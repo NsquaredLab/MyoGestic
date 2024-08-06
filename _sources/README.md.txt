@@ -3,6 +3,12 @@
 MyoGestic is a software framework made to help the myocontrol community to develop and test new myocontrol algorithms.
 It is made to be easily extensible and to minimize dead time when testing on injured individuals.
 
+```{tip}
+
+Take a look at our [documentation](https://nsquaredlab.github.io/MyoGestic/).
+```
+
+
 ## Installation
 ```{important}
 
@@ -34,12 +40,6 @@ poetry install
 ```
 
 ## How to use
-```{tip}
-
-You can find a more detailed explanation in the [documentation](https://nsquaredlab.github.io/MyoGestic/).
-```
-
-
 [![MyoGestic Tutorial](https://img.youtube.com/vi/Re3VfgKhjCM/maxresdefault.jpg)](https://youtu.be/Re3VfgKhjCM)
 
 ## Development installation
