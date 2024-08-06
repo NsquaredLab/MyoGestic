@@ -83,7 +83,9 @@ class MyogesticModel(QObject):
         self.load_function = load_function
         self.train_function = train_function
 
-        self.model = self.train_function(self.model, training_x, training_y, self.logger)
+        self.model = self.train_function(
+            self.model, training_x, training_y, self.logger
+        )
 
     def set_conformal_predictor(self, params: dict) -> None:
         try:

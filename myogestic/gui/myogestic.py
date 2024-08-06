@@ -15,12 +15,17 @@ from myogestic.gui.widgets.logger import CustomLogger
 from myogestic.gui.protocols.protocol import Protocol
 from myogestic.gui.ui_compiled.main_window import Ui_MyoGestic
 from myogestic.gui.widgets.output import VirtualHandInterface
-from biosignal_device_interface.constants.devices.core.base_device_constants import DeviceType
+from biosignal_device_interface.constants.devices.core.base_device_constants import (
+    DeviceType,
+)
 
 if TYPE_CHECKING:
-    from biosignal_device_interface.gui.device_template_widgets.otb.otb_devices_widget import OTBDevicesWidget
-    from biosignal_device_interface.gui.plot_widgets.biosignal_plot_widget import BiosignalPlotWidget
-
+    from biosignal_device_interface.gui.device_template_widgets.otb.otb_devices_widget import (
+        OTBDevicesWidget,
+    )
+    from biosignal_device_interface.gui.plot_widgets.biosignal_plot_widget import (
+        BiosignalPlotWidget,
+    )
 
 
 class MyoGestic(QMainWindow):
@@ -197,7 +202,7 @@ class MyoGestic(QMainWindow):
         if self.toggle_vispy_plot_check_box.isChecked():
             self.plot.update_plot(data[: self.number_of_channels] * 5)
 
-    def _prepare_plot(self, is_configured:bool) -> None:
+    def _prepare_plot(self, is_configured: bool) -> None:
         """
         Prepare the plot.
 

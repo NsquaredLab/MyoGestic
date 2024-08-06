@@ -273,9 +273,11 @@ class PredictionSolver:
             num_labels = np.sum(prediction, axis=-1)
             prediction = np.array(
                 [
-                    prediction_set
-                    if num_labels[idx] < self.reject_setsize
-                    else np.zeros_like(prediction_set)
+                    (
+                        prediction_set
+                        if num_labels[idx] < self.reject_setsize
+                        else np.zeros_like(prediction_set)
+                    )
                     for idx, prediction_set in enumerate(prediction)
                 ]
             )
