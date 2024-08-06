@@ -932,7 +932,7 @@ color: rgb(0, 0, 0);</string>
   <customwidget>
    <class>OTBDevicesWidget</class>
    <extends>QWidget</extends>
-   <header>biosignal_device_interface.gui.device_template_widgets.otb.otb_devices_widget</header>
+   <header>biosignal_device_interface.devices</header>
    <container>1</container>
   </customwidget>
   <customwidget>

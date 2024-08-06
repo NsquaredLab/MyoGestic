@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
     QSpinBox, QStackedWidget, QStatusBar, QTabWidget,
     QTableWidget, QTableWidgetItem, QTextEdit, QWidget)
 
-from biosignal_device_interface.gui.device_template_widgets.otb.otb_devices_widget import OTBDevicesWidget
+from biosignal_device_interface.devices import OTBDevicesWidget
 from biosignal_device_interface.gui.plot_widgets.biosignal_plot_widget import BiosignalPlotWidget
 
 class Ui_MyoGestic(object):
