@@ -275,7 +275,7 @@ class TrainingProtocol(QObject):
         if not os.path.exists(self.datasets_dir_path):
             os.makedirs(self.datasets_dir_path)
 
-    def _update_device_configuration(self, is_configured:bool) -> None:
+    def _update_device_configuration(self, is_configured: bool) -> None:
         if not is_configured:
             return
         self.model_interface = MyogesticModelInterface(
@@ -463,10 +463,7 @@ class TrainingProtocol(QObject):
         with open(os.path.join(self.datasets_dir_path, file_name), "wb") as f:
             pickle.dump(dataset_dict, f)
 
-        self.main_window.logger.print(
-            f"Dataset {file_name} created!",
-            LoggerLevel.INFO,
-        )
+        self.main_window.logger.print(f"Dataset {file_name} created!", LoggerLevel.INFO)
 
     def _select_dataset(self) -> None:
         # Open dialog to select dataset
@@ -490,12 +487,7 @@ class TrainingProtocol(QObject):
         self.train_model_push_button.setEnabled(True)
 
     def _open_warning_dialog(self, info: str) -> None:
-        QMessageBox.warning(
-            self.main_window,
-            "Warning",
-            info,
-            QMessageBox.Ok,
-        )
+        QMessageBox.warning(self.main_window, "Warning", info, QMessageBox.Ok)
 
     def _train_model(self) -> None:
         if not self.selected_dataset_filepath:
@@ -542,8 +534,7 @@ class TrainingProtocol(QObject):
             )
         except Exception as e:
             self.main_window.logger.print(
-                f"Error during training: {e}",
-                LoggerLevel.ERROR,
+                f"Error during training: {e}", LoggerLevel.ERROR
             )
             return
 
@@ -558,17 +549,13 @@ class TrainingProtocol(QObject):
             model_save_dict = self.model_interface.save_model(model_filepath)
         except Exception as e:
             self.main_window.logger.print(
-                f"Error during saving models: {e}",
-                LoggerLevel.ERROR,
+                f"Error during saving models: {e}", LoggerLevel.ERROR
             )
             return
         with open(model_filepath, "wb") as file:
             pickle.dump(model_save_dict, file)
 
-        self.main_window.logger.print(
-            f"Model trained: {file_name}",
-            LoggerLevel.INFO,
-        )
+        self.main_window.logger.print(f"Model trained: {file_name}", LoggerLevel.INFO)
 
     def _train_model_finished(self) -> None:
         self.training_selected_dataset_label.setText(self.no_dataset_selected_info)

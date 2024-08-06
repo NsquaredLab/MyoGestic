@@ -123,7 +123,9 @@ class RecordProtocol(QObject):
                 f"EMG recording finished at: {round(time.time() - self.start_time)}"
             )
             self.has_finished_emg = True
-            self.main_window.device_widget.biosignal_data_arrived.disconnect(self.emg_update)
+            self.main_window.device_widget.biosignal_data_arrived.disconnect(
+                self.emg_update
+            )
             self.finished_recording()
 
     def kinematics_update(self, data: np.ndarray) -> None:
@@ -210,7 +212,9 @@ class RecordProtocol(QObject):
                 self.record_toggle_push_button.setChecked(False)
                 return
 
-            self.main_window.device_widget.biosignal_data_arrived.connect(self.emg_update)
+            self.main_window.device_widget.biosignal_data_arrived.connect(
+                self.emg_update
+            )
 
             self.start_time = time.time()
 

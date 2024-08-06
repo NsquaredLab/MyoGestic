@@ -59,5 +59,5 @@ PARAMETERS_MAP = {
     "Linear Regressor Per Finger": {
         "changeable": {},
         "unchangeable": {},
-    }
+    },
 }

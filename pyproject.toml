@@ -23,6 +23,7 @@ optional = true
 
 [tool.poetry.group.dev.dependencies]
 matplotlib = "^3.9.0"
+black = "^24.8.0"
 
 [tool.poetry.group.docs]
 optional = true

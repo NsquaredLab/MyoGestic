@@ -177,7 +177,11 @@ class MyogesticDataset(QObject):
 
         training_emg = np.concatenate(list(training_emg.values()), axis=0)
         training_class = np.concatenate(list(training_data_classes.values()), axis=0)
-        training_kinematics = np.concatenate(training_kinematics, axis=0) if len(training_kinematics) > 0 else []
+        training_kinematics = (
+            np.concatenate(training_kinematics, axis=0)
+            if len(training_kinematics) > 0
+            else []
+        )
 
         dataset: dict = {
             "emg": training_emg,

@@ -2,6 +2,7 @@ from myogestic.gui.myogestic import MyoGestic
 import sys
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+
 class UserWarning(QMessageBox):
     def __init__(self, message: str, parent=None):
         super(UserWarning, self).__init__(parent)

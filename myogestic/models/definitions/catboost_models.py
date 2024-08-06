@@ -1,6 +1,7 @@
 """
 This module contains the functions to save, load and train CatBoost models.
 """
+
 import numpy as np
 from catboost.core import _CatBoostBase
 from myogestic.gui.widgets.logger import CustomLogger

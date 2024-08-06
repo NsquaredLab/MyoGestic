@@ -133,7 +133,7 @@ class OnlineProtocol(QObject):
         if not os.path.exists(self.model_dir_path):
             os.makedirs(self.model_dir_path)
 
-    def _update_device_configuration(self, is_configured:bool) -> None:
+    def _update_device_configuration(self, is_configured: bool) -> None:
         if not is_configured:
             return
 
