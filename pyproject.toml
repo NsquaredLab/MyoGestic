@@ -1,0 +1,47 @@
+[tool.poetry]
+name = "myogestic"
+version = "0.1.0"
+description = ""
+authors = [
+    "Raul C. Sîmpetru <raul.simpetru@fau.de>",
+    "Dominik I. Braun <dome.braun@fau.de>",
+    "Vlad Cnejevici <vlad.cnejevici@fau.de>",
+]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+qdarkstyle = "^3.2.3"
+poethepoet = "^0.27.0"
+catboost = "^1.2.5"
+scikit-learn = "^1.5.1"
+toml = "^0.10.2"
+biosignal-device-interface = "^0.1.0"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+matplotlib = "^3.9.0"
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.4.6"
+rinohtype = "^0.5.5"
+furo = "^2024.7.18"
+sphinx-gallery = "^0.16.0"
+enum-tools = {extras = ["sphinx"], version = "^0.12.0"}
+sphinxcontrib-youtube = "^1.4.1"
+
+[tool.poe.tasks]
+_install_poetry_with_dev = "poetry install --with dev"
+_run_submodule_update = "git submodule update --init --recursive"
+_run_remove_device_interfaces = "poetry run pip uninstall -y biosignal-device-interface"
+_run_install_device_interfaces = "poetry run pip install -e submodules/biosignal_device_interface"
+install-dev = ["_install_poetry_with_dev", "_run_submodule_update", "_run_remove_device_interfaces", "_run_install_device_interfaces"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,3 @@
+[submodule "submodules/biosignal_device_interface"]
+	path = submodules/biosignal_device_interface
+	url = https://github.com/NsquaredLab/Biosignal-Device-Interface
