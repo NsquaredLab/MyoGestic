@@ -387,7 +387,9 @@
                 <span class="sa">f</span><span class="s2">&quot;EMG recording finished at: </span><span class="si">{</span><span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">start_time</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
             <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">has_finished_emg</span> <span class="o">=</span> <span class="kc">True</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">device_widget</span><span class="o">.</span><span class="n">biosignal_data_arrived</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">emg_update</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">device_widget</span><span class="o">.</span><span class="n">biosignal_data_arrived</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">emg_update</span>
+            <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">finished_recording</span><span class="p">()</span></div>
 
 
@@ -478,7 +480,9 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
                 <span class="k">return</span>
 
-            <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">device_widget</span><span class="o">.</span><span class="n">biosignal_data_arrived</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">emg_update</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">device_widget</span><span class="o">.</span><span class="n">biosignal_data_arrived</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">emg_update</span>
+            <span class="p">)</span>
 
             <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
 

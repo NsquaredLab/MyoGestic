@@ -552,7 +552,7 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">datasets_dir_path</span><span class="p">):</span>
             <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">datasets_dir_path</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">_update_device_configuration</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">is_configured</span><span class="p">:</span><span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">_update_device_configuration</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">is_configured</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">is_configured</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">model_interface</span> <span class="o">=</span> <span class="n">MyogesticModelInterface</span><span class="p">(</span>
@@ -740,10 +740,7 @@
         <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">datasets_dir_path</span><span class="p">,</span> <span class="n">file_name</span><span class="p">),</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
             <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">dataset_dict</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Dataset </span><span class="si">{</span><span class="n">file_name</span><span class="si">}</span><span class="s2"> created!&quot;</span><span class="p">,</span>
-            <span class="n">LoggerLevel</span><span class="o">.</span><span class="n">INFO</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Dataset </span><span class="si">{</span><span class="n">file_name</span><span class="si">}</span><span class="s2"> created!&quot;</span><span class="p">,</span> <span class="n">LoggerLevel</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">_select_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># Open dialog to select dataset</span>
@@ -767,12 +764,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">train_model_push_button</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">_open_warning_dialog</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">info</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">QMessageBox</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="p">,</span>
-            <span class="s2">&quot;Warning&quot;</span><span class="p">,</span>
-            <span class="n">info</span><span class="p">,</span>
-            <span class="n">QMessageBox</span><span class="o">.</span><span class="n">Ok</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="n">QMessageBox</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="p">,</span> <span class="s2">&quot;Warning&quot;</span><span class="p">,</span> <span class="n">info</span><span class="p">,</span> <span class="n">QMessageBox</span><span class="o">.</span><span class="n">Ok</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">_train_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_dataset_filepath</span><span class="p">:</span>
@@ -819,8 +811,7 @@
             <span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Error during training: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;Error during training: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span>
             <span class="p">)</span>
             <span class="k">return</span>
 
@@ -835,17 +826,13 @@
             <span class="n">model_save_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_interface</span><span class="o">.</span><span class="n">save_model</span><span class="p">(</span><span class="n">model_filepath</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Error during saving models: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;Error during saving models: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span>
             <span class="p">)</span>
             <span class="k">return</span>
         <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">model_filepath</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
             <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">model_save_dict</span><span class="p">,</span> <span class="n">file</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Model trained: </span><span class="si">{</span><span class="n">file_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-            <span class="n">LoggerLevel</span><span class="o">.</span><span class="n">INFO</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model trained: </span><span class="si">{</span><span class="n">file_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">LoggerLevel</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">_train_model_finished</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">training_selected_dataset_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">no_dataset_selected_info</span><span class="p">)</span>
