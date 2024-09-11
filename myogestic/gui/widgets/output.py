@@ -82,7 +82,7 @@ class VirtualHandInterface(QObject):
             QMessageBox.critical(
                 self.main_window,
                 "Error",
-                "Virtual Hand Interface executable not found!",
+                f"Virtual Hand Interface executable not found!\n {unity_executable}",
             )
             return
 

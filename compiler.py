@@ -7,6 +7,8 @@ import vispy.glsl
 import vispy.io
 import distributed
 
+sys.setrecursionlimit(sys.getrecursionlimit() * 5)
+
 # Collect data files
 data_files = [
     (os.path.dirname(vispy.glsl.__file__), os.path.join("vispy", "glsl")),
