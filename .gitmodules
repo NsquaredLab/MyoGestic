@@ -1,3 +1,6 @@
 [submodule "submodules/biosignal_device_interface"]
 	path = submodules/biosignal_device_interface
 	url = https://github.com/NsquaredLab/Biosignal-Device-Interface
+[submodule "submodules/doc_octopy"]
+	path = submodules/doc_octopy
+	url = git@nsquared-nas.aibe.uni-erlangen.de:n-squared-lab/projects/processing/kinematic-prediction/DocOctopy.git
