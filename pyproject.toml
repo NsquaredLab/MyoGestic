@@ -17,6 +17,7 @@ catboost = "^1.2.5"
 scikit-learn = "^1.5.1"
 toml = "^0.10.2"
 biosignal-device-interface = "^0.1.0"
+doc-octopy = {git = "https://github.com/NsquaredLab/DocOctopy.git"}
 
 [tool.poetry.group.dev]
 optional = true
@@ -49,6 +50,11 @@ _run_submodule_update = "git submodule update --init --recursive"
 _run_remove_device_interfaces = "poetry run pip uninstall -y biosignal-device-interface"
 _run_install_device_interfaces = "poetry run pip install -e submodules/biosignal_device_interface"
 install-dev = ["_install_poetry_with_dev", "_run_submodule_update", "_run_remove_device_interfaces", "_run_install_device_interfaces"]
+
+[[tool.poetry.source]]
+name = "pytorch_gpu"
+url = "https://download.pytorch.org/whl/cu124"
+priority = "explicit"
 
 [build-system]
 requires = ["poetry-core"]
