@@ -224,7 +224,7 @@ class MyoGestic(QMainWindow):
 
         self.plot.configure(
             display_time=self.display_time,
-            sampling_freuqency=self.sampling_frequency,
+            sampling_frequency=self.sampling_frequency,
             lines=self.number_of_channels,
         )
 
