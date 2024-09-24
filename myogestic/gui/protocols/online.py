@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QFileDialog
-from myogestic.gui.widgets.logger import LoggerLevel
 
-from myogestic.models.interface import MyogesticModelInterface
+from myogestic.gui.widgets.logger import LoggerLevel
+from myogestic.models.interface import MyoGesticModelInterface
 
 if TYPE_CHECKING:
     from myogestic.gui.myogestic import MyoGestic
@@ -57,7 +57,7 @@ class OnlineProtocol(QObject):
             Path for storing the models.
         time_since_last_prediction : float
             Time since the last prediction.
-        model_interface : MyogesticModelInterface | None
+        model_interface : MyoGesticModelInterface | None
             Interface for the Myogestic models.
         online_load_model_push_button : QPushButton
             Push button for loading the models.
@@ -101,7 +101,7 @@ class OnlineProtocol(QObject):
         )
         self.time_since_last_prediction = 0
 
-        self.model_interface: MyogesticModelInterface | None = None
+        self.model_interface: MyoGesticModelInterface | None = None
         self.main_window.device_widget.configure_toggled.connect(
             self._update_device_configuration
         )
@@ -140,13 +140,12 @@ class OnlineProtocol(QObject):
         self.device_information = (
             self.main_window.device_widget.get_device_information()
         )
-        self.model_interface = MyogesticModelInterface(
+        self.model_interface = MyoGesticModelInterface(
             device_information=self.device_information, logger=self.main_window.logger
         )
         self.online_load_model_push_button.setEnabled(True)
 
     def online_emg_update(self, data: np.ndarray) -> None:
-
         try:
             (
                 vhi_prediction,
@@ -165,7 +164,7 @@ class OnlineProtocol(QObject):
         try:
             if prediction == -1:
                 return
-        except Exception as e:
+        except Exception:
             pass
 
         vhi_input = vhi_prediction.encode("utf-8")

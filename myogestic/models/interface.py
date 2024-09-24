@@ -1,18 +1,18 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Dict, Union
+
+from typing import TYPE_CHECKING, Any, Dict
 
 from PySide6.QtCore import QObject
 
-# MindMove imports
-from myogestic.models.core.model import MyogesticModel
-from myogestic.models.core.dataset import MyogesticDataset
+from myogestic.models.core.dataset import MyoGesticDataset
+from myogestic.models.core.model import MyoGesticModel
 
 if TYPE_CHECKING:
     import numpy as np
     from myogestic.gui.widgets.logger import CustomLogger
 
 
-class MyogesticModelInterface(QObject):
+class MyoGesticModelInterface(QObject):
     def __init__(
         self,
         device_information: dict[str, Any],
@@ -23,11 +23,11 @@ class MyogesticModelInterface(QObject):
 
         self.logger = logger
 
-        self.model: MyogesticModel = MyogesticModel(logger=self.logger)
-        self.dataset: MyogesticDataset = MyogesticDataset(
+        self.model: MyoGesticModel = MyoGesticModel(logger=self.logger)
+        self.dataset: MyoGesticDataset = MyoGesticDataset(
             device_information=device_information, logger=self.logger
         )
-        self.input_dataset: dict = None
+        self.input_dataset: dict = {}
         self.model_is_loaded: bool = False
 
     def create_dataset(
@@ -57,10 +57,8 @@ class MyogesticModelInterface(QObject):
         )
 
     def predict(
-        self,
-        input: np.ndarray,
-        bad_channels: list[int] = [],
-    ) -> tuple[str, str, int, np.ndarray]:
+        self, input: np.ndarray, bad_channels: list[int] = ()
+    ) -> tuple[str, str, int, np.ndarray | None]:
         if not self.model_is_loaded:
             raise ValueError("Model is not loaded!")
 
@@ -73,7 +71,7 @@ class MyogesticModelInterface(QObject):
             return "Bad channels detected", "", -1, None
         return self.model.predict(preprocessed_input)
 
-    def save_model(self, model_path: str) -> dict[str, Union[str, Any]]:
+    def save_model(self, model_path: str) -> dict[str, str | None]:
         self.input_dataset = None
         return self.model.save(model_path)
 

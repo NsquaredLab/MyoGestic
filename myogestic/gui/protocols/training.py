@@ -37,7 +37,7 @@ from myogestic.models.config import (
     PARAMETERS_MAP,
     UnchangeableParameter,
 )
-from myogestic.models.interface import MyogesticModelInterface
+from myogestic.models.interface import MyoGesticModelInterface
 
 if TYPE_CHECKING:
     from myogestic.gui.myogestic import MyoGestic
@@ -207,7 +207,7 @@ class TrainingProtocol(QObject):
     ----------
     main_window : MyoGestic
         The main window of the MyoGestic application.
-    model_interface : MyogesticModelInterface
+    model_interface : MyoGesticModelInterface
         Interface for the models.
     selected_recordings : dict[str, dict]
         Dictionary for the selected recordings.
@@ -278,7 +278,7 @@ class TrainingProtocol(QObject):
     def _update_device_configuration(self, is_configured: bool) -> None:
         if not is_configured:
             return
-        self.model_interface = MyogesticModelInterface(
+        self.model_interface = MyoGesticModelInterface(
             device_information=self.main_window.device_widget.get_device_information(),
             logger=self.main_window.logger,
         )

@@ -291,7 +291,7 @@ the parameter values as values.
 The changeable parameters must be of type ChangeableParameter and the unchangeable parameters must be of type UnchangeableParameter.
 """
 
-FEATURES_MAP: dict[str, FilterBaseClass] = {
+FEATURES_MAP: dict[str, FilterBaseClass] = { # noqa
     "Root Mean Square": RMSFilter,
     "Mean Absolute Value": MAVFilter,
     "Integrated Absolute Value": IAVFilter,

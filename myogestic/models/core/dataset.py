@@ -4,13 +4,11 @@ import math
 from typing import Any, TYPE_CHECKING
 
 import numpy as np
-
 from doc_octopy.datasets.filters.temporal import SOSFrequencyFilter
 from doc_octopy.datasets.supervised import EMGDataset
-from doc_octopy.datatypes import EMGData
-from myogestic.gui.widgets.logger import LoggerLevel
 from scipy.signal import butter
 
+from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.models.config import FEATURES_MAP
 
 if TYPE_CHECKING:
@@ -19,7 +17,7 @@ if TYPE_CHECKING:
 from PySide6.QtCore import QObject
 
 
-class MyogesticDataset(QObject):
+class MyoGesticDataset(QObject):
     def __init__(
         self,
         device_information: dict[str, Any],
@@ -182,7 +180,9 @@ class MyogesticDataset(QObject):
                 ]
             ],
             emg_representations_to_filter_before_chunking=["Input"],
-            emg_filter_pipeline_after_chunking=[[FEATURES_MAP[feature]] for feature in selected_features],
+            emg_filter_pipeline_after_chunking=[
+                [FEATURES_MAP[feature]] for feature in selected_features
+            ],
             emg_representations_to_filter_after_chunking=["Last"],
             ground_truth_filter_pipeline_before_chunking=[],
             ground_truth_representations_to_filter_before_chunking=["Input"],

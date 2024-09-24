@@ -2,12 +2,12 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
-from myogestic.models.interface import MyogesticModelInterface
+from myogestic.models.interface import MyoGesticModelInterface
 
 
 def main():
     device_information = {"sampling_frequency": 2000, "samples_per_frame": 18}
-    model_interface = MyogesticModelInterface(device_information)
+    model_interface = MyoGesticModelInterface(device_information)
     recordings = [
         r"data\recordings\MindMove_Recording_20240530_115505896810_rest_default.pkl",
         r"data\recordings\MindMove_Recording_20240530_115522545011_fist_default.pkl",
