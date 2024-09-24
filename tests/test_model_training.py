@@ -1,11 +1,12 @@
-from myogestic.models.interface import MyogesticModelInterface
 import pickle
+
+from myogestic.models.interface import MyoGesticModelInterface
 
 device_information = {
     "sampling_frequency": 2048,
     "samples_per_frame": 64,
 }
-model_interface = MyogesticModelInterface(device_information=device_information)
+model_interface = MyoGesticModelInterface(device_information=device_information)
 selected_recordings = {}
 selected_dataset = {}
 
