@@ -258,7 +258,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for myogestic.models.config</h1><div class="highlight"><pre>
-<span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypedDict</span>
+<span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypedDict</span><span class="p">,</span> <span class="n">Literal</span>
 
 <span class="kn">from</span> <span class="nn">catboost</span> <span class="kn">import</span> <span class="n">CatBoostClassifier</span><span class="p">,</span> <span class="n">CatBoostRegressor</span>
 <span class="kn">from</span> <span class="nn">catboost.utils</span> <span class="kn">import</span> <span class="n">get_gpu_device_count</span>
@@ -269,7 +269,16 @@
 <span class="kn">from</span> <span class="nn">sklearn.svm</span> <span class="kn">import</span> <span class="n">SVC</span>
 
 <span class="kn">import</span> <span class="nn">myogestic.models.definitions.catboost_models</span> <span class="k">as</span> <span class="nn">catboost_models</span>
-<span class="kn">from</span> <span class="nn">myogestic.models.core.ai_utils.filters.temporal</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">doc_octopy.datasets.filters._template</span> <span class="kn">import</span> <span class="n">FilterBaseClass</span>
+<span class="kn">from</span> <span class="nn">doc_octopy.datasets.filters.temporal</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">RMSFilter</span><span class="p">,</span>
+    <span class="n">MAVFilter</span><span class="p">,</span>
+    <span class="n">IAVFilter</span><span class="p">,</span>
+    <span class="n">VARFilter</span><span class="p">,</span>
+    <span class="n">WFLFilter</span><span class="p">,</span>
+    <span class="n">ZCFilter</span><span class="p">,</span>
+    <span class="n">SSCFilter</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span> <span class="nn">myogestic.models.definitions</span> <span class="kn">import</span> <span class="n">sklearn_models</span>
 <span class="kn">from</span> <span class="nn">myogestic.user_config</span> <span class="kn">import</span> <span class="p">(</span>
     <span class="n">FUNCTIONS_MAP</span> <span class="k">as</span> <span class="n">USER_FUNCTIONS_MAP</span><span class="p">,</span>
@@ -557,18 +566,19 @@
 <span class="sd">The changeable parameters must be of type ChangeableParameter and the unchangeable parameters must be of type UnchangeableParameter.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
-<span class="n">FEATURES_MAP</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FilterBaseClass</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="n">FEATURES_MAP</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FilterBaseClass</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span> <span class="c1"># noqa</span>
     <span class="s2">&quot;Root Mean Square&quot;</span><span class="p">:</span> <span class="n">RMSFilter</span><span class="p">,</span>
     <span class="s2">&quot;Mean Absolute Value&quot;</span><span class="p">:</span> <span class="n">MAVFilter</span><span class="p">,</span>
     <span class="s2">&quot;Integrated Absolute Value&quot;</span><span class="p">:</span> <span class="n">IAVFilter</span><span class="p">,</span>
     <span class="s2">&quot;Variance&quot;</span><span class="p">:</span> <span class="n">VARFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Difference Absolute Standard Deviation&quot;</span><span class="p">:</span> <span class="n">DASDVFilter</span><span class="p">,</span>
-    <span class="s2">&quot;V-Order&quot;</span><span class="p">:</span> <span class="n">VOrderFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Average Amplitude Change&quot;</span><span class="p">:</span> <span class="n">AACFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Maximum Fractal Length&quot;</span><span class="p">:</span> <span class="n">MFLFilter</span><span class="p">,</span>
     <span class="s2">&quot;Waveform Length&quot;</span><span class="p">:</span> <span class="n">WFLFilter</span><span class="p">,</span>
     <span class="s2">&quot;Zero Crossings&quot;</span><span class="p">:</span> <span class="n">ZCFilter</span><span class="p">,</span>
     <span class="s2">&quot;Slope Sign Change&quot;</span><span class="p">:</span> <span class="n">SSCFilter</span><span class="p">,</span>
+    <span class="c1"># TODO: Add these back</span>
+    <span class="c1"># &quot;Difference Absolute Standard Deviation&quot;: DASDVFilter,</span>
+    <span class="c1"># &quot;V-Order&quot;: VOrderFilter,</span>
+    <span class="c1"># &quot;Average Amplitude Change&quot;: AACFilter,</span>
+    <span class="c1"># &quot;Maximum Fractal Length&quot;: MFLFilter,</span>
 <span class="p">}</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Dictionary to get the EMG features class.</span>

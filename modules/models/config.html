@@ -533,18 +533,19 @@ the parameter values as values.</p>
 The features must subclass the FilterBaseClass.</p>
 </dd></dl>
 
-<span class="sig-name descname">FEATURES_MAP</span><dd><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">FEATURES_MAP</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FilterBaseClass</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="sig-name descname">FEATURES_MAP</span><dd><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">FEATURES_MAP</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FilterBaseClass</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span> <span class="c1"># noqa</span>
     <span class="s2">&quot;Root Mean Square&quot;</span><span class="p">:</span> <span class="n">RMSFilter</span><span class="p">,</span>
     <span class="s2">&quot;Mean Absolute Value&quot;</span><span class="p">:</span> <span class="n">MAVFilter</span><span class="p">,</span>
     <span class="s2">&quot;Integrated Absolute Value&quot;</span><span class="p">:</span> <span class="n">IAVFilter</span><span class="p">,</span>
     <span class="s2">&quot;Variance&quot;</span><span class="p">:</span> <span class="n">VARFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Difference Absolute Standard Deviation&quot;</span><span class="p">:</span> <span class="n">DASDVFilter</span><span class="p">,</span>
-    <span class="s2">&quot;V-Order&quot;</span><span class="p">:</span> <span class="n">VOrderFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Average Amplitude Change&quot;</span><span class="p">:</span> <span class="n">AACFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Maximum Fractal Length&quot;</span><span class="p">:</span> <span class="n">MFLFilter</span><span class="p">,</span>
     <span class="s2">&quot;Waveform Length&quot;</span><span class="p">:</span> <span class="n">WFLFilter</span><span class="p">,</span>
     <span class="s2">&quot;Zero Crossings&quot;</span><span class="p">:</span> <span class="n">ZCFilter</span><span class="p">,</span>
     <span class="s2">&quot;Slope Sign Change&quot;</span><span class="p">:</span> <span class="n">SSCFilter</span><span class="p">,</span>
+    <span class="c1"># TODO: Add these back</span>
+    <span class="c1"># &quot;Difference Absolute Standard Deviation&quot;: DASDVFilter,</span>
+    <span class="c1"># &quot;V-Order&quot;: VOrderFilter,</span>
+    <span class="c1"># &quot;Average Amplitude Change&quot;: AACFilter,</span>
+    <span class="c1"># &quot;Maximum Fractal Length&quot;: MFLFilter,</span>
 <span class="p">}</span>
 </pre></div>
 </div>

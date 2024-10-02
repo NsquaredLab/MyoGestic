@@ -270,9 +270,9 @@
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">from</span> <span class="nn">PySide6.QtCore</span> <span class="kn">import</span> <span class="n">QObject</span>
 <span class="kn">from</span> <span class="nn">PySide6.QtWidgets</span> <span class="kn">import</span> <span class="n">QFileDialog</span>
-<span class="kn">from</span> <span class="nn">myogestic.gui.widgets.logger</span> <span class="kn">import</span> <span class="n">LoggerLevel</span>
 
-<span class="kn">from</span> <span class="nn">myogestic.models.interface</span> <span class="kn">import</span> <span class="n">MyogesticModelInterface</span>
+<span class="kn">from</span> <span class="nn">myogestic.gui.widgets.logger</span> <span class="kn">import</span> <span class="n">LoggerLevel</span>
+<span class="kn">from</span> <span class="nn">myogestic.models.interface</span> <span class="kn">import</span> <span class="n">MyoGesticModelInterface</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span> <span class="nn">myogestic.gui.myogestic</span> <span class="kn">import</span> <span class="n">MyoGestic</span>
@@ -319,7 +319,7 @@
 <span class="sd">            Path for storing the models.</span>
 <span class="sd">        time_since_last_prediction : float</span>
 <span class="sd">            Time since the last prediction.</span>
-<span class="sd">        model_interface : MyogesticModelInterface | None</span>
+<span class="sd">        model_interface : MyoGesticModelInterface | None</span>
 <span class="sd">            Interface for the Myogestic models.</span>
 <span class="sd">        online_load_model_push_button : QPushButton</span>
 <span class="sd">            Push button for loading the models.</span>
@@ -363,7 +363,7 @@
         <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">time_since_last_prediction</span> <span class="o">=</span> <span class="mi">0</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">model_interface</span><span class="p">:</span> <span class="n">MyogesticModelInterface</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_interface</span><span class="p">:</span> <span class="n">MyoGesticModelInterface</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">device_widget</span><span class="o">.</span><span class="n">configure_toggled</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_update_device_configuration</span>
         <span class="p">)</span>
@@ -402,13 +402,12 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">device_information</span> <span class="o">=</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">device_widget</span><span class="o">.</span><span class="n">get_device_information</span><span class="p">()</span>
         <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">model_interface</span> <span class="o">=</span> <span class="n">MyogesticModelInterface</span><span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_interface</span> <span class="o">=</span> <span class="n">MyoGesticModelInterface</span><span class="p">(</span>
             <span class="n">device_information</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device_information</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">logger</span>
         <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">online_load_model_push_button</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">online_emg_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-
         <span class="k">try</span><span class="p">:</span>
             <span class="p">(</span>
                 <span class="n">vhi_prediction</span><span class="p">,</span>
@@ -427,7 +426,7 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">prediction</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
                 <span class="k">return</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
             <span class="k">pass</span>
 
         <span class="n">vhi_input</span> <span class="o">=</span> <span class="n">vhi_prediction</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
