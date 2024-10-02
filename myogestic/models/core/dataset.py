@@ -20,8 +20,10 @@ if TYPE_CHECKING:
 
 from PySide6.QtCore import QObject
 
+
 def standardize_data(data: np.ndarray, mean: float, std: float) -> np.ndarray:
     return (data - mean) / std
+
 
 class MyoGesticDataset(QObject):
     def __init__(
@@ -90,10 +92,7 @@ class MyoGesticDataset(QObject):
 
             if recording["use_kinematics"]:
                 kinematics = recording["kinematics"]
-                # TODO: Implement kinematics processing
-
                 # Upsample kinematics 60Hz to 2000 Hz
-
                 kinematics = np.array(
                     [
                         np.interp(
@@ -106,63 +105,10 @@ class MyoGesticDataset(QObject):
                 )
 
                 ground_truth_data[task_label] = kinematics
-
-                # kinematics = np.stack(
-                #     [
-                #         kinematics[..., i : i + self.buffer_size_samples]
-                #         for i in range(
-                #             0,
-                #             kinematics.shape[-1] - self.buffer_size_samples,
-                #             self.samples_per_frame,
-                #         )
-                #     ],
-                #     axis=0,
-                # )
-                #
-                # training_kinematics.append(kinematics.mean(axis=-1))
-
             else:
                 ground_truth_data[task_label] = np.zeros((9, emg.shape[-1]))
 
             emg_data[task_label] = emg
-            # emg = np.stack(
-            #     [
-            #         emg[..., i : i + self.buffer_size_samples]
-            #         for i in range(
-            #             0,
-            #             emg.shape[-1] - self.buffer_size_samples,
-            #             self.samples_per_frame,
-            #         )
-            #     ],
-            #     axis=0,
-            # )[None, ...]
-            #
-            # emg = EMGDataset(emg_data=e
-            #
-            # emg = SOSFrequencyFilter(
-            #     sos_filter_coefficients=butter(
-            #         4,
-            #         (47, 53),
-            #         "bandstop",
-            #         output="sos",
-            #         fs=self.sampling_frequency,
-            #     ),
-            #     append_result_to_input=False,
-            # )(emg)
-            #
-            # for feature in selected_features:
-            #     training_data_emg[feature][task_label] = FEATURES_MAP[feature](
-            #         window_size=self.buffer_size_samples
-            #     )(emg)[0]
-            #
-            # # Create dataset for training
-            # classes = (
-            #     np.zeros(training_data_emg[feature][task_label].shape[0]) + task_label
-            # )
-            #
-            # training_data_classes[task_label] = classes
-
-        # training_x = np.concatenate(list(training_data_emg.values()), axis=0)
 
         dataset = EMGDataset(
             emg_data=emg_data,
@@ -187,15 +133,15 @@ class MyoGesticDataset(QObject):
                 ]
             ],
             emg_representations_to_filter_before_chunking=["Input"],
-            emg_filter_pipeline_after_chunking=[
+            emg_filter_pipeline_after_chunking=[  # noqa
                 [
                     FEATURES_MAP[feature](
-                        is_output=True, window_size=self.buffer_size_samples
+                        is_output=True, window_size=self.buffer_size_samples  # noqa
                     )
                 ]
                 for feature in selected_features
             ],
-            emg_representations_to_filter_after_chunking=["Last"]
+            emg_representations_to_filter_after_chunking=["EMG_Chunkizer"]
             * len(selected_features),
             ground_truth_filter_pipeline_before_chunking=[],
             ground_truth_representations_to_filter_before_chunking=["Input"],
@@ -206,39 +152,6 @@ class MyoGesticDataset(QObject):
         )
 
         dataset.create_dataset()
-
-        # training_means = {
-        #     key: np.concatenate(list(training_data_emg[key].values()), axis=0).mean()
-        #     for key in selected_features
-        # }
-        # training_stds = {
-        #     key: np.concatenate(list(training_data_emg[key].values()), axis=0).std()
-        #     for key in selected_features
-        # }
-        #
-        # training_emg = {}
-        #
-        # task_group = {task: {} for task in training_data_classes.keys()}
-        # for feature in training_data_emg.keys():
-        #     for task in training_data_emg[feature].keys():
-        #         task_group[task][feature] = training_data_emg[feature][task]
-        #         task_group[task][feature] = (
-        #             task_group[task][feature] - training_means[feature]
-        #         ) / training_stds[feature]
-        #
-        # for task in task_group:
-        #     temp = np.concatenate(list(task_group[task].values()), axis=-1)
-        #     temp = temp.reshape(temp.shape[0], -1)
-        #
-        #     training_emg[task] = temp
-        #
-        # training_emg = np.concatenate(list(training_emg.values()), axis=0)
-        # training_class = np.concatenate(list(training_data_classes.values()), axis=0)
-        # training_kinematics = (
-        #     np.concatenate(training_kinematics, axis=0)
-        #     if len(training_kinematics) > 0
-        #     else []
-        # )
 
         dataset = zarr.open("data/datasets/dataset.zarr", mode="r")
 
@@ -261,7 +174,7 @@ class MyoGesticDataset(QObject):
                 (emg_per_key - training_means[key]) / training_stds[key]
             )
 
-        training_emg = np.concatenate(training_emg, axis=0)
+        training_emg = np.concatenate(training_emg, axis=1)[..., 0]
 
         print("Dataset created")
 
@@ -300,7 +213,8 @@ class MyoGesticDataset(QObject):
                         "bandstop",
                         output="sos",
                         fs=self.sampling_frequency,
-                    )
+                    ),
+                    name="SOSFilter",
                 ),
                 representation_to_filter="Input",
             )
@@ -308,21 +222,25 @@ class MyoGesticDataset(QObject):
             frame_data.apply_filter_pipeline(
                 [
                     [
-                        FEATURES_MAP[feature](window_size=self.buffer_size_samples),
+                        FEATURES_MAP[feature](
+                            window_size=self.buffer_size_samples  # noqa
+                        ),  # noqa
                         ApplyFunctionFilter(
                             is_output=True,
                             function=standardize_data,
-                            mean = self.dataset_mean[FEATURES_MAP[feature].__name__],
-                            std = self.dataset_std[FEATURES_MAP[feature].__name__],
+                            mean=self.dataset_mean[FEATURES_MAP[feature].__name__],
+                            std=self.dataset_std[FEATURES_MAP[feature].__name__],
                             name=feature,
                         ),
                     ]
                     for feature in selected_features
                 ],
-                representations_to_filter=["Last"] * len(selected_features),
+                representations_to_filter=["SOSFilter"] * len(selected_features),
             )
 
-            frame_data = np.concatenate([x for x in frame_data.output_representations.values()], axis=-1)
+            frame_data = np.concatenate(
+                [x for x in frame_data.output_representations.values()], axis=1
+            )
 
             frame_data = frame_data.reshape(1, -1)
 
