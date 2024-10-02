@@ -17,7 +17,7 @@ catboost = "^1.2.5"
 scikit-learn = "^1.5.1"
 toml = "^0.10.2"
 biosignal-device-interface = "^0.1.0"
-doc-octopy = {path = "./submodules/doc_octopy", develop=true}
+doc-octopy = {git = "https://github.com/NsquaredLab/DocOctopy.git"}
 
 [tool.poetry.group.dev]
 optional = true
