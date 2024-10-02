@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 import numpy as np
-from myogestic.gui.widgets.logger import LoggerLevel
+import zarr
 from scipy.signal import butter
 
+from doc_octopy.datasets.filters.generic import ApplyFunctionFilter
+from doc_octopy.datasets.filters.temporal import SOSFrequencyFilter
+from doc_octopy.datasets.supervised import EMGDataset
+from doc_octopy.datatypes import EMGData
+from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.models.config import FEATURES_MAP
-from myogestic.models.core.ai_utils.filters.temporal import SOSFrequencyFilter
 
 if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger
@@ -16,7 +21,11 @@ if TYPE_CHECKING:
 from PySide6.QtCore import QObject
 
 
-class MyogesticDataset(QObject):
+def standardize_data(data: np.ndarray, mean: float, std: float) -> np.ndarray:
+    return (data - mean) / std
+
+
+class MyoGesticDataset(QObject):
     def __init__(
         self,
         device_information: dict[str, Any],
@@ -60,11 +69,11 @@ class MyogesticDataset(QObject):
     def create_dataset(
         self, dataset: dict[str, dict], selected_features: list[str]
     ) -> dict:
-        training_data_emg = {key: {} for key in selected_features}
-        training_data_classes = {}
-        training_kinematics = []
+        # Accumulate bad channels. Maybe more channels get added between recordings
         bad_channels: list[int] = []
 
+        emg_data = {}
+        ground_truth_data = {}
         for task, recording in dataset.items():
             if task.lower() not in self.task_to_class_map.keys():
                 self.logger.print(
@@ -72,22 +81,18 @@ class MyogesticDataset(QObject):
                 )
                 continue
 
-            task_label: int = self.task_to_class_map[task.lower()]
-
-            training_data_classes[task_label] = {}
+            task_label: str = str(self.task_to_class_map[task.lower()])
 
             recording_bad_channels = recording["bad_channels"]
             bad_channels.extend(recording_bad_channels)
+
             emg = recording["emg"]
             if len(recording_bad_channels) > 0:
                 emg = np.delete(emg, recording_bad_channels, axis=0)
 
             if recording["use_kinematics"]:
                 kinematics = recording["kinematics"]
-                # TODO: Implement kinematics processing
-
                 # Upsample kinematics 60Hz to 2000 Hz
-
                 kinematics = np.array(
                     [
                         np.interp(
@@ -99,91 +104,81 @@ class MyogesticDataset(QObject):
                     ]
                 )
 
-                kinematics = np.stack(
-                    [
-                        kinematics[..., i : i + self.buffer_size_samples]
-                        for i in range(
-                            0,
-                            kinematics.shape[-1] - self.buffer_size_samples,
-                            self.samples_per_frame,
-                        )
-                    ],
-                    axis=0,
-                )
+                ground_truth_data[task_label] = kinematics
+            else:
+                ground_truth_data[task_label] = np.zeros((9, emg.shape[-1]))
 
-                training_kinematics.append(kinematics.mean(axis=-1))
+            emg_data[task_label] = emg
 
-            emg = np.stack(
+        dataset = EMGDataset(
+            emg_data=emg_data,
+            ground_truth_data=ground_truth_data,
+            ground_truth_data_type="virtual_hand",
+            save_path=Path("data/datasets/dataset.zarr"),
+            sampling_frequency=self.sampling_frequency,
+            tasks_to_use=list(emg_data.keys()),
+            chunk_size=self.buffer_size_samples,
+            chunk_shift=self.samples_per_frame,
+            emg_filter_pipeline_before_chunking=[
                 [
-                    emg[..., i : i + self.buffer_size_samples]
-                    for i in range(
-                        0,
-                        emg.shape[-1] - self.buffer_size_samples,
-                        self.samples_per_frame,
+                    SOSFrequencyFilter(
+                        sos_filter_coefficients=butter(
+                            4,
+                            (47, 53),
+                            "bandstop",
+                            output="sos",
+                            fs=self.sampling_frequency,
+                        )
                     )
-                ],
-                axis=0,
-            )[None, ...]
-
-            emg = SOSFrequencyFilter(
-                sos_filter_coefficients=butter(
-                    4,
-                    (47, 53),
-                    "bandstop",
-                    output="sos",
-                    fs=self.sampling_frequency,
-                ),
-                append_result_to_input=False,
-            )(emg)
-
-            for feature in selected_features:
-                training_data_emg[feature][task_label] = FEATURES_MAP[feature](
-                    window_size=self.buffer_size_samples
-                )(emg)[0]
-
-            # Create dataset for training
-            classes = (
-                np.zeros(training_data_emg[feature][task_label].shape[0]) + task_label
-            )
-
-            training_data_classes[task_label] = classes
-
-        # training_x = np.concatenate(list(training_data_emg.values()), axis=0)
-
-        training_means = {
-            key: np.concatenate(list(training_data_emg[key].values()), axis=0).mean()
-            for key in selected_features
-        }
-        training_stds = {
-            key: np.concatenate(list(training_data_emg[key].values()), axis=0).std()
-            for key in selected_features
-        }
-
-        training_emg = {}
-
-        task_group = {task: {} for task in training_data_classes.keys()}
-        for feature in training_data_emg.keys():
-            for task in training_data_emg[feature].keys():
-                task_group[task][feature] = training_data_emg[feature][task]
-                task_group[task][feature] = (
-                    task_group[task][feature] - training_means[feature]
-                ) / training_stds[feature]
-
-        for task in task_group:
-            temp = np.concatenate(list(task_group[task].values()), axis=-1)
-            temp = temp.reshape(temp.shape[0], -1)
-
-            training_emg[task] = temp
-
-        training_emg = np.concatenate(list(training_emg.values()), axis=0)
-        training_class = np.concatenate(list(training_data_classes.values()), axis=0)
-        training_kinematics = (
-            np.concatenate(training_kinematics, axis=0)
-            if len(training_kinematics) > 0
-            else []
+                ]
+            ],
+            emg_representations_to_filter_before_chunking=["Input"],
+            emg_filter_pipeline_after_chunking=[  # noqa
+                [
+                    FEATURES_MAP[feature](
+                        is_output=True, window_size=self.buffer_size_samples  # noqa
+                    )
+                ]
+                for feature in selected_features
+            ],
+            emg_representations_to_filter_after_chunking=["EMG_Chunkizer"]
+            * len(selected_features),
+            ground_truth_filter_pipeline_before_chunking=[],
+            ground_truth_representations_to_filter_before_chunking=["Input"],
+            ground_truth_filter_pipeline_after_chunking=[
+                [ApplyFunctionFilter(is_output=True, function=np.mean, axis=-1)]
+            ],
+            ground_truth_representations_to_filter_after_chunking=["Last"],
         )
 
-        dataset: dict = {
+        dataset.create_dataset()
+
+        dataset = zarr.open("data/datasets/dataset.zarr", mode="r")
+
+        feature_keys = list(dataset["training"]["emg"])
+        training_class = dataset["training"]["label"][:, 0].astype(int)
+        training_kinematics = dataset["training"]["ground_truth"][
+            "ApplyFunctionFilter"
+        ][()]
+
+        training_means = {}
+        training_stds = {}
+        training_emg = []
+
+        for key in feature_keys:
+            emg_per_key = dataset["training"]["emg"][key][()]
+
+            training_means[key] = emg_per_key.mean()
+            training_stds[key] = emg_per_key.std()
+            training_emg.append(
+                (emg_per_key - training_means[key]) / training_stds[key]
+            )
+
+        training_emg = np.concatenate(training_emg, axis=1)[..., 0]
+
+        print("Dataset created")
+
+        return {
             "emg": training_emg,
             "classes": training_class,
             "kinematics": training_kinematics,
@@ -192,8 +187,6 @@ class MyogesticDataset(QObject):
             "bad_channels": list(set(bad_channels)),
         }
 
-        return dataset
-
     def preprocess_data(
         self, data: np.ndarray, bad_channels: list[int], selected_features
     ) -> np.ndarray:
@@ -201,34 +194,53 @@ class MyogesticDataset(QObject):
         if len(self.emg_buffer) > self.buffer_size:
             self.emg_buffer.pop(0)
 
-            frame_data = np.concatenate(self.emg_buffer, axis=-1)[None, None]
+            frame_data = np.concatenate(self.emg_buffer, axis=-1)[None]
 
             bad_channels = list(set(bad_channels + self.dataset_bad_channels))
             if len(bad_channels) > 0:
                 frame_data = np.delete(frame_data, bad_channels, axis=2)
 
-            frame_data = SOSFrequencyFilter(
-                sos_filter_coefficients=butter(
-                    4,
-                    (47, 53),
-                    "bandstop",
-                    output="sos",
-                    fs=self.sampling_frequency,
+            frame_data = EMGData(
+                input_data=frame_data,
+                sampling_frequency=self.sampling_frequency,
+            )
+
+            frame_data.apply_filter(
+                SOSFrequencyFilter(
+                    sos_filter_coefficients=butter(
+                        4,
+                        (47, 53),
+                        "bandstop",
+                        output="sos",
+                        fs=self.sampling_frequency,
+                    ),
+                    name="SOSFilter",
                 ),
-                append_result_to_input=False,
-            )(frame_data)
+                representation_to_filter="Input",
+            )
 
-            emg_concat = []
-            for feature in selected_features:
-                temp = FEATURES_MAP[feature](window_size=self.buffer_size_samples)(
-                    frame_data
-                )[0]
+            frame_data.apply_filter_pipeline(
+                [
+                    [
+                        FEATURES_MAP[feature](
+                            window_size=self.buffer_size_samples  # noqa
+                        ),  # noqa
+                        ApplyFunctionFilter(
+                            is_output=True,
+                            function=standardize_data,
+                            mean=self.dataset_mean[FEATURES_MAP[feature].__name__],
+                            std=self.dataset_std[FEATURES_MAP[feature].__name__],
+                            name=feature,
+                        ),
+                    ]
+                    for feature in selected_features
+                ],
+                representations_to_filter=["SOSFilter"] * len(selected_features),
+            )
 
-                temp = (temp - self.dataset_mean[feature]) / self.dataset_std[feature]
-
-                emg_concat.append(temp)
-
-            frame_data = np.concatenate(emg_concat, axis=-1)
+            frame_data = np.concatenate(
+                [x for x in frame_data.output_representations.values()], axis=1
+            )
 
             frame_data = frame_data.reshape(1, -1)
 

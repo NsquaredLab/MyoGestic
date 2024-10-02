@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import TypedDict, Literal
 
 from catboost import CatBoostClassifier, CatBoostRegressor
 from catboost.utils import get_gpu_device_count
@@ -9,7 +9,16 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
 
 import myogestic.models.definitions.catboost_models as catboost_models
-from myogestic.models.core.ai_utils.filters.temporal import *
+from doc_octopy.datasets.filters._template import FilterBaseClass
+from doc_octopy.datasets.filters.temporal import (
+    RMSFilter,
+    MAVFilter,
+    IAVFilter,
+    VARFilter,
+    WFLFilter,
+    ZCFilter,
+    SSCFilter,
+)
 from myogestic.models.definitions import sklearn_models
 from myogestic.user_config import (
     FUNCTIONS_MAP as USER_FUNCTIONS_MAP,
@@ -282,18 +291,19 @@ the parameter values as values.
 The changeable parameters must be of type ChangeableParameter and the unchangeable parameters must be of type UnchangeableParameter.
 """
 
-FEATURES_MAP: dict[str, FilterBaseClass] = {
+FEATURES_MAP: dict[str, FilterBaseClass] = { # noqa
     "Root Mean Square": RMSFilter,
     "Mean Absolute Value": MAVFilter,
     "Integrated Absolute Value": IAVFilter,
     "Variance": VARFilter,
-    "Difference Absolute Standard Deviation": DASDVFilter,
-    "V-Order": VOrderFilter,
-    "Average Amplitude Change": AACFilter,
-    "Maximum Fractal Length": MFLFilter,
     "Waveform Length": WFLFilter,
     "Zero Crossings": ZCFilter,
     "Slope Sign Change": SSCFilter,
+    # TODO: Add these back
+    # "Difference Absolute Standard Deviation": DASDVFilter,
+    # "V-Order": VOrderFilter,
+    # "Average Amplitude Change": AACFilter,
+    # "Maximum Fractal Length": MFLFilter,
 }
 """
 Dictionary to get the EMG features class.

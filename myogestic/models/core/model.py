@@ -6,22 +6,25 @@ from typing import Any, TYPE_CHECKING, Union
 import numpy as np
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.models.config import FUNCTIONS_MAP, MODELS_MAP
-from myogestic.models.core.ai_utils.conformal_prediction import (
-    ConformalPredictor,
-    PredictionSolver,
-)
 
 if TYPE_CHECKING:
-    from myogestic.gui.widgets.logger.logger import CustomLogger
+    from myogestic.gui.widgets.logger import CustomLogger
 
 from PySide6.QtCore import QObject
 
 
-class MyogesticModel(QObject):
+class MyoGesticModel(QObject):
     def __init__(self, logger: CustomLogger, parent: QObject | None = None) -> None:
         super().__init__(parent)
 
+        self.model_params = None
+        self.model_name = None
+        self.is_classifier = False
         self.logger = logger
+
+        self.train_function = None
+        self.load_function = None
+        self.save_function = None
 
         self.model_prediction_to_interface_map = {
             -1: "Rejected Sample",
@@ -77,7 +80,7 @@ class MyogesticModel(QObject):
         self.model_information = dataset
         self.model_information["selected_features"] = selected_features
 
-        self.model: object = model_class(**self.model_params)
+        self.model: object = model_class(**self.model_params)  # noqa
 
         self.save_function = save_function
         self.load_function = load_function
@@ -86,37 +89,6 @@ class MyogesticModel(QObject):
         self.model = self.train_function(
             self.model, training_x, training_y, self.logger
         )
-
-    def set_conformal_predictor(self, params: dict) -> None:
-        try:
-            self.conformal_predictor = ConformalPredictor(
-                calibrator=params["calibrator_type"], alpha=params["alpha"]
-            )
-
-            self.prediction_solver = PredictionSolver(
-                kernel_size=params["kernel_size"],
-                solver_strategie=params["solver_strategy"],
-                solve_online=True,
-            )
-
-            calibration_emg = self.model_information["x"]
-            calibration_classes = self.model_information["y"]
-
-            class_mapping = list(self.model.classes_)
-            calibration_classes_idx = np.array(
-                [class_mapping.index(i) for i in calibration_classes]
-            )
-
-            predictions = self.model.predict_proba(calibration_emg)
-            self.conformal_predictor.calibrate(predictions, calibration_classes_idx)
-            self.logger.print(f"CP calibrator set: {params['calibrator_type']}")
-
-        except Exception as error:
-            self.conformal_predictor = None
-            self.prediction_solver = None
-            self.logger.print(
-                f"CP calibrator not set. Error: {error}", LoggerLevel.ERROR
-            )
 
     def predict(self, input: np.ndarray) -> tuple[str, str, int, np.ndarray]:
         if self.is_classifier:
@@ -189,7 +161,7 @@ class MyogesticModel(QObject):
 
         self.model = self.load_function(
             self.model_information["model_path"],
-            model_class(**self.model_information["model_params"]),
+            model_class(**self.model_information["model_params"]),  # noqa
         )
 
         return self.model_information

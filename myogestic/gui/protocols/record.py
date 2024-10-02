@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from PySide6.QtCore import QObject
+
 from myogestic.gui.widgets.logger import LoggerLevel
 
 if TYPE_CHECKING:
