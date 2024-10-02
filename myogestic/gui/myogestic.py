@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import platform
 import sys
 import time
 from typing import TYPE_CHECKING
@@ -10,14 +9,14 @@ import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import QCheckBox, QLabel, QMainWindow
-from myogestic.gui.widgets.logger import CustomLogger
-
-from myogestic.gui.protocols.protocol import Protocol
-from myogestic.gui.ui_compiled.main_window import Ui_MyoGestic
-from myogestic.gui.widgets.output import VirtualHandInterface
 from biosignal_device_interface.constants.devices.core.base_device_constants import (
     DeviceType,
 )
+
+from myogestic.gui.protocols.protocol import Protocol
+from myogestic.gui.ui_compiled.main_window import Ui_MyoGestic
+from myogestic.gui.widgets.logger import CustomLogger
+from myogestic.gui.widgets.output import VirtualHandInterface
 
 if TYPE_CHECKING:
     from biosignal_device_interface.gui.device_template_widgets.otb.otb_devices_widget import (
@@ -41,7 +40,7 @@ class MyoGestic(QMainWindow):
         The main user interface of the application.
     update_fps_label : QLabel
         Label for displaying the current update rate of the application.
-    fps_buffer : list[float] # TODO: What is this?
+    fps_buffer : list[float]
         Buffer for storing the update rates of the application.
     time_since_last_fps_update : float
         Time of the last update rate calculation.
@@ -111,26 +110,12 @@ class MyoGestic(QMainWindow):
         self.samples_per_frame = None
         self.number_of_channels = None
 
-        # Base path for saving files
-        platform_name = platform.system()
-        # TODO: Really necessary to check for _MEIPASS?
+        # _MEIPASS is a PyInstaller specific attribute that is set when the application is run as a frozen executable.
         if hasattr(sys, "_MEIPASS"):
-            match platform_name:
-                case "Windows":
-                    self.base_path = os.path.expanduser("~")
-
-                case "Darwin":
-                    self.base_path = os.path.expanduser("~")
-
-                case "Linux":
-                    self.base_path = os.path.expanduser("~")
-
-                case _:
-                    self.base_path = os.path.expanduser("~")
-
+            self.base_path = os.path.expanduser("~")
             self.base_path = os.path.join(self.base_path, "MyoGestic")
         else:
-            self.base_path = r"data"
+            self.base_path = "data"
 
         if not os.path.exists(self.base_path):
             os.makedirs(self.base_path)
@@ -172,9 +157,8 @@ class MyoGestic(QMainWindow):
         """
         self.current_bad_channels = np.nonzero(bad_channels == 0)[0].tolist()
 
-    def update(self, data: np.ndarray) -> None:
+    def update(self, data: np.ndarray) -> None: # noqa
         """
-        # TODO: What does this do?
         Update the application.
 
         This method updates the application with new data.
@@ -190,7 +174,7 @@ class MyoGestic(QMainWindow):
         """
         time_difference = time.time() - self.time_since_last_fps_update
         if time_difference != 0:
-            fps = 1 / (time_difference)
+            fps = 1 / time_difference
         else:
             fps = 0
 
@@ -228,7 +212,6 @@ class MyoGestic(QMainWindow):
             lines=self.number_of_channels,
         )
 
-        # TODO: 0.2? Why?
         frames_per_second = int(self.sampling_frequency / self.samples_per_frame)
         fps_buffer = np.zeros(int(frames_per_second))
         self.fps_buffer = fps_buffer.tolist()
