@@ -130,6 +130,7 @@ sphinx_gallery_conf = {
     "remove_config_comments": True,
     "show_memory": True,
     "within_subsection_order": FileNameSortKey,
+    "plot_gallery": False,
 }
 
 suppress_warnings = ["config.cache"]
