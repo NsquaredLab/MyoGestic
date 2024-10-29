@@ -79,6 +79,7 @@ extensions = [
     "enum_tools.autoenum",
     "myst_parser",
     "sphinxcontrib.youtube",
+    "sphinxcontrib.pdfembed",
 ]
 
 # autosummary_generate = True
