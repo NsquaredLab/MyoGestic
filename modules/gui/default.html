@@ -182,7 +182,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -258,103 +258,14 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="module-myogestic.gui.protocols.protocol">
-<span id="base-protocol-panel"></span><h1>Base Protocol (Panel)<a class="headerlink" href="#module-myogestic.gui.protocols.protocol" title="Link to this heading">¶</a></h1>
-<dl class="py class">
-<dt class="sig sig-object py" id="myogestic.gui.protocols.protocol.Protocol">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.gui.protocols.protocol.</span></span><span class="sig-name descname"><span class="pre">Protocol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://doc.qt.io/qtforpython-6/PySide6/QtCore/QObject.html#PySide6.QtCore.QObject" title="(in PySide v6.8.0)"><span class="pre">PySide6.QtCore.QObject</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/myogestic/gui/protocols/protocol.html#Protocol"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.protocols.protocol.Protocol" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference external" href="https://doc.qt.io/qtforpython-6/PySide6/QtCore/QObject.html#PySide6.QtCore.QObject" title="(in PySide v6.8.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">QObject</span></code></a></p>
-<p>Class for handling the different protocols of the MyoGestic application.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>parent</strong> (<em>MyoGestic</em><em> | </em><em>None</em>) – The parent object of the protocol object.</p>
-</dd>
-</dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="myogestic.gui.protocols.protocol.Protocol.main_window">
-<span class="sig-name descname"><span class="pre">main_window</span></span><a class="headerlink" href="#myogestic.gui.protocols.protocol.Protocol.main_window" title="Link to this definition">¶</a></dt>
-<dd><p>The main window of the MyoGestic application.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>MyoGestic</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="myogestic.gui.protocols.protocol.Protocol.protocol_mode_stacked_widget">
-<span class="sig-name descname"><span class="pre">protocol_mode_stacked_widget</span></span><a class="headerlink" href="#myogestic.gui.protocols.protocol.Protocol.protocol_mode_stacked_widget" title="Link to this definition">¶</a></dt>
-<dd><p>Stacked widget for displaying the different protocol modes.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>QStackedWidget</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="myogestic.gui.protocols.protocol.Protocol.protocol_record_radio_button">
-<span class="sig-name descname"><span class="pre">protocol_record_radio_button</span></span><a class="headerlink" href="#myogestic.gui.protocols.protocol.Protocol.protocol_record_radio_button" title="Link to this definition">¶</a></dt>
-<dd><p>Radio button for the record protocol.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>QRadioButton</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="myogestic.gui.protocols.protocol.Protocol.protocol_training_radio_button">
-<span class="sig-name descname"><span class="pre">protocol_training_radio_button</span></span><a class="headerlink" href="#myogestic.gui.protocols.protocol.Protocol.protocol_training_radio_button" title="Link to this definition">¶</a></dt>
-<dd><p>Radio button for the training protocol.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>QRadioButton</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="myogestic.gui.protocols.protocol.Protocol.protocol_online_radio_button">
-<span class="sig-name descname"><span class="pre">protocol_online_radio_button</span></span><a class="headerlink" href="#myogestic.gui.protocols.protocol.Protocol.protocol_online_radio_button" title="Link to this definition">¶</a></dt>
-<dd><p>Radio button for the online protocol.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>QRadioButton</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="myogestic.gui.protocols.protocol.Protocol.current_protocol">
-<span class="sig-name descname"><span class="pre">current_protocol</span></span><a class="headerlink" href="#myogestic.gui.protocols.protocol.Protocol.current_protocol" title="Link to this definition">¶</a></dt>
-<dd><p>The current protocol object.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="record.html#myogestic.gui.protocols.record.RecordProtocol" title="myogestic.gui.protocols.record.RecordProtocol">RecordProtocol</a> | <a class="reference internal" href="training.html#myogestic.gui.protocols.training.TrainingProtocol" title="myogestic.gui.protocols.training.TrainingProtocol">TrainingProtocol</a> | <a class="reference internal" href="online.html#myogestic.gui.protocols.online.OnlineProtocol" title="myogestic.gui.protocols.online.OnlineProtocol">OnlineProtocol</a> | None</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="myogestic.gui.protocols.protocol.Protocol.available_protocols">
-<span class="sig-name descname"><span class="pre">available_protocols</span></span><a class="headerlink" href="#myogestic.gui.protocols.protocol.Protocol.available_protocols" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)">list</a>[<a class="reference internal" href="record.html#myogestic.gui.protocols.record.RecordProtocol" title="myogestic.gui.protocols.record.RecordProtocol">RecordProtocol</a> | <a class="reference internal" href="training.html#myogestic.gui.protocols.training.TrainingProtocol" title="myogestic.gui.protocols.training.TrainingProtocol">TrainingProtocol</a> | <a class="reference internal" href="online.html#myogestic.gui.protocols.online.OnlineProtocol" title="myogestic.gui.protocols.online.OnlineProtocol">OnlineProtocol</a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<p>Initialize self.  See help(type(self)) for accurate signature.</p>
-</dd></dl>
-
+          <section id="base-protocol-panel">
+<h1>Base Protocol (Panel)<a class="headerlink" href="#base-protocol-panel" title="Link to this heading">¶</a></h1>
 </section>
 
         </article>
@@ -400,36 +311,8 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer">
+    <aside class="toc-drawer no-toc">
       
-      
-      <div class="toc-sticky toc-scroll">
-        <div class="toc-title-container">
-          <span class="toc-title">
-            On this page
-          </span>
-        </div>
-        <div class="toc-tree-container">
-          <div class="toc-tree">
-            <ul>
-<li><a class="reference internal" href="#">Base Protocol (Panel)</a><ul>
-<li><a class="reference internal" href="#myogestic.gui.protocols.protocol.Protocol"><code class="docutils literal notranslate"><span class="pre">Protocol</span></code></a><ul>
-<li><a class="reference internal" href="#myogestic.gui.protocols.protocol.Protocol.main_window"><code class="docutils literal notranslate"><span class="pre">Protocol.main_window</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.gui.protocols.protocol.Protocol.protocol_mode_stacked_widget"><code class="docutils literal notranslate"><span class="pre">Protocol.protocol_mode_stacked_widget</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.gui.protocols.protocol.Protocol.protocol_record_radio_button"><code class="docutils literal notranslate"><span class="pre">Protocol.protocol_record_radio_button</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.gui.protocols.protocol.Protocol.protocol_training_radio_button"><code class="docutils literal notranslate"><span class="pre">Protocol.protocol_training_radio_button</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.gui.protocols.protocol.Protocol.protocol_online_radio_button"><code class="docutils literal notranslate"><span class="pre">Protocol.protocol_online_radio_button</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.gui.protocols.protocol.Protocol.current_protocol"><code class="docutils literal notranslate"><span class="pre">Protocol.current_protocol</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.gui.protocols.protocol.Protocol.available_protocols"><code class="docutils literal notranslate"><span class="pre">Protocol.available_protocols</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-
-          </div>
-        </div>
-      </div>
       
       
     </aside>

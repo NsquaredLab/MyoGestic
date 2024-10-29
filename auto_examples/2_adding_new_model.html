@@ -282,73 +282,8 @@ to download the full example code.</p>
 <li><p><cite>PARAMETERS_MAP</cite>: a dictionary where the keys are the model names and the values are a dictionary containing the parameters that the model needs. This dictionary is used to create the GUI for the model in the MyoGestic interface.</p></li>
 </ul>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="c1"># print configuration file</span>
-<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;../myogestic/user_config.py&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <a href="https://docs.python.org/3/library/io.html#io.TextIOWrapper" title="io.TextIOWrapper" class="sphx-glr-backref-module-io sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">f</span></a><span class="p">:</span>
-    <span class="nb">print</span><span class="p">(</span><a href="https://docs.python.org/3/library/io.html#io.TextIOWrapper" title="io.TextIOWrapper" class="sphx-glr-backref-module-io sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">f</span></a><span class="o">.</span><span class="n">read</span><span class="p">())</span>
-</pre></div>
-</div>
-<div class="sphx-glr-script-out highlight-none notranslate"><div class="highlight"><pre><span></span>from catboost import CatBoostRegressor
-from catboost.utils import get_gpu_device_count
-from sklearn.linear_model import LinearRegression
-from sklearn.multioutput import MultiOutputRegressor
-
-from myogestic.models.definitions import sklearn_models
-
-MODELS_MAP = {
-    &quot;Catboost Regressor Per Finger&quot;: (
-        lambda **params: MultiOutputRegressor(CatBoostRegressor(**params)),
-        False,
-    ),
-    &quot;Linear Regressor Per Finger&quot;: (
-        lambda **params: MultiOutputRegressor(LinearRegression(**params)),
-        False,
-    ),
-}
-
-FUNCTIONS_MAP = {
-    &quot;Catboost Regressor Per Finger&quot;: {
-        &quot;save_function&quot;: sklearn_models.save,
-        &quot;load_function&quot;: sklearn_models.load,
-        &quot;train_function&quot;: sklearn_models.train,
-    },
-    &quot;Linear Regressor Per Finger&quot;: {
-        &quot;save_function&quot;: sklearn_models.save,
-        &quot;load_function&quot;: sklearn_models.load,
-        &quot;train_function&quot;: sklearn_models.train,
-    },
-}
-
-PARAMETERS_MAP = {
-    &quot;Catboost Regressor Per Finger&quot;: {
-        &quot;changeable&quot;: {
-            &quot;iterations&quot;: {
-                &quot;start_value&quot;: 10,
-                &quot;end_value&quot;: 1000,
-                &quot;step&quot;: 10,
-                &quot;default_value&quot;: 100,
-            },
-            &quot;l2_leaf_reg&quot;: {
-                &quot;start_value&quot;: 1,
-                &quot;end_value&quot;: 10,
-                &quot;step&quot;: 1,
-                &quot;default_value&quot;: 5,
-            },
-            &quot;border_count&quot;: {
-                &quot;start_value&quot;: 1,
-                &quot;end_value&quot;: 255,
-                &quot;step&quot;: 1,
-                &quot;default_value&quot;: 128,
-            },
-        },
-        &quot;unchangeable&quot;: {
-            &quot;task_type&quot;: &quot;GPU&quot; if get_gpu_device_count() &gt; 0 else &quot;CPU&quot;,
-            &quot;train_dir&quot;: None,
-        },
-    },
-    &quot;Linear Regressor Per Finger&quot;: {
-        &quot;changeable&quot;: {},
-        &quot;unchangeable&quot;: {},
-    },
-}
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;../myogestic/user_config.py&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
 </pre></div>
 </div>
 <section id="create-a-new-model">
@@ -367,14 +302,14 @@ PARAMETERS_MAP = {
 <p class="admonition-title">Important</p>
 <p>Each model should have an unique name that is consistent across the <cite>MODELS_MAP</cite>, <cite>FUNCTIONS_MAP</cite>, and <cite>PARAMETERS_MAP</cite> dictionaries. This name will be displayed in the GUI.</p>
 </div>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sklearn.multioutput</span> <span class="kn">import</span> <a href="https://scikit-learn.org/stable/modules/generated/sklearn.multioutput.MultiOutputRegressor.html#sklearn.multioutput.MultiOutputRegressor" title="sklearn.multioutput.MultiOutputRegressor" class="sphx-glr-backref-module-sklearn-multioutput sphx-glr-backref-type-py-class"><span class="n">MultiOutputRegressor</span></a>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sklearn.multioutput</span> <span class="kn">import</span> <a href="https://scikit-learn.org/stable/modules/generated/sklearn.multioutput.MultiOutputRegressor.html#sklearn.multioutput.MultiOutputRegressor" title="sklearn.multioutput.MultiOutputRegressor" class="sphx-glr-backref-module-sklearn-multioutput sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">MultiOutputRegressor</span></a>
 <span class="kn">from</span> <span class="nn">catboost</span> <span class="kn">import</span> <span class="n">CatBoostRegressor</span>
 
 <span class="c1"># for such a model. we do not need to define a new class. We can use a lambda function to create the model.</span>
-<span class="n">my_new_model</span> <span class="o">=</span> <span class="k">lambda</span> <span class="o">**</span><span class="n">params</span><span class="p">:</span> <a href="https://scikit-learn.org/stable/modules/generated/sklearn.multioutput.MultiOutputRegressor.html#sklearn.multioutput.MultiOutputRegressor" title="sklearn.multioutput.MultiOutputRegressor" class="sphx-glr-backref-module-sklearn-multioutput sphx-glr-backref-type-py-class"><span class="n">MultiOutputRegressor</span></a><span class="p">(</span><span class="n">CatBoostRegressor</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">))</span>
+<span class="n">my_new_model</span> <span class="o">=</span> <span class="k">lambda</span> <span class="o">**</span><span class="n">params</span><span class="p">:</span> <a href="https://scikit-learn.org/stable/modules/generated/sklearn.multioutput.MultiOutputRegressor.html#sklearn.multioutput.MultiOutputRegressor" title="sklearn.multioutput.MultiOutputRegressor" class="sphx-glr-backref-module-sklearn-multioutput sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">MultiOutputRegressor</span></a><span class="p">(</span><span class="n">CatBoostRegressor</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">))</span>
 
 <span class="c1"># Add the model to the MODELS_MAP dictionary</span>
-<a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">MODELS_MAP</span></a> <span class="o">=</span> <span class="p">{</span>
+<span class="n">MODELS_MAP</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">&quot;My New Model&quot;</span><span class="p">:</span> <span class="p">(</span>
         <span class="n">my_new_model</span><span class="p">,</span>
         <span class="kc">False</span><span class="p">,</span>  <span class="c1"># False because it is *not* a classifier</span>
@@ -394,7 +329,7 @@ PARAMETERS_MAP = {
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">myogestic.models.definitions</span> <span class="kn">import</span> <span class="n">sklearn_models</span>
 
 <span class="c1"># Add the functions to the FUNCTIONS_MAP dictionary</span>
-<a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">FUNCTIONS_MAP</span></a> <span class="o">=</span> <span class="p">{</span>
+<span class="n">FUNCTIONS_MAP</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">&quot;My New Model&quot;</span><span class="p">:</span> <span class="p">{</span>
         <span class="s2">&quot;save_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
         <span class="s2">&quot;load_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
@@ -433,7 +368,7 @@ PARAMETERS_MAP = {
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">catboost.utils</span> <span class="kn">import</span> <span class="n">get_gpu_device_count</span>
 
 <span class="c1"># Add the parameters to the PARAMETERS_MAP dictionary</span>
-<a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">PARAMETERS_MAP</span></a> <span class="o">=</span> <span class="p">{</span>
+<span class="n">PARAMETERS_MAP</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">&quot;My New Model&quot;</span><span class="p">:</span> <span class="p">{</span>
         <span class="s2">&quot;changeable&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;iterations&quot;</span><span class="p">:</span> <span class="p">{</span>
@@ -463,7 +398,7 @@ PARAMETERS_MAP = {
 <span class="p">}</span>
 </pre></div>
 </div>
-<p class="sphx-glr-timing"><strong>Total running time of the script:</strong> (0 minutes 0.012 seconds)</p>
+<p><strong>Estimated memory usage:</strong>  0 MB</p>
 <div class="sphx-glr-footer sphx-glr-footer-example docutils container" id="sphx-glr-download-auto-examples-2-adding-new-model-py">
 <div class="sphx-glr-download sphx-glr-download-jupyter docutils container">
 <p><a class="reference download internal" download="" href="../_downloads/f8643e76dd7dfd649e4b8af4624caa59/2_adding_new_model.ipynb"><code class="xref download docutils literal notranslate"><span class="pre">Download</span> <span class="pre">Jupyter</span> <span class="pre">notebook:</span> <span class="pre">2_adding_new_model.ipynb</span></code></a></p>

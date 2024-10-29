@@ -46,81 +46,6 @@ This file contains 3 dictionaries (see :ref:`models_config` for more details):
         print(f.read())
 
 
-
-
-
-.. rst-class:: sphx-glr-script-out
-
- .. code-block:: none
-
-    from catboost import CatBoostRegressor
-    from catboost.utils import get_gpu_device_count
-    from sklearn.linear_model import LinearRegression
-    from sklearn.multioutput import MultiOutputRegressor
-
-    from myogestic.models.definitions import sklearn_models
-
-    MODELS_MAP = {
-        "Catboost Regressor Per Finger": (
-            lambda **params: MultiOutputRegressor(CatBoostRegressor(**params)),
-            False,
-        ),
-        "Linear Regressor Per Finger": (
-            lambda **params: MultiOutputRegressor(LinearRegression(**params)),
-            False,
-        ),
-    }
-
-    FUNCTIONS_MAP = {
-        "Catboost Regressor Per Finger": {
-            "save_function": sklearn_models.save,
-            "load_function": sklearn_models.load,
-            "train_function": sklearn_models.train,
-        },
-        "Linear Regressor Per Finger": {
-            "save_function": sklearn_models.save,
-            "load_function": sklearn_models.load,
-            "train_function": sklearn_models.train,
-        },
-    }
-
-    PARAMETERS_MAP = {
-        "Catboost Regressor Per Finger": {
-            "changeable": {
-                "iterations": {
-                    "start_value": 10,
-                    "end_value": 1000,
-                    "step": 10,
-                    "default_value": 100,
-                },
-                "l2_leaf_reg": {
-                    "start_value": 1,
-                    "end_value": 10,
-                    "step": 1,
-                    "default_value": 5,
-                },
-                "border_count": {
-                    "start_value": 1,
-                    "end_value": 255,
-                    "step": 1,
-                    "default_value": 128,
-                },
-            },
-            "unchangeable": {
-                "task_type": "GPU" if get_gpu_device_count() > 0 else "CPU",
-                "train_dir": None,
-            },
-        },
-        "Linear Regressor Per Finger": {
-            "changeable": {},
-            "unchangeable": {},
-        },
-    }
-
-
-
-
-
 .. GENERATED FROM PYTHON SOURCE LINES 25-36
 
 Create a new model
@@ -155,12 +80,6 @@ Our model is going to be a per finger regressor using the `CatBoostRegressor` fr
     }
 
 
-
-
-
-
-
-
 .. GENERATED FROM PYTHON SOURCE LINES 52-59
 
 Add functions to save, load, and train the model
@@ -186,12 +105,6 @@ We can use the `sklearn_models` functions that are already defined in the `myoge
             "train_function": sklearn_models.train,
         },
     }
-
-
-
-
-
-
 
 
 .. GENERATED FROM PYTHON SOURCE LINES 72-92
@@ -254,16 +167,7 @@ We are also going to define the following unchangeable parameters:
         },
     }
 
-
-
-
-
-
-
-
-.. rst-class:: sphx-glr-timing
-
-   **Total running time of the script:** (0 minutes 0.012 seconds)
+**Estimated memory usage:**  0 MB
 
 
 .. _sphx_glr_download_auto_examples_2_adding_new_model.py:
