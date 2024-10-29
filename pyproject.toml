@@ -52,11 +52,6 @@ _run_remove_device_interfaces = "poetry run pip uninstall -y biosignal-device-in
 _run_install_device_interfaces = "poetry run pip install -e submodules/biosignal_device_interface"
 install-dev = ["_install_poetry_with_dev", "_run_submodule_update", "_run_remove_device_interfaces", "_run_install_device_interfaces"]
 
-[[tool.poetry.source]]
-name = "pytorch_gpu"
-url = "https://download.pytorch.org/whl/cu124"
-priority = "explicit"
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

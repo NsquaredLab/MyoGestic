@@ -19,7 +19,6 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libegl1-mesa libgl1-mesa-glx
         python -m pip install --upgrade pip
         python -m pip install poetry
         poetry lock --no-update
