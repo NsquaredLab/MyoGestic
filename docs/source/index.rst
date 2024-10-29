@@ -17,6 +17,12 @@ MyoGestic (💪👑 ➡️ 💻 ➡️ 🦾) Documentation
 MyoGestic is a software framework made to help the myocontrol community to develop and test new myocontrol algorithms.
 It is made to be easily extensible and to minimize dead time when testing on motor impaired individuals.
 
+Tutorial
+--------
+:pdfembed:`src:_static/MyoGestic_Tutorial.pdf#view=Fit#toolbar=0#statusbar=0#navpanes=0, height:540, width:960, align:middle`
+
+:download:`Download the PDF <_static/MyoGestic_Tutorial.pdf>`
+
 Usage Examples
 ----------------
 
