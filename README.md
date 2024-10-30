@@ -31,7 +31,7 @@ poetry install
 [![MyoGestic Tutorial](https://img.youtube.com/vi/Re3VfgKhjCM/maxresdefault.jpg)](https://youtu.be/Re3VfgKhjCM)
 
 If you prefer a PDF version, you can download it [here](
-https://github.com/NsquaredLab/MyoGestic/tree/main/docs/_static/MyoGestic_Tutorial.pdf).
+https://github.com/NsquaredLab/MyoGestic/tree/main/docs/source/_static/MyoGestic_Tutorial.pdf).
 
 ## Development installation
 If you want to contribute to the project, you can install the development dependencies using the following command:
