@@ -97,12 +97,14 @@ class MyoGestic(QMainWindow):
         self.plot: BiosignalPlotWidget = self.ui.vispyPlotWidget
         self.current_bad_channels: list | None = []
         self.plot.bad_channels_updated.connect(self._update_bad_channels)
-        self.display_time = 10
+        self.display_time = self.ui.timeShownDoubleSpinBox.value()
 
         # Device Setup
         self.device_widget: OTBDevicesWidget = self.ui.devicesWidget
         self.device_widget.biosignal_data_arrived.connect(self.update)
         self.device_widget.configure_toggled.connect(self._prepare_plot)
+
+        self.ui.timeShownDoubleSpinBox.valueChanged.connect(self._reconfigure_plot)
 
         # Device parameters
         self.device_name: DeviceType = None
@@ -128,7 +130,7 @@ class MyoGestic(QMainWindow):
         # Output Setup
         self.virtual_hand_interface = VirtualHandInterface(self)
 
-        # Procotol Setup
+        # Protocol Setup
         self.protocol = Protocol(self)
 
         # Preferences
@@ -157,7 +159,7 @@ class MyoGestic(QMainWindow):
         """
         self.current_bad_channels = np.nonzero(bad_channels == 0)[0].tolist()
 
-    def update(self, data: np.ndarray) -> None: # noqa
+    def update(self, data: np.ndarray) -> None:  # noqa
         """
         Update the application.
 
@@ -196,7 +198,6 @@ class MyoGestic(QMainWindow):
         -------
         None
         """
-
         if not is_configured:
             return
 
@@ -215,6 +216,26 @@ class MyoGestic(QMainWindow):
         frames_per_second = int(self.sampling_frequency / self.samples_per_frame)
         fps_buffer = np.zeros(int(frames_per_second))
         self.fps_buffer = fps_buffer.tolist()
+
+    def _reconfigure_plot(self, value) -> None:
+        """
+        Reconfigure the plot.
+
+        This method reconfigures the plot for displaying biosignal data based on the given value in seconds.
+
+        Returns
+        -------
+        None
+        """
+        if self.sampling_frequency is None or self.number_of_channels is None:
+            return
+
+        self.plot.configure(
+            display_time=value,
+            sampling_frequency=self.sampling_frequency,
+            lines=self.number_of_channels,
+        )
+        self.plot.resize(0, 0)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
