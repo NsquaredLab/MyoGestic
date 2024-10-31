@@ -565,7 +565,7 @@ class Ui_MyoGestic(object):
         self.timeShownDoubleSpinBox.setSizePolicy(sizePolicy7)
         self.timeShownDoubleSpinBox.setDecimals(1)
         self.timeShownDoubleSpinBox.setMinimum(0.100000000000000)
-        self.timeShownDoubleSpinBox.setMaximum(60.000000000000000)
+        self.timeShownDoubleSpinBox.setMaximum(300.000000000000000)
         self.timeShownDoubleSpinBox.setValue(10.000000000000000)
 
         self.horizontalLayout.addWidget(self.timeShownDoubleSpinBox)
