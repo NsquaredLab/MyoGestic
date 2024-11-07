@@ -1,15 +1,11 @@
-from typing import TypedDict, Literal
-
 from catboost import CatBoostClassifier, CatBoostRegressor
 from catboost.utils import get_gpu_device_count
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.gaussian_process import GaussianProcessClassifier
-from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPClassifier
-from sklearn.svm import SVC
 
-import myogestic.models.definitions.catboost_models as catboost_models
-from doc_octopy.datasets.filters._template import FilterBaseClass
+from doc_octopy.datasets.filters.generic import IdentityFilter
 from doc_octopy.datasets.filters.temporal import (
     RMSFilter,
     MAVFilter,
@@ -19,301 +15,203 @@ from doc_octopy.datasets.filters.temporal import (
     ZCFilter,
     SSCFilter,
 )
-from myogestic.models.definitions import sklearn_models
-from myogestic.user_config import (
-    FUNCTIONS_MAP as USER_FUNCTIONS_MAP,
-    MODELS_MAP as USER_MODELS_MAP,
-    PARAMETERS_MAP as USER_PARAMETERS_MAP,
+from doc_octopy.models.definitions.raul_net.online.v16 import RaulNetV16
+from myogestic.models.definitions import sklearn_models, catboost_models, raulnet_models
+from myogestic.models.utils import Registry
+
+CONFIG_REGISTRY = Registry()
+
+# Register models
+CONFIG_REGISTRY.register_model(
+    "RaulNet Regressor",
+    RaulNetV16,
+    False,
+    raulnet_models.save,
+    raulnet_models.load,
+    raulnet_models.train,
+    raulnet_models.predict,
+    unchangeable_parameters={
+        "learning_rate": 1e-4,
+        "nr_of_input_channels": 1,
+        "input_length__samples": 360,
+        "nr_of_outputs": 5,
+        "nr_of_electrode_grids": 1,
+        "nr_of_electrodes_per_grid": 32,
+        "cnn_encoder_channels": (64, 32, 32),
+        "mlp_encoder_channels": (128, 128),
+        "event_search_kernel_length": 31,
+        "event_search_kernel_stride": 8,
+    },
 )
 
-
-class IntParameter(TypedDict):
-    """TypedDict for integer parameters.
-
-    Parameters
-    ----------
-    start_value : int
-        The start value for the parameter.
-    end_value : int
-        The end value for the parameter.
-    step : int
-        The step for the parameter.
-    default_value : int
-        The default value for the parameter.
-    """
-
-    start_value: int
-    end_value: int
-    step: int
-    default_value: int
-
-
-class FloatParameter(TypedDict):
-    """TypedDict for float parameters.
-
-    Parameters
-    ----------
-    start_value : float
-        The start value for the parameter.
-    end_value : float
-        The end value for the parameter.
-    step : float
-        The step for the parameter.
-    default_value : float
-        The default value for the parameter.
-    """
-
-    start_value: float
-    end_value: float
-    step: float
-    default_value: float
-
-
-class StringParameter(TypedDict):
-    """TypedDict for string parameters.
-
-    Parameters
-    ----------
-    default_value : str
-        The default value for the parameter.
-    """
-
-    default_value: str
-
-
-class BoolParameter(TypedDict):
-    """TypedDict for boolean parameters.
-
-    Parameters
-    ----------
-    default_value : bool
-        The default value for the parameter.
-    """
-
-    default_value: bool
-
-
-class CategoricalParameter(TypedDict):
-    """TypedDict for categorical parameters.
-
-    Parameters
-    ----------
-    values : list[str]
-        The values for the parameter.
-    default_value : str
-        The default value for the parameter.
-    """
-
-    values: list[str]
-    default_value: str
-
-
-ChangeableParameter = (
-    IntParameter
-    | FloatParameter
-    | StringParameter
-    | BoolParameter
-    | CategoricalParameter
+CONFIG_REGISTRY.register_model(
+    "RaulNet Regressor per Finger",
+    RaulNetV16,
+    False,
+    raulnet_models.save_per_finger,
+    raulnet_models.load_per_finger,
+    raulnet_models.train_per_finger,
+    raulnet_models.predict_per_finger,
+    unchangeable_parameters={
+        "learning_rate": 1e-4,
+        "nr_of_input_channels": 1,
+        "input_length__samples": 360,
+        "nr_of_outputs": 1,
+        "nr_of_electrode_grids": 1,
+        "nr_of_electrodes_per_grid": 32,
+        "cnn_encoder_channels": (64, 32, 32),
+        "mlp_encoder_channels": (128, 128),
+        "event_search_kernel_length": 31,
+        "event_search_kernel_stride": 8,
+    },
 )
-"""
-Union of the TypedDicts for the changeable parameters.
-"""
 
-UnchangeableParameter = int | float | str | bool | list[str] | None
-"""
-Union of the types for the unchangeable parameters.
-"""
-
-MODELS_MAP: dict[str, tuple[object, bool]] = {
-    "CatBoost Classifier": (CatBoostClassifier, True),
-    "CatBoost Regressor": (CatBoostRegressor, False),
-    "Linear Regressor": (LinearRegression, False),
-    "Logistic Classifier": (LogisticRegression, True),
-    "Gaussian Process Classifier": (GaussianProcessClassifier, True),
-    "AdaBoost Classifier": (AdaBoostClassifier, True),
-    "MLP Classifier": (MLPClassifier, True),
-    "Support Vector Classifier": (SVC, True),
-}
-"""
-Dictionary to get the models class and whether it is a classifier or regressor.
-
-The keys are the models names, the values are tuples with the models class and a boolean
-indicating whether the models is a classifier.
-
-The model class must be a callable that receives the parameters as keyword arguments.
-"""
-
-FUNCTIONS_MAP: dict[
-    str, dict[Literal["save_function", "load_function", "train_function"], callable]
-] = {
-    "CatBoost Classifier": {
-        "save_function": catboost_models.save,
-        "load_function": catboost_models.load,
-        "train_function": catboost_models.train,
-    },
-    "CatBoost Regressor": {
-        "save_function": catboost_models.save,
-        "load_function": catboost_models.load,
-        "train_function": catboost_models.train,
-    },
-    "Linear Regressor": {
-        "save_function": sklearn_models.save,
-        "load_function": sklearn_models.load,
-        "train_function": sklearn_models.train,
-    },
-    "Linear Regressor Per Finger": {
-        "save_function": sklearn_models.save,
-        "load_function": sklearn_models.load,
-        "train_function": sklearn_models.train,
-    },
-    "Gaussian Process Classifier": {
-        "save_function": sklearn_models.save,
-        "load_function": sklearn_models.load,
-        "train_function": sklearn_models.train,
-    },
-    "AdaBoost Classifier": {
-        "save_function": sklearn_models.save,
-        "load_function": sklearn_models.load,
-        "train_function": sklearn_models.train,
-    },
-    "MLP Classifier": {
-        "save_function": sklearn_models.save,
-        "load_function": sklearn_models.load,
-        "train_function": sklearn_models.train,
-    },
-    "Support Vector Classifier": {
-        "save_function": sklearn_models.save,
-        "load_function": sklearn_models.load,
-        "train_function": sklearn_models.train,
-    },
-}
-"""
-Dictionary to get the functions to save and load the models.
-
-The keys are the models names, the values are dictionaries with the keys "save_function",
-"load_function" and "train_function" and the values are the functions to save, load and train
-the models, respectively.
-"""
-
-PARAMETERS_MAP: dict[
-    str,
-    dict[
-        Literal["changeable", "unchangeable"],
-        dict[str, ChangeableParameter | UnchangeableParameter],
-    ],
-] = {
-    "CatBoost Classifier": {
-        "changeable": {
-            "iterations": {
-                "start_value": 10,
-                "end_value": 10000,
-                "step": 100,
-                "default_value": 1000,
-            },
-            "l2_leaf_reg": {
-                "start_value": 1,
-                "end_value": 10,
-                "step": 1,
-                "default_value": 5,
-            },
-            "border_count": {
-                "start_value": 1,
-                "end_value": 255,
-                "step": 1,
-                "default_value": 254,
-            },
+CONFIG_REGISTRY.register_model(
+    "CatBoost Classifier",
+    CatBoostClassifier,
+    True,
+    catboost_models.save,
+    catboost_models.load,
+    catboost_models.train,
+    catboost_models.predict,
+    {
+        "iterations": {
+            "start_value": 10,
+            "end_value": 10000,
+            "step": 100,
+            "default_value": 1000,
         },
-        "unchangeable": {
-            "task_type": "GPU" if get_gpu_device_count() > 0 else "CPU",
-            "train_dir": None,
+        "l2_leaf_reg": {
+            "start_value": 1,
+            "end_value": 10,
+            "step": 1,
+            "default_value": 5,
+        },
+        "border_count": {
+            "start_value": 1,
+            "end_value": 255,
+            "step": 1,
+            "default_value": 254,
         },
     },
-    "CatBoost Regressor": {
-        "changeable": {
-            "iterations": {
-                "start_value": 10,
-                "end_value": 1000,
-                "step": 10,
-                "default_value": 100,
-            },
-            "l2_leaf_reg": {
-                "start_value": 1,
-                "end_value": 10,
-                "step": 1,
-                "default_value": 5,
-            },
-            "border_count": {
-                "start_value": 1,
-                "end_value": 255,
-                "step": 1,
-                "default_value": 254,
-            },
+    {"task_type": "GPU" if get_gpu_device_count() > 0 else "CPU", "train_dir": None},
+)
+
+CONFIG_REGISTRY.register_model(
+    "CatBoost Regressor",
+    CatBoostRegressor,
+    False,
+    catboost_models.save,
+    catboost_models.load,
+    catboost_models.train,
+    catboost_models.predict,
+    {
+        "iterations": {
+            "start_value": 10,
+            "end_value": 1000,
+            "step": 10,
+            "default_value": 100,
         },
-        "unchangeable": {
-            "task_type": "GPU" if get_gpu_device_count() > 0 else "CPU",
-            "train_dir": None,
-            "loss_function": "MultiRMSE",
-            "boosting_type": "Plain",
+        "l2_leaf_reg": {
+            "start_value": 1,
+            "end_value": 10,
+            "step": 1,
+            "default_value": 5,
+        },
+        "border_count": {
+            "start_value": 1,
+            "end_value": 255,
+            "step": 1,
+            "default_value": 254,
         },
     },
-    "Linear Regressor": {
-        "changeable": {},
-        "unchangeable": {},
+    {
+        "task_type": "GPU" if get_gpu_device_count() > 0 else "CPU",
+        "train_dir": None,
+        "loss_function": "MultiRMSE",
+        "boosting_type": "Plain",
     },
-    "Logistic Classifier": {
-        "changeable": {},
-        "unchangeable": {},
-    },
-    "Gaussian Process Classifier": {
-        "changeable": {},
-        "unchangeable": {},
-    },
-    "AdaBoost Classifier": {
-        "changeable": {},
-        "unchangeable": {},
-    },
-    "MLP Classifier": {
-        "changeable": {},
-        "unchangeable": {},
-    },
-    "Support Vector Classifier": {
-        "changeable": {},
-        "unchangeable": {},
-    },
-}
-"""
-Dictionary to get the parameters for the models.
+)
 
-The keys are the models names, the values are dictionaries with two keys: "changeable"
-and "unchangeable". The values are dictionaries with the parameter names as keys and
-the parameter values as values.
+CONFIG_REGISTRY.register_model(
+    "AdaBoost Classifier",
+    AdaBoostClassifier,
+    True,
+    sklearn_models.save,
+    sklearn_models.load,
+    sklearn_models.train,
+    sklearn_models.predict,
+    {
+        "n_estimators": {
+            "start_value": 10,
+            "end_value": 1000,
+            "step": 10,
+            "default_value": 100,
+        },
+        "learning_rate": {
+            "start_value": 0.1,
+            "end_value": 1,
+            "step": 0.1,
+            "default_value": 0.1,
+        },
+    },
+)
 
-The changeable parameters must be of type ChangeableParameter and the unchangeable parameters must be of type UnchangeableParameter.
-"""
+CONFIG_REGISTRY.register_model(
+    "Gaussian Process Classifier",
+    GaussianProcessClassifier,
+    True,
+    sklearn_models.save,
+    sklearn_models.load,
+    sklearn_models.train,
+    sklearn_models.predict,
+    unchangeable_parameters={"kernel": None},
+)
 
-FEATURES_MAP: dict[str, FilterBaseClass] = { # noqa
-    "Root Mean Square": RMSFilter,
-    "Mean Absolute Value": MAVFilter,
-    "Integrated Absolute Value": IAVFilter,
-    "Variance": VARFilter,
-    "Waveform Length": WFLFilter,
-    "Zero Crossings": ZCFilter,
-    "Slope Sign Change": SSCFilter,
-    # TODO: Add these back
-    # "Difference Absolute Standard Deviation": DASDVFilter,
-    # "V-Order": VOrderFilter,
-    # "Average Amplitude Change": AACFilter,
-    # "Maximum Fractal Length": MFLFilter,
-}
-"""
-Dictionary to get the EMG features class.
+CONFIG_REGISTRY.register_model(
+    "Linear Regression",
+    LinearRegression,
+    False,
+    sklearn_models.save,
+    sklearn_models.load,
+    sklearn_models.train,
+    sklearn_models.predict,
+    unchangeable_parameters={"fit_intercept": True},
+)
 
-The keys are the feature names, the values are the features class.
-The features must subclass the FilterBaseClass.
-"""
+CONFIG_REGISTRY.register_model(
+    "MLP Classifier",
+    MLPClassifier,
+    True,
+    sklearn_models.save,
+    sklearn_models.load,
+    sklearn_models.train,
+    sklearn_models.predict,
+    {
+        "hidden_layer_sizes": {
+            "start_value": 10,
+            "end_value": 1000,
+            "step": 10,
+            "default_value": 100,
+        },
+        "alpha": {
+            "start_value": 1e-4,
+            "end_value": 1,
+            "step": 1e-4,
+            "default_value": 1e-4,
+        },
+    },
+    {"activation": "relu"},
+)
 
-# Make the user configurations appear first.
-# This reduces the amount of clicks necessary to find the user configurations.
-MODELS_MAP = {**USER_MODELS_MAP, **MODELS_MAP}
-FUNCTIONS_MAP = {**USER_FUNCTIONS_MAP, **FUNCTIONS_MAP}
-PARAMETERS_MAP = {**USER_PARAMETERS_MAP, **PARAMETERS_MAP}
+# Register features
+CONFIG_REGISTRY.register_feature("Root Mean Square", RMSFilter)
+CONFIG_REGISTRY.register_feature("Mean Absolute Value", MAVFilter)
+CONFIG_REGISTRY.register_feature("Integrated Absolute Value", IAVFilter)
+CONFIG_REGISTRY.register_feature("Variance", VARFilter)
+CONFIG_REGISTRY.register_feature("Waveform Length", WFLFilter)
+CONFIG_REGISTRY.register_feature("Zero Crossings", ZCFilter)
+CONFIG_REGISTRY.register_feature("Slope Sign Change", SSCFilter)
+CONFIG_REGISTRY.register_feature("Identity", IdentityFilter)
+
+# load user configuration

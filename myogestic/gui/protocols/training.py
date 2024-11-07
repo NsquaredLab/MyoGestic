@@ -29,15 +29,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from myogestic.gui.widgets.logger import LoggerLevel
+from myogestic.models.config import CONFIG_REGISTRY
 
-from myogestic.models.config import (
-    FEATURES_MAP,
-    FUNCTIONS_MAP,
-    MODELS_MAP,
-    PARAMETERS_MAP,
-    UnchangeableParameter,
-)
 from myogestic.models.interface import MyoGesticModelInterface
+from myogestic.models.utils import UnchangeableParameter
 
 if TYPE_CHECKING:
     from myogestic.gui.myogestic import MyoGestic
@@ -55,9 +50,9 @@ class PopupWindowParameters(QDialog):
 
         layout = QVBoxLayout()
 
-        for parameter, value in PARAMETERS_MAP[selected_model_name][
-            "changeable"
-        ].items():
+        for parameter, value in CONFIG_REGISTRY.models_parameters_map[
+            selected_model_name
+        ]["changeable"].items():
             horizontal_layout = QHBoxLayout()
             horizontal_layout.addWidget(QLabel(parameter.replace("_", " ").title()))
             default_value = value["default_value"]
@@ -127,7 +122,7 @@ class PopupWindowFeatures(QDialog):
 
         self.checkboxes = []
 
-        for filter in FEATURES_MAP.keys():
+        for filter in CONFIG_REGISTRY.features_map.keys():
             feature_checkbox = QCheckBox(filter)
             self.checkboxes.append(feature_checkbox)
             self.scroll_area_layout.addWidget(feature_checkbox)
@@ -242,12 +237,12 @@ class TrainingProtocol(QObject):
         # Model interface
         self.model_interface = None
 
-        self.selected_model_name = "CatBoost Classifier"
-        self.selected_model, self.model_is_classifier = MODELS_MAP[
+        self.selected_model_name = list(CONFIG_REGISTRY.models_map.keys())[0]
+        self.selected_model, self.model_is_classifier = CONFIG_REGISTRY.models_map[
             self.selected_model_name
         ]
         self.model_changeable_parameters = {}
-        self.selected_features = ["Root Mean Square"]
+        self.selected_features = [list(CONFIG_REGISTRY.features_map.keys())[0]]
 
         # Get configuration update
         self.main_window.device_widget.configure_toggled.connect(
@@ -450,20 +445,22 @@ class TrainingProtocol(QObject):
         now = datetime.now()
         formatted_now = now.strftime("%Y%m%d_%H%M%S%f")
 
-        dataset_dict = self.model_interface.create_dataset(
-            self.selected_recordings, self.selected_features
-        )
+        file_name = f"MindMove_Dataset_{formatted_now}_{label.lower()}"
 
-        file_name = f"MindMove_Dataset_{formatted_now}_{label.lower()}.pkl"
+        dataset_dict = self.model_interface.create_dataset(
+            self.selected_recordings, self.selected_features, file_name
+        )
 
         dataset_dict["dataset_file_path"] = os.path.join(
-            self.datasets_dir_path, file_name
+            self.datasets_dir_path, file_name + ".pkl"
         )
 
-        with open(os.path.join(self.datasets_dir_path, file_name), "wb") as f:
+        with open(os.path.join(self.datasets_dir_path, file_name + ".pkl"), "wb") as f:
             pickle.dump(dataset_dict, f)
 
-        self.main_window.logger.print(f"Dataset {file_name} created!", LoggerLevel.INFO)
+        self.main_window.logger.print(
+            f"Dataset {file_name  + '.pkl'} created!", LoggerLevel.INFO
+        )
 
     def _select_dataset(self) -> None:
         # Open dialog to select dataset
@@ -516,21 +513,31 @@ class TrainingProtocol(QObject):
         if len(self.model_changeable_parameters) == 0:
             self.model_changeable_parameters = {
                 key: value["default_value"]
-                for key, value in PARAMETERS_MAP[self.selected_model_name][
-                    "changeable"
-                ].items()
+                for key, value in CONFIG_REGISTRY.models_parameters_map[
+                    self.selected_model_name
+                ]["changeable"].items()
             }
 
         try:
+            func_map = CONFIG_REGISTRY.models_functions_map[self.selected_model_name]
+
+            train = func_map["train"]
+            save = func_map["save"]
+            load = func_map["load"]
+
             self.model_interface.train_model(
                 dataset=dataset,
                 model_name=self.selected_model_name,
                 model_parameters={
-                    **PARAMETERS_MAP[self.selected_model_name]["unchangeable"],
+                    **CONFIG_REGISTRY.models_parameters_map[self.selected_model_name][
+                        "unchangeable"
+                    ],
                     **self.model_changeable_parameters,
                 },
-                selected_features=self.selected_features,
-                **FUNCTIONS_MAP[self.selected_model_name],
+                selected_features=dataset["selected_features"],
+                save=save,
+                load=load,
+                train=train,
             )
         except Exception as e:
             self.main_window.logger.print(
@@ -565,15 +572,15 @@ class TrainingProtocol(QObject):
 
     def _update_model_selection(self) -> None:
         self.selected_model_name = self.training_model_selection_combo_box.currentText()
-        self.selected_model, self.model_is_classifier = MODELS_MAP[
+        self.selected_model, self.model_is_classifier = CONFIG_REGISTRY.models_map[
             self.selected_model_name
         ]
 
         self.model_changeable_parameters = {
             key: value["default_value"]
-            for key, value in PARAMETERS_MAP[self.selected_model_name][
-                "changeable"
-            ].items()
+            for key, value in CONFIG_REGISTRY.models_parameters_map[
+                self.selected_model_name
+            ]["changeable"].items()
         }
 
         if len(self.model_changeable_parameters) > 0:
@@ -682,7 +689,9 @@ class TrainingProtocol(QObject):
             self.main_window.ui.trainingModelSelectionComboBox
         )
         # set the models selection combo box
-        self.training_model_selection_combo_box.addItems(list(MODELS_MAP.keys()))
+        self.training_model_selection_combo_box.addItems(
+            list(CONFIG_REGISTRY.models_map.keys())
+        )
         # connect the models selection combo box to the models selection function
         self.training_model_selection_combo_box.currentIndexChanged.connect(
             self._update_model_selection

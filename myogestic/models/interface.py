@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from PySide6.QtCore import QObject
 
+from myogestic.models.config import CONFIG_REGISTRY
 from myogestic.models.core.dataset import MyoGesticDataset
 from myogestic.models.core.model import MyoGesticModel
 
@@ -31,9 +32,11 @@ class MyoGesticModelInterface(QObject):
         self.model_is_loaded: bool = False
 
     def create_dataset(
-        self, dataset: Dict, selected_features: list[str]
+        self, dataset: Dict, selected_features: list[str], file_name: str
     ) -> Dict[str, Dict[str, Any]]:
-        self.input_dataset = self.dataset.create_dataset(dataset, selected_features)
+        self.input_dataset = self.dataset.create_dataset(
+            dataset, selected_features, file_name
+        )
         return self.input_dataset
 
     def train_model(
@@ -41,19 +44,13 @@ class MyoGesticModelInterface(QObject):
         dataset: Dict[str, Dict[str, Any]],
         model_name: str,
         model_parameters: dict[str, Any],
-        save_function: callable,
-        load_function: callable,
-        train_function: callable,
+        save: callable,
+        load: callable,
+        train: callable,
         selected_features: list[str],
     ) -> None:
         self.model.train(
-            dataset,
-            model_name,
-            model_parameters,
-            save_function,
-            load_function,
-            train_function,
-            selected_features,
+            dataset, model_name, model_parameters, save, load, train, selected_features
         )
 
     def predict(
@@ -69,7 +66,7 @@ class MyoGesticModelInterface(QObject):
         )
         if preprocessed_input is None:
             return "Bad channels detected", "", -1, None
-        return self.model.predict(preprocessed_input)
+        return self.model.predict(preprocessed_input, self.predict_function)
 
     def save_model(self, model_path: str) -> dict[str, str | None]:
         self.input_dataset = None
@@ -78,6 +75,10 @@ class MyoGesticModelInterface(QObject):
     def load_model(self, model_path: str) -> dict:
         model_information = self.model.load(model_path)
         self.dataset.set_online_parameters(model_information)
+
+        self.predict_function = CONFIG_REGISTRY.models_functions_map[
+            model_information["model_name"]
+        ]["predict"]
 
         # Set the models as loaded
         self.model_is_loaded = True
