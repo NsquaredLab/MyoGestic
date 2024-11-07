@@ -184,6 +184,7 @@ class RecordProtocol(QObject):
         """
 
         if checked:
+            self.recording_time = self.record_duration_spin_box.value()
             # Check for Kinematics
             if self.use_kinematics_check_box.isChecked():
                 if not self.main_window.virtual_hand_interface.is_connected:

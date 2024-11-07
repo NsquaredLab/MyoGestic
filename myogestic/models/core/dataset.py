@@ -8,12 +8,12 @@ import numpy as np
 import zarr
 from scipy.signal import butter
 
-from doc_octopy.datasets.filters.generic import ApplyFunctionFilter
+from doc_octopy.datasets.filters.generic import ApplyFunctionFilter, IndexDataFilter
 from doc_octopy.datasets.filters.temporal import SOSFrequencyFilter
 from doc_octopy.datasets.supervised import EMGDataset
 from doc_octopy.datatypes import EMGData
 from myogestic.gui.widgets.logger import LoggerLevel
-from myogestic.models.config import FEATURES_MAP
+from myogestic.models.config import CONFIG_REGISTRY
 
 if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger
@@ -67,7 +67,7 @@ class MyoGesticDataset(QObject):
         self.dataset_std: float = 1
 
     def create_dataset(
-        self, dataset: dict[str, dict], selected_features: list[str]
+        self, dataset: dict[str, dict], selected_features: list[str], file_name: str
     ) -> dict:
         # Accumulate bad channels. Maybe more channels get added between recordings
         bad_channels: list[int] = []
@@ -110,11 +110,26 @@ class MyoGesticDataset(QObject):
 
             emg_data[task_label] = emg
 
+        emg_filter_pipeline_after_chunking = []
+        for feature in selected_features:
+            try:
+                emg_filter_pipeline_after_chunking.append(
+                    [
+                        CONFIG_REGISTRY.features_map[feature](
+                            is_output=True, window_size=self.buffer_size_samples  # noqa
+                        )
+                    ]
+                )
+            except TypeError:
+                emg_filter_pipeline_after_chunking.append(
+                    [CONFIG_REGISTRY.features_map[feature](is_output=True)]  # noqa
+                )
+
         dataset = EMGDataset(
             emg_data=emg_data,
             ground_truth_data=ground_truth_data,
             ground_truth_data_type="virtual_hand",
-            save_path=Path("data/datasets/dataset.zarr"),
+            save_path=Path(f"data/datasets/{file_name}.zarr"),
             sampling_frequency=self.sampling_frequency,
             tasks_to_use=list(emg_data.keys()),
             chunk_size=self.buffer_size_samples,
@@ -133,17 +148,12 @@ class MyoGesticDataset(QObject):
                 ]
             ],
             emg_representations_to_filter_before_chunking=["Input"],
-            emg_filter_pipeline_after_chunking=[  # noqa
-                [
-                    FEATURES_MAP[feature](
-                        is_output=True, window_size=self.buffer_size_samples  # noqa
-                    )
-                ]
-                for feature in selected_features
-            ],
+            emg_filter_pipeline_after_chunking=emg_filter_pipeline_after_chunking,
             emg_representations_to_filter_after_chunking=["EMG_Chunkizer"]
             * len(selected_features),
-            ground_truth_filter_pipeline_before_chunking=[],
+            ground_truth_filter_pipeline_before_chunking=[
+                [IndexDataFilter(indices=((0, 2, 3, 4, 5),))]
+            ],
             ground_truth_representations_to_filter_before_chunking=["Input"],
             ground_truth_filter_pipeline_after_chunking=[
                 [ApplyFunctionFilter(is_output=True, function=np.mean, axis=-1)]
@@ -153,7 +163,7 @@ class MyoGesticDataset(QObject):
 
         dataset.create_dataset()
 
-        dataset = zarr.open("data/datasets/dataset.zarr", mode="r")
+        dataset = zarr.open(f"data/datasets/{file_name}.zarr", mode="r")
 
         feature_keys = list(dataset["training"]["emg"])
         training_class = dataset["training"]["label"][:, 0].astype(int)
@@ -174,7 +184,7 @@ class MyoGesticDataset(QObject):
                 (emg_per_key - training_means[key]) / training_stds[key]
             )
 
-        training_emg = np.concatenate(training_emg, axis=1)[..., 0]
+        training_emg = np.concatenate(training_emg, axis=1)
 
         print("Dataset created")
 
@@ -185,6 +195,9 @@ class MyoGesticDataset(QObject):
             "mean": training_means,
             "std": training_stds,
             "bad_channels": list(set(bad_channels)),
+            "selected_features": selected_features,
+            "device_information": self.device_information,
+            "zarr_file_path": file_name + ".zarr",
         }
 
     def preprocess_data(
@@ -219,21 +232,33 @@ class MyoGesticDataset(QObject):
                 representation_to_filter="Input",
             )
 
+            emg_filters = []
+            for feature in selected_features:
+                try:
+                    emg_filters.append(
+                        CONFIG_REGISTRY.features_map[feature](
+                            is_output=False,
+                            window_size=self.buffer_size_samples,  # noqa
+                        )
+                    )
+                except TypeError:
+                    emg_filters.append(
+                        CONFIG_REGISTRY.features_map[feature](is_output=False)
+                    )  # noqa
+
             frame_data.apply_filter_pipeline(
                 [
                     [
-                        FEATURES_MAP[feature](
-                            window_size=self.buffer_size_samples  # noqa
-                        ),  # noqa
+                        emg_filter,  # noqa
                         ApplyFunctionFilter(
                             is_output=True,
                             function=standardize_data,
-                            mean=self.dataset_mean[FEATURES_MAP[feature].__name__],
-                            std=self.dataset_std[FEATURES_MAP[feature].__name__],
+                            mean=self.dataset_mean[feature],
+                            std=self.dataset_std[feature],
                             name=feature,
                         ),
                     ]
-                    for feature in selected_features
+                    for feature, emg_filter in zip(selected_features, emg_filters)
                 ],
                 representations_to_filter=["SOSFilter"] * len(selected_features),
             )
@@ -241,8 +266,6 @@ class MyoGesticDataset(QObject):
             frame_data = np.concatenate(
                 [x for x in frame_data.output_representations.values()], axis=1
             )
-
-            frame_data = frame_data.reshape(1, -1)
 
             return frame_data
 

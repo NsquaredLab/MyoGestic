@@ -19,76 +19,76 @@ if TYPE_CHECKING:
 
 
 class OnlineProtocol(QObject):
+    """
+    Class for handling the online protocol of the MyoGestic application.
+
+
+    Parameters
+    ----------
+    parent : MyoGestic | None
+        The parent object of the protocol object.
+
+    Attributes
+    ----------
+    main_window : MyoGestic
+        The main window of the MyoGestic application.
+    emg_buffer : list[np.ndarray]
+        Buffer for storing the EMG data.
+    kinematics_buffer : list[(int, np.ndarray)]
+        Buffer for storing the kinematics data.
+    buffer_emg_recording : list[(float, np.ndarray)] | None
+        Buffer for storing the EMG data during recording.
+    buffer_kinematics_recording : list[(float, np.ndarray)] | None
+        Buffer for storing the kinematics data during recording.
+    buffer_predictions_recording : list[(float, np.ndarray)] | None
+        Buffer for storing the predictions during recording.
+    buffer_prediction_proba_recording : list[(float, np.ndarray)] | None
+        Buffer for storing the prediction probabilities during recording.
+    start_time : float | None
+        Start time of the recording.
+    device_information : dict[str, str] | None
+        Information about the connected device.
+    model_information : dict[str, str] | None
+        Information about the loaded models.
+    prediction_dir_path : str
+        Path for storing the predictions.
+    model_dir_path : str
+        Path for storing the models.
+    time_since_last_prediction : float
+        Time since the last prediction.
+    model_interface : MyoGesticModelInterface | None
+        Interface for the Myogestic models.
+    online_load_model_push_button : QPushButton
+        Push button for loading the models.
+    online_model_label : QLabel
+        Label for displaying the loaded models.
+    online_commands_group_box : QGroupBox
+        Group box for the online commands.
+    online_record_toggle_push_button : QPushButton
+        Push button for toggling the recording.
+    online_prediction_toggle_push_button : QPushButton
+        Push button for toggling the prediction.
+    conformal_prediction_set_pushbutton : QPushButton
+        Push button for setting the conformal predictor.
+    conformal_prediction_type_combo_box : QComboBox
+        Combo box for selecting the conformal predictor type.
+    conformal_prediction_solving_combo_box : QComboBox
+        Combo box for selecting the conformal predictor solving method.
+    conformal_prediction_alpha_spin_box : QDoubleSpinBox
+        Spin box for setting the conformal predictor alpha.
+    conformal_prediction_kernel_spin_box : QSpinBox
+        Spin box for setting the conformal predictor kernel size.
+    conformal_prediction_group_box : QGroupBox
+        Group box for the conformal predictor.
+    conformal_prediction_label_kernel_size : QLabel
+        Label for the conformal predictor kernel size.
+    conformal_prediction_label_alpha : QLabel
+        Label for the conformal predictor alpha.
+    conformal_prediction_label_solving_method : QLabel
+        Label for the conformal predictor solving method
+    """
+
     def __init__(self, parent: MyoGestic | None = ...) -> None:
-        """
-        Class for handling the online protocol of the MyoGestic application.
-
-
-        Parameters
-        ----------
-        parent : MyoGestic | None
-            The parent object of the protocol object.
-
-        Attributes
-        ----------
-        main_window : MyoGestic
-            The main window of the MyoGestic application.
-        emg_buffer : list[np.ndarray]
-            Buffer for storing the EMG data.
-        kinematics_buffer : list[(int, np.ndarray)]
-            Buffer for storing the kinematics data.
-        buffer_emg_recording : list[(float, np.ndarray)] | None
-            Buffer for storing the EMG data during recording.
-        buffer_kinematics_recording : list[(float, np.ndarray)] | None
-            Buffer for storing the kinematics data during recording.
-        buffer_predictions_recording : list[(float, np.ndarray)] | None
-            Buffer for storing the predictions during recording.
-        buffer_prediction_proba_recording : list[(float, np.ndarray)] | None
-            Buffer for storing the prediction probabilities during recording.
-        start_time : float | None
-            Start time of the recording.
-        device_information : dict[str, str] | None
-            Information about the connected device.
-        model_information : dict[str, str] | None
-            Information about the loaded models.
-        prediction_dir_path : str
-            Path for storing the predictions.
-        model_dir_path : str
-            Path for storing the models.
-        time_since_last_prediction : float
-            Time since the last prediction.
-        model_interface : MyoGesticModelInterface | None
-            Interface for the Myogestic models.
-        online_load_model_push_button : QPushButton
-            Push button for loading the models.
-        online_model_label : QLabel
-            Label for displaying the loaded models.
-        online_commands_group_box : QGroupBox
-            Group box for the online commands.
-        online_record_toggle_push_button : QPushButton
-            Push button for toggling the recording.
-        online_prediction_toggle_push_button : QPushButton
-            Push button for toggling the prediction.
-        conformal_prediction_set_pushbutton : QPushButton
-            Push button for setting the conformal predictor.
-        conformal_prediction_type_combo_box : QComboBox
-            Combo box for selecting the conformal predictor type.
-        conformal_prediction_solving_combo_box : QComboBox
-            Combo box for selecting the conformal predictor solving method.
-        conformal_prediction_alpha_spin_box : QDoubleSpinBox
-            Spin box for setting the conformal predictor alpha.
-        conformal_prediction_kernel_spin_box : QSpinBox
-            Spin box for setting the conformal predictor kernel size.
-        conformal_prediction_group_box : QGroupBox
-            Group box for the conformal predictor.
-        conformal_prediction_label_kernel_size : QLabel
-            Label for the conformal predictor kernel size.
-        conformal_prediction_label_alpha : QLabel
-            Label for the conformal predictor alpha.
-        conformal_prediction_label_solving_method : QLabel
-            Label for the conformal predictor solving method
-        """
-
         super().__init__(parent)
 
         self.main_window = parent

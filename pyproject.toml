@@ -18,6 +18,7 @@ scikit-learn = "^1.5.1"
 toml = "^0.10.2"
 biosignal-device-interface = "^0.1.0"
 doc-octopy = {git = "https://github.com/NsquaredLab/DocOctopy.git"}
+triton = {url = "https://github.com/woct0rdho/triton-windows/releases/download/v3.1.0-windows.post5/triton-3.0.0-cp310-cp310-win_amd64.whl"}
 
 [tool.poetry.group.dev]
 optional = true

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import pickle
-from typing import Any, TYPE_CHECKING, Union
+from typing import Any, TYPE_CHECKING, Union, Optional
 
 import numpy as np
-from myogestic.gui.widgets.logger import LoggerLevel
-from myogestic.models.config import FUNCTIONS_MAP, MODELS_MAP
+from scipy.ndimage import gaussian_filter
+from scipy.signal import savgol_filter
+from torch.signal.windows import gaussian
+
+from myogestic.models.config import CONFIG_REGISTRY
 
 if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger
@@ -16,6 +19,8 @@ from PySide6.QtCore import QObject
 class MyoGesticModel(QObject):
     def __init__(self, logger: CustomLogger, parent: QObject | None = None) -> None:
         super().__init__(parent)
+
+        self.past_predictions = []
 
         self.model_params = None
         self.model_name = None
@@ -69,13 +74,7 @@ class MyoGesticModel(QObject):
         self.model_name = model_name
         self.model_params = model_parameters
 
-        model_class, self.is_classifier = MODELS_MAP[self.model_name]
-
-        training_x: np.ndarray = dataset["emg"]
-        if self.is_classifier:
-            training_y: np.ndarray = dataset["classes"]
-        else:
-            training_y: np.ndarray = dataset["kinematics"][:, [0, 2, 3, 4, 5]]
+        model_class, self.is_classifier = CONFIG_REGISTRY.models_map[self.model_name]
 
         self.model_information = dataset
         self.model_information["selected_features"] = selected_features
@@ -87,56 +86,42 @@ class MyoGesticModel(QObject):
         self.train_function = train_function
 
         self.model = self.train_function(
-            self.model, training_x, training_y, self.logger
+            self.model, dataset, self.is_classifier, self.logger
         )
 
-    def predict(self, input: np.ndarray) -> tuple[str, str, int, np.ndarray]:
+    def predict(
+        self, input: np.ndarray, prediction_function
+    ) -> tuple[str, str, Any, Optional[np.ndarray]]:
         if self.is_classifier:
-            prediction_proba = None
-            if self.conformal_predictor is not None:
-                try:
-                    prediction_proba = self.model.predict_proba(input)[0]
-                    prediction_set = self.conformal_predictor.predict(
-                        np.array(prediction_proba)
-                    )
-                    prediction = self.prediction_solver.solve(prediction_set)
-
-                    if prediction != -1:
-                        prediction = self.model.classes_[prediction]
-
-                except Exception as error:
-                    self.logger.print(
-                        f"Warning - prediction not conformalized - Error: {error}",
-                        LoggerLevel.ERROR,
-                    )
-                    prediction = -1
-            else:
-                try:
-                    prediction = self.model.predict(input)[0, 0]
-                except Exception:
-                    prediction = self.model.predict(input)[0]
+            prediction = prediction_function(self.model, input, self.is_classifier)
 
             if prediction == -1:
-                return "", "", -1, prediction_proba
-            else:
-                return (
-                    self.model_prediction_to_interface_map[prediction],
-                    self.model_prediction_to_mechatronic_interface_map[prediction],
-                    prediction,
-                    prediction_proba,
-                )
-
-        else:
-            prediction = list(self.model.predict(input)[0])
-
-            prediction = [prediction[0]] + [0] + prediction[1:] + [0, 0, 0]
+                return "", "", -1, None
 
             return (
-                str(prediction),
-                "",
+                self.model_prediction_to_interface_map[prediction],
+                self.model_prediction_to_mechatronic_interface_map[prediction],
                 prediction,
                 None,
             )
+
+        prediction = prediction_function(self.model, input, self.is_classifier)
+
+        self.past_predictions.append(prediction)
+        if len(self.past_predictions) > 555:
+            self.past_predictions.pop(0)
+
+            # real-time savitzky-golay filter
+            prediction = gaussian_filter(np.array(self.past_predictions), 15, 0, axes=(0, ))
+            #prediction = savgol_filter(np.array(self.past_predictions), 111, 3, axis=0)
+            prediction = list(prediction[-1])
+
+
+        prediction = [prediction[0]] + [0.0] + prediction[1:] + [0.0, 0.0, 0.0]
+
+        prediction = list(np.clip(prediction, 0, 1))
+
+        return str(prediction), "", prediction, None
 
     def save(self, model_path: str) -> dict[str, Union[str, Any]]:
         self.model_information["model_params"] = self.model_params
@@ -151,11 +136,11 @@ class MyoGesticModel(QObject):
         with open(model_path, "rb") as f:
             self.model_information = pickle.load(f)
 
-        self.load_function = FUNCTIONS_MAP[self.model_information["model_name"]][
-            "load_function"
-        ]
+        self.load_function = CONFIG_REGISTRY.models_functions_map[
+            self.model_information["model_name"]
+        ]["load"]
 
-        model_class, self.is_classifier = MODELS_MAP[
+        model_class, self.is_classifier = CONFIG_REGISTRY.models_map[
             self.model_information["model_name"]
         ]
 
