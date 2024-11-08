@@ -105,6 +105,8 @@ exclude_patterns = []
 html_theme = "furo"
 html_static_path = ["_static"]
 
+html_css_files = ["custom.css"]
+
 # -- Options for intersphinx extension ---------------------------------------
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
@@ -130,7 +132,8 @@ sphinx_gallery_conf = {
     "remove_config_comments": True,
     "show_memory": True,
     "within_subsection_order": FileNameSortKey,
-    "plot_gallery": False,
+    "plot_gallery": True,
+    "download_all_examples": False,
 }
 
 suppress_warnings = ["config.cache"]

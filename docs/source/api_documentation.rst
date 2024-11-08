@@ -52,10 +52,3 @@ The features can be set in the configuration file:
     :maxdepth: 1
 
     modules/models/config
-
-Following features are supported out of the box:
-
-.. toctree::
-    :maxdepth: 2
-
-    modules/features/temporal
