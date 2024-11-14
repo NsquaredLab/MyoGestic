@@ -436,6 +436,9 @@ class TrainingProtocol(QObject):
         self.training_create_dataset_label_line_edit.setText("")
         self.training_create_datasets_select_recordings_push_button.setEnabled(True)
         self.selected_recordings = None
+        self.main_window.logger.print(
+            f"Dataset created!", LoggerLevel.INFO
+        )
 
     def _create_dataset_thread(self) -> None:
         label = self.training_create_dataset_label_line_edit.text()
@@ -458,9 +461,6 @@ class TrainingProtocol(QObject):
         with open(os.path.join(self.datasets_dir_path, file_name + ".pkl"), "wb") as f:
             pickle.dump(dataset_dict, f)
 
-        self.main_window.logger.print(
-            f"Dataset {file_name  + '.pkl'} created!", LoggerLevel.INFO
-        )
 
     def _select_dataset(self) -> None:
         # Open dialog to select dataset
@@ -559,16 +559,16 @@ class TrainingProtocol(QObject):
                 f"Error during saving models: {e}", LoggerLevel.ERROR
             )
             return
+
         with open(model_filepath, "wb") as file:
             pickle.dump(model_save_dict, file)
-
-        self.main_window.logger.print(f"Model trained: {file_name}", LoggerLevel.INFO)
 
     def _train_model_finished(self) -> None:
         self.training_selected_dataset_label.setText(self.no_dataset_selected_info)
         self.training_select_dataset_push_button.setEnabled(True)
         self.selected_dataset_filepath = None
         self.training_model_label_line_edit.setText("")
+        self.main_window.logger.print(f"Model trained", LoggerLevel.INFO)
 
     def _update_model_selection(self) -> None:
         self.selected_model_name = self.training_model_selection_combo_box.currentText()
