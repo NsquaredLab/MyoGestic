@@ -215,3 +215,4 @@ CONFIG_REGISTRY.register_feature("Slope Sign Change", SSCFilter)
 CONFIG_REGISTRY.register_feature("Identity", IdentityFilter)
 
 # load user configuration
+import myogestic.user_config  # noqa
