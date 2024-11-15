@@ -1,5 +1,8 @@
+import numpy as np
 from catboost import CatBoostClassifier, CatBoostRegressor
 from catboost.utils import get_gpu_device_count
+from scipy.ndimage import gaussian_filter
+from scipy.signal import savgol_filter
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.linear_model import LinearRegression
@@ -213,6 +216,16 @@ CONFIG_REGISTRY.register_feature("Waveform Length", WFLFilter)
 CONFIG_REGISTRY.register_feature("Zero Crossings", ZCFilter)
 CONFIG_REGISTRY.register_feature("Slope Sign Change", SSCFilter)
 CONFIG_REGISTRY.register_feature("Identity", IdentityFilter)
+
+# Register real-time filters
+CONFIG_REGISTRY.register_real_time_filter("Identity", lambda x: x)
+CONFIG_REGISTRY.register_real_time_filter(
+    "Gaussian", lambda x: gaussian_filter(np.array(x), 15, 0, axes=(0,))
+)
+
+CONFIG_REGISTRY.register_real_time_filter(
+    "Savgol", lambda x: savgol_filter(np.array(x), 111, 3, axis=0)
+)
 
 # load user configuration
 import myogestic.user_config  # noqa

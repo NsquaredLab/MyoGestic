@@ -54,7 +54,10 @@ class MyoGesticModelInterface(QObject):
         )
 
     def predict(
-        self, input: np.ndarray, bad_channels: list[int] = ()
+        self,
+        input: np.ndarray,
+        bad_channels: list[int] = (),
+        selected_real_time_filter: str = "",
     ) -> tuple[str, str, int, np.ndarray | None]:
         if not self.model_is_loaded:
             raise ValueError("Model is not loaded!")
@@ -66,7 +69,9 @@ class MyoGesticModelInterface(QObject):
         )
         if preprocessed_input is None:
             return "Bad channels detected", "", -1, None
-        return self.model.predict(preprocessed_input, self.predict_function)
+        return self.model.predict(
+            preprocessed_input, self.predict_function, selected_real_time_filter
+        )
 
     def save_model(self, model_path: str) -> dict[str, str | None]:
         self.input_dataset = None

@@ -90,7 +90,7 @@ class MyoGesticModel(QObject):
         )
 
     def predict(
-        self, input: np.ndarray, prediction_function
+        self, input: np.ndarray, prediction_function, selected_real_time_filter: str
     ) -> tuple[str, str, Any, Optional[np.ndarray]]:
         if self.is_classifier:
             prediction = prediction_function(self.model, input, self.is_classifier)
@@ -112,10 +112,12 @@ class MyoGesticModel(QObject):
             self.past_predictions.pop(0)
 
             # real-time savitzky-golay filter
-            prediction = gaussian_filter(np.array(self.past_predictions), 15, 0, axes=(0, ))
-            #prediction = savgol_filter(np.array(self.past_predictions), 111, 3, axis=0)
+            print(selected_real_time_filter)
+            prediction = CONFIG_REGISTRY.real_time_filters_map[
+                selected_real_time_filter
+            ](self.past_predictions)
+            # prediction =
             prediction = list(prediction[-1])
-
 
         prediction = [prediction[0]] + [0.0] + prediction[1:] + [0.0, 0.0, 0.0]
 

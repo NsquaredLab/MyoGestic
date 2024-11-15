@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'main_window.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.7.2
+## Created by: Qt User Interface Compiler version 6.8.0
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -31,7 +31,7 @@ class Ui_MyoGestic(object):
     def setupUi(self, MyoGestic):
         if not MyoGestic.objectName():
             MyoGestic.setObjectName(u"MyoGestic")
-        MyoGestic.resize(902, 962)
+        MyoGestic.resize(922, 962)
         self.actionPreferences = QAction(MyoGestic)
         self.actionPreferences.setObjectName(u"actionPreferences")
         self.actionPreferences.setEnabled(True)
@@ -188,7 +188,7 @@ class Ui_MyoGestic(object):
         self.recordUseKinematicsCheckBox = QCheckBox(self.recordRecordingGroupBox)
         self.recordUseKinematicsCheckBox.setObjectName(u"recordUseKinematicsCheckBox")
         self.recordUseKinematicsCheckBox.setEnabled(True)
-        self.recordUseKinematicsCheckBox.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.recordUseKinematicsCheckBox.setLayoutDirection(Qt.LeftToRight)
         self.recordUseKinematicsCheckBox.setChecked(False)
 
         self.gridLayout_9.addWidget(self.recordUseKinematicsCheckBox, 2, 0, 1, 1)
@@ -250,7 +250,7 @@ class Ui_MyoGestic(object):
         self.reviewRecordingRejectPushButton.setObjectName(u"reviewRecordingRejectPushButton")
         sizePolicy1.setHeightForWidth(self.reviewRecordingRejectPushButton.sizePolicy().hasHeightForWidth())
         self.reviewRecordingRejectPushButton.setSizePolicy(sizePolicy1)
-        self.reviewRecordingRejectPushButton.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.reviewRecordingRejectPushButton.setLayoutDirection(Qt.LeftToRight)
         self.reviewRecordingRejectPushButton.setStyleSheet(u"background-color: rgb(255, 0, 0);\n"
 "color: rgb(0, 0, 0);")
 
@@ -263,7 +263,7 @@ class Ui_MyoGestic(object):
 
         self.gridLayout_5.addWidget(self.recordReviewRecordingStackedWidget, 1, 0, 1, 1)
 
-        self.verticalSpacer_5 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
+        self.verticalSpacer_5 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
 
         self.gridLayout_5.addItem(self.verticalSpacer_5, 2, 0, 1, 1)
 
@@ -412,27 +412,6 @@ class Ui_MyoGestic(object):
 
         self.gridLayout_4.addWidget(self.onlineLoadModelGroupBox, 0, 0, 1, 1)
 
-        self.onlineCommandsGroupBox = QGroupBox(self.onlineWidget)
-        self.onlineCommandsGroupBox.setObjectName(u"onlineCommandsGroupBox")
-        sizePolicy2.setHeightForWidth(self.onlineCommandsGroupBox.sizePolicy().hasHeightForWidth())
-        self.onlineCommandsGroupBox.setSizePolicy(sizePolicy2)
-        self.gridLayout_19 = QGridLayout(self.onlineCommandsGroupBox)
-        self.gridLayout_19.setObjectName(u"gridLayout_19")
-        self.onlineRecordTogglePushButton = QPushButton(self.onlineCommandsGroupBox)
-        self.onlineRecordTogglePushButton.setObjectName(u"onlineRecordTogglePushButton")
-        self.onlineRecordTogglePushButton.setCheckable(True)
-
-        self.gridLayout_19.addWidget(self.onlineRecordTogglePushButton, 0, 1, 1, 1)
-
-        self.onlinePredictionTogglePushButton = QPushButton(self.onlineCommandsGroupBox)
-        self.onlinePredictionTogglePushButton.setObjectName(u"onlinePredictionTogglePushButton")
-        self.onlinePredictionTogglePushButton.setCheckable(True)
-
-        self.gridLayout_19.addWidget(self.onlinePredictionTogglePushButton, 0, 0, 1, 1)
-
-
-        self.gridLayout_4.addWidget(self.onlineCommandsGroupBox, 2, 0, 1, 1)
-
         self.conformalPredictionGroupBox = QGroupBox(self.onlineWidget)
         self.conformalPredictionGroupBox.setObjectName(u"conformalPredictionGroupBox")
         sizePolicy2.setHeightForWidth(self.conformalPredictionGroupBox.sizePolicy().hasHeightForWidth())
@@ -517,9 +496,51 @@ class Ui_MyoGestic(object):
 
         self.gridLayout_4.addWidget(self.conformalPredictionGroupBox, 1, 0, 1, 1)
 
-        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
+        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
 
-        self.gridLayout_4.addItem(self.verticalSpacer, 3, 0, 1, 1)
+        self.gridLayout_4.addItem(self.verticalSpacer, 5, 0, 1, 1)
+
+        self.onlineCommandsGroupBox = QGroupBox(self.onlineWidget)
+        self.onlineCommandsGroupBox.setObjectName(u"onlineCommandsGroupBox")
+        sizePolicy2.setHeightForWidth(self.onlineCommandsGroupBox.sizePolicy().hasHeightForWidth())
+        self.onlineCommandsGroupBox.setSizePolicy(sizePolicy2)
+        self.gridLayout_19 = QGridLayout(self.onlineCommandsGroupBox)
+        self.gridLayout_19.setObjectName(u"gridLayout_19")
+        self.onlineRecordTogglePushButton = QPushButton(self.onlineCommandsGroupBox)
+        self.onlineRecordTogglePushButton.setObjectName(u"onlineRecordTogglePushButton")
+        self.onlineRecordTogglePushButton.setCheckable(True)
+
+        self.gridLayout_19.addWidget(self.onlineRecordTogglePushButton, 0, 1, 1, 1)
+
+        self.onlinePredictionTogglePushButton = QPushButton(self.onlineCommandsGroupBox)
+        self.onlinePredictionTogglePushButton.setObjectName(u"onlinePredictionTogglePushButton")
+        self.onlinePredictionTogglePushButton.setCheckable(True)
+
+        self.gridLayout_19.addWidget(self.onlinePredictionTogglePushButton, 0, 0, 1, 1)
+
+
+        self.gridLayout_4.addWidget(self.onlineCommandsGroupBox, 4, 0, 1, 1)
+
+        self.onlineFiltersGroupBox = QGroupBox(self.onlineWidget)
+        self.onlineFiltersGroupBox.setObjectName(u"onlineFiltersGroupBox")
+        sizePolicy2.setHeightForWidth(self.onlineFiltersGroupBox.sizePolicy().hasHeightForWidth())
+        self.onlineFiltersGroupBox.setSizePolicy(sizePolicy2)
+        self.onlineFiltersGroupBox.setMinimumSize(QSize(122, 0))
+        self.onlineFiltersGroupBox.setMaximumSize(QSize(16777215, 16777215))
+        self.gridLayout_16 = QGridLayout(self.onlineFiltersGroupBox)
+        self.gridLayout_16.setObjectName(u"gridLayout_16")
+        self.onlineFiltersComboBox = QComboBox(self.onlineFiltersGroupBox)
+        self.onlineFiltersComboBox.setObjectName(u"onlineFiltersComboBox")
+        sizePolicy6 = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        sizePolicy6.setHorizontalStretch(0)
+        sizePolicy6.setVerticalStretch(0)
+        sizePolicy6.setHeightForWidth(self.onlineFiltersComboBox.sizePolicy().hasHeightForWidth())
+        self.onlineFiltersComboBox.setSizePolicy(sizePolicy6)
+
+        self.gridLayout_16.addWidget(self.onlineFiltersComboBox, 0, 0, 1, 1)
+
+
+        self.gridLayout_4.addWidget(self.onlineFiltersGroupBox, 3, 0, 1, 1)
 
         self.protocolModeStackedWidget.addWidget(self.onlineWidget)
 
@@ -531,38 +552,37 @@ class Ui_MyoGestic(object):
 
         self.verticalLayout = QVBoxLayout()
         self.verticalLayout.setObjectName(u"verticalLayout")
-        self.verticalLayout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
+        self.verticalLayout.setSizeConstraint(QLayout.SetDefaultConstraint)
         self.horizontalLayout = QHBoxLayout()
         self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
-        self.horizontalLayout.setSizeConstraint(QLayout.SizeConstraint.SetMaximumSize)
+        self.horizontalLayout.setSizeConstraint(QLayout.SetDefaultConstraint)
         self.horizontalLayout.setContentsMargins(-1, 0, 0, 0)
         self.toggleVispyPlotCheckBox = QCheckBox(self.centralwidget)
         self.toggleVispyPlotCheckBox.setObjectName(u"toggleVispyPlotCheckBox")
-        sizePolicy6 = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Maximum)
-        sizePolicy6.setHorizontalStretch(0)
-        sizePolicy6.setVerticalStretch(0)
-        sizePolicy6.setHeightForWidth(self.toggleVispyPlotCheckBox.sizePolicy().hasHeightForWidth())
-        self.toggleVispyPlotCheckBox.setSizePolicy(sizePolicy6)
+        sizePolicy7 = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Maximum)
+        sizePolicy7.setHorizontalStretch(0)
+        sizePolicy7.setVerticalStretch(0)
+        sizePolicy7.setHeightForWidth(self.toggleVispyPlotCheckBox.sizePolicy().hasHeightForWidth())
+        self.toggleVispyPlotCheckBox.setSizePolicy(sizePolicy7)
         self.toggleVispyPlotCheckBox.setChecked(True)
 
         self.horizontalLayout.addWidget(self.toggleVispyPlotCheckBox)
 
         self.label_9 = QLabel(self.centralwidget)
         self.label_9.setObjectName(u"label_9")
-        sizePolicy7 = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
-        sizePolicy7.setHorizontalStretch(0)
-        sizePolicy7.setVerticalStretch(0)
-        sizePolicy7.setHeightForWidth(self.label_9.sizePolicy().hasHeightForWidth())
-        self.label_9.setSizePolicy(sizePolicy7)
-        self.label_9.setAlignment(Qt.AlignmentFlag.AlignLeading|Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter)
+        sizePolicy8 = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        sizePolicy8.setHorizontalStretch(0)
+        sizePolicy8.setVerticalStretch(0)
+        sizePolicy8.setHeightForWidth(self.label_9.sizePolicy().hasHeightForWidth())
+        self.label_9.setSizePolicy(sizePolicy8)
 
         self.horizontalLayout.addWidget(self.label_9)
 
         self.timeShownDoubleSpinBox = QDoubleSpinBox(self.centralwidget)
         self.timeShownDoubleSpinBox.setObjectName(u"timeShownDoubleSpinBox")
-        sizePolicy7.setHeightForWidth(self.timeShownDoubleSpinBox.sizePolicy().hasHeightForWidth())
-        self.timeShownDoubleSpinBox.setSizePolicy(sizePolicy7)
+        sizePolicy8.setHeightForWidth(self.timeShownDoubleSpinBox.sizePolicy().hasHeightForWidth())
+        self.timeShownDoubleSpinBox.setSizePolicy(sizePolicy8)
         self.timeShownDoubleSpinBox.setDecimals(1)
         self.timeShownDoubleSpinBox.setMinimum(0.100000000000000)
         self.timeShownDoubleSpinBox.setMaximum(300.000000000000000)
@@ -575,11 +595,11 @@ class Ui_MyoGestic(object):
 
         self.vispyPlotWidget = BiosignalPlotWidget(self.centralwidget)
         self.vispyPlotWidget.setObjectName(u"vispyPlotWidget")
-        sizePolicy8 = QSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
-        sizePolicy8.setHorizontalStretch(0)
-        sizePolicy8.setVerticalStretch(0)
-        sizePolicy8.setHeightForWidth(self.vispyPlotWidget.sizePolicy().hasHeightForWidth())
-        self.vispyPlotWidget.setSizePolicy(sizePolicy8)
+        sizePolicy9 = QSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy9.setHorizontalStretch(0)
+        sizePolicy9.setVerticalStretch(0)
+        sizePolicy9.setHeightForWidth(self.vispyPlotWidget.sizePolicy().hasHeightForWidth())
+        self.vispyPlotWidget.setSizePolicy(sizePolicy9)
         self.vispyPlotWidget.setMinimumSize(QSize(500, 634))
         self.vispyPlotWidget.setSizeIncrement(QSize(0, 0))
 
@@ -592,16 +612,6 @@ class Ui_MyoGestic(object):
         self.loggingGroupBox.setObjectName(u"loggingGroupBox")
         self.gridLayout_14 = QGridLayout(self.loggingGroupBox)
         self.gridLayout_14.setObjectName(u"gridLayout_14")
-        self.label_4 = QLabel(self.loggingGroupBox)
-        self.label_4.setObjectName(u"label_4")
-
-        self.gridLayout_14.addWidget(self.label_4, 0, 0, 1, 1)
-
-        self.appUpdateFPSLabel = QLabel(self.loggingGroupBox)
-        self.appUpdateFPSLabel.setObjectName(u"appUpdateFPSLabel")
-
-        self.gridLayout_14.addWidget(self.appUpdateFPSLabel, 0, 1, 1, 1)
-
         self.loggingScrollArea = QScrollArea(self.loggingGroupBox)
         self.loggingScrollArea.setObjectName(u"loggingScrollArea")
         sizePolicy.setHeightForWidth(self.loggingScrollArea.sizePolicy().hasHeightForWidth())
@@ -609,7 +619,7 @@ class Ui_MyoGestic(object):
         self.loggingScrollArea.setWidgetResizable(True)
         self.loggingScrollAreaWidgetContents = QWidget()
         self.loggingScrollAreaWidgetContents.setObjectName(u"loggingScrollAreaWidgetContents")
-        self.loggingScrollAreaWidgetContents.setGeometry(QRect(0, 0, 354, 201))
+        self.loggingScrollAreaWidgetContents.setGeometry(QRect(0, 0, 370, 146))
         self.gridLayout_15 = QGridLayout(self.loggingScrollAreaWidgetContents)
         self.gridLayout_15.setObjectName(u"gridLayout_15")
         self.loggingTextEdit = QTextEdit(self.loggingScrollAreaWidgetContents)
@@ -620,6 +630,16 @@ class Ui_MyoGestic(object):
         self.loggingScrollArea.setWidget(self.loggingScrollAreaWidgetContents)
 
         self.gridLayout_14.addWidget(self.loggingScrollArea, 1, 0, 1, 2)
+
+        self.label_4 = QLabel(self.loggingGroupBox)
+        self.label_4.setObjectName(u"label_4")
+
+        self.gridLayout_14.addWidget(self.label_4, 0, 0, 1, 1)
+
+        self.appUpdateFPSLabel = QLabel(self.loggingGroupBox)
+        self.appUpdateFPSLabel.setObjectName(u"appUpdateFPSLabel")
+
+        self.gridLayout_14.addWidget(self.appUpdateFPSLabel, 0, 1, 1, 1)
 
 
         self.gridLayout.addWidget(self.loggingGroupBox, 1, 0, 1, 1)
@@ -632,7 +652,7 @@ class Ui_MyoGestic(object):
         self.retranslateUi(MyoGestic)
 
         self.mindMoveTabWidget.setCurrentIndex(1)
-        self.protocolModeStackedWidget.setCurrentIndex(0)
+        self.protocolModeStackedWidget.setCurrentIndex(2)
         self.recordReviewRecordingStackedWidget.setCurrentIndex(1)
 
 
@@ -695,9 +715,6 @@ class Ui_MyoGestic(object):
         self.onlineLoadModelGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Load Model", None))
         self.onlineLoadModelPushButton.setText(QCoreApplication.translate("MyoGestic", u"Select Model", None))
         self.onlineModelLabel.setText(QCoreApplication.translate("MyoGestic", u"Placeholder", None))
-        self.onlineCommandsGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Commands", None))
-        self.onlineRecordTogglePushButton.setText(QCoreApplication.translate("MyoGestic", u"Start Recording", None))
-        self.onlinePredictionTogglePushButton.setText(QCoreApplication.translate("MyoGestic", u"Start Prediction", None))
         self.conformalPredictionGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Conformal Prediction ", None))
         self.label_16.setText(QCoreApplication.translate("MyoGestic", u"Type", None))
         self.conformalPredictionSetPushButton.setText(QCoreApplication.translate("MyoGestic", u"Set", None))
@@ -713,6 +730,10 @@ class Ui_MyoGestic(object):
         self.conformalPredictionTypeComboBox.setItemText(2, QCoreApplication.translate("MyoGestic", u"RAPS", None))
         self.conformalPredictionTypeComboBox.setItemText(3, QCoreApplication.translate("MyoGestic", u"APS", None))
 
+        self.onlineCommandsGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Commands", None))
+        self.onlineRecordTogglePushButton.setText(QCoreApplication.translate("MyoGestic", u"Start Recording", None))
+        self.onlinePredictionTogglePushButton.setText(QCoreApplication.translate("MyoGestic", u"Start Prediction", None))
+        self.onlineFiltersGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Real-Time FIlters", None))
         self.mindMoveTabWidget.setTabText(self.mindMoveTabWidget.indexOf(self.procotolWidget), QCoreApplication.translate("MyoGestic", u"Protocol", None))
         self.toggleVispyPlotCheckBox.setText(QCoreApplication.translate("MyoGestic", u"Toggle Plot", None))
         self.label_9.setText(QCoreApplication.translate("MyoGestic", u"Time shown (s)", None))
