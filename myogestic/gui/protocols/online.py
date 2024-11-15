@@ -12,6 +12,7 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QFileDialog
 
 from myogestic.gui.widgets.logger import LoggerLevel
+from myogestic.models.config import CONFIG_REGISTRY
 from myogestic.models.interface import MyoGesticModelInterface
 
 if TYPE_CHECKING:
@@ -133,6 +134,14 @@ class OnlineProtocol(QObject):
         if not os.path.exists(self.model_dir_path):
             os.makedirs(self.model_dir_path)
 
+        self.real_time_filter_combo_box.addItems(
+            CONFIG_REGISTRY.real_time_filters_map.keys()
+        )
+
+    def _update_real_time_filter(self) -> None:
+        filter_name = self.real_time_filter_combo_box.currentText()
+        self.model_interface.set_real_time_filter(filter_name)
+
     def _update_device_configuration(self, is_configured: bool) -> None:
         if not is_configured:
             return
@@ -153,7 +162,9 @@ class OnlineProtocol(QObject):
                 prediction,
                 prediction_proba,
             ) = self.model_interface.predict(
-                data, bad_channels=self.main_window.current_bad_channels
+                data,
+                bad_channels=self.main_window.current_bad_channels,
+                selected_real_time_filter=self.real_time_filter_combo_box.currentText(),
             )
         except Exception as e:
             self.main_window.logger.print(
@@ -400,5 +411,7 @@ class OnlineProtocol(QObject):
         self.conformal_prediction_label_solving_method = (
             self.main_window.ui.labelCpSolvingMethod
         )
+
+        self.real_time_filter_combo_box = self.main_window.ui.onlineFiltersComboBox
 
         self._toggle_conformal_prediction_widget()

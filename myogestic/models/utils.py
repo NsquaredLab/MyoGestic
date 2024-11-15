@@ -68,6 +68,8 @@ class Registry:
 
         self.features_map: Dict[str, FilterBaseClass] = {}
 
+        self.real_time_filters_map: Dict[str, callable] = {}
+
     def register_model(
         self,
         model_name: str,
@@ -156,3 +158,28 @@ class Registry:
         feature.name = feature_name
 
         self.features_map[feature_name] = copy.deepcopy(feature)
+
+    def register_real_time_filter(self, filter_name: str, filter_function: callable):
+        """
+        Register a real-time filter in the registry.
+
+        .. note:: The filter name must be unique.
+
+        Parameters
+        ----------
+        filter_name : str
+            The name of the filter.
+        filter_function : callable
+            The filter function.
+
+        Raises
+        ------
+        ValueError
+            If the filter is already registered.
+        """
+        if filter_name in self.real_time_filters_map:
+            raise ValueError(
+                f'Filter "{filter_name}" is already registered. Please choose a different name.'
+            )
+
+        self.real_time_filters_map[filter_name] = filter_function
