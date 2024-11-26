@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "myogestic"
-version = "0.1.0"
-description = ""
+version = "0.2.0"
+description = "Software framework made to help the myocontrol community to develop and test new myocontrol algorithms."
 authors = [
     "Raul C. Sîmpetru <raul.simpetru@fau.de>",
     "Dominik I. Braun <dome.braun@fau.de>",
