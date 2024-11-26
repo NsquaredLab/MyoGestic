@@ -10,13 +10,13 @@ authors = [
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.12"
+python = ">=3.10,<3.13"
 qdarkstyle = "^3.2.3"
 poethepoet = "^0.27.0"
 catboost = "^1.2.5"
 scikit-learn = "^1.5.1"
 toml = "^0.10.2"
-biosignal-device-interface = "^0.1.0"
+biosignal-device-interface = {git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git"}
 doc-octopy = {git = "https://github.com/NsquaredLab/DocOctopy.git"}
 
 [tool.poetry.group.dev]
