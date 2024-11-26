@@ -18,6 +18,7 @@ scikit-learn = "^1.5.1"
 toml = "^0.10.2"
 biosignal-device-interface = {git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git"}
 doc-octopy = {git = "https://github.com/NsquaredLab/DocOctopy.git"}
+tornado = "^6.4.2"
 
 [tool.poetry.group.dev]
 optional = true
