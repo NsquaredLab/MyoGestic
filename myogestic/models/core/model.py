@@ -4,19 +4,18 @@ import pickle
 from typing import Any, TYPE_CHECKING, Union, Optional
 
 import numpy as np
-from scipy.ndimage import gaussian_filter
-from scipy.signal import savgol_filter
-from torch.signal.windows import gaussian
 
 from myogestic.models.config import CONFIG_REGISTRY
 
 if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 
 
 class MyoGesticModel(QObject):
+    predicted_emg_signal = Signal(np.ndarray)
+
     def __init__(self, logger: CustomLogger, parent: QObject | None = None) -> None:
         super().__init__(parent)
 
@@ -92,6 +91,10 @@ class MyoGesticModel(QObject):
     def predict(
         self, input: np.ndarray, prediction_function, selected_real_time_filter: str
     ) -> tuple[str, str, Any, Optional[np.ndarray]]:
+
+        # emit the input as a signal
+        self.predicted_emg_signal.emit(input)
+
         if self.is_classifier:
             prediction = prediction_function(self.model, input, self.is_classifier)
 
@@ -112,7 +115,7 @@ class MyoGesticModel(QObject):
             self.past_predictions.pop(0)
 
             # real-time savitzky-golay filter
-            print(selected_real_time_filter)
+            # print(selected_real_time_filter)
             prediction = CONFIG_REGISTRY.real_time_filters_map[
                 selected_real_time_filter
             ](self.past_predictions)
