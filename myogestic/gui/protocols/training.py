@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import pickle
 from datetime import datetime
 from functools import partial
@@ -29,10 +28,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from myogestic.gui.widgets.logger import LoggerLevel
-from myogestic.models.config import CONFIG_REGISTRY
 
 from myogestic.models.interface import MyoGesticModelInterface
-from myogestic.models.utils import UnchangeableParameter
+from myogestic.utils.config import UnchangeableParameter, CONFIG_REGISTRY
+from myogestic.utils.constants import (
+    RECORDING_DIR_PATH,
+    MODELS_DIR_PATH,
+    DATASETS_DIR_PATH,
+    NO_DATASET_SELECTED_INFO
+)
 
 if TYPE_CHECKING:
     from myogestic.gui.myogestic import MyoGestic
@@ -212,14 +216,6 @@ class TrainingProtocol(QObject):
         Thread for creating a dataset.
     train_model_thread : PyQtThread
         Thread for training a models.
-    recordings_dir_path : str
-        Path for the recordings directory.
-    models_dir_path : str
-        Path for the models directory.
-    datasets_dir_path : str
-        Path for the datasets directory.
-    no_dataset_selected_info : str
-        Information for no dataset selected.
     """
 
     def __init__(self, parent: MyoGestic | None = ...) -> None:
@@ -254,21 +250,9 @@ class TrainingProtocol(QObject):
         self.train_model_thread = None
 
         # File management:
-        self.recordings_dir_path: str = os.path.join(
-            self.main_window.base_path, "recordings"
-        )
-        self.models_dir_path: str = os.path.join(self.main_window.base_path, "models")
-        self.datasets_dir_path: str = os.path.join(
-            self.main_window.base_path, "datasets"
-        )
-        if not os.path.exists(self.recordings_dir_path):
-            os.makedirs(self.recordings_dir_path)
-
-        if not os.path.exists(self.models_dir_path):
-            os.makedirs(self.models_dir_path)
-
-        if not os.path.exists(self.datasets_dir_path):
-            os.makedirs(self.datasets_dir_path)
+        RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
+        MODELS_DIR_PATH.mkdir(parents=True, exist_ok=True)
+        DATASETS_DIR_PATH.mkdir(parents=True, exist_ok=True)
 
     def _update_device_configuration(self, is_configured: bool) -> None:
         if not is_configured:
@@ -308,7 +292,7 @@ class TrainingProtocol(QObject):
         dialog = QFileDialog(self.main_window)
         dialog.setFileMode(QFileDialog.ExistingFiles)
         dialog.setNameFilter("Pickle files (*.pkl)")
-        dialog.setDirectory(self.recordings_dir_path)
+        dialog.setDirectory(str(RECORDING_DIR_PATH))
 
         filenames, _ = dialog.getOpenFileNames()
         self.selected_recordings = {}
@@ -436,9 +420,7 @@ class TrainingProtocol(QObject):
         self.training_create_dataset_label_line_edit.setText("")
         self.training_create_datasets_select_recordings_push_button.setEnabled(True)
         self.selected_recordings = None
-        self.main_window.logger.print(
-            f"Dataset created!", LoggerLevel.INFO
-        )
+        self.main_window.logger.print(f"Dataset created!", LoggerLevel.INFO)
 
     def _create_dataset_thread(self) -> None:
         label = self.training_create_dataset_label_line_edit.text()
@@ -454,26 +436,23 @@ class TrainingProtocol(QObject):
             self.selected_recordings, self.selected_features, file_name
         )
 
-        dataset_dict["dataset_file_path"] = os.path.join(
-            self.datasets_dir_path, file_name + ".pkl"
-        )
+        dataset_dict["dataset_file_path"] = str(DATASETS_DIR_PATH / f"{file_name}.pkl")
 
-        with open(os.path.join(self.datasets_dir_path, file_name + ".pkl"), "wb") as f:
+        with (DATASETS_DIR_PATH / f"{file_name}.pkl").open("wb") as f:
             pickle.dump(dataset_dict, f)
-
 
     def _select_dataset(self) -> None:
         # Open dialog to select dataset
         dialog = QFileDialog(self.main_window)
         dialog.setFileMode(QFileDialog.ExistingFile)
         dialog.setNameFilter("Pickle files (*.pkl)")
-        dialog.setDirectory(self.datasets_dir_path)
+        dialog.setDirectory(str(DATASETS_DIR_PATH))
 
         filename, _ = dialog.getOpenFileName()
 
         if not filename:
-            self._open_warning_dialog(self.no_dataset_selected_info)
-            self.training_selected_dataset_label.setText(self.no_dataset_selected_info)
+            self._open_warning_dialog(NO_DATASET_SELECTED_INFO)
+            self.training_selected_dataset_label.setText(NO_DATASET_SELECTED_INFO)
             return
 
         self.selected_dataset_filepath = filename
@@ -488,7 +467,7 @@ class TrainingProtocol(QObject):
 
     def _train_model(self) -> None:
         if not self.selected_dataset_filepath:
-            self._open_warning_dialog(self.no_dataset_selected_info)
+            self._open_warning_dialog(NO_DATASET_SELECTED_INFO)
             return
 
         self.train_model_push_button.setEnabled(False)
@@ -550,7 +529,7 @@ class TrainingProtocol(QObject):
 
         file_name = f"MindMove_Model_{formatted_now}_{label.lower()}.pkl"
 
-        model_filepath = os.path.join(self.models_dir_path, file_name)
+        model_filepath = MODELS_DIR_PATH / file_name
 
         try:
             model_save_dict = self.model_interface.save_model(model_filepath)
@@ -560,11 +539,11 @@ class TrainingProtocol(QObject):
             )
             return
 
-        with open(model_filepath, "wb") as file:
+        with model_filepath.open("wb") as file:
             pickle.dump(model_save_dict, file)
 
     def _train_model_finished(self) -> None:
-        self.training_selected_dataset_label.setText(self.no_dataset_selected_info)
+        self.training_selected_dataset_label.setText(NO_DATASET_SELECTED_INFO)
         self.training_select_dataset_push_button.setEnabled(True)
         self.selected_dataset_filepath = None
         self.training_model_label_line_edit.setText("")
@@ -682,8 +661,7 @@ class TrainingProtocol(QObject):
             self.main_window.ui.trainingSelectedDatasetLabel
         )
 
-        self.no_dataset_selected_info = "No dataset selected!"
-        self.training_selected_dataset_label.setText(self.no_dataset_selected_info)
+        self.training_selected_dataset_label.setText(NO_DATASET_SELECTED_INFO)
 
         self.training_model_selection_combo_box = (
             self.main_window.ui.trainingModelSelectionComboBox

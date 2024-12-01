@@ -6,14 +6,13 @@ from typing import Any, TYPE_CHECKING
 
 import numpy as np
 import zarr
-from scipy.signal import butter
-
 from doc_octopy.datasets.filters.generic import ApplyFunctionFilter, IndexDataFilter
 from doc_octopy.datasets.filters.temporal import SOSFrequencyFilter
 from doc_octopy.datasets.supervised import EMGDataset
 from doc_octopy.datatypes import EMGData
+from scipy.signal import butter
+
 from myogestic.gui.widgets.logger import LoggerLevel
-from myogestic.models.config import CONFIG_REGISTRY
 
 if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger

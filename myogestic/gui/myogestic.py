@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import os
-import sys
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -13,10 +12,12 @@ from biosignal_device_interface.constants.devices.core.base_device_constants imp
     DeviceType,
 )
 
+from myogestic.gui.main_window import Ui_MyoGestic
 from myogestic.gui.protocols.protocol import Protocol
-from myogestic.gui.ui_compiled.main_window import Ui_MyoGestic
 from myogestic.gui.widgets.logger import CustomLogger
 from myogestic.gui.widgets.output import VirtualHandInterface
+from myogestic.utils.constants import BASE_PATH
+from myogestic.utils.config import _set_config_registry # noqa
 
 if TYPE_CHECKING:
     from biosignal_device_interface.gui.device_template_widgets.otb.otb_devices_widget import (
@@ -64,8 +65,6 @@ class MyoGestic(QMainWindow):
         Number of samples per frame.
     number_of_channels : int
         Number of biosignal channels.
-    base_path : str
-        Base path for saving files.
     virtual_hand_interface : VirtualHandInterface
         Interface for controlling the virtual hand.
     protocol : Protocol
@@ -76,6 +75,8 @@ class MyoGestic(QMainWindow):
 
     def __init__(self):
         super().__init__()
+
+        _set_config_registry()
 
         self.ui = Ui_MyoGestic()
         self.ui.setupUi(self)
@@ -112,20 +113,10 @@ class MyoGestic(QMainWindow):
         self.samples_per_frame = None
         self.number_of_channels = None
 
-        # _MEIPASS is a PyInstaller specific attribute that is set when the application is run as a frozen executable.
-        if hasattr(sys, "_MEIPASS"):
-            self.base_path = os.path.expanduser("~")
-            self.base_path = os.path.join(self.base_path, "MyoGestic")
-        else:
-            self.base_path = "data"
-
-        if not os.path.exists(self.base_path):
-            os.makedirs(self.base_path)
+        BASE_PATH.mkdir(exist_ok=True, parents=True)
 
         status_bar = self.ui.statusbar
-        status_bar.showMessage(
-            f"Data path: {os.path.join(os.getcwd(), self.base_path)}"
-        )
+        status_bar.showMessage(f"Data path: {Path.cwd() / BASE_PATH}")
 
         # Output Setup
         self.virtual_hand_interface = VirtualHandInterface(self)

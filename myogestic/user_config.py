@@ -1,9 +1,9 @@
+from doc_octopy.datasets.filters.temporal import RMSFilter
 from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression
 from sklearn.multioutput import MultiOutputRegressor
 
-from doc_octopy.datasets.filters.temporal import RMSFilter
-from myogestic.models.config import CONFIG_REGISTRY
 from myogestic.models.definitions import sklearn_models
+from myogestic.utils.config import CONFIG_REGISTRY
 
 # Register models
 CONFIG_REGISTRY.register_model(

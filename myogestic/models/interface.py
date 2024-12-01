@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from PySide6.QtCore import QObject
 
-from myogestic.models.config import CONFIG_REGISTRY
 from myogestic.models.core.dataset import MyoGesticDataset
 from myogestic.models.core.model import MyoGesticModel
 

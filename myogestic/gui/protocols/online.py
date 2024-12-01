@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import pickle
 import time
 from datetime import datetime
@@ -9,11 +8,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QFileDialog
+from PySide6.QtWidgets import QCheckBox, QFileDialog, QWidget, QVBoxLayout
 
 from myogestic.gui.widgets.logger import LoggerLevel
-from myogestic.models.config import CONFIG_REGISTRY
+from myogestic.gui.widgets.monitoring.template import _MonitoringWidgetBaseClass
 from myogestic.models.interface import MyoGesticModelInterface
+from myogestic.utils.config import CONFIG_REGISTRY
+from myogestic.utils.constants import PREDICTIONS_DIR_PATH, MODELS_DIR_PATH
 
 if TYPE_CHECKING:
     from myogestic.gui.myogestic import MyoGestic
@@ -51,10 +52,6 @@ class OnlineProtocol(QObject):
         Information about the connected device.
     model_information : dict[str, str] | None
         Information about the loaded models.
-    prediction_dir_path : str
-        Path for storing the predictions.
-    model_dir_path : str
-        Path for storing the models.
     time_since_last_prediction : float
         Time since the last prediction.
     model_interface : MyoGesticModelInterface | None
@@ -123,20 +120,14 @@ class OnlineProtocol(QObject):
         self.model_information: dict[str, str] = None
 
         # File management
-        self.prediction_dir_path: str = os.path.join(
-            self.main_window.base_path, "predictions"
-        )
-        self.model_dir_path: str = os.path.join(self.main_window.base_path, "models")
-
-        if not os.path.exists(self.prediction_dir_path):
-            os.makedirs(self.prediction_dir_path)
-
-        if not os.path.exists(self.model_dir_path):
-            os.makedirs(self.model_dir_path)
+        PREDICTIONS_DIR_PATH.mkdir(exist_ok=True, parents=True)
+        MODELS_DIR_PATH.mkdir(exist_ok=True, parents=True)
 
         self.real_time_filter_combo_box.addItems(
             CONFIG_REGISTRY.real_time_filters_map.keys()
         )
+
+        self.active_monitoring_widgets = {}
 
     def _update_real_time_filter(self) -> None:
         filter_name = self.real_time_filter_combo_box.currentText()
@@ -287,7 +278,7 @@ class OnlineProtocol(QObject):
         formatted_now = now.strftime("%Y%m%d_%H%M%S%f")
         file_name = f"MyoGestic_Prediction_{formatted_now}_{self.online_model_label.text().lower().split(' ')[0]}.pkl"
 
-        with open(os.path.join(self.prediction_dir_path, file_name), "wb") as f:
+        with (PREDICTIONS_DIR_PATH / file_name).open("wb") as f:
             pickle.dump(save_pickle_dict, f)
 
         # Reset buffers
@@ -302,7 +293,7 @@ class OnlineProtocol(QObject):
         file_name = dialog.getOpenFileName(
             self.main_window,
             "Open Model",
-            self.model_dir_path,
+            MODELS_DIR_PATH,
             "Checkpoint files (*.pkl)",
         )[0]
 
@@ -348,6 +339,29 @@ class OnlineProtocol(QObject):
             self.conformal_prediction_label_alpha.setEnabled(True)
             self.conformal_prediction_label_solving_method.setEnabled(True)
             self.conformal_prediction_set_pushbutton.setEnabled(True)
+
+    def _setup_monitoring_widget(
+        self,
+        name_of_monitoring_widget: str,
+        monitoring_widget: Type[_MonitoringWidgetBaseClass],
+    ) -> None:
+        self.active_monitoring_widgets[name_of_monitoring_widget] = monitoring_widget()
+        self.active_monitoring_widgets[name_of_monitoring_widget].show()
+
+    def _setup_monitoring_widgets_ui(self) -> None:
+        container_widget = QWidget()
+
+        layout = QVBoxLayout(container_widget)
+        # For each monitoring widget in CONFIG_REGISTRY.monitoring_widgets add a push button to the monitoring list
+        for k, v in CONFIG_REGISTRY.monitoring_widgets_map.items():
+            monitoring_push_button = QCheckBox(k)
+            monitoring_push_button.clicked.connect(
+                partial(self._setup_monitoring_widget, k, v)
+            )
+
+            layout.addWidget(monitoring_push_button)
+
+        self.monitoring_widgets_scroll_area.setWidget(container_widget)
 
     def _setup_protocol_ui(self) -> None:
         self.online_load_model_group_box = self.main_window.ui.onlineLoadModelGroupBox
@@ -415,3 +429,8 @@ class OnlineProtocol(QObject):
         self.real_time_filter_combo_box = self.main_window.ui.onlineFiltersComboBox
 
         self._toggle_conformal_prediction_widget()
+
+        self.monitoring_widgets_scroll_area = (
+            self.main_window.ui.monitoringWidgetsScrollArea
+        )
+        self._setup_monitoring_widgets_ui()

@@ -5,8 +5,6 @@ from typing import Any, TYPE_CHECKING, Union, Optional
 
 import numpy as np
 
-from myogestic.models.config import CONFIG_REGISTRY
-
 if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger
 

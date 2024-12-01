@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import pickle
 import time
 from datetime import datetime
@@ -10,6 +9,7 @@ import numpy as np
 from PySide6.QtCore import QObject
 
 from myogestic.gui.widgets.logger import LoggerLevel
+from myogestic.utils.constants import RECORDING_DIR_PATH
 
 if TYPE_CHECKING:
     from myogestic.gui.myogestic import MyoGestic
@@ -54,8 +54,6 @@ class RecordProtocol(QObject):
         A flag indicating whether the kinematics recording has finished.
     start_time : float
         The start time of the recording.
-    recording_dir_path : str
-        The directory path for saving the recordings.
     emg_recording_time : int
         The total number of EMG samples to be recorded.
     """
@@ -81,13 +79,7 @@ class RecordProtocol(QObject):
 
         self.start_time: float = None
 
-        # File management:
-        self.recording_dir_path: str = os.path.join(
-            self.main_window.base_path, "recordings"
-        )
-
-        if not os.path.exists(self.recording_dir_path):
-            os.makedirs(self.recording_dir_path)
+        RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
 
     def emg_update(self, data: np.ndarray) -> None:
         """
@@ -343,7 +335,7 @@ class RecordProtocol(QObject):
         formatted_now = now.strftime("%Y%m%d_%H%M%S%f")
         file_name = f"MindMove_Recording_{formatted_now}_{self.current_task.lower()}_{label.lower()}.pkl"
 
-        with open(os.path.join(self.recording_dir_path, file_name), "wb") as f:
+        with (RECORDING_DIR_PATH / file_name).open("wb") as f:
             pickle.dump(save_pickle_dict, f)
 
         # Reset progress bars
