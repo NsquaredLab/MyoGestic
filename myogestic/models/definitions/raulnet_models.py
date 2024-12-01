@@ -7,11 +7,11 @@ from pathlib import Path
 import lightning as L
 import numpy as np
 import torch
+from doc_octopy.datasets.filters.generic import IndexDataFilter
+from doc_octopy.datasets.loader import EMGDatasetLoader
 from lightning.pytorch.callbacks import StochasticWeightAveraging, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
 
-from doc_octopy.datasets.filters.generic import IndexDataFilter
-from doc_octopy.datasets.loader import EMGDatasetLoader
 from myogestic.gui.widgets.logger import CustomLogger
 
 

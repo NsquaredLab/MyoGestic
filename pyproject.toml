@@ -20,6 +20,7 @@ biosignal-device-interface = {git = "https://github.com/NsquaredLab/Biosignal-De
 doc-octopy = {git = "https://github.com/NsquaredLab/DocOctopy.git"}
 tornado = "^6.4.2"
 aiohttp = "^3.11.7"
+umap-learn = "^0.5.7"
 
 [tool.poetry.group.dev]
 optional = true
