@@ -37,8 +37,10 @@ class Ui_UMAP(object):
         self.actionPreferences.setEnabled(True)
         self.centralwidget = QWidget(UMAP)
         self.centralwidget.setObjectName(u"centralwidget")
-        self.gridLayout = QGridLayout(self.centralwidget)
-        self.gridLayout.setObjectName(u"gridLayout")
+        self.gridLayout_2 = QGridLayout(self.centralwidget)
+        self.gridLayout_2.setObjectName(u"gridLayout_2")
+        self.horizontalLayout = QHBoxLayout()
+        self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.verticalLayout_2 = QVBoxLayout()
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.groupBox = QGroupBox(self.centralwidget)
@@ -48,43 +50,49 @@ class Ui_UMAP(object):
         sizePolicy1.setVerticalStretch(0)
         sizePolicy1.setHeightForWidth(self.groupBox.sizePolicy().hasHeightForWidth())
         self.groupBox.setSizePolicy(sizePolicy1)
-        self.horizontalLayout = QHBoxLayout(self.groupBox)
-        self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.gridLayout = QGridLayout(self.groupBox)
+        self.gridLayout.setObjectName(u"gridLayout")
+        self.verticalLayout = QVBoxLayout()
+        self.verticalLayout.setObjectName(u"verticalLayout")
         self.trainingSelectDatasetPushButton = QPushButton(self.groupBox)
         self.trainingSelectDatasetPushButton.setObjectName(u"trainingSelectDatasetPushButton")
 
-        self.horizontalLayout.addWidget(self.trainingSelectDatasetPushButton)
+        self.verticalLayout.addWidget(self.trainingSelectDatasetPushButton)
 
         self.trainingSelectedDatasetLabel = QLabel(self.groupBox)
         self.trainingSelectedDatasetLabel.setObjectName(u"trainingSelectedDatasetLabel")
 
-        self.horizontalLayout.addWidget(self.trainingSelectedDatasetLabel)
+        self.verticalLayout.addWidget(self.trainingSelectedDatasetLabel)
 
 
-        self.verticalLayout_2.addWidget(self.groupBox)
-
-        self.horizontalLayout_2 = QHBoxLayout()
-        self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
-        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-
-        self.horizontalLayout_2.addItem(self.horizontalSpacer)
-
-        self.pushButton = QPushButton(self.centralwidget)
-        self.pushButton.setObjectName(u"pushButton")
-        sizePolicy1.setHeightForWidth(self.pushButton.sizePolicy().hasHeightForWidth())
-        self.pushButton.setSizePolicy(sizePolicy1)
-
-        self.horizontalLayout_2.addWidget(self.pushButton)
-
-        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-
-        self.horizontalLayout_2.addItem(self.horizontalSpacer_2)
+        self.gridLayout.addLayout(self.verticalLayout, 0, 0, 1, 1)
 
 
-        self.verticalLayout_2.addLayout(self.horizontalLayout_2)
+        self.verticalLayout_2.addWidget(self.groupBox, 0, Qt.AlignTop)
+
+        self.groupBox_2 = QGroupBox(self.centralwidget)
+        self.groupBox_2.setObjectName(u"groupBox_2")
+        self.gridLayout_3 = QGridLayout(self.groupBox_2)
+        self.gridLayout_3.setObjectName(u"gridLayout_3")
+        self.umapCreateModelPushButton = QPushButton(self.groupBox_2)
+        self.umapCreateModelPushButton.setObjectName(u"umapCreateModelPushButton")
+        sizePolicy1.setHeightForWidth(self.umapCreateModelPushButton.sizePolicy().hasHeightForWidth())
+        self.umapCreateModelPushButton.setSizePolicy(sizePolicy1)
+
+        self.gridLayout_3.addWidget(self.umapCreateModelPushButton, 0, 0, 1, 1)
 
 
-        self.gridLayout.addLayout(self.verticalLayout_2, 0, 0, 1, 1)
+        self.verticalLayout_2.addWidget(self.groupBox_2)
+
+        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+
+        self.verticalLayout_2.addItem(self.verticalSpacer)
+
+
+        self.horizontalLayout.addLayout(self.verticalLayout_2)
+
+
+        self.gridLayout_2.addLayout(self.horizontalLayout, 0, 1, 1, 1)
 
         UMAP.setCentralWidget(self.centralwidget)
         self.statusbar = QStatusBar(UMAP)
@@ -102,6 +110,7 @@ class Ui_UMAP(object):
         self.groupBox.setTitle(QCoreApplication.translate("UMAP", u"Dataset", None))
         self.trainingSelectDatasetPushButton.setText(QCoreApplication.translate("UMAP", u"Select Dataset", None))
         self.trainingSelectedDatasetLabel.setText(QCoreApplication.translate("UMAP", u"Placeholder", None))
-        self.pushButton.setText(QCoreApplication.translate("UMAP", u"Create UMAP model", None))
+        self.groupBox_2.setTitle(QCoreApplication.translate("UMAP", u"Train", None))
+        self.umapCreateModelPushButton.setText(QCoreApplication.translate("UMAP", u"Create UMAP model", None))
     # retranslateUi
 

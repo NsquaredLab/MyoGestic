@@ -13,6 +13,7 @@ from doc_octopy.datatypes import EMGData
 from scipy.signal import butter
 
 from myogestic.gui.widgets.logger import LoggerLevel
+from myogestic.utils.config import CONFIG_REGISTRY
 
 if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger

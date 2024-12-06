@@ -442,7 +442,5 @@ def _set_config_registry() -> None:
 
     # Register monitoring widgets
     CONFIG_REGISTRY.register_monitoring_widget("UMAP", UMAPMonitoringWidget)
-    CONFIG_REGISTRY.register_monitoring_widget("UMA2", UMAPMonitoringWidget)
-    CONFIG_REGISTRY.register_monitoring_widget("UMA3", UMAPMonitoringWidget)
     # load user configuration
     import myogestic.user_config  # noqa

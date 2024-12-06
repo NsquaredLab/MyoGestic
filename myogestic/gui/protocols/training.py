@@ -6,7 +6,7 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 import numpy as np
-from PySide6.QtCore import QObject, QThread, Qt, Signal
+from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -35,7 +35,7 @@ from myogestic.utils.constants import (
     RECORDING_DIR_PATH,
     MODELS_DIR_PATH,
     DATASETS_DIR_PATH,
-    NO_DATASET_SELECTED_INFO
+    NO_DATASET_SELECTED_INFO,
 )
 
 if TYPE_CHECKING:
@@ -185,6 +185,7 @@ class PyQtThread(QThread):
 
         self.t = target
 
+    @Slot()
     def run(self):
         self.t()
         self.has_finished_signal.emit()
