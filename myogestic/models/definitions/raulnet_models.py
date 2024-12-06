@@ -116,7 +116,7 @@ def load_per_finger(
         model.__class__.load_from_checkpoint(
             list(Path(model_path + f"_{i}").rglob("last.ckpt"))[0]
         ).to("cuda" if torch.cuda.is_available() else "cpu")
-        for i in range(5)
+        for i in range(3)
     ]
 
 
@@ -233,7 +233,7 @@ def train_per_finger(model: L.LightningModule, dataset, _: bool, __: CustomLogge
     except Exception:
         version_nr = 0
 
-    for i in range(5):
+    for i in range(3):
         hparams = model.hparams
         hparams["input_length__samples"] = dataset["emg"].shape[-1]
 
@@ -249,7 +249,7 @@ def train_per_finger(model: L.LightningModule, dataset, _: bool, __: CustomLogge
                 "persistent_workers": True,
             },
             ground_truth_augmentation_pipeline=[
-                [IndexDataFilter(indices=(0, [i]), is_output=True)]
+                [IndexDataFilter(indices=(0, [i + 1]), is_output=True)]
             ],
         )
 
@@ -340,18 +340,22 @@ def predict_per_finger(
     """
     if not is_classifier:
         with torch.inference_mode():
-            return list(
-                torch.concatenate(
-                    [
-                        model[i](
-                            torch.from_numpy(input)
-                            .to(torch.float32)
-                            .to(model[i].device)[None, ...]
-                        )
-                        for i in range(5)
-                    ]
+            return (
+                [0]
+                + list(
+                    torch.concatenate(
+                        [
+                            model[i](
+                                torch.from_numpy(input)
+                                .to(torch.float32)
+                                .to(model[i].device)[None, ...]
+                            )
+                            for i in range(3)
+                        ]
+                    )
+                    .detach()
+                    .cpu()
+                    .numpy()[:, 0]
                 )
-                .detach()
-                .cpu()
-                .numpy()[:, 0]
+                + [0]
             )

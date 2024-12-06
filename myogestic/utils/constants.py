@@ -15,5 +15,7 @@ MODELS_DIR_PATH = BASE_PATH / "models"
 DATASETS_DIR_PATH = BASE_PATH / "datasets"
 PREDICTIONS_DIR_PATH = BASE_PATH / "predictions"
 
+MONITORING_WIDGETS_EXCHANGE_DIR_PATH = BASE_PATH / "monitoring_widgets_exchange"
+
 # Repeatable Texts
 NO_DATASET_SELECTED_INFO = "No dataset selected!"

@@ -7,7 +7,7 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 import numpy as np
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QCheckBox, QFileDialog, QWidget, QVBoxLayout
 
 from myogestic.gui.widgets.logger import LoggerLevel
@@ -85,6 +85,8 @@ class OnlineProtocol(QObject):
     conformal_prediction_label_solving_method : QLabel
         Label for the conformal predictor solving method
     """
+
+    model_information_signal = Signal(dict)
 
     def __init__(self, parent: MyoGestic | None = ...) -> None:
         super().__init__(parent)
@@ -293,7 +295,7 @@ class OnlineProtocol(QObject):
         file_name = dialog.getOpenFileName(
             self.main_window,
             "Open Model",
-            MODELS_DIR_PATH,
+            str(MODELS_DIR_PATH),
             "Checkpoint files (*.pkl)",
         )[0]
 
@@ -317,10 +319,15 @@ class OnlineProtocol(QObject):
         self.online_commands_group_box.setEnabled(True)
         self.online_record_toggle_push_button.setEnabled(False)
 
+        self.monitoring_widgets_scroll_area.setEnabled(True)
+
         self.main_window.logger.print(
             f"Model loaded. Label: {label}",
             LoggerLevel.INFO,
         )
+
+        if len(self.active_monitoring_widgets) != 0:
+            self._send_model_information()
 
     def _toggle_conformal_prediction_widget(self) -> None:
         if self.conformal_prediction_type_combo_box.currentText() == "None":
@@ -340,13 +347,48 @@ class OnlineProtocol(QObject):
             self.conformal_prediction_label_solving_method.setEnabled(True)
             self.conformal_prediction_set_pushbutton.setEnabled(True)
 
+    def _send_model_information(self) -> None:
+        self.model_information_signal.emit(
+            {
+                "models_map": CONFIG_REGISTRY.models_map[
+                    self.model_information["model_name"]
+                ],
+                "functions_map": CONFIG_REGISTRY.models_functions_map[
+                    self.model_information["model_name"]
+                ],
+                "model_path": self.model_information["model_path"],
+                "model_params": self.model_information["model_params"],
+            }
+        )
+
     def _setup_monitoring_widget(
         self,
         name_of_monitoring_widget: str,
         monitoring_widget: Type[_MonitoringWidgetBaseClass],
+        state: int,
     ) -> None:
-        self.active_monitoring_widgets[name_of_monitoring_widget] = monitoring_widget()
-        self.active_monitoring_widgets[name_of_monitoring_widget].show()
+        if state.value == 2:
+            self.active_monitoring_widgets[name_of_monitoring_widget] = (
+                monitoring_widget()
+            )
+            self.active_monitoring_widgets[name_of_monitoring_widget].show()
+
+            # connect the signal to the monitoring widget
+            self.model_interface.model.predicted_emg_signal.connect(
+                self.active_monitoring_widgets[name_of_monitoring_widget].run_monitoring
+            )
+
+            self.model_information_signal.connect(
+                self.active_monitoring_widgets[
+                    name_of_monitoring_widget
+                ].update_model_information
+            )
+
+            self._send_model_information()
+
+        else:
+            self.active_monitoring_widgets[name_of_monitoring_widget].close()
+            del self.active_monitoring_widgets[name_of_monitoring_widget]
 
     def _setup_monitoring_widgets_ui(self) -> None:
         container_widget = QWidget()
@@ -355,8 +397,12 @@ class OnlineProtocol(QObject):
         # For each monitoring widget in CONFIG_REGISTRY.monitoring_widgets add a push button to the monitoring list
         for k, v in CONFIG_REGISTRY.monitoring_widgets_map.items():
             monitoring_push_button = QCheckBox(k)
-            monitoring_push_button.clicked.connect(
-                partial(self._setup_monitoring_widget, k, v)
+            monitoring_push_button.checkStateChanged.connect(
+                partial(
+                    self._setup_monitoring_widget,
+                    k,
+                    v,
+                )
             )
 
             layout.addWidget(monitoring_push_button)
@@ -433,4 +479,5 @@ class OnlineProtocol(QObject):
         self.monitoring_widgets_scroll_area = (
             self.main_window.ui.monitoringWidgetsScrollArea
         )
+        self.monitoring_widgets_scroll_area.setEnabled(False)
         self._setup_monitoring_widgets_ui()

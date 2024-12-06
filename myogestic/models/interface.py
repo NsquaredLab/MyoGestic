@@ -6,6 +6,7 @@ from PySide6.QtCore import QObject
 
 from myogestic.models.core.dataset import MyoGesticDataset
 from myogestic.models.core.model import MyoGesticModel
+from myogestic.utils.config import CONFIG_REGISTRY
 
 if TYPE_CHECKING:
     import numpy as np

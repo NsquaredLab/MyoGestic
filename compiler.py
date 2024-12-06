@@ -75,7 +75,7 @@ def compile():
     #     pyinstaller_args.append(f"--add-binary={exe_src};{exe_dst}")
 
     # Run PyInstaller with the constructed arguments
-    PyInstaller.__main__.run(pyinstaller_args)
+    PyInstaller.__main__.run_monitoring(pyinstaller_args)
 
 
 if __name__ == "__main__":
