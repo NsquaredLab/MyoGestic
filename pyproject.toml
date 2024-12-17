@@ -1,6 +1,6 @@
 [tool.poetry]
-name = "myogestic"
-version = "0.2.0"
+name = "MyoGestic"
+version = "0.3.0"
 description = "Software framework made to help the myocontrol community to develop and test new myocontrol algorithms."
 authors = [
     "Raul C. Sîmpetru <raul.simpetru@fau.de>",
@@ -17,10 +17,9 @@ catboost = "^1.2.5"
 scikit-learn = "^1.5.1"
 toml = "^0.10.2"
 biosignal-device-interface = {git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git"}
-doc-octopy = {git = "https://github.com/NsquaredLab/DocOctopy.git"}
+myoverse = {git = "https://github.com/NsquaredLab/MyoVerse.git"}
 tornado = "^6.4.2"
 aiohttp = "^3.11.7"
-umap-learn = "^0.5.7"
 
 [tool.poetry.group.dev]
 optional = true
@@ -40,6 +39,7 @@ sphinx-gallery = "^0.16.0"
 enum-tools = {extras = ["sphinx"], version = "^0.12.0"}
 sphinxcontrib-youtube = "^1.4.1"
 sphinxcontrib-pdfembed = {git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git"}
+memory-profiler = "^0.61.0"
 
 [tool.poetry.group.compile]
 optional = true

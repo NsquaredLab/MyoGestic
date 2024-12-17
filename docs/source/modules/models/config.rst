@@ -6,23 +6,23 @@ MyoGestic Model Configurations
 Configuration Parameters
 ------------------------
 
-.. automodule:: myogestic.models.utils
+.. automodule:: myogestic.utils.config
     :members:
     :show-inheritance:
     :exclude-members: ChangeableParameter, UnchangeableParameter, Registry
 
 .. _changeable_parameter:
-.. autodata:: myogestic.models.utils.ChangeableParameter
+.. autodata:: myogestic.utils.config.ChangeableParameter
     :annotation:
 
 .. _unchangeable_parameter:
-.. autodata:: myogestic.models.utils.UnchangeableParameter
+.. autodata:: myogestic.utils.config.UnchangeableParameter
     :annotation:
 
 Registry
 --------
 
-.. automodule:: myogestic.models.utils
+.. automodule:: myogestic.utils.config
     :members:
     :show-inheritance:
     :exclude-members: ChangeableParameter, UnchangeableParameter, BoolParameter, IntParameter, FloatParameter, StringParameter, CategoricalParameter

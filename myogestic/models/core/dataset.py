@@ -6,10 +6,10 @@ from typing import Any, TYPE_CHECKING
 
 import numpy as np
 import zarr
-from doc_octopy.datasets.filters.generic import ApplyFunctionFilter, IndexDataFilter
-from doc_octopy.datasets.filters.temporal import SOSFrequencyFilter
-from doc_octopy.datasets.supervised import EMGDataset
-from doc_octopy.datatypes import EMGData
+from myoverse.datasets.filters.generic import ApplyFunctionFilter, IndexDataFilter
+from myoverse.datasets.filters.temporal import SOSFrequencyFilter
+from myoverse.datasets.supervised import EMGDataset
+from myoverse.datatypes import EMGData
 from scipy.signal import butter
 
 from myogestic.gui.widgets.logger import LoggerLevel

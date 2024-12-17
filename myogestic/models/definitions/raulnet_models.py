@@ -7,8 +7,8 @@ from pathlib import Path
 import lightning as L
 import numpy as np
 import torch
-from doc_octopy.datasets.filters.generic import IndexDataFilter
-from doc_octopy.datasets.loader import EMGDatasetLoader
+from myoverse.datasets.filters.generic import IndexDataFilter
+from myoverse.datasets.loader import EMGDatasetLoader
 from lightning.pytorch.callbacks import StochasticWeightAveraging, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
 
@@ -102,12 +102,12 @@ def load_per_finger(
     ----------
     model_path: str
         The path to load the model.
-    model: _CatBoostBase
+    model: L.LightningModule
         A new instance of the CatBoost model. This instance is used to load the model.
 
     Returns
     -------
-    _CatBoostBase
+    L.LightningModule
         The loaded RaulNet model.
 
     """
@@ -124,7 +124,7 @@ def train(
     model: L.LightningModule, dataset, _: bool, __: CustomLogger
 ) -> L.LightningModule:
     """
-    Train a CatBoost model.
+    Train a RaulNet model.
 
     Parameters
     ----------
@@ -194,7 +194,7 @@ def train(
 
 def train_per_finger(model: L.LightningModule, dataset, _: bool, __: CustomLogger):
     """
-    Train a CatBoost model.
+    Train a RaulNet model.
 
     Parameters
     ----------

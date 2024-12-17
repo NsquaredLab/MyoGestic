@@ -12,20 +12,13 @@ if TYPE_CHECKING:
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-import vgamepad as vg
-
 
 class MyoGesticModel(QObject):
     predicted_emg_signal = Signal(np.ndarray)
-
-    gamepad_signal = Signal(list)
-
     def __init__(self, logger: CustomLogger, parent: QObject | None = None) -> None:
         super().__init__(parent)
 
         self.past_predictions = []
-
-        self.gamepad = None
 
         self.model_params = None
         self.model_name = None
@@ -66,8 +59,6 @@ class MyoGesticModel(QObject):
         self.conformal_predictor = None
         self.prediction_solver = None
 
-        self.gamepad_signal.connect(self.update_gamepad)
-
     def train(
         self,
         dataset: dict,
@@ -99,42 +90,6 @@ class MyoGesticModel(QObject):
     def custom_log(self, x, a=3):
         return np.log(1 + a * x) / np.log(1 + a)
 
-    @Slot(list)
-    def update_gamepad(self, prediction: list[float]) -> None:
-        self.gamepad.reset()
-        self.gamepad.update()
-
-        if sum(prediction) == 0:
-            self.gamepad.left_joystick_float(x_value_float=0, y_value_float=-1.0)
-            self.gamepad.update()
-
-            return
-
-        # self.gamepad.reset()
-        # self.gamepad.update()
-
-        # print(prediction)
-
-        # prediction[2] = 1.0
-
-        if prediction[3] >= 0.4:
-            prediction[3] = 1.0
-
-        if prediction[4] >= 0.4:
-            prediction[4] = 1.0
-
-        # if prediction[4] == 1.0:
-        #     prediction[2] = 0.0
-
-        # prediction[2] = self.custom_log(prediction[2])
-        # prediction[3] = self.custom_log(prediction[3])
-        # prediction[4] = self.custom_log(prediction[4])
-
-        self.gamepad.left_joystick_float(
-            x_value_float=-prediction[2] + prediction[4], y_value_float=-1.0
-        )
-        self.gamepad.update()
-
     def predict(
         self, input: np.ndarray, prediction_function, selected_real_time_filter: str
     ) -> tuple[str, str, Any, Optional[np.ndarray]]:
@@ -155,8 +110,6 @@ class MyoGesticModel(QObject):
                 + [1.0 if prediction == 4 else 0.0]
                 + [0.0, 0.0, 0.0, 0.0]
             )
-
-            self.gamepad_signal.emit(to_emit)
 
             return (
                 self.model_prediction_to_interface_map[prediction],
@@ -180,8 +133,6 @@ class MyoGesticModel(QObject):
             prediction = [prediction[0]] + [0.0] + prediction[1:] + [0.0, 0.0, 0.0]
 
             prediction = list(np.clip(prediction, 0, 1))
-
-            # self.gamepad_signal.emit(prediction)
 
             return str(prediction), "", prediction, None
 
@@ -210,12 +161,5 @@ class MyoGesticModel(QObject):
             self.model_information["model_path"],
             model_class(**self.model_information["model_params"]),  # noqa
         )
-
-        try:
-            self.gamepad = vg.VX360Gamepad()
-        except Exception as e:
-            self.logger.log(
-                f"Gamepad not connected: {e}. If on linux try to set the permissions to the gamepad device."
-            )
 
         return self.model_information

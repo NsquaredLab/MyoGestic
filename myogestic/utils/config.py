@@ -4,9 +4,9 @@ from typing import TypedDict, Union, Dict, Type, Callable, Any, Literal, Optiona
 import numpy as np
 from catboost import CatBoostClassifier, CatBoostRegressor
 from catboost.utils import get_gpu_device_count
-from doc_octopy.datasets.filters._template import FilterBaseClass  # noqa
-from doc_octopy.datasets.filters.generic import IdentityFilter
-from doc_octopy.datasets.filters.temporal import (
+from myoverse.datasets.filters._template import FilterBaseClass  # noqa
+from myoverse.datasets.filters.generic import IdentityFilter
+from myoverse.datasets.filters.temporal import (
     RMSFilter,
     MAVFilter,
     IAVFilter,
@@ -15,7 +15,7 @@ from doc_octopy.datasets.filters.temporal import (
     ZCFilter,
     SSCFilter,
 )
-from doc_octopy.models.definitions.raul_net.online.v16 import RaulNetV16
+from myoverse.models.definitions.raul_net.online.v16 import RaulNetV16
 from scipy.ndimage import gaussian_filter
 from scipy.signal import savgol_filter
 from sklearn.ensemble import AdaBoostClassifier
@@ -23,8 +23,6 @@ from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPClassifier
 
-from myogestic.gui.widgets.monitoring.template import _MonitoringWidgetBaseClass  # noqa
-from myogestic.gui.widgets.monitoring.umap_monitoring import UMAPMonitoringWidget
 from myogestic.models.definitions import sklearn_models, catboost_models, raulnet_models
 
 
@@ -210,19 +208,6 @@ class Registry:
 
         self.real_time_filters_map[filter_name] = filter_function
 
-    def register_monitoring_widget(
-        self, widget_name: str, widget: Type[_MonitoringWidgetBaseClass]
-    ):
-        """
-        Register a monitoring widget in the registry.
-        """
-        if widget_name in self.monitoring_widgets_map:
-            raise ValueError(
-                f'Monitoring widget "{widget_name}" is already registered. Please choose a different name.'
-            )
-
-        self.monitoring_widgets_map[widget_name] = widget
-
 
 # ------------------------------------------------------------------------------
 if "CONFIG_REGISTRY" not in globals():
@@ -314,42 +299,6 @@ def _set_config_registry() -> None:
     )
 
     CONFIG_REGISTRY.register_model(
-        "CatBoost Regressor",
-        CatBoostRegressor,
-        False,
-        catboost_models.save,
-        catboost_models.load,
-        catboost_models.train,
-        catboost_models.predict,
-        {
-            "iterations": {
-                "start_value": 10,
-                "end_value": 1000,
-                "step": 10,
-                "default_value": 100,
-            },
-            "l2_leaf_reg": {
-                "start_value": 1,
-                "end_value": 10,
-                "step": 1,
-                "default_value": 5,
-            },
-            "border_count": {
-                "start_value": 1,
-                "end_value": 255,
-                "step": 1,
-                "default_value": 254,
-            },
-        },
-        {
-            "task_type": "GPU" if get_gpu_device_count() > 0 else "CPU",
-            "train_dir": None,
-            "loss_function": "MultiRMSE",
-            "boosting_type": "Plain",
-        },
-    )
-
-    CONFIG_REGISTRY.register_model(
         "AdaBoost Classifier",
         AdaBoostClassifier,
         True,
@@ -371,17 +320,6 @@ def _set_config_registry() -> None:
                 "default_value": 0.1,
             },
         },
-    )
-
-    CONFIG_REGISTRY.register_model(
-        "Gaussian Process Classifier",
-        GaussianProcessClassifier,
-        True,
-        sklearn_models.save,
-        sklearn_models.load,
-        sklearn_models.train,
-        sklearn_models.predict,
-        unchangeable_parameters={"kernel": None},
     )
 
     CONFIG_REGISTRY.register_model(
@@ -440,7 +378,5 @@ def _set_config_registry() -> None:
         "Savgol", lambda x: savgol_filter(np.array(x), 111, 3, axis=0)
     )
 
-    # Register monitoring widgets
-    CONFIG_REGISTRY.register_monitoring_widget("UMAP", UMAPMonitoringWidget)
     # load user configuration
     import myogestic.user_config  # noqa
