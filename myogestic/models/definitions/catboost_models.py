@@ -1,6 +1,7 @@
 """
 This module contains the functions to save, load, train and predict using CatBoost models.
 """
+
 from typing import Union
 
 import numpy as np
@@ -26,7 +27,7 @@ def save(model_path: str, model: _CatBoostBase) -> str:
         The path where the model was saved.
 
     """
-    output_model_path = model_path.split(".")[0] + "_model" + ".cbm"
+    output_model_path = str(model_path).split(".")[0] + "_model" + ".cbm"
     model.save_model(output_model_path)
     return output_model_path
 

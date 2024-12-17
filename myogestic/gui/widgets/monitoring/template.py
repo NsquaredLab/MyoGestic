@@ -6,12 +6,10 @@ from PySide6.QtWidgets import QMainWindow
 
 
 class _MonitoringWidgetBaseClass(QMainWindow):
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, emg_signal=None) -> None:
         super().__init__(parent)
         self.model_information: dict[str, Any] = None
-
-    def run_monitoring(self, data: np.ndarray):
-        raise NotImplementedError()
+        self.emg_signal = emg_signal
 
     def _setup_functionality(self) -> None:
         raise NotImplementedError()
