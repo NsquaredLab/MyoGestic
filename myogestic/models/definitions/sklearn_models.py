@@ -27,7 +27,7 @@ def save(model_path: str, model: object) -> str:
         The path where the model was saved.
 
     """
-    output_model_path: str = model_path.split(".")[0] + "_model" + ".pkl"
+    output_model_path: str = str(model_path).split(".")[0] + "_model" + ".pkl"
     joblib.dump(model, output_model_path)
     return output_model_path
 

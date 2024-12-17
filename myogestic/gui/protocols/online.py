@@ -11,7 +11,6 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QCheckBox, QFileDialog, QWidget, QVBoxLayout
 
 from myogestic.gui.widgets.logger import LoggerLevel
-from myogestic.gui.widgets.monitoring.template import _MonitoringWidgetBaseClass
 from myogestic.models.interface import MyoGesticModelInterface
 from myogestic.utils.config import CONFIG_REGISTRY
 from myogestic.utils.constants import PREDICTIONS_DIR_PATH, MODELS_DIR_PATH
@@ -319,8 +318,6 @@ class OnlineProtocol(QObject):
         self.online_commands_group_box.setEnabled(True)
         self.online_record_toggle_push_button.setEnabled(False)
 
-        self.monitoring_widgets_scroll_area.setEnabled(True)
-
         self.main_window.logger.print(
             f"Model loaded. Label: {label}",
             LoggerLevel.INFO,
@@ -470,9 +467,3 @@ class OnlineProtocol(QObject):
         self.real_time_filter_combo_box = self.main_window.ui.onlineFiltersComboBox
 
         self._toggle_conformal_prediction_widget()
-
-        self.monitoring_widgets_scroll_area = (
-            self.main_window.ui.monitoringWidgetsScrollArea
-        )
-        self.monitoring_widgets_scroll_area.setEnabled(False)
-        self._setup_monitoring_widgets_ui()

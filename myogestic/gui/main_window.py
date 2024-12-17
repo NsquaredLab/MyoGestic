@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'main_window.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.0
+## Created by: Qt User Interface Compiler version 6.8.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -31,7 +31,7 @@ class Ui_MyoGestic(object):
     def setupUi(self, MyoGestic):
         if not MyoGestic.objectName():
             MyoGestic.setObjectName(u"MyoGestic")
-        MyoGestic.resize(902, 907)
+        MyoGestic.resize(945, 971)
         self.actionPreferences = QAction(MyoGestic)
         self.actionPreferences.setObjectName(u"actionPreferences")
         self.actionPreferences.setEnabled(True)
@@ -185,7 +185,7 @@ class Ui_MyoGestic(object):
         self.reviewRecordingRejectPushButton.setObjectName(u"reviewRecordingRejectPushButton")
         sizePolicy1.setHeightForWidth(self.reviewRecordingRejectPushButton.sizePolicy().hasHeightForWidth())
         self.reviewRecordingRejectPushButton.setSizePolicy(sizePolicy1)
-        self.reviewRecordingRejectPushButton.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.reviewRecordingRejectPushButton.setLayoutDirection(Qt.LeftToRight)
         self.reviewRecordingRejectPushButton.setStyleSheet(u"background-color: rgb(255, 0, 0);\n"
 "color: rgb(0, 0, 0);")
 
@@ -262,7 +262,7 @@ class Ui_MyoGestic(object):
         self.recordUseKinematicsCheckBox = QCheckBox(self.recordRecordingGroupBox)
         self.recordUseKinematicsCheckBox.setObjectName(u"recordUseKinematicsCheckBox")
         self.recordUseKinematicsCheckBox.setEnabled(True)
-        self.recordUseKinematicsCheckBox.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.recordUseKinematicsCheckBox.setLayoutDirection(Qt.LeftToRight)
         self.recordUseKinematicsCheckBox.setChecked(False)
 
         self.gridLayout_9.addWidget(self.recordUseKinematicsCheckBox, 2, 0, 1, 1)
@@ -399,46 +399,6 @@ class Ui_MyoGestic(object):
         self.onlineWidget.setObjectName(u"onlineWidget")
         self.gridLayout_4 = QGridLayout(self.onlineWidget)
         self.gridLayout_4.setObjectName(u"gridLayout_4")
-        self.onlineCommandsGroupBox = QGroupBox(self.onlineWidget)
-        self.onlineCommandsGroupBox.setObjectName(u"onlineCommandsGroupBox")
-        sizePolicy2.setHeightForWidth(self.onlineCommandsGroupBox.sizePolicy().hasHeightForWidth())
-        self.onlineCommandsGroupBox.setSizePolicy(sizePolicy2)
-        self.gridLayout_19 = QGridLayout(self.onlineCommandsGroupBox)
-        self.gridLayout_19.setObjectName(u"gridLayout_19")
-        self.onlineRecordTogglePushButton = QPushButton(self.onlineCommandsGroupBox)
-        self.onlineRecordTogglePushButton.setObjectName(u"onlineRecordTogglePushButton")
-        self.onlineRecordTogglePushButton.setCheckable(True)
-
-        self.gridLayout_19.addWidget(self.onlineRecordTogglePushButton, 0, 1, 1, 1)
-
-        self.onlinePredictionTogglePushButton = QPushButton(self.onlineCommandsGroupBox)
-        self.onlinePredictionTogglePushButton.setObjectName(u"onlinePredictionTogglePushButton")
-        self.onlinePredictionTogglePushButton.setCheckable(True)
-
-        self.gridLayout_19.addWidget(self.onlinePredictionTogglePushButton, 0, 0, 1, 1)
-
-
-        self.gridLayout_4.addWidget(self.onlineCommandsGroupBox, 5, 0, 1, 1)
-
-        self.monitoringWidgetsGroupBox = QGroupBox(self.onlineWidget)
-        self.monitoringWidgetsGroupBox.setObjectName(u"monitoringWidgetsGroupBox")
-        sizePolicy2.setHeightForWidth(self.monitoringWidgetsGroupBox.sizePolicy().hasHeightForWidth())
-        self.monitoringWidgetsGroupBox.setSizePolicy(sizePolicy2)
-        self.gridLayout_17 = QGridLayout(self.monitoringWidgetsGroupBox)
-        self.gridLayout_17.setObjectName(u"gridLayout_17")
-        self.monitoringWidgetsScrollArea = QScrollArea(self.monitoringWidgetsGroupBox)
-        self.monitoringWidgetsScrollArea.setObjectName(u"monitoringWidgetsScrollArea")
-        self.monitoringWidgetsScrollArea.setWidgetResizable(True)
-        self.scrollAreaWidgetContents = QWidget()
-        self.scrollAreaWidgetContents.setObjectName(u"scrollAreaWidgetContents")
-        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 312, 54))
-        self.monitoringWidgetsScrollArea.setWidget(self.scrollAreaWidgetContents)
-
-        self.gridLayout_17.addWidget(self.monitoringWidgetsScrollArea, 0, 0, 1, 1)
-
-
-        self.gridLayout_4.addWidget(self.monitoringWidgetsGroupBox, 3, 0, 1, 1)
-
         self.verticalSpacer_3 = QSpacerItem(10, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
 
         self.gridLayout_4.addItem(self.verticalSpacer_3, 2, 0, 1, 1)
@@ -462,6 +422,27 @@ class Ui_MyoGestic(object):
 
 
         self.gridLayout_4.addWidget(self.onlineLoadModelGroupBox, 0, 0, 1, 1)
+
+        self.onlineCommandsGroupBox = QGroupBox(self.onlineWidget)
+        self.onlineCommandsGroupBox.setObjectName(u"onlineCommandsGroupBox")
+        sizePolicy2.setHeightForWidth(self.onlineCommandsGroupBox.sizePolicy().hasHeightForWidth())
+        self.onlineCommandsGroupBox.setSizePolicy(sizePolicy2)
+        self.gridLayout_19 = QGridLayout(self.onlineCommandsGroupBox)
+        self.gridLayout_19.setObjectName(u"gridLayout_19")
+        self.onlineRecordTogglePushButton = QPushButton(self.onlineCommandsGroupBox)
+        self.onlineRecordTogglePushButton.setObjectName(u"onlineRecordTogglePushButton")
+        self.onlineRecordTogglePushButton.setCheckable(True)
+
+        self.gridLayout_19.addWidget(self.onlineRecordTogglePushButton, 0, 1, 1, 1)
+
+        self.onlinePredictionTogglePushButton = QPushButton(self.onlineCommandsGroupBox)
+        self.onlinePredictionTogglePushButton.setObjectName(u"onlinePredictionTogglePushButton")
+        self.onlinePredictionTogglePushButton.setCheckable(True)
+
+        self.gridLayout_19.addWidget(self.onlinePredictionTogglePushButton, 0, 0, 1, 1)
+
+
+        self.gridLayout_4.addWidget(self.onlineCommandsGroupBox, 4, 0, 1, 1)
 
         self.conformalPredictionGroupBox = QGroupBox(self.onlineWidget)
         self.conformalPredictionGroupBox.setObjectName(u"conformalPredictionGroupBox")
@@ -564,7 +545,7 @@ class Ui_MyoGestic(object):
         self.gridLayout_16.addWidget(self.onlineFiltersComboBox, 0, 0, 1, 1)
 
 
-        self.gridLayout_4.addWidget(self.onlineFiltersGroupBox, 4, 0, 1, 1)
+        self.gridLayout_4.addWidget(self.onlineFiltersGroupBox, 3, 0, 1, 1)
 
         self.protocolModeStackedWidget.addWidget(self.onlineWidget)
 
@@ -591,7 +572,7 @@ class Ui_MyoGestic(object):
         self.loggingScrollArea.setWidgetResizable(True)
         self.loggingScrollAreaWidgetContents = QWidget()
         self.loggingScrollAreaWidgetContents.setObjectName(u"loggingScrollAreaWidgetContents")
-        self.loggingScrollAreaWidgetContents.setGeometry(QRect(0, 0, 354, 140))
+        self.loggingScrollAreaWidgetContents.setGeometry(QRect(0, 0, 393, 132))
         self.gridLayout_15 = QGridLayout(self.loggingScrollAreaWidgetContents)
         self.gridLayout_15.setObjectName(u"gridLayout_15")
         self.loggingTextEdit = QTextEdit(self.loggingScrollAreaWidgetContents)
@@ -618,11 +599,11 @@ class Ui_MyoGestic(object):
 
         self.verticalLayout = QVBoxLayout()
         self.verticalLayout.setObjectName(u"verticalLayout")
-        self.verticalLayout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
+        self.verticalLayout.setSizeConstraint(QLayout.SetDefaultConstraint)
         self.horizontalLayout = QHBoxLayout()
         self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
-        self.horizontalLayout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
+        self.horizontalLayout.setSizeConstraint(QLayout.SetDefaultConstraint)
         self.horizontalLayout.setContentsMargins(-1, 0, 0, 0)
         self.toggleVispyPlotCheckBox = QCheckBox(self.centralwidget)
         self.toggleVispyPlotCheckBox.setObjectName(u"toggleVispyPlotCheckBox")
@@ -742,13 +723,12 @@ class Ui_MyoGestic(object):
         self.label_3.setText(QCoreApplication.translate("MyoGestic", u"Model", None))
         self.trainingSelectedDatasetLabel.setText(QCoreApplication.translate("MyoGestic", u"Placeholder", None))
         self.trainingModelParametersPushButton.setText(QCoreApplication.translate("MyoGestic", u"Change Parameters", None))
-        self.onlineCommandsGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Commands", None))
-        self.onlineRecordTogglePushButton.setText(QCoreApplication.translate("MyoGestic", u"Start Recording", None))
-        self.onlinePredictionTogglePushButton.setText(QCoreApplication.translate("MyoGestic", u"Start Prediction", None))
-        self.monitoringWidgetsGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Monitoring Tools", None))
         self.onlineLoadModelGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Load Model", None))
         self.onlineLoadModelPushButton.setText(QCoreApplication.translate("MyoGestic", u"Select Model", None))
         self.onlineModelLabel.setText(QCoreApplication.translate("MyoGestic", u"Placeholder", None))
+        self.onlineCommandsGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Commands", None))
+        self.onlineRecordTogglePushButton.setText(QCoreApplication.translate("MyoGestic", u"Start Recording", None))
+        self.onlinePredictionTogglePushButton.setText(QCoreApplication.translate("MyoGestic", u"Start Prediction", None))
         self.conformalPredictionGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Conformal Prediction ", None))
         self.labelCpKernelSize.setText(QCoreApplication.translate("MyoGestic", u"Kernel Size", None))
         self.conformalPredictionSolvingComboBox.setItemText(0, QCoreApplication.translate("MyoGestic", u"Mode", None))

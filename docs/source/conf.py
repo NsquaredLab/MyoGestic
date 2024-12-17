@@ -13,6 +13,7 @@ from importlib import import_module
 from inspect import getsource
 
 import toml
+import torch._dynamo
 from docutils import nodes
 from docutils.parsers.rst import Directive
 from sphinx import addnodes

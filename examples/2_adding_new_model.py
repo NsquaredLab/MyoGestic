@@ -84,7 +84,7 @@ unchangeable_parameters = {"penalty": "l2"}
 # .. important:: The model_name must be unique.
 #
 
-from myogestic.config import CONFIG_REGISTRY
+from myogestic.utils.config import CONFIG_REGISTRY
 
 CONFIG_REGISTRY.register_model(
     model_name="Logistic Regression",
