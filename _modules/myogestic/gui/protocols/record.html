@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" />
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
-        <title>myogestic.gui.protocols.record - MyoGestic 0.1.0 documentation</title>
+        <title>myogestic.gui.protocols.record - MyoGestic 0.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/sg_gallery.css?v=61a4c737" />
@@ -13,6 +13,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/custom.css?v=a2b31644" />
     
     
 
@@ -169,7 +170,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../../index.html"><div class="brand">MyoGestic 0.1.0 documentation</div></a>
+      <a href="../../../../index.html"><div class="brand">MyoGestic 0.3.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -193,7 +194,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
   
   
-  <span class="sidebar-brand-text">MyoGestic 0.1.0 documentation</span>
+  <span class="sidebar-brand-text">MyoGestic 0.3.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -216,11 +217,10 @@
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../../../modules/models/definitions.html">MyoGestic Model Definitions</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of MyoGestic Model Definitions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../../../modules/models/definitions/catboost.html">Catboost Model Definitions</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../modules/models/definitions/sklearn.html">Sklearn Model Definitions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../modules/models/definitions/raulnet.html">RaulNet Model Definitions</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../modules/models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../modules/models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../modules/features/temporal.html">Temporal Features</a></li>
 </ul>
 </li>
 </ul>
@@ -260,7 +260,6 @@
           <h1>Source code for myogestic.gui.protocols.record</h1><div class="highlight"><pre>
 <span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
 
-<span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">pickle</span>
 <span class="kn">import</span> <span class="nn">time</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
@@ -270,6 +269,7 @@
 <span class="kn">from</span> <span class="nn">PySide6.QtCore</span> <span class="kn">import</span> <span class="n">QObject</span>
 
 <span class="kn">from</span> <span class="nn">myogestic.gui.widgets.logger</span> <span class="kn">import</span> <span class="n">LoggerLevel</span>
+<span class="kn">from</span> <span class="nn">myogestic.utils.constants</span> <span class="kn">import</span> <span class="n">RECORDING_DIR_PATH</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span> <span class="nn">myogestic.gui.myogestic</span> <span class="kn">import</span> <span class="n">MyoGestic</span>
@@ -316,8 +316,6 @@
 <span class="sd">        A flag indicating whether the kinematics recording has finished.</span>
 <span class="sd">    start_time : float</span>
 <span class="sd">        The start time of the recording.</span>
-<span class="sd">    recording_dir_path : str</span>
-<span class="sd">        The directory path for saving the recordings.</span>
 <span class="sd">    emg_recording_time : int</span>
 <span class="sd">        The total number of EMG samples to be recorded.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -343,13 +341,7 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span>
 
-        <span class="c1"># File management:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">recording_dir_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">base_path</span><span class="p">,</span> <span class="s2">&quot;recordings&quot;</span>
-        <span class="p">)</span>
-
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">recording_dir_path</span><span class="p">):</span>
-            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">recording_dir_path</span><span class="p">)</span>
+        <span class="n">RECORDING_DIR_PATH</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 <div class="viewcode-block" id="RecordProtocol.emg_update">
 <a class="viewcode-back" href="../../../../modules/gui/record.html#myogestic.gui.protocols.record.RecordProtocol.emg_update">[docs]</a>
@@ -452,6 +444,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="k">if</span> <span class="n">checked</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">recording_time</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
             <span class="c1"># Check for Kinematics</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
                 <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">main_window</span><span class="o">.</span><span class="n">virtual_hand_interface</span><span class="o">.</span><span class="n">is_connected</span><span class="p">:</span>
@@ -613,7 +606,7 @@
         <span class="n">formatted_now</span> <span class="o">=</span> <span class="n">now</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y%m</span><span class="si">%d</span><span class="s2">_%H%M%S</span><span class="si">%f</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="n">file_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;MindMove_Recording_</span><span class="si">{</span><span class="n">formatted_now</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">current_task</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">label</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2">.pkl&quot;</span>
 
-        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">recording_dir_path</span><span class="p">,</span> <span class="n">file_name</span><span class="p">),</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="k">with</span> <span class="p">(</span><span class="n">RECORDING_DIR_PATH</span> <span class="o">/</span> <span class="n">file_name</span><span class="p">)</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
             <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">save_pickle_dict</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
 
         <span class="c1"># Reset progress bars</span>
@@ -723,7 +716,7 @@
       
     </aside>
   </div>
-</div><script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+</div><script src="../../../../_static/documentation_options.js?v=e259d695"></script>
     <script src="../../../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/scripts/furo.js?v=5fa4622c"></script>

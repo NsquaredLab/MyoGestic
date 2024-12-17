@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="Training Protocol (Panel)" href="training.html" /><link rel="prev" title="API Documentation" href="../../api_documentation.html" />
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
-        <title>Recording Protocol (Panel) - MyoGestic 0.1.0 documentation</title>
+        <title>Recording Protocol (Panel) - MyoGestic 0.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery.css?v=61a4c737" />
@@ -14,6 +14,7 @@
     <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
     <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=a2b31644" />
     
     
 
@@ -170,7 +171,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">MyoGestic 0.1.0 documentation</div></a>
+      <a href="../../index.html"><div class="brand">MyoGestic 0.3.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -194,7 +195,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
   
   
-  <span class="sidebar-brand-text">MyoGestic 0.1.0 documentation</span>
+  <span class="sidebar-brand-text">MyoGestic 0.3.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -217,11 +218,10 @@
 <li class="toctree-l2 has-children"><a class="reference internal" href="../models/definitions.html">MyoGestic Model Definitions</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of MyoGestic Model Definitions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../models/definitions/catboost.html">Catboost Model Definitions</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../models/definitions/sklearn.html">Sklearn Model Definitions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../models/definitions/raulnet.html">RaulNet Model Definitions</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../features/temporal.html">Temporal Features</a></li>
 </ul>
 </li>
 </ul>
@@ -268,8 +268,8 @@
 <span id="recording-protocol-panel"></span><h1>Recording Protocol (Panel)<a class="headerlink" href="#module-myogestic.gui.protocols.record" title="Link to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="myogestic.gui.protocols.record.RecordProtocol">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.gui.protocols.record.</span></span><span class="sig-name descname"><span class="pre">RecordProtocol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://doc.qt.io/qtforpython-6/PySide6/QtCore/QObject.html#PySide6.QtCore.QObject" title="(in PySide v6.8.0)"><span class="pre">PySide6.QtCore.QObject</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/myogestic/gui/protocols/record.html#RecordProtocol"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.protocols.record.RecordProtocol" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference external" href="https://doc.qt.io/qtforpython-6/PySide6/QtCore/QObject.html#PySide6.QtCore.QObject" title="(in PySide v6.8.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">QObject</span></code></a></p>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.gui.protocols.record.</span></span><span class="sig-name descname"><span class="pre">RecordProtocol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://doc.qt.io/qtforpython-6/PySide6/QtCore/QObject.html#PySide6.QtCore.QObject" title="(in PySide v6.8.1)"><span class="pre">PySide6.QtCore.QObject</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/myogestic/gui/protocols/record.html#RecordProtocol"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.protocols.record.RecordProtocol" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://doc.qt.io/qtforpython-6/PySide6/QtCore/QObject.html#PySide6.QtCore.QObject" title="(in PySide v6.8.1)"><code class="xref py py-class docutils literal notranslate"><span class="pre">QObject</span></code></a></p>
 <p>Protocol for recording EMG and kinematics data.</p>
 <p>This protocol allows the user to record EMG and kinematics data for a specified duration.
 The user can select the task to be recorded and provide a label for the recording.</p>
@@ -384,17 +384,6 @@ The user can select the task to be recorded and provide a label for the recordin
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)">float</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="myogestic.gui.protocols.record.RecordProtocol.recording_dir_path">
-<span class="sig-name descname"><span class="pre">recording_dir_path</span></span><a class="headerlink" href="#myogestic.gui.protocols.record.RecordProtocol.recording_dir_path" title="Link to this definition">¶</a></dt>
-<dd><p>The directory path for saving the recordings.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -552,7 +541,6 @@ The user can select the task to be recorded and provide a label for the recordin
 <li><a class="reference internal" href="#myogestic.gui.protocols.record.RecordProtocol.has_finished_emg"><code class="docutils literal notranslate"><span class="pre">RecordProtocol.has_finished_emg</span></code></a></li>
 <li><a class="reference internal" href="#myogestic.gui.protocols.record.RecordProtocol.has_finished_kinematics"><code class="docutils literal notranslate"><span class="pre">RecordProtocol.has_finished_kinematics</span></code></a></li>
 <li><a class="reference internal" href="#myogestic.gui.protocols.record.RecordProtocol.start_time"><code class="docutils literal notranslate"><span class="pre">RecordProtocol.start_time</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.gui.protocols.record.RecordProtocol.recording_dir_path"><code class="docutils literal notranslate"><span class="pre">RecordProtocol.recording_dir_path</span></code></a></li>
 <li><a class="reference internal" href="#myogestic.gui.protocols.record.RecordProtocol.emg_recording_time"><code class="docutils literal notranslate"><span class="pre">RecordProtocol.emg_recording_time</span></code></a></li>
 <li><a class="reference internal" href="#myogestic.gui.protocols.record.RecordProtocol.emg_update"><code class="docutils literal notranslate"><span class="pre">RecordProtocol.emg_update()</span></code></a></li>
 <li><a class="reference internal" href="#myogestic.gui.protocols.record.RecordProtocol.finished_recording"><code class="docutils literal notranslate"><span class="pre">RecordProtocol.finished_recording()</span></code></a></li>
@@ -570,7 +558,7 @@ The user can select the task to be recorded and provide a label for the recordin
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=01f34227"></script>
+</div><script src="../../_static/documentation_options.js?v=e259d695"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/furo.js?v=5fa4622c"></script>

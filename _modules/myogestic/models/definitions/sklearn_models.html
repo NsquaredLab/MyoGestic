@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../../genindex.html" /><link rel="search" title="Search" href="../../../../search.html" />
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
-        <title>myogestic.models.definitions.sklearn_models - MyoGestic 0.1.0 documentation</title>
+        <title>myogestic.models.definitions.sklearn_models - MyoGestic 0.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/sg_gallery.css?v=61a4c737" />
@@ -13,6 +13,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/custom.css?v=a2b31644" />
     
     
 
@@ -169,7 +170,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../../index.html"><div class="brand">MyoGestic 0.1.0 documentation</div></a>
+      <a href="../../../../index.html"><div class="brand">MyoGestic 0.3.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -193,7 +194,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
   
   
-  <span class="sidebar-brand-text">MyoGestic 0.1.0 documentation</span>
+  <span class="sidebar-brand-text">MyoGestic 0.3.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -216,11 +217,10 @@
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../../../modules/models/definitions.html">MyoGestic Model Definitions</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of MyoGestic Model Definitions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../../../modules/models/definitions/catboost.html">Catboost Model Definitions</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../modules/models/definitions/sklearn.html">Sklearn Model Definitions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../modules/models/definitions/raulnet.html">RaulNet Model Definitions</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../modules/models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../modules/models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../modules/features/temporal.html">Temporal Features</a></li>
 </ul>
 </li>
 </ul>
@@ -259,10 +259,14 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for myogestic.models.definitions.sklearn_models</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">This module contains the functions to save, load and train sklearn models.</span>
+<span class="sd">This module contains the functions to save, load, train and predict using sklearn models.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span>
+
 <span class="kn">import</span> <span class="nn">joblib</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
 <span class="kn">from</span> <span class="nn">myogestic.gui.widgets.logger</span> <span class="kn">import</span> <span class="n">CustomLogger</span>
 
 
@@ -285,7 +289,7 @@
 <span class="sd">        The path where the model was saved.</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">output_model_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">model_path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;_model&quot;</span> <span class="o">+</span> <span class="s2">&quot;.pkl&quot;</span>
+    <span class="n">output_model_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">model_path</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;_model&quot;</span> <span class="o">+</span> <span class="s2">&quot;.pkl&quot;</span>
     <span class="n">joblib</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">output_model_path</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">output_model_path</span></div>
 
@@ -318,7 +322,7 @@
 
 <div class="viewcode-block" id="train">
 <a class="viewcode-back" href="../../../../modules/models/definitions/sklearn.html#myogestic.models.definitions.sklearn_models.train">[docs]</a>
-<span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span> <span class="n">x_train</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span> <span class="n">y_train</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span> <span class="n">_</span><span class="p">:</span> <span class="n">CustomLogger</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">object</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">is_classifier</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">_</span><span class="p">:</span> <span class="n">CustomLogger</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">object</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Train a sklearn model.</span>
 
@@ -326,12 +330,11 @@
 <span class="sd">    ----------</span>
 <span class="sd">    model: Any</span>
 <span class="sd">        The sklearn model to train.</span>
-<span class="sd">    x_train: Any</span>
-<span class="sd">        The input data to train the model.</span>
-<span class="sd">    y_train: Any</span>
-<span class="sd">        The target data to train the model.</span>
+<span class="sd">    dataset</span>
 <span class="sd">    _: CustomLogger</span>
 <span class="sd">        The logger to log the training process. This parameter is not used.</span>
+<span class="sd">    is_classifier: bool</span>
+<span class="sd">        Whether the model is a classifier.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -339,8 +342,63 @@
 <span class="sd">        The trained sklearn model.</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x_train</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">&quot;emg&quot;</span><span class="p">][()]</span>
+
+    <span class="n">x_train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+        <span class="n">x_train</span><span class="p">,</span> <span class="p">(</span><span class="n">x_train</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x_train</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">x_train</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">is_classifier</span><span class="p">:</span>
+        <span class="n">y_train</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">&quot;classes&quot;</span><span class="p">][()]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">y_train</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">&quot;kinematics&quot;</span><span class="p">][()]</span>
+        <span class="c1"># add small noise to the target to avoid errors</span>
+        <span class="n">y_train</span><span class="p">[</span><span class="n">y_train</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span>
+            <span class="mf">0.0001</span><span class="p">,</span> <span class="mf">0.001</span><span class="p">,</span> <span class="n">y_train</span><span class="p">[</span><span class="n">y_train</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span>
+        <span class="p">)</span>
+
     <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">x_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">model</span></div>
+
+
+
+<div class="viewcode-block" id="predict">
+<a class="viewcode-back" href="../../../../modules/models/definitions/sklearn.html#myogestic.models.definitions.sklearn_models.predict">[docs]</a>
+<span class="k">def</span> <span class="nf">predict</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">is_classifier</span><span class="p">:</span> <span class="nb">bool</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Predict with a sklearn model.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model: Any</span>
+<span class="sd">        The sklearn model to predict with.</span>
+<span class="sd">    input: np.ndarray</span>
+<span class="sd">        The input data to predict.</span>
+<span class="sd">    is_classifier: bool</span>
+<span class="sd">        Whether the model is a classifier.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Union[np.ndarray, list[float]]</span>
+<span class="sd">        The prediction of the model. If the model is a classifier, the prediction is a np.array.</span>
+<span class="sd">        Otherwise, the prediction is a list of floats.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="nb">input</span><span class="p">,</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">is_classifier</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">prediction</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">IndexError</span><span class="p">:</span>
+            <span class="n">prediction</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">prediction</span>
+
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">prediction</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span></div>
 
 </pre></div>
         </article>
@@ -374,7 +432,7 @@
       
     </aside>
   </div>
-</div><script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+</div><script src="../../../../_static/documentation_options.js?v=e259d695"></script>
     <script src="../../../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/scripts/furo.js?v=5fa4622c"></script>

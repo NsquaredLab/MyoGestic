@@ -12,3 +12,4 @@ The model definitions are as follows:
 
     definitions/catboost
     definitions/sklearn
+    definitions/raulnet

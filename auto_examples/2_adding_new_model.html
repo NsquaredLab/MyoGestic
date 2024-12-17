@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="API Documentation" href="../api_documentation.html" /><link rel="prev" title="How to use MyoGestic" href="1_tutorial.html" />
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
-        <title>Adding a new model to MyoGestic - MyoGestic 0.1.0 documentation</title>
+        <title>Adding a new model to MyoGestic - MyoGestic 0.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/sg_gallery.css?v=61a4c737" />
@@ -14,6 +14,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-dataframe.css?v=2082cf3c" />
     <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=a2b31644" />
     
     
 
@@ -170,7 +171,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">MyoGestic 0.1.0 documentation</div></a>
+      <a href="../index.html"><div class="brand">MyoGestic 0.3.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -194,7 +195,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
   
-  <span class="sidebar-brand-text">MyoGestic 0.1.0 documentation</span>
+  <span class="sidebar-brand-text">MyoGestic 0.3.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -217,11 +218,10 @@
 <li class="toctree-l2 has-children"><a class="reference internal" href="../modules/models/definitions.html">MyoGestic Model Definitions</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of MyoGestic Model Definitions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../modules/models/definitions/catboost.html">Catboost Model Definitions</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../modules/models/definitions/sklearn.html">Sklearn Model Definitions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../modules/models/definitions/raulnet.html">RaulNet Model Definitions</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../modules/models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../modules/models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../modules/features/temporal.html">Temporal Features</a></li>
 </ul>
 </li>
 </ul>
@@ -275,15 +275,47 @@ to download the full example code.</p>
 <p>MyoGestic makes use of a configuration file to define the models that are available to the user in the GUI.</p>
 <p>For ease of use, we have provided a template configuration file that you can use to add your own models
 <cite>myogestic/user_config.py</cite>.</p>
-<p>This file contains 3 dictionaries (see <a class="reference internal" href="../modules/models/config.html#models-config"><span class="std std-ref">MyoGestic Model Configurations</span></a> for more details):</p>
-<ul class="simple">
-<li><p><cite>MODELS_MAP</cite>: a dictionary where the keys are the model names and the values are a tuple containing the model class and whether the model is a classifier or not.</p></li>
-<li><p><cite>FUNCTIONS_MAP</cite>: a dictionary where the keys are the model names and the values are a tuple containing the function to save, load, and train the model.</p></li>
-<li><p><cite>PARAMETERS_MAP</cite>: a dictionary where the keys are the model names and the values are a dictionary containing the parameters that the model needs. This dictionary is used to create the GUI for the model in the MyoGestic interface.</p></li>
-</ul>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="c1"># print configuration file</span>
-<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;../myogestic/user_config.py&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-    <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;../myogestic/user_config.py&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <a href="https://docs.python.org/3/library/io.html#io.TextIOWrapper" title="io.TextIOWrapper" class="sphx-glr-backref-module-io sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">f</span></a><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><a href="https://docs.python.org/3/library/io.html#io.TextIOWrapper" title="io.TextIOWrapper" class="sphx-glr-backref-module-io sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">f</span></a><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+</pre></div>
+</div>
+<div class="sphx-glr-script-out highlight-none notranslate"><div class="highlight"><pre><span></span>from myoverse.datasets.filters.temporal import RMSFilter
+from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression
+from sklearn.multioutput import MultiOutputRegressor
+
+from myogestic.models.definitions import sklearn_models
+from myogestic.utils.config import CONFIG_REGISTRY
+
+# Register models
+CONFIG_REGISTRY.register_model(
+    &quot;Linear Regressor Per Finger&quot;,
+    lambda **params: MultiOutputRegressor(LinearRegression(**params)),
+    False,
+    sklearn_models.save,
+    sklearn_models.load,
+    sklearn_models.train,
+    sklearn_models.predict,
+)
+
+CONFIG_REGISTRY.register_model(
+    &quot;Ridge Regressor Per Finger&quot;,
+    lambda **params: MultiOutputRegressor(Ridge(**params)),
+    False,
+    sklearn_models.save,
+    sklearn_models.load,
+    sklearn_models.train,
+    sklearn_models.predict,
+)
+
+
+# Register features
+class RMSFilterFixedWindow(RMSFilter):
+    def __init__(self, is_output: bool = False, name: str = None):
+        super().__init__(window_size=120, is_output=is_output, name=name)
+
+
+CONFIG_REGISTRY.register_feature(&quot;RMS Small Window&quot;, RMSFilterFixedWindow)
 </pre></div>
 </div>
 <section id="create-a-new-model">
@@ -291,51 +323,147 @@ to download the full example code.</p>
 <p>Let’s add a new model to MyoGestic.</p>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
-<p>While we encourage you to add a new model in a separate file than the <cite>user_config.py</cite>, you can add it directly to the user_config.py file if you prefer since all that matters is that the model class you make ends up in the <cite>MODELS_MAP</cite> dictionary.</p>
+<p>While we encourage you to add a new model in <cite>user_config.py</cite>, you can also add it in a separate file and import it in <cite>user_config.py</cite>.</p>
 </div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>The model class should be able to recieve keyword arguments that are passed from the GUI. Also the model should have a function to save, load, train, and predict.</p>
-</div>
-<p>Our model is going to be a per finger regressor using the <cite>CatBoostRegressor</cite> from the <cite>catboost</cite> library.</p>
-<div class="admonition important">
-<p class="admonition-title">Important</p>
-<p>Each model should have an unique name that is consistent across the <cite>MODELS_MAP</cite>, <cite>FUNCTIONS_MAP</cite>, and <cite>PARAMETERS_MAP</cite> dictionaries. This name will be displayed in the GUI.</p>
-</div>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sklearn.multioutput</span> <span class="kn">import</span> <a href="https://scikit-learn.org/stable/modules/generated/sklearn.multioutput.MultiOutputRegressor.html#sklearn.multioutput.MultiOutputRegressor" title="sklearn.multioutput.MultiOutputRegressor" class="sphx-glr-backref-module-sklearn-multioutput sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">MultiOutputRegressor</span></a>
-<span class="kn">from</span> <span class="nn">catboost</span> <span class="kn">import</span> <span class="n">CatBoostRegressor</span>
-
-<span class="c1"># for such a model. we do not need to define a new class. We can use a lambda function to create the model.</span>
-<span class="n">my_new_model</span> <span class="o">=</span> <span class="k">lambda</span> <span class="o">**</span><span class="n">params</span><span class="p">:</span> <a href="https://scikit-learn.org/stable/modules/generated/sklearn.multioutput.MultiOutputRegressor.html#sklearn.multioutput.MultiOutputRegressor" title="sklearn.multioutput.MultiOutputRegressor" class="sphx-glr-backref-module-sklearn-multioutput sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">MultiOutputRegressor</span></a><span class="p">(</span><span class="n">CatBoostRegressor</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">))</span>
-
-<span class="c1"># Add the model to the MODELS_MAP dictionary</span>
-<span class="n">MODELS_MAP</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;My New Model&quot;</span><span class="p">:</span> <span class="p">(</span>
-        <span class="n">my_new_model</span><span class="p">,</span>
-        <span class="kc">False</span><span class="p">,</span>  <span class="c1"># False because it is *not* a classifier</span>
-    <span class="p">),</span>
-<span class="p">}</span>
+<p>Our model is going to be a Logistic Regression model. We are going to use the <cite>LogisticRegression</cite> class from sklearn.</p>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sklearn.linear_model</span> <span class="kn">import</span> <a href="https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html#sklearn.linear_model.LogisticRegression" title="sklearn.linear_model.LogisticRegression" class="sphx-glr-backref-module-sklearn-linear_model sphx-glr-backref-type-py-class"><span class="n">LogisticRegression</span></a>
 </pre></div>
 </div>
 </section>
-<section id="add-functions-to-save-load-and-train-the-model">
-<h2>Add functions to save, load, and train the model<a class="headerlink" href="#add-functions-to-save-load-and-train-the-model" title="Link to this heading">¶</a></h2>
-<p>Next, we need to define the functions to save, load, and train the model.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>The save and load functions should take the model and a file path as arguments. The train function should take the model, the training data, the training ground truth, and a logger as arguments. See <a class="reference internal" href="../modules/models/definitions/sklearn.html#sklearn-models"><span class="std std-ref">Sklearn Model Definitions</span></a> for more details.</p>
-</div>
-<p>We can use the <cite>sklearn_models</cite> functions that are already defined in the <cite>myogestic.models.definitions</cite> module.</p>
+<section id="add-functions-to-save-load-train-and-predict">
+<h2>Add functions to save, load, train, and predict<a class="headerlink" href="#add-functions-to-save-load-train-and-predict" title="Link to this heading">¶</a></h2>
+<p>We can use the <cite>sklearn_models</cite> functions that are already defined in the <cite>myogestic.models.definitions</cite> module.
+These should work for most models that are based on sklearn models.</p>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">myogestic.models.definitions</span> <span class="kn">import</span> <span class="n">sklearn_models</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
 
-<span class="c1"># Add the functions to the FUNCTIONS_MAP dictionary</span>
-<span class="n">FUNCTIONS_MAP</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;My New Model&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;save_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
-        <span class="s2">&quot;load_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
-        <span class="s2">&quot;train_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
-    <span class="p">},</span>
-<span class="p">}</span>
+<span class="nb">print</span><span class="p">(</span><a href="https://docs.python.org/3/library/inspect.html#inspect.getsource" title="inspect.getsource" class="sphx-glr-backref-module-inspect sphx-glr-backref-type-py-function"><span class="n">inspect</span><span class="o">.</span><span class="n">getsource</span></a><span class="p">(</span><span class="n">sklearn_models</span><span class="o">.</span><span class="n">save</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s2">&quot;-&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">80</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><a href="https://docs.python.org/3/library/inspect.html#inspect.getsource" title="inspect.getsource" class="sphx-glr-backref-module-inspect sphx-glr-backref-type-py-function"><span class="n">inspect</span><span class="o">.</span><span class="n">getsource</span></a><span class="p">(</span><span class="n">sklearn_models</span><span class="o">.</span><span class="n">load</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s2">&quot;-&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">80</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><a href="https://docs.python.org/3/library/inspect.html#inspect.getsource" title="inspect.getsource" class="sphx-glr-backref-module-inspect sphx-glr-backref-type-py-function"><span class="n">inspect</span><span class="o">.</span><span class="n">getsource</span></a><span class="p">(</span><span class="n">sklearn_models</span><span class="o">.</span><span class="n">train</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s2">&quot;-&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">80</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><a href="https://docs.python.org/3/library/inspect.html#inspect.getsource" title="inspect.getsource" class="sphx-glr-backref-module-inspect sphx-glr-backref-type-py-function"><span class="n">inspect</span><span class="o">.</span><span class="n">getsource</span></a><span class="p">(</span><span class="n">sklearn_models</span><span class="o">.</span><span class="n">predict</span><span class="p">))</span>
+</pre></div>
+</div>
+<div class="sphx-glr-script-out highlight-none notranslate"><div class="highlight"><pre><span></span>def save(model_path: str, model: object) -&gt; str:
+    &quot;&quot;&quot;
+    Save a sklearn model.
+
+    Parameters
+    ----------
+    model_path: str
+        The path to save the model.
+    model: Any
+        The sklearn model to save.
+
+    Returns
+    -------
+    str
+        The path where the model was saved.
+
+    &quot;&quot;&quot;
+    output_model_path: str = str(model_path).split(&quot;.&quot;)[0] + &quot;_model&quot; + &quot;.pkl&quot;
+    joblib.dump(model, output_model_path)
+    return output_model_path
+
+--------------------------------------------------------------------------------
+def load(model_path: str, _: object) -&gt; object:
+    &quot;&quot;&quot;
+    Load a sklearn model.
+
+    Parameters
+    ----------
+    model_path: str
+        The path to load the model.
+    _: Any
+        A new instance of the sklearn model. This instance is not used to load the model.
+
+    Returns
+    -------
+    Any
+        The loaded sklearn model
+
+    &quot;&quot;&quot;
+    with open(model_path, &quot;rb&quot;) as f:
+        model = joblib.load(f)
+    return model
+
+--------------------------------------------------------------------------------
+def train(model: object, dataset, is_classifier: bool, _: CustomLogger) -&gt; object:
+    &quot;&quot;&quot;
+    Train a sklearn model.
+
+    Parameters
+    ----------
+    model: Any
+        The sklearn model to train.
+    dataset
+    _: CustomLogger
+        The logger to log the training process. This parameter is not used.
+    is_classifier: bool
+        Whether the model is a classifier.
+
+    Returns
+    -------
+    Any
+        The trained sklearn model.
+
+    &quot;&quot;&quot;
+    x_train = dataset[&quot;emg&quot;][()]
+
+    x_train = np.reshape(
+        x_train, (x_train.shape[0], x_train.shape[1] * x_train.shape[2])
+    )
+
+    if is_classifier:
+        y_train = dataset[&quot;classes&quot;][()]
+    else:
+        y_train = dataset[&quot;kinematics&quot;][()]
+        # add small noise to the target to avoid errors
+        y_train[y_train == 0] = np.random.uniform(
+            0.0001, 0.001, y_train[y_train == 0].shape
+        )
+
+    model.fit(x_train, y_train)
+    return model
+
+--------------------------------------------------------------------------------
+def predict(
+    model: object, input: np.ndarray, is_classifier: bool
+) -&gt; Union[np.ndarray, list[float]]:
+    &quot;&quot;&quot;
+    Predict with a sklearn model.
+
+    Parameters
+    ----------
+    model: Any
+        The sklearn model to predict with.
+    input: np.ndarray
+        The input data to predict.
+    is_classifier: bool
+        Whether the model is a classifier.
+
+    Returns
+    -------
+    Union[np.ndarray, list[float]]
+        The prediction of the model. If the model is a classifier, the prediction is a np.array.
+        Otherwise, the prediction is a list of floats.
+
+    &quot;&quot;&quot;
+    prediction = model.predict(
+        np.reshape(input, (input.shape[0], input.shape[1] * input.shape[2]))
+    )
+
+    if is_classifier:
+        try:
+            prediction = prediction[0, 0]
+        except IndexError:
+            prediction = prediction[0]
+
+        return prediction
+
+    return list(prediction[0])
 </pre></div>
 </div>
 </section>
@@ -346,59 +474,56 @@ to download the full example code.</p>
 <p class="admonition-title">Note</p>
 <p>The parameters should be divided into <cite>changeable</cite> and <cite>unchangeable</cite> parameters. The <cite>changeable</cite> parameters are the ones that the user can change in the GUI. The <cite>unchangeable</cite> parameters are the ones that the user cannot change and are set by the system.</p>
 </div>
-<div class="admonition important">
-<p class="admonition-title">Important</p>
-<p>Changeable parameters are dictionaries where the keys are predefined depending on the type of parameter. See <a class="reference internal" href="../modules/models/config.html#models-config"><span class="std std-ref">MyoGestic Model Configurations</span></a> for details. The keys are self-explanatory.</p>
-</div>
-<div class="admonition important">
-<p class="admonition-title">Important</p>
-<p>Unchangeable parameters are just key-value pairs.</p>
-</div>
-<p>For our model, we are going to define the following changeable parameters:</p>
-<ul class="simple">
-<li><p><cite>iterations</cite>: the number of iterations for the CatBoostRegressor.</p></li>
-<li><p><cite>l2_leaf_reg</cite>: the L2 regularization parameter for the CatBoostRegressor.</p></li>
-<li><p><cite>border_count</cite>: the number of splits for numerical features for the CatBoostRegressor.</p></li>
-</ul>
-<p>We are also going to define the following unchangeable parameters:</p>
-<ul class="simple">
-<li><p><cite>task_type</cite>: the task type for the CatBoostRegressor. We are going to set it to “GPU” if there is a GPU available, otherwise we are going to set it to “CPU”.</p></li>
-<li><p><cite>train_dir</cite>: the directory where the model is saved. This is set to <cite>None</cite> since the model should be saved using our function and not directly by the library.</p></li>
-</ul>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">catboost.utils</span> <span class="kn">import</span> <span class="n">get_gpu_device_count</span>
-
-<span class="c1"># Add the parameters to the PARAMETERS_MAP dictionary</span>
-<span class="n">PARAMETERS_MAP</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;My New Model&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;changeable&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">&quot;iterations&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-                <span class="s2">&quot;end_value&quot;</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>
-                <span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-                <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
-            <span class="p">},</span>
-            <span class="s2">&quot;l2_leaf_reg&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;end_value&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-                <span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
-            <span class="p">},</span>
-            <span class="s2">&quot;border_count&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;end_value&quot;</span><span class="p">:</span> <span class="mi">255</span><span class="p">,</span>
-                <span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mi">128</span><span class="p">,</span>
-            <span class="p">},</span>
-        <span class="p">},</span>
-        <span class="s2">&quot;unchangeable&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">&quot;task_type&quot;</span><span class="p">:</span> <span class="s2">&quot;GPU&quot;</span> <span class="k">if</span> <span class="n">get_gpu_device_count</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;CPU&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;train_dir&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="p">},</span>
-    <span class="p">},</span>
+<p>For our model, we are going to allow ‘C’ to be a changeable parameters and ‘penalty’ to be an unchangeable parameter.</p>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="c1"># The `ChangeableParameter` and `UnchangeableParameter` classes are used to define the parameters.</span>
+<a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">changeable_parameters</span></a> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;C&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mf">1e-4</span><span class="p">,</span> <span class="s2">&quot;end_value&quot;</span><span class="p">:</span> <span class="mf">1e4</span><span class="p">,</span> <span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="mf">1e-4</span><span class="p">,</span> <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
 <span class="p">}</span>
+
+<a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">unchangeable_parameters</span></a> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;penalty&quot;</span><span class="p">:</span> <span class="s2">&quot;l2&quot;</span><span class="p">}</span>
 </pre></div>
 </div>
-<p><strong>Estimated memory usage:</strong>  0 MB</p>
+</section>
+<section id="register-the-model">
+<h2>Register the model<a class="headerlink" href="#register-the-model" title="Link to this heading">¶</a></h2>
+<p>We can now register the model in the configuration registry.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The register_model function is used to add a new model to MyoGestic.</p>
+</div>
+<dl class="simple">
+<dt>The function takes the following arguments:</dt><dd><ul class="simple">
+<li><p>model_name: The name of the model.</p></li>
+<li><p>model_class: The python class of the model. Example: LinearRegression from sklearn.</p></li>
+<li><p>is_classifier: A boolean indicating whether the model is a classifier.</p></li>
+<li><p>save_function: The function to save the model.</p></li>
+<li><p>load_function: The function to load the model.</p></li>
+<li><p>train_function: The function to train the model.</p></li>
+<li><p>predict_function: The function to predict with the model.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>The model_name must be unique.</p>
+</div>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">myogestic.utils.config</span> <span class="kn">import</span> <span class="n">CONFIG_REGISTRY</span>
+
+<span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">register_model</span><span class="p">(</span>
+    <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;Logistic Regression&quot;</span><span class="p">,</span>
+    <span class="n">model_class</span><span class="o">=</span><a href="https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html#sklearn.linear_model.LogisticRegression" title="sklearn.linear_model.LogisticRegression" class="sphx-glr-backref-module-sklearn-linear_model sphx-glr-backref-type-py-class"><span class="n">LogisticRegression</span></a><span class="p">,</span>
+    <span class="n">is_classifier</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">save_function</span><span class="o">=</span><span class="n">sklearn_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
+    <span class="n">load_function</span><span class="o">=</span><span class="n">sklearn_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
+    <span class="n">train_function</span><span class="o">=</span><span class="n">sklearn_models</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
+    <span class="n">predict_function</span><span class="o">=</span><span class="n">sklearn_models</span><span class="o">.</span><span class="n">predict</span><span class="p">,</span>
+    <a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">changeable_parameters</span></a><span class="o">=</span><a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">changeable_parameters</span></a><span class="p">,</span>
+    <a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">unchangeable_parameters</span></a><span class="o">=</span><a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">unchangeable_parameters</span></a><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p class="sphx-glr-timing"><strong>Total running time of the script:</strong> (0 minutes 0.887 seconds)</p>
+<p><strong>Estimated memory usage:</strong>  17 MB</p>
 <div class="sphx-glr-footer sphx-glr-footer-example docutils container" id="sphx-glr-download-auto-examples-2-adding-new-model-py">
 <div class="sphx-glr-download sphx-glr-download-jupyter docutils container">
 <p><a class="reference download internal" download="" href="../_downloads/f8643e76dd7dfd649e4b8af4624caa59/2_adding_new_model.ipynb"><code class="xref download docutils literal notranslate"><span class="pre">Download</span> <span class="pre">Jupyter</span> <span class="pre">notebook:</span> <span class="pre">2_adding_new_model.ipynb</span></code></a></p>
@@ -468,8 +593,9 @@ to download the full example code.</p>
             <ul>
 <li><a class="reference internal" href="#">Adding a new model to MyoGestic</a><ul>
 <li><a class="reference internal" href="#create-a-new-model">Create a new model</a></li>
-<li><a class="reference internal" href="#add-functions-to-save-load-and-train-the-model">Add functions to save, load, and train the model</a></li>
+<li><a class="reference internal" href="#add-functions-to-save-load-train-and-predict">Add functions to save, load, train, and predict</a></li>
 <li><a class="reference internal" href="#add-parameters-for-the-model">Add parameters for the model</a></li>
+<li><a class="reference internal" href="#register-the-model">Register the model</a></li>
 </ul>
 </li>
 </ul>
@@ -481,7 +607,7 @@ to download the full example code.</p>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=01f34227"></script>
+</div><script src="../_static/documentation_options.js?v=e259d695"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>

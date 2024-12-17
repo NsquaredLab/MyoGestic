@@ -3,31 +3,26 @@
 MyoGestic Model Configurations
 ==============================
 
-.. automodule:: myogestic.models.config
+Configuration Parameters
+------------------------
+
+.. automodule:: myogestic.utils.config
     :members:
     :show-inheritance:
-    :exclude-members: MODELS_MAP, FUNCTIONS_MAP, PARAMETERS_MAP, FEATURES_MAP, ChangeableParameter, UnchangeableParameter
+    :exclude-members: ChangeableParameter, UnchangeableParameter, Registry
 
 .. _changeable_parameter:
-.. autodata:: myogestic.models.config.ChangeableParameter
+.. autodata:: myogestic.utils.config.ChangeableParameter
     :annotation:
 
 .. _unchangeable_parameter:
-.. autodata:: myogestic.models.config.UnchangeableParameter
+.. autodata:: myogestic.utils.config.UnchangeableParameter
     :annotation:
 
-.. autodata:: myogestic.models.config.MODELS_MAP
-    :annotation:
-.. pprint:: myogestic.models.config.MODELS_MAP
+Registry
+--------
 
-.. autodata:: myogestic.models.config.FUNCTIONS_MAP
-    :annotation:
-.. pprint:: myogestic.models.config.FUNCTIONS_MAP
-
-.. autodata:: myogestic.models.config.PARAMETERS_MAP
-    :annotation:
-.. pprint:: myogestic.models.config.PARAMETERS_MAP
-
-.. autodata:: myogestic.models.config.FEATURES_MAP
-    :annotation:
-.. pprint:: myogestic.models.config.FEATURES_MAP
+.. automodule:: myogestic.utils.config
+    :members:
+    :show-inheritance:
+    :exclude-members: ChangeableParameter, UnchangeableParameter, BoolParameter, IntParameter, FloatParameter, StringParameter, CategoricalParameter

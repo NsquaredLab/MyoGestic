@@ -3,10 +3,10 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="Temporal Features" href="../features/temporal.html" /><link rel="prev" title="Sklearn Model Definitions" href="definitions/sklearn.html" />
+<link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="prev" title="RaulNet Model Definitions" href="definitions/raulnet.html" />
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
-        <title>MyoGestic Model Configurations - MyoGestic 0.1.0 documentation</title>
+        <title>MyoGestic Model Configurations - MyoGestic 0.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery.css?v=61a4c737" />
@@ -14,6 +14,7 @@
     <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
     <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=a2b31644" />
     
     
 
@@ -170,7 +171,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">MyoGestic 0.1.0 documentation</div></a>
+      <a href="../../index.html"><div class="brand">MyoGestic 0.3.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -194,7 +195,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
   
   
-  <span class="sidebar-brand-text">MyoGestic 0.1.0 documentation</span>
+  <span class="sidebar-brand-text">MyoGestic 0.3.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -217,11 +218,10 @@
 <li class="toctree-l2 has-children"><a class="reference internal" href="definitions.html">MyoGestic Model Definitions</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of MyoGestic Model Definitions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="definitions/catboost.html">Catboost Model Definitions</a></li>
 <li class="toctree-l3"><a class="reference internal" href="definitions/sklearn.html">Sklearn Model Definitions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="definitions/raulnet.html">RaulNet Model Definitions</a></li>
 </ul>
 </li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">MyoGestic Model Configurations</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../features/temporal.html">Temporal Features</a></li>
 </ul>
 </li>
 </ul>
@@ -264,315 +264,193 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="module-myogestic.models.config">
-<span id="myogestic-model-configurations"></span><span id="models-config"></span><h1>MyoGestic Model Configurations<a class="headerlink" href="#module-myogestic.models.config" title="Link to this heading">¶</a></h1>
+          <section id="myogestic-model-configurations">
+<span id="models-config"></span><h1>MyoGestic Model Configurations<a class="headerlink" href="#myogestic-model-configurations" title="Link to this heading">¶</a></h1>
+<section id="module-myogestic.utils.config">
+<span id="configuration-parameters"></span><h2>Configuration Parameters<a class="headerlink" href="#module-myogestic.utils.config" title="Link to this heading">¶</a></h2>
 <dl class="py class">
-<dt class="sig sig-object py" id="myogestic.models.config.BoolParameter">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">BoolParameter</span></span><a class="reference internal" href="../../_modules/myogestic/models/config.html#BoolParameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.models.config.BoolParameter" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="myogestic.utils.config.BoolParameter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.utils.config.</span></span><span class="sig-name descname"><span class="pre">BoolParameter</span></span><a class="reference internal" href="../../_modules/myogestic/utils/config.html#BoolParameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.utils.config.BoolParameter" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.TypedDict" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">TypedDict</span></code></a></p>
-<p>TypedDict for boolean parameters.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>default_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – The default value for the parameter.</p>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="myogestic.models.config.CategoricalParameter">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">CategoricalParameter</span></span><a class="reference internal" href="../../_modules/myogestic/models/config.html#CategoricalParameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.models.config.CategoricalParameter" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="myogestic.utils.config.CategoricalParameter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.utils.config.</span></span><span class="sig-name descname"><span class="pre">CategoricalParameter</span></span><a class="reference internal" href="../../_modules/myogestic/utils/config.html#CategoricalParameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.utils.config.CategoricalParameter" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.TypedDict" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">TypedDict</span></code></a></p>
-<p>TypedDict for categorical parameters.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>values</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – The values for the parameter.</p></li>
-<li><p><strong>default_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The default value for the parameter.</p></li>
-</ul>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="myogestic.models.config.FloatParameter">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">FloatParameter</span></span><a class="reference internal" href="../../_modules/myogestic/models/config.html#FloatParameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.models.config.FloatParameter" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="myogestic.utils.config.FloatParameter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.utils.config.</span></span><span class="sig-name descname"><span class="pre">FloatParameter</span></span><a class="reference internal" href="../../_modules/myogestic/utils/config.html#FloatParameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.utils.config.FloatParameter" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.TypedDict" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">TypedDict</span></code></a></p>
-<p>TypedDict for float parameters.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>start_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The start value for the parameter.</p></li>
-<li><p><strong>end_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The end value for the parameter.</p></li>
-<li><p><strong>step</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The step for the parameter.</p></li>
-<li><p><strong>default_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The default value for the parameter.</p></li>
-</ul>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="myogestic.models.config.IntParameter">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">IntParameter</span></span><a class="reference internal" href="../../_modules/myogestic/models/config.html#IntParameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.models.config.IntParameter" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="myogestic.utils.config.IntParameter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.utils.config.</span></span><span class="sig-name descname"><span class="pre">IntParameter</span></span><a class="reference internal" href="../../_modules/myogestic/utils/config.html#IntParameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.utils.config.IntParameter" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.TypedDict" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">TypedDict</span></code></a></p>
-<p>TypedDict for integer parameters.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>start_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The start value for the parameter.</p></li>
-<li><p><strong>end_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The end value for the parameter.</p></li>
-<li><p><strong>step</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The step for the parameter.</p></li>
-<li><p><strong>default_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The default value for the parameter.</p></li>
-</ul>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="myogestic.models.config.StringParameter">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">StringParameter</span></span><a class="reference internal" href="../../_modules/myogestic/models/config.html#StringParameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.models.config.StringParameter" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="myogestic.utils.config.StringParameter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.utils.config.</span></span><span class="sig-name descname"><span class="pre">StringParameter</span></span><a class="reference internal" href="../../_modules/myogestic/utils/config.html#StringParameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.utils.config.StringParameter" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.TypedDict" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">TypedDict</span></code></a></p>
-<p>TypedDict for string parameters.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>default_value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The default value for the parameter.</p>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py data" id="changeable-parameter">
-<dt class="sig sig-object py" id="myogestic.models.config.ChangeableParameter">
-<span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">ChangeableParameter</span></span><a class="headerlink" href="#myogestic.models.config.ChangeableParameter" title="Link to this definition">¶</a></dt>
-<dd><p>Union of the TypedDicts for the changeable parameters.</p>
+<dt class="sig sig-object py" id="myogestic.utils.config.ChangeableParameter">
+<span class="sig-prename descclassname"><span class="pre">myogestic.utils.config.</span></span><span class="sig-name descname"><span class="pre">ChangeableParameter</span></span><a class="headerlink" href="#myogestic.utils.config.ChangeableParameter" title="Link to this definition">¶</a></dt>
+<dd><p>alias of <a class="reference internal" href="#myogestic.utils.config.IntParameter" title="myogestic.utils.config.IntParameter"><code class="xref py py-class docutils literal notranslate"><span class="pre">IntParameter</span></code></a> | <a class="reference internal" href="#myogestic.utils.config.FloatParameter" title="myogestic.utils.config.FloatParameter"><code class="xref py py-class docutils literal notranslate"><span class="pre">FloatParameter</span></code></a> | <a class="reference internal" href="#myogestic.utils.config.StringParameter" title="myogestic.utils.config.StringParameter"><code class="xref py py-class docutils literal notranslate"><span class="pre">StringParameter</span></code></a> | <a class="reference internal" href="#myogestic.utils.config.BoolParameter" title="myogestic.utils.config.BoolParameter"><code class="xref py py-class docutils literal notranslate"><span class="pre">BoolParameter</span></code></a> | <a class="reference internal" href="#myogestic.utils.config.CategoricalParameter" title="myogestic.utils.config.CategoricalParameter"><code class="xref py py-class docutils literal notranslate"><span class="pre">CategoricalParameter</span></code></a></p>
 </dd></dl>
 
 <dl class="py data" id="unchangeable-parameter">
-<dt class="sig sig-object py" id="myogestic.models.config.UnchangeableParameter">
-<span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">UnchangeableParameter</span></span><a class="headerlink" href="#myogestic.models.config.UnchangeableParameter" title="Link to this definition">¶</a></dt>
-<dd><p>Union of the types for the unchangeable parameters.</p>
+<dt class="sig sig-object py" id="myogestic.utils.config.UnchangeableParameter">
+<span class="sig-prename descclassname"><span class="pre">myogestic.utils.config.</span></span><span class="sig-name descname"><span class="pre">UnchangeableParameter</span></span><a class="headerlink" href="#myogestic.utils.config.UnchangeableParameter" title="Link to this definition">¶</a></dt>
+<dd><p>alias of <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a> | <a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></a> | <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a> | <a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></a> | <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>] | <a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></p>
 </dd></dl>
 
-<dl class="py data">
-<dt class="sig sig-object py" id="myogestic.models.config.MODELS_MAP">
-<span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">MODELS_MAP</span></span><a class="headerlink" href="#myogestic.models.config.MODELS_MAP" title="Link to this definition">¶</a></dt>
-<dd><p>Dictionary to get the models class and whether it is a classifier or regressor.</p>
-<p>The keys are the models names, the values are tuples with the models class and a boolean
-indicating whether the models is a classifier.</p>
-<p>The model class must be a callable that receives the parameters as keyword arguments.</p>
+</section>
+<section id="module-0">
+<span id="registry"></span><h2>Registry<a class="headerlink" href="#module-0" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="myogestic.utils.config.Registry">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.utils.config.</span></span><span class="sig-name descname"><span class="pre">Registry</span></span><a class="reference internal" href="../../_modules/myogestic/utils/config.html#Registry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.utils.config.Registry" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Base class for registration of models and features in the MyoGestic application.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="myogestic.utils.config.Registry.models_map">
+<span class="sig-name descname"><span class="pre">models_map</span></span><a class="headerlink" href="#myogestic.utils.config.Registry.models_map" title="Link to this definition">¶</a></dt>
+<dd><p>A dictionary mapping model names to tuples of the model class and a boolean indicating whether the model is a classifier.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)">tuple</a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.13)">type</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)">bool</a>]]</p>
+</dd>
+</dl>
 </dd></dl>
 
-<span class="sig-name descname">MODELS_MAP</span><dd><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">MODELS_MAP</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">object</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;CatBoost Classifier&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">CatBoostClassifier</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
-    <span class="s2">&quot;CatBoost Regressor&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">CatBoostRegressor</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
-    <span class="s2">&quot;Linear Regressor&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">LinearRegression</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
-    <span class="s2">&quot;Logistic Classifier&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">LogisticRegression</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
-    <span class="s2">&quot;Gaussian Process Classifier&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">GaussianProcessClassifier</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
-    <span class="s2">&quot;AdaBoost Classifier&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">AdaBoostClassifier</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
-    <span class="s2">&quot;MLP Classifier&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">MLPClassifier</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
-    <span class="s2">&quot;Support Vector Classifier&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">SVC</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
-<span class="p">}</span>
-</pre></div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="myogestic.utils.config.Registry.models_functions_map">
+<span class="sig-name descname"><span class="pre">models_functions_map</span></span><a class="headerlink" href="#myogestic.utils.config.Registry.models_functions_map" title="Link to this definition">¶</a></dt>
+<dd><p>A dictionary mapping model names to dictionaries of functions to save, load and train the model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[Literal[“save”, “load”, “train”], Callable]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="myogestic.utils.config.Registry.models_parameters_map">
+<span class="sig-name descname"><span class="pre">models_parameters_map</span></span><a class="headerlink" href="#myogestic.utils.config.Registry.models_parameters_map" title="Link to this definition">¶</a></dt>
+<dd><p>A dictionary mapping model names to dictionaries of changeable and unchangeable parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[Literal[“changeable”, “unchangeable”], Union[ChangeableParameter, UnchangeableParameter]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="myogestic.utils.config.Registry.features_map">
+<span class="sig-name descname"><span class="pre">features_map</span></span><a class="headerlink" href="#myogestic.utils.config.Registry.features_map" title="Link to this definition">¶</a></dt>
+<dd><p>A dictionary mapping feature names to filters or partial functions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, FilterBaseClass]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="myogestic.utils.config.Registry.register_feature">
+<span class="sig-name descname"><span class="pre">register_feature</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">feature_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/myogestic/utils/config.html#Registry.register_feature"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.utils.config.Registry.register_feature" title="Link to this definition">¶</a></dt>
+<dd><p>Register a feature in the registry.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The feature name must be unique and the attribute <cite>name</cite> of the feature will be set to the feature name.</p>
 </div>
-</dd><dl class="py data">
-<dt class="sig sig-object py" id="myogestic.models.config.FUNCTIONS_MAP">
-<span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">FUNCTIONS_MAP</span></span><a class="headerlink" href="#myogestic.models.config.FUNCTIONS_MAP" title="Link to this definition">¶</a></dt>
-<dd><p>Dictionary to get the functions to save and load the models.</p>
-<p>The keys are the models names, the values are dictionaries with the keys “save_function”,
-“load_function” and “train_function” and the values are the functions to save, load and train
-the models, respectively.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>feature_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The name of the feature.</p></li>
+<li><p><strong>feature</strong> (<em>Type</em><em>[</em><em>FilterBaseClass</em><em>]</em>) – The feature to register.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the feature is already registered</p>
+</dd>
+</dl>
 </dd></dl>
 
-<span class="sig-name descname">FUNCTIONS_MAP</span><dd><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">FUNCTIONS_MAP</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span>
-    <span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;save_function&quot;</span><span class="p">,</span> <span class="s2">&quot;load_function&quot;</span><span class="p">,</span> <span class="s2">&quot;train_function&quot;</span><span class="p">],</span> <span class="nb">callable</span><span class="p">]</span>
-<span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;CatBoost Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;save_function&quot;</span><span class="p">:</span> <span class="n">catboost_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
-        <span class="s2">&quot;load_function&quot;</span><span class="p">:</span> <span class="n">catboost_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
-        <span class="s2">&quot;train_function&quot;</span><span class="p">:</span> <span class="n">catboost_models</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;CatBoost Regressor&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;save_function&quot;</span><span class="p">:</span> <span class="n">catboost_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
-        <span class="s2">&quot;load_function&quot;</span><span class="p">:</span> <span class="n">catboost_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
-        <span class="s2">&quot;train_function&quot;</span><span class="p">:</span> <span class="n">catboost_models</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;Linear Regressor&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;save_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
-        <span class="s2">&quot;load_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
-        <span class="s2">&quot;train_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;Linear Regressor Per Finger&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;save_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
-        <span class="s2">&quot;load_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
-        <span class="s2">&quot;train_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;Gaussian Process Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;save_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
-        <span class="s2">&quot;load_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
-        <span class="s2">&quot;train_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;AdaBoost Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;save_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
-        <span class="s2">&quot;load_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
-        <span class="s2">&quot;train_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;MLP Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;save_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
-        <span class="s2">&quot;load_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
-        <span class="s2">&quot;train_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;Support Vector Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;save_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">save</span><span class="p">,</span>
-        <span class="s2">&quot;load_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">load</span><span class="p">,</span>
-        <span class="s2">&quot;train_function&quot;</span><span class="p">:</span> <span class="n">sklearn_models</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
-    <span class="p">},</span>
-<span class="p">}</span>
-</pre></div>
+<dl class="py method">
+<dt class="sig sig-object py" id="myogestic.utils.config.Registry.register_model">
+<span class="sig-name descname"><span class="pre">register_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_classifier</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_function</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">load_function</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_function</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predict_function</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changeable_parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unchangeable_parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/myogestic/utils/config.html#Registry.register_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.utils.config.Registry.register_model" title="Link to this definition">¶</a></dt>
+<dd><p>Register a model in the registry.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The model name must be unique.</p>
 </div>
-</dd><dl class="py data">
-<dt class="sig sig-object py" id="myogestic.models.config.PARAMETERS_MAP">
-<span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">PARAMETERS_MAP</span></span><a class="headerlink" href="#myogestic.models.config.PARAMETERS_MAP" title="Link to this definition">¶</a></dt>
-<dd><p>Dictionary to get the parameters for the models.</p>
-<p>The keys are the models names, the values are dictionaries with two keys: “changeable”
-and “unchangeable”. The values are dictionaries with the parameter names as keys and
-the parameter values as values.</p>
-<p>The changeable parameters must be of type ChangeableParameter and the unchangeable parameters must be of type UnchangeableParameter.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The name of the model.</p></li>
+<li><p><strong>model_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.13)"><em>type</em></a>) – The class of the model.</p></li>
+<li><p><strong>is_classifier</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether the model is a classifier.</p></li>
+<li><p><strong>save_function</strong> (<em>callable</em>) – The function to save the model.</p></li>
+<li><p><strong>load_function</strong> (<em>callable</em>) – The function to load the model.</p></li>
+<li><p><strong>train_function</strong> (<em>callable</em>) – The function to train the model.</p></li>
+<li><p><strong>predict_function</strong> (<em>callable</em>) – The function to predict with the model.</p></li>
+<li><p><strong>changeable_parameters</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>ChangeableParameter</em><em>]</em><em>, </em><em>optional</em>) – The changeable parameters of the model, by default None.</p></li>
+<li><p><strong>unchangeable_parameters</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>UnchangeableParameter</em><em>]</em><em>, </em><em>optional</em>) – The unchangeable parameters of the model, by default None.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the model is already registered.</p>
+</dd>
+</dl>
 </dd></dl>
 
-<span class="sig-name descname">PARAMETERS_MAP</span><dd><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">PARAMETERS_MAP</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span>
-    <span class="nb">str</span><span class="p">,</span>
-    <span class="nb">dict</span><span class="p">[</span>
-        <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;changeable&quot;</span><span class="p">,</span> <span class="s2">&quot;unchangeable&quot;</span><span class="p">],</span>
-        <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ChangeableParameter</span> <span class="o">|</span> <span class="n">UnchangeableParameter</span><span class="p">],</span>
-    <span class="p">],</span>
-<span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;CatBoost Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;changeable&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">&quot;iterations&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-                <span class="s2">&quot;end_value&quot;</span><span class="p">:</span> <span class="mi">10000</span><span class="p">,</span>
-                <span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
-                <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>
-            <span class="p">},</span>
-            <span class="s2">&quot;l2_leaf_reg&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;end_value&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-                <span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
-            <span class="p">},</span>
-            <span class="s2">&quot;border_count&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;end_value&quot;</span><span class="p">:</span> <span class="mi">255</span><span class="p">,</span>
-                <span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mi">254</span><span class="p">,</span>
-            <span class="p">},</span>
-        <span class="p">},</span>
-        <span class="s2">&quot;unchangeable&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">&quot;task_type&quot;</span><span class="p">:</span> <span class="s2">&quot;GPU&quot;</span> <span class="k">if</span> <span class="n">get_gpu_device_count</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;CPU&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;train_dir&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="p">},</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;CatBoost Regressor&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;changeable&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">&quot;iterations&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-                <span class="s2">&quot;end_value&quot;</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>
-                <span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-                <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
-            <span class="p">},</span>
-            <span class="s2">&quot;l2_leaf_reg&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;end_value&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-                <span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
-            <span class="p">},</span>
-            <span class="s2">&quot;border_count&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;end_value&quot;</span><span class="p">:</span> <span class="mi">255</span><span class="p">,</span>
-                <span class="s2">&quot;step&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-                <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mi">254</span><span class="p">,</span>
-            <span class="p">},</span>
-        <span class="p">},</span>
-        <span class="s2">&quot;unchangeable&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">&quot;task_type&quot;</span><span class="p">:</span> <span class="s2">&quot;GPU&quot;</span> <span class="k">if</span> <span class="n">get_gpu_device_count</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;CPU&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;train_dir&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
-            <span class="s2">&quot;loss_function&quot;</span><span class="p">:</span> <span class="s2">&quot;MultiRMSE&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;boosting_type&quot;</span><span class="p">:</span> <span class="s2">&quot;Plain&quot;</span><span class="p">,</span>
-        <span class="p">},</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;Linear Regressor&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;changeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-        <span class="s2">&quot;unchangeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;Logistic Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;changeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-        <span class="s2">&quot;unchangeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;Gaussian Process Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;changeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-        <span class="s2">&quot;unchangeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;AdaBoost Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;changeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-        <span class="s2">&quot;unchangeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;MLP Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;changeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-        <span class="s2">&quot;unchangeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-    <span class="p">},</span>
-    <span class="s2">&quot;Support Vector Classifier&quot;</span><span class="p">:</span> <span class="p">{</span>
-        <span class="s2">&quot;changeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-        <span class="s2">&quot;unchangeable&quot;</span><span class="p">:</span> <span class="p">{},</span>
-    <span class="p">},</span>
-<span class="p">}</span>
-</pre></div>
+<dl class="py method">
+<dt class="sig sig-object py" id="myogestic.utils.config.Registry.register_real_time_filter">
+<span class="sig-name descname"><span class="pre">register_real_time_filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filter_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filter_function</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/myogestic/utils/config.html#Registry.register_real_time_filter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.utils.config.Registry.register_real_time_filter" title="Link to this definition">¶</a></dt>
+<dd><p>Register a real-time filter in the registry.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The filter name must be unique.</p>
 </div>
-</dd><dl class="py data">
-<dt class="sig sig-object py" id="myogestic.models.config.FEATURES_MAP">
-<span class="sig-prename descclassname"><span class="pre">myogestic.models.config.</span></span><span class="sig-name descname"><span class="pre">FEATURES_MAP</span></span><a class="headerlink" href="#myogestic.models.config.FEATURES_MAP" title="Link to this definition">¶</a></dt>
-<dd><p>Dictionary to get the EMG features class.</p>
-<p>The keys are the feature names, the values are the features class.
-The features must subclass the FilterBaseClass.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>filter_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The name of the filter.</p></li>
+<li><p><strong>filter_function</strong> (<em>callable</em>) – The filter function.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the filter is already registered.</p>
+</dd>
+</dl>
 </dd></dl>
 
-<span class="sig-name descname">FEATURES_MAP</span><dd><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">FEATURES_MAP</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FilterBaseClass</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span> <span class="c1"># noqa</span>
-    <span class="s2">&quot;Root Mean Square&quot;</span><span class="p">:</span> <span class="n">RMSFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Mean Absolute Value&quot;</span><span class="p">:</span> <span class="n">MAVFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Integrated Absolute Value&quot;</span><span class="p">:</span> <span class="n">IAVFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Variance&quot;</span><span class="p">:</span> <span class="n">VARFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Waveform Length&quot;</span><span class="p">:</span> <span class="n">WFLFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Zero Crossings&quot;</span><span class="p">:</span> <span class="n">ZCFilter</span><span class="p">,</span>
-    <span class="s2">&quot;Slope Sign Change&quot;</span><span class="p">:</span> <span class="n">SSCFilter</span><span class="p">,</span>
-    <span class="c1"># TODO: Add these back</span>
-    <span class="c1"># &quot;Difference Absolute Standard Deviation&quot;: DASDVFilter,</span>
-    <span class="c1"># &quot;V-Order&quot;: VOrderFilter,</span>
-    <span class="c1"># &quot;Average Amplitude Change&quot;: AACFilter,</span>
-    <span class="c1"># &quot;Maximum Fractal Length&quot;: MFLFilter,</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-</dd></section>
+</dd></dl>
+
+</section>
+</section>
 
         </article>
       </div>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="../features/temporal.html">
-              <div class="page-info">
-                <div class="context">
-                  <span>Next</span>
-                </div>
-                <div class="title">Temporal Features</div>
-              </div>
-              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
-            </a>
-          <a class="prev-page" href="definitions/sklearn.html">
+          
+          <a class="prev-page" href="definitions/raulnet.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Sklearn Model Definitions</div>
+                <div class="title">RaulNet Model Definitions</div>
                 
               </div>
             </a>
@@ -607,17 +485,29 @@ The features must subclass the FilterBaseClass.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">MyoGestic Model Configurations</a><ul>
-<li><a class="reference internal" href="#myogestic.models.config.BoolParameter"><code class="docutils literal notranslate"><span class="pre">BoolParameter</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.models.config.CategoricalParameter"><code class="docutils literal notranslate"><span class="pre">CategoricalParameter</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.models.config.FloatParameter"><code class="docutils literal notranslate"><span class="pre">FloatParameter</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.models.config.IntParameter"><code class="docutils literal notranslate"><span class="pre">IntParameter</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.models.config.StringParameter"><code class="docutils literal notranslate"><span class="pre">StringParameter</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.models.config.ChangeableParameter"><code class="docutils literal notranslate"><span class="pre">ChangeableParameter</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.models.config.UnchangeableParameter"><code class="docutils literal notranslate"><span class="pre">UnchangeableParameter</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.models.config.MODELS_MAP"><code class="docutils literal notranslate"><span class="pre">MODELS_MAP</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.models.config.FUNCTIONS_MAP"><code class="docutils literal notranslate"><span class="pre">FUNCTIONS_MAP</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.models.config.PARAMETERS_MAP"><code class="docutils literal notranslate"><span class="pre">PARAMETERS_MAP</span></code></a></li>
-<li><a class="reference internal" href="#myogestic.models.config.FEATURES_MAP"><code class="docutils literal notranslate"><span class="pre">FEATURES_MAP</span></code></a></li>
+<li><a class="reference internal" href="#module-myogestic.utils.config">Configuration Parameters</a><ul>
+<li><a class="reference internal" href="#myogestic.utils.config.BoolParameter"><code class="docutils literal notranslate"><span class="pre">BoolParameter</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.CategoricalParameter"><code class="docutils literal notranslate"><span class="pre">CategoricalParameter</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.FloatParameter"><code class="docutils literal notranslate"><span class="pre">FloatParameter</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.IntParameter"><code class="docutils literal notranslate"><span class="pre">IntParameter</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.StringParameter"><code class="docutils literal notranslate"><span class="pre">StringParameter</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.ChangeableParameter"><code class="docutils literal notranslate"><span class="pre">ChangeableParameter</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.UnchangeableParameter"><code class="docutils literal notranslate"><span class="pre">UnchangeableParameter</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-0">Registry</a><ul>
+<li><a class="reference internal" href="#myogestic.utils.config.Registry"><code class="docutils literal notranslate"><span class="pre">Registry</span></code></a><ul>
+<li><a class="reference internal" href="#myogestic.utils.config.Registry.models_map"><code class="docutils literal notranslate"><span class="pre">Registry.models_map</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.Registry.models_functions_map"><code class="docutils literal notranslate"><span class="pre">Registry.models_functions_map</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.Registry.models_parameters_map"><code class="docutils literal notranslate"><span class="pre">Registry.models_parameters_map</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.Registry.features_map"><code class="docutils literal notranslate"><span class="pre">Registry.features_map</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.Registry.register_feature"><code class="docutils literal notranslate"><span class="pre">Registry.register_feature()</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.Registry.register_model"><code class="docutils literal notranslate"><span class="pre">Registry.register_model()</span></code></a></li>
+<li><a class="reference internal" href="#myogestic.utils.config.Registry.register_real_time_filter"><code class="docutils literal notranslate"><span class="pre">Registry.register_real_time_filter()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -629,7 +519,7 @@ The features must subclass the FilterBaseClass.</p>
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=01f34227"></script>
+</div><script src="../../_static/documentation_options.js?v=e259d695"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/furo.js?v=5fa4622c"></script>

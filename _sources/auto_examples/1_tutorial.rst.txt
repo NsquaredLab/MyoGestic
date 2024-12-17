@@ -23,14 +23,24 @@ How to use MyoGestic
 
 This tutorial will guide you through the process of using MyoGestic to train a model to predict hand gestures from EMG data.
 
-.. GENERATED FROM PYTHON SOURCE LINES 9-13
+.. GENERATED FROM PYTHON SOURCE LINES 9-18
+
+Tutorial Slides
+---------------
+:pdfembed:`src:../../html/_static/MyoGestic_Tutorial.pdf#view=Fit#toolbar=0#statusbar=0#navpanes=0, height:540, width:960, align:middle`
+
 
 Tutorial Video
 --------------
 .. youtube:: Re3VfgKhjCM
    :width: 800
 
-**Estimated memory usage:**  0 MB
+
+.. rst-class:: sphx-glr-timing
+
+   **Total running time of the script:** (0 minutes 0.000 seconds)
+
+**Estimated memory usage:**  17 MB
 
 
 .. _sphx_glr_download_auto_examples_1_tutorial.py:

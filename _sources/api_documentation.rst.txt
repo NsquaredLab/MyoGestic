@@ -31,31 +31,13 @@ MyoGestic supports following models out of the box:
 
     modules/models/definitions
 
-The models are configured in the configuration file:
-
-.. toctree::
-    :maxdepth: 1
-
-    modules/models/config
-
-.. important:: If you wish to add a new model, you must add it to the user configuration file. See :ref:`examples-index` for more information.
-
-
-Features
+Config
 ================
-
-.. warning:: The feature API will be changed in the future. We are currently working on a new feature API that will be more flexible and easier to use. Stay tuned for updates.
-
-The features can be set in the configuration file:
+The models and features can be set in the configuration file:
 
 .. toctree::
     :maxdepth: 1
 
     modules/models/config
 
-Following features are supported out of the box:
-
-.. toctree::
-    :maxdepth: 2
-
-    modules/features/temporal
+.. important:: If you wish to add a new model or feature, you must add it to the user configuration file. See :ref:`examples-index` for more information.

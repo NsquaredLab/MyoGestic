@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Adding a new model to MyoGestic" href="2_adding_new_model.html" /><link rel="prev" title="Examples" href="index.html" />
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
-        <title>How to use MyoGestic - MyoGestic 0.1.0 documentation</title>
+        <title>How to use MyoGestic - MyoGestic 0.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/sg_gallery.css?v=61a4c737" />
@@ -14,6 +14,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-dataframe.css?v=2082cf3c" />
     <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=a2b31644" />
     
     
 
@@ -170,7 +171,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">MyoGestic 0.1.0 documentation</div></a>
+      <a href="../index.html"><div class="brand">MyoGestic 0.3.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -194,7 +195,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
   
-  <span class="sidebar-brand-text">MyoGestic 0.1.0 documentation</span>
+  <span class="sidebar-brand-text">MyoGestic 0.3.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -217,11 +218,10 @@
 <li class="toctree-l2 has-children"><a class="reference internal" href="../modules/models/definitions.html">MyoGestic Model Definitions</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of MyoGestic Model Definitions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../modules/models/definitions/catboost.html">Catboost Model Definitions</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../modules/models/definitions/sklearn.html">Sklearn Model Definitions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../modules/models/definitions/raulnet.html">RaulNet Model Definitions</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../modules/models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../modules/models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../modules/features/temporal.html">Temporal Features</a></li>
 </ul>
 </li>
 </ul>
@@ -272,11 +272,28 @@ to download the full example code.</p>
 <section class="sphx-glr-example-title" id="how-to-use-myogestic">
 <span id="sphx-glr-auto-examples-1-tutorial-py"></span><h1>How to use MyoGestic<a class="headerlink" href="#how-to-use-myogestic" title="Link to this heading">¶</a></h1>
 <p>This tutorial will guide you through the process of using MyoGestic to train a model to predict hand gestures from EMG data.</p>
+<section id="tutorial-slides">
+<h2>Tutorial Slides<a class="headerlink" href="#tutorial-slides" title="Link to this heading">¶</a></h2>
+<p>
+                        <iframe
+                                id="ID"
+                                style="border:1px solid #666CCC"
+                                title="PDF"
+                                src="../../html/_static/MyoGestic_Tutorial.pdf#view=Fit#toolbar=0#statusbar=0#navpanes=0"
+                                frameborder="1"
+                                scrolling="auto"
+                                height="540"
+                                width="960"
+                                align="middle">
+                        </iframe>
+                     </p>
+</section>
 <section id="tutorial-video">
 <h2>Tutorial Video<a class="headerlink" href="#tutorial-video" title="Link to this heading">¶</a></h2>
 <div class="video_wrapper" style="">
 <iframe allowfullscreen="true" src="https://www.youtube.com/embed/Re3VfgKhjCM" style="border: 0; height: 480px; width: 800px">
-</iframe></div><p><strong>Estimated memory usage:</strong>  0 MB</p>
+</iframe></div><p class="sphx-glr-timing"><strong>Total running time of the script:</strong> (0 minutes 0.000 seconds)</p>
+<p><strong>Estimated memory usage:</strong>  17 MB</p>
 <div class="sphx-glr-footer sphx-glr-footer-example docutils container" id="sphx-glr-download-auto-examples-1-tutorial-py">
 <div class="sphx-glr-download sphx-glr-download-jupyter docutils container">
 <p><a class="reference download internal" download="" href="../_downloads/2212e87bd3fb3aad8c40a09fcf8bc488/1_tutorial.ipynb"><code class="xref download docutils literal notranslate"><span class="pre">Download</span> <span class="pre">Jupyter</span> <span class="pre">notebook:</span> <span class="pre">1_tutorial.ipynb</span></code></a></p>
@@ -345,6 +362,7 @@ to download the full example code.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">How to use MyoGestic</a><ul>
+<li><a class="reference internal" href="#tutorial-slides">Tutorial Slides</a></li>
 <li><a class="reference internal" href="#tutorial-video">Tutorial Video</a></li>
 </ul>
 </li>
@@ -357,7 +375,7 @@ to download the full example code.</p>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=01f34227"></script>
+</div><script src="../_static/documentation_options.js?v=e259d695"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>

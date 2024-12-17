@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="genindex.html" /><link rel="search" title="Search" href="search.html" /><link rel="next" title="Recording Protocol (Panel)" href="modules/gui/record.html" /><link rel="prev" title="Adding a new model to MyoGestic" href="auto_examples/2_adding_new_model.html" />
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
-        <title>API Documentation - MyoGestic 0.1.0 documentation</title>
+        <title>API Documentation - MyoGestic 0.3.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="_static/sg_gallery.css?v=61a4c737" />
@@ -14,6 +14,7 @@
     <link rel="stylesheet" type="text/css" href="_static/sg_gallery-dataframe.css?v=2082cf3c" />
     <link rel="stylesheet" type="text/css" href="_static/sg_gallery-rendered-html.css?v=1277b6f3" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=a2b31644" />
     
     
 
@@ -170,7 +171,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">MyoGestic 0.1.0 documentation</div></a>
+      <a href="index.html"><div class="brand">MyoGestic 0.3.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -194,7 +195,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
   
-  <span class="sidebar-brand-text">MyoGestic 0.1.0 documentation</span>
+  <span class="sidebar-brand-text">MyoGestic 0.3.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -217,11 +218,10 @@
 <li class="toctree-l2 has-children"><a class="reference internal" href="modules/models/definitions.html">MyoGestic Model Definitions</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of MyoGestic Model Definitions</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="modules/models/definitions/catboost.html">Catboost Model Definitions</a></li>
 <li class="toctree-l3"><a class="reference internal" href="modules/models/definitions/sklearn.html">Sklearn Model Definitions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="modules/models/definitions/raulnet.html">RaulNet Model Definitions</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="modules/models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="modules/models/config.html">MyoGestic Model Configurations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="modules/features/temporal.html">Temporal Features</a></li>
 </ul>
 </li>
 </ul>
@@ -293,11 +293,15 @@ Internally we call these panels protocols since the researcher has to complete e
 <li class="toctree-l1"><a class="reference internal" href="modules/models/definitions.html">MyoGestic Model Definitions</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="modules/models/definitions/catboost.html">Catboost Model Definitions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="modules/models/definitions/sklearn.html">Sklearn Model Definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="modules/models/definitions/raulnet.html">RaulNet Model Definitions</a></li>
 </ul>
 </li>
 </ul>
 </div>
-<p>The models are configured in the configuration file:</p>
+</section>
+<section id="config">
+<h2>Config<a class="headerlink" href="#config" title="Link to this heading">¶</a></h2>
+<p>The models and features can be set in the configuration file:</p>
 <div class="toctree-wrapper compound">
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="modules/models/config.html">MyoGestic Model Configurations</a></li>
@@ -305,26 +309,7 @@ Internally we call these panels protocols since the researcher has to complete e
 </div>
 <div class="admonition important">
 <p class="admonition-title">Important</p>
-<p>If you wish to add a new model, you must add it to the user configuration file. See <a class="reference internal" href="auto_examples/index.html#examples-index"><span class="std std-ref">Examples</span></a> for more information.</p>
-</div>
-</section>
-<section id="features">
-<h2>Features<a class="headerlink" href="#features" title="Link to this heading">¶</a></h2>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>The feature API will be changed in the future. We are currently working on a new feature API that will be more flexible and easier to use. Stay tuned for updates.</p>
-</div>
-<p>The features can be set in the configuration file:</p>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="modules/models/config.html">MyoGestic Model Configurations</a></li>
-</ul>
-</div>
-<p>Following features are supported out of the box:</p>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="modules/features/temporal.html">Temporal Features</a></li>
-</ul>
+<p>If you wish to add a new model or feature, you must add it to the user configuration file. See <a class="reference internal" href="auto_examples/index.html#examples-index"><span class="std std-ref">Examples</span></a> for more information.</p>
 </div>
 </section>
 </section>
@@ -388,12 +373,8 @@ Internally we call these panels protocols since the researcher has to complete e
 <li><a class="reference internal" href="#gui-protocols-panels">GUI Protocols (Panels)</a><ul>
 </ul>
 </li>
-<li><a class="reference internal" href="#models">Models</a><ul>
-</ul>
-</li>
-<li><a class="reference internal" href="#features">Features</a><ul>
-</ul>
-</li>
+<li><a class="reference internal" href="#models">Models</a></li>
+<li><a class="reference internal" href="#config">Config</a></li>
 </ul>
 </li>
 </ul>
@@ -405,7 +386,7 @@ Internally we call these panels protocols since the researcher has to complete e
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=01f34227"></script>
+</div><script src="_static/documentation_options.js?v=e259d695"></script>
     <script src="_static/doctools.js?v=9a2dae69"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/furo.js?v=5fa4622c"></script>
