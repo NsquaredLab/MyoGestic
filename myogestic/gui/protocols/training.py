@@ -520,9 +520,7 @@ class TrainingProtocol(QObject):
                 train=train,
             )
         except Exception as e:
-            self.main_window.logger.print(
-                f"Error during training: {e}", LoggerLevel.ERROR
-            )
+            print(f"Error during training: {e}", LoggerLevel.ERROR)
             return
 
         now = datetime.now()
@@ -535,9 +533,7 @@ class TrainingProtocol(QObject):
         try:
             model_save_dict = self.model_interface.save_model(model_filepath)
         except Exception as e:
-            self.main_window.logger.print(
-                f"Error during saving models: {e}", LoggerLevel.ERROR
-            )
+            print(f"Error during saving models: {e}", LoggerLevel.ERROR)
             return
 
         with model_filepath.open("wb") as file:

@@ -32,6 +32,62 @@ NUM_LINE_POINTS = 200
 IMAGE_SHAPE = (600, 800)  # (height, width)
 
 
+class RunningWorker(QObject):
+    finished = Signal()
+    plot_info = Signal(np.ndarray, list)
+
+    def __init__(
+        self,
+        parent=None,
+        model=None,
+        umap_model=None,
+        transformed_training_data=None,
+    ):
+        super().__init__(parent)
+        self.model = model
+        self.umap_model = umap_model
+        self.transformed_training_data = transformed_training_data
+        self.transformed_online_data = []
+        self.color_list = [(1, 0, 0, 0.5)] * len(self.transformed_training_data)
+
+    @Slot(np.ndarray)
+    def run(self, emg_data: np.ndarray) -> None:
+        if not self.umap_model:
+            QMessageBox.warning(
+                self,
+                "Warning",
+                "You need to train the umap model first.",
+                QMessageBox.Ok,
+            )
+            return
+
+        latent_vector = (
+            self.model.cnn_encoder(
+                self.model._reshape_and_normalize(
+                    torch.from_numpy(emg_data[:, None].astype(np.float32)).to(
+                        self.model.device
+                    )
+                )
+            )
+            .cpu()
+            .detach()
+            .numpy()
+        )
+
+        self.transformed_online_data.append(
+            list(self.umap_model.transform(latent_vector)[0])
+        )
+
+        self.color_list.append((0, 0, 1, 0.5))
+
+        self.plot_info.emit(
+            np.concatenate(
+                [self.transformed_training_data, np.array(self.transformed_online_data)]
+            ),
+            self.color_list,
+        )
+
+
 class TrainingWorker(QObject):
     finished = Signal()
     pass_info = Signal(str, str)
@@ -82,7 +138,7 @@ class TrainingWorker(QObject):
         now = datetime.now()
         formatted_now = now.strftime("%Y%m%d_%H%M%S%f")
 
-        umap_model = UMAP(metric="cosine", verbose=True)
+        umap_model = UMAP(metric="euclidean", verbose=False)
         train_data_transformed = umap_model.fit_transform(latent_vectors)
 
         print(cuml.metrics.trustworthiness(latent_vectors, train_data_transformed))
@@ -109,13 +165,19 @@ class TrainingWorker(QObject):
 
 
 class UMAPMonitoringWidget(_MonitoringWidgetBaseClass):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self, parent=None, emg_signal=None):
+        super().__init__(parent, emg_signal)
         self.ui = Ui_UMAP()  # Create an instance of the UI class
         self.ui.setupUi(self)  # Set up the UI
         self.selected_dataset_filepath = (
             None  # Initialize the selected dataset filepath
         )
+        self.model = None
+        self.umap_model = None
+        self.color_list = None
+        self.transformed_online_data = []
+        self.running_thread = None
+
         self._setup_functionality()
 
     def _select_dataset(self) -> None:
@@ -153,27 +215,16 @@ class UMAPMonitoringWidget(_MonitoringWidgetBaseClass):
 
         self.ui.umapCreateModelPushButton.setEnabled(True)
 
-    def run_monitoring(self, emg_data: np.ndarray) -> None:
-        if not self.selected_dataset_filepath:
-            QMessageBox.warning(self, "Warning", "No dataset selected.", QMessageBox.Ok)
-            return
-
-        print(emg_data.shape)
-        # # Load the dataset
-        # dataset = self.load_dataset(self.selected_dataset_filepath)
-        #
-        # # Perform UMAP
-        # umap_data = self.umap(dataset["X"])
-        #
-        # # Plot the UMAP
-        # self.plot_umap(umap_data)
-
     def start_training_umap(self, dataset: dict) -> None:
         self.training_thread.start()
 
-    def plot_data(self, scatter_data: np.ndarray) -> None:
+    @Slot(np.ndarray, list)
+    def plot_data(self, scatter_data: np.ndarray, color_list=None) -> None:
         self._canvas_wrapper.scatter.set_data(
-            scatter_data, edge_color=None, face_color=(1, 0, 0, 0.5), size=10
+            scatter_data,
+            edge_color=None,
+            face_color=color_list if color_list else (1, 0, 0, 0.5),
+            size=10,
         )
 
     @Slot(str, str)
@@ -185,25 +236,47 @@ class UMAPMonitoringWidget(_MonitoringWidgetBaseClass):
         self.umap_model = load(umap_model_path)
         self.transformed_training_data = load(transformed_training_data_path)
 
+        self.color_list = [(1, 0, 0, 0.5)] * len(self.transformed_training_data)
+
         self.training_thread.quit()
 
         print("UMAP model trained successfully!")
 
-        self.plot_data(self.transformed_training_data)
+        self.plot_data(self.transformed_training_data, self.color_list)
+
+        self.model = self.model_information["functions_map"]["load"](
+            self.model_information["model_path"],
+            self.model_information["models_map"][0](
+                **self.model_information["model_params"]
+            ),
+        )
+
+        self.running_worker = RunningWorker(
+            None, self.model, self.umap_model, self.transformed_training_data
+        )
+        self.running_thread = QThread()
+        self.running_worker.moveToThread(self.running_thread)
+
+        self.running_thread.finished.connect(self.running_thread.deleteLater)
+        self.running_worker.plot_info.connect(self.plot_data)
+        self.running_thread.finished.connect(self.running_thread.deleteLater)
+        self.emg_signal.connect(self.running_worker.run)
+
+        self.running_thread.start()
 
     def load_dataset(self, filepath: str) -> dict:
         with open(filepath, "rb") as file:
             return pickle.load(file)
 
-    def umap(self, data: np.ndarray) -> np.ndarray:
-        # Placeholder for UMAP implementation
-        # Replace with actual UMAP computation
-        return data  # Assuming data is already in 2D for simplicity
-
-    def plot_umap(self, umap_data: np.ndarray) -> None:
+    def plot_umap(self, umap_data: np.ndarray, color_list=None) -> None:
         self.view.camera = "turntable"
         scatter = scene.visuals.Markers()
-        scatter.set_data(umap_data, edge_color=None, face_color=(1, 1, 1, 0.5), size=5)
+        scatter.set_data(
+            umap_data,
+            edge_color=None,
+            face_color=color_list if color_list else (1, 0, 0, 0.5),
+            size=5,
+        )
         self.view.add(scatter)
 
     def _setup_functionality(self) -> None:

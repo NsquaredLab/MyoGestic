@@ -369,14 +369,9 @@ class OnlineProtocol(QObject):
     ) -> None:
         if state.value == 2:
             self.active_monitoring_widgets[name_of_monitoring_widget] = (
-                monitoring_widget()
+                monitoring_widget(None, self.model_interface.model.predicted_emg_signal)
             )
             self.active_monitoring_widgets[name_of_monitoring_widget].show()
-
-            # connect the signal to the monitoring widget
-            self.model_interface.model.predicted_emg_signal.connect(
-                self.active_monitoring_widgets[name_of_monitoring_widget].run_monitoring
-            )
 
             self.model_information_signal.connect(
                 self.active_monitoring_widgets[

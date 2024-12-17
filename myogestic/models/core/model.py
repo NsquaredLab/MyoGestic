@@ -101,10 +101,21 @@ class MyoGesticModel(QObject):
 
     @Slot(list)
     def update_gamepad(self, prediction: list[float]) -> None:
+        self.gamepad.reset()
+        self.gamepad.update()
+
+        if sum(prediction) == 0:
+            self.gamepad.left_joystick_float(x_value_float=0, y_value_float=-1.0)
+            self.gamepad.update()
+
+            return
+
         # self.gamepad.reset()
         # self.gamepad.update()
 
-        prediction[2] = 1.0
+        # print(prediction)
+
+        # prediction[2] = 1.0
 
         if prediction[3] >= 0.4:
             prediction[3] = 1.0
@@ -112,12 +123,15 @@ class MyoGesticModel(QObject):
         if prediction[4] >= 0.4:
             prediction[4] = 1.0
 
+        # if prediction[4] == 1.0:
+        #     prediction[2] = 0.0
+
         # prediction[2] = self.custom_log(prediction[2])
         # prediction[3] = self.custom_log(prediction[3])
         # prediction[4] = self.custom_log(prediction[4])
 
         self.gamepad.left_joystick_float(
-            x_value_float=-prediction[3] + prediction[4], y_value_float=-prediction[2]
+            x_value_float=-prediction[2] + prediction[4], y_value_float=-1.0
         )
         self.gamepad.update()
 
@@ -128,11 +142,21 @@ class MyoGesticModel(QObject):
         # emit the input as a signal
         self.predicted_emg_signal.emit(input)
 
+        prediction = prediction_function(self.model, input, self.is_classifier)
         if self.is_classifier:
-            prediction = prediction_function(self.model, input, self.is_classifier)
-
             if prediction == -1:
                 return "", "", -1, None
+
+            to_emit = (
+                [0.0]
+                + [0.0]
+                + [1.0 if prediction == 1 else 0.0]
+                + [1.0 if prediction == 3 else 0.0]
+                + [1.0 if prediction == 4 else 0.0]
+                + [0.0, 0.0, 0.0, 0.0]
+            )
+
+            self.gamepad_signal.emit(to_emit)
 
             return (
                 self.model_prediction_to_interface_map[prediction],
@@ -140,28 +164,26 @@ class MyoGesticModel(QObject):
                 prediction,
                 None,
             )
+        else:
+            self.past_predictions.append(prediction)
+            if len(self.past_predictions) > 555:
+                self.past_predictions.pop(0)
 
-        prediction = prediction_function(self.model, input, self.is_classifier)
+                # real-time savitzky-golay filter
+                # print(selected_real_time_filter)
+                prediction = CONFIG_REGISTRY.real_time_filters_map[
+                    selected_real_time_filter
+                ](self.past_predictions)
+                # prediction =
+                prediction = list(prediction[-1])
 
-        self.past_predictions.append(prediction)
-        if len(self.past_predictions) > 555:
-            self.past_predictions.pop(0)
+            prediction = [prediction[0]] + [0.0] + prediction[1:] + [0.0, 0.0, 0.0]
 
-            # real-time savitzky-golay filter
-            # print(selected_real_time_filter)
-            prediction = CONFIG_REGISTRY.real_time_filters_map[
-                selected_real_time_filter
-            ](self.past_predictions)
-            # prediction =
-            prediction = list(prediction[-1])
+            prediction = list(np.clip(prediction, 0, 1))
 
-        prediction = [prediction[0]] + [0.0] + prediction[1:] + [0.0, 0.0, 0.0]
+            # self.gamepad_signal.emit(prediction)
 
-        prediction = list(np.clip(prediction, 0, 1))
-
-        self.gamepad_signal.emit(prediction)
-
-        return str(prediction), "", prediction, None
+            return str(prediction), "", prediction, None
 
     def save(self, model_path: str) -> dict[str, Union[str, Any]]:
         self.model_information["model_params"] = self.model_params
@@ -189,6 +211,11 @@ class MyoGesticModel(QObject):
             model_class(**self.model_information["model_params"]),  # noqa
         )
 
-        self.gamepad = vg.VX360Gamepad()
+        try:
+            self.gamepad = vg.VX360Gamepad()
+        except Exception as e:
+            self.logger.log(
+                f"Gamepad not connected: {e}. If on linux try to set the permissions to the gamepad device."
+            )
 
         return self.model_information
