@@ -349,7 +349,7 @@ The function takes the following arguments:
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** (0 minutes 0.887 seconds)
+   **Total running time of the script:** (0 minutes 0.904 seconds)
 
 **Estimated memory usage:**  17 MB
 

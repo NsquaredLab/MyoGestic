@@ -27,7 +27,7 @@ This tutorial will guide you through the process of using MyoGestic to train a m
 
 Tutorial Slides
 ---------------
-:pdfembed:`src:../../html/_static/MyoGestic_Tutorial.pdf#view=Fit#toolbar=0#statusbar=0#navpanes=0, height:540, width:960, align:middle`
+:pdfembed:`src:../_static/MyoGestic_Tutorial.pdf#view=Fit#toolbar=0#statusbar=0#navpanes=0, height:540, width:960, align:middle`
 
 
 Tutorial Video
