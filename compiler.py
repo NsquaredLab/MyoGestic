@@ -62,12 +62,12 @@ def compile():
         r"--workpath=bin\build",
         "--name=MyoGestic",
         # "--icon=videoIcon.ico",
-        f"--add-data={data_file1};{data_file1_sec}",
-        f"--add-data={data_file2};{data_file2_sec}",
-        f"--add-data={data_file3};{data_file3_sec}",
+        f"--add-data={data_file1}:{data_file1_sec}",
+        f"--add-data={data_file2}:{data_file2_sec}",
+        f"--add-data={data_file3}:{data_file3_sec}",
         "--hidden-import=vispy.ext._bundled.six",
         "--hidden-import=vispy.app.backends._pyside6",
-        f"--add-data={unity_folder};dist",
+        f"--add-data={unity_folder}:dist",
     ]
 
     # Add Unity executables to the PyInstaller arguments
@@ -75,7 +75,7 @@ def compile():
     #     pyinstaller_args.append(f"--add-binary={exe_src};{exe_dst}")
 
     # Run PyInstaller with the constructed arguments
-    PyInstaller.__main__.run_monitoring(pyinstaller_args)
+    PyInstaller.__main__.run(pyinstaller_args)
 
 
 if __name__ == "__main__":
