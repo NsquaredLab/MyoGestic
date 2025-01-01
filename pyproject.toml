@@ -20,6 +20,7 @@ biosignal-device-interface = {git = "https://github.com/NsquaredLab/Biosignal-De
 myoverse = {git = "https://github.com/NsquaredLab/MyoVerse.git"}
 tornado = "^6.4.2"
 aiohttp = "^3.11.7"
+shiboken6 = "6.8.1"
 
 [tool.poetry.group.dev]
 optional = true
