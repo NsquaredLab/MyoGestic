@@ -59,20 +59,14 @@ class Protocol(QObject):
             OnlineProtocol(self.main_window),
         ]
 
-    def _protocol_record_toggled(self, checked: bool) -> None:
+    def _protocol_toggled(self, index: int, checked: bool) -> None:
         if checked:
-            self.protocol_mode_stacked_widget.setCurrentIndex(0)
-            self.current_protocol = self.available_protocols[0]
+            self.protocol_mode_stacked_widget.setCurrentIndex(index)
+            self.current_protocol = self.available_protocols[index]
 
-    def _protocol_training_toggled(self, checked: bool) -> None:
-        if checked:
-            self.protocol_mode_stacked_widget.setCurrentIndex(1)
-            self.current_protocol = self.available_protocols[1]
-
-    def _protocol_online_toggled(self, checked: bool) -> None:
-        if checked:
-            self.protocol_mode_stacked_widget.setCurrentIndex(2)
-            self.current_protocol = self.available_protocols[2]
+    def _pass_on_selected_visual_interface(self) -> None:
+        for protocol in self.available_protocols:
+            protocol.selected_visual_interface = self.main_window.selected_visual_interface
 
     def _setup_protocol_ui(self):
         self.protocol_mode_stacked_widget = (
@@ -83,14 +77,13 @@ class Protocol(QObject):
             self.main_window.ui.protocolRecordRadioButton
         )
         self.protocol_record_radio_button.setChecked(True)
-        self.protocol_record_radio_button.toggled.connect(self._protocol_record_toggled)
+        self.protocol_record_radio_button.toggled.connect(lambda checked: self._protocol_toggled(0, checked))
         self.protocol_training_radio_button = (
             self.main_window.ui.protocolTrainingRadioButton
         )
-        self.protocol_training_radio_button.toggled.connect(
-            self._protocol_training_toggled
-        )
+        self.protocol_training_radio_button.toggled.connect(lambda checked: self._protocol_toggled(1, checked))
+
         self.protocol_online_radio_button = (
             self.main_window.ui.protocolOnlineRadioButton
         )
-        self.protocol_online_radio_button.toggled.connect(self._protocol_online_toggled)
+        self.protocol_online_radio_button.toggled.connect(lambda checked: self._protocol_toggled(2, checked))

@@ -7,17 +7,22 @@ from typing import TYPE_CHECKING
 import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
-from PySide6.QtWidgets import QCheckBox, QLabel, QMainWindow
+from PySide6.QtWidgets import QCheckBox, QLabel, QMainWindow, QGroupBox, QVBoxLayout
 from biosignal_device_interface.constants.devices.core.base_device_constants import (
     DeviceType,
 )
 
-from myogestic.gui.main_window import Ui_MyoGestic
+from myogestic.gui.main_window_v2 import Ui_MyoGestic
+from myogestic.gui.biosignal import Ui_BioSignalInterface
 from myogestic.gui.protocols.protocol import Protocol
 from myogestic.gui.widgets.logger import CustomLogger
 from myogestic.gui.widgets.output import VirtualHandInterface
 from myogestic.utils.constants import BASE_PATH
-from myogestic.utils.config import _set_config_registry # noqa
+from myogestic.utils.config import (
+    _set_config_registry,
+    custom_message_handler,
+    CONFIG_REGISTRY,
+)  # noqa
 
 if TYPE_CHECKING:
     from biosignal_device_interface.gui.device_template_widgets.otb.otb_devices_widget import (
@@ -26,6 +31,8 @@ if TYPE_CHECKING:
     from biosignal_device_interface.gui.plot_widgets.biosignal_plot_widget import (
         BiosignalPlotWidget,
     )
+
+from PySide6.QtCore import qInstallMessageHandler, QtMsgType
 
 
 class MyoGestic(QMainWindow):
@@ -81,6 +88,9 @@ class MyoGestic(QMainWindow):
         self.ui = Ui_MyoGestic()
         self.ui.setupUi(self)
 
+        # Install the custom message handler
+        qInstallMessageHandler(custom_message_handler)
+
         # Logging
         self.update_fps_label: QLabel = self.ui.appUpdateFPSLabel
         self.update_fps_label.setText("")
@@ -101,7 +111,12 @@ class MyoGestic(QMainWindow):
         self.display_time = self.ui.timeShownDoubleSpinBox.value()
 
         # Device Setup
-        self.device_widget: OTBDevicesWidget = self.ui.devicesWidget
+        self.bio_signal_interface = Ui_BioSignalInterface()
+        self.bio_signal_interface.setupUi(self)
+        self.device_widget: OTBDevicesWidget = self.bio_signal_interface.devicesWidget
+
+        self.ui.setupVerticalLayout.addWidget(self.bio_signal_interface.groupBox)
+
         self.device_widget.biosignal_data_arrived.connect(self.update)
         self.device_widget.configure_toggled.connect(self._prepare_plot)
 
@@ -118,8 +133,23 @@ class MyoGestic(QMainWindow):
         status_bar = self.ui.statusbar
         status_bar.showMessage(f"Data path: {Path.cwd() / BASE_PATH}")
 
+        # Visual Interface(s) Setup
+        self.ui.visualInterfacesGroupBox = QGroupBox("Visual Interfaces")
+        self.ui.visualInterfacesGroupBox.setObjectName("visualInterfacesGroupBox")
+        self.ui.visualInterfacesVerticalLayout = QVBoxLayout()
+        self.ui.setupVerticalLayout.addWidget(self.ui.visualInterfacesGroupBox)
+        self.ui.visualInterfacesGroupBox.setLayout(
+            self.ui.visualInterfacesVerticalLayout
+        )
+        self.ui.visualInterfacesVerticalLayout.setContentsMargins(*([15] * 4))
+
+        self.selected_visual_interface = None
+        self.visual_interfaces = {}
+        for name, main_class in CONFIG_REGISTRY.visual_interfaces_map.items():
+            self.visual_interfaces[name] = main_class(self, name=name)
+
         # Output Setup
-        self.virtual_hand_interface = VirtualHandInterface(self)
+        # self.virtual_hand_interface = VirtualHandInterface(self)
 
         # Protocol Setup
         self.protocol = Protocol(self)
@@ -134,6 +164,34 @@ class MyoGestic(QMainWindow):
         # Toggle plotting shortcut
         toggle_plotting = QShortcut(QKeySequence(Qt.CTRL | Qt.Key_T), self)
         toggle_plotting.activated.connect(self.toggle_vispy_plot_check_box.toggle)
+
+    def _toggle_selected_visual_interface(self, name: str) -> None:
+        """
+        Toggle the selected visual interface.
+
+        This methods sets all other visual interfaces to disabled and enables the selected visual interface.
+
+        Parameters
+        ----------
+        name : str
+            Name of the visual interface to toggle.
+
+        Returns
+        -------
+        None
+        """
+        if self.selected_visual_interface:
+            for visual_interface in self.visual_interfaces.values():
+                visual_interface.enable()
+            self.selected_visual_interface = None
+        else:
+            for visual_interface in self.visual_interfaces.values():
+                if visual_interface.name != name:
+                    visual_interface.disable()
+            self.selected_visual_interface = self.visual_interfaces[name]
+
+        self.protocol._pass_on_selected_visual_interface()
+
 
     def _update_bad_channels(self, bad_channels: np.ndarray) -> None:
         """
@@ -242,5 +300,8 @@ class MyoGestic(QMainWindow):
         Notes
         """
         self.device_widget.closeEvent(event)
-        self.virtual_hand_interface.closeEvent(event)
+
+        for visual_interface in self.visual_interfaces.values():
+            visual_interface.close_event(event)
+
         super().closeEvent(event)
