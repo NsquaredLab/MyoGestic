@@ -86,14 +86,8 @@ unchangeable_parameters = {"penalty": "l2"}
 
 from myogestic.utils.config import CONFIG_REGISTRY
 
-CONFIG_REGISTRY.register_model(
-    model_name="Logistic Regression",
-    model_class=LogisticRegression,
-    is_classifier=True,
-    save_function=sklearn_models.save,
-    load_function=sklearn_models.load,
-    train_function=sklearn_models.train,
-    predict_function=sklearn_models.predict,
-    changeable_parameters=changeable_parameters,
-    unchangeable_parameters=unchangeable_parameters,
-)
+CONFIG_REGISTRY.register_model(name="Logistic Regression", model_class=LogisticRegression, is_classifier=True,
+                               save_function=sklearn_models.save, load_function=sklearn_models.load,
+                               train_function=sklearn_models.train, predict_function=sklearn_models.predict,
+                               changeable_parameters=changeable_parameters,
+                               unchangeable_parameters=unchangeable_parameters)

@@ -1,29 +1,18 @@
+import contextlib
 import copy
 from typing import TypedDict, Union, Dict, Type, Callable, Any, Literal, Optional
 
-import numpy as np
-from catboost import CatBoostClassifier, CatBoostRegressor
-from catboost.utils import get_gpu_device_count
 from myoverse.datasets.filters._template import FilterBaseClass  # noqa
-from myoverse.datasets.filters.generic import IdentityFilter
-from myoverse.datasets.filters.temporal import (
-    RMSFilter,
-    MAVFilter,
-    IAVFilter,
-    VARFilter,
-    WFLFilter,
-    ZCFilter,
-    SSCFilter,
-)
-from myoverse.models.definitions.raul_net.online.v16 import RaulNetV16
-from scipy.ndimage import gaussian_filter
-from scipy.signal import savgol_filter
-from sklearn.ensemble import AdaBoostClassifier
-from sklearn.gaussian_process import GaussianProcessClassifier
-from sklearn.linear_model import LinearRegression
-from sklearn.neural_network import MLPClassifier
 
-from myogestic.models.definitions import sklearn_models, catboost_models, raulnet_models
+from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
+
+
+def custom_message_handler(mode, context, message):
+    # Suppress the specific warning
+    if "QLayout: Attempting to add QLayout" in message:
+        return
+    # Print other messages to the console
+    print(f"{mode}: {message}")
 
 
 class IntParameter(TypedDict):
@@ -92,11 +81,11 @@ class Registry:
 
         self.real_time_filters_map: Dict[str, callable] = {}
 
-        self.monitoring_widgets_map: Dict[str, Type[_MonitoringWidgetBaseClass]] = {}
+        self.visual_interfaces_map: Dict[str, Type[VisualInterfaceTemplate]] = {}
 
     def register_model(
         self,
-        model_name: str,
+        name: str,
         model_class: Type,
         is_classifier: bool,
         save_function: Callable,
@@ -113,7 +102,7 @@ class Registry:
 
         Parameters
         ----------
-        model_name : str
+        name : str
             The name of the model.
         model_class : type
             The class of the model.
@@ -137,26 +126,26 @@ class Registry:
         ValueError
             If the model is already registered.
         """
-        if model_name in self.models_map:
+        if name in self.models_map:
             raise ValueError(
-                f'Model "{model_name}" is already registered. Please choose a different name.'
+                f'Model "{name}" is already registered. Please choose a different name.'
             )
 
-        self.models_map[model_name] = (model_class, is_classifier)
+        self.models_map[name] = (model_class, is_classifier)
 
-        self.models_functions_map[model_name] = {
+        self.models_functions_map[name] = {
             "save": save_function,
             "load": load_function,
             "train": train_function,
             "predict": predict_function,
         }
 
-        self.models_parameters_map[model_name] = {
+        self.models_parameters_map[name] = {
             "changeable": changeable_parameters or {},
             "unchangeable": unchangeable_parameters or {},
         }
 
-    def register_feature(self, feature_name: str, feature: Type[FilterBaseClass]):
+    def register_feature(self, name: str, feature: Type[FilterBaseClass]):
         """
         Register a feature in the registry.
 
@@ -164,7 +153,7 @@ class Registry:
 
         Parameters
         ----------
-        feature_name : str
+        name : str
             The name of the feature.
         feature : Type[FilterBaseClass]
             The feature to register.
@@ -174,16 +163,16 @@ class Registry:
         ValueError
             If the feature is already registered
         """
-        if feature_name in self.features_map:
+        if name in self.features_map:
             raise ValueError(
-                f'Feature "{feature_name}" is already registered. Please choose a different name.'
+                f'Feature "{name}" is already registered. Please choose a different name.'
             )
 
-        feature.name = feature_name
+        feature.name = name
 
-        self.features_map[feature_name] = copy.deepcopy(feature)
+        self.features_map[name] = copy.deepcopy(feature)
 
-    def register_real_time_filter(self, filter_name: str, filter_function: callable):
+    def register_real_time_filter(self, name: str, function: callable):
         """
         Register a real-time filter in the registry.
 
@@ -191,9 +180,9 @@ class Registry:
 
         Parameters
         ----------
-        filter_name : str
+        name : str
             The name of the filter.
-        filter_function : callable
+        function : callable
             The filter function.
 
         Raises
@@ -201,12 +190,39 @@ class Registry:
         ValueError
             If the filter is already registered.
         """
-        if filter_name in self.real_time_filters_map:
+        if name in self.real_time_filters_map:
             raise ValueError(
-                f'Filter "{filter_name}" is already registered. Please choose a different name.'
+                f'Filter "{name}" is already registered. Please choose a different name.'
             )
 
-        self.real_time_filters_map[filter_name] = filter_function
+        self.real_time_filters_map[name] = function
+
+    def register_visual_interface(
+        self, name: str, main_class: Type[VisualInterfaceTemplate]
+    ):
+        """
+        Register a visual interface in the registry.
+
+         .. note:: The output modality name must be unique.
+
+         Parameters
+         ----------
+         name : str
+             The name of the visual interface.
+         main_class : Type[VisualInterfaceTemplate]
+             The main class of the visual interface. Must inherit from `VisualInterfaceTemplate`.
+
+         Raises
+         ------
+         ValueError
+             If the visual interface is already registered.
+        """
+        if name in self.visual_interfaces_map:
+            raise ValueError(
+                f'Visual interface "{name}" is already registered. Please choose a different name.'
+            )
+
+        self.visual_interfaces_map[name] = main_class
 
 
 # ------------------------------------------------------------------------------
@@ -217,166 +233,7 @@ if "CONFIG_REGISTRY" not in globals():
 def _set_config_registry() -> None:
     """
     Set the global CONFIG_REGISTRY.
-
     """
-    # Register models
-    CONFIG_REGISTRY.register_model(
-        "RaulNet Regressor",
-        RaulNetV16,
-        False,
-        raulnet_models.save,
-        raulnet_models.load,
-        raulnet_models.train,
-        raulnet_models.predict,
-        unchangeable_parameters={
-            "learning_rate": 1e-4,
-            "nr_of_input_channels": 1,
-            "input_length__samples": 360,
-            "nr_of_outputs": 5,
-            "nr_of_electrode_grids": 1,
-            "nr_of_electrodes_per_grid": 32,
-            "cnn_encoder_channels": (64, 32, 32),
-            "mlp_encoder_channels": (128, 128),
-            "event_search_kernel_length": 31,
-            "event_search_kernel_stride": 8,
-        },
-    )
-
-    CONFIG_REGISTRY.register_model(
-        "RaulNet Regressor per Finger",
-        RaulNetV16,
-        False,
-        raulnet_models.save_per_finger,
-        raulnet_models.load_per_finger,
-        raulnet_models.train_per_finger,
-        raulnet_models.predict_per_finger,
-        unchangeable_parameters={
-            "learning_rate": 1e-4,
-            "nr_of_input_channels": 1,
-            "input_length__samples": 360,
-            "nr_of_outputs": 1,
-            "nr_of_electrode_grids": 1,
-            "nr_of_electrodes_per_grid": 32,
-            "cnn_encoder_channels": (64, 32, 32),
-            "mlp_encoder_channels": (128, 128),
-            "event_search_kernel_length": 31,
-            "event_search_kernel_stride": 8,
-        },
-    )
-
-    CONFIG_REGISTRY.register_model(
-        "CatBoost Classifier",
-        CatBoostClassifier,
-        True,
-        catboost_models.save,
-        catboost_models.load,
-        catboost_models.train,
-        catboost_models.predict,
-        {
-            "iterations": {
-                "start_value": 10,
-                "end_value": 10000,
-                "step": 100,
-                "default_value": 1000,
-            },
-            "l2_leaf_reg": {
-                "start_value": 1,
-                "end_value": 10,
-                "step": 1,
-                "default_value": 5,
-            },
-            "border_count": {
-                "start_value": 1,
-                "end_value": 255,
-                "step": 1,
-                "default_value": 254,
-            },
-        },
-        {
-            "task_type": "GPU" if get_gpu_device_count() > 0 else "CPU",
-            "train_dir": None,
-        },
-    )
-
-    CONFIG_REGISTRY.register_model(
-        "AdaBoost Classifier",
-        AdaBoostClassifier,
-        True,
-        sklearn_models.save,
-        sklearn_models.load,
-        sklearn_models.train,
-        sklearn_models.predict,
-        {
-            "n_estimators": {
-                "start_value": 10,
-                "end_value": 1000,
-                "step": 10,
-                "default_value": 100,
-            },
-            "learning_rate": {
-                "start_value": 0.1,
-                "end_value": 1,
-                "step": 0.1,
-                "default_value": 0.1,
-            },
-        },
-    )
-
-    CONFIG_REGISTRY.register_model(
-        "Linear Regression",
-        LinearRegression,
-        False,
-        sklearn_models.save,
-        sklearn_models.load,
-        sklearn_models.train,
-        sklearn_models.predict,
-        unchangeable_parameters={"fit_intercept": True},
-    )
-
-    CONFIG_REGISTRY.register_model(
-        "MLP Classifier",
-        MLPClassifier,
-        True,
-        sklearn_models.save,
-        sklearn_models.load,
-        sklearn_models.train,
-        sklearn_models.predict,
-        {
-            "hidden_layer_sizes": {
-                "start_value": 10,
-                "end_value": 1000,
-                "step": 10,
-                "default_value": 100,
-            },
-            "alpha": {
-                "start_value": 1e-4,
-                "end_value": 1,
-                "step": 1e-4,
-                "default_value": 1e-4,
-            },
-        },
-        {"activation": "relu"},
-    )
-
-    # Register features
-    CONFIG_REGISTRY.register_feature("Root Mean Square", RMSFilter)
-    CONFIG_REGISTRY.register_feature("Mean Absolute Value", MAVFilter)
-    CONFIG_REGISTRY.register_feature("Integrated Absolute Value", IAVFilter)
-    CONFIG_REGISTRY.register_feature("Variance", VARFilter)
-    CONFIG_REGISTRY.register_feature("Waveform Length", WFLFilter)
-    CONFIG_REGISTRY.register_feature("Zero Crossings", ZCFilter)
-    CONFIG_REGISTRY.register_feature("Slope Sign Change", SSCFilter)
-    CONFIG_REGISTRY.register_feature("Identity", IdentityFilter)
-
-    # Register real-time filters
-    CONFIG_REGISTRY.register_real_time_filter("Identity", lambda x: x)
-    CONFIG_REGISTRY.register_real_time_filter(
-        "Gaussian", lambda x: gaussian_filter(np.array(x), 15, 0, axes=(0,))
-    )
-
-    CONFIG_REGISTRY.register_real_time_filter(
-        "Savgol", lambda x: savgol_filter(np.array(x), 111, 3, axis=0)
-    )
-
-    # load user configuration
-    import myogestic.user_config  # noqa
+    with contextlib.suppress(ImportError):
+        import myogestic.default_config  # noqa
+        import myogestic.user_config  # noqa

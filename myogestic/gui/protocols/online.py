@@ -4,7 +4,7 @@ import pickle
 import time
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from PySide6.QtCore import QObject, Signal
@@ -91,6 +91,8 @@ class OnlineProtocol(QObject):
         super().__init__(parent)
 
         self.main_window = parent
+
+        self.selected_visual_interface: Optional[VisualInterfaceTemplate] = None
 
         # Initialize Protocol UI
         self._setup_protocol_ui()

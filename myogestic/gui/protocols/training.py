@@ -3,7 +3,7 @@ from __future__ import annotations
 import pickle
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from myogestic.gui.widgets.logger import LoggerLevel
+from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
 
 from myogestic.models.interface import MyoGesticModelInterface
 from myogestic.utils.config import UnchangeableParameter, CONFIG_REGISTRY
@@ -110,6 +111,8 @@ class PopupWindowParameters(QDialog):
 class PopupWindowFeatures(QDialog):
     def __init__(self, selected_features: list[str]):
         super().__init__()
+
+        self.selected_visual_interface: Optional[VisualInterfaceTemplate] = None
 
         self.selected_features = set(selected_features)
 

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SetupVirtualHandInterface</class>
+ <widget class="QWidget" name="SetupVirtualHandInterface">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>342</width>
+    <height>78</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Virtual Hand Interface</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_31">
+      <item row="0" column="4">
+       <widget class="QCheckBox" name="useExternalVirtualHandInterfaceCheckBox">
+        <property name="text">
+         <string>Use external Virtual Hand Interface</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QWidget" name="virtualHandInterfaceStatusWidget" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>10</width>
+          <height>10</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">border-radius: 5px;</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0" colspan="2">
+       <widget class="QPushButton" name="toggleVirtualHandInterfacePushButton">
+        <property name="text">
+         <string>Open</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

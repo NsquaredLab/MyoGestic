@@ -1,6 +1,9 @@
 import sys
 from pathlib import Path
 
+# PORTS
+MYOGESTIC_UDP_PORT = 1233
+
 BASE_PATH = Path("data")
 
 # _MEIPASS is a PyInstaller specific attribute that is set when the application is run as a frozen executable.
