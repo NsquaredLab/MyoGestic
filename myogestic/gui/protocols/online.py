@@ -8,12 +8,15 @@ from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QCheckBox, QFileDialog, QWidget, QVBoxLayout
+from PySide6.QtWidgets import QFileDialog
 
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.models.interface import MyoGesticModelInterface
 from myogestic.utils.config import CONFIG_REGISTRY
 from myogestic.utils.constants import PREDICTIONS_DIR_PATH, MODELS_DIR_PATH
+
+from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
+
 
 if TYPE_CHECKING:
     from myogestic.gui.myogestic import MyoGestic
@@ -174,7 +177,9 @@ class OnlineProtocol(QObject):
 
         vhi_input = vhi_prediction.encode("utf-8")
         # mechatronic_input = mechatronic_prediction.encode("utf-8")
-        self.main_window.virtual_hand_interface.output_message_signal.emit(vhi_input)
+        self.main_window.selected_visual_interface.outgoing_message_signal.emit(
+            vhi_input
+        )
         # self.main_window.virtual_hand_interface.mechatronic_output_message_signal.emit(
         #     mechatronic_input
         # )
@@ -229,7 +234,7 @@ class OnlineProtocol(QObject):
     def _toggle_recording(self):
         if self.online_record_toggle_push_button.isChecked():
             self.online_prediction_toggle_push_button.setEnabled(False)
-            self.main_window.virtual_hand_interface.input_message_signal.connect(
+            self.main_window.selected_visual_interface.incoming_message_signal.connect(
                 self.online_kinematics_update
             )
             self.buffer_emg_recording = []
@@ -240,7 +245,7 @@ class OnlineProtocol(QObject):
             self.online_record_toggle_push_button.setText("Stop Recording")
         else:
             self.online_prediction_toggle_push_button.setEnabled(True)
-            self.main_window.virtual_hand_interface.input_message_signal.disconnect(
+            self.main_window.selected_visual_interface.incoming_message_signal.disconnect(
                 self.online_kinematics_update
             )
             self.online_record_toggle_push_button.setText("Start Recording")
@@ -360,48 +365,48 @@ class OnlineProtocol(QObject):
             }
         )
 
-    def _setup_monitoring_widget(
-        self,
-        name_of_monitoring_widget: str,
-        monitoring_widget: Type[_MonitoringWidgetBaseClass],
-        state: int,
-    ) -> None:
-        if state.value == 2:
-            self.active_monitoring_widgets[name_of_monitoring_widget] = (
-                monitoring_widget(None, self.model_interface.model.predicted_emg_signal)
-            )
-            self.active_monitoring_widgets[name_of_monitoring_widget].show()
+    # def _setup_monitoring_widget(
+    #     self,
+    #     name_of_monitoring_widget: str,
+    #     monitoring_widget: Type[_MonitoringWidgetBaseClass],
+    #     state: int,
+    # ) -> None:
+    #     if state.value == 2:
+    #         self.active_monitoring_widgets[name_of_monitoring_widget] = (
+    #             monitoring_widget(None, self.model_interface.model.predicted_emg_signal)
+    #         )
+    #         self.active_monitoring_widgets[name_of_monitoring_widget].show()
+    #
+    #         self.model_information_signal.connect(
+    #             self.active_monitoring_widgets[
+    #                 name_of_monitoring_widget
+    #             ].update_model_information
+    #         )
+    #
+    #         self._send_model_information()
+    #
+    #     else:
+    #         self.active_monitoring_widgets[name_of_monitoring_widget].close()
+    #         del self.active_monitoring_widgets[name_of_monitoring_widget]
 
-            self.model_information_signal.connect(
-                self.active_monitoring_widgets[
-                    name_of_monitoring_widget
-                ].update_model_information
-            )
-
-            self._send_model_information()
-
-        else:
-            self.active_monitoring_widgets[name_of_monitoring_widget].close()
-            del self.active_monitoring_widgets[name_of_monitoring_widget]
-
-    def _setup_monitoring_widgets_ui(self) -> None:
-        container_widget = QWidget()
-
-        layout = QVBoxLayout(container_widget)
-        # For each monitoring widget in CONFIG_REGISTRY.monitoring_widgets add a push button to the monitoring list
-        for k, v in CONFIG_REGISTRY.monitoring_widgets_map.items():
-            monitoring_push_button = QCheckBox(k)
-            monitoring_push_button.checkStateChanged.connect(
-                partial(
-                    self._setup_monitoring_widget,
-                    k,
-                    v,
-                )
-            )
-
-            layout.addWidget(monitoring_push_button)
-
-        self.monitoring_widgets_scroll_area.setWidget(container_widget)
+    # def _setup_monitoring_widgets_ui(self) -> None:
+    #     container_widget = QWidget()
+    #
+    #     layout = QVBoxLayout(container_widget)
+    #     # For each monitoring widget in CONFIG_REGISTRY.monitoring_widgets add a push button to the monitoring list
+    #     for k, v in CONFIG_REGISTRY.monitoring_widgets_map.items():
+    #         monitoring_push_button = QCheckBox(k)
+    #         monitoring_push_button.checkStateChanged.connect(
+    #             partial(
+    #                 self._setup_monitoring_widget,
+    #                 k,
+    #                 v,
+    #             )
+    #         )
+    #
+    #         layout.addWidget(monitoring_push_button)
+    #
+    #     self.monitoring_widgets_scroll_area.setWidget(container_widget)
 
     def _setup_protocol_ui(self) -> None:
         self.online_load_model_group_box = self.main_window.ui.onlineLoadModelGroupBox

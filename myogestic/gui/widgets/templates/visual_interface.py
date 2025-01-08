@@ -27,10 +27,16 @@ class SetupUITemplate(QObject, metaclass=MetaQObjectABC):
     outgoing_message_signal = Signal(QByteArray)
     incoming_message_signal = Signal(np.ndarray)
 
-    def __init__(self, main_window: Optional[QMainWindow] = None, name: str = "SetupUI", ui: object = None):
+    def __init__(
+        self,
+        main_window: QMainWindow = None,
+        name: str = "SetupUI",
+        ui: object = None,
+    ):
         super().__init__()
         self.main_window = main_window
         self.name = name
+
         if not ui:
             raise ValueError("The UI object must be provided.")
         self.ui = ui
@@ -42,7 +48,7 @@ class SetupUITemplate(QObject, metaclass=MetaQObjectABC):
         pass
 
     @abstractmethod
-    def start(self) -> None:
+    def start_interface(self) -> None:
         """Start the visual interface.
 
         This method should be called when the visual interface is started.
@@ -52,7 +58,7 @@ class SetupUITemplate(QObject, metaclass=MetaQObjectABC):
         pass
 
     @abstractmethod
-    def stop(self) -> None:
+    def stop_interface(self) -> None:
         """Stop the visual interface.
 
         This method should be called when the visual interface is stopped.
@@ -62,7 +68,7 @@ class SetupUITemplate(QObject, metaclass=MetaQObjectABC):
         pass
 
     @abstractmethod
-    def kill(self) -> None:
+    def interface_was_killed(self) -> None:
         """Kill the visual interface.
 
         This method should be called when the visual interface is killed.
@@ -76,14 +82,14 @@ class SetupUITemplate(QObject, metaclass=MetaQObjectABC):
         """Close the interface and stop necessary processes."""
         pass
 
-    def enable(self):
+    def enable_ui(self):
         """Enable the UI elements.
 
         .. important:: This method assumes that the UI elements are in a `groupBox` widget.
         """
         self.ui.groupBox.setEnabled(True)
 
-    def disable(self):
+    def disable_ui(self):
         """Disable the UI elements.
 
         .. important:: This method assumes that the UI elements are in a `groupBox` widget.
@@ -119,14 +125,22 @@ class RecordingUITemplate(QObject, metaclass=MetaQObjectABC):
         self.ui = ui
         self.ui.setupUi(self.main_window)
 
+        self.record_emg_progress_bar = self.main_window.ui.recordEMGProgressBar
+        self.record_emg_progress_bar.setValue(0)
+
+        # check if groundTruthProgressBar is in the UI
+        if hasattr(self.ui, "groundTruthProgressBar"):
+            self.ground_truth_recording_time = 0
+            self.record_ground_truth_progress_bar = self.ui.groundTruthProgressBar
+            self.record_ground_truth_progress_bar.setValue(0)
+        else:
+            raise ValueError(
+                "A UI element named 'groundTruthProgressBar' must be provided in the ui file!"
+            )
+
         if not incoming_message_signal:
             raise ValueError("The incoming message signal must be provided.")
         self.incoming_message_signal = incoming_message_signal
-
-        self.ground_truth_recording_time = 0
-        self.record_ground_truth_progress_bar = self.ui.groundTruthProgressBar
-        self.record_emg_progress_bar = self.main_window.ui.recordEMGProgressBar
-        self.record_emg_progress_bar.setValue(0)
 
     @abstractmethod
     def initialize_ui_logic(self) -> None:
@@ -153,8 +167,6 @@ class RecordingUITemplate(QObject, metaclass=MetaQObjectABC):
         progress_bar.setValue(min(value / total * 100, 100))
 
 
-
-
 class VisualInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
     """
     Base class for visual interfaces in the MyoGestic application.
@@ -178,21 +190,36 @@ class VisualInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         self.main_window = main_window
         self.name = name
         self.setup_interface_ui = setup_interface_ui(main_window, name)
+
+        try:
+            self.incoming_message_signal = (
+                self.setup_interface_ui.incoming_message_signal
+            )
+            self.outgoing_message_signal = (
+                self.setup_interface_ui.outgoing_message_signal
+            )
+        except AttributeError:
+            raise ValueError(
+                "The setup interface must have incoming and outgoing message signals."
+            )
+
         self.recording_interface_ui = recording_interface_ui(
-            main_window, name, incoming_message_signal=self.setup_interface_ui.incoming_message_signal
+            main_window,
+            name,
+            incoming_message_signal=self.incoming_message_signal,
         )
 
-    def enable(self) -> None:
+    def enable_ui(self) -> None:
         """Enable all UI elements."""
         if self.setup_interface_ui:
-            self.setup_interface_ui.enable()
+            self.setup_interface_ui.enable_ui()
         if self.recording_interface_ui:
             self.recording_interface_ui.enable()
 
-    def disable(self) -> None:
+    def disable_ui(self) -> None:
         """Disable all UI elements."""
         if self.setup_interface_ui:
-            self.setup_interface_ui.disable()
+            self.setup_interface_ui.disable_ui()
         if self.recording_interface_ui:
             self.recording_interface_ui.disable()
 

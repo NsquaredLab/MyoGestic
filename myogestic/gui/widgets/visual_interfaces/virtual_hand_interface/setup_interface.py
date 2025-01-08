@@ -10,7 +10,6 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtNetwork import QUdpSocket, QHostAddress
 from PySide6.QtWidgets import QCheckBox, QPushButton, QWidget
 
-from myogestic.gui.protocols.protocol import Protocol
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.gui.widgets.templates.visual_interface import SetupUITemplate
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
@@ -28,6 +27,7 @@ STREAMING_FREQUENCY = 32
 # Ports
 VIRTUAL_HAND_INTERFACE_UDP_PORT = 1236
 
+
 class VirtualHandInterfaceSetupUI(SetupUITemplate):
     def __init__(self, parent, name="VirtualHandInterface"):
         super().__init__(parent, name, ui=Ui_SetupVirtualHandInterface())
@@ -39,7 +39,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
         self._setup_timers()
 
         self.unity_process = QProcess()
-        self.unity_process.finished.connect(self.kill)
+        self.unity_process.finished.connect(self.interface_was_killed)
 
         # Toggle the selected visual interface when the Unity process is started or finished
         self.unity_process.finished.connect(
@@ -49,7 +49,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
             lambda: self.main_window._toggle_selected_visual_interface(self.name)
         )
 
-        self.record_protocol = Protocol(self.main_window).available_protocols[0]
+        self.record_protocol = self.main_window.protocol.available_protocols[0]
 
         # Get OS of the user
         self.unity_process.setProgram(str(self._get_unity_executable()))
@@ -68,22 +68,31 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
 
     @staticmethod
     def _get_unity_executable() -> Path:
-        base_dir = Path("dist") if not hasattr(sys, "_MEIPASS") else Path(sys._MEIPASS, "dist")
+        base_dir = (
+            Path("dist") if not hasattr(sys, "_MEIPASS") else Path(sys._MEIPASS, "dist")
+        )
         unity_executable_paths = {
             "Windows": base_dir / "windows" / "Virtual Hand Interface.exe",
-            "Darwin": base_dir / "macOS" / "Virtual Hand Interface.app" / "Contents" / "MacOS" / "Virtual Hand Interface",
+            "Darwin": base_dir
+            / "macOS"
+            / "Virtual Hand Interface.app"
+            / "Contents"
+            / "MacOS"
+            / "Virtual Hand Interface",
             "Linux": base_dir / "linux" / "VirtualHandInterface.x86_64",
         }
 
         executable = unity_executable_paths.get(platform.system())
         if executable and executable.exists():
             return executable
-        raise FileNotFoundError(f"Unity executable not found for platform {platform.system()}.")
+        raise FileNotFoundError(
+            f"Unity executable not found for platform {platform.system()}."
+        )
 
     def _setup_timers(self):
         self.status_request_timer = QTimer(self)
         self.status_request_timer.setInterval(2000)
-        self.status_request_timer.timeout.connect(self._write_status_message)
+        self.status_request_timer.timeout.connect(self.write_status_message)
 
         self.status_request_timeout_timer = QTimer(self)
         self.status_request_timeout_timer.setSingleShot(True)
@@ -97,17 +106,13 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
             self.ui.toggleVirtualHandInterfacePushButton
         )
         self.toggle_virtual_hand_interface_push_button.clicked.connect(
-            self._toggle_virtual_hand_interface
+            self.toggle_virtual_hand_interface
         )
         self.virtual_hand_interface_status_widget: QWidget = (
             self.ui.virtualHandInterfaceStatusWidget
         )
-        self.virtual_hand_interface_not_connected_stylesheet = (
-            RED_BACKGROUND
-        )
-        self.virtual_hand_interface_connected_stylesheet = (
-            GREEN_BACKGROUND
-        )
+        self.virtual_hand_interface_not_connected_stylesheet = RED_BACKGROUND
+        self.virtual_hand_interface_connected_stylesheet = GREEN_BACKGROUND
         self.virtual_hand_interface_status_widget.setStyleSheet(
             self.virtual_hand_interface_not_connected_stylesheet
         )
@@ -116,21 +121,21 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
             self.ui.useExternalVirtualHandInterfaceCheckBox
         )
 
-    def start(self):
+    def start_interface(self):
         if not self.use_external_virtual_hand_interface_check_box.isChecked():
             self.unity_process.start()
             self.unity_process.waitForStarted()
         self.status_request_timer.start()
-        self._toggle_streaming()
+        self.toggle_streaming()
 
-    def stop(self):
+    def stop_interface(self):
         if not self.use_external_virtual_hand_interface_check_box.isChecked():
             self.unity_process.kill()
             self.unity_process.waitForFinished()
         self.status_request_timer.stop()
-        self._toggle_streaming()
+        self.toggle_streaming()
 
-    def kill(self) -> None:
+    def interface_was_killed(self) -> None:
         self.toggle_virtual_hand_interface_push_button.setChecked(False)
         self.toggle_virtual_hand_interface_push_button.setText("Open")
         self.use_external_virtual_hand_interface_check_box.setEnabled(True)
@@ -139,7 +144,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
         )
         self.is_connected = False
 
-    def close_event(self, event: QCloseEvent) -> None:
+    def close_event(self, _: QCloseEvent) -> None:
         try:
             if self.streaming_udp_socket:
                 self.streaming_udp_socket.close()
@@ -157,23 +162,23 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
             self.virtual_hand_interface_not_connected_stylesheet
         )
 
-    def _toggle_virtual_hand_interface(self):
+    def toggle_virtual_hand_interface(self):
         if self.toggle_virtual_hand_interface_push_button.isChecked():
             print("Opening Virtual Hand Interface")
-            self.start()
+            self.start_interface()
             self.use_external_virtual_hand_interface_check_box.setEnabled(False)
             self.toggle_virtual_hand_interface_push_button.setText("Close")
         else:
             print("Closing Virtual Hand Interface")
-            self.stop()
+            self.stop_interface()
             self.use_external_virtual_hand_interface_check_box.setEnabled(True)
             self.toggle_virtual_hand_interface_push_button.setText("Open")
 
-    def _toggle_streaming(self) -> None:
+    def toggle_streaming(self) -> None:
         if self.toggle_virtual_hand_interface_push_button.isChecked():
             self.streaming_udp_socket = QUdpSocket(self)
-            self.streaming_udp_socket.readyRead.connect(self._read_message)
-            self.outgoing_message_signal.connect(self._write_message)
+            self.streaming_udp_socket.readyRead.connect(self.read_message)
+            self.outgoing_message_signal.connect(self.write_message)
             self.streaming_udp_socket.bind(
                 QHostAddress(self.socket_ip), MYOGESTIC_UDP_PORT
             )
@@ -189,7 +194,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
                 self.virtual_hand_interface_not_connected_stylesheet
             )
 
-    def _write_message(self, message: QByteArray) -> None:
+    def write_message(self, message: QByteArray) -> None:
         if self.is_connected:
             if (
                 time.time() - self.last_message_time
@@ -209,7 +214,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
                     level=LoggerLevel.ERROR,
                 )
 
-    def _read_message(self) -> None:
+    def read_message(self) -> None:
         if self.toggle_virtual_hand_interface_push_button.isChecked():
             while self.streaming_udp_socket.hasPendingDatagrams():
                 datagram, _, port = self.streaming_udp_socket.readDatagram(
@@ -237,7 +242,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
                     np.array(ast.literal_eval(datagram.data().decode("utf-8")))
                 )
 
-    def _write_status_message(self) -> None:
+    def write_status_message(self) -> None:
         if self.toggle_virtual_hand_interface_push_button.isChecked():
             output_bytes = self.streaming_udp_socket.writeDatagram(
                 self.status_request.encode("utf-8"),
