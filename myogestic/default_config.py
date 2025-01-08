@@ -17,9 +17,10 @@ from scipy.signal import savgol_filter
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPClassifier
+from sklearn.svm import SVC
 
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
-    VirtualHandInterface
+    VirtualHandInterface,
 )
 from myogestic.models.definitions import raulnet_models, sklearn_models, catboost_models
 from myogestic.utils.config import CONFIG_REGISTRY
@@ -135,6 +136,31 @@ CONFIG_REGISTRY.register_model(
     sklearn_models.train,
     sklearn_models.predict,
     unchangeable_parameters={"fit_intercept": True},
+)
+
+CONFIG_REGISTRY.register_model(
+    "SVM Classifier",
+    SVC,
+    True,
+    sklearn_models.save,
+    sklearn_models.load,
+    sklearn_models.train,
+    sklearn_models.predict,
+    {
+        "C": {
+            "start_value": 1e-4,
+            "end_value": 1,
+            "step": 1e-4,
+            "default_value": 1e-2,
+        },
+        "gamma": {
+            "start_value": 1e-4,
+            "end_value": 1,
+            "step": 1e-4,
+            "default_value": 1e-2,
+        },
+    },
+    {"kernel": "rbf"},
 )
 
 CONFIG_REGISTRY.register_model(

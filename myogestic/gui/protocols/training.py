@@ -227,6 +227,8 @@ class TrainingProtocol(QObject):
 
         self.main_window = parent
 
+        print("TrainingProtocol")
+
         # Initialize Protocol UI
         self._setup_protocol_ui()
 

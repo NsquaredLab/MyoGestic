@@ -133,6 +133,9 @@ class MyoGestic(QMainWindow):
         status_bar = self.ui.statusbar
         status_bar.showMessage(f"Data path: {Path.cwd() / BASE_PATH}")
 
+        # Protocol Setup
+        self.protocol = Protocol(self)
+
         # Visual Interface(s) Setup
         self.ui.visualInterfacesGroupBox = QGroupBox("Visual Interfaces")
         self.ui.visualInterfacesGroupBox.setObjectName("visualInterfacesGroupBox")
@@ -149,10 +152,7 @@ class MyoGestic(QMainWindow):
             self.visual_interfaces[name] = main_class(self, name=name)
 
         # Output Setup
-        # self.virtual_hand_interface = VirtualHandInterface(self)
-
-        # Protocol Setup
-        self.protocol = Protocol(self)
+        # self.virtual_hand_interface = VirtualHandInterface(self
 
         # Preferences
         self.toggle_vispy_plot_check_box: QCheckBox = self.ui.toggleVispyPlotCheckBox
@@ -182,16 +182,15 @@ class MyoGestic(QMainWindow):
         """
         if self.selected_visual_interface:
             for visual_interface in self.visual_interfaces.values():
-                visual_interface.enable()
+                visual_interface.enable_ui()
             self.selected_visual_interface = None
         else:
             for visual_interface in self.visual_interfaces.values():
                 if visual_interface.name != name:
-                    visual_interface.disable()
+                    visual_interface.disable_ui()
             self.selected_visual_interface = self.visual_interfaces[name]
 
         self.protocol._pass_on_selected_visual_interface()
-
 
     def _update_bad_channels(self, bad_channels: np.ndarray) -> None:
         """
