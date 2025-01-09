@@ -149,6 +149,7 @@ def train(
 
     hparams = model.hparams
     hparams["input_length__samples"] = dataset["emg"].shape[-1]
+    hparams["nr_of_electrodes_per_grid"] = dataset["emg"].shape[-2]
 
     model = model.__class__(**hparams)
 

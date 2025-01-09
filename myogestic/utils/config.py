@@ -225,9 +225,6 @@ class Registry:
         self.visual_interfaces_map[name] = main_class
 
 
-# ------------------------------------------------------------------------------
-if "CONFIG_REGISTRY" not in globals():
-    CONFIG_REGISTRY = Registry()
 
 
 def _set_config_registry() -> None:
@@ -237,3 +234,8 @@ def _set_config_registry() -> None:
     with contextlib.suppress(ImportError):
         import myogestic.default_config  # noqa
         import myogestic.user_config  # noqa
+
+# ------------------------------------------------------------------------------
+if "CONFIG_REGISTRY" not in globals():
+    CONFIG_REGISTRY = Registry()
+    _set_config_registry()

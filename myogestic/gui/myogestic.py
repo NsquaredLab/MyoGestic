@@ -19,7 +19,6 @@ from myogestic.gui.widgets.logger import CustomLogger
 from myogestic.gui.widgets.output import VirtualHandInterface
 from myogestic.utils.constants import BASE_PATH
 from myogestic.utils.config import (
-    _set_config_registry,
     custom_message_handler,
     CONFIG_REGISTRY,
 )  # noqa
@@ -82,8 +81,6 @@ class MyoGestic(QMainWindow):
 
     def __init__(self):
         super().__init__()
-
-        _set_config_registry()
 
         self.ui = Ui_MyoGestic()
         self.ui.setupUi(self)
