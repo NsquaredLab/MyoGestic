@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
 from PySide6.QtCore import QObject
 
+from myogestic.user_config import CHANNELS
+
 
 def standardize_data(data: np.ndarray, mean: float, std: float) -> np.ndarray:
     return (data - mean) / std
@@ -86,7 +88,7 @@ class MyoGesticDataset(QObject):
             recording_bad_channels = recording["bad_channels"]
             bad_channels.extend(recording_bad_channels)
 
-            emg = recording["emg"]
+            emg = recording["emg"][CHANNELS]
             if len(recording_bad_channels) > 0:
                 emg = np.delete(emg, recording_bad_channels, axis=0)
 
@@ -203,7 +205,7 @@ class MyoGesticDataset(QObject):
     def preprocess_data(
         self, data: np.ndarray, bad_channels: list[int], selected_features
     ) -> np.ndarray:
-        self.emg_buffer.append(data)
+        self.emg_buffer.append(data[CHANNELS])
         if len(self.emg_buffer) > self.buffer_size:
             self.emg_buffer.pop(0)
 
@@ -266,6 +268,8 @@ class MyoGesticDataset(QObject):
             frame_data = np.concatenate(
                 [x for x in frame_data.output_representations.values()], axis=1
             )
+
+            #frame_data = frame_data.reshape(1, -1)
 
             return frame_data
 

@@ -5,6 +5,8 @@ from sklearn.multioutput import MultiOutputRegressor
 from myogestic.models.definitions import sklearn_models
 from myogestic.utils.config import CONFIG_REGISTRY
 
+CHANNELS = [0, 1]
+
 # Register models
 CONFIG_REGISTRY.register_model("Linear Regressor Per Finger",
                                lambda **params: MultiOutputRegressor(LinearRegression(**params)), False,
