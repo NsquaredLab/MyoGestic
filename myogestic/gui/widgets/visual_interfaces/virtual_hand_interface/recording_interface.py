@@ -105,7 +105,7 @@ class VirtualHandInterfaceRecordingUI(RecordingUITemplate):
         #     return False
 
         if (
-            not self.main_window.device_widget._get_current_widget().device._is_streaming
+            not self.main_window.device_widget._get_current_widget()._device._is_streaming
         ):
             self.main_window.logger.print(
                 "Biosignal device not streaming!", level=LoggerLevel.ERROR

@@ -1,3 +1,4 @@
+import numpy as np
 from myoverse.datasets.filters.temporal import RMSFilter
 from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression
 from sklearn.multioutput import MultiOutputRegressor
@@ -5,7 +6,7 @@ from sklearn.multioutput import MultiOutputRegressor
 from myogestic.models.definitions import sklearn_models
 from myogestic.utils.config import CONFIG_REGISTRY
 
-CHANNELS = [0, 1]
+CHANNELS = list(np.arange(9))
 
 # Register models
 CONFIG_REGISTRY.register_model("Linear Regressor Per Finger",

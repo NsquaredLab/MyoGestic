@@ -67,8 +67,10 @@ class MyoGesticModelInterface(QObject):
             bad_channels=bad_channels,
             selected_features=self.model.model_information["selected_features"],
         )
+
         if preprocessed_input is None:
             return "Bad channels detected", "", -1, None
+
         return self.model.predict(
             preprocessed_input, self.predict_function, selected_real_time_filter
         )

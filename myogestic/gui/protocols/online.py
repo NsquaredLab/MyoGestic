@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QFileDialog
 
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.models.interface import MyoGesticModelInterface
+from myogestic.user_config import CHANNELS
 from myogestic.utils.config import CONFIG_REGISTRY
 from myogestic.utils.constants import PREDICTIONS_DIR_PATH, MODELS_DIR_PATH
 
@@ -172,8 +173,11 @@ class OnlineProtocol(QObject):
         try:
             if prediction == -1:
                 return
-        except Exception:
+        except Exception as e:
             pass
+
+        #if self.model_interface.model.is_classifier:
+
 
         vhi_input = vhi_prediction.encode("utf-8")
         # mechatronic_input = mechatronic_prediction.encode("utf-8")
@@ -254,7 +258,7 @@ class OnlineProtocol(QObject):
 
     def _save_data(self) -> None:
         save_pickle_dict = {
-            "emg": np.hstack([data for _, data in self.buffer_emg_recording]),
+            "emg": np.stack([data for _, data in self.buffer_emg_recording], axis=-1),
             "emg_timings": np.array([time for time, _ in self.buffer_emg_recording]),
             "kinematics": np.vstack(
                 [data for _, data in self.buffer_kinematics_recording]
@@ -262,8 +266,8 @@ class OnlineProtocol(QObject):
             "kinematics_timings": np.array(
                 [time for time, _ in self.buffer_kinematics_recording]
             ),
-            "predictions": np.hstack(
-                [data for _, data in self.buffer_predictions_recording]
+            "predictions": np.stack(
+                 [data for _, data in self.buffer_predictions_recording], axis=-1
             ),
             "predictions_timings": np.array(
                 [time for time, _ in self.buffer_predictions_recording]
@@ -281,6 +285,7 @@ class OnlineProtocol(QObject):
                 self.main_window.current_bad_channels
                 + self.model_information["bad_channels"]
             ),
+            "channels": CHANNELS
         }
         now = datetime.now()
         formatted_now = now.strftime("%Y%m%d_%H%M%S%f")
