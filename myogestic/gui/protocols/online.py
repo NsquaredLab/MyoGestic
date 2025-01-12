@@ -11,6 +11,7 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QFileDialog
 
 from myogestic.gui.widgets.logger import LoggerLevel
+from myogestic.gui.widgets.templates.output_system import OutputSystemTemplate
 from myogestic.models.interface import MyoGesticModelInterface
 from myogestic.user_config import CHANNELS
 from myogestic.utils.config import CONFIG_REGISTRY
@@ -119,6 +120,9 @@ class OnlineProtocol(QObject):
         self.buffer_emg_recording: list[(float, np.ndarray)] = None
         self.buffer_kinematics_recording: list[(float, np.ndarray)] = None
         self.buffer_predictions_recording: list[(float, np.ndarray)] = None
+        self.buffer_prediction_before_filter_recording: list[(float, np.ndarray)] = None
+        self.buffer_predictions_after_filter_recording: list[(float, np.ndarray)] = None
+        self.buffer_selected_real_time_filter_recording: list[(float, str)] = None
         self.buffer_prediction_proba_recording: list[(float, np.ndarray)] = None
         self.start_time: float = None
 
@@ -135,6 +139,8 @@ class OnlineProtocol(QObject):
         )
 
         self.active_monitoring_widgets = {}
+
+        self.output_systems: dict[str, OutputSystemTemplate] = {}
 
     def _update_real_time_filter(self) -> None:
         filter_name = self.real_time_filter_combo_box.currentText()
@@ -155,10 +161,9 @@ class OnlineProtocol(QObject):
     def online_emg_update(self, data: np.ndarray) -> None:
         try:
             (
-                vhi_prediction,
-                mechatronic_prediction,
-                prediction,
-                prediction_proba,
+                prediction_before_filter,
+                prediction_after_filter,
+                selected_real_time_filter,
             ) = self.model_interface.predict(
                 data,
                 bad_channels=self.main_window.current_bad_channels,
@@ -171,32 +176,49 @@ class OnlineProtocol(QObject):
             return
 
         try:
-            if prediction == -1:
+            if prediction_before_filter == -1:
                 return
         except Exception as e:
             pass
 
-        #if self.model_interface.model.is_classifier:
+        if len(self.output_systems) == 0:
+            raise ValueError("No output systems available!")
 
-
-        vhi_input = vhi_prediction.encode("utf-8")
-        # mechatronic_input = mechatronic_prediction.encode("utf-8")
-        self.main_window.selected_visual_interface.outgoing_message_signal.emit(
-            vhi_input
+        prediction = (
+            prediction_before_filter
+            if prediction_after_filter is None
+            else prediction_after_filter
         )
+
+        for output_system in self.output_systems.values():
+            output_system.send_prediction(prediction)
+
         # self.main_window.virtual_hand_interface.mechatronic_output_message_signal.emit(
         #     mechatronic_input
         # )
 
         # Save buffer
         if self.online_record_toggle_push_button.isChecked():
-            self.buffer_emg_recording.append((time.time() - self.start_time, data))
-            self.buffer_predictions_recording.append(
-                (time.time() - self.start_time, prediction)
+            current_time = time.time()
+
+            self.buffer_emg_recording.append((current_time - self.start_time, data))
+
+            self.buffer_prediction_before_filter_recording.append(
+                (current_time - self.start_time, prediction_before_filter)
             )
-            self.buffer_prediction_proba_recording.append(
-                (time.time() - self.start_time, prediction_proba)
+            self.buffer_predictions_after_filter_recording.append(
+                (current_time - self.start_time, prediction_after_filter)
             )
+            self.buffer_selected_real_time_filter_recording.append(
+                (current_time - self.start_time, selected_real_time_filter)
+            )
+
+            # self.buffer_predictions_recording.append(
+            #     (current_time - self.start_time, prediction)
+            # )
+            # self.buffer_prediction_proba_recording.append(
+            #     (current_time - self.start_time, prediction_proba)
+            # )
 
     def online_kinematics_update(self, data: np.ndarray) -> None:
         if self.online_record_toggle_push_button.isChecked():
@@ -245,6 +267,11 @@ class OnlineProtocol(QObject):
             self.buffer_kinematics_recording = []
             self.buffer_predictions_recording = []
             self.buffer_prediction_proba_recording = []
+
+            self.buffer_prediction_before_filter_recording = []
+            self.buffer_predictions_after_filter_recording = []
+            self.buffer_selected_real_time_filter_recording = []
+
             self.start_time = time.time()
             self.online_record_toggle_push_button.setText("Stop Recording")
         else:
@@ -266,17 +293,22 @@ class OnlineProtocol(QObject):
             "kinematics_timings": np.array(
                 [time for time, _ in self.buffer_kinematics_recording]
             ),
-            "predictions": np.stack(
-                 [data for _, data in self.buffer_predictions_recording], axis=-1
+            "predictions_before_filters": np.stack(
+                [data for _, data in self.buffer_prediction_before_filter_recording],
+                axis=-1,
             ),
-            "predictions_timings": np.array(
-                [time for time, _ in self.buffer_predictions_recording]
+            "predictions_before_filters_timings": np.array(
+                [time for time, _ in self.buffer_prediction_before_filter_recording]
             ),
-            "prediction_proba": np.hstack(
-                [data for _, data in self.buffer_prediction_proba_recording]
+            "predictions_after_filters": np.stack(
+                [data for _, data in self.buffer_predictions_after_filter_recording],
+                axis=-1,
             ),
-            "prediction_proba_timings": np.array(
-                [time for time, _ in self.buffer_prediction_proba_recording]
+            "predictions_after_filters_timings": np.array(
+                [time for time, _ in self.buffer_predictions_after_filter_recording]
+            ),
+            "selected_real_time_filters": np.array(
+                [data for _, data in self.buffer_selected_real_time_filter_recording]
             ),
             "label": self.online_model_label.text().split(" ")[0],
             "model_information": self.model_information,
@@ -285,7 +317,7 @@ class OnlineProtocol(QObject):
                 self.main_window.current_bad_channels
                 + self.model_information["bad_channels"]
             ),
-            "channels": CHANNELS
+            "channels": CHANNELS,
         }
         now = datetime.now()
         formatted_now = now.strftime("%Y%m%d_%H%M%S%f")
@@ -337,6 +369,11 @@ class OnlineProtocol(QObject):
 
         if len(self.active_monitoring_widgets) != 0:
             self._send_model_information()
+
+        self.output_systems = {
+            k: v(self.main_window, self.model_interface.model.is_classifier)
+            for k, v in CONFIG_REGISTRY.output_systems_map.items()
+        }
 
     def _toggle_conformal_prediction_widget(self) -> None:
         if self.conformal_prediction_type_combo_box.currentText() == "None":
