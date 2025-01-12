@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Tuple, List
 
 from PySide6.QtCore import QObject
 
@@ -58,7 +58,7 @@ class MyoGesticModelInterface(QObject):
         input: np.ndarray,
         bad_channels: list[int] = (),
         selected_real_time_filter: str = "",
-    ) -> tuple[str, str, int, np.ndarray | None]:
+    ) -> tuple[Any, list[Any] | None, str | None]:
         if not self.model_is_loaded:
             raise ValueError("Model is not loaded!")
 
@@ -69,7 +69,7 @@ class MyoGesticModelInterface(QObject):
         )
 
         if preprocessed_input is None:
-            return "Bad channels detected", "", -1, None
+            return -1, None, None
 
         return self.model.predict(
             preprocessed_input, self.predict_function, selected_real_time_filter

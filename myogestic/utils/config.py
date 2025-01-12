@@ -4,6 +4,7 @@ from typing import TypedDict, Union, Dict, Type, Callable, Any, Literal, Optiona
 
 from myoverse.datasets.filters._template import FilterBaseClass  # noqa
 
+from myogestic.gui.widgets.templates.output_system import OutputSystemTemplate
 from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
 
 
@@ -82,6 +83,7 @@ class Registry:
         self.real_time_filters_map: Dict[str, callable] = {}
 
         self.visual_interfaces_map: Dict[str, Type[VisualInterfaceTemplate]] = {}
+        self.output_systems_map: Dict[str, Type[OutputSystemTemplate]] = {}
 
     def register_model(
         self,
@@ -223,6 +225,31 @@ class Registry:
             )
 
         self.visual_interfaces_map[name] = main_class
+
+    def register_output_system(self, name: str, output_system: Type[OutputSystemTemplate]):
+        """
+        Register an output system in the registry.
+
+        .. note:: The output system name must be unique.
+
+        Parameters
+        ----------
+        name : str
+            The name of the output system.
+        output_system : callable
+            The output system class.
+
+        Raises
+        ------
+        ValueError
+            If the output system is already registered.
+        """
+        if name in self.output_systems_map:
+            raise ValueError(
+                f'Output system "{name}" is already registered. Please choose a different name.'
+            )
+
+        self.output_systems_map[name] = output_system
 
 
 

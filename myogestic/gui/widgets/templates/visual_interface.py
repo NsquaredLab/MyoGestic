@@ -1,4 +1,4 @@
-from abc import abstractmethod, ABCMeta
+from abc import abstractmethod
 from typing import Optional, Type
 
 import numpy as np
@@ -6,10 +6,7 @@ from PySide6.QtCore import QObject, Signal, QByteArray, SignalInstance
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox, QMainWindow
 
-
-# Create a custom metaclass that combines ABCMeta and QObject's metaclass
-class MetaQObjectABC(type(QObject), ABCMeta):
-    pass
+from myogestic.gui.widgets.templates.meta_qobject import MetaQObjectABC
 
 
 class SetupUITemplate(QObject, metaclass=MetaQObjectABC):

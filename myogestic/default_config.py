@@ -22,6 +22,9 @@ from sklearn.svm import SVC
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
     VirtualHandInterface,
 )
+from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.output_interface import (
+    VirtualHandInterfaceOutputSystem,
+)
 from myogestic.models.definitions import raulnet_models, sklearn_models, catboost_models
 from myogestic.utils.config import CONFIG_REGISTRY
 
@@ -209,3 +212,4 @@ CONFIG_REGISTRY.register_real_time_filter(
 )
 
 CONFIG_REGISTRY.register_visual_interface("VHI", VirtualHandInterface)
+CONFIG_REGISTRY.register_output_system("VHI", VirtualHandInterfaceOutputSystem)

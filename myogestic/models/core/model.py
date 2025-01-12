@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pickle
-from typing import Any, TYPE_CHECKING, Union, Optional
+from typing import Any, TYPE_CHECKING, Union, Optional, Tuple, List
 
 import numpy as np
 
@@ -15,6 +15,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 class MyoGesticModel(QObject):
     predicted_emg_signal = Signal(np.ndarray)
+
     def __init__(self, logger: CustomLogger, parent: QObject | None = None) -> None:
         super().__init__(parent)
 
@@ -29,18 +30,6 @@ class MyoGesticModel(QObject):
         self.load_function = None
         self.save_function = None
 
-        self.model_prediction_to_interface_map = {
-            -1: "Rejected Sample",
-            0: "[0, 0, 0, 0, 0, 0, 0, 0, 0]",
-            1: "[0, 0, 1, 0, 0, 0, 0, 0, 0]",
-            2: "[1, 0, 0, 0, 0, 0, 0, 0, 0]",
-            3: "[0, 0, 0, 1, 0, 0, 0, 0, 0]",
-            4: "[0, 0, 0, 0, 1, 0, 0, 0, 0]",
-            5: "[0, 0, 0, 0, 0, 1, 0, 0, 0]",
-            6: "[0.67, 1, 1, 1, 1, 1, 0, 0, 0]",
-            7: "[0.45, 1, 0.6, 0, 0, 0, 0, 0, 0]",
-            8: "[0.55, 1, 0.65, 0.65, 0, 0, 0, 0, 0]",
-        }
         self.model_prediction_to_mechatronic_interface_map = {
             -1: "Rejected Sample",
             0: "[0, 0, 0, 0, 0, 0, 0, 0, 0]",
@@ -92,7 +81,7 @@ class MyoGesticModel(QObject):
 
     def predict(
         self, input: np.ndarray, prediction_function, selected_real_time_filter: str
-    ) -> tuple[str, str, Any, Optional[np.ndarray]]:
+    ) -> tuple[Any, list[Any] | None, str | None]:
 
         # emit the input as a signal
         self.predicted_emg_signal.emit(input)
@@ -101,38 +90,44 @@ class MyoGesticModel(QObject):
 
         if self.is_classifier:
             if prediction == -1:
-                return "", "", -1, None
+                return -1, None, None
 
-            to_emit = (
-                [0.0]
-                + [0.0]
-                + [1.0 if prediction == 1 else 0.0]
-                + [1.0 if prediction == 3 else 0.0]
-                + [1.0 if prediction == 4 else 0.0]
-                + [0.0, 0.0, 0.0, 0.0]
-            )
+            # to_emit = (
+            #     [0.0]
+            #     + [0.0]
+            #     + [1.0 if prediction == 1 else 0.0]
+            #     + [1.0 if prediction == 3 else 0.0]
+            #     + [1.0 if prediction == 4 else 0.0]
+            #     + [0.0, 0.0, 0.0, 0.0]
+            # )
 
-            return (
-                self.model_prediction_to_interface_map[prediction],
-                self.model_prediction_to_mechatronic_interface_map[prediction],
-                prediction,
-                None,
-            )
+            return prediction, None, None
         else:
-            self.past_predictions.append(prediction)
+            prediction_before_filter = prediction
+            prediction_after_filter = None
+
+            self.past_predictions.append(prediction_before_filter)
             if len(self.past_predictions) > 555:
                 self.past_predictions.pop(0)
 
-                prediction = CONFIG_REGISTRY.real_time_filters_map[
+                prediction_after_filter = CONFIG_REGISTRY.real_time_filters_map[
                     selected_real_time_filter
                 ](self.past_predictions)
-                prediction = list(prediction[-1])
+                prediction_after_filter = list(prediction_after_filter[-1])
 
+            prediction = (
+                prediction_before_filter
+                if prediction_after_filter is None
+                else prediction_after_filter
+            )
             prediction = [prediction[0]] + [0.0] + prediction[1:] + [0.0, 0.0, 0.0]
-
             prediction = list(np.clip(prediction, 0, 1))
 
-            return str(prediction), "", prediction, None
+            return (
+                prediction_before_filter,
+                prediction_after_filter,
+                selected_real_time_filter,
+            )
 
     def save(self, model_path: str) -> dict[str, Union[str, Any]]:
         self.model_information["model_params"] = self.model_params

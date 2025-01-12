@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from PySide6.QtCore import Qt
@@ -17,11 +17,9 @@ from myogestic.gui.biosignal import Ui_BioSignalInterface
 from myogestic.gui.protocols.protocol import Protocol
 from myogestic.gui.widgets.logger import CustomLogger
 from myogestic.gui.widgets.output import VirtualHandInterface
+from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
 from myogestic.utils.constants import BASE_PATH
-from myogestic.utils.config import (
-    custom_message_handler,
-    CONFIG_REGISTRY,
-)  # noqa
+from myogestic.utils.config import custom_message_handler, CONFIG_REGISTRY  # noqa
 
 if TYPE_CHECKING:
     from biosignal_device_interface.gui.device_template_widgets.otb.otb_devices_widget import (
@@ -143,8 +141,8 @@ class MyoGestic(QMainWindow):
         )
         self.ui.visualInterfacesVerticalLayout.setContentsMargins(*([15] * 4))
 
-        self.selected_visual_interface = None
-        self.visual_interfaces = {}
+        self.selected_visual_interface: Optional[VisualInterfaceTemplate] = None
+        self.visual_interfaces: dict[str, VisualInterfaceTemplate] = {}
         for name, main_class in CONFIG_REGISTRY.visual_interfaces_map.items():
             self.visual_interfaces[name] = main_class(self, name=name)
 

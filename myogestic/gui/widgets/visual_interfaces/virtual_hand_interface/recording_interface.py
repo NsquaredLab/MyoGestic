@@ -6,6 +6,7 @@ import numpy as np
 from PySide6.QtCore import SignalInstance
 from PySide6.QtGui import QCloseEvent
 
+from myogestic.gui.myogestic import MyoGestic
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.gui.widgets.templates.visual_interface import RecordingUITemplate
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
@@ -20,7 +21,7 @@ class VirtualHandInterfaceRecordingUI(RecordingUITemplate):
     def __init__(
         self,
         parent,
-        name="VirtualHandInterface",
+        name: str = "VirtualHandInterface",
         incoming_message_signal: SignalInstance = None,
     ) -> None:
         super().__init__(
@@ -43,7 +44,7 @@ class VirtualHandInterfaceRecordingUI(RecordingUITemplate):
         self.initialize_ui_logic()
 
     def initialize_ui_logic(self) -> None:
-        ui = self.ui
+        ui: Ui_RecordingVirtualHandInterface = self.ui
 
         self.main_window.ui.recordVerticalLayout.addWidget(ui.recordRecordingGroupBox)
         self.main_window.ui.recordVerticalLayout.addWidget(
