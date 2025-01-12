@@ -6,7 +6,6 @@ import numpy as np
 from PySide6.QtCore import SignalInstance
 from PySide6.QtGui import QCloseEvent
 
-from myogestic.gui.myogestic import MyoGestic
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.gui.widgets.templates.visual_interface import RecordingUITemplate
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (

@@ -226,7 +226,9 @@ class Registry:
 
         self.visual_interfaces_map[name] = main_class
 
-    def register_output_system(self, name: str, output_system: Type[OutputSystemTemplate]):
+    def register_output_system(
+        self, name: str, output_system: Type[OutputSystemTemplate]
+    ):
         """
         Register an output system in the registry.
 
@@ -252,8 +254,6 @@ class Registry:
         self.output_systems_map[name] = output_system
 
 
-
-
 def _set_config_registry() -> None:
     """
     Set the global CONFIG_REGISTRY.
@@ -261,6 +261,7 @@ def _set_config_registry() -> None:
     with contextlib.suppress(ImportError):
         import myogestic.default_config  # noqa
         import myogestic.user_config  # noqa
+
 
 # ------------------------------------------------------------------------------
 if "CONFIG_REGISTRY" not in globals():
