@@ -98,6 +98,7 @@ class MyoGesticModel(QObject):
         self.predicted_emg_signal.emit(input)
 
         prediction = prediction_function(self.model, input, self.is_classifier)
+
         if self.is_classifier:
             if prediction == -1:
                 return "", "", -1, None
@@ -122,12 +123,9 @@ class MyoGesticModel(QObject):
             if len(self.past_predictions) > 555:
                 self.past_predictions.pop(0)
 
-                # real-time savitzky-golay filter
-                # print(selected_real_time_filter)
                 prediction = CONFIG_REGISTRY.real_time_filters_map[
                     selected_real_time_filter
                 ](self.past_predictions)
-                # prediction =
                 prediction = list(prediction[-1])
 
             prediction = [prediction[0]] + [0.0] + prediction[1:] + [0.0, 0.0, 0.0]

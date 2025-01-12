@@ -70,7 +70,7 @@ class RecordProtocol(QObject):
             True if preparation succeeds, False otherwise.
         """
         device_widget = self.main_window.device_widget
-        device = device_widget._get_current_widget().device
+        device = device_widget._get_current_widget()._device
         if not device._is_streaming:
             self.main_window.logger.print(
                 "Biosignal device not streaming!", level=LoggerLevel.ERROR
@@ -129,9 +129,13 @@ class RecordProtocol(QObject):
         Tuple[np.ndarray, np.ndarray]
             A tuple of EMG data and corresponding timestamps.
         """
-        return np.hstack([sample for _, sample in self.biosignal_buffer])[
-            :, : self.total_samples_to_record
-        ], np.array([timestamp for timestamp, _ in self.biosignal_buffer])
+        emg, timings = [], []
+
+        for sample, timestamp in self.biosignal_buffer:
+            emg.append(sample)
+            timings.append(timestamp)
+
+        return np.stack(emg, axis=-1)[..., : self.total_samples_to_record], np.array(timings)
 
     def _reset_recording_ui(self) -> None:
         """Reset the recording UI and clear the buffer."""
