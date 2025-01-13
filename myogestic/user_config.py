@@ -6,7 +6,7 @@ from sklearn.multioutput import MultiOutputRegressor
 from myogestic.models.definitions import sklearn_models
 from myogestic.utils.config import CONFIG_REGISTRY
 
-CHANNELS = list(np.arange(9))
+CHANNELS = list(np.arange(32))
 
 # Register models
 CONFIG_REGISTRY.register_model(

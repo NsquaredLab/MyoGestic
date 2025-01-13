@@ -66,7 +66,9 @@ class Protocol(QObject):
 
     def _pass_on_selected_visual_interface(self) -> None:
         for protocol in self.available_protocols:
-            protocol.selected_visual_interface = self.main_window.selected_visual_interface
+            protocol.selected_visual_interface = (
+                self.main_window.selected_visual_interface
+            )
 
     def _setup_protocol_ui(self):
         self.protocol_mode_stacked_widget = (
@@ -77,13 +79,19 @@ class Protocol(QObject):
             self.main_window.ui.protocolRecordRadioButton
         )
         self.protocol_record_radio_button.setChecked(True)
-        self.protocol_record_radio_button.toggled.connect(lambda checked: self._protocol_toggled(0, checked))
+        self.protocol_record_radio_button.toggled.connect(
+            lambda checked: self._protocol_toggled(0, checked)
+        )
         self.protocol_training_radio_button = (
             self.main_window.ui.protocolTrainingRadioButton
         )
-        self.protocol_training_radio_button.toggled.connect(lambda checked: self._protocol_toggled(1, checked))
+        self.protocol_training_radio_button.toggled.connect(
+            lambda checked: self._protocol_toggled(1, checked)
+        )
 
         self.protocol_online_radio_button = (
             self.main_window.ui.protocolOnlineRadioButton
         )
-        self.protocol_online_radio_button.toggled.connect(lambda checked: self._protocol_toggled(2, checked))
+        self.protocol_online_radio_button.toggled.connect(
+            lambda checked: self._protocol_toggled(2, checked)
+        )
