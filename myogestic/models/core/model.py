@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pickle
-from typing import Any, TYPE_CHECKING, Union, Optional, Tuple, List
+from typing import Any, TYPE_CHECKING, Union
 
 import numpy as np
 
@@ -10,7 +10,7 @@ from myogestic.utils.config import CONFIG_REGISTRY
 if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal
 
 
 class MyoGesticModel(QObject):
@@ -103,25 +103,17 @@ class MyoGesticModel(QObject):
 
             return prediction, None, None
         else:
-            prediction_before_filter = prediction
-            prediction_after_filter = None
+            prediction_before_filter = list(np.clip(prediction, 0, 1))
+            prediction_after_filter = [np.nan] * len(prediction)
 
             self.past_predictions.append(prediction_before_filter)
-            if len(self.past_predictions) > 555:
+            if len(self.past_predictions) > (self.model_information["device_information"]["sampling_frequency"] // self.model_information["device_information"]["samples_per_frame"]) * 5:
                 self.past_predictions.pop(0)
 
                 prediction_after_filter = CONFIG_REGISTRY.real_time_filters_map[
                     selected_real_time_filter
                 ](self.past_predictions)
                 prediction_after_filter = list(prediction_after_filter[-1])
-
-            prediction = (
-                prediction_before_filter
-                if prediction_after_filter is None
-                else prediction_after_filter
-            )
-            prediction = [prediction[0]] + [0.0] + prediction[1:] + [0.0, 0.0, 0.0]
-            prediction = list(np.clip(prediction, 0, 1))
 
             return (
                 prediction_before_filter,

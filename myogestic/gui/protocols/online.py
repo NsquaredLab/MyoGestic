@@ -142,8 +142,6 @@ class OnlineProtocol(QObject):
 
         self.output_systems: dict[str, OutputSystemTemplate] = {}
 
-        print(self.selected_visual_interface)
-
     def _update_real_time_filter(self) -> None:
         filter_name = self.real_time_filter_combo_box.currentText()
         self.model_interface.set_real_time_filter(filter_name)
@@ -333,7 +331,6 @@ class OnlineProtocol(QObject):
         self.kinematics_buffer = []
 
     def _load_model(self) -> None:
-        print(self.selected_visual_interface)
         dialog = QFileDialog(self.main_window)
         dialog.setFileMode(QFileDialog.ExistingFile)
         dialog.setNameFilter("Checkpoint files (*.pkl)")
