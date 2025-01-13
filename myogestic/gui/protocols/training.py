@@ -347,8 +347,8 @@ class TrainingProtocol(QObject):
                         selected_recordings_key
                     ]
 
-                    recording["emg"] = np.hstack(
-                        [current_recording["emg"], recording["emg"]]
+                    recording["emg"] = np.concatenate(
+                        [current_recording["emg"], recording["emg"]], axis=-1
                     )
                     recording["kinematics"] = np.concatenate(
                         [current_recording["kinematics"], recording["kinematics"]],
@@ -390,16 +390,15 @@ class TrainingProtocol(QObject):
                 row_position
             )
 
-            # Insert new recording
-            recording_time = int(
-                item["emg"].shape[1] / self.main_window.sampling_frequency
-            )
-
             self.training_create_dataset_selected_recordings_table_widget.setItem(
                 row_position, 0, QTableWidgetItem(key)
             )
             self.training_create_dataset_selected_recordings_table_widget.setItem(
-                row_position, 1, QTableWidgetItem(str(recording_time))
+                row_position,
+                1,
+                QTableWidgetItem(
+                    f"{((item['emg'].shape[-1] * item['emg'].shape[-2]) / self.main_window.sampling_frequency):.2f} s"
+                ),
             )
             self.training_create_dataset_selected_recordings_table_widget.setItem(
                 row_position, 2, QTableWidgetItem(item["label"])
@@ -426,7 +425,7 @@ class TrainingProtocol(QObject):
         self.training_create_dataset_label_line_edit.setText("")
         self.training_create_datasets_select_recordings_push_button.setEnabled(True)
         self.selected_recordings = None
-        self.main_window.logger.print(f"Dataset created!", LoggerLevel.INFO)
+        self.main_window.logger.print("Dataset created!", LoggerLevel.INFO)
 
     def _create_dataset_thread(self) -> None:
         label = self.training_create_dataset_label_line_edit.text()
@@ -549,7 +548,7 @@ class TrainingProtocol(QObject):
         self.training_select_dataset_push_button.setEnabled(True)
         self.selected_dataset_filepath = None
         self.training_model_label_line_edit.setText("")
-        self.main_window.logger.print(f"Model trained", LoggerLevel.INFO)
+        self.main_window.logger.print("Model trained", LoggerLevel.INFO)
 
     def _update_model_selection(self) -> None:
         self.selected_model_name = self.training_model_selection_combo_box.currentText()

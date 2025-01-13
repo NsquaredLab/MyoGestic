@@ -131,11 +131,13 @@ class RecordProtocol(QObject):
         """
         emg, timings = [], []
 
-        for sample, timestamp in self.biosignal_buffer:
+        for timestamp, sample in self.biosignal_buffer:
             emg.append(sample)
             timings.append(timestamp)
 
-        return np.stack(emg, axis=-1)[..., : self.total_samples_to_record], np.array(timings)
+        return np.stack(emg, axis=-1)[..., : self.total_samples_to_record], np.array(
+            timings
+        )
 
     def _reset_recording_ui(self) -> None:
         """Reset the recording UI and clear the buffer."""

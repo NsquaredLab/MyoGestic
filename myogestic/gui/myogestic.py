@@ -16,7 +16,6 @@ from myogestic.gui.main_window_v2 import Ui_MyoGestic
 from myogestic.gui.biosignal import Ui_BioSignalInterface
 from myogestic.gui.protocols.protocol import Protocol
 from myogestic.gui.widgets.logger import CustomLogger
-from myogestic.gui.widgets.output import VirtualHandInterface
 from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
 from myogestic.utils.constants import BASE_PATH
 from myogestic.utils.config import custom_message_handler, CONFIG_REGISTRY  # noqa
@@ -29,7 +28,7 @@ if TYPE_CHECKING:
         BiosignalPlotWidget,
     )
 
-from PySide6.QtCore import qInstallMessageHandler, QtMsgType
+from PySide6.QtCore import qInstallMessageHandler
 
 
 class MyoGestic(QMainWindow):
@@ -175,6 +174,8 @@ class MyoGestic(QMainWindow):
         -------
         None
         """
+        print("HELP")
+
         if self.selected_visual_interface:
             for visual_interface in self.visual_interfaces.values():
                 visual_interface.enable_ui()

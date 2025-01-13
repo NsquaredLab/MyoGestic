@@ -88,7 +88,8 @@ class MyoGesticDataset(QObject):
             recording_bad_channels = recording["bad_channels"]
             bad_channels.extend(recording_bad_channels)
 
-            emg = recording["emg"][CHANNELS]
+            emg = np.concatenate(recording["emg"][CHANNELS].T).T
+
             if len(recording_bad_channels) > 0:
                 emg = np.delete(emg, recording_bad_channels, axis=0)
 
@@ -180,8 +181,10 @@ class MyoGesticDataset(QObject):
         for key in feature_keys:
             emg_per_key = dataset["training"]["emg"][key][()]
 
-            training_means[key] = emg_per_key.mean()
-            training_stds[key] = emg_per_key.std()
+            training_means[key], training_stds[key] = (
+                emg_per_key.mean(),
+                emg_per_key.std(),
+            )
             training_emg.append(
                 (emg_per_key - training_means[key]) / training_stds[key]
             )
@@ -269,7 +272,7 @@ class MyoGesticDataset(QObject):
                 [x for x in frame_data.output_representations.values()], axis=1
             )
 
-            #frame_data = frame_data.reshape(1, -1)
+            # frame_data = frame_data.reshape(1, -1)
 
             return frame_data
 
