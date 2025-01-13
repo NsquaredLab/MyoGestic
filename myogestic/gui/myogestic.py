@@ -174,8 +174,6 @@ class MyoGestic(QMainWindow):
         -------
         None
         """
-        print("HELP")
-
         if self.selected_visual_interface:
             for visual_interface in self.visual_interfaces.values():
                 visual_interface.enable_ui()
