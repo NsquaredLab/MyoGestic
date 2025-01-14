@@ -123,7 +123,9 @@ class OnlineProtocol(QObject):
         self.buffer_prediction_before_filter_recording: list[(float, np.ndarray)] = None
         self.buffer_predictions_after_filter_recording: list[(float, np.ndarray)] = None
         self.buffer_selected_real_time_filter_recording: list[(float, str)] = None
-        self.buffer_prediction_proba_recording: list[(float, np.ndarray)] = None
+
+        self.buffer_predicted_hand_recording: list[(float, np.ndarray)] = None
+
         self.start_time: float = None
 
         # Device
@@ -226,6 +228,12 @@ class OnlineProtocol(QObject):
                 (time.time() - self.start_time, data)
             )
 
+    def online_predicted_hand_update(self, data: np.ndarray) -> None:
+        if self.online_record_toggle_push_button.isChecked():
+            self.buffer_predicted_hand_recording.append(
+                (time.time() - self.start_time, data)
+            )
+
     def _set_conformal_prediction(self) -> None:
         params = {
             "calibrator_type": self.conformal_prediction_type_combo_box.currentText(),
@@ -260,13 +268,19 @@ class OnlineProtocol(QObject):
     def _toggle_recording(self):
         if self.online_record_toggle_push_button.isChecked():
             self.online_prediction_toggle_push_button.setEnabled(False)
+
             self.main_window.selected_visual_interface.incoming_message_signal.connect(
                 self.online_kinematics_update
             )
+
+            self.main_window.selected_visual_interface.predicted_hand_signal.connect(
+                self.online_predicted_hand_update
+            )
+
             self.buffer_emg_recording = []
             self.buffer_kinematics_recording = []
             self.buffer_predictions_recording = []
-            self.buffer_prediction_proba_recording = []
+            self.buffer_predicted_hand_recording = []
 
             self.buffer_prediction_before_filter_recording = []
             self.buffer_predictions_after_filter_recording = []
@@ -279,6 +293,11 @@ class OnlineProtocol(QObject):
             self.main_window.selected_visual_interface.incoming_message_signal.disconnect(
                 self.online_kinematics_update
             )
+
+            self.main_window.selected_visual_interface.predicted_hand_signal.disconnect(
+                self.online_predicted_hand_update
+            )
+
             self.online_record_toggle_push_button.setText("Start Recording")
 
             self._save_data()
@@ -306,6 +325,12 @@ class OnlineProtocol(QObject):
             ),
             "predictions_after_filters_timings": np.array(
                 [time for time, _ in self.buffer_predictions_after_filter_recording]
+            ),
+            "predicted_hand": np.vstack(
+                [data for _, data in self.buffer_predicted_hand_recording],
+            ).T,
+            "predicted_hand_timings": np.array(
+                [time for time, _ in self.buffer_predicted_hand_recording]
             ),
             "selected_real_time_filters": np.array(
                 [data for _, data in self.buffer_selected_real_time_filter_recording]

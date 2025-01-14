@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QTimer, QProcess, QByteArray
+from PySide6.QtCore import QTimer, QProcess, QByteArray, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtNetwork import QUdpSocket, QHostAddress
 from PySide6.QtWidgets import QCheckBox, QPushButton, QWidget
@@ -23,12 +23,21 @@ GREEN_BACKGROUND = "background-color: green; border-radius: 5px;"
 
 # Constants
 STREAMING_FREQUENCY = 32
+SOCKET_IP = "127.0.0.1"
 
 # Ports
-VIRTUAL_HAND_INTERFACE_UDP_PORT = 1236
+
+# on this port the VHI listens for incoming messages from MyoGestic
+VHI__UDP_PORT = 1236
+
+# on this port the VHI sends the currently displayed predicted hand after having applied linear interpolation
+VHI_PREDICTION__UDP_PORT = 1234
 
 
 class VirtualHandInterfaceSetupUI(SetupUITemplate):
+
+    __predicted_hand_signal = Signal(np.ndarray)
+
     def __init__(self, parent, name="VirtualHandInterface"):
         super().__init__(parent, name, ui=Ui_SetupVirtualHandInterface())
 
@@ -54,14 +63,12 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
         # Get OS of the user
         self.unity_process.setProgram(str(self._get_unity_executable()))
 
-        # Initialize UDP socket
-        self.socket_ip: str = "127.0.0.1"
-
         self.time_difference_between_messages = float(1 / STREAMING_FREQUENCY)
         self.last_message_time = time.time()
         self.is_connected: bool = False
 
         self.streaming_udp_socket: QUdpSocket | None = None
+        self.predicted_hand_udp_socket: QUdpSocket | None = None
 
         # Initialize Virtual Hand Interface UI
         self.initialize_ui_logic()
@@ -178,21 +185,42 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
         if self.toggle_virtual_hand_interface_push_button.isChecked():
             self.streaming_udp_socket = QUdpSocket(self)
             self.streaming_udp_socket.readyRead.connect(self.read_message)
-            self.outgoing_message_signal.connect(self.write_message)
+            self.__outgoing_message_signal.connect(self.write_message)
             self.streaming_udp_socket.bind(
-                QHostAddress(self.socket_ip), MYOGESTIC_UDP_PORT
+                QHostAddress(SOCKET_IP), MYOGESTIC_UDP_PORT
             )
+
+            self.predicted_hand_udp_socket = QUdpSocket(self)
+            self.predicted_hand_udp_socket.bind(
+                QHostAddress(SOCKET_IP), VHI_PREDICTION__UDP_PORT
+            )
+            self.predicted_hand_udp_socket.readyRead.connect(self.read_predicted_hand)
+
             self.last_message_time = time.time()
         else:
             try:
                 self.streaming_udp_socket.close()
+                self.predicted_hand_udp_socket.close()
             except AttributeError:
                 pass
             self.streaming_udp_socket = None
+            self.predicted_hand_udp_socket = None
             self.is_connected = False
             self.virtual_hand_interface_status_widget.setStyleSheet(
                 self.virtual_hand_interface_not_connected_stylesheet
             )
+
+    def read_predicted_hand(self) -> None:
+        while self.predicted_hand_udp_socket.hasPendingDatagrams():
+            datagram, _, _ = self.predicted_hand_udp_socket.readDatagram(
+                self.predicted_hand_udp_socket.pendingDatagramSize()
+            )
+
+            data = datagram.data().decode("utf-8")
+            if not data:
+                return
+
+            self.__predicted_hand_signal.emit(np.array(ast.literal_eval(data)))
 
     def write_message(self, message: QByteArray) -> None:
         if self.is_connected:
@@ -204,8 +232,8 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
             self.last_message_time = time.time()
             output_bytes = self.streaming_udp_socket.writeDatagram(
                 message,
-                QHostAddress(self.socket_ip),
-                VIRTUAL_HAND_INTERFACE_UDP_PORT,
+                QHostAddress(SOCKET_IP),
+                VHI__UDP_PORT,
             )
 
             if output_bytes == -1:
@@ -217,12 +245,9 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
     def read_message(self) -> None:
         if self.toggle_virtual_hand_interface_push_button.isChecked():
             while self.streaming_udp_socket.hasPendingDatagrams():
-                datagram, _, port = self.streaming_udp_socket.readDatagram(
+                datagram, _, _ = self.streaming_udp_socket.readDatagram(
                     self.streaming_udp_socket.pendingDatagramSize()
                 )
-
-                if port != VIRTUAL_HAND_INTERFACE_UDP_PORT:
-                    continue
 
                 if len(datagram.data()) == 0:
                     return
@@ -238,7 +263,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
                     self.status_request_timeout_timer.stop()
                     return
 
-                self.incoming_message_signal.emit(
+                self.__incoming_message_signal.emit(
                     np.array(ast.literal_eval(datagram.data().decode("utf-8")))
                 )
 
@@ -246,8 +271,8 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
         if self.toggle_virtual_hand_interface_push_button.isChecked():
             output_bytes = self.streaming_udp_socket.writeDatagram(
                 self.status_request.encode("utf-8"),
-                QHostAddress(self.socket_ip),
-                VIRTUAL_HAND_INTERFACE_UDP_PORT,
+                QHostAddress(SOCKET_IP),
+                VHI__UDP_PORT,
             )
 
             if output_bytes == -1:
