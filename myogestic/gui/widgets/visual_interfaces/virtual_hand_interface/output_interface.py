@@ -29,7 +29,7 @@ class VirtualHandInterfaceOutputSystem(OutputSystemTemplate):
                 f"Got {type(main_window.selected_visual_interface)}."
             )
 
-        self.outgoing_message_signal = (
+        self._outgoing_message_signal = (
             main_window.selected_visual_interface.outgoing_message_signal
         )
 
@@ -40,4 +40,4 @@ class VirtualHandInterfaceOutputSystem(OutputSystemTemplate):
         return str([prediction[0]] + [0] + prediction[1:] + [0, 0, 0]).encode("utf-8")
 
     def send_prediction(self, prediction: Any) -> None:
-        self.outgoing_message_signal.emit(self.process_prediction(prediction))
+        self._outgoing_message_signal.emit(self.process_prediction(prediction))
