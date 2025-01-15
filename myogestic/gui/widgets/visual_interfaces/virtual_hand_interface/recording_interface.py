@@ -220,10 +220,10 @@ class VirtualHandInterfaceRecordingUI(RecordingUITemplate):
         self.record_ground_truth_progress_bar.setValue(0)
         self.kinematics_buffer.clear()
 
-    def close_event(self, _: QCloseEvent) -> None:
+    def closeEvent(self, _: QCloseEvent) -> None:
         self.record_toggle_push_button.setChecked(False)
         self.reset_ui()
-        self.recording_protocol.close_event(_)
+        self.recording_protocol.closeEvent(_)
         self.main_window.logger.print("Recording interface closed.")
 
     def enable(self):

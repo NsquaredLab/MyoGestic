@@ -151,7 +151,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
         )
         self.is_connected = False
 
-    def close_event(self, _: QCloseEvent) -> None:
+    def closeEvent(self, _: QCloseEvent) -> None:
         try:
             if self.streaming_udp_socket:
                 self.streaming_udp_socket.close()

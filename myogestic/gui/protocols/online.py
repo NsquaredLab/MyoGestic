@@ -400,6 +400,10 @@ class OnlineProtocol(QObject):
             for k, v in CONFIG_REGISTRY.output_systems_map.items()
         }
 
+    def closeEvent(self, event) -> None:
+        for output_system in self.output_systems.values():
+            output_system.closeEvent(event)
+
     def _toggle_conformal_prediction_widget(self) -> None:
         if self.conformal_prediction_type_combo_box.currentText() == "None":
             self.conformal_prediction_solving_combo_box.setEnabled(False)

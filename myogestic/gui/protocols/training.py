@@ -584,6 +584,9 @@ class TrainingProtocol(QObject):
     def _get_features(self) -> None:
         self.selected_features = list(self.popup_window.selected_features)
 
+    def closeEvent(self, event) -> None:
+        self.main_window.logger.print("Training Protocol Closed", LoggerLevel.INFO)
+
     def _setup_protocol_ui(self) -> None:
         # Create Datasets
         self.training_create_dataset_group_box = (

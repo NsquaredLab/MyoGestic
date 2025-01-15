@@ -220,12 +220,12 @@ class VisualInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         if self.recording_interface_ui:
             self.recording_interface_ui.disable()
 
-    def close_event(self, event: QCloseEvent) -> None:
+    def closeEvent(self, event: QCloseEvent) -> None:
         """Close the interface and stop necessary processes."""
         if self.setup_interface_ui:
-            self.setup_interface_ui.close_event(event)
+            self.setup_interface_ui.closeEvent(event)
         if self.recording_interface_ui:
-            self.recording_interface_ui.close_event(event)
+            self.recording_interface_ui.closeEvent(event)
 
     def _log_error(self, message: str) -> None:
         """Log an error message."""

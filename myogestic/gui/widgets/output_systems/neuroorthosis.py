@@ -53,3 +53,6 @@ class NeuroOrthosisOutputSystem(OutputSystemTemplate):
 
     def send_prediction(self, prediction: Any) -> None:
         self._outgoing_message_signal.emit(self.process_prediction(prediction))
+
+    def closeEvent(self, event):
+        self._streaming_udp_socket.close()

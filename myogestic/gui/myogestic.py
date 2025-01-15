@@ -7,7 +7,14 @@ from typing import TYPE_CHECKING, Optional
 import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
-from PySide6.QtWidgets import QCheckBox, QLabel, QMainWindow, QGroupBox, QVBoxLayout
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QLabel,
+    QMainWindow,
+    QGroupBox,
+    QVBoxLayout,
+    QApplication,
+)
 from biosignal_device_interface.constants.devices.core.base_device_constants import (
     DeviceType,
 )
@@ -295,6 +302,9 @@ class MyoGestic(QMainWindow):
         self.device_widget.closeEvent(event)
 
         for visual_interface in self.visual_interfaces.values():
-            visual_interface.close_event(event)
+            visual_interface.closeEvent(event)
+
+        for p in self.protocol.available_protocols:
+            p.closeEvent(event)
 
         super().closeEvent(event)
