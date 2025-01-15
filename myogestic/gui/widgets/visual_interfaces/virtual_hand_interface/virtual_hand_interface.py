@@ -19,4 +19,4 @@ class VirtualHandInterface(VisualInterfaceTemplate):
     ):
         super().__init__(main_window, name, setup_interface_ui, recording_interface_ui)
 
-        self.predicted_hand_signal: SignalInstance = self.setup_interface_ui.__predicted_hand_signal # noqa
+        self.predicted_hand_signal: SignalInstance = self.setup_interface_ui._predicted_hand_signal # noqa
