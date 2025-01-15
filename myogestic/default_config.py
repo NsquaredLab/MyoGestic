@@ -19,6 +19,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
 
+from myogestic.gui.widgets.output_systems.neuroorthosis import NeuroOrthosisOutputSystem
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
     VirtualHandInterface,
 )
@@ -213,3 +214,4 @@ CONFIG_REGISTRY.register_real_time_filter(
 
 CONFIG_REGISTRY.register_visual_interface("VHI", VirtualHandInterface)
 CONFIG_REGISTRY.register_output_system("VHI", VirtualHandInterfaceOutputSystem)
+CONFIG_REGISTRY.register_output_system("NEUROORTHOSIS", NeuroOrthosisOutputSystem)
