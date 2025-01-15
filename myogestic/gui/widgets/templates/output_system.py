@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from PySide6.QtCore import SignalInstance
 from PySide6.QtWidgets import QMainWindow
 
 
@@ -33,4 +32,8 @@ class OutputSystemTemplate(ABC):
 
     @abstractmethod
     def send_prediction(self, prediction: Any) -> None:
+        pass
+
+    @abstractmethod
+    def closeEvent(self, event: QCloseEvent):  # noqa
         pass
