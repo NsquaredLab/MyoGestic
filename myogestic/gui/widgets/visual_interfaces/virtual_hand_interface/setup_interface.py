@@ -36,7 +36,7 @@ VHI_PREDICTION__UDP_PORT = 1234
 
 class VirtualHandInterfaceSetupUI(SetupUITemplate):
 
-    __predicted_hand_signal = Signal(np.ndarray)
+    _predicted_hand_signal = Signal(np.ndarray)
 
     def __init__(self, parent, name="VirtualHandInterface"):
         super().__init__(parent, name, ui=Ui_SetupVirtualHandInterface())
@@ -185,7 +185,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
         if self.toggle_virtual_hand_interface_push_button.isChecked():
             self.streaming_udp_socket = QUdpSocket(self)
             self.streaming_udp_socket.readyRead.connect(self.read_message)
-            self.__outgoing_message_signal.connect(self.write_message)
+            self._outgoing_message_signal.connect(self.write_message)
             self.streaming_udp_socket.bind(
                 QHostAddress(SOCKET_IP), MYOGESTIC_UDP_PORT
             )
@@ -220,7 +220,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
             if not data:
                 return
 
-            self.__predicted_hand_signal.emit(np.array(ast.literal_eval(data)))
+            self._predicted_hand_signal.emit(np.array(ast.literal_eval(data)))
 
     def write_message(self, message: QByteArray) -> None:
         if self.is_connected:
@@ -263,7 +263,7 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
                     self.status_request_timeout_timer.stop()
                     return
 
-                self.__incoming_message_signal.emit(
+                self._incoming_message_signal.emit(
                     np.array(ast.literal_eval(datagram.data().decode("utf-8")))
                 )
 

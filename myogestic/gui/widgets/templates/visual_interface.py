@@ -21,8 +21,8 @@ class SetupUITemplate(QObject, metaclass=MetaQObjectABC):
         The main_window widget of the visual interface.
     """
 
-    __outgoing_message_signal = Signal(QByteArray)
-    __incoming_message_signal = Signal(np.ndarray)
+    _outgoing_message_signal = Signal(QByteArray)
+    _incoming_message_signal = Signal(np.ndarray)
 
     def __init__(
         self,
@@ -190,10 +190,10 @@ class VisualInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
 
         try:
             self.incoming_message_signal = (
-                self.setup_interface_ui.__incoming_message_signal
+                self.setup_interface_ui._incoming_message_signal
             )
             self.outgoing_message_signal = (
-                self.setup_interface_ui.__outgoing_message_signal
+                self.setup_interface_ui._outgoing_message_signal
             )
         except AttributeError:
             raise ValueError(
