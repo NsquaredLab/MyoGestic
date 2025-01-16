@@ -21,8 +21,8 @@ class SetupUITemplate(QObject, metaclass=MetaQObjectABC):
         The main_window widget of the visual interface.
     """
 
-    _outgoing_message_signal = Signal(QByteArray)
-    _incoming_message_signal = Signal(np.ndarray)
+    outgoing_message_signal = Signal(QByteArray)
+    incoming_message_signal = Signal(np.ndarray)
 
     def __init__(
         self,
@@ -137,7 +137,7 @@ class RecordingUITemplate(QObject, metaclass=MetaQObjectABC):
 
         if not incoming_message_signal:
             raise ValueError("The incoming message signal must be provided.")
-        self.__incoming_message_signal = incoming_message_signal
+        self.incoming_message_signal = incoming_message_signal
 
     @abstractmethod
     def initialize_ui_logic(self) -> None:
@@ -190,10 +190,10 @@ class VisualInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
 
         try:
             self.incoming_message_signal = (
-                self.setup_interface_ui._incoming_message_signal
+                self.setup_interface_ui.incoming_message_signal
             )
             self.outgoing_message_signal = (
-                self.setup_interface_ui._outgoing_message_signal
+                self.setup_interface_ui.outgoing_message_signal
             )
         except AttributeError:
             raise ValueError(

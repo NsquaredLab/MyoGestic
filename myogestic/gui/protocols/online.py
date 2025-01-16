@@ -188,16 +188,15 @@ class OnlineProtocol(QObject):
 
         prediction = (
             prediction_before_filter
-            if prediction_after_filter is None
+            if (
+                prediction_after_filter is None
+                or np.isnan(prediction_after_filter).any()
+            )
             else prediction_after_filter
         )
 
         for output_system in self.output_systems.values():
             output_system.send_prediction(prediction)
-
-        # self.main_window.virtual_hand_interface.mechatronic_output_message_signal.emit(
-        #     mechatronic_input
-        # )
 
         # Save buffer
         if self.online_record_toggle_push_button.isChecked():

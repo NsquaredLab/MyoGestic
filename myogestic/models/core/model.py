@@ -107,7 +107,14 @@ class MyoGesticModel(QObject):
             prediction_after_filter = [np.nan] * len(prediction)
 
             self.past_predictions.append(prediction_before_filter)
-            if len(self.past_predictions) > (self.model_information["device_information"]["sampling_frequency"] // self.model_information["device_information"]["samples_per_frame"]) * 5:
+            if (
+                len(self.past_predictions)
+                > (
+                    self.model_information["device_information"]["sampling_frequency"]
+                    // self.model_information["device_information"]["samples_per_frame"]
+                )
+                * 5
+            ):
                 self.past_predictions.pop(0)
 
                 prediction_after_filter = CONFIG_REGISTRY.real_time_filters_map[

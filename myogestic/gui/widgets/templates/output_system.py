@@ -1,13 +1,18 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from PySide6.QtWidgets import QMainWindow
+from PySide6.QtCore import QObject
+from PySide6.QtGui import QCloseEvent
+
+from myogestic.gui.widgets.templates.meta_qobject import MetaQObjectABC
 
 
-class OutputSystemTemplate(ABC):
+class OutputSystemTemplate(QObject, metaclass=MetaQObjectABC):
     def __init__(
-        self, main_window: QMainWindow = None, prediction_is_classification: bool = None
+        self, main_window=None, prediction_is_classification: bool = None
     ) -> None:
+        super().__init__()
+
         if main_window is None:
             raise ValueError("The main_window must be provided.")
         if prediction_is_classification is None:
