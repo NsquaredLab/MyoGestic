@@ -90,7 +90,7 @@ class VirtualHandInterfaceRecordingUI(RecordingUITemplate):
             self.current_task = self.record_task_combo_box.currentText()
 
             if self.use_kinematics_check_box.isChecked():
-                self.__incoming_message_signal.connect(self.update_ground_truth_buffer)
+                self.incoming_message_signal.connect(self.update_ground_truth_buffer)
 
             self.has_finished_kinematics = not self.use_kinematics_check_box.isChecked()
 
@@ -135,7 +135,7 @@ class VirtualHandInterfaceRecordingUI(RecordingUITemplate):
                 f"Kinematics recording finished at: {round(time.time() - self.start_time)} seconds"
             )
             self.has_finished_kinematics = True
-            self.__incoming_message_signal.disconnect(self.update_ground_truth_buffer)
+            self.incoming_message_signal.disconnect(self.update_ground_truth_buffer)
             self.check_recording_completion()
 
     def check_recording_completion(self) -> None:
