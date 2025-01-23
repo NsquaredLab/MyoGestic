@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QMessageBox, QMainWindow
 from myogestic.gui.widgets.templates.meta_qobject import MetaQObjectABC
 
 
-class SetupUITemplate(QObject, metaclass=MetaQObjectABC):
+class SetupInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
     """
     Base class for the setup interface of a visual interface.
 
@@ -75,7 +75,7 @@ class SetupUITemplate(QObject, metaclass=MetaQObjectABC):
         pass
 
     @abstractmethod
-    def close_event(self, event: QCloseEvent) -> None:
+    def closeEvent(self, event: QCloseEvent) -> None:
         """Close the interface and stop necessary processes."""
         pass
 
@@ -98,8 +98,18 @@ class SetupUITemplate(QObject, metaclass=MetaQObjectABC):
         if self.parent:
             QMessageBox.critical(self.parent, "Error", message)
 
+    @abstractmethod
+    def connect_custom_signals(self):
+        """Connect custom signals to slots."""
+        pass
 
-class RecordingUITemplate(QObject, metaclass=MetaQObjectABC):
+    @abstractmethod
+    def disconnect_custom_signals(self):
+        """Disconnect custom signals from slots."""
+        pass
+
+
+class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
     """
     Base class for the recording interface of a visual interface.
 
@@ -155,7 +165,7 @@ class RecordingUITemplate(QObject, metaclass=MetaQObjectABC):
         pass
 
     @abstractmethod
-    def close_event(self, event: QCloseEvent) -> None:
+    def closeEvent(self, event: QCloseEvent) -> None:
         """Close the interface and stop necessary processes."""
         pass
 
@@ -164,7 +174,7 @@ class RecordingUITemplate(QObject, metaclass=MetaQObjectABC):
         progress_bar.setValue(min(value / total * 100, 100))
 
 
-class VisualInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
+class VisualInterface(QObject):
     """
     Base class for visual interfaces in the MyoGestic application.
 
@@ -180,12 +190,15 @@ class VisualInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         self,
         main_window: Optional[QMainWindow] = None,
         name: str = "VisualInterface",
-        setup_interface_ui: Type[SetupUITemplate] = None,
-        recording_interface_ui: Type[RecordingUITemplate] = None,
+        setup_interface_ui: Type[SetupInterfaceTemplate] = None,
+        recording_interface_ui: Type[RecordingInterfaceTemplate] = None,
     ) -> None:
         super().__init__()
         self.main_window = main_window
         self.name = name
+
+        if not setup_interface_ui:
+            raise ValueError("The setup interface must be provided.")
         self.setup_interface_ui = setup_interface_ui(main_window, name)
 
         try:
@@ -200,6 +213,8 @@ class VisualInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
                 "The setup interface must have incoming and outgoing message signals."
             )
 
+        if not recording_interface_ui:
+            raise ValueError("The recording interface must be provided.")
         self.recording_interface_ui = recording_interface_ui(
             main_window,
             name,

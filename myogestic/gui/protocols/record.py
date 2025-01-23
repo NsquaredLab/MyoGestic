@@ -8,7 +8,7 @@ from PySide6.QtCore import QObject
 from PySide6.QtGui import QCloseEvent
 
 from myogestic.gui.widgets.logger import LoggerLevel
-from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
+from myogestic.gui.widgets.templates.visual_interface import VisualInterface
 
 if TYPE_CHECKING:
     from myogestic.gui.myogestic import MyoGestic
@@ -50,7 +50,7 @@ class RecordProtocol(QObject):
         super().__init__(parent)
         self.main_window = parent
         self.sampling_frequency: Optional[int] = None
-        self.selected_visual_interface: Optional[VisualInterfaceTemplate] = None
+        self.selected_visual_interface: Optional[VisualInterface] = None
         self.total_samples_to_record: int = 0
         self.biosignal_buffer: list[Tuple[float, np.ndarray]] = []
         self.is_biosignal_recording_complete: bool = False

@@ -1,11 +1,14 @@
 import contextlib
 import copy
-from typing import TypedDict, Union, Dict, Type, Callable, Any, Literal, Optional
+from typing import TypedDict, Union, Dict, Type, Callable, Any, Literal, Optional, Tuple
 
 from myoverse.datasets.filters._template import FilterBaseClass  # noqa
 
 from myogestic.gui.widgets.templates.output_system import OutputSystemTemplate
-from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
+from myogestic.gui.widgets.templates.visual_interface import (
+    SetupInterfaceTemplate,
+    RecordingInterfaceTemplate,
+)
 
 
 def custom_message_handler(mode, context, message):
@@ -82,7 +85,9 @@ class Registry:
 
         self.real_time_filters_map: Dict[str, callable] = {}
 
-        self.visual_interfaces_map: Dict[str, Type[VisualInterfaceTemplate]] = {}
+        self.visual_interfaces_map: Dict[
+            str, Tuple[Type[SetupInterfaceTemplate], Type[RecordingInterfaceTemplate]]
+        ] = {}
         self.output_systems_map: Dict[str, Type[OutputSystemTemplate]] = {}
 
     def register_model(
@@ -200,7 +205,10 @@ class Registry:
         self.real_time_filters_map[name] = function
 
     def register_visual_interface(
-        self, name: str, main_class: Type[VisualInterfaceTemplate]
+        self,
+        name: str,
+        setup_interface_ui: Type[SetupInterfaceTemplate],
+        recording_interface_ui: Type[RecordingInterfaceTemplate],
     ):
         """
         Register a visual interface in the registry.
@@ -211,8 +219,11 @@ class Registry:
          ----------
          name : str
              The name of the visual interface.
-         main_class : Type[VisualInterfaceTemplate]
-             The main class of the visual interface. Must inherit from `VisualInterfaceTemplate`.
+         setup_interface_ui : Type[SetupInterfaceTemplate]
+            The setup interface class.
+         recording_interface_ui : Type[RecordingInterfaceTemplate]
+            The recording interface class.
+
 
          Raises
          ------
@@ -224,7 +235,7 @@ class Registry:
                 f'Visual interface "{name}" is already registered. Please choose a different name.'
             )
 
-        self.visual_interfaces_map[name] = main_class
+        self.visual_interfaces_map[name] = (setup_interface_ui, recording_interface_ui)
 
     def register_output_system(
         self, name: str, output_system: Type[OutputSystemTemplate]
@@ -254,16 +265,9 @@ class Registry:
         self.output_systems_map[name] = output_system
 
 
-def _set_config_registry() -> None:
-    """
-    Set the global CONFIG_REGISTRY.
-    """
-    with contextlib.suppress(ImportError):
-        import myogestic.default_config  # noqa
-        import myogestic.user_config  # noqa
-
-
 # ------------------------------------------------------------------------------
 if "CONFIG_REGISTRY" not in globals():
     CONFIG_REGISTRY = Registry()
-    _set_config_registry()
+
+    import myogestic.default_config  # noqa
+    import myogestic.user_config  # noqa

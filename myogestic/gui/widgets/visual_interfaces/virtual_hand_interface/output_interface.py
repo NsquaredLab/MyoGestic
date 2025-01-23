@@ -1,9 +1,10 @@
 from typing import Any
 
-from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
-    VirtualHandInterface,
-)
+from myogestic.gui.myogestic import MyoGestic
 from myogestic.gui.widgets.templates.output_system import OutputSystemTemplate
+from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.setup_interface import (
+    VirtualHandInterface_SetupInterface,
+)
 
 PREDICTION2INTERFACE_MAP = {
     -1: "Rejected Sample",
@@ -20,12 +21,17 @@ PREDICTION2INTERFACE_MAP = {
 
 
 class VirtualHandInterfaceOutputSystem(OutputSystemTemplate):
-    def __init__(self, main_window, prediction_is_classification: bool) -> None:
+    def __init__(
+        self, main_window: MyoGestic, prediction_is_classification: bool
+    ) -> None:
         super().__init__(main_window, prediction_is_classification)
 
-        if not isinstance(main_window.selected_visual_interface, VirtualHandInterface):
+        if not isinstance(
+            main_window.selected_visual_interface.setup_interface_ui,
+            VirtualHandInterface_SetupInterface,
+        ):
             raise ValueError(
-                "The selected_visual_interface must be an instance of VirtualHandInterface."
+                "The virtual interface must be the Virtual Hand Interface."
                 f"Got {type(main_window.selected_visual_interface)}."
             )
 
