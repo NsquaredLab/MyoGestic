@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from myogestic.gui.widgets.logger import LoggerLevel
-from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
+from myogestic.gui.widgets.templates.visual_interface import VisualInterface
 
 from myogestic.models.interface import MyoGesticModelInterface
 from myogestic.utils.config import UnchangeableParameter, CONFIG_REGISTRY
@@ -112,7 +112,7 @@ class PopupWindowFeatures(QDialog):
     def __init__(self, selected_features: list[str]):
         super().__init__()
 
-        self.selected_visual_interface: Optional[VisualInterfaceTemplate] = None
+        self.selected_visual_interface: Optional[VisualInterface] = None
 
         self.selected_features = set(selected_features)
 
@@ -129,14 +129,16 @@ class PopupWindowFeatures(QDialog):
 
         self.checkboxes = []
 
-        for filter in CONFIG_REGISTRY.features_map.keys():
-            feature_checkbox = QCheckBox(filter)
+        for feature in CONFIG_REGISTRY.features_map.keys():
+            feature_checkbox = QCheckBox(feature)
             self.checkboxes.append(feature_checkbox)
             self.scroll_area_layout.addWidget(feature_checkbox)
-            if filter in self.selected_features:
+            if feature in self.selected_features:
                 feature_checkbox.setChecked(True)
 
-            feature_checkbox.checkStateChanged.connect(partial(self._on_change, filter))
+            feature_checkbox.checkStateChanged.connect(
+                partial(self._on_change, feature)
+            )
 
         self.scroll_area_widget.setLayout(self.scroll_area_layout)
         self.scroll_area.setWidget(self.scroll_area_widget)
@@ -149,7 +151,7 @@ class PopupWindowFeatures(QDialog):
             if checkbox.text() in self.selected_features:
                 checkbox.setCheckState(Qt.CheckState.Checked)
 
-    def _on_change(self, feature_name: str, state: int) -> None:
+    def _on_change(self, feature_name: str, state) -> None:
         if state.value == 2:
             self.selected_features.add(feature_name)
         else:
@@ -222,12 +224,10 @@ class TrainingProtocol(QObject):
         Thread for training a models.
     """
 
-    def __init__(self, parent: MyoGestic | None = ...) -> None:
-        super().__init__(parent)
+    def __init__(self, main_window: MyoGestic) -> None:
+        super().__init__(main_window)
 
-        self.main_window = parent
-
-        print("TrainingProtocol")
+        self.main_window = main_window
 
         # Initialize Protocol UI
         self._setup_protocol_ui()

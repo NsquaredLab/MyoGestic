@@ -11,7 +11,7 @@ from PySide6.QtNetwork import QUdpSocket, QHostAddress
 from PySide6.QtWidgets import QCheckBox, QPushButton, QWidget
 
 from myogestic.gui.widgets.logger import LoggerLevel
-from myogestic.gui.widgets.templates.visual_interface import SetupUITemplate
+from myogestic.gui.widgets.templates.visual_interface import SetupInterfaceTemplate
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
     Ui_SetupVirtualHandInterface,
 )
@@ -26,7 +26,6 @@ STREAMING_FREQUENCY = 32
 SOCKET_IP = "127.0.0.1"
 
 # Ports
-
 # on this port the VHI listens for incoming messages from MyoGestic
 VHI__UDP_PORT = 1236
 
@@ -34,7 +33,7 @@ VHI__UDP_PORT = 1236
 VHI_PREDICTION__UDP_PORT = 1234
 
 
-class VirtualHandInterfaceSetupUI(SetupUITemplate):
+class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
 
     predicted_hand_signal = Signal(np.ndarray)
 
@@ -47,21 +46,20 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
 
         self._setup_timers()
 
-        self.unity_process = QProcess()
-        self.unity_process.finished.connect(self.interface_was_killed)
+        self._unity_process = QProcess()
+        self._unity_process.finished.connect(self.interface_was_killed)
 
         # Toggle the selected visual interface when the Unity process is started or finished
-        self.unity_process.finished.connect(
+        self._unity_process.finished.connect(
             lambda: self.main_window._toggle_selected_visual_interface(self.name)
         )
-        self.unity_process.started.connect(
+        self._unity_process.started.connect(
             lambda: self.main_window._toggle_selected_visual_interface(self.name)
         )
 
-        self.record_protocol = self.main_window.protocol.available_protocols[0]
+        self._record_protocol = self.main_window.protocol.available_protocols[0]
 
-        # Get OS of the user
-        self.unity_process.setProgram(str(self._get_unity_executable()))
+        self._unity_process.setProgram(str(self._get_unity_executable()))
 
         self.time_difference_between_messages = float(1 / STREAMING_FREQUENCY)
         self.last_message_time = time.time()
@@ -130,15 +128,15 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
 
     def start_interface(self):
         if not self.use_external_virtual_hand_interface_check_box.isChecked():
-            self.unity_process.start()
-            self.unity_process.waitForStarted()
+            self._unity_process.start()
+            self._unity_process.waitForStarted()
         self.status_request_timer.start()
         self.toggle_streaming()
 
     def stop_interface(self):
         if not self.use_external_virtual_hand_interface_check_box.isChecked():
-            self.unity_process.kill()
-            self.unity_process.waitForFinished()
+            self._unity_process.kill()
+            self._unity_process.waitForFinished()
         self.status_request_timer.stop()
         self.toggle_streaming()
 
@@ -155,9 +153,9 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
         try:
             if self.streaming_udp_socket:
                 self.streaming_udp_socket.close()
-            if self.unity_process.state() != QProcess.NotRunning:
-                self.unity_process.kill()
-                self.unity_process.waitForFinished()
+            if self._unity_process.state() != QProcess.NotRunning:
+                self._unity_process.kill()
+                self._unity_process.waitForFinished()
         except Exception as e:
             self.main_window.logger.print(
                 f"Error during cleanup: {e}", level=LoggerLevel.ERROR
@@ -281,3 +279,15 @@ class VirtualHandInterfaceSetupUI(SetupUITemplate):
                 return
 
             self.status_request_timeout_timer.start()
+
+    def connect_custom_signals(self):
+        self.predicted_hand_signal.connect(self.online_predicted_hand_update)
+
+    def disconnect_custom_signals(self):
+        self.predicted_hand_signal.disconnect(self.online_predicted_hand_update)
+
+    def online_predicted_hand_update(self, data: np.ndarray) -> None:
+        if self.online_record_toggle_push_button.isChecked():
+            self.buffer_predicted_hand_recording.append(
+                (time.time() - self.start_time, data)
+            )

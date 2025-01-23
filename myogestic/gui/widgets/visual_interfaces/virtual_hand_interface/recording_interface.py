@@ -7,7 +7,7 @@ from PySide6.QtCore import SignalInstance
 from PySide6.QtGui import QCloseEvent
 
 from myogestic.gui.widgets.logger import LoggerLevel
-from myogestic.gui.widgets.templates.visual_interface import RecordingUITemplate
+from myogestic.gui.widgets.templates.visual_interface import RecordingInterfaceTemplate
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
     Ui_RecordingVirtualHandInterface,
 )
@@ -16,7 +16,7 @@ from myogestic.utils.constants import RECORDING_DIR_PATH
 KINEMATICS_SAMPLING_FREQUENCY = 60
 
 
-class VirtualHandInterfaceRecordingUI(RecordingUITemplate):
+class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
     def __init__(
         self,
         parent,

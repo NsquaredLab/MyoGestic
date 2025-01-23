@@ -1,5 +1,6 @@
 import qdarkstyle
 import sys
+from utils.config import CONFIG_REGISTRY
 
 from PySide6.QtWidgets import QApplication
 

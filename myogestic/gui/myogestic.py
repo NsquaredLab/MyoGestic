@@ -13,19 +13,18 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QGroupBox,
     QVBoxLayout,
-    QApplication,
 )
 from biosignal_device_interface.constants.devices.core.base_device_constants import (
     DeviceType,
 )
 
-from myogestic.gui.main_window_v2 import Ui_MyoGestic
 from myogestic.gui.biosignal import Ui_BioSignalInterface
+from myogestic.gui.main_window_v2 import Ui_MyoGestic
 from myogestic.gui.protocols.protocol import Protocol
 from myogestic.gui.widgets.logger import CustomLogger
-from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
-from myogestic.utils.constants import BASE_PATH
+from myogestic.gui.widgets.templates.visual_interface import VisualInterface
 from myogestic.utils.config import custom_message_handler, CONFIG_REGISTRY  # noqa
+from myogestic.utils.constants import BASE_PATH
 
 if TYPE_CHECKING:
     from biosignal_device_interface.gui.device_template_widgets.otb.otb_devices_widget import (
@@ -147,10 +146,18 @@ class MyoGestic(QMainWindow):
         )
         self.ui.visualInterfacesVerticalLayout.setContentsMargins(*([15] * 4))
 
-        self.selected_visual_interface: Optional[VisualInterfaceTemplate] = None
-        self.visual_interfaces: dict[str, VisualInterfaceTemplate] = {}
-        for name, main_class in CONFIG_REGISTRY.visual_interfaces_map.items():
-            self.visual_interfaces[name] = main_class(self, name=name)
+        self.selected_visual_interface: Optional[VisualInterface] = None
+        self.visual_interfaces: dict[str, VisualInterface] = {}
+        for name, (
+            setup_ui,
+            interface_ui,
+        ) in CONFIG_REGISTRY.visual_interfaces_map.items():
+            self.visual_interfaces[name] = VisualInterface(
+                self,
+                name=name,
+                setup_interface_ui=setup_ui,
+                recording_interface_ui=interface_ui,
+            )
 
         # Output Setup
         # self.virtual_hand_interface = VirtualHandInterface(self

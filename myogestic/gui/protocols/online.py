@@ -12,12 +12,11 @@ from PySide6.QtWidgets import QFileDialog
 
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.gui.widgets.templates.output_system import OutputSystemTemplate
+from myogestic.gui.widgets.templates.visual_interface import VisualInterface
 from myogestic.models.interface import MyoGesticModelInterface
 from myogestic.user_config import CHANNELS
 from myogestic.utils.config import CONFIG_REGISTRY
 from myogestic.utils.constants import PREDICTIONS_DIR_PATH, MODELS_DIR_PATH
-
-from myogestic.gui.widgets.templates.visual_interface import VisualInterfaceTemplate
 
 
 if TYPE_CHECKING:
@@ -44,7 +43,7 @@ class OnlineProtocol(QObject):
         Buffer for storing the kinematics data.
     buffer_emg_recording : list[(float, np.ndarray)] | None
         Buffer for storing the EMG data during recording.
-    buffer_kinematics_recording : list[(float, np.ndarray)] | None
+    buffer_ground_truth_recording : list[(float, np.ndarray)] | None
         Buffer for storing the kinematics data during recording.
     buffer_predictions_recording : list[(float, np.ndarray)] | None
         Buffer for storing the predictions during recording.
@@ -97,7 +96,7 @@ class OnlineProtocol(QObject):
 
         self.main_window = parent
 
-        self.selected_visual_interface: Optional[VisualInterfaceTemplate] = None
+        self.selected_visual_interface: Optional[VisualInterface] = None
 
         # Initialize Protocol UI
         self._setup_protocol_ui()
@@ -118,7 +117,7 @@ class OnlineProtocol(QObject):
 
         # Timings
         self.buffer_emg_recording: list[(float, np.ndarray)] = None
-        self.buffer_kinematics_recording: list[(float, np.ndarray)] = None
+        self.buffer_ground_truth_recording: list[(float, np.ndarray)] = None
         self.buffer_predictions_recording: list[(float, np.ndarray)] = None
         self.buffer_prediction_before_filter_recording: list[(float, np.ndarray)] = None
         self.buffer_predictions_after_filter_recording: list[(float, np.ndarray)] = None
@@ -221,9 +220,9 @@ class OnlineProtocol(QObject):
             #     (current_time - self.start_time, prediction_proba)
             # )
 
-    def online_kinematics_update(self, data: np.ndarray) -> None:
+    def online_ground_truth_update(self, data: np.ndarray) -> None:
         if self.online_record_toggle_push_button.isChecked():
-            self.buffer_kinematics_recording.append(
+            self.buffer_ground_truth_recording.append(
                 (time.time() - self.start_time, data)
             )
 
@@ -269,15 +268,17 @@ class OnlineProtocol(QObject):
             self.online_prediction_toggle_push_button.setEnabled(False)
 
             self.main_window.selected_visual_interface.incoming_message_signal.connect(
-                self.online_kinematics_update
+                self.online_ground_truth_update
             )
 
-            self.main_window.selected_visual_interface.predicted_hand_signal.connect(
+            self.selected_visual_interface.setup_interface_ui.connect_custom_signals()
+
+            self.main_window.selected_visual_interface.setup_interface_ui.predicted_hand_signal.connect(
                 self.online_predicted_hand_update
             )
 
             self.buffer_emg_recording = []
-            self.buffer_kinematics_recording = []
+            self.buffer_ground_truth_recording = []
             self.buffer_predictions_recording = []
             self.buffer_predicted_hand_recording = []
 
@@ -290,10 +291,10 @@ class OnlineProtocol(QObject):
         else:
             self.online_prediction_toggle_push_button.setEnabled(True)
             self.main_window.selected_visual_interface.incoming_message_signal.disconnect(
-                self.online_kinematics_update
+                self.online_ground_truth_update
             )
 
-            self.main_window.selected_visual_interface.predicted_hand_signal.disconnect(
+            self.main_window.selected_visual_interface.setup_interface_ui.predicted_hand_signal.disconnect(
                 self.online_predicted_hand_update
             )
 
@@ -305,11 +306,11 @@ class OnlineProtocol(QObject):
         save_pickle_dict = {
             "emg": np.stack([data for _, data in self.buffer_emg_recording], axis=-1),
             "emg_timings": np.array([time for time, _ in self.buffer_emg_recording]),
-            "kinematics": np.vstack(
-                [data for _, data in self.buffer_kinematics_recording]
+            "ground_truth": np.vstack(
+                [data for _, data in self.buffer_ground_truth_recording]
             ).T,
-            "kinematics_timings": np.array(
-                [time for time, _ in self.buffer_kinematics_recording]
+            "ground_truth_timings": np.array(
+                [time for time, _ in self.buffer_ground_truth_recording]
             ),
             "predictions_before_filters": np.stack(
                 [data for _, data in self.buffer_prediction_before_filter_recording],
@@ -343,9 +344,8 @@ class OnlineProtocol(QObject):
             ),
             "channels": CHANNELS,
         }
-        now = datetime.now()
-        formatted_now = now.strftime("%Y%m%d_%H%M%S%f")
-        file_name = f"MyoGestic_Prediction_{formatted_now}_{self.online_model_label.text().lower().split(' ')[0]}.pkl"
+
+        file_name = f"MyoGestic_Prediction_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{self.online_model_label.text().lower().split(' ')[0]}.pkl"
 
         with (PREDICTIONS_DIR_PATH / file_name).open("wb") as f:
             pickle.dump(save_pickle_dict, f)

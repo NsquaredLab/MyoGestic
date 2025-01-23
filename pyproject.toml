@@ -16,7 +16,7 @@ poethepoet = "^0.27.0"
 catboost = "^1.2.5"
 scikit-learn = "^1.5.1"
 toml = "^0.10.2"
-biosignal-device-interface = {git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git", branch= "implementation-quattrocento-raw"}
+biosignal-device-interface = {git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git"}
 myoverse = {git = "https://github.com/NsquaredLab/MyoVerse.git"}
 tornado = "^6.4.2"
 aiohttp = "^3.11.7"
@@ -29,6 +29,7 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 matplotlib = "^3.9.0"
 ruff = "^0.8.6"
+prospector = "^1.13.3"
 
 [tool.poetry.group.docs]
 optional = true
