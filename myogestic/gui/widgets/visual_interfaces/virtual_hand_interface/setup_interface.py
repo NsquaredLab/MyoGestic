@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QCheckBox, QPushButton, QWidget
 
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.gui.widgets.templates.visual_interface import SetupInterfaceTemplate
-from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
+from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.ui import (
     Ui_SetupVirtualHandInterface,
 )
 from myogestic.utils.constants import MYOGESTIC_UDP_PORT
@@ -34,7 +34,6 @@ VHI_PREDICTION__UDP_PORT = 1234
 
 
 class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
-
     predicted_hand_signal = Signal(np.ndarray)
 
     def __init__(self, parent, name="VirtualHandInterface"):
@@ -58,6 +57,7 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
         )
 
         self._record_protocol = self.main_window.protocol.available_protocols[0]
+        self._online_protocol = self.main_window.protocol.available_protocols[2]
 
         self._unity_process.setProgram(str(self._get_unity_executable()))
 
@@ -67,6 +67,8 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
 
         self.streaming_udp_socket: QUdpSocket | None = None
         self.predicted_hand_udp_socket: QUdpSocket | None = None
+
+        self.buffer_predicted_hand_recording: list[(float, np.ndarray)] = None
 
         # Initialize Virtual Hand Interface UI
         self.initialize_ui_logic()
@@ -248,20 +250,24 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
                 if len(datagram.data()) == 0:
                     return
 
-                if (
-                    len(datagram.data()) == len(self.status_response.encode("utf-8"))
-                    and datagram.data().decode("utf-8") == self.status_response
-                ):
-                    self.is_connected = True
-                    self.virtual_hand_interface_status_widget.setStyleSheet(
-                        self.virtual_hand_interface_connected_stylesheet
-                    )
-                    self.status_request_timeout_timer.stop()
-                    return
+                try:
+                    if (
+                        len(datagram.data())
+                        == len(self.status_response.encode("utf-8"))
+                        and datagram.data().decode("utf-8") == self.status_response
+                    ):
+                        self.is_connected = True
+                        self.virtual_hand_interface_status_widget.setStyleSheet(
+                            self.virtual_hand_interface_connected_stylesheet
+                        )
+                        self.status_request_timeout_timer.stop()
+                        return
 
-                self.incoming_message_signal.emit(
-                    np.array(ast.literal_eval(datagram.data().decode("utf-8")))
-                )
+                    self.incoming_message_signal.emit(
+                        np.array(ast.literal_eval(datagram.data().decode("utf-8")))
+                    )
+                except (UnicodeDecodeError, SyntaxError):
+                    pass
 
     def write_status_message(self) -> None:
         if self.toggle_virtual_hand_interface_push_button.isChecked():
@@ -280,14 +286,27 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
 
             self.status_request_timeout_timer.start()
 
-    def connect_custom_signals(self):
+    def connect_custom_signals(self) -> None:
         self.predicted_hand_signal.connect(self.online_predicted_hand_update)
 
-    def disconnect_custom_signals(self):
+    def disconnect_custom_signals(self) -> None:
         self.predicted_hand_signal.disconnect(self.online_predicted_hand_update)
 
+    def get_custom_save_data(self) -> dict:
+        return {
+            "predicted_hand": np.vstack(
+                [data for _, data in self.buffer_predicted_hand_recording],
+            ).T,
+            "predicted_hand_timings": np.array(
+                [time for time, _ in self.buffer_predicted_hand_recording],
+            ),
+        }
+
+    def clear_custom_signal_buffers(self) -> None:
+        self.buffer_predicted_hand_recording = []
+
     def online_predicted_hand_update(self, data: np.ndarray) -> None:
-        if self.online_record_toggle_push_button.isChecked():
+        if self._online_protocol.online_record_toggle_push_button.isChecked():
             self.buffer_predicted_hand_recording.append(
-                (time.time() - self.start_time, data)
+                (time.time() - self._online_protocol.start_time, data)
             )

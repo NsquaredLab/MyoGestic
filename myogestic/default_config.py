@@ -21,12 +21,10 @@ from sklearn.svm import SVC
 
 from myogestic.gui.widgets.output_systems.neuroorthosis import NeuroOrthosisOutputSystem
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.output_interface import (
-    VirtualHandInterfaceOutputSystem,
+    VirtualHandInterface_OutputSystem,
 )
-from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.recording_interface import (
+from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
     VirtualHandInterface_RecordingInterface,
-)
-from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.setup_interface import (
     VirtualHandInterface_SetupInterface,
 )
 from myogestic.models.definitions import raulnet_models, sklearn_models, catboost_models
@@ -220,5 +218,5 @@ CONFIG_REGISTRY.register_visual_interface(
     setup_interface_ui=VirtualHandInterface_SetupInterface,
     recording_interface_ui=VirtualHandInterface_RecordingInterface,
 )
-CONFIG_REGISTRY.register_output_system("VHI", VirtualHandInterfaceOutputSystem)
+CONFIG_REGISTRY.register_output_system("VHI", VirtualHandInterface_OutputSystem)
 CONFIG_REGISTRY.register_output_system("NEUROORTHOSIS", NeuroOrthosisOutputSystem)

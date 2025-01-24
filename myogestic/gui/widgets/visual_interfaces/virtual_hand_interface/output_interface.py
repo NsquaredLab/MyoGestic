@@ -20,7 +20,7 @@ PREDICTION2INTERFACE_MAP = {
 }
 
 
-class VirtualHandInterfaceOutputSystem(OutputSystemTemplate):
+class VirtualHandInterface_OutputSystem(OutputSystemTemplate):
     def __init__(
         self, main_window: MyoGestic, prediction_is_classification: bool
     ) -> None:

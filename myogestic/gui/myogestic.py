@@ -19,7 +19,7 @@ from biosignal_device_interface.constants.devices.core.base_device_constants imp
 )
 
 from myogestic.gui.biosignal import Ui_BioSignalInterface
-from myogestic.gui.main_window_v2 import Ui_MyoGestic
+from myogestic.gui.main_window import Ui_MyoGestic
 from myogestic.gui.protocols.protocol import Protocol
 from myogestic.gui.widgets.logger import CustomLogger
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface

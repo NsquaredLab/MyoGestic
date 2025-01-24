@@ -108,6 +108,21 @@ class SetupInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         """Disconnect custom signals from slots."""
         pass
 
+    def get_custom_save_data(self) -> dict:
+        """Get custom data to save.
+
+        Returns
+        -------
+        dict
+            The custom data to save. If no custom data is available, an empty dictionary must be returned.
+        """
+        return {}
+
+    @abstractmethod
+    def clear_custom_signal_buffers(self):
+        """Clear the buffers of the custom signals."""
+        pass
+
 
 class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
     """
