@@ -8,7 +8,7 @@ from PySide6.QtGui import QCloseEvent
 
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.gui.widgets.templates.visual_interface import RecordingInterfaceTemplate
-from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
+from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.ui import (
     Ui_RecordingVirtualHandInterface,
 )
 from myogestic.utils.constants import RECORDING_DIR_PATH
@@ -169,9 +169,10 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         - use_kinematics: Boolean indicating whether kinematics data was recorded.
         """
         label = self.review_recording_label_line_edit.text() or "default"
-        biosignal_signal, biosignal_timings = (
-            self.recording_protocol.retrieve_recorded_data()
-        )
+        (
+            biosignal_signal,
+            biosignal_timings,
+        ) = self.recording_protocol.retrieve_recorded_data()
 
         save_pickle_dict = {
             "emg": biosignal_signal,
