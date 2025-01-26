@@ -1,6 +1,5 @@
 from typing import Any
 
-from myogestic.gui.myogestic import MyoGestic
 from myogestic.gui.widgets.templates.output_system import OutputSystemTemplate
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.setup_interface import (
     VirtualHandInterface_SetupInterface,
@@ -21,9 +20,7 @@ PREDICTION2INTERFACE_MAP = {
 
 
 class VirtualHandInterface_OutputSystem(OutputSystemTemplate):
-    def __init__(
-        self, main_window: MyoGestic, prediction_is_classification: bool
-    ) -> None:
+    def __init__(self, main_window, prediction_is_classification: bool) -> None:
         super().__init__(main_window, prediction_is_classification)
 
         if not isinstance(

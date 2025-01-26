@@ -1,3 +1,5 @@
+import pickle
+from datetime import datetime
 from abc import abstractmethod
 from typing import Optional, Type
 
@@ -7,6 +9,7 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox, QMainWindow
 
 from myogestic.gui.widgets.templates.meta_qobject import MetaQObjectABC
+from myogestic.utils.constants import RECORDING_DIR_PATH
 
 
 class SetupInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
@@ -24,14 +27,12 @@ class SetupInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
     outgoing_message_signal = Signal(QByteArray)
     incoming_message_signal = Signal(np.ndarray)
 
-    def __init__(
-        self,
-        main_window: QMainWindow = None,
-        name: str = "SetupUI",
-        ui: object = None,
-    ):
+    def __init__(self, main_window, name: str = "SetupUI", ui: object = None):
         super().__init__()
-        self.main_window = main_window
+
+        from myogestic.gui.myogestic import MyoGestic
+
+        self.main_window: MyoGestic = main_window
         self.name = name
 
         if not ui:
@@ -133,13 +134,16 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
 
     def __init__(
         self,
-        main_window: Optional[QMainWindow] = None,
+        main_window,
         name: str = "RecordingUI",
         ui: object = None,
         incoming_message_signal: SignalInstance = None,
     ):
         super().__init__()
-        self.main_window = main_window
+
+        from myogestic.gui.myogestic import MyoGestic
+
+        self.main_window: MyoGestic = main_window
         self.name = name
 
         if not ui:
@@ -163,6 +167,67 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         if not incoming_message_signal:
             raise ValueError("The incoming message signal must be provided.")
         self.incoming_message_signal = incoming_message_signal
+
+    def save_recording(
+        self,
+        biosignal: np.ndarray,
+        biosignal_timings: np.ndarray,
+        ground_truth: np.ndarray,
+        ground_truth_timings: np.ndarray,
+        record_duration: int | float,
+        use_as_classification: bool,
+        recording_label: str,
+        task: str,
+        ground_truth_sampling_frequency: int | float,
+        **kwargs,
+    ) -> None:
+        """Save the recording.
+
+        Parameters
+        ----------
+        biosignal : np.ndarray
+            The recorded biosignal data.
+        biosignal_timings : np.ndarray
+            The recorded biosignal timings.
+        ground_truth : np.ndarray
+            The recorded ground truth data.
+        ground_truth_timings : np.ndarray
+            The recorded ground truth timings.
+        record_duration : int | float
+            The duration of the recording in seconds.
+        use_as_classification : bool
+            Whether to use the recording as classification data.
+        recording_label : str
+            The label of the recording.
+        task : str
+            The task of the recording.
+        ground_truth_sampling_frequency : int | float
+            The sampling frequency of the ground truth data.
+        kwargs : dict
+            Additional custom data to save.
+        """
+
+        save_pickle_dict = {
+            "biosignal": biosignal,
+            "biosignal_timings": biosignal_timings,
+            "ground_truth": ground_truth,
+            "ground_truth_timings": ground_truth_timings,
+            "recording_label": recording_label,
+            "task": task,
+            "ground_truth_sampling_frequency": ground_truth_sampling_frequency,
+            "device_information": self.main_window.device__widget.get_device_information(),
+            "bad_channels": self.main_window.current_bad_channels__list,
+            "recording_time": record_duration,
+            "use_as_classification": use_as_classification,
+            "visual_interface": self.main_window.selected_visual_interface.name,
+        }
+
+        save_pickle_dict.update(kwargs)
+
+        file_name = f"{save_pickle_dict["visual_interface"]}_Recording_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{task.lower()}_{recording_label.lower()}.pkl"
+
+        with (RECORDING_DIR_PATH / file_name).open("wb") as f:
+            pickle.dump(save_pickle_dict, f)
 
     @abstractmethod
     def initialize_ui_logic(self) -> None:

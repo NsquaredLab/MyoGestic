@@ -3,7 +3,7 @@ from __future__ import annotations
 import pickle
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Any
 
 import numpy as np
 from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
@@ -27,16 +27,21 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from myogestic.gui.widgets.logger import LoggerLevel
+from myogestic.gui.widgets.logger import LoggerLevel, CustomLogger
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface
 
 from myogestic.models.interface import MyoGesticModelInterface
-from myogestic.utils.config import UnchangeableParameter, CONFIG_REGISTRY
+from myogestic.utils.config import (
+    UnchangeableParameter,
+    CONFIG_REGISTRY,
+    ChangeableParameter,
+)
 from myogestic.utils.constants import (
     RECORDING_DIR_PATH,
     MODELS_DIR_PATH,
     DATASETS_DIR_PATH,
     NO_DATASET_SELECTED_INFO,
+    REQUIRED_RECORDING_KEYS,
 )
 
 if TYPE_CHECKING:
@@ -44,10 +49,28 @@ if TYPE_CHECKING:
 
 
 class PopupWindowParameters(QDialog):
-    def __init__(self, selected_model_name):
+    """
+    Class for the popup window for the model parameters.
+
+    Parameters
+    ----------
+    selected_model_name : str
+        The selected model name.
+    logger : CustomLogger
+        The logger object from the main window.
+
+    Attributes
+    ----------
+    model_changeable_parameters : dict[str, ChangeableParameter]
+        Dictionary for the model changeable parameters.
+
+    """
+
+    def __init__(self, selected_model_name: str, logger: CustomLogger):
         super().__init__()
 
-        self.model_changeable_parameters = {}
+        self.model_changeable_parameters: dict[str, ChangeableParameter] = {}
+        self._logger = logger
 
         # set for each parameter the default value in an appropriate widget
         self.setWindowTitle("Model Parameters")
@@ -105,7 +128,9 @@ class PopupWindowParameters(QDialog):
 
     def _on_change(self, parameter_name: str, value: UnchangeableParameter) -> None:
         self.model_changeable_parameters[parameter_name] = value
-        print(self.model_changeable_parameters)
+        self._logger.print(
+            f"Parameter {parameter_name} changed to {value}", LoggerLevel.INFO
+        )
 
 
 class PopupWindowFeatures(QDialog):
@@ -205,68 +230,60 @@ class TrainingProtocol(QObject):
 
     Parameters
     ----------
-    parent : MyoGestic | None
-        The parent object of the protocol object.
+    main_window : MyoGestic
+        The main window of the MyoGestic application.
 
     Attributes
     ----------
-    main_window : MyoGestic
+    _main_window : MyoGestic
         The main window of the MyoGestic application.
-    model_interface : MyoGesticModelInterface
+    _model_interface : MyoGesticModelInterface
         Interface for the models.
-    selected_recordings : dict[str, dict]
+    _selected_recordings__dict : dict[str, dict]
         Dictionary for the selected recordings.
-    selected_dataset_filepath : dict[str, np.ndarray]
+    _selected_dataset__filepath : dict[str, np.ndarray]
         Dictionary for the selected dataset file path.
-    create_dataset_thread : PyQtThread
+    _create_dataset__thread : PyQtThread
         Thread for creating a dataset.
-    train_model_thread : PyQtThread
+    _train_model__thread : PyQtThread
         Thread for training a models.
     """
 
     def __init__(self, main_window: MyoGestic) -> None:
         super().__init__(main_window)
 
-        self.main_window = main_window
+        self._main_window = main_window
 
         # Initialize Protocol UI
         self._setup_protocol_ui()
 
         # Initialize Protocol
-        self.selected_recordings: dict[str, dict] = None
-        self.selected_dataset_filepath: dict[str, np.ndarray] = None
+        self._selected_recordings__dict: dict[str, dict] | None = None
+        self._selected_dataset__filepath: str | None = None
 
         # Model interface
-        self.model_interface = None
+        self._model_interface: MyoGesticModelInterface | None = None
+        self._current_device_information: dict[str, Any] | None = None
 
-        self.selected_model_name = list(CONFIG_REGISTRY.models_map.keys())[0]
-        self.selected_model, self.model_is_classifier = CONFIG_REGISTRY.models_map[
-            self.selected_model_name
+        self._selected_model_name: str = list(CONFIG_REGISTRY.models_map.keys())[0]
+        self._model_changeable_parameters__dict = {}
+        self._selected_features__list: list[str] = [
+            list(CONFIG_REGISTRY.features_map.keys())[0]
         ]
-        self.model_changeable_parameters = {}
-        self.selected_features = [list(CONFIG_REGISTRY.features_map.keys())[0]]
 
         # Get configuration update
-        self.main_window.device_widget.configure_toggled.connect(
-            self._update_device_configuration
-        )
+        # self._main_window.device__widget.configure_toggled.connect(
+        #     self._update_device_configuration
+        # )
 
         # Threads
-        self.create_dataset_thread = None
-        self.train_model_thread = None
+        self._create_dataset__thread: PyQtThread | None = None
+        self._train_model__thread: PyQtThread | None = None
 
         # File management:
         RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
         MODELS_DIR_PATH.mkdir(parents=True, exist_ok=True)
         DATASETS_DIR_PATH.mkdir(parents=True, exist_ok=True)
-
-    def _update_device_configuration(self, is_configured: bool) -> None:
-        if not is_configured:
-            return
-        self.model_interface = MyoGesticModelInterface(
-            device_information=self.main_window.device_widget.get_device_information(),
-            logger=self.main_window.logger,
-        )
 
     def _check_if_recordings_selected(self) -> None:
         if (
@@ -277,13 +294,14 @@ class TrainingProtocol(QObject):
             self.training_remove_selected_recording_push_button.setEnabled(True)
 
     def _remove_selected_recording(self) -> None:
-        selected_rows = list(
-            set(
-                index.row()
-                for index in self.training_create_dataset_selected_recordings_table_widget.selectedIndexes()
+        for row in reversed(
+            list(
+                set(
+                    index.row()
+                    for index in self.training_create_dataset_selected_recordings_table_widget.selectedIndexes()
+                )
             )
-        )
-        for row in selected_rows[::-1]:
+        ):
             self.training_create_dataset_selected_recordings_table_widget.removeRow(row)
         self._check_if_recordings_selected()
 
@@ -295,63 +313,49 @@ class TrainingProtocol(QObject):
         self.training_create_dataset_push_button.setEnabled(False)
 
         # Open dialog to select recordings
-        dialog = QFileDialog(self.main_window)
+        dialog = QFileDialog(self._main_window)
         dialog.setFileMode(QFileDialog.ExistingFiles)
         dialog.setNameFilter("Pickle files (*.pkl)")
         dialog.setDirectory(str(RECORDING_DIR_PATH))
 
-        filenames, _ = dialog.getOpenFileNames()
-        self.selected_recordings = {}
+        self._selected_recordings__dict = {}
         self.training_create_dataset_selected_recordings_table_widget.setRowCount(0)
 
-        for file in filenames:
+        for file in dialog.getOpenFileNames()[0]:
             with open(file, "rb") as f:
                 recording: dict = pickle.load(f)
 
-                if not recording:
-                    continue
-
-                if not isinstance(recording, dict):
+                if not recording or not isinstance(recording, dict):
                     continue
 
                 keys = recording.keys()
 
-                required_keys = [
-                    "emg",
-                    "kinematics",
-                    "timings_kinematics",
-                    "timings_emg",
-                    "label",
-                    "task",
-                    "device",
-                    "bad_channels",
-                ]
-
-                if not all(key in keys for key in required_keys):
-                    self.main_window.logger.print(
-                        f" {f} is an invalid recording! \n Missing keys: {set(required_keys) - set(keys)}",
+                missing_keys = REQUIRED_RECORDING_KEYS - set(keys)
+                if missing_keys:
+                    self._main_window.logger.print(
+                        f" {f} is an invalid recording! \n Missing keys: {missing_keys}",
                         LoggerLevel.ERROR,
                     )
                     continue
 
-                if recording["device"] != self.main_window.device_name:
-                    self.main_window.logger.print(
-                        f" {f} is not recorded with the current device! \n Please select {recording['device']}.",
-                        LoggerLevel.ERROR,
-                    )
-                    continue
+                # if recording["device"] != self._main_window.device_name:
+                #     self._main_window.logger.print(
+                #         f" {f} is not recorded with the current device! \n Please select {recording['device']}.",
+                #         LoggerLevel.ERROR,
+                #     )
+                #     continue
 
                 selected_recordings_key = recording["task"].capitalize()
-                if selected_recordings_key in self.selected_recordings.keys():
-                    current_recording = self.selected_recordings[
+                if selected_recordings_key in self._selected_recordings__dict.keys():
+                    current_recording = self._selected_recordings__dict[
                         selected_recordings_key
                     ]
 
                     recording["emg"] = np.concatenate(
                         [current_recording["emg"], recording["emg"]], axis=-1
                     )
-                    recording["kinematics"] = np.concatenate(
-                        [current_recording["kinematics"], recording["kinematics"]],
+                    recording["ground_truth"] = np.concatenate(
+                        [current_recording["kinematics"], recording["ground_truth"]],
                         axis=-1,
                     )
                     recording["timings_kinematics"] = np.concatenate(
@@ -376,13 +380,27 @@ class TrainingProtocol(QObject):
                         and current_recording["use_kinematics"]
                     )
 
-                self.selected_recordings[selected_recordings_key] = recording
+                self._selected_recordings__dict[selected_recordings_key] = recording
 
-        if len(self.selected_recordings) == 0:
+        if len(self._selected_recordings__dict) == 0:
             self._open_warning_dialog("No valid recordings selected!")
             return
 
-        for key, item in self.selected_recordings.items():
+        for i, (_, item) in enumerate(self._selected_recordings__dict.items()):
+            if i == 0:
+                self._current_device_information = item["device_information"]
+
+            if item["device_information"] != self._current_device_information:
+                self._open_warning_dialog("Recordings are not from the same device!")
+                self._selected_recordings__dict = {}
+                self.training_create_dataset_push_button.setEnabled(False)
+
+        self._model_interface = MyoGesticModelInterface(
+            device_information=self._current_device_information,
+            logger=self._main_window.logger
+        )
+
+        for key, item in self._selected_recordings__dict.items():
             row_position = (
                 self.training_create_dataset_selected_recordings_table_widget.rowCount()
             )
@@ -397,58 +415,56 @@ class TrainingProtocol(QObject):
                 row_position,
                 1,
                 QTableWidgetItem(
-                    f"{((item['emg'].shape[-1] * item['emg'].shape[-2]) / self.main_window.sampling_frequency):.2f} s"
+                    f"{((item['biosignal'].shape[-1] * item['biosignal'].shape[-2]) / item['device_information']["sampling_frequency"]):.2f} s"
                 ),
             )
             self.training_create_dataset_selected_recordings_table_widget.setItem(
-                row_position, 2, QTableWidgetItem(item["label"])
+                row_position, 2, QTableWidgetItem(item["recording_label"])
             )
 
         self.training_create_dataset_push_button.setEnabled(True)
 
     def _create_dataset(self) -> None:
-        if not self.selected_recordings:
+        if not self._selected_recordings__dict:
             self._open_warning_dialog("No recordings selected!")
         self.training_create_dataset_push_button.setEnabled(False)
         self.training_create_datasets_select_recordings_push_button.setEnabled(False)
 
-        self.create_dataset_thread = PyQtThread(
-            target=self._create_dataset_thread, parent=self.main_window
+        self._create_dataset__thread = PyQtThread(
+            target=self._create_dataset_thread, parent=self._main_window
         )
-        self.create_dataset_thread.has_finished_signal.connect(
+        self._create_dataset__thread.has_finished_signal.connect(
             self.__create_dataset_thread_finished
         )
-        self.create_dataset_thread.start()
+        self._create_dataset__thread.start()
 
     def __create_dataset_thread_finished(self) -> None:
         self.training_create_dataset_selected_recordings_table_widget.setRowCount(0)
         self.training_create_dataset_label_line_edit.setText("")
         self.training_create_datasets_select_recordings_push_button.setEnabled(True)
-        self.selected_recordings = None
-        self.main_window.logger.print("Dataset created!", LoggerLevel.INFO)
+        self._selected_recordings__dict = None
+        self._main_window.logger.print("Dataset created!", LoggerLevel.INFO)
 
     def _create_dataset_thread(self) -> None:
         label = self.training_create_dataset_label_line_edit.text()
         if not label:
             label = "default"
 
-        now = datetime.now()
-        formatted_now = now.strftime("%Y%m%d_%H%M%S%f")
+        file_name = f"MindMove_Dataset_{datetime.now().strftime("%Y%m%d_%H%M%S%f")}_{label.lower()}"
 
-        file_name = f"MindMove_Dataset_{formatted_now}_{label.lower()}"
-
-        dataset_dict = self.model_interface.create_dataset(
-            self.selected_recordings, self.selected_features, file_name
+        dataset_dict = self._model_interface.create_dataset(
+            self._selected_recordings__dict, self._selected_features__list, file_name
         )
 
         dataset_dict["dataset_file_path"] = str(DATASETS_DIR_PATH / f"{file_name}.pkl")
+        dataset_dict["device_information"] = self._current_device_information
 
         with (DATASETS_DIR_PATH / f"{file_name}.pkl").open("wb") as f:
             pickle.dump(dataset_dict, f)
 
     def _select_dataset(self) -> None:
         # Open dialog to select dataset
-        dialog = QFileDialog(self.main_window)
+        dialog = QFileDialog(self._main_window)
         dialog.setFileMode(QFileDialog.ExistingFile)
         dialog.setNameFilter("Pickle files (*.pkl)")
         dialog.setDirectory(str(DATASETS_DIR_PATH))
@@ -460,68 +476,74 @@ class TrainingProtocol(QObject):
             self.training_selected_dataset_label.setText(NO_DATASET_SELECTED_INFO)
             return
 
-        self.selected_dataset_filepath = filename
+        self._selected_dataset__filepath = filename
         self.training_selected_dataset_label.setText(
-            self.selected_dataset_filepath.split("_")[-1].replace(".pkl", "").title()
+            self._selected_dataset__filepath.split("_")[-1].replace(".pkl", "").title()
         )
 
         self.train_model_push_button.setEnabled(True)
 
     def _open_warning_dialog(self, info: str) -> None:
-        QMessageBox.warning(self.main_window, "Warning", info, QMessageBox.Ok)
+        QMessageBox.warning(self._main_window, "Warning", info, QMessageBox.Ok)
 
     def _train_model(self) -> None:
-        if not self.selected_dataset_filepath:
+        if not self._selected_dataset__filepath:
             self._open_warning_dialog(NO_DATASET_SELECTED_INFO)
             return
 
         self.train_model_push_button.setEnabled(False)
         self.training_select_dataset_push_button.setEnabled(False)
 
-        self.train_model_thread = PyQtThread(
-            target=self._train_model_thread, parent=self.main_window
+        self._train_model__thread = PyQtThread(
+            target=self._train_model_thread, parent=self._main_window
         )
-        self.train_model_thread.has_finished_signal.connect(self._train_model_finished)
-        self.train_model_thread.start()
+        self._train_model__thread.has_finished_signal.connect(
+            self._train_model_finished
+        )
+        self._train_model__thread.start()
 
     def _train_model_thread(self) -> None:
         label = self.training_model_label_line_edit.text()
         if not label:
             label = "default"
 
-        assert self.selected_dataset_filepath is not None
+        assert self._selected_dataset__filepath is not None
 
-        with open(self.selected_dataset_filepath, "rb") as file:
+        with open(self._selected_dataset__filepath, "rb") as file:
             dataset = pickle.load(file)
 
-        if len(self.model_changeable_parameters) == 0:
-            self.model_changeable_parameters = {
+        if len(self._model_changeable_parameters__dict) == 0:
+            self._model_changeable_parameters__dict = {
                 key: value["default_value"]
                 for key, value in CONFIG_REGISTRY.models_parameters_map[
-                    self.selected_model_name
+                    self._selected_model_name
                 ]["changeable"].items()
             }
 
+        if not self._model_interface:
+            self._current_device_information = dataset["device_information"]
+
+            self._model_interface = MyoGesticModelInterface(
+                device_information=self._current_device_information,
+                logger=self._main_window.logger
+            )
+
         try:
-            func_map = CONFIG_REGISTRY.models_functions_map[self.selected_model_name]
+            func_map = CONFIG_REGISTRY.models_functions_map[self._selected_model_name]
 
-            train = func_map["train"]
-            save = func_map["save"]
-            load = func_map["load"]
-
-            self.model_interface.train_model(
+            self._model_interface.train_model(
                 dataset=dataset,
-                model_name=self.selected_model_name,
+                model_name=self._selected_model_name,
                 model_parameters={
-                    **CONFIG_REGISTRY.models_parameters_map[self.selected_model_name][
+                    **CONFIG_REGISTRY.models_parameters_map[self._selected_model_name][
                         "unchangeable"
                     ],
-                    **self.model_changeable_parameters,
+                    **self._model_changeable_parameters__dict,
                 },
                 selected_features=dataset["selected_features"],
-                save=save,
-                load=load,
-                train=train,
+                save=func_map["save"],
+                load=func_map["load"],
+                train=func_map["train"],
             )
         except Exception as e:
             print(f"Error during training: {e}", LoggerLevel.ERROR)
@@ -535,7 +557,7 @@ class TrainingProtocol(QObject):
         model_filepath = MODELS_DIR_PATH / file_name
 
         try:
-            model_save_dict = self.model_interface.save_model(model_filepath)
+            model_save_dict = self._model_interface.save_model(model_filepath)
         except Exception as e:
             print(f"Error during saving models: {e}", LoggerLevel.ERROR)
             return
@@ -546,54 +568,57 @@ class TrainingProtocol(QObject):
     def _train_model_finished(self) -> None:
         self.training_selected_dataset_label.setText(NO_DATASET_SELECTED_INFO)
         self.training_select_dataset_push_button.setEnabled(True)
-        self.selected_dataset_filepath = None
+        self._selected_dataset__filepath = None
         self.training_model_label_line_edit.setText("")
-        self.main_window.logger.print("Model trained", LoggerLevel.INFO)
+        self._main_window.logger.print("Model trained", LoggerLevel.INFO)
 
     def _update_model_selection(self) -> None:
-        self.selected_model_name = self.training_model_selection_combo_box.currentText()
-        self.selected_model, self.model_is_classifier = CONFIG_REGISTRY.models_map[
-            self.selected_model_name
-        ]
+        self._selected_model_name = (
+            self.training_model_selection_combo_box.currentText()
+        )
 
-        self.model_changeable_parameters = {
+        self._model_changeable_parameters__dict = {
             key: value["default_value"]
             for key, value in CONFIG_REGISTRY.models_parameters_map[
-                self.selected_model_name
+                self._selected_model_name
             ]["changeable"].items()
         }
 
-        if len(self.model_changeable_parameters) > 0:
+        if len(self._model_changeable_parameters__dict) > 0:
             self.training_model_parameters_push_button.setEnabled(True)
         else:
             self.training_model_parameters_push_button.setEnabled(False)
 
     def _open_model_parameters_popup(self) -> None:
-        self.popup_window = PopupWindowParameters(self.selected_model_name)
+        self.popup_window = PopupWindowParameters(
+            self._selected_model_name, self._main_window.logger
+        )
         self.popup_window.show()
         self.popup_window.finished.connect(self._get_model_parameters)
 
     def _get_model_parameters(self) -> None:
-        self.model_changeable_parameters = self.popup_window.model_changeable_parameters
+        self._model_changeable_parameters__dict = (
+            self.popup_window.model_changeable_parameters
+        )
 
     def _open_feature_selection_popup(self) -> None:
-        self.popup_window = PopupWindowFeatures(self.selected_features)
+        self.popup_window = PopupWindowFeatures(self._selected_features__list)
         self.popup_window.show()
         self.popup_window.finished.connect(self._get_features)
 
     def _get_features(self) -> None:
-        self.selected_features = list(self.popup_window.selected_features)
+        self._selected_features__list = list(self.popup_window.selected_features)
 
     def closeEvent(self, event) -> None:
-        self.main_window.logger.print("Training Protocol Closed", LoggerLevel.INFO)
+        self._main_window.logger.print("Training Protocol Closed", LoggerLevel.INFO)
 
     def _setup_protocol_ui(self) -> None:
         # Create Datasets
         self.training_create_dataset_group_box = (
-            self.main_window.ui.trainingCreateDatasetGroupBox
+            self._main_window.ui.trainingCreateDatasetGroupBox
         )
         self.training_create_datasets_select_recordings_push_button = (
-            self.main_window.ui.trainingCreateDatasetsSelectRecordingsPushButton
+            self._main_window.ui.trainingCreateDatasetsSelectRecordingsPushButton
         )
         self.training_create_datasets_select_recordings_push_button.clicked.connect(
             self.select_recordings
@@ -601,7 +626,7 @@ class TrainingProtocol(QObject):
 
         # Table Widget for recordings
         self.training_create_dataset_selected_recordings_table_widget: QTableWidget = (
-            self.main_window.ui.trainingCreateDatasetSelectedRecordingsTableWidget
+            self._main_window.ui.trainingCreateDatasetSelectedRecordingsTableWidget
         )
         self.training_create_dataset_selected_recordings_table_widget.setSelectionBehavior(
             QAbstractItemView.SelectRows
@@ -623,7 +648,7 @@ class TrainingProtocol(QObject):
         self.training_create_dataset_selected_recordings_table_widget.setRowCount(0)
 
         self.training_remove_selected_recording_push_button: QPushButton = (
-            self.main_window.ui.trainingRemoveSelectedRecordingPushButton
+            self._main_window.ui.trainingRemoveSelectedRecordingPushButton
         )
         self.training_remove_selected_recording_push_button.clicked.connect(
             self._remove_selected_recording
@@ -631,44 +656,44 @@ class TrainingProtocol(QObject):
         self.training_remove_selected_recording_push_button.setEnabled(False)
 
         self.training_remove_all_selected_recordings_push_button: QPushButton = (
-            self.main_window.ui.trainingRemoveAllSelectedRecordingsPushButton
+            self._main_window.ui.trainingRemoveAllSelectedRecordingsPushButton
         )
         self.training_remove_all_selected_recordings_push_button.clicked.connect(
             self._remove_all_selected_recordings
         )
 
         self.training_create_dataset_select_features_push_button = (
-            self.main_window.ui.trainingCreateDatasetSelectFeaturesPushButton
+            self._main_window.ui.trainingCreateDatasetSelectFeaturesPushButton
         )
         self.training_create_dataset_select_features_push_button.clicked.connect(
             self._open_feature_selection_popup
         )
 
         self.training_create_dataset_label_line_edit = (
-            self.main_window.ui.trainingCreateDatasetLabelLineEdit
+            self._main_window.ui.trainingCreateDatasetLabelLineEdit
         )
         self.training_create_dataset_push_button = (
-            self.main_window.ui.trainingCreateDatasetPushButton
+            self._main_window.ui.trainingCreateDatasetPushButton
         )
         self.training_create_dataset_push_button.clicked.connect(self._create_dataset)
         self.training_create_dataset_push_button.setEnabled(False)
 
         # Train Model
         self.training_train_model_group_box = (
-            self.main_window.ui.trainingTrainModelGroupBox
+            self._main_window.ui.trainingTrainModelGroupBox
         )
         self.training_select_dataset_push_button = (
-            self.main_window.ui.trainingSelectDatasetPushButton
+            self._main_window.ui.trainingSelectDatasetPushButton
         )
         self.training_select_dataset_push_button.clicked.connect(self._select_dataset)
         self.training_selected_dataset_label = (
-            self.main_window.ui.trainingSelectedDatasetLabel
+            self._main_window.ui.trainingSelectedDatasetLabel
         )
 
         self.training_selected_dataset_label.setText(NO_DATASET_SELECTED_INFO)
 
         self.training_model_selection_combo_box = (
-            self.main_window.ui.trainingModelSelectionComboBox
+            self._main_window.ui.trainingModelSelectionComboBox
         )
         # set the models selection combo box
         self.training_model_selection_combo_box.addItems(
@@ -682,17 +707,17 @@ class TrainingProtocol(QObject):
         self.training_model_selection_combo_box.setCurrentIndex(0)
 
         self.training_model_label_line_edit = (
-            self.main_window.ui.trainingModelLabelLineEdit
+            self._main_window.ui.trainingModelLabelLineEdit
         )
 
         self.training_model_parameters_push_button = (
-            self.main_window.ui.trainingModelParametersPushButton
+            self._main_window.ui.trainingModelParametersPushButton
         )
         # connect the models parameters push button to the models parameters popup
         self.training_model_parameters_push_button.clicked.connect(
             self._open_model_parameters_popup
         )
 
-        self.train_model_push_button = self.main_window.ui.trainingTrainModelPushButton
+        self.train_model_push_button = self._main_window.ui.trainingTrainModelPushButton
         self.train_model_push_button.clicked.connect(self._train_model)
         self.train_model_push_button.setEnabled(False)

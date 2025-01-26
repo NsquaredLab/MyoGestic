@@ -18,36 +18,32 @@ class Protocol(QObject):
 
     Parameters
     ----------
-    parent : MyoGestic | None
-        The parent object of the protocol object.
+    main_window : MyoGestic
+        The main window of the MyoGestic application.
 
     Attributes
     ----------
     main_window : MyoGestic
         The main window of the MyoGestic application.
-    protocol_mode_stacked_widget : QStackedWidget
-        Stacked widget for displaying the different protocol modes.
-    protocol_record_radio_button : QRadioButton
-        Radio button for the record protocol.
-    protocol_training_radio_button : QRadioButton
-        Radio button for the training protocol.
-    protocol_online_radio_button : QRadioButton
-        Radio button for the online protocol.
-    current_protocol : RecordProtocol | TrainingProtocol | OnlineProtocol | None
-        The current protocol object.
     available_protocols : list[RecordProtocol | TrainingProtocol | OnlineProtocol]
+        The available protocols of the MyoGestic application. The protocols are:
+        - RecordProtocol
+        - TrainingProtocol
+        - OnlineProtocol
+    _current_protocol : RecordProtocol | TrainingProtocol | OnlineProtocol | None
+        The current protocol that is selected by the user.
     """
 
-    def __init__(self, parent: MyoGestic | None = ...) -> None:
-        super().__init__(parent)
+    def __init__(self, main_window: MyoGestic) -> None:
+        super().__init__(main_window)
 
-        self.main_window = parent
+        self.main_window = main_window
 
         # Initialize Protocol UI
         self._setup_protocol_ui()
 
         # Initialize Protocol
-        self.current_protocol: Optional[
+        self._current_protocol: Optional[
             Union[RecordProtocol, TrainingProtocol, OnlineProtocol]
         ] = None
 
@@ -61,8 +57,8 @@ class Protocol(QObject):
 
     def _protocol_toggled(self, index: int, checked: bool) -> None:
         if checked:
-            self.protocol_mode_stacked_widget.setCurrentIndex(index)
-            self.current_protocol = self.available_protocols[index]
+            self._protocol_mode__stacked_widget.setCurrentIndex(index)
+            self._current_protocol = self.available_protocols[index]
 
     def _pass_on_selected_visual_interface(self) -> None:
         for protocol in self.available_protocols:
@@ -71,27 +67,29 @@ class Protocol(QObject):
             )
 
     def _setup_protocol_ui(self):
-        self.protocol_mode_stacked_widget = (
+        self._protocol_mode__stacked_widget = (
             self.main_window.ui.protocolModeStackedWidget
         )
-        self.protocol_mode_stacked_widget.setCurrentIndex(0)
-        self.protocol_record_radio_button = (
+        self._protocol_mode__stacked_widget.setCurrentIndex(0)
+
+        self._protocol_record__radio_button = (
             self.main_window.ui.protocolRecordRadioButton
         )
-        self.protocol_record_radio_button.setChecked(True)
-        self.protocol_record_radio_button.toggled.connect(
+        self._protocol_record__radio_button.setChecked(True)
+        self._protocol_record__radio_button.toggled.connect(
             lambda checked: self._protocol_toggled(0, checked)
         )
-        self.protocol_training_radio_button = (
+
+        self._protocol_training__radio_button = (
             self.main_window.ui.protocolTrainingRadioButton
         )
-        self.protocol_training_radio_button.toggled.connect(
+        self._protocol_training__radio_button.toggled.connect(
             lambda checked: self._protocol_toggled(1, checked)
         )
 
-        self.protocol_online_radio_button = (
+        self._protocol_online__radio_button = (
             self.main_window.ui.protocolOnlineRadioButton
         )
-        self.protocol_online_radio_button.toggled.connect(
+        self._protocol_online__radio_button.toggled.connect(
             lambda checked: self._protocol_toggled(2, checked)
         )

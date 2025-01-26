@@ -1,4 +1,7 @@
 import numpy as np
+from biosignal_device_interface.constants.devices.core.base_device_constants import (
+    DeviceType,
+)
 from myoverse.datasets.filters.temporal import RMSFilter
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.multioutput import MultiOutputRegressor
@@ -7,6 +10,7 @@ from myogestic.models.definitions import sklearn_models
 from myogestic.utils.config import CONFIG_REGISTRY
 
 CHANNELS = list(np.arange(32))
+DEFAULT_DEVICE_TO_USE = DeviceType.OTB_QUATTROCENTO_LIGHT.value
 
 # Register models
 CONFIG_REGISTRY.register_model(

@@ -50,14 +50,17 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
 
         # Toggle the selected visual interface when the Unity process is started or finished
         self._unity_process.finished.connect(
-            lambda: self.main_window._toggle_selected_visual_interface(self.name)
+            lambda: self.main_window.toggle_selected_visual_interface(self.name)
         )
         self._unity_process.started.connect(
-            lambda: self.main_window._toggle_selected_visual_interface(self.name)
+            lambda: self.main_window.toggle_selected_visual_interface(self.name)
         )
 
-        self._record_protocol = self.main_window.protocol.available_protocols[0]
-        self._online_protocol = self.main_window.protocol.available_protocols[2]
+        from myogestic.gui.protocols.online import OnlineProtocol
+        from myogestic.gui.protocols.record import RecordProtocol
+
+        self._record_protocol: RecordProtocol = self.main_window.protocols[0]
+        self._online_protocol: OnlineProtocol = self.main_window.protocols[2]
 
         self._unity_process.setProgram(str(self._get_unity_executable()))
 
@@ -308,5 +311,5 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
     def online_predicted_hand_update(self, data: np.ndarray) -> None:
         if self._online_protocol.online_record_toggle_push_button.isChecked():
             self.buffer_predicted_hand_recording.append(
-                (time.time() - self._online_protocol.start_time, data)
+                (time.time() - self._online_protocol.recording_start_time, data)
             )

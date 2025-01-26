@@ -74,7 +74,7 @@ class MyoGesticDataset(QObject):
         # Accumulate bad channels. Maybe more channels get added between recordings
         bad_channels: list[int] = []
 
-        emg_data = {}
+        biosignal_data = {}
         ground_truth_data = {}
         for task, recording in dataset.items():
             if task.lower() not in self.task_to_class_map.keys():
@@ -88,35 +88,34 @@ class MyoGesticDataset(QObject):
             recording_bad_channels = recording["bad_channels"]
             bad_channels.extend(recording_bad_channels)
 
-            emg = np.concatenate(recording["emg"][CHANNELS].T).T
+            biosignal = np.concatenate(recording["biosignal"][CHANNELS].T).T
 
             if len(recording_bad_channels) > 0:
-                emg = np.delete(emg, recording_bad_channels, axis=0)
+                biosignal = np.delete(biosignal, recording_bad_channels, axis=0)
 
-            if recording["use_kinematics"]:
-                kinematics = recording["kinematics"]
-                # Upsample kinematics 60Hz to 2000 Hz
-                kinematics = np.array(
+            if not recording["use_as_classification"]:
+                ground_truth = recording["ground_truth"]
+                ground_truth = np.array(
                     [
                         np.interp(
-                            np.linspace(0, 1, emg.shape[1]),
-                            np.linspace(0, 1, kinematics.shape[1]),
+                            np.linspace(0, 1, biosignal.shape[1]),
+                            np.linspace(0, 1, ground_truth.shape[1]),
                             k,
                         )
-                        for k in kinematics
+                        for k in ground_truth
                     ]
                 )
 
-                ground_truth_data[task_label] = kinematics
+                ground_truth_data[task_label] = ground_truth
             else:
-                ground_truth_data[task_label] = np.zeros((9, emg.shape[-1]))
+                ground_truth_data[task_label] = np.zeros((9, biosignal.shape[-1]))
 
-            emg_data[task_label] = emg
+            biosignal_data[task_label] = biosignal
 
-        emg_filter_pipeline_after_chunking = []
+        biosignal_filter_pipeline_after_chunking = []
         for feature in selected_features:
             try:
-                emg_filter_pipeline_after_chunking.append(
+                biosignal_filter_pipeline_after_chunking.append(
                     [
                         CONFIG_REGISTRY.features_map[feature](
                             is_output=True, window_size=self.buffer_size_samples  # noqa
@@ -124,17 +123,17 @@ class MyoGesticDataset(QObject):
                     ]
                 )
             except TypeError:
-                emg_filter_pipeline_after_chunking.append(
+                biosignal_filter_pipeline_after_chunking.append(
                     [CONFIG_REGISTRY.features_map[feature](is_output=True)]  # noqa
                 )
 
         dataset = EMGDataset(
-            emg_data=emg_data,
+            emg_data=biosignal_data,
             ground_truth_data=ground_truth_data,
             ground_truth_data_type="virtual_hand",
             save_path=Path(f"data/datasets/{file_name}.zarr"),
             sampling_frequency=self.sampling_frequency,
-            tasks_to_use=list(emg_data.keys()),
+            tasks_to_use=list(biosignal_data.keys()),
             chunk_size=self.buffer_size_samples,
             chunk_shift=self.samples_per_frame,
             emg_filter_pipeline_before_chunking=[
@@ -151,7 +150,7 @@ class MyoGesticDataset(QObject):
                 ]
             ],
             emg_representations_to_filter_before_chunking=["Input"],
-            emg_filter_pipeline_after_chunking=emg_filter_pipeline_after_chunking,
+            emg_filter_pipeline_after_chunking=biosignal_filter_pipeline_after_chunking,
             emg_representations_to_filter_after_chunking=["EMG_Chunkizer"]
             * len(selected_features),
             ground_truth_filter_pipeline_before_chunking=[
