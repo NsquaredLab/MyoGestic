@@ -1,4 +1,3 @@
-import contextlib
 import copy
 from typing import TypedDict, Union, Dict, Type, Callable, Any, Literal, Optional, Tuple
 
@@ -11,7 +10,22 @@ from myogestic.gui.widgets.templates.visual_interface import (
 )
 
 
-def custom_message_handler(mode, context, message):
+def _custom_message_handler(mode, context, message):
+    """
+    Custom message handler for the "warnings" module.
+
+    This function is used to suppress a QLayout warning that is not relevant to the user.
+    This warning is printed to the console when a new widget is added to a layout that already has a layout.
+
+    Parameters
+    ----------
+    mode : str
+        The mode of the message.
+    context : dict
+        The context of the message.
+    message : str
+        The message to display.
+    """
     # Suppress the specific warning
     if "QLayout: Attempting to add QLayout" in message:
         return
@@ -54,18 +68,31 @@ UnchangeableParameter = Union[int, float, str, bool, list[str], None]
 
 class Registry:
     """
-    Base class for registration of models and features in the MyoGestic application.
+    The registry class is used to store different components of a MyoGestic application pipeline.
 
     Attributes
     ----------
-    models_map : dict[str, tuple[type, bool]]
-        A dictionary mapping model names to tuples of the model class and a boolean indicating whether the model is a classifier.
-    models_functions_map : dict[str, dict[Literal["save", "load", "train"], Callable]]
-        A dictionary mapping model names to dictionaries of functions to save, load and train the model.
-    models_parameters_map : dict[str, dict[Literal["changeable", "unchangeable"], Union[ChangeableParameter, UnchangeableParameter]]]
-        A dictionary mapping model names to dictionaries of changeable and unchangeable parameters.
-    features_map : dict[str, FilterBaseClass]
-        A dictionary mapping feature names to filters or partial functions.
+    models_map : dict[str, tuple[Any, bool]], optional
+        A dictionary that maps model names to tuples of model classes and whether the model is a classifier, by default {}. The tuple is in the form (model_class, is_classifier).
+    models_functions_map : dict[str, dict[Literal["save", "load", "train", "predict"], callable]], optional
+        A dictionary that maps model names to dictionaries of model functions, by default {}. The functions are `save`, `load`, `train`, and `predict`.
+    models_parameters_map : dict[str, dict[Literal["changeable", "unchangeable"], Union[ChangeableParameter, UnchangeableParameter]]], optional
+        A dictionary that maps model names to dictionaries of model parameters, by default {}. The parameters are `changeable` and `unchangeable`.
+        The `changeable` parameters are dictionaries of changeable parameters, while the `unchangeable` parameters are dictionaries of unchangeable parameters.
+        See the `ChangeableParameter` and `UnchangeableParameter` types for more information.
+    features_map : dict[str, type[FilterBaseClass]], optional
+        A dictionary that maps feature names to feature classes, by default {}.
+        The feature class must be subclasses of `FilterBaseClass`.
+    real_time_filters_map : dict[str, callable], optional
+        A dictionary that maps filter names to filter functions, by default {}.
+        A filter function is a callable that takes a single argument, which is the data to filter.
+        The data will be a list of floats that represent the regression output of a model.
+    visual_interfaces_map : dict[str, tuple[type[SetupInterfaceTemplate], type[RecordingInterfaceTemplate]]], optional
+        A dictionary that maps visual interface names to tuples of setup and recording interface classes, by default {}.
+        The setup interface class must be a subclass of `SetupInterfaceTemplate`, while the recording interface class must be a subclass of `RecordingInterfaceTemplate`.
+    output_systems_map : dict[str, type[OutputSystemTemplate]], optional
+        A dictionary that maps output system names to output system classes, by default {}.
+        The output system class must be a subclass of `OutputSystemTemplate`.
     """
 
     def __init__(self):

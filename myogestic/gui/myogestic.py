@@ -23,7 +23,8 @@ from myogestic.gui.main_window import Ui_MyoGestic
 from myogestic.gui.protocols.protocol import Protocol
 from myogestic.gui.widgets.logger import CustomLogger
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface
-from myogestic.utils.config import custom_message_handler, CONFIG_REGISTRY  # noqa
+from myogestic.user_config import DEFAULT_DEVICE_TO_USE
+from myogestic.utils.config import _custom_message_handler, CONFIG_REGISTRY  # noqa
 from myogestic.utils.constants import BASE_PATH
 
 if TYPE_CHECKING:
@@ -47,39 +48,13 @@ class MyoGestic(QMainWindow):
     Attributes
     ----------
     ui : Ui_MyoGestic
-        The main user interface of the application.
-    update_fps_label : QLabel
-        Label for displaying the current update rate of the application.
-    fps_buffer : list[float]
-        Buffer for storing the update rates of the application.
-    time_since_last_fps_update : float
-        Time of the last update rate calculation.
-    logging_text_edit : QTextEdit
-        Text edit widget for logging messages.
+        The backbone UI of MyoGestic. This is the compiled PySide6 code from the main_window.ui file.
     logger : CustomLogger
-        Custom logger for logging messages.
-    plot : VispyBiosignalPlot
-        Plot widget for displaying biosignal data.
-    current_bad_channels : list[int] | None
-        List of bad channels.
-    display_time : int
-        Time for displaying the biosignal data.
-    device_widget : DeviceWidget
-        Widget for configuring and connecting devices.
-    device_name : Device
-        Name of the connected device.
-    sampling_frequency : float
-        Sampling frequency of the connected device.
-    samples_per_frame : int
-        Number of samples per frame.
-    number_of_channels : int
-        Number of biosignal channels.
-    virtual_hand_interface : VirtualHandInterface
-        Interface for controlling the virtual hand.
-    protocol : Protocol
-        Protocol for controlling the application.
-    toggle_vispy_plot_check_box : QCheckBox
-        Check box for toggling the biosignal plot.
+        The ui logger of MyoGestic. This is a custom logger that logs messages to the main window.
+    protocols : list[Protocol]
+        List of protocols (recording, training, and online) available in MyoGestic.
+    selected_visual_interface : Optional[VisualInterface]
+        The selected visual interface in MyoGestic. This is distributed to the protocols.
     """
 
     def __init__(self):
@@ -89,52 +64,58 @@ class MyoGestic(QMainWindow):
         self.ui.setupUi(self)
 
         # Install the custom message handler
-        qInstallMessageHandler(custom_message_handler)
+        qInstallMessageHandler(_custom_message_handler)
 
         # Logging
-        self.update_fps_label: QLabel = self.ui.appUpdateFPSLabel
-        self.update_fps_label.setText("")
-        self.fps_buffer: list[float] = []
-        self.time_since_last_fps_update: float = time.time()
-        self.logging_text_edit = self.ui.loggingTextEdit
-        self.logger: CustomLogger = CustomLogger(self.logging_text_edit)
+        self._fps_display__label: QLabel = self.ui.appUpdateFPSLabel
+        self._fps_display__label.setText("")
+        self._fps__buffer: list[float, float] = []
+        self._last_fps_update__time: float = time.time()
+
+        self.logger: CustomLogger = CustomLogger(self.ui.loggingTextEdit)
         self.logger.print("MyoGestic started")
 
         # Tab Widget
-        self.tab_widget = self.ui.mindMoveTabWidget
-        self.tab_widget.setCurrentIndex(0)
+        self._tab__widget = self.ui.mindMoveTabWidget
+        self._tab__widget.setCurrentIndex(0)
 
         # Plot Setup
-        self.plot: BiosignalPlotWidget = self.ui.vispyPlotWidget
-        self.current_bad_channels: list | None = []
-        self.plot.bad_channels_updated.connect(self._update_bad_channels)
-        self.display_time = self.ui.timeShownDoubleSpinBox.value()
+        self._plot__widget: BiosignalPlotWidget = self.ui.vispyPlotWidget
+        self.current_bad_channels__list: list | None = []
+        self._plot__widget.bad_channels_updated.connect(self._update_bad_channels)
+        self._biosignal_plot_display_time_range__value = (
+            self.ui.timeShownDoubleSpinBox.value()
+        )
 
         # Device Setup
-        self.bio_signal_interface = Ui_BioSignalInterface()
-        self.bio_signal_interface.setupUi(self)
-        self.device_widget: OTBDevicesWidget = self.bio_signal_interface.devicesWidget
+        self._biosignal_interface__widget = Ui_BioSignalInterface()
+        self._biosignal_interface__widget.setupUi(self)
+        self.device__widget: OTBDevicesWidget = (
+            self._biosignal_interface__widget.devicesWidget
+        )
 
-        self.ui.setupVerticalLayout.addWidget(self.bio_signal_interface.groupBox)
+        self.ui.setupVerticalLayout.addWidget(
+            self._biosignal_interface__widget.groupBox
+        )
 
-        self.device_widget.biosignal_data_arrived.connect(self.update)
-        self.device_widget.configure_toggled.connect(self._prepare_plot)
+        self.device__widget.biosignal_data_arrived.connect(self.update)
+        self.device__widget.configure_toggled.connect(self._prepare_plot)
 
         self.ui.timeShownDoubleSpinBox.valueChanged.connect(self._reconfigure_plot)
 
         # Device parameters
         self.device_name: DeviceType = None
         self.sampling_frequency = None
-        self.samples_per_frame = None
-        self.number_of_channels = None
+
+        self._samples_per_frame = None
+        self._number_of_channels = None
 
         BASE_PATH.mkdir(exist_ok=True, parents=True)
-
-        status_bar = self.ui.statusbar
-        status_bar.showMessage(f"Data path: {Path.cwd() / BASE_PATH}")
+        self.ui.statusbar.showMessage(f"Data path: {Path.cwd() / BASE_PATH}")
 
         # Protocol Setup
-        self.protocol = Protocol(self)
+        self._protocol__helper_class = Protocol(self)
+        self.protocols = self._protocol__helper_class.available_protocols
 
         # Visual Interface(s) Setup
         self.ui.visualInterfacesGroupBox = QGroupBox("Visual Interfaces")
@@ -147,35 +128,35 @@ class MyoGestic(QMainWindow):
         self.ui.visualInterfacesVerticalLayout.setContentsMargins(*([15] * 4))
 
         self.selected_visual_interface: Optional[VisualInterface] = None
-        self.visual_interfaces: dict[str, VisualInterface] = {}
-        for name, (
-            setup_ui,
-            interface_ui,
-        ) in CONFIG_REGISTRY.visual_interfaces_map.items():
-            self.visual_interfaces[name] = VisualInterface(
+        self._visual_interfaces__dict: dict[str, VisualInterface] = {
+            name: VisualInterface(
                 self,
                 name=name,
                 setup_interface_ui=setup_ui,
                 recording_interface_ui=interface_ui,
             )
-
-        # Output Setup
-        # self.virtual_hand_interface = VirtualHandInterface(self
+            for name, (
+                setup_ui,
+                interface_ui,
+            ) in CONFIG_REGISTRY.visual_interfaces_map.items()
+        }
 
         # Preferences
-        self.toggle_vispy_plot_check_box: QCheckBox = self.ui.toggleVispyPlotCheckBox
+        self._toggle_vispy_plot__check_box: QCheckBox = self.ui.toggleVispyPlotCheckBox
 
-        self.device_widget.device_selection_combo_box.setCurrentIndex(
-            DeviceType.OTB_QUATTROCENTO_LIGHT.value
+        self.device__widget.device_selection_combo_box.setCurrentIndex(
+            DEFAULT_DEVICE_TO_USE
         )
+
         # Add shortcuts
         # Toggle plotting shortcut
-        toggle_plotting = QShortcut(QKeySequence(Qt.CTRL | Qt.Key_T), self)
-        toggle_plotting.activated.connect(self.toggle_vispy_plot_check_box.toggle)
+        QShortcut(QKeySequence(Qt.CTRL | Qt.Key_T), self).activated.connect(
+            self._toggle_vispy_plot__check_box.toggle
+        )
 
-    def _toggle_selected_visual_interface(self, name: str) -> None:
+    def toggle_selected_visual_interface(self, name: str) -> None:
         """
-        Toggle the selected visual interface.
+        Toggles the selected visual interface.
 
         This methods sets all other visual interfaces to disabled and enables the selected visual interface.
 
@@ -189,16 +170,16 @@ class MyoGestic(QMainWindow):
         None
         """
         if self.selected_visual_interface:
-            for visual_interface in self.visual_interfaces.values():
+            for visual_interface in self._visual_interfaces__dict.values():
                 visual_interface.enable_ui()
             self.selected_visual_interface = None
         else:
-            for visual_interface in self.visual_interfaces.values():
+            for visual_interface in self._visual_interfaces__dict.values():
                 if visual_interface.name != name:
                     visual_interface.disable_ui()
-            self.selected_visual_interface = self.visual_interfaces[name]
+            self.selected_visual_interface = self._visual_interfaces__dict[name]
 
-        self.protocol._pass_on_selected_visual_interface()
+        self._protocol__helper_class._pass_on_selected_visual_interface()
 
     def _update_bad_channels(self, bad_channels: np.ndarray) -> None:
         """
@@ -213,7 +194,7 @@ class MyoGestic(QMainWindow):
         -------
         None
         """
-        self.current_bad_channels = np.nonzero(bad_channels == 0)[0].tolist()
+        self.current_bad_channels__list = np.nonzero(bad_channels == 0)[0].tolist()
 
     def update(self, data: np.ndarray) -> None:  # noqa
         """
@@ -230,68 +211,71 @@ class MyoGestic(QMainWindow):
         -------
         None
         """
-        time_difference = time.time() - self.time_since_last_fps_update
-        if time_difference != 0:
-            fps = 1 / time_difference
-        else:
-            fps = 0
+        current_time = time.time()
 
-        self.fps_buffer.append(fps)
-        self.time_since_last_fps_update = time.time()
-        self.update_fps_label.setText(f"FPS: {round(np.mean(self.fps_buffer))}")
+        self._fps__buffer.append(
+            (current_time, 1 / max(current_time - self._last_fps_update__time, 1e-10))
+        )
+        self._last_fps_update__time = current_time
+        self._fps_display__label.setText(
+            f"FPS: {round(np.mean(np.array(self._fps__buffer)[1, :]))}"
+        )
+
+        self._fps__buffer = list(
+            filter(lambda x: current_time - x[0] <= 60, self._fps__buffer)
+        )
 
         # EMG Data
-        if self.toggle_vispy_plot_check_box.isChecked():
-            self.plot.update_plot(data[: self.number_of_channels] * 5)
+        if self._toggle_vispy_plot__check_box.isChecked():
+            self._plot__widget.update_plot(data[: self._number_of_channels] * 5)
 
     def _prepare_plot(self, is_configured: bool) -> None:
         """
-        Prepare the plot.
+        Prepare the plot widget.
 
-        This method prepares the plot for displaying biosignal data.
+        This method prepares the plot widget for displaying biosignal data.
 
         Returns
         -------
         None
         """
         if not is_configured:
+            self.logger.print("Device not configured!")
             return
 
-        device_information = self.device_widget.get_device_information()
+        device_information = self.device__widget.get_device_information()
         self.device_name = device_information["name"]
         self.sampling_frequency = device_information["sampling_frequency"]
-        self.samples_per_frame = device_information["samples_per_frame"]
-        self.number_of_channels = device_information["number_of_biosignal_channels"]
+        self._samples_per_frame = device_information["samples_per_frame"]
+        self._number_of_channels = device_information["number_of_biosignal_channels"]
 
-        self.plot.configure(
-            display_time=self.display_time,
-            sampling_frequency=self.sampling_frequency,
-            lines=self.number_of_channels,
+        self._reconfigure_plot(self._biosignal_plot_display_time_range__value)
+
+        # initialize the fps buffer with zeros for one second to avoid a spike in the first few frames
+        self._fps__buffer = [(time.time(), 0)] * int(
+            self.sampling_frequency / self._samples_per_frame
         )
-
-        frames_per_second = int(self.sampling_frequency / self.samples_per_frame)
-        fps_buffer = np.zeros(int(frames_per_second))
-        self.fps_buffer = fps_buffer.tolist()
 
     def _reconfigure_plot(self, value) -> None:
         """
-        Reconfigure the plot.
+        Reconfigure the plot widget.
 
-        This method reconfigures the plot for displaying biosignal data based on the given value in seconds.
+        This method reconfigures the plot widget for displaying biosignal data based on the given value in seconds.
 
         Returns
         -------
         None
         """
-        if self.sampling_frequency is None or self.number_of_channels is None:
+        if self.sampling_frequency is None or self._number_of_channels is None:
+            self.logger.print("Device not configured!")
             return
 
-        self.plot.configure(
+        self._plot__widget.configure(
             display_time=value,
             sampling_frequency=self.sampling_frequency,
-            lines=self.number_of_channels,
+            lines=self._number_of_channels,
         )
-        self.plot.resize(0, 0)
+        self._plot__widget.resize(0, 0)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
@@ -306,12 +290,12 @@ class MyoGestic(QMainWindow):
         -------
         Notes
         """
-        self.device_widget.closeEvent(event)
+        self.device__widget.closeEvent(event)
 
-        for visual_interface in self.visual_interfaces.values():
-            visual_interface.closeEvent(event)
+        for vi in self._visual_interfaces__dict.values():
+            vi.closeEvent(event)
 
-        for p in self.protocol.available_protocols:
+        for p in self.protocols:
             p.closeEvent(event)
 
         super().closeEvent(event)

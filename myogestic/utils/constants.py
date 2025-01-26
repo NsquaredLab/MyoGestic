@@ -1,6 +1,20 @@
 import sys
 from pathlib import Path
 
+REQUIRED_RECORDING_KEYS = {
+    "biosignal",
+    "biosignal_timings",
+    "ground_truth",
+    "ground_truth_timings",
+    "recording_label",
+    "task",
+    "ground_truth_sampling_frequency",
+    "device_information",
+    "recording_time",
+    "use_as_classification",
+    "bad_channels",
+}
+
 # PORTS
 MYOGESTIC_UDP_PORT = 1233
 

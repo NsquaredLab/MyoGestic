@@ -1,6 +1,4 @@
-import pickle
 import time
-from datetime import datetime
 
 import numpy as np
 from PySide6.QtCore import SignalInstance
@@ -19,12 +17,12 @@ KINEMATICS_SAMPLING_FREQUENCY = 60
 class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
     def __init__(
         self,
-        parent,
+        main_window,
         name: str = "VirtualHandInterface",
         incoming_message_signal: SignalInstance = None,
     ) -> None:
         super().__init__(
-            parent,
+            main_window,
             name,
             ui=Ui_RecordingVirtualHandInterface(),
             incoming_message_signal=incoming_message_signal,
@@ -35,7 +33,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         self.current_task = None
         self.kinematics_buffer = []
 
-        self.recording_protocol = self.main_window.protocol.available_protocols[0]
+        self.recording_protocol = self.main_window.protocols[0]
 
         self.has_finished_kinematics = False
         self.start_time = None
@@ -105,7 +103,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         #     return False
 
         if (
-            not self.main_window.device_widget._get_current_widget()._device._is_streaming
+            not self.main_window.device__widget._get_current_widget()._device._is_streaming
         ):
             self.main_window.logger.print(
                 "Biosignal device not streaming!", level=LoggerLevel.ERROR
@@ -170,36 +168,29 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         """
         label = self.review_recording_label_line_edit.text() or "default"
         (
-            biosignal_signal,
+            biosignal_data,
             biosignal_timings,
         ) = self.recording_protocol.retrieve_recorded_data()
 
-        save_pickle_dict = {
-            "emg": biosignal_signal,
-            "kinematics": (
+        self.save_recording(
+            biosignal=biosignal_data,
+            biosignal_timings=biosignal_timings,
+            ground_truth=(
                 np.vstack([data for _, data in self.kinematics_buffer]).T
                 if self.use_kinematics_check_box.isChecked()
                 else np.array([])
             ),
-            "timings_emg": biosignal_timings,
-            "timings_kinematics": (
+            ground_truth_timings=(
                 np.array([time_stamp for time_stamp, _ in self.kinematics_buffer])
                 if self.use_kinematics_check_box.isChecked()
                 else np.array([])
             ),
-            "label": label,
-            "task": self.current_task,
-            "device": self.main_window.device_name,
-            "bad_channels": self.main_window.current_bad_channels,
-            "sampling_frequency": self.main_window.sampling_frequency,
-            "kinematics_sampling_frequency": KINEMATICS_SAMPLING_FREQUENCY,
-            "recording_time": self.record_duration_spin_box.value(),
-            "use_kinematics": self.use_kinematics_check_box.isChecked(),
-        }
-
-        file_name = f"MindMove_Recording_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{self.current_task.lower()}_{label.lower()}.pkl"
-        with (RECORDING_DIR_PATH / file_name).open("wb") as f:
-            pickle.dump(save_pickle_dict, f)
+            recording_label=label,
+            task=self.current_task,
+            ground_truth_sampling_frequency=KINEMATICS_SAMPLING_FREQUENCY,
+            use_as_classification=not self.use_kinematics_check_box.isChecked(),
+            record_duration=self.record_duration_spin_box.value(),
+        )
 
         self.reset_ui()
         self.main_window.logger.print(

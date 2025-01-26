@@ -37,9 +37,9 @@ class OnlineProtocol(QObject):
     ----------
     main_window : MyoGestic
         The main window of the MyoGestic application.
-    emg_buffer : list[np.ndarray]
+    _biosignal__buffer : list[np.ndarray]
         Buffer for storing the EMG data.
-    kinematics_buffer : list[(int, np.ndarray)]
+    _ground_truth_and_timings__buffer : list[(int, np.ndarray)]
         Buffer for storing the kinematics data.
     buffer_emg_recording : list[(float, np.ndarray)] | None
         Buffer for storing the EMG data during recording.
@@ -49,15 +49,15 @@ class OnlineProtocol(QObject):
         Buffer for storing the predictions during recording.
     buffer_prediction_proba_recording : list[(float, np.ndarray)] | None
         Buffer for storing the prediction probabilities during recording.
-    start_time : float | None
+    recording_start_time : float | None
         Start time of the recording.
-    device_information : dict[str, str] | None
+    _device_information__dict : dict[str, str] | None
         Information about the connected device.
-    model_information : dict[str, str] | None
+    _model_information__dict : dict[str, str] | None
         Information about the loaded models.
-    time_since_last_prediction : float
+    _time_since_last_prediction : float
         Time since the last prediction.
-    model_interface : MyoGesticModelInterface | None
+    _model_interface : MyoGesticModelInterface | None
         Interface for the Myogestic models.
     online_load_model_push_button : QPushButton
         Push button for loading the models.
@@ -91,29 +91,29 @@ class OnlineProtocol(QObject):
 
     model_information_signal = Signal(dict)
 
-    def __init__(self, parent: MyoGestic | None = ...) -> None:
-        super().__init__(parent)
+    def __init__(self, main_window: MyoGestic) -> None:
+        super().__init__(main_window)
 
-        self.main_window = parent
+        self.main_window = main_window
 
         self.selected_visual_interface: Optional[VisualInterface] = None
 
         # Initialize Protocol UI
         self._setup_protocol_ui()
 
-        self.main_window.device_widget.device_changed_signal.connect(
+        self.main_window.device__widget.device_changed_signal.connect(
             partial(self.online_load_model_push_button.setEnabled, False)
         )
-        self.time_since_last_prediction = 0
+        self._time_since_last_prediction = 0
 
-        self.model_interface: MyoGesticModelInterface | None = None
-        self.main_window.device_widget.configure_toggled.connect(
+        self._model_interface: MyoGesticModelInterface | None = None
+        self.main_window.device__widget.configure_toggled.connect(
             self._update_device_configuration
         )
 
         # Initialize Protocol
-        self.emg_buffer: list[np.ndarray] = []
-        self.kinematics_buffer: list[(int, np.ndarray)] = []
+        self._biosignal__buffer: list[np.ndarray] = []
+        self._ground_truth_and_timings__buffer: list[(int, np.ndarray)] = []
 
         # Timings
         self.buffer_emg_recording: list[(float, np.ndarray)] = None
@@ -123,11 +123,11 @@ class OnlineProtocol(QObject):
         self.buffer_predictions_after_filter_recording: list[(float, np.ndarray)] = None
         self.buffer_selected_real_time_filter_recording: list[(float, str)] = None
 
-        self.start_time: float = None
+        self.recording_start_time: float | None = None
 
         # Device
-        self.device_information: dict[str, str] = None
-        self.model_information: dict[str, str] = None
+        self._device_information__dict: dict[str, Any] | None = None
+        self._model_information__dict: dict[str, Any] | None = None
 
         # File management
         PREDICTIONS_DIR_PATH.mkdir(exist_ok=True, parents=True)
@@ -142,18 +142,24 @@ class OnlineProtocol(QObject):
         self.output_systems: dict[str, OutputSystemTemplate] = {}
 
     def _update_real_time_filter(self) -> None:
-        filter_name = self.real_time_filter_combo_box.currentText()
-        self.model_interface.set_real_time_filter(filter_name)
+        self._model_interface.set_real_time_filter(
+            self.real_time_filter_combo_box.currentText()
+        )
 
     def _update_device_configuration(self, is_configured: bool) -> None:
         if not is_configured:
+            self.main_window.logger.print(
+                "Device not configured! Please configure the device!",
+                LoggerLevel.ERROR,
+            )
             return
 
-        self.device_information = (
-            self.main_window.device_widget.get_device_information()
+        self._device_information__dict = (
+            self.main_window.device__widget.get_device_information()
         )
-        self.model_interface = MyoGesticModelInterface(
-            device_information=self.device_information, logger=self.main_window.logger
+        self._model_interface = MyoGesticModelInterface(
+            device_information=self._device_information__dict,
+            logger=self.main_window.logger,
         )
         self.online_load_model_push_button.setEnabled(True)
 
@@ -163,9 +169,9 @@ class OnlineProtocol(QObject):
                 prediction_before_filter,
                 prediction_after_filter,
                 selected_real_time_filter,
-            ) = self.model_interface.predict(
+            ) = self._model_interface.predict(
                 data,
-                bad_channels=self.main_window.current_bad_channels,
+                bad_channels=self.main_window.current_bad_channels__list,
                 selected_real_time_filter=self.real_time_filter_combo_box.currentText(),
             )
         except Exception as e:
@@ -199,16 +205,18 @@ class OnlineProtocol(QObject):
         if self.online_record_toggle_push_button.isChecked():
             current_time = time.time()
 
-            self.buffer_emg_recording.append((current_time - self.start_time, data))
+            self.buffer_emg_recording.append(
+                (current_time - self.recording_start_time, data)
+            )
 
             self.buffer_prediction_before_filter_recording.append(
-                (current_time - self.start_time, prediction_before_filter)
+                (current_time - self.recording_start_time, prediction_before_filter)
             )
             self.buffer_predictions_after_filter_recording.append(
-                (current_time - self.start_time, prediction_after_filter)
+                (current_time - self.recording_start_time, prediction_after_filter)
             )
             self.buffer_selected_real_time_filter_recording.append(
-                (current_time - self.start_time, selected_real_time_filter)
+                (current_time - self.recording_start_time, selected_real_time_filter)
             )
 
             # self.buffer_predictions_recording.append(
@@ -221,7 +229,7 @@ class OnlineProtocol(QObject):
     def online_ground_truth_update(self, data: np.ndarray) -> None:
         if self.online_record_toggle_push_button.isChecked():
             self.buffer_ground_truth_recording.append(
-                (time.time() - self.start_time, data)
+                (time.time() - self.recording_start_time, data)
             )
 
     def _set_conformal_prediction(self) -> None:
@@ -231,7 +239,7 @@ class OnlineProtocol(QObject):
             "kernel_size": self.conformal_prediction_kernel_spin_box.value(),
             "solver_strategy": self.conformal_prediction_solving_combo_box.currentText(),
         }
-        self.model_interface.set_conformal_predictor(params)
+        self._model_interface.set_conformal_predictor(params)
 
     def _reset_conformal_predictor(self) -> None:
         self.conformal_prediction_type_combo_box.setCurrentIndex(0)
@@ -241,7 +249,7 @@ class OnlineProtocol(QObject):
         if self.online_prediction_toggle_push_button.isChecked():
             self.online_prediction_toggle_push_button.setText("Stop Prediction")
             self.online_load_model_push_button.setEnabled(False)
-            self.main_window.device_widget.biosignal_data_arrived.connect(
+            self.main_window.device__widget.biosignal_data_arrived.connect(
                 self.online_emg_update
             )
             self.online_record_toggle_push_button.setEnabled(True)
@@ -249,7 +257,7 @@ class OnlineProtocol(QObject):
         else:
             self.online_prediction_toggle_push_button.setText("Start Prediction")
             self.online_load_model_push_button.setEnabled(True)
-            self.main_window.device_widget.biosignal_data_arrived.disconnect(
+            self.main_window.device__widget.biosignal_data_arrived.disconnect(
                 self.online_emg_update
             )
             self.online_record_toggle_push_button.setEnabled(False)
@@ -275,7 +283,7 @@ class OnlineProtocol(QObject):
             self.buffer_predictions_after_filter_recording = []
             self.buffer_selected_real_time_filter_recording = []
 
-            self.start_time = time.time()
+            self.recording_start_time = time.time()
             self.online_record_toggle_push_button.setText("Stop Recording")
         else:
             self.online_prediction_toggle_push_button.setEnabled(True)
@@ -317,11 +325,11 @@ class OnlineProtocol(QObject):
                 [data for _, data in self.buffer_selected_real_time_filter_recording]
             ),
             "label": self.online_model_label.text().split(" ")[0],
-            "model_information": self.model_information,
-            "sampling_frequency": self.device_information["sampling_frequency"],
+            "model_information": self._model_information__dict,
+            "sampling_frequency": self._device_information__dict["sampling_frequency"],
             "bad_channels": set(
-                self.main_window.current_bad_channels
-                + self.model_information["bad_channels"]
+                self.main_window.current_bad_channels__list
+                + self._model_information__dict["bad_channels"]
             ),
             "channels": CHANNELS,
         }
@@ -336,8 +344,8 @@ class OnlineProtocol(QObject):
             pickle.dump(save_pickle_dict, f)
 
         # Reset buffers
-        self.emg_buffer = []
-        self.kinematics_buffer = []
+        self._biosignal__buffer = []
+        self._ground_truth_and_timings__buffer = []
 
     def _load_model(self) -> None:
         dialog = QFileDialog(self.main_window)
@@ -356,7 +364,7 @@ class OnlineProtocol(QObject):
             return
 
         try:
-            self.model_information = self.model_interface.load_model(file_name)
+            self._model_information__dict = self._model_interface.load_model(file_name)
         except Exception as e:
             self.main_window.logger.print(
                 f"Error in loading models: {e}", LoggerLevel.ERROR
@@ -380,7 +388,7 @@ class OnlineProtocol(QObject):
             self._send_model_information()
 
         self.output_systems = {
-            k: v(self.main_window, self.model_interface.model.is_classifier)
+            k: v(self.main_window, self._model_interface.model.is_classifier)
             for k, v in CONFIG_REGISTRY.output_systems_map.items()
         }
 
@@ -410,13 +418,13 @@ class OnlineProtocol(QObject):
         self.model_information_signal.emit(
             {
                 "models_map": CONFIG_REGISTRY.models_map[
-                    self.model_information["model_name"]
+                    self._model_information__dict["model_name"]
                 ],
                 "functions_map": CONFIG_REGISTRY.models_functions_map[
-                    self.model_information["model_name"]
+                    self._model_information__dict["model_name"]
                 ],
-                "model_path": self.model_information["model_path"],
-                "model_params": self.model_information["model_params"],
+                "model_path": self._model_information__dict["model_path"],
+                "model_params": self._model_information__dict["model_params"],
             }
         )
 
