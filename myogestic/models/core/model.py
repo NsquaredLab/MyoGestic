@@ -30,18 +30,6 @@ class MyoGesticModel(QObject):
         self.load_function = None
         self.save_function = None
 
-        self.model_prediction_to_mechatronic_interface_map = {
-            -1: "Rejected Sample",
-            0: "[0, 0, 0, 0, 0, 0, 0, 0, 0]",
-            1: "[0, 0, 1, 0, 0, 0, 0, 0, 0]",
-            2: "[1, 0, 0, 0, 0, 0, 0, 0, 0]",
-            3: "[0, 0, 0, 1, 0, 0, 0, 0, 0]",
-            4: "[0, 0, 0, 0, 1, 0, 0, 0, 0]",
-            5: "[0, 0, 0, 0, 0, 1, 0, 0, 0]",
-            6: "[1, 1, 1, 1, 1, 1, 0, 0, 0]",
-            7: "[1, 1, 1, 0, 0, 0, 0, 0, 0]",
-            8: "[1, 1, 1, 1, 0, 0, 0, 0, 0]",
-        }
         self.model = None
         self.model_information = None
 
@@ -76,9 +64,6 @@ class MyoGesticModel(QObject):
             self.model, dataset, self.is_classifier, self.logger
         )
 
-    def custom_log(self, x, a=3):
-        return np.log(1 + a * x) / np.log(1 + a)
-
     def predict(
         self, input: np.ndarray, prediction_function, selected_real_time_filter: str
     ) -> tuple[Any, list[Any] | None, str | None]:
@@ -91,15 +76,6 @@ class MyoGesticModel(QObject):
         if self.is_classifier:
             if prediction == -1:
                 return -1, None, None
-
-            # to_emit = (
-            #     [0.0]
-            #     + [0.0]
-            #     + [1.0 if prediction == 1 else 0.0]
-            #     + [1.0 if prediction == 3 else 0.0]
-            #     + [1.0 if prediction == 4 else 0.0]
-            #     + [0.0, 0.0, 0.0, 0.0]
-            # )
 
             return prediction, None, None
         else:

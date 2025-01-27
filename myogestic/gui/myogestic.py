@@ -48,7 +48,7 @@ class MyoGestic(QMainWindow):
     Attributes
     ----------
     ui : Ui_MyoGestic
-        The backbone UI of MyoGestic. This is the compiled PySide6 code from the main_window.ui file.
+        The backbone UI of MyoGestic. This is the compiled PySide6 code from the _main_window.ui file.
     logger : CustomLogger
         The ui logger of MyoGestic. This is a custom logger that logs messages to the main window.
     protocols : list[Protocol]
@@ -70,10 +70,10 @@ class MyoGestic(QMainWindow):
         self._fps_display__label: QLabel = self.ui.appUpdateFPSLabel
         self._fps_display__label.setText("")
         self._fps__buffer: list[float, float] = []
-        self._last_fps_update__time: float = time.time()
+        self._start_fps_counting__time: float = time.time()
 
         self.logger: CustomLogger = CustomLogger(self.ui.loggingTextEdit)
-        self.logger.print("MyoGestic started")
+        self.logger.print("MyoGestic started!")
 
         # Tab Widget
         self._tab__widget = self.ui.mindMoveTabWidget
@@ -81,7 +81,7 @@ class MyoGestic(QMainWindow):
 
         # Plot Setup
         self._plot__widget: BiosignalPlotWidget = self.ui.vispyPlotWidget
-        self.current_bad_channels__list: list | None = []
+        self.current_bad_channels__list: list = []
         self._plot__widget.bad_channels_updated.connect(self._update_bad_channels)
         self._biosignal_plot_display_time_range__value = (
             self.ui.timeShownDoubleSpinBox.value()
@@ -104,9 +104,8 @@ class MyoGestic(QMainWindow):
         self.ui.timeShownDoubleSpinBox.valueChanged.connect(self._reconfigure_plot)
 
         # Device parameters
-        self.device_name: DeviceType = None
-        self.sampling_frequency = None
-
+        self._device_name: DeviceType | None = None
+        self._sampling_frequency = None
         self._samples_per_frame = None
         self._number_of_channels = None
 
@@ -214,16 +213,18 @@ class MyoGestic(QMainWindow):
         current_time = time.time()
 
         self._fps__buffer.append(
-            (current_time, 1 / max(current_time - self._last_fps_update__time, 1e-10))
+            max(current_time - self._start_fps_counting__time, 1e-10)
         )
-        self._last_fps_update__time = current_time
-        self._fps_display__label.setText(
-            f"FPS: {round(np.mean(np.array(self._fps__buffer)[1, :]))}"
-        )
+        last_time = self._fps__buffer[-1]
 
         self._fps__buffer = list(
-            filter(lambda x: current_time - x[0] <= 60, self._fps__buffer)
+            filter(
+                lambda x: last_time - 1 < x <= last_time,
+                self._fps__buffer,
+            )
         )
+
+        self._fps_display__label.setText(f"{len(self._fps__buffer)}")
 
         # EMG Data
         if self._toggle_vispy_plot__check_box.isChecked():
@@ -244,17 +245,16 @@ class MyoGestic(QMainWindow):
             return
 
         device_information = self.device__widget.get_device_information()
-        self.device_name = device_information["name"]
-        self.sampling_frequency = device_information["sampling_frequency"]
+        self._device_name = device_information["name"]
+        self._sampling_frequency = device_information["sampling_frequency"]
         self._samples_per_frame = device_information["samples_per_frame"]
         self._number_of_channels = device_information["number_of_biosignal_channels"]
 
         self._reconfigure_plot(self._biosignal_plot_display_time_range__value)
 
         # initialize the fps buffer with zeros for one second to avoid a spike in the first few frames
-        self._fps__buffer = [(time.time(), 0)] * int(
-            self.sampling_frequency / self._samples_per_frame
-        )
+        self._start_fps_counting__time = time.time()
+        self._fps__buffer = [time.time() - self._start_fps_counting__time]
 
     def _reconfigure_plot(self, value) -> None:
         """
@@ -266,13 +266,13 @@ class MyoGestic(QMainWindow):
         -------
         None
         """
-        if self.sampling_frequency is None or self._number_of_channels is None:
+        if self._sampling_frequency is None or self._number_of_channels is None:
             self.logger.print("Device not configured!")
             return
 
         self._plot__widget.configure(
             display_time=value,
-            sampling_frequency=self.sampling_frequency,
+            sampling_frequency=self._sampling_frequency,
             lines=self._number_of_channels,
         )
         self._plot__widget.resize(0, 0)

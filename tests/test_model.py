@@ -6,7 +6,7 @@ from myogestic.models.interface import MyoGesticModelInterface
 
 
 def main():
-    device_information = {"sampling_frequency": 2000, "samples_per_frame": 18}
+    device_information = {"_sampling_frequency": 2000, "samples_per_frame": 18}
     model_interface = MyoGesticModelInterface(device_information)
     recordings = [
         r"data\recordings\MindMove_Recording_20240530_115505896810_rest_default.pkl",

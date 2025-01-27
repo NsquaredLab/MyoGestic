@@ -62,7 +62,7 @@ class Protocol(QObject):
 
     def _pass_on_selected_visual_interface(self) -> None:
         for protocol in self.available_protocols:
-            protocol.selected_visual_interface = (
+            protocol._selected_visual_interface = (
                 self.main_window.selected_visual_interface
             )
 

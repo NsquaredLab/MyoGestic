@@ -40,8 +40,8 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
         super().__init__(parent, name, ui=Ui_SetupVirtualHandInterface())
 
         # Initialize Virtual Hand Interface
-        self.status_request: str = "status"
-        self.status_response: str = "active"
+        self._status_request: str = "status"
+        self._status_response: str = "active"
 
         self._setup_timers()
 
@@ -49,29 +49,29 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
         self._unity_process.finished.connect(self.interface_was_killed)
 
         # Toggle the selected visual interface when the Unity process is started or finished
-        self._unity_process.finished.connect(
-            lambda: self.main_window.toggle_selected_visual_interface(self.name)
-        )
         self._unity_process.started.connect(
-            lambda: self.main_window.toggle_selected_visual_interface(self.name)
+            lambda: self._main_window.toggle_selected_visual_interface(self.name)
+        )
+        self._unity_process.finished.connect(
+            lambda: self._main_window.toggle_selected_visual_interface(self.name)
         )
 
         from myogestic.gui.protocols.online import OnlineProtocol
         from myogestic.gui.protocols.record import RecordProtocol
 
-        self._record_protocol: RecordProtocol = self.main_window.protocols[0]
-        self._online_protocol: OnlineProtocol = self.main_window.protocols[2]
+        self._record_protocol: RecordProtocol = self._main_window.protocols[0]
+        self._online_protocol: OnlineProtocol = self._main_window.protocols[2]
 
         self._unity_process.setProgram(str(self._get_unity_executable()))
 
-        self.time_difference_between_messages = float(1 / STREAMING_FREQUENCY)
-        self.last_message_time = time.time()
-        self.is_connected: bool = False
+        self._time_difference_between_messages = float(1 / STREAMING_FREQUENCY)
+        self._last_message_time = time.time()
+        self._is_connected: bool = False
 
-        self.streaming_udp_socket: QUdpSocket | None = None
-        self.predicted_hand_udp_socket: QUdpSocket | None = None
+        self._streaming__udp_socket: QUdpSocket | None = None
+        self._predicted_hand__udp_socket: QUdpSocket | None = None
 
-        self.buffer_predicted_hand_recording: list[(float, np.ndarray)] = None
+        self._predicted_hand_recording__buffer: list[(float, np.ndarray)] = []
 
         # Initialize Virtual Hand Interface UI
         self.initialize_ui_logic()
@@ -110,7 +110,7 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
         self.status_request_timeout_timer.timeout.connect(self._update_status)
 
     def initialize_ui_logic(self):
-        self.main_window.ui.visualInterfacesVerticalLayout.addWidget(self.ui.groupBox)
+        self._main_window.ui.visualInterfacesVerticalLayout.addWidget(self.ui.groupBox)
 
         self.toggle_virtual_hand_interface_push_button: QPushButton = (
             self.ui.toggleVirtualHandInterfacePushButton
@@ -152,22 +152,22 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
         self.virtual_hand_interface_status_widget.setStyleSheet(
             self.virtual_hand_interface_not_connected_stylesheet
         )
-        self.is_connected = False
+        self._is_connected = False
 
     def closeEvent(self, _: QCloseEvent) -> None:
         try:
-            if self.streaming_udp_socket:
-                self.streaming_udp_socket.close()
+            if self._streaming__udp_socket:
+                self._streaming__udp_socket.close()
             if self._unity_process.state() != QProcess.NotRunning:
                 self._unity_process.kill()
                 self._unity_process.waitForFinished()
         except Exception as e:
-            self.main_window.logger.print(
+            self._main_window.logger.print(
                 f"Error during cleanup: {e}", level=LoggerLevel.ERROR
             )
 
     def _update_status(self) -> None:
-        self.is_connected = False
+        self._is_connected = False
         self.virtual_hand_interface_status_widget.setStyleSheet(
             self.virtual_hand_interface_not_connected_stylesheet
         )
@@ -186,35 +186,37 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
 
     def toggle_streaming(self) -> None:
         if self.toggle_virtual_hand_interface_push_button.isChecked():
-            self.streaming_udp_socket = QUdpSocket(self)
-            self.streaming_udp_socket.readyRead.connect(self.read_message)
+            self._streaming__udp_socket = QUdpSocket(self)
+            self._streaming__udp_socket.readyRead.connect(self.read_message)
             self.outgoing_message_signal.connect(self.write_message)
-            self.streaming_udp_socket.bind(QHostAddress(SOCKET_IP), MYOGESTIC_UDP_PORT)
+            self._streaming__udp_socket.bind(
+                QHostAddress(SOCKET_IP), MYOGESTIC_UDP_PORT
+            )
 
-            self.predicted_hand_udp_socket = QUdpSocket(self)
-            self.predicted_hand_udp_socket.bind(
+            self._predicted_hand__udp_socket = QUdpSocket(self)
+            self._predicted_hand__udp_socket.bind(
                 QHostAddress(SOCKET_IP), VHI_PREDICTION__UDP_PORT
             )
-            self.predicted_hand_udp_socket.readyRead.connect(self.read_predicted_hand)
+            self._predicted_hand__udp_socket.readyRead.connect(self.read_predicted_hand)
 
-            self.last_message_time = time.time()
+            self._last_message_time = time.time()
         else:
             try:
-                self.streaming_udp_socket.close()
-                self.predicted_hand_udp_socket.close()
+                self._streaming__udp_socket.close()
+                self._predicted_hand__udp_socket.close()
             except AttributeError:
                 pass
-            self.streaming_udp_socket = None
-            self.predicted_hand_udp_socket = None
-            self.is_connected = False
+            self._streaming__udp_socket = None
+            self._predicted_hand__udp_socket = None
+            self._is_connected = False
             self.virtual_hand_interface_status_widget.setStyleSheet(
                 self.virtual_hand_interface_not_connected_stylesheet
             )
 
     def read_predicted_hand(self) -> None:
-        while self.predicted_hand_udp_socket.hasPendingDatagrams():
-            datagram, _, _ = self.predicted_hand_udp_socket.readDatagram(
-                self.predicted_hand_udp_socket.pendingDatagramSize()
+        while self._predicted_hand__udp_socket.hasPendingDatagrams():
+            datagram, _, _ = self._predicted_hand__udp_socket.readDatagram(
+                self._predicted_hand__udp_socket.pendingDatagramSize()
             )
 
             data = datagram.data().decode("utf-8")
@@ -224,30 +226,30 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
             self.predicted_hand_signal.emit(np.array(ast.literal_eval(data)))
 
     def write_message(self, message: QByteArray) -> None:
-        if self.is_connected:
+        if self._is_connected:
             if (
-                time.time() - self.last_message_time
-                < self.time_difference_between_messages
+                time.time() - self._last_message_time
+                < self._time_difference_between_messages
             ):
                 return
-            self.last_message_time = time.time()
-            output_bytes = self.streaming_udp_socket.writeDatagram(
+            self._last_message_time = time.time()
+            output_bytes = self._streaming__udp_socket.writeDatagram(
                 message,
                 QHostAddress(SOCKET_IP),
                 VHI__UDP_PORT,
             )
 
             if output_bytes == -1:
-                self.main_window.logger.print(
+                self._main_window.logger.print(
                     "Error in sending message to Virtual Hand Interface!",
                     level=LoggerLevel.ERROR,
                 )
 
     def read_message(self) -> None:
         if self.toggle_virtual_hand_interface_push_button.isChecked():
-            while self.streaming_udp_socket.hasPendingDatagrams():
-                datagram, _, _ = self.streaming_udp_socket.readDatagram(
-                    self.streaming_udp_socket.pendingDatagramSize()
+            while self._streaming__udp_socket.hasPendingDatagrams():
+                datagram, _, _ = self._streaming__udp_socket.readDatagram(
+                    self._streaming__udp_socket.pendingDatagramSize()
                 )
 
                 if len(datagram.data()) == 0:
@@ -256,10 +258,10 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
                 try:
                     if (
                         len(datagram.data())
-                        == len(self.status_response.encode("utf-8"))
-                        and datagram.data().decode("utf-8") == self.status_response
+                        == len(self._status_response.encode("utf-8"))
+                        and datagram.data().decode("utf-8") == self._status_response
                     ):
-                        self.is_connected = True
+                        self._is_connected = True
                         self.virtual_hand_interface_status_widget.setStyleSheet(
                             self.virtual_hand_interface_connected_stylesheet
                         )
@@ -274,14 +276,14 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
 
     def write_status_message(self) -> None:
         if self.toggle_virtual_hand_interface_push_button.isChecked():
-            output_bytes = self.streaming_udp_socket.writeDatagram(
-                self.status_request.encode("utf-8"),
+            output_bytes = self._streaming__udp_socket.writeDatagram(
+                self._status_request.encode("utf-8"),
                 QHostAddress(SOCKET_IP),
                 VHI__UDP_PORT,
             )
 
             if output_bytes == -1:
-                self.main_window.logger.print(
+                self._main_window.logger.print(
                     "Error in sending status message to Virtual Hand Interface!",
                     level=LoggerLevel.ERROR,
                 )
@@ -298,18 +300,18 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
     def get_custom_save_data(self) -> dict:
         return {
             "predicted_hand": np.vstack(
-                [data for _, data in self.buffer_predicted_hand_recording],
+                [data for _, data in self._predicted_hand_recording__buffer],
             ).T,
             "predicted_hand_timings": np.array(
-                [time for time, _ in self.buffer_predicted_hand_recording],
+                [time for time, _ in self._predicted_hand_recording__buffer],
             ),
         }
 
     def clear_custom_signal_buffers(self) -> None:
-        self.buffer_predicted_hand_recording = []
+        self._predicted_hand_recording__buffer = []
 
     def online_predicted_hand_update(self, data: np.ndarray) -> None:
         if self._online_protocol.online_record_toggle_push_button.isChecked():
-            self.buffer_predicted_hand_recording.append(
+            self._predicted_hand_recording__buffer.append(
                 (time.time() - self._online_protocol.recording_start_time, data)
             )
