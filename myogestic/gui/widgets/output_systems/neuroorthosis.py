@@ -51,7 +51,7 @@ class NeuroOrthosisOutputSystem(OutputSystemTemplate):
         )
 
         if output_bytes == -1:
-            self.main_window.logger.print(
+            self._main_window.logger.print(
                 "Error in sending message to the Neuroorthosis",
                 level=LoggerLevel.ERROR,
             )

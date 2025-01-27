@@ -14,16 +14,16 @@ class OutputSystemTemplate(QObject, metaclass=MetaQObjectABC):
         super().__init__()
 
         if main_window is None:
-            raise ValueError("The main_window must be provided.")
+            raise ValueError("The _main_window must be provided.")
         if prediction_is_classification is None:
-            raise ValueError("The prediction_is_classification must be provided.")
+            raise ValueError("The _prediction_is_classification must be provided.")
 
-        self.main_window = main_window
-        self.prediction_is_classification = prediction_is_classification
+        self._main_window = main_window
+        self._prediction_is_classification = prediction_is_classification
 
         self.process_prediction = (
             self._process_prediction__classification
-            if self.prediction_is_classification
+            if self._prediction_is_classification
             else self._process_prediction__regression
         )
 

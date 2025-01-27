@@ -261,6 +261,8 @@ class TrainingProtocol(QObject):
         self._selected_recordings__dict: dict[str, dict] | None = None
         self._selected_dataset__filepath: str | None = None
 
+        self._selected_visual_interface: Optional[VisualInterface] = None
+
         # Model interface
         self._model_interface: MyoGesticModelInterface | None = None
         self._current_device_information: dict[str, Any] | None = None
@@ -338,7 +340,7 @@ class TrainingProtocol(QObject):
                     )
                     continue
 
-                # if recording["device"] != self._main_window.device_name:
+                # if recording["device"] != self._main_window._device_name:
                 #     self._main_window.logger.print(
                 #         f" {f} is not recorded with the current device! \n Please select {recording['device']}.",
                 #         LoggerLevel.ERROR,
@@ -351,34 +353,62 @@ class TrainingProtocol(QObject):
                         selected_recordings_key
                     ]
 
-                    recording["emg"] = np.concatenate(
-                        [current_recording["emg"], recording["emg"]], axis=-1
-                    )
-                    recording["ground_truth"] = np.concatenate(
-                        [current_recording["kinematics"], recording["ground_truth"]],
+                    recording["biosignal"] = np.concatenate(
+                        [current_recording["biosignal"], recording["biosignal"]],
                         axis=-1,
                     )
-                    recording["timings_kinematics"] = np.concatenate(
+                    recording["ground_truth"] = np.concatenate(
+                        [current_recording["ground_truth"], recording["ground_truth"]],
+                        axis=-1,
+                    )
+                    recording["biosignal_timings"] = np.concatenate(
                         [
-                            current_recording["timings_kinematics"],
-                            recording["timings_kinematics"],
+                            current_recording["biosignal_timings"],
+                            recording["biosignal_timings"],
                         ]
                     )
-                    recording["timings_emg"] = np.concatenate(
-                        [current_recording["timings_emg"], recording["timings_emg"]]
+                    recording["ground_truth_timings"] = np.concatenate(
+                        [
+                            current_recording["ground_truth_timings"],
+                            recording["ground_truth_timings"],
+                        ]
                     )
 
-                    recording["label"] += "; " + current_recording["label"]
+                    recording["recording_label"] += (
+                        "; " + current_recording["recording_label"]
+                    )
 
                     recording["bad_channels"].extend(current_recording["bad_channels"])
                     recording["bad_channels"] = list(
                         set([item for item in recording["bad_channels"]])
                     )
 
-                    recording["use_kinematics"] = (
-                        recording["use_kinematics"]
-                        and current_recording["use_kinematics"]
+                    recording["use_as_classification"] = (
+                        recording["use_as_classification"]
+                        and current_recording["use_as_classification"]
                     )
+
+                    if (
+                        recording["ground_truth_sampling_frequency"]
+                        != current_recording["ground_truth_sampling_frequency"]
+                    ):
+                        self._open_warning_dialog(
+                            "Recordings have different ground truth sampling frequencies!"
+                        )
+                        continue
+
+                    if (
+                        recording["device_information"]
+                        != current_recording["device_information"]
+                    ):
+                        self._open_warning_dialog(
+                            "Recordings are not from the same device!"
+                        )
+                        continue
+
+                    recording["recording_time"] += current_recording["recording_time"]
+
+                    recording["task"] = selected_recordings_key
 
                 self._selected_recordings__dict[selected_recordings_key] = recording
 
@@ -397,7 +427,7 @@ class TrainingProtocol(QObject):
 
         self._model_interface = MyoGesticModelInterface(
             device_information=self._current_device_information,
-            logger=self._main_window.logger
+            logger=self._main_window.logger,
         )
 
         for key, item in self._selected_recordings__dict.items():
@@ -415,7 +445,7 @@ class TrainingProtocol(QObject):
                 row_position,
                 1,
                 QTableWidgetItem(
-                    f"{((item['biosignal'].shape[-1] * item['biosignal'].shape[-2]) / item['device_information']["sampling_frequency"]):.2f} s"
+                    f"{((item['biosignal'].shape[-1] * item['biosignal'].shape[-2]) / item['device_information']['sampling_frequency']):.2f} s"
                 ),
             )
             self.training_create_dataset_selected_recordings_table_widget.setItem(
@@ -450,7 +480,7 @@ class TrainingProtocol(QObject):
         if not label:
             label = "default"
 
-        file_name = f"MindMove_Dataset_{datetime.now().strftime("%Y%m%d_%H%M%S%f")}_{label.lower()}"
+        file_name = f"{self._selected_visual_interface.name}_Dataset_{datetime.now().strftime("%Y%m%d_%H%M%S%f")}_{label.lower()}"
 
         dataset_dict = self._model_interface.create_dataset(
             self._selected_recordings__dict, self._selected_features__list, file_name
@@ -525,7 +555,7 @@ class TrainingProtocol(QObject):
 
             self._model_interface = MyoGesticModelInterface(
                 device_information=self._current_device_information,
-                logger=self._main_window.logger
+                logger=self._main_window.logger,
             )
 
         try:
@@ -546,20 +576,21 @@ class TrainingProtocol(QObject):
                 train=func_map["train"],
             )
         except Exception as e:
-            print(f"Error during training: {e}", LoggerLevel.ERROR)
+            self._main_window.logger.print(
+                f"Error during training: {e}", LoggerLevel.ERROR
+            )
             return
 
-        now = datetime.now()
-        formatted_now = now.strftime("%Y%m%d_%H%M%S%f")
-
-        file_name = f"MindMove_Model_{formatted_now}_{label.lower()}.pkl"
+        file_name = f"{self._selected_visual_interface.name}_Model_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{label.lower()}.pkl"
 
         model_filepath = MODELS_DIR_PATH / file_name
 
         try:
             model_save_dict = self._model_interface.save_model(model_filepath)
         except Exception as e:
-            print(f"Error during saving models: {e}", LoggerLevel.ERROR)
+            self._main_window.logger.print(
+                f"Error during saving model: {e}", LoggerLevel.ERROR
+            )
             return
 
         with model_filepath.open("wb") as file:

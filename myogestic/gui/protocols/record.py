@@ -30,7 +30,7 @@ class RecordProtocol(QObject):
 
     Attributes
     ----------
-    selected_visual_interface : Optional[VisualInterfaceTemplate]
+    _selected_visual_interface : Optional[VisualInterfaceTemplate]
         The visual interface used for the recording.
     _sampling_frequency : Optional[int]
         Sampling frequency of the biosignal device.
@@ -49,7 +49,7 @@ class RecordProtocol(QObject):
         self._main_window = main_window
 
         self._sampling_frequency: Optional[int] = None
-        self.selected_visual_interface: Optional[VisualInterface] = None
+        self._selected_visual_interface: Optional[VisualInterface] = None
 
         self._total_samples_to_record: int = 0
         self._biosignal__buffer: list[Tuple[float, np.ndarray]] = []
@@ -124,8 +124,8 @@ class RecordProtocol(QObject):
             self.update_biosignal_buffer
         )
 
-        if self.selected_visual_interface:
-            self.selected_visual_interface.recording_interface_ui.check_recording_completion()
+        if self._selected_visual_interface:
+            self._selected_visual_interface.recording_interface_ui.check_recording_completion()
 
     def retrieve_recorded_data(self) -> Tuple[np.ndarray, np.ndarray]:
         """Retrieve recorded EMG data and timestamps.

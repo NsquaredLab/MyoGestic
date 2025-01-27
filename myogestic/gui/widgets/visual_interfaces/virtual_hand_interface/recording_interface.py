@@ -30,21 +30,21 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
 
         RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
 
-        self.current_task = None
-        self.kinematics_buffer = []
+        self._current_task: str = ""
+        self._kinematics__buffer = []
 
-        self.recording_protocol = self.main_window.protocols[0]
+        self._recording_protocol = self._main_window.protocols[0]
 
-        self.has_finished_kinematics = False
-        self.start_time = None
+        self._has_finished_kinematics: bool = False
+        self._start_time: float = 0
 
         self.initialize_ui_logic()
 
     def initialize_ui_logic(self) -> None:
         ui: Ui_RecordingVirtualHandInterface = self.ui
 
-        self.main_window.ui.recordVerticalLayout.addWidget(ui.recordRecordingGroupBox)
-        self.main_window.ui.recordVerticalLayout.addWidget(
+        self._main_window.ui.recordVerticalLayout.addWidget(ui.recordRecordingGroupBox)
+        self._main_window.ui.recordVerticalLayout.addWidget(
             ui.recordReviewRecordingStackedWidget
         )
 
@@ -75,37 +75,30 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
                 self.record_toggle_push_button.setChecked(False)
                 return
 
-            if not self.recording_protocol.start_recording_preparation(
+            if not self._recording_protocol.start_recording_preparation(
                 self.record_duration_spin_box.value()
             ):
                 self.record_toggle_push_button.setChecked(False)
                 return
 
-            self.start_time = time.time()
+            self._start_time = time.time()
 
             self.record_toggle_push_button.setText("Recording...")
             self.record_group_box.setEnabled(False)
-            self.current_task = self.record_task_combo_box.currentText()
+            self._current_task = self.record_task_combo_box.currentText()
 
             if self.use_kinematics_check_box.isChecked():
                 self.incoming_message_signal.connect(self.update_ground_truth_buffer)
 
-            self.has_finished_kinematics = not self.use_kinematics_check_box.isChecked()
+            self._has_finished_kinematics = (
+                not self.use_kinematics_check_box.isChecked()
+            )
 
     def start_recording_preparation(self) -> bool:
-        # if (
-        #     self.use_kinematics_check_box.isChecked()
-        #     and not self.main_window.virtual_hand_interface.is_connected
-        # ):
-        #     self.main_window.logger.print(
-        #         "Virtual Hand Interface not connected!", level=LoggerLevel.ERROR
-        #     )
-        #     return False
-
         if (
-            not self.main_window.device__widget._get_current_widget()._device._is_streaming
+            not self._main_window.device__widget._get_current_widget()._device._is_streaming
         ):
-            self.main_window.logger.print(
+            self._main_window.logger.print(
                 "Biosignal device not streaming!", level=LoggerLevel.ERROR
             )
             return False
@@ -113,15 +106,15 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         self.kinematics_recording_time = int(
             self.record_duration_spin_box.value() * KINEMATICS_SAMPLING_FREQUENCY
         )
-        self.kinematics_buffer = []
+        self._kinematics__buffer = []
         return True
 
     def update_ground_truth_buffer(self, data: np.ndarray) -> None:
         if not self.use_kinematics_check_box.isChecked():
             return
 
-        self.kinematics_buffer.append((time.time(), data))
-        current_samples = len(self.kinematics_buffer)
+        self._kinematics__buffer.append((time.time(), data))
+        current_samples = len(self._kinematics__buffer)
         self._set_progress_bar(
             self.record_ground_truth_progress_bar,
             current_samples,
@@ -129,24 +122,24 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         )
 
         if current_samples >= self.kinematics_recording_time:
-            self.main_window.logger.print(
-                f"Kinematics recording finished at: {round(time.time() - self.start_time)} seconds"
+            self._main_window.logger.print(
+                f"Kinematics recording finished at: {round(time.time() - self._start_time)} seconds"
             )
-            self.has_finished_kinematics = True
+            self._has_finished_kinematics = True
             self.incoming_message_signal.disconnect(self.update_ground_truth_buffer)
             self.check_recording_completion()
 
     def check_recording_completion(self) -> None:
         if (
-            self.recording_protocol.is_biosignal_recording_complete
-            and self.has_finished_kinematics
+            self._recording_protocol.is_biosignal_recording_complete
+            and self._has_finished_kinematics
         ):
             self.finish_recording()
 
     def finish_recording(self) -> None:
         self.review_recording_stacked_widget.setCurrentIndex(1)
         self.record_toggle_push_button.setText("Finished Recording")
-        self.review_recording_task_label.setText(self.current_task.capitalize())
+        self.review_recording_task_label.setText(self._current_task.capitalize())
 
     def accept_recording(self) -> None:
         """
@@ -161,7 +154,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         - task: The task being recorded.
         - device: The name of the device used for recording.
         - bad_channels: A list of channels marked as "bad."
-        - sampling_frequency: The EMG sampling frequency.
+        - _sampling_frequency: The EMG sampling frequency.
         - kinematics_sampling_frequency: The kinematics sampling frequency.
         - recording_time: The recording duration in seconds.
         - use_kinematics: Boolean indicating whether kinematics data was recorded.
@@ -170,36 +163,36 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         (
             biosignal_data,
             biosignal_timings,
-        ) = self.recording_protocol.retrieve_recorded_data()
+        ) = self._recording_protocol.retrieve_recorded_data()
 
         self.save_recording(
             biosignal=biosignal_data,
             biosignal_timings=biosignal_timings,
             ground_truth=(
-                np.vstack([data for _, data in self.kinematics_buffer]).T
+                np.vstack([data for _, data in self._kinematics__buffer]).T
                 if self.use_kinematics_check_box.isChecked()
                 else np.array([])
             ),
             ground_truth_timings=(
-                np.array([time_stamp for time_stamp, _ in self.kinematics_buffer])
+                np.array([time_stamp for time_stamp, _ in self._kinematics__buffer])
                 if self.use_kinematics_check_box.isChecked()
                 else np.array([])
             ),
             recording_label=label,
-            task=self.current_task,
+            task=self._current_task,
             ground_truth_sampling_frequency=KINEMATICS_SAMPLING_FREQUENCY,
             use_as_classification=not self.use_kinematics_check_box.isChecked(),
             record_duration=self.record_duration_spin_box.value(),
         )
 
         self.reset_ui()
-        self.main_window.logger.print(
-            f"Recording of task {self.current_task.lower()} with label {label} accepted!"
+        self._main_window.logger.print(
+            f"Recording of task {self._current_task.lower()} with label {label} accepted!"
         )
 
     def reject_recording(self) -> None:
         self.reset_ui()
-        self.main_window.logger.print("Recording rejected.")
+        self._main_window.logger.print("Recording rejected.")
 
     def reset_ui(self) -> None:
         self.review_recording_stacked_widget.setCurrentIndex(0)
@@ -207,16 +200,16 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         self.record_toggle_push_button.setChecked(False)
         self.record_group_box.setEnabled(True)
 
-        self.recording_protocol._reset_recording_ui()
+        self._recording_protocol._reset_recording_ui()
 
         self.record_ground_truth_progress_bar.setValue(0)
-        self.kinematics_buffer.clear()
+        self._kinematics__buffer.clear()
 
     def closeEvent(self, _: QCloseEvent) -> None:
         self.record_toggle_push_button.setChecked(False)
         self.reset_ui()
-        self.recording_protocol.closeEvent(_)
-        self.main_window.logger.print("Recording interface closed.")
+        self._recording_protocol.closeEvent(_)
+        self._main_window.logger.print("Recording interface closed.")
 
     def enable(self):
         """Enable the UI elements."""

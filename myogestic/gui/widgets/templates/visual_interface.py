@@ -20,8 +20,8 @@ class SetupInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
 
     Attributes
     ----------
-    main_window : Optional[QObject]
-        The main_window widget of the visual interface.
+    _main_window : Optional[QObject]
+        The _main_window widget of the visual interface.
     """
 
     outgoing_message_signal = Signal(QByteArray)
@@ -32,13 +32,13 @@ class SetupInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
 
         from myogestic.gui.myogestic import MyoGestic
 
-        self.main_window: MyoGestic = main_window
+        self._main_window: MyoGestic = main_window
         self.name = name
 
         if not ui:
             raise ValueError("The UI object must be provided.")
         self.ui = ui
-        self.ui.setupUi(self.main_window)
+        self.ui.setupUi(self._main_window)
 
     @abstractmethod
     def initialize_ui_logic(self) -> None:
@@ -143,16 +143,16 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
 
         from myogestic.gui.myogestic import MyoGestic
 
-        self.main_window: MyoGestic = main_window
+        self._main_window: MyoGestic = main_window
         self.name = name
 
         if not ui:
             raise ValueError("The UI object must be provided.")
         self.ui = ui
-        self.ui.setupUi(self.main_window)
+        self.ui.setupUi(self._main_window)
 
-        self.record_emg_progress_bar = self.main_window.ui.recordEMGProgressBar
-        self.record_emg_progress_bar.setValue(0)
+        self._record_emg_progress__bar = self._main_window.ui.recordEMGProgressBar
+        self._record_emg_progress__bar.setValue(0)
 
         # check if groundTruthProgressBar is in the UI
         if hasattr(self.ui, "groundTruthProgressBar"):
@@ -215,16 +215,16 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
             "recording_label": recording_label,
             "task": task,
             "ground_truth_sampling_frequency": ground_truth_sampling_frequency,
-            "device_information": self.main_window.device__widget.get_device_information(),
-            "bad_channels": self.main_window.current_bad_channels__list,
+            "device_information": self._main_window.device__widget.get_device_information(),
+            "bad_channels": self._main_window.current_bad_channels__list,
             "recording_time": record_duration,
             "use_as_classification": use_as_classification,
-            "visual_interface": self.main_window.selected_visual_interface.name,
+            "visual_interface": self._main_window.selected_visual_interface.name,
         }
 
         save_pickle_dict.update(kwargs)
 
-        file_name = f"{save_pickle_dict["visual_interface"]}_Recording_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{task.lower()}_{recording_label.lower()}.pkl"
+        file_name = f"{save_pickle_dict['visual_interface']}_Recording_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{task.lower()}_{recording_label.lower()}.pkl"
 
         with (RECORDING_DIR_PATH / file_name).open("wb") as f:
             pickle.dump(save_pickle_dict, f)
@@ -262,8 +262,8 @@ class VisualInterface(QObject):
 
     Attributes
     ----------
-    main_window : Optional[QObject]
-        The main_window widget of the visual interface.
+    _main_window : Optional[QObject]
+        The _main_window widget of the visual interface.
     """
 
     def __init__(
@@ -274,7 +274,7 @@ class VisualInterface(QObject):
         recording_interface_ui: Type[RecordingInterfaceTemplate] = None,
     ) -> None:
         super().__init__()
-        self.main_window = main_window
+        self._main_window = main_window
         self.name = name
 
         if not setup_interface_ui:

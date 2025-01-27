@@ -1,8 +1,12 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
 import logging
 from enum import Enum
+from queue import Queue
+from threading import Thread
+from typing import TYPE_CHECKING
+
+from PySide6.QtCore import Signal, QObject
 
 if TYPE_CHECKING:
     from PySide6.QtWidgets import QWidget
@@ -18,6 +22,10 @@ class LoggerLevel(Enum):
     DEFAULT = 6
 
 
+class LoggerSignal(QObject):
+    log_message = Signal(str)
+
+
 class CustomLogger(logging.Handler):
     """
     Custom Logger:
@@ -27,6 +35,8 @@ class CustomLogger(logging.Handler):
     def __init__(self, widget: QWidget) -> None:
         super().__init__()
         self.widget = widget
+        self.signal = LoggerSignal()
+        self.signal.log_message.connect(self.append_log)
 
         # Log
         self.logger = logging.getLogger("CustomLogger")
@@ -34,11 +44,25 @@ class CustomLogger(logging.Handler):
         self.logger.setLevel(logging.INFO)
         self.setFormatter(logging.Formatter("%(type)s : %(message)s"))
 
+        self.queue = Queue()
+        self.thread = Thread(target=self.process_queue)
+        self.thread.daemon = True
+        self.thread.start()
+
     def get_logger(self) -> logging.Logger:
         return self.logger
 
     def emit(self, record):
         msg = self.format(record)
+        self.queue.put(msg)
+
+    def process_queue(self):
+        while True:
+            msg = self.queue.get()
+            self.signal.log_message.emit(msg)
+            self.queue.task_done()
+
+    def append_log(self, msg: str) -> None:
         self.widget.append(msg)
         if (
             self.widget.verticalScrollBar().maximum() > 0
