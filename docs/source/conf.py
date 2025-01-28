@@ -13,13 +13,18 @@ from importlib import import_module
 from inspect import getsource
 
 import toml
-import torch._dynamo
+import torch._dynamo  # noqa
 from docutils import nodes
 from docutils.parsers.rst import Directive
 from sphinx import addnodes
 from sphinx_gallery.sorting import FileNameSortKey
 
 sys.path.insert(0, pathlib.Path(__file__).parents[2].resolve().as_posix())
+
+HERE = pathlib.Path(__file__)
+
+sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parent.parent))
 
 
 # Info from poetry config:
@@ -76,6 +81,8 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
     "sphinx_gallery.gen_gallery",
+    "sphinx_toolbox.more_autodoc.autotypeddict",
+    "sphinx.ext.doctest",
     "rinoh.frontend.sphinx",
     "enum_tools.autoenum",
     "myst_parser",
@@ -83,7 +90,31 @@ extensions = [
     "sphinxcontrib.pdfembed",
 ]
 
-# autosummary_generate = True
+autodoc_inherit_docstrings = True  # Prevent inherited docstrings from being included
+
+numpydoc_class_members_toctree = True
+numpydoc_show_inherited_class_members = True
+
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = True
+napoleon_include_private_with_doc = True
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = True
+napoleon_use_admonition_for_notes = True
+napoleon_use_admonition_for_references = True
+napoleon_use_ivar = True
+napoleon_use_param = True
+napoleon_use_rtype = True
+napoleon_preprocess_types = True
+napoleon_type_aliases = None
+napoleon_attr_annotations = True
+
+autodoc_default_options = {
+    "members": True,
+    "inherited-members": False,
+}
+
+
 autoclass_content = "both"
 autodoc_typehints = "description"
 
@@ -92,20 +123,18 @@ autodoc_member_order = "groupwise"
 autosummary_generate = True
 autosummary_generate_overwrite = True
 
-add_function_parentheses = True
+add_function_parentheses = False
+autosummary_imported_members = False
 
-napoleon_numpy_docstring = True
-
-templates_path = ["_templates"]
+templates_path = ["templates"]
 exclude_patterns = []
 
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "furo"
+html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
-
 html_css_files = ["custom.css"]
 
 # -- Options for intersphinx extension ---------------------------------------

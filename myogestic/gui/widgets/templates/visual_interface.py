@@ -260,15 +260,38 @@ class VisualInterface(QObject):
 
     This class is the base class for visual interfaces in the MyoGestic application.
 
+    Parameters
+    ----------
+    main_window : QMainWindow
+        The main window of the visual interface.
+    name : str
+        The name of the visual interface. Default is "VisualInterface".
+
+        .. important:: The name is used to identify the visual interface in the application. It should be unique.
+
+    setup_interface_ui : Type[SetupInterfaceTemplate]
+        The setup interface of the visual interface.
+    recording_interface_ui : Type[RecordingInterfaceTemplate]
+        The recording interface of the visual interface.
+
     Attributes
     ----------
-    _main_window : Optional[QObject]
-        The _main_window widget of the visual interface.
+    _main_window : QObject
+        The main_window widget of the visual interface.
+    setup_interface_ui : SetupInterfaceTemplate
+        The setup interface of the visual interface.
+    recording_interface_ui : RecordingInterfaceTemplate
+        The recording interface of the visual interface.
+    incoming_message_signal : SignalInstance
+        The incoming message signal of the visual interface.
+    outgoing_message_signal : SignalInstance
+        The outgoing message signal of the visual interface.
+
     """
 
     def __init__(
         self,
-        main_window: Optional[QMainWindow] = None,
+        main_window: QMainWindow,
         name: str = "VisualInterface",
         setup_interface_ui: Type[SetupInterfaceTemplate] = None,
         recording_interface_ui: Type[RecordingInterfaceTemplate] = None,
