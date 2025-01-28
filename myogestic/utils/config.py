@@ -132,7 +132,7 @@ class Registry:
         """
         Register a model in the registry.
 
-        .. note:: The model name must be unique.
+        The model name must be unique.
 
         Parameters
         ----------
@@ -149,17 +149,18 @@ class Registry:
         train_function : callable
             The function to train the model.
         predict_function : callable
-            The function to predict with the model.
-        changeable_parameters : dict[str, ChangeableParameter], optional
-            The changeable parameters of the model, by default None.
-        unchangeable_parameters : dict[str, UnchangeableParameter], optional
-            The unchangeable parameters of the model, by default None.
+            The function to make predictions with the model.
+        changeable_parameters : dict of str to ChangeableParameter, optional
+            A dictionary of changeable parameters for the model. Default is None.
+        unchangeable_parameters : dict of str to UnchangeableParameter, optional
+            A dictionary of unchangeable parameters for the model. Default is None.
 
         Raises
         ------
         ValueError
             If the model is already registered.
         """
+
         if name in self.models_map:
             raise ValueError(
                 f'Model "{name}" is already registered. Please choose a different name.'
@@ -240,22 +241,21 @@ class Registry:
         """
         Register a visual interface in the registry.
 
-         .. note:: The output modality name must be unique.
+        .. note:: The output modality name must be unique.
 
-         Parameters
-         ----------
-         name : str
-             The name of the visual interface.
-         setup_interface_ui : Type[SetupInterfaceTemplate]
+        Parameters
+        ----------
+        name : str
+            The name of the visual interface.
+        setup_interface_ui : Type[SetupInterfaceTemplate]
             The setup interface class.
-         recording_interface_ui : Type[RecordingInterfaceTemplate]
+        recording_interface_ui : Type[RecordingInterfaceTemplate]
             The recording interface class.
 
-
-         Raises
-         ------
-         ValueError
-             If the visual interface is already registered.
+        Raises
+        ------
+        ValueError
+            If the visual interface is already registered.
         """
         if name in self.visual_interfaces_map:
             raise ValueError(

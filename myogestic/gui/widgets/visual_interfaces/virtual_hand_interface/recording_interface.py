@@ -15,6 +15,23 @@ KINEMATICS_SAMPLING_FREQUENCY = 60
 
 
 class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
+    """
+    Class for the recording interface of the Virtual Hand Interface.
+
+    This class is responsible for handling the recording of EMG and kinematics data.
+
+    Parameters
+    ----------
+    main_window : MainWindow
+        The main window of the application.
+    name : str
+        The name of the interface, by default "VirtualHandInterface".
+
+        .. important:: This name is used to identify the interface in the main window. It should be unique.
+    incoming_message_signal : SignalInstance
+        The signal instance used to receive incoming messages from the device.
+    """
+
     def __init__(
         self,
         main_window,
@@ -41,6 +58,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         self.initialize_ui_logic()
 
     def initialize_ui_logic(self) -> None:
+        """Initializes the logic for the UI elements."""
         ui: Ui_RecordingVirtualHandInterface = self.ui
 
         self._main_window.ui.recordVerticalLayout.addWidget(ui.recordRecordingGroupBox)
@@ -70,6 +88,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         self.review_recording_stacked_widget.setCurrentIndex(0)
 
     def start_recording(self, checked: bool) -> None:
+        """Starts the recording process."""
         if checked:
             if not self.start_recording_preparation():
                 self.record_toggle_push_button.setChecked(False)
@@ -95,6 +114,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
             )
 
     def start_recording_preparation(self) -> bool:
+        """Prepares the recording process by checking if the device is streaming."""
         if (
             not self._main_window.device__widget._get_current_widget()._device._is_streaming
         ):
@@ -110,6 +130,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         return True
 
     def update_ground_truth_buffer(self, data: np.ndarray) -> None:
+        """Updates the buffer with the incoming kinematics data."""
         if not self.use_kinematics_check_box.isChecked():
             return
 
@@ -130,6 +151,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
             self.check_recording_completion()
 
     def check_recording_completion(self) -> None:
+        """Checks if the recording process is complete and finishes it if so."""
         if (
             self._recording_protocol.is_biosignal_recording_complete
             and self._has_finished_kinematics
@@ -137,6 +159,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
             self.finish_recording()
 
     def finish_recording(self) -> None:
+        """Finishes the recording process and switches to the review recording interface."""
         self.review_recording_stacked_widget.setCurrentIndex(1)
         self.record_toggle_push_button.setText("Finished Recording")
         self.review_recording_task_label.setText(self._current_task.capitalize())
@@ -146,6 +169,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         Accepts the current recording and saves the data to a pickle file.
 
         The saved data is a dictionary containing:
+
         - emg: A 2D NumPy array of EMG signals with time samples as rows and channels as columns.
         - kinematics: A 2D NumPy array of kinematics data (empty if not used).
         - timings_emg: A 1D NumPy array of timestamps for EMG samples.
@@ -191,10 +215,12 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         )
 
     def reject_recording(self) -> None:
+        """Rejects the current recording and resets the recording interface."""
         self.reset_ui()
         self._main_window.logger.print("Recording rejected.")
 
     def reset_ui(self) -> None:
+        """Resets the recording interface UI elements."""
         self.review_recording_stacked_widget.setCurrentIndex(0)
         self.record_toggle_push_button.setText("Start Recording")
         self.record_toggle_push_button.setChecked(False)
@@ -206,6 +232,7 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         self._kinematics__buffer.clear()
 
     def closeEvent(self, _: QCloseEvent) -> None:
+        """Closes the recording interface."""
         self.record_toggle_push_button.setChecked(False)
         self.reset_ui()
         self._recording_protocol.closeEvent(_)
