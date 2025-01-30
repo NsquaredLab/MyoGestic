@@ -3,18 +3,30 @@
 MyoGestic is a software framework made to help the myocontrol community to develop and test new myocontrol algorithms.
 It is made to be easily extensible and to minimize dead time when testing on injured individuals.
 
-> [!TIP]
-> Take a look at our [documentation](https://nsquaredlab.github.io/MyoGestic/).
+```{tip}
+
+Take a look at our [documentation](https://nsquaredlab.github.io/MyoGestic/).
+```
+
 
 ## Installation
-> [!IMPORTANT]
-> The simplest way is to install MyoGestic using the installer. You can download the installer from the [releases page](https://github.com/NsquaredLab/MyoGestic/releases).
+```{important}
 
-> [!NOTE]
-> The installer is only available for Windows. If you are using another operating system, you can follow the manual installation instructions.
+The simplest way is to install MyoGestic using the installer. You can download the installer from the [releases page](https://github.com/NsquaredLab/MyoGestic/releases).
+```
 
-> [!NOTE]  
-> This does not allow you to add your own myocontrol algorithms. This is only for using the existing ones.
+
+```{note}
+
+The installer is only available for Windows. If you are using another operating system, you can follow the manual installation instructions.
+```
+
+
+```{note}
+
+This does not allow you to add your own myocontrol algorithms. This is only for using the existing ones.
+```
+
 
 ### Manual installation
 The installation is made using Poetry. You can install it using the following command:

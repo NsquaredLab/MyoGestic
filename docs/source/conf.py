@@ -1,78 +1,64 @@
-# Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
-
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-
-import pathlib
 import sys
+from pathlib import Path
 from datetime import datetime
 from importlib import import_module
 from inspect import getsource
-
 import toml
-import torch._dynamo  # noqa
 from docutils import nodes
 from docutils.parsers.rst import Directive
 from sphinx import addnodes
 from sphinx_gallery.sorting import FileNameSortKey
 
-sys.path.insert(0, pathlib.Path(__file__).parents[2].resolve().as_posix())
+# Setup paths
+base_dir = Path.cwd().parent.parent
+sys.path.insert(0, str(base_dir))
+sys.path.insert(0, str(base_dir.parent))
 
-HERE = pathlib.Path(__file__)
-
-sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parent.parent))
-
-
-# Info from poetry config:
-info = toml.load("../../pyproject.toml")["tool"]["poetry"]
-
+# Project Information
+poetry_info = toml.load(base_dir / "pyproject.toml")["tool"]["poetry"]
 project = "MyoGestic"
-author = ", ".join(info["authors"])
-release = info["version"]
-
+author = ", ".join(poetry_info["authors"])
+release = poetry_info["version"]
 copyright = (
     f"2023 - {datetime.now().year}, n-squared lab, FAU Erlangen-Nürnberg, Germany"
 )
 
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-# Generate README.md for sphinx
-# --------------------------------
-HERE = pathlib.Path(__file__).parent
-with (HERE.parent.parent / "README.md").open() as f:
-    out = f.read()
+def process_readme(readme_path: Path) -> str:
+    """Processes the README.md file and generates the modified content."""
+    with readme_path.open() as f:
+        lines = f.read().split("\n")
 
-lines = out.split("\n")
+    line_indices = [i for i, line in enumerate(lines) if "[!" in line]
+    line_ranges = find_line_ranges(lines, line_indices)
 
-# find the line_indices containing "[!"
-line_indices = [i for i, line in enumerate(lines) if "[!" in line]
-# find for each index the last line connected to it that does not contain ">".
-lines_connected = {}
-for i, l in enumerate(line_indices):
-    for j in range(l, len(lines) - 1):
-        if ">" in lines[j] and ">" not in lines[j + 1]:
-            lines_connected[l] = j
-            break
+    # Format lines
+    for start, end in line_ranges.items():
+        lines[start] = f"```{{{lines[start][4:].strip().replace(']', '').lower()}}}\n"
+        for i in range(start + 1, end + 1):
+            lines[i] = lines[i].replace("> ", "") + "\n"
+        lines[end] += "```\n"
 
-for start, end in lines_connected.items():
-    lines[start] = "```{" + lines[start][4:].strip().replace("]", "").lower() + "}\n"
-    for i in range(start + 1, end + 1):
-        lines[i] = lines[i].replace("> ", "") + "\n"
-
-    lines[end] += "```\n"
-
-out = "\n".join(lines)
+    return "\n".join(lines)
 
 
-with (HERE / "README.md").open("w+") as f:
-    f.write(out)
+def find_line_ranges(lines, indices):
+    """Finds the range of lines connected to each matched line index."""
+    line_ranges = {}
+    for i, start in enumerate(indices):
+        for j in range(start, len(lines) - 1):
+            if ">" in lines[j] and ">" not in lines[j + 1]:
+                line_ranges[start] = j
+                break
+    return line_ranges
 
 
+# Process README and save
+modified_readme = process_readme(base_dir / "README.md")
+with (base_dir / "README.md").open("w+") as readme_file:
+    readme_file.write(modified_readme)
+
+# Sphinx Configuration
 extensions = [
     "sphinx.ext.autodoc",
     # "sphinx_autodoc_typehints",
@@ -90,54 +76,22 @@ extensions = [
     "sphinxcontrib.pdfembed",
 ]
 
-autodoc_inherit_docstrings = True  # Prevent inherited docstrings from being included
-
-numpydoc_class_members_toctree = True
-numpydoc_show_inherited_class_members = True
-
-napoleon_numpy_docstring = True
-napoleon_include_init_with_doc = True
-napoleon_include_private_with_doc = True
-napoleon_include_special_with_doc = True
-napoleon_use_admonition_for_examples = True
-napoleon_use_admonition_for_notes = True
-napoleon_use_admonition_for_references = True
-napoleon_use_ivar = True
-napoleon_use_param = True
-napoleon_use_rtype = True
-napoleon_preprocess_types = True
-napoleon_type_aliases = None
-napoleon_attr_annotations = True
-
-autodoc_default_options = {
-    "members": True,
-    "inherited-members": False,
-}
-
-
+autodoc_default_options = {"members": True, "inherited-members": False}
+autodoc_inherit_docstrings = True
 autoclass_content = "both"
 autodoc_typehints = "description"
-
 autodoc_member_order = "groupwise"
-
 autosummary_generate = True
 autosummary_generate_overwrite = True
-
-add_function_parentheses = False
 autosummary_imported_members = False
 
 templates_path = ["templates"]
-exclude_patterns = []
-
-
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+exclude_patterns = ["auto_examples/", "Thumbs.db", ".DS_Store"]
 
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 
-# -- Options for intersphinx extension ---------------------------------------
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
@@ -151,13 +105,11 @@ intersphinx_mapping = {
         "https://doc.qt.io/qtforpython-6/",
         "https://doc.qt.io/qtforpython-6/objects.inv",
     ),
-    # TODO: Add catboost intersphinx ... probably manually as they do not have a objects.inv file,
 }
 
-# -- Options for sphinx_gallery ----------------------------------------------
 sphinx_gallery_conf = {
-    "examples_dirs": "../../examples",  # path to your example scripts
-    "gallery_dirs": "auto_examples",  # path to where to save gallery generated output
+    "examples_dirs": str(base_dir / "examples"),
+    "gallery_dirs": "auto_examples",
     "filename_pattern": r"\.py",
     "remove_config_comments": True,
     "show_memory": True,
@@ -170,48 +122,42 @@ suppress_warnings = ["config.cache"]
 
 
 class PrettyPrintIterable(Directive):
-    """
-    Directive to pretty print an iterable object in the documentation
-
-    Note:
-    -----
-    - The directive is copied from https://stackoverflow.com/a/62253904
-    """
+    """Directive to pretty print an iterable object in the documentation."""
 
     required_arguments = 1
 
     def run(self):
-        def _get_iter_source(src, varname):
-            # 1. identifies target iterable by variable name, (cannot be spaced)
-            # 2. determines iter source code start & end by tracking brackets
-            # 3. returns source code between found start & end
-            start = end = None
-            open_brackets = closed_brackets = 0
-            for i, line in enumerate(src):
-                if line.startswith(varname):
-                    if start is None:
-                        start = i
-                if start is not None:
-                    open_brackets += sum(line.count(b) for b in "([{")
-                    closed_brackets += sum(line.count(b) for b in ")]}")
-
-                if open_brackets > 0 and (open_brackets - closed_brackets == 0):
-                    end = i + 1
-                    break
-            return "\n".join(src[start:end])
-
         module_path, member_name = self.arguments[0].rsplit(".", 1)
         src = getsource(import_module(module_path)).split("\n")
         code = _get_iter_source(src, member_name)
-
         literal = nodes.literal_block(code, code)
         literal["language"] = "python"
-
         return [
             addnodes.desc_name(text=member_name),
             addnodes.desc_content("", literal),
         ]
 
 
+def _get_iter_source(src, varname):
+    """Fetches the source code of an iterable."""
+    start = end = None
+    open_brackets = closed_brackets = 0
+    for i, line in enumerate(src):
+        if line.startswith(varname):
+            if start is None:
+                start = i
+        if start is not None:
+            open_brackets += sum(line.count(b) for b in "([{")
+            closed_brackets += sum(line.count(b) for b in ")]}")
+        if open_brackets > 0 and (open_brackets - closed_brackets == 0):
+            end = i + 1
+            break
+    return "\n".join(src[start:end])
+
+def skip_modules(app, what, name, obj, skip, options):
+    exclude_modules = ["auto_examples/*", "README.md"]
+    return any(name.startswith(excluded) for excluded in exclude_modules) or skip
+
 def setup(app):
     app.add_directive("pprint", PrettyPrintIterable)
+    app.connect("autodoc-skip-member", skip_modules)

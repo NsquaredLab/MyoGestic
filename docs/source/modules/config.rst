@@ -21,18 +21,19 @@ Registry
 
     Registry
 
+.. _config_parameters:
+
 Configuration Parameters
 ------------------------
+.. _changeable_parameter:
+.. autodata:: myogestic.utils.config.ChangeableParameter
+    :annotation:
+
 .. autotypeddict:: myogestic.utils.config.BoolParameter
 .. autotypeddict:: myogestic.utils.config.IntParameter
 .. autotypeddict:: myogestic.utils.config.FloatParameter
 .. autotypeddict:: myogestic.utils.config.StringParameter
 .. autotypeddict:: myogestic.utils.config.CategoricalParameter
-
-
-.. _changeable_parameter:
-.. autodata:: myogestic.utils.config.ChangeableParameter
-    :annotation:
 
 .. _unchangeable_parameter:
 .. autodata:: myogestic.utils.config.UnchangeableParameter
