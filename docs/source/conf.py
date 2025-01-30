@@ -8,11 +8,11 @@ from docutils import nodes
 from docutils.parsers.rst import Directive
 from sphinx import addnodes
 from sphinx_gallery.sorting import FileNameSortKey
+import torch._dynamo  # noqa
 
 # Setup paths
 base_dir = Path.cwd().parent.parent
 sys.path.insert(0, str(base_dir))
-sys.path.insert(0, str(base_dir.parent))
 
 # Project Information
 poetry_info = toml.load(base_dir / "pyproject.toml")["tool"]["poetry"]
@@ -154,9 +154,11 @@ def _get_iter_source(src, varname):
             break
     return "\n".join(src[start:end])
 
+
 def skip_modules(app, what, name, obj, skip, options):
     exclude_modules = ["auto_examples/*", "README.md"]
     return any(name.startswith(excluded) for excluded in exclude_modules) or skip
+
 
 def setup(app):
     app.add_directive("pprint", PrettyPrintIterable)
