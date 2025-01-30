@@ -19,7 +19,7 @@ class MyoGesticModel(QObject):
     def __init__(self, logger: CustomLogger, parent: QObject | None = None) -> None:
         super().__init__(parent)
 
-        self.past_predictions = []
+        self.past_predictions: list = []
 
         self.model_params = None
         self.model_name = None

@@ -153,6 +153,9 @@ class MyoGestic(QMainWindow):
             self._toggle_vispy_plot__check_box.toggle
         )
 
+        # Set the title of the main window
+        self.setWindowTitle("MyoGestic")
+
     def toggle_selected_visual_interface(self, name: str) -> None:
         """
         Toggles the selected visual interface.
