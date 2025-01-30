@@ -2,8 +2,8 @@ Visual Interfaces
 ==============================
 
 Templates
----------
-.. currentmodule:: myogestic.gui.widgets.templates.visual_interface
+---------------------
+.. currentmodule:: myogestic.gui.widgets.templates
 .. autosummary::
     :toctree: generated/visual_interface
     :template: class.rst
@@ -12,8 +12,18 @@ Templates
     SetupInterfaceTemplate
     RecordingInterfaceTemplate
 
-Virtual Hand Interface
+.. _output_system_template:
+Output System Template
 ----------------------
+.. currentmodule:: myogestic.gui.widgets.templates
+.. autosummary::
+    :toctree: generated/visual_interface
+    :template: class.rst
+
+    OutputSystemTemplate
+
+Example - Virtual Hand Interface
+--------------------------------
 .. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_hand_interface
 .. autosummary::
     :toctree: generated/visual_interface
