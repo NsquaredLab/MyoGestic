@@ -218,8 +218,7 @@ class MyoGesticDataset(QObject):
                 frame_data = np.delete(frame_data, bad_channels, axis=2)
 
             frame_data = EMGData(
-                input_data=frame_data,
-                sampling_frequency=self.sampling_frequency,
+                input_data=frame_data, sampling_frequency=self.sampling_frequency
             )
 
             frame_data.apply_filter(
