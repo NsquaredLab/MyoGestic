@@ -1,10 +1,16 @@
-.. MyoGestic documentation master file, created by
-   sphinx-quickstart on Fri Aug  2 21:09:07 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+.. MyoGestic Documentation — Landing Page
 
 MyoGestic (💪👑 ➡️ 💻 ➡️ 🦾) Documentation
 ==========================================
+
+Welcome to the official documentation for **MyoGestic**, a flexible and efficient software framework for the myocontrol community. MyoGestic makes it simple to develop and test new myocontrol algorithms, allowing you to focus on innovation rather than setup. With its modular design, you can easily swap out components, run experiments, and fine-tune your solutions.
+
+Key Features
+------------
+- **Extensibility:** Easily incorporate new sensors, algorithms, or device interfaces.
+- **Rapid Prototyping:** Minimize time spent configuring, so you can start testing and iterating right away.
+- **Community-Driven:** Built with close collaboration in mind—learn from others’ examples and share your own.
+- **Efficient Testing:** Streamline your workflow for real-world studies with motor-impaired individuals.
 
 .. toctree::
    :maxdepth: 1
@@ -13,18 +19,17 @@ MyoGestic (💪👑 ➡️ 💻 ➡️ 🦾) Documentation
    auto_examples/index.rst
    api_documentation.rst
 
-
-MyoGestic is a software framework made to help the myocontrol community to develop and test new myocontrol algorithms.
-It is made to be easily extensible and to minimize dead time when testing on motor impaired individuals.
-
 Tutorial
 --------
+Explore the fundamentals in our comprehensive tutorial:
+
 :pdfembed:`src:_static/MyoGestic_Tutorial.pdf#view=Fit#toolbar=0#statusbar=0#navpanes=0, height:540, width:960, align:middle`
 
-:download:`Download the PDF <_static/MyoGestic_Tutorial.pdf>`
+Or download it for offline use: :download:`Download the PDF <_static/MyoGestic_Tutorial.pdf>`
 
 Usage Examples
-----------------
+--------------
+Get a quick glimpse of MyoGestic in action through our video demos:
 
 .. youtube:: NPemwlSg-mE
    :align: center
@@ -35,3 +40,4 @@ Usage Examples
 .. youtube:: zxICSVn-3P8
    :align: center
 
+Stay tuned for more tutorials, tips, and community showcases as we continue to grow MyoGestic!
