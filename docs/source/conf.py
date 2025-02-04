@@ -26,6 +26,8 @@ copyright = (
 
 def process_readme(readme_path: Path) -> str:
     """Processes the README.md file and generates the modified content."""
+    print(readme_path)
+
     with readme_path.open() as f:
         lines = f.read().split("\n")
 
@@ -55,7 +57,7 @@ def find_line_ranges(lines, indices):
 
 # Process README and save
 modified_readme = process_readme(base_dir / "README.md")
-with (base_dir / "README.md").open("w+") as readme_file:
+with (Path.cwd()/ "README.md").open("w+") as readme_file:
     readme_file.write(modified_readme)
 
 # Sphinx Configuration
