@@ -150,7 +150,7 @@ class RecordProtocol(QObject):
         self._main_window.ui.recordEMGProgressBar.setValue(0)
         self._biosignal__buffer.clear()
 
-    def closeEvent(self, _: QCloseEvent) -> None:
+    def close_event(self, _: QCloseEvent) -> None:
         """Handle the close event for the recording protocol."""
         self._reset_recording_ui()
         self.is_biosignal_recording_complete = False

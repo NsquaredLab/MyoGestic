@@ -20,7 +20,12 @@ if TYPE_CHECKING:
 
 from PySide6.QtCore import QObject
 
-from myogestic.user_config import CHANNELS
+from myogestic.user_config import (
+    CHANNELS,
+    BUFFER_SIZE__CHUNKS,
+    BUFFER_SIZE__SAMPLES,
+    GROUND_TRUTH_INDICES_TO_KEEP,
+)
 
 
 def standardize_data(data: np.ndarray, mean: float, std: float) -> np.ndarray:
@@ -29,50 +34,45 @@ def standardize_data(data: np.ndarray, mean: float, std: float) -> np.ndarray:
 
 class MyoGesticDataset(QObject):
     def __init__(
-        self,
-        device_information: dict[str, Any],
-        logger: CustomLogger,
-        parent: QObject | None = None,
+        self, device_information: dict[str, Any], logger: CustomLogger, parent
     ) -> None:
         super().__init__(parent)
 
-        self.logger = logger
+        from myogestic.gui.myogestic import MyoGestic
 
-        self.task_to_class_map: dict[str, int] = {
-            "rest": 0,
-            "index": 1,
-            "thumb": 2,
-            "middle": 3,
-            "ring": 4,
-            "pinky": 5,
-            "fist": 6,
-            "pinch": 7,
-            "3fpinch": 8,
-            "pointing": 9,
-        }
+        self._main_window: MyoGestic = parent
+
+        self.logger = logger
 
         self.device_information = device_information
         self.sampling_frequency: int = self.device_information["sampling_frequency"]
         self.samples_per_frame: int = self.device_information["samples_per_frame"]
 
         # Offline processing
-        self.default_buffer_size_samples: int = 360
-        self.buffer_size = math.ceil(
-            self.default_buffer_size_samples / self.samples_per_frame
+        self.buffer_size__chunks: int = (
+            BUFFER_SIZE__CHUNKS
+            if BUFFER_SIZE__SAMPLES == -1
+            else math.ceil(BUFFER_SIZE__SAMPLES / self.samples_per_frame)
         )
-        self.buffer_size_samples: int = self.buffer_size * self.samples_per_frame
+        self.buffer_size__samples: int = (
+            self.buffer_size__chunks * self.samples_per_frame
+        )
 
         # Online processing
-        self.emg_buffer: list[np.ndarray] = None
-        self.dataset_bad_channels: list[int] = None
-        self.dataset_mean: float = 0
-        self.dataset_std: float = 1
+        self.emg_buffer: list[np.ndarray] | None = None
+        self.dataset_bad_channels: list[int] | None = None
+        self.dataset_mean: float = 0.0
+        self.dataset_std: float = 1.0
 
     def create_dataset(
         self, dataset: dict[str, dict], selected_features: list[str], file_name: str
     ) -> dict:
         # Accumulate bad channels. Maybe more channels get added between recordings
         bad_channels: list[int] = []
+
+        self.task_to_class_map: dict[str, int] = (
+            self._main_window.selected_visual_interface.recording_interface_ui.ground_truth__task_map
+        )
 
         biosignal_data = {}
         ground_truth_data = {}
@@ -108,7 +108,12 @@ class MyoGesticDataset(QObject):
 
                 ground_truth_data[task_label] = ground_truth
             else:
-                ground_truth_data[task_label] = np.zeros((9, biosignal.shape[-1]))
+                ground_truth_data[task_label] = np.zeros(
+                    (
+                        self._main_window.selected_visual_interface.recording_interface_ui.ground_truth__nr_of_recording_values,
+                        biosignal.shape[-1],
+                    )
+                )
 
             biosignal_data[task_label] = biosignal
 
@@ -118,7 +123,8 @@ class MyoGesticDataset(QObject):
                 biosignal_filter_pipeline_after_chunking.append(
                     [
                         CONFIG_REGISTRY.features_map[feature](
-                            is_output=True, window_size=self.buffer_size_samples  # noqa
+                            is_output=True,
+                            window_size=self.buffer_size__samples,  # noqa
                         )
                     ]
                 )
@@ -127,6 +133,16 @@ class MyoGesticDataset(QObject):
                     [CONFIG_REGISTRY.features_map[feature](is_output=True)]  # noqa
                 )
 
+        ground_truth_indices_to_keep = (
+            tuple(
+                np.arange(
+                    self._main_window.selected_visual_interface.recording_interface_ui.ground_truth__nr_of_recording_values
+                )
+            )
+            if GROUND_TRUTH_INDICES_TO_KEEP == "all"
+            else tuple(GROUND_TRUTH_INDICES_TO_KEEP)
+        )
+
         dataset = EMGDataset(
             emg_data=biosignal_data,
             ground_truth_data=ground_truth_data,
@@ -134,7 +150,7 @@ class MyoGesticDataset(QObject):
             save_path=Path(f"data/datasets/{file_name}.zarr"),
             sampling_frequency=self.sampling_frequency,
             tasks_to_use=list(biosignal_data.keys()),
-            chunk_size=self.buffer_size_samples,
+            chunk_size=self.buffer_size__samples,
             chunk_shift=self.samples_per_frame,
             emg_filter_pipeline_before_chunking=[
                 [
@@ -154,7 +170,7 @@ class MyoGesticDataset(QObject):
             emg_representations_to_filter_after_chunking=["EMG_Chunkizer"]
             * len(selected_features),
             ground_truth_filter_pipeline_before_chunking=[
-                [IndexDataFilter(indices=((0, 2, 3, 4, 5),))]
+                [IndexDataFilter(indices=(ground_truth_indices_to_keep,))]
             ],
             ground_truth_representations_to_filter_before_chunking=["Input"],
             ground_truth_filter_pipeline_after_chunking=[
@@ -208,7 +224,7 @@ class MyoGesticDataset(QObject):
         self, data: np.ndarray, bad_channels: list[int], selected_features
     ) -> np.ndarray:
         self.emg_buffer.append(data[CHANNELS])
-        if len(self.emg_buffer) > self.buffer_size:
+        if len(self.emg_buffer) > self.buffer_size__chunks:
             self.emg_buffer.pop(0)
 
             frame_data = np.concatenate(self.emg_buffer, axis=-1)[None]
@@ -241,7 +257,7 @@ class MyoGesticDataset(QObject):
                     emg_filters.append(
                         CONFIG_REGISTRY.features_map[feature](
                             is_output=False,
-                            window_size=self.buffer_size_samples,  # noqa
+                            window_size=self.buffer_size__samples,  # noqa
                         )
                     )
                 except TypeError:

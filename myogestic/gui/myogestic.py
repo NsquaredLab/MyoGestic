@@ -296,9 +296,9 @@ class MyoGestic(QMainWindow):
         self.device__widget.closeEvent(event)
 
         for vi in self._visual_interfaces__dict.values():
-            vi.closeEvent(event)
+            vi.close_event(event)
 
         for p in self.protocols:
-            p.closeEvent(event)
+            p.close_event(event)
 
         super().closeEvent(event)

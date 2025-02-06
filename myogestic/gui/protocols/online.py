@@ -134,6 +134,7 @@ class OnlineProtocol(QObject):
         self._model_interface = MyoGesticModelInterface(
             device_information=self._device_information__dict,
             logger=self._main_window.logger,
+            parent=self._main_window,
         )
 
         self.online_load_model_push_button.setEnabled(True)
@@ -362,9 +363,9 @@ class OnlineProtocol(QObject):
             for k, v in CONFIG_REGISTRY.output_systems_map.items()
         }
 
-    def closeEvent(self, event) -> None:
+    def close_event(self, event) -> None:
         for output_system in self._output_systems__dict.values():
-            output_system.closeEvent(event)
+            output_system.close_event(event)
 
     def _toggle_conformal_prediction_widget(self) -> None:
         if self.conformal_prediction_type_combo_box.currentText() == "None":

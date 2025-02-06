@@ -22,6 +22,14 @@ class SetupInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
     ----------
     _main_window : Optional[QObject]
         The _main_window widget of the visual interface.
+    name : str
+        The name of the visual interface.
+    ui : object
+        The UI layout of the setup interface.
+    outgoing_message_signal : PySide6.SignalInstance
+        The outgoing message signal of the visual interface.
+    incoming_message_signal : PySide6.SignalInstance
+        The incoming message signal of the visual interface.
     """
 
     outgoing_message_signal = Signal(QByteArray)
@@ -39,6 +47,14 @@ class SetupInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
             raise ValueError("The UI object must be provided.")
         self.ui = ui
         self.ui.setupUi(self._main_window)
+
+        from myogestic.gui.protocols.record import RecordProtocol
+        from myogestic.gui.protocols.training import TrainingProtocol
+        from myogestic.gui.protocols.online import OnlineProtocol
+
+        self._record_protocol: RecordProtocol = self._main_window.protocols[0]
+        self._training_protocol: TrainingProtocol = self._main_window.protocols[1]
+        self._online_protocol: OnlineProtocol = self._main_window.protocols[2]
 
     @abstractmethod
     def initialize_ui_logic(self) -> None:
@@ -76,7 +92,7 @@ class SetupInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         pass
 
     @abstractmethod
-    def closeEvent(self, event: QCloseEvent) -> None:
+    def close_event(self, event: QCloseEvent) -> None:
         """Close the interface and stop necessary processes."""
         pass
 
@@ -130,14 +146,31 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
     Base class for the recording interface of a visual interface.
 
     This class contains the logic and the UI elements of the recording interface of a visual interface.
+
+    Attributes
+    ----------
+    _main_window : Optional[QObject]
+        The _main_window widget of the visual interface.
+    name : str
+        The name of the visual interface.
+    ui : object
+        The UI layout of the recording interface.
+    incoming_message_signal : PySide6.QtCore.SignalInstance
+        The incoming message signal of the visual interface.
+    ground_truth__nr_of_recording_values : int
+        The number of recording values the visual interface sends to MyoGestic.
+    ground_truth__task_map : dict[str, int]
+        The task map. The keys are the task names and the values are the task indices.
     """
 
     def __init__(
         self,
         main_window,
         name: str = "RecordingUI",
-        ui: object = None,
-        incoming_message_signal: SignalInstance = None,
+        ui: object | None = None,
+        incoming_message_signal: SignalInstance | None = None,
+        ground_truth__nr_of_recording_values: int = -1,
+        ground_truth__task_map: dict[str, int] | None = None,
     ):
         super().__init__()
 
@@ -153,6 +186,14 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
 
         self._record_emg_progress__bar = self._main_window.ui.recordEMGProgressBar
         self._record_emg_progress__bar.setValue(0)
+
+        if ground_truth__nr_of_recording_values == -1:
+            raise ValueError("The number of recording values must be provided.")
+        self.ground_truth__nr_of_recording_values = ground_truth__nr_of_recording_values
+
+        if not ground_truth__task_map:
+            raise ValueError("The task map must be provided.")
+        self.ground_truth__task_map = ground_truth__task_map
 
         # check if groundTruthProgressBar is in the UI
         if hasattr(self.ui, "groundTruthProgressBar"):
@@ -185,13 +226,13 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
 
         Parameters
         ----------
-        biosignal : np.ndarray
+        biosignal : numpy.ndarray
             The recorded biosignal data.
-        biosignal_timings : np.ndarray
+        biosignal_timings : numpy.ndarray
             The recorded biosignal timings.
-        ground_truth : np.ndarray
+        ground_truth : numpy.ndarray
             The recorded ground truth data.
-        ground_truth_timings : np.ndarray
+        ground_truth_timings : numpy.ndarray
             The recorded ground truth timings.
         record_duration : int | float
             The duration of the recording in seconds.
@@ -245,12 +286,13 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         pass
 
     @abstractmethod
-    def closeEvent(self, event: QCloseEvent) -> None:
+    def close_event(self, event: QCloseEvent) -> None:
         """Close the interface and stop necessary processes."""
         pass
 
     @staticmethod
     def _set_progress_bar(progress_bar, value: int, total: int) -> None:
+        """Set the value of a progress bar."""
         progress_bar.setValue(min(value / total * 100, 100))
 
 
@@ -282,9 +324,9 @@ class VisualInterface(QObject):
         The setup interface of the visual interface.
     recording_interface_ui : RecordingInterfaceTemplate
         The recording interface of the visual interface.
-    incoming_message_signal : SignalInstance
+    incoming_message_signal : PySide6.SignalInstance
         The incoming message signal of the visual interface.
-    outgoing_message_signal : SignalInstance
+    outgoing_message_signal : PySide6.SignalInstance
         The outgoing message signal of the visual interface.
 
     """
@@ -302,7 +344,7 @@ class VisualInterface(QObject):
 
         if not setup_interface_ui:
             raise ValueError("The setup interface must be provided.")
-        self.setup_interface_ui = setup_interface_ui(main_window, name)
+        self.setup_interface_ui : SetupInterfaceTemplate = setup_interface_ui(main_window, name)
 
         try:
             self.incoming_message_signal = (
@@ -318,7 +360,7 @@ class VisualInterface(QObject):
 
         if not recording_interface_ui:
             raise ValueError("The recording interface must be provided.")
-        self.recording_interface_ui = recording_interface_ui(
+        self.recording_interface_ui : RecordingInterfaceTemplate = recording_interface_ui(
             main_window,
             name,
             incoming_message_signal=self.incoming_message_signal,
@@ -338,12 +380,12 @@ class VisualInterface(QObject):
         if self.recording_interface_ui:
             self.recording_interface_ui.disable()
 
-    def closeEvent(self, event: QCloseEvent) -> None:
+    def close_event(self, event: QCloseEvent) -> None:
         """Close the interface and stop necessary processes."""
         if self.setup_interface_ui:
-            self.setup_interface_ui.closeEvent(event)
+            self.setup_interface_ui.close_event(event)
         if self.recording_interface_ui:
-            self.recording_interface_ui.closeEvent(event)
+            self.recording_interface_ui.close_event(event)
 
     def _log_error(self, message: str) -> None:
         """Log an error message."""
