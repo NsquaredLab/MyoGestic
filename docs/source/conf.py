@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -9,10 +10,14 @@ from docutils.parsers.rst import Directive
 from sphinx import addnodes
 from sphinx_gallery.sorting import FileNameSortKey
 import torch._dynamo  # noqa
+import myogestic # noqa
 
 # Setup paths
 base_dir = Path.cwd().parent.parent
 sys.path.insert(0, str(base_dir))
+sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, os.path.abspath('../..'))
+sys.path.insert(0, os.path.abspath('../../myogestic'))
 
 # Project Information
 poetry_info = toml.load(base_dir / "pyproject.toml")["tool"]["poetry"]
@@ -78,6 +83,7 @@ extensions = [
     "sphinxcontrib.pdfembed",
 ]
 
+numpydoc_class_members_toctree = False
 autodoc_default_options = {"members": True, "inherited-members": False}
 autodoc_inherit_docstrings = True
 autoclass_content = "both"

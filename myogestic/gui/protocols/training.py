@@ -465,11 +465,11 @@ class TrainingProtocol(QObject):
             target=self._create_dataset_thread, parent=self._main_window
         )
         self._create_dataset__thread.has_finished_signal.connect(
-            self.__create_dataset_thread_finished
+            self._create_dataset_thread_finished
         )
         self._create_dataset__thread.start()
 
-    def __create_dataset_thread_finished(self) -> None:
+    def _create_dataset_thread_finished(self) -> None:
         self.training_create_dataset_selected_recordings_table_widget.setRowCount(0)
         self.training_create_dataset_label_line_edit.setText("")
         self.training_create_datasets_select_recordings_push_button.setEnabled(True)
