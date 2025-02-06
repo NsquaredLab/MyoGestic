@@ -22,13 +22,17 @@ Output System Template
 
     OutputSystemTemplate
 
-Example - Virtual Hand Interface
---------------------------------
+Preimplemented Visual Interfaces
+==============================
+.. _virtual_hand_interface:
+Virtual Hand Interface
+------------------------------
 .. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_hand_interface
 .. autosummary::
     :toctree: generated/visual_interface
     :template: class.rst
 
     VirtualHandInterface_RecordingInterface
+    .. _virtual_hand_interface_setup_interface:
     VirtualHandInterface_SetupInterface
     VirtualHandInterface_OutputSystem
