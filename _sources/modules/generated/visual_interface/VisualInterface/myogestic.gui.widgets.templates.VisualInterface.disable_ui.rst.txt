@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.VisualInterface.disable\_ui
+===========================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: VisualInterface.disable_ui

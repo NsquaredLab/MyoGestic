@@ -1,0 +1,6 @@
+myogestic.gui.protocols.OnlineProtocol.\_toggle\_prediction
+===========================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: OnlineProtocol._toggle_prediction

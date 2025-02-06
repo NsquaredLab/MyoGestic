@@ -1,0 +1,24 @@
+﻿RecordProtocol
+======================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. autoclass:: RecordProtocol
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: RecordProtocol
+       
+            ~RecordProtocol.__init__
+            ~RecordProtocol._complete_recording_process
+            ~RecordProtocol._reset_recording_ui
+            ~RecordProtocol.close_event
+            ~RecordProtocol.retrieve_recorded_data
+            ~RecordProtocol.start_recording_preparation
+            ~RecordProtocol.update_biosignal_buffer
+        
+        

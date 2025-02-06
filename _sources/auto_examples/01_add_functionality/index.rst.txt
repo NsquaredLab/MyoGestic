@@ -1,0 +1,100 @@
+
+
+.. _sphx_glr_auto_examples_01_add_functionality:
+
+
+-----------------
+Add Functionality
+-----------------
+
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbnails">
+
+.. thumbnail-parent-div-open
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="This example demonstrates how to create and register a new real-time post-prediction filter in MyoGestic, allowing you to process or smooth model outputs in real time after predictions are made.">
+
+.. only:: html
+
+  .. image:: /auto_examples/01_add_functionality/images/thumb/sphx_glr_1_add_post_prediction_filter_thumb.png
+    :alt:
+
+  :ref:`sphx_glr_auto_examples_01_add_functionality_1_add_post_prediction_filter.py`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Add a Post-Prediction Filter</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="This example demonstrates how to create and register a custom model to MyoGestic using the CONFIG_REGISTRY from user_config.py. This example also explains how to define changeable and unchangeable parameters in your configuration.">
+
+.. only:: html
+
+  .. image:: /auto_examples/01_add_functionality/images/thumb/sphx_glr_2_add_model_thumb.png
+    :alt:
+
+  :ref:`sphx_glr_auto_examples_01_add_functionality_2_add_model.py`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Add a Custom Model</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="Below is an example of how to create and register a new feature by inheriting from a base filter class from MyoVerse.">
+
+.. only:: html
+
+  .. image:: /auto_examples/01_add_functionality/images/thumb/sphx_glr_3_add_biosignal_feature_thumb.png
+    :alt:
+
+  :ref:`sphx_glr_auto_examples_01_add_functionality_3_add_biosignal_feature.py`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Adding a Custom Biosignal Feature</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="This example demonstrates how to build and register a new output system in MyoGestic.">
+
+.. only:: html
+
+  .. image:: /auto_examples/01_add_functionality/images/thumb/sphx_glr_4_add_output_system_thumb.png
+    :alt:
+
+  :ref:`sphx_glr_auto_examples_01_add_functionality_4_add_output_system.py`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Add a Custom Output System</div>
+    </div>
+
+
+.. thumbnail-parent-div-close
+
+.. raw:: html
+
+    </div>
+
+
+.. toctree::
+   :hidden:
+
+   /auto_examples/01_add_functionality/1_add_post_prediction_filter
+   /auto_examples/01_add_functionality/2_add_model
+   /auto_examples/01_add_functionality/3_add_biosignal_feature
+   /auto_examples/01_add_functionality/4_add_output_system
+

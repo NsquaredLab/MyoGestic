@@ -1,0 +1,100 @@
+
+
+.. _sphx_glr_auto_examples_02_add_visual_interface:
+
+
+---------------------------
+Add a New Visual Interface
+---------------------------
+
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbnails">
+
+.. thumbnail-parent-div-open
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="A Visual Interface is a graphical user interface (GUI) that allows us to perform experiments, visualize data, and interact with the models trained in MyoGestic.">
+
+.. only:: html
+
+  .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_0_add_ui_thumb.png
+    :alt:
+
+  :ref:`sphx_glr_auto_examples_02_add_visual_interface_0_add_ui.py`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Part 0: What is a Visual Interface?</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="The setup interface is the first component of a visual interface in MyoGestic.">
+
+.. only:: html
+
+  .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_1_setup_interface_thumb.png
+    :alt:
+
+  :ref:`sphx_glr_auto_examples_02_add_visual_interface_1_setup_interface.py`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Part 1: Setup Interface</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="The recording interface is the second component of a visual interface in MyoGestic.">
+
+.. only:: html
+
+  .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_2_recording_interface_thumb.png
+    :alt:
+
+  :ref:`sphx_glr_auto_examples_02_add_visual_interface_2_recording_interface.py`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Part 2: Recording Interface</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="This implementation demonstrates the creation of an Output System for the Virtual Hand Interface. It processes predictions (classification or regression) and communicates them to the visual interface.">
+
+.. only:: html
+
+  .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_3_output_system_thumb.png
+    :alt:
+
+  :ref:`sphx_glr_auto_examples_02_add_visual_interface_3_output_system.py`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Part 3: Output System</div>
+    </div>
+
+
+.. thumbnail-parent-div-close
+
+.. raw:: html
+
+    </div>
+
+
+.. toctree::
+   :hidden:
+
+   /auto_examples/02_add_visual_interface/0_add_ui
+   /auto_examples/02_add_visual_interface/1_setup_interface
+   /auto_examples/02_add_visual_interface/2_recording_interface
+   /auto_examples/02_add_visual_interface/3_output_system
+

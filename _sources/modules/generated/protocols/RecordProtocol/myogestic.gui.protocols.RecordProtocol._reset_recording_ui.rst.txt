@@ -1,0 +1,6 @@
+myogestic.gui.protocols.RecordProtocol.\_reset\_recording\_ui
+=============================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: RecordProtocol._reset_recording_ui

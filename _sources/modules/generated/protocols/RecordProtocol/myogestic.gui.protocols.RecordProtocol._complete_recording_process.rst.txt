@@ -1,0 +1,6 @@
+myogestic.gui.protocols.RecordProtocol.\_complete\_recording\_process
+=====================================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: RecordProtocol._complete_recording_process

@@ -1,0 +1,6 @@
+myogestic.gui.protocols.OnlineProtocol.\_toggle\_recording
+==========================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: OnlineProtocol._toggle_recording

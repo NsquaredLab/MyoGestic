@@ -1,0 +1,6 @@
+myogestic.gui.protocols.TrainingProtocol.\_open\_warning\_dialog
+================================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: TrainingProtocol._open_warning_dialog

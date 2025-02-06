@@ -1,0 +1,6 @@
+myogestic.gui.protocols.OnlineProtocol.\_update\_real\_time\_filter
+===================================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: OnlineProtocol._update_real_time_filter

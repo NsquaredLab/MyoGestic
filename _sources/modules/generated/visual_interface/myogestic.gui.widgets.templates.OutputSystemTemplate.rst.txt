@@ -1,0 +1,22 @@
+﻿OutputSystemTemplate
+====================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. autoclass:: OutputSystemTemplate
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: OutputSystemTemplate
+       
+            ~OutputSystemTemplate.__init__
+            ~OutputSystemTemplate._process_prediction__classification
+            ~OutputSystemTemplate._process_prediction__regression
+            ~OutputSystemTemplate.close_event
+            ~OutputSystemTemplate.send_prediction
+        
+        

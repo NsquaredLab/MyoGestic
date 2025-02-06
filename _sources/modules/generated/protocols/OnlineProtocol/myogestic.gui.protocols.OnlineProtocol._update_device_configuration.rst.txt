@@ -1,0 +1,6 @@
+myogestic.gui.protocols.OnlineProtocol.\_update\_device\_configuration
+======================================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: OnlineProtocol._update_device_configuration

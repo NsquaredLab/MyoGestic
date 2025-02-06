@@ -1,0 +1,6 @@
+myogestic.gui.protocols.OnlineProtocol.\_save\_data
+===================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: OnlineProtocol._save_data

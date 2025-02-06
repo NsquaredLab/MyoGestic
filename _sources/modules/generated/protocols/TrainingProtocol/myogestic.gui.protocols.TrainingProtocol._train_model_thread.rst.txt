@@ -1,0 +1,6 @@
+myogestic.gui.protocols.TrainingProtocol.\_train\_model\_thread
+===============================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: TrainingProtocol._train_model_thread

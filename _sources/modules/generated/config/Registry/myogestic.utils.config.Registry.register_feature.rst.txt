@@ -1,0 +1,6 @@
+myogestic.utils.config.Registry.register\_feature
+=================================================
+
+.. currentmodule:: myogestic.utils.config
+
+.. automethod:: Registry.register_feature

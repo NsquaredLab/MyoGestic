@@ -1,0 +1,37 @@
+﻿TrainingProtocol
+========================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. autoclass:: TrainingProtocol
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: TrainingProtocol
+       
+            ~TrainingProtocol.__init__
+            ~TrainingProtocol._check_if_recordings_selected
+            ~TrainingProtocol._create_dataset
+            ~TrainingProtocol._create_dataset_thread
+            ~TrainingProtocol._create_dataset_thread_finished
+            ~TrainingProtocol._get_features
+            ~TrainingProtocol._get_model_parameters
+            ~TrainingProtocol._open_feature_selection_popup
+            ~TrainingProtocol._open_model_parameters_popup
+            ~TrainingProtocol._open_warning_dialog
+            ~TrainingProtocol._remove_all_selected_recordings
+            ~TrainingProtocol._remove_selected_recording
+            ~TrainingProtocol._select_dataset
+            ~TrainingProtocol._setup_protocol_ui
+            ~TrainingProtocol._train_model
+            ~TrainingProtocol._train_model_finished
+            ~TrainingProtocol._train_model_thread
+            ~TrainingProtocol._update_model_selection
+            ~TrainingProtocol.close_event
+            ~TrainingProtocol.select_recordings
+        
+        

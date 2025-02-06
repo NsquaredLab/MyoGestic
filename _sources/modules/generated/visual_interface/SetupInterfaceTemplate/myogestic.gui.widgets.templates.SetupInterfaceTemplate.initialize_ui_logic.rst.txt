@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.SetupInterfaceTemplate.initialize\_ui\_logic
+============================================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: SetupInterfaceTemplate.initialize_ui_logic

@@ -1,0 +1,6 @@
+myogestic.gui.protocols.TrainingProtocol.\_create\_dataset\_thread\_finished
+============================================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: TrainingProtocol._create_dataset_thread_finished

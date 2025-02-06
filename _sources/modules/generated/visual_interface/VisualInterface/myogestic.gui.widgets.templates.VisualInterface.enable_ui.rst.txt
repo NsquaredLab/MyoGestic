@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.VisualInterface.enable\_ui
+==========================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: VisualInterface.enable_ui

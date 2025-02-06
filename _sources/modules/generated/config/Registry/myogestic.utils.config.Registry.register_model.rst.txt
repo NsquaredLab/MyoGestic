@@ -1,0 +1,6 @@
+myogestic.utils.config.Registry.register\_model
+===============================================
+
+.. currentmodule:: myogestic.utils.config
+
+.. automethod:: Registry.register_model

@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.OutputSystemTemplate.\_process\_prediction\_\_classification
+============================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: OutputSystemTemplate._process_prediction__classification

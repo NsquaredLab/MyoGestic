@@ -1,0 +1,6 @@
+myogestic.gui.protocols.TrainingProtocol.\_update\_model\_selection
+===================================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: TrainingProtocol._update_model_selection

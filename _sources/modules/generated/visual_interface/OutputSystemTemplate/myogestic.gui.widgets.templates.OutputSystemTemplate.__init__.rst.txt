@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.OutputSystemTemplate.\_\_init\_\_
+=================================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: OutputSystemTemplate.__init__

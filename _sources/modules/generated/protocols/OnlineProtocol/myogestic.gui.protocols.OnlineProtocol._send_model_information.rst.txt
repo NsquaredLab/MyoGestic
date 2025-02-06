@@ -1,0 +1,6 @@
+myogestic.gui.protocols.OnlineProtocol.\_send\_model\_information
+=================================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: OnlineProtocol._send_model_information

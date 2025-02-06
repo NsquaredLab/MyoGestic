@@ -1,0 +1,6 @@
+myogestic.gui.protocols.OnlineProtocol.online\_ground\_truth\_update
+====================================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: OnlineProtocol.online_ground_truth_update

@@ -1,0 +1,30 @@
+﻿VirtualHandInterface_RecordingInterface
+======================================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_hand_interface
+
+.. autoclass:: VirtualHandInterface_RecordingInterface
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: VirtualHandInterface_RecordingInterface
+       
+            ~VirtualHandInterface_RecordingInterface.__init__
+            ~VirtualHandInterface_RecordingInterface.accept_recording
+            ~VirtualHandInterface_RecordingInterface.check_recording_completion
+            ~VirtualHandInterface_RecordingInterface.close_event
+            ~VirtualHandInterface_RecordingInterface.disable
+            ~VirtualHandInterface_RecordingInterface.enable
+            ~VirtualHandInterface_RecordingInterface.finish_recording
+            ~VirtualHandInterface_RecordingInterface.initialize_ui_logic
+            ~VirtualHandInterface_RecordingInterface.reject_recording
+            ~VirtualHandInterface_RecordingInterface.reset_ui
+            ~VirtualHandInterface_RecordingInterface.start_recording
+            ~VirtualHandInterface_RecordingInterface.start_recording_preparation
+            ~VirtualHandInterface_RecordingInterface.update_ground_truth_buffer
+        
+        

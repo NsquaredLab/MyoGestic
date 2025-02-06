@@ -1,0 +1,6 @@
+myogestic.gui.protocols.TrainingProtocol.\_get\_model\_parameters
+=================================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: TrainingProtocol._get_model_parameters

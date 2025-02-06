@@ -1,0 +1,22 @@
+﻿VirtualHandInterface_OutputSystem
+================================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_hand_interface
+
+.. autoclass:: VirtualHandInterface_OutputSystem
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: VirtualHandInterface_OutputSystem
+       
+            ~VirtualHandInterface_OutputSystem.__init__
+            ~VirtualHandInterface_OutputSystem._process_prediction__classification
+            ~VirtualHandInterface_OutputSystem._process_prediction__regression
+            ~VirtualHandInterface_OutputSystem.close_event
+            ~VirtualHandInterface_OutputSystem.send_prediction
+        
+        

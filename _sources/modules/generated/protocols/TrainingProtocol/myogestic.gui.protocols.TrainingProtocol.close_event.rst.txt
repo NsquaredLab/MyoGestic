@@ -1,0 +1,6 @@
+myogestic.gui.protocols.TrainingProtocol.close\_event
+=====================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: TrainingProtocol.close_event

@@ -1,0 +1,6 @@
+myogestic.gui.protocols.TrainingProtocol.\_open\_model\_parameters\_popup
+=========================================================================
+
+.. currentmodule:: myogestic.gui.protocols
+
+.. automethod:: TrainingProtocol._open_model_parameters_popup

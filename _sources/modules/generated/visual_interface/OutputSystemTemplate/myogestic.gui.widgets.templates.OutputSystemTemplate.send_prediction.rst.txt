@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.OutputSystemTemplate.send\_prediction
+=====================================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: OutputSystemTemplate.send_prediction

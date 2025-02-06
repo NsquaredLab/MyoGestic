@@ -1,0 +1,6 @@
+myogestic.utils.config.Registry.register\_real\_time\_filter
+============================================================
+
+.. currentmodule:: myogestic.utils.config
+
+.. automethod:: Registry.register_real_time_filter

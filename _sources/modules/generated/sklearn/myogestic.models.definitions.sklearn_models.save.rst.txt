@@ -1,0 +1,8 @@
+﻿myogestic.models.definitions.sklearn_models.save
+====================================================================
+
+.. currentmodule:: myogestic.models.definitions.sklearn_models
+
+.. autofunction:: save
+
+.. include:: /modules/generated/backreferences/myogestic.models.definitions.sklearn_models.save.examples
