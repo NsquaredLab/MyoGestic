@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Tuple, List
+from typing import TYPE_CHECKING, Any, Dict
 
 from PySide6.QtCore import QObject
 
@@ -18,15 +18,18 @@ class MyoGesticModelInterface(QObject):
         self,
         device_information: dict[str, Any],
         logger: CustomLogger,
-        parent: QObject | None = None,
+        parent
     ) -> None:
         super().__init__(parent)
 
+        from myogestic.gui.myogestic import MyoGestic
+        self._main_window: MyoGestic = parent
+
         self.logger = logger
 
-        self.model: MyoGesticModel = MyoGesticModel(logger=self.logger)
+        self.model: MyoGesticModel = MyoGesticModel(logger=self.logger, parent=self._main_window)
         self.dataset: MyoGesticDataset = MyoGesticDataset(
-            device_information=device_information, logger=self.logger
+            device_information=device_information, logger=self.logger, parent=self._main_window
         )
         self.input_dataset: dict = {}
         self.model_is_loaded: bool = False

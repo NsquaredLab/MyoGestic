@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
-    QWidget,
+    QWidget, QApplication,
 )
 from myogestic.gui.widgets.logger import LoggerLevel, CustomLogger
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface
@@ -428,6 +428,7 @@ class TrainingProtocol(QObject):
         self._model_interface = MyoGesticModelInterface(
             device_information=self._current_device_information,
             logger=self._main_window.logger,
+            parent=self._main_window,
         )
 
         for key, item in self._selected_recordings__dict.items():
@@ -556,6 +557,7 @@ class TrainingProtocol(QObject):
             self._model_interface = MyoGesticModelInterface(
                 device_information=self._current_device_information,
                 logger=self._main_window.logger,
+                parent=self._main_window,
             )
 
         try:
@@ -640,7 +642,7 @@ class TrainingProtocol(QObject):
     def _get_features(self) -> None:
         self._selected_features__list = list(self.popup_window.selected_features)
 
-    def closeEvent(self, event) -> None:
+    def close_event(self, event) -> None:
         self._main_window.logger.print("Training Protocol Closed", LoggerLevel.INFO)
 
     def _setup_protocol_ui(self) -> None:

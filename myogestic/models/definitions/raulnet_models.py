@@ -150,6 +150,7 @@ def train(
     hparams = model.hparams
     hparams["input_length__samples"] = dataset["emg"].shape[-1]
     hparams["nr_of_electrodes_per_grid"] = dataset["emg"].shape[-2]
+    hparams["nr_of_outputs"] = dataset["kinematics"].shape[-1]
 
     model = model.__class__(**hparams)
 

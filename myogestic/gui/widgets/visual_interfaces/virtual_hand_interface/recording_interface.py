@@ -43,6 +43,19 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
             name,
             ui=Ui_RecordingVirtualHandInterface(),
             incoming_message_signal=incoming_message_signal,
+            ground_truth__nr_of_recording_values=9,
+            ground_truth__task_map={
+                "rest": 0,
+                "index": 1,
+                "thumb": 2,
+                "middle": 3,
+                "ring": 4,
+                "pinky": 5,
+                "fist": 6,
+                "pinch": 7,
+                "3fpinch": 8,
+                "pointing": 9,
+            }
         )
 
         RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
@@ -231,11 +244,11 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         self.record_ground_truth_progress_bar.setValue(0)
         self._kinematics__buffer.clear()
 
-    def closeEvent(self, _: QCloseEvent) -> None:
+    def close_event(self, _: QCloseEvent) -> None:
         """Closes the recording interface."""
         self.record_toggle_push_button.setChecked(False)
         self.reset_ui()
-        self._recording_protocol.closeEvent(_)
+        self._recording_protocol.close_event(_)
         self._main_window.logger.print("Recording interface closed.")
 
     def enable(self):

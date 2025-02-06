@@ -77,6 +77,6 @@ class NeuroOrthosisOutputSystem(OutputSystemTemplate):
         if self._latest_prediction is not None and not STREAM_ASAP:
             self.outgoing_message_signal.emit(self._latest_prediction)
 
-    def closeEvent(self, event):
+    def close_event(self, event):
         self._timer.stop()
         self._streaming_udp_socket.close()

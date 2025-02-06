@@ -59,12 +59,12 @@ class VirtualHandInterface_OutputSystem(OutputSystemTemplate):
 
     def _process_prediction__regression(self, prediction: Any) -> bytes:
         """Process the prediction for regression."""
-        return str([prediction[0]] + [0] + prediction[1:] + [0, 0, 0]).encode("utf-8")
+        return str(prediction).encode("utf-8")
 
     def send_prediction(self, prediction: Any) -> None:
         """Send the prediction to the visual interface."""
         self._outgoing_message_signal.emit(self.process_prediction(prediction))
 
-    def closeEvent(self, event):
+    def close_event(self, event):
         """Close the output system."""
         pass

@@ -113,7 +113,7 @@ class OutputSystemTemplate(QObject, metaclass=MetaQObjectABC):
         pass
 
     @abstractmethod
-    def closeEvent(self, event: QCloseEvent):  # noqa
+    def close_event(self, event: QCloseEvent):  # noqa
         """
         Close event handler for the widget or window.
 

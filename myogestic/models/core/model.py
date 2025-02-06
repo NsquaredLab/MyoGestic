@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger
 
 from PySide6.QtCore import QObject, Signal
+from myogestic.user_config import GROUND_TRUTH_INDICES_TO_KEEP
 
 
 class MyoGesticModel(QObject):
@@ -67,42 +68,46 @@ class MyoGesticModel(QObject):
     def predict(
         self, input: np.ndarray, prediction_function, selected_real_time_filter: str
     ) -> tuple[Any, list[Any] | None, str | None]:
-
-        # emit the input as a signal
         self.predicted_emg_signal.emit(input)
-
         prediction = prediction_function(self.model, input, self.is_classifier)
 
         if self.is_classifier:
-            if prediction == -1:
-                return -1, None, None
+            return (prediction, None, None) if prediction != -1 else (-1, None, None)
 
-            return prediction, None, None
-        else:
-            prediction_before_filter = list(np.clip(prediction, 0, 1))
-            prediction_after_filter = [np.nan] * len(prediction)
-
-            self.past_predictions.append(prediction_before_filter)
-            if (
-                len(self.past_predictions)
-                > (
-                    self.model_information["device_information"]["sampling_frequency"]
-                    // self.model_information["device_information"]["samples_per_frame"]
-                )
-                * 5
-            ):
-                self.past_predictions.pop(0)
-
-                prediction_after_filter = CONFIG_REGISTRY.real_time_filters_map[
-                    selected_real_time_filter
-                ](self.past_predictions)
-                prediction_after_filter = list(prediction_after_filter[-1])
-
-            return (
-                prediction_before_filter,
-                prediction_after_filter,
-                selected_real_time_filter,
+        prediction_before_filter = (
+            np.zeros(
+                self.parent().selected_visual_interface.recording_interface_ui.ground_truth__nr_of_recording_values
             )
+            if GROUND_TRUTH_INDICES_TO_KEEP != "all"
+            else prediction
+        )
+        if GROUND_TRUTH_INDICES_TO_KEEP != "all":
+            for index, value in enumerate(GROUND_TRUTH_INDICES_TO_KEEP):
+                prediction_before_filter[value] = prediction[index]
+
+        prediction_before_filter = list(np.clip(prediction_before_filter, 0, 1))
+        self.past_predictions.append(prediction_before_filter)
+        if (
+            len(self.past_predictions)
+            > (
+                self.model_information["device_information"]["sampling_frequency"]
+                // self.model_information["device_information"]["samples_per_frame"]
+            )
+            * 5
+        ):
+            self.past_predictions.pop(0)
+            prediction_after_filter = CONFIG_REGISTRY.real_time_filters_map[
+                selected_real_time_filter
+            ](self.past_predictions)
+            prediction_after_filter = list(prediction_after_filter[-1])
+        else:
+            prediction_after_filter = [np.nan] * len(prediction_before_filter)
+
+        return (
+            prediction_before_filter,
+            prediction_after_filter,
+            selected_real_time_filter,
+        )
 
     def save(self, model_path: str) -> dict[str, Union[str, Any]]:
         self.model_information["model_params"] = self.model_params
