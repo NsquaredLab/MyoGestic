@@ -27,7 +27,6 @@ jobs:
       run: |
         source .venv/bin/activate
         cd docs
-        sphinx-build -b html source build
         make clean
         make html
         cd ..
