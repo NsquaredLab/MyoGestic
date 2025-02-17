@@ -179,7 +179,7 @@ Example: Virtual Hand Interface
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** (0 minutes 0.321 seconds)
+   **Total running time of the script:** (0 minutes 0.374 seconds)
 
 **Estimated memory usage:**  577 MB
 
