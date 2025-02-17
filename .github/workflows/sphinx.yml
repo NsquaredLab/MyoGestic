@@ -26,8 +26,7 @@ jobs:
     - name: Build the docs
       run: |
         source .venv/bin/activate
-        cd docs 
-        python -c "import myogestic.gui.protocols"
+        cd docs
         sphinx-build -b html source build
         make clean
         make html
