@@ -1186,6 +1186,7 @@ dev = [
 docs = [
     { name = "enum-tools", extra = ["sphinx"] },
     { name = "memory-profiler" },
+    { name = "myogestic" },
     { name = "pydata-sphinx-theme" },
     { name = "rinohtype" },
     { name = "sphinx" },
@@ -1217,6 +1218,7 @@ dev = [
 docs = [
     { name = "enum-tools", extras = ["sphinx"], specifier = ">=0.12.0" },
     { name = "memory-profiler", specifier = ">=0.61.0" },
+    { name = "myogestic", virtual = "." },
     { name = "pydata-sphinx-theme", specifier = ">=0.16.1" },
     { name = "rinohtype", specifier = ">=0.5.5" },
     { name = "sphinx", specifier = ">=8.1.3" },
@@ -1228,7 +1230,7 @@ docs = [
 [[package]]
 name = "myoverse"
 version = "0.7.1"
-source = { git = "https://github.com/NsquaredLab/MyoVerse.git#d09d17871a8cfbf4c7a9d5424a2a1ba20ae33144" }
+source = { git = "https://github.com/NsquaredLab/MyoVerse.git#e5d1df8631bb6b08503817bfc934bceb50f61220" }
 dependencies = [
     { name = "lightning" },
     { name = "mplcursors" },
@@ -1265,11 +1267,11 @@ wheels = [
 
 [[package]]
 name = "narwhals"
-version = "1.26.0"
+version = "1.27.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/18/6f/75929abaac73088fe34c788ecb40db20252174bcd00b8612381aebb954ee/narwhals-1.26.0.tar.gz", hash = "sha256:b9d7605bf1d97a9d87783a69748c39150964e2a1ab0e5a6fef3e59e56772639e", size = 248933 }
+sdist = { url = "https://files.pythonhosted.org/packages/82/12/42b899a8f66e357776e1f7cb283b9dfacde2fb2af12a518d79c206c42dba/narwhals-1.27.0.tar.gz", hash = "sha256:6486168853e82df3eca8c290b52aec887735352262151d160ab2742ecfef707c", size = 249247 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/15/fc/420680ad8b0cf81372eee7a213a7b7173ec5a628f0d5b2426047fe55c3b3/narwhals-1.26.0-py3-none-any.whl", hash = "sha256:4af8bbdea9e45638bb9a981568a8dfa880e40eb7dcf740d19fd32aea79223c6f", size = 306574 },
+    { url = "https://files.pythonhosted.org/packages/89/75/f62c7045bd1637540d843760904f798e84449e6a2923eacda7ded45b4661/narwhals-1.27.0-py3-none-any.whl", hash = "sha256:d3a2100fa6e2840ee578c5f52e706d89e6ed248266ac3a3e8ee0dc5a8ce08d58", size = 305987 },
 ]
 
 [[package]]
