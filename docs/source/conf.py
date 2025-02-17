@@ -20,9 +20,9 @@ sys.path.insert(0, os.path.abspath('../..'))
 sys.path.insert(0, os.path.abspath('../../myogestic'))
 
 # Project Information
-poetry_info = toml.load(base_dir / "pyproject.toml")["tool"]["poetry"]
+poetry_info = toml.load(base_dir / "pyproject.toml")["project"]
 project = "MyoGestic"
-author = ", ".join(poetry_info["authors"])
+author = ", ".join([x["name"] + f" ({x['email']})" for x in poetry_info["authors"]])
 release = poetry_info["version"]
 copyright = (
     f"2023 - {datetime.now().year}, n-squared lab, FAU Erlangen-Nürnberg, Germany"
