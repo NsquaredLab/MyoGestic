@@ -20,9 +20,8 @@ jobs:
       run: |
         sudo apt update && sudo apt install -y libegl1-mesa-dev
         python -m pip install --upgrade pip
-        python -m pip install poetry
-        poetry lock
-        poetry install --with docs
+        python -m pip install uv
+        uv sync --group docs
 
     - name: Build the docs
       run: |
