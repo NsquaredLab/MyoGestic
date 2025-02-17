@@ -10,14 +10,17 @@ from docutils.parsers.rst import Directive
 from sphinx import addnodes
 from sphinx_gallery.sorting import FileNameSortKey
 import torch._dynamo  # noqa
-import myogestic # noqa
-
 # Setup paths
 base_dir = Path.cwd().parent.parent
 sys.path.insert(0, str(base_dir))
 sys.path.insert(0, os.path.abspath('..'))
 sys.path.insert(0, os.path.abspath('../..'))
 sys.path.insert(0, os.path.abspath('../../myogestic'))
+sys.path.insert(0, os.path.abspath('../../../myogestic'))
+
+print(os.path.abspath('..'))
+
+import myogestic # noqa
 
 # Project Information
 poetry_info = toml.load(base_dir / "pyproject.toml")["project"]
