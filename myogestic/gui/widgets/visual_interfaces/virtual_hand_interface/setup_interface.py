@@ -90,26 +90,23 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
     @staticmethod
     def _get_unity_executable() -> Path:
         """Get the path to the Unity executable based on the platform."""
-        base_dir = (
-            Path("dist") if not hasattr(sys, "_MEIPASS") else Path(sys._MEIPASS, "dist")
-        )
-        unity_executable_paths = {
-            "Windows": base_dir / "windows" / "Virtual Hand Interface.exe",
-            "Darwin": base_dir
-            / "macOS"
-            / "Virtual Hand Interface.app"
-            / "Contents"
-            / "MacOS"
-            / "Virtual Hand Interface",
-            "Linux": base_dir / "linux" / "VirtualHandInterface.x86_64",
-        }
+        base_dirs = [
+            Path("dist") if not hasattr(sys, "_MEIPASS") else Path(sys._MEIPASS, "dist"),
+            Path("myogestic", "dist") if not hasattr(sys, "_MEIPASS") else Path(sys._MEIPASS, "dist"),
+        ]
 
-        executable = unity_executable_paths.get(platform.system())
-        if executable and executable.exists():
-            return executable
-        raise FileNotFoundError(
-            f"Unity executable not found for platform {platform.system()}."
-        )
+        unity_executable_paths = {
+            "Windows": "windows/Virtual Hand Interface.exe",
+            "Darwin": "macOS/Virtual Hand Interface.app/Contents/MacOS/Virtual Hand Interface",
+        "Linux": "linux/VirtualHandInterface.x86_64",
+    }
+
+        for base_dir in base_dirs:
+            executable = base_dir / unity_executable_paths.get(platform.system(), "")
+            if executable.exists():
+                return executable
+
+        raise FileNotFoundError(f"Unity executable not found for platform {platform.system()}.")
 
     def _setup_timers(self):
         """Setup the timers for the Virtual Hand Interface."""
