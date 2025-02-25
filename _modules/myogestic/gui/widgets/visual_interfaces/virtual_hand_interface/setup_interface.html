@@ -414,26 +414,23 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_unity_executable</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the path to the Unity executable based on the platform.&quot;&quot;&quot;</span>
-        <span class="n">base_dir</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;dist&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s2">&quot;_MEIPASS&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">Path</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">_MEIPASS</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">)</span>
-        <span class="p">)</span>
-        <span class="n">unity_executable_paths</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s2">&quot;Windows&quot;</span><span class="p">:</span> <span class="n">base_dir</span> <span class="o">/</span> <span class="s2">&quot;windows&quot;</span> <span class="o">/</span> <span class="s2">&quot;Virtual Hand Interface.exe&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;Darwin&quot;</span><span class="p">:</span> <span class="n">base_dir</span>
-            <span class="o">/</span> <span class="s2">&quot;macOS&quot;</span>
-            <span class="o">/</span> <span class="s2">&quot;Virtual Hand Interface.app&quot;</span>
-            <span class="o">/</span> <span class="s2">&quot;Contents&quot;</span>
-            <span class="o">/</span> <span class="s2">&quot;MacOS&quot;</span>
-            <span class="o">/</span> <span class="s2">&quot;Virtual Hand Interface&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;Linux&quot;</span><span class="p">:</span> <span class="n">base_dir</span> <span class="o">/</span> <span class="s2">&quot;linux&quot;</span> <span class="o">/</span> <span class="s2">&quot;VirtualHandInterface.x86_64&quot;</span><span class="p">,</span>
-        <span class="p">}</span>
+        <span class="n">base_dirs</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;dist&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s2">&quot;_MEIPASS&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">Path</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">_MEIPASS</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">),</span>
+            <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;myogestic&quot;</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s2">&quot;_MEIPASS&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">Path</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">_MEIPASS</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">),</span>
+        <span class="p">]</span>
 
-        <span class="n">executable</span> <span class="o">=</span> <span class="n">unity_executable_paths</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">())</span>
-        <span class="k">if</span> <span class="n">executable</span> <span class="ow">and</span> <span class="n">executable</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-            <span class="k">return</span> <span class="n">executable</span>
-        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Unity executable not found for platform </span><span class="si">{</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span><span class="si">}</span><span class="s2">.&quot;</span>
-        <span class="p">)</span></div>
+        <span class="n">unity_executable_paths</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;Windows&quot;</span><span class="p">:</span> <span class="s2">&quot;windows/Virtual Hand Interface.exe&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Darwin&quot;</span><span class="p">:</span> <span class="s2">&quot;macOS/Virtual Hand Interface.app/Contents/MacOS/Virtual Hand Interface&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Linux&quot;</span><span class="p">:</span> <span class="s2">&quot;linux/VirtualHandInterface.x86_64&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+        <span class="k">for</span> <span class="n">base_dir</span> <span class="ow">in</span> <span class="n">base_dirs</span><span class="p">:</span>
+            <span class="n">executable</span> <span class="o">=</span> <span class="n">base_dir</span> <span class="o">/</span> <span class="n">unity_executable_paths</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">(),</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">executable</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                <span class="k">return</span> <span class="n">executable</span>
+
+        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unity executable not found for platform </span><span class="si">{</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="VirtualHandInterface_SetupInterface._setup_timers">

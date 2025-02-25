@@ -500,64 +500,61 @@ Virtual Hand Interface, manages its state, and ensures communication with MyoGes
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 90</span>    <span class="nd">@staticmethod</span>
 <span class="linenos"> 91</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_get_unity_executable</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
 <span class="linenos"> 92</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the path to the Unity executable based on the platform.&quot;&quot;&quot;</span>
-<span class="linenos"> 93</span>        <span class="n">base_dir</span> <span class="o">=</span> <span class="p">(</span>
-<span class="linenos"> 94</span>            <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;dist&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s2">&quot;_MEIPASS&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">Path</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">_MEIPASS</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">)</span>
-<span class="linenos"> 95</span>        <span class="p">)</span>
-<span class="linenos"> 96</span>        <span class="n">unity_executable_paths</span> <span class="o">=</span> <span class="p">{</span>
-<span class="linenos"> 97</span>            <span class="s2">&quot;Windows&quot;</span><span class="p">:</span> <span class="n">base_dir</span> <span class="o">/</span> <span class="s2">&quot;windows&quot;</span> <span class="o">/</span> <span class="s2">&quot;Virtual Hand Interface.exe&quot;</span><span class="p">,</span>
-<span class="linenos"> 98</span>            <span class="s2">&quot;Darwin&quot;</span><span class="p">:</span> <span class="n">base_dir</span>
-<span class="linenos"> 99</span>            <span class="o">/</span> <span class="s2">&quot;macOS&quot;</span>
-<span class="linenos">100</span>            <span class="o">/</span> <span class="s2">&quot;Virtual Hand Interface.app&quot;</span>
-<span class="linenos">101</span>            <span class="o">/</span> <span class="s2">&quot;Contents&quot;</span>
-<span class="linenos">102</span>            <span class="o">/</span> <span class="s2">&quot;MacOS&quot;</span>
-<span class="linenos">103</span>            <span class="o">/</span> <span class="s2">&quot;Virtual Hand Interface&quot;</span><span class="p">,</span>
-<span class="linenos">104</span>            <span class="s2">&quot;Linux&quot;</span><span class="p">:</span> <span class="n">base_dir</span> <span class="o">/</span> <span class="s2">&quot;linux&quot;</span> <span class="o">/</span> <span class="s2">&quot;VirtualHandInterface.x86_64&quot;</span><span class="p">,</span>
-<span class="linenos">105</span>        <span class="p">}</span>
-<span class="linenos">106</span>
-<span class="linenos">107</span>        <span class="n">executable</span> <span class="o">=</span> <span class="n">unity_executable_paths</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">())</span>
-<span class="linenos">108</span>        <span class="k">if</span> <span class="n">executable</span> <span class="ow">and</span> <span class="n">executable</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-<span class="linenos">109</span>            <span class="k">return</span> <span class="n">executable</span>
-<span class="linenos">110</span>        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span>
-<span class="linenos">111</span>            <span class="sa">f</span><span class="s2">&quot;Unity executable not found for platform </span><span class="si">{</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span><span class="si">}</span><span class="s2">.&quot;</span>
-<span class="linenos">112</span>        <span class="p">)</span>
+<span class="linenos"> 93</span>        <span class="n">base_dirs</span> <span class="o">=</span> <span class="p">[</span>
+<span class="linenos"> 94</span>            <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;dist&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s2">&quot;_MEIPASS&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">Path</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">_MEIPASS</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">),</span>
+<span class="linenos"> 95</span>            <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;myogestic&quot;</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s2">&quot;_MEIPASS&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">Path</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">_MEIPASS</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">),</span>
+<span class="linenos"> 96</span>        <span class="p">]</span>
+<span class="linenos"> 97</span>
+<span class="linenos"> 98</span>        <span class="n">unity_executable_paths</span> <span class="o">=</span> <span class="p">{</span>
+<span class="linenos"> 99</span>            <span class="s2">&quot;Windows&quot;</span><span class="p">:</span> <span class="s2">&quot;windows/Virtual Hand Interface.exe&quot;</span><span class="p">,</span>
+<span class="linenos">100</span>            <span class="s2">&quot;Darwin&quot;</span><span class="p">:</span> <span class="s2">&quot;macOS/Virtual Hand Interface.app/Contents/MacOS/Virtual Hand Interface&quot;</span><span class="p">,</span>
+<span class="linenos">101</span>        <span class="s2">&quot;Linux&quot;</span><span class="p">:</span> <span class="s2">&quot;linux/VirtualHandInterface.x86_64&quot;</span><span class="p">,</span>
+<span class="linenos">102</span>    <span class="p">}</span>
+<span class="linenos">103</span>
+<span class="linenos">104</span>        <span class="k">for</span> <span class="n">base_dir</span> <span class="ow">in</span> <span class="n">base_dirs</span><span class="p">:</span>
+<span class="linenos">105</span>            <span class="n">executable</span> <span class="o">=</span> <span class="n">base_dir</span> <span class="o">/</span> <span class="n">unity_executable_paths</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">(),</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+<span class="linenos">106</span>            <span class="k">if</span> <span class="n">executable</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+<span class="linenos">107</span>                <span class="k">return</span> <span class="n">executable</span>
+<span class="linenos">108</span>
+<span class="linenos">109</span>        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unity executable not found for platform </span><span class="si">{</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">114</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_setup_timers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="linenos">115</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Setup the timers for the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">116</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span> <span class="o">=</span> <span class="n">QTimer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-<span class="linenos">117</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span><span class="o">.</span><span class="n">setInterval</span><span class="p">(</span><span class="mi">2000</span><span class="p">)</span>
-<span class="linenos">118</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span><span class="o">.</span><span class="n">timeout</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">write_status_message</span><span class="p">)</span>
-<span class="linenos">119</span>
-<span class="linenos">120</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span> <span class="o">=</span> <span class="n">QTimer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-<span class="linenos">121</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">setSingleShot</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
-<span class="linenos">122</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">setInterval</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
-<span class="linenos">123</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">timeout</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_update_status</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">111</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_setup_timers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="linenos">112</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Setup the timers for the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">113</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span> <span class="o">=</span> <span class="n">QTimer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+<span class="linenos">114</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span><span class="o">.</span><span class="n">setInterval</span><span class="p">(</span><span class="mi">2000</span><span class="p">)</span>
+<span class="linenos">115</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span><span class="o">.</span><span class="n">timeout</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">write_status_message</span><span class="p">)</span>
+<span class="linenos">116</span>
+<span class="linenos">117</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span> <span class="o">=</span> <span class="n">QTimer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+<span class="linenos">118</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">setSingleShot</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+<span class="linenos">119</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">setInterval</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+<span class="linenos">120</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">timeout</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_update_status</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id4">
 <div class="code-block-caption"><span class="caption-text">UI Setup</span><a class="headerlink" href="#id4" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">125</span>    <span class="k">def</span><span class="w"> </span><span class="nf">initialize_ui_logic</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="linenos">126</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize the UI logic for the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">127</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">visualInterfacesVerticalLayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">groupBox</span><span class="p">)</span>
-<span class="linenos">128</span>
-<span class="linenos">129</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="p">:</span> <span class="n">QPushButton</span> <span class="o">=</span> <span class="p">(</span>
-<span class="linenos">130</span>            <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">toggleVirtualHandInterfacePushButton</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">122</span>    <span class="k">def</span><span class="w"> </span><span class="nf">initialize_ui_logic</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="linenos">123</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize the UI logic for the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">124</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">visualInterfacesVerticalLayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">groupBox</span><span class="p">)</span>
+<span class="linenos">125</span>
+<span class="linenos">126</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="p">:</span> <span class="n">QPushButton</span> <span class="o">=</span> <span class="p">(</span>
+<span class="linenos">127</span>            <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">toggleVirtualHandInterfacePushButton</span>
+<span class="linenos">128</span>        <span class="p">)</span>
+<span class="linenos">129</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span>
+<span class="linenos">130</span>            <span class="bp">self</span><span class="o">.</span><span class="n">toggle_virtual_hand_interface</span>
 <span class="linenos">131</span>        <span class="p">)</span>
-<span class="linenos">132</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span>
-<span class="linenos">133</span>            <span class="bp">self</span><span class="o">.</span><span class="n">toggle_virtual_hand_interface</span>
+<span class="linenos">132</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="p">:</span> <span class="n">QWidget</span> <span class="o">=</span> <span class="p">(</span>
+<span class="linenos">133</span>            <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">virtualHandInterfaceStatusWidget</span>
 <span class="linenos">134</span>        <span class="p">)</span>
-<span class="linenos">135</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="p">:</span> <span class="n">QWidget</span> <span class="o">=</span> <span class="p">(</span>
-<span class="linenos">136</span>            <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">virtualHandInterfaceStatusWidget</span>
-<span class="linenos">137</span>        <span class="p">)</span>
-<span class="linenos">138</span>
-<span class="linenos">139</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
-<span class="linenos">140</span>            <span class="n">NOT_CONNECTED_STYLESHEET</span>
-<span class="linenos">141</span>        <span class="p">)</span>
-<span class="linenos">142</span>
-<span class="linenos">143</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="p">:</span> <span class="n">QCheckBox</span> <span class="o">=</span> <span class="p">(</span>
-<span class="linenos">144</span>            <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">useExternalVirtualHandInterfaceCheckBox</span>
-<span class="linenos">145</span>        <span class="p">)</span>
+<span class="linenos">135</span>
+<span class="linenos">136</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
+<span class="linenos">137</span>            <span class="n">NOT_CONNECTED_STYLESHEET</span>
+<span class="linenos">138</span>        <span class="p">)</span>
+<span class="linenos">139</span>
+<span class="linenos">140</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="p">:</span> <span class="n">QCheckBox</span> <span class="o">=</span> <span class="p">(</span>
+<span class="linenos">141</span>            <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">useExternalVirtualHandInterfaceCheckBox</span>
+<span class="linenos">142</span>        <span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -568,68 +565,68 @@ Virtual Hand Interface, manages its state, and ensures communication with MyoGes
 It also ensures that the interface is correctly set up and ready for use.</p>
 <div class="literal-block-wrapper docutils container" id="id5">
 <div class="code-block-caption"><span class="caption-text">Start Interface - This method starts the interface.</span><a class="headerlink" href="#id5" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">147</span>    <span class="k">def</span><span class="w"> </span><span class="nf">start_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="linenos">148</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Start the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">149</span>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">150</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_unity_process</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-<span class="linenos">151</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_unity_process</span><span class="o">.</span><span class="n">waitForStarted</span><span class="p">()</span>
-<span class="linenos">152</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-<span class="linenos">153</span>        <span class="bp">self</span><span class="o">.</span><span class="n">toggle_streaming</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">144</span>    <span class="k">def</span><span class="w"> </span><span class="nf">start_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="linenos">145</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Start the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">146</span>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+<span class="linenos">147</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_unity_process</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<span class="linenos">148</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_unity_process</span><span class="o">.</span><span class="n">waitForStarted</span><span class="p">()</span>
+<span class="linenos">149</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<span class="linenos">150</span>        <span class="bp">self</span><span class="o">.</span><span class="n">toggle_streaming</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id6">
 <div class="code-block-caption"><span class="caption-text">Stop Interface - This method stops the interface.</span><a class="headerlink" href="#id6" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">155</span>    <span class="k">def</span><span class="w"> </span><span class="nf">stop_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="linenos">156</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Stop the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">157</span>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">158</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_unity_process</span><span class="o">.</span><span class="n">kill</span><span class="p">()</span>
-<span class="linenos">159</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_unity_process</span><span class="o">.</span><span class="n">waitForFinished</span><span class="p">()</span>
-<span class="linenos">160</span>        <span class="c1"># In case the stop function would be called from outside the main thread we need to use invokeMethod</span>
-<span class="linenos">161</span>        <span class="n">QMetaObject</span><span class="o">.</span><span class="n">invokeMethod</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span><span class="p">,</span> <span class="s2">&quot;stop&quot;</span><span class="p">,</span> <span class="n">Qt</span><span class="o">.</span><span class="n">QueuedConnection</span><span class="p">)</span>
-<span class="linenos">162</span>        <span class="bp">self</span><span class="o">.</span><span class="n">toggle_streaming</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">152</span>    <span class="k">def</span><span class="w"> </span><span class="nf">stop_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="linenos">153</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Stop the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">154</span>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+<span class="linenos">155</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_unity_process</span><span class="o">.</span><span class="n">kill</span><span class="p">()</span>
+<span class="linenos">156</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_unity_process</span><span class="o">.</span><span class="n">waitForFinished</span><span class="p">()</span>
+<span class="linenos">157</span>        <span class="c1"># In case the stop function would be called from outside the main thread we need to use invokeMethod</span>
+<span class="linenos">158</span>        <span class="n">QMetaObject</span><span class="o">.</span><span class="n">invokeMethod</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span><span class="p">,</span> <span class="s2">&quot;stop&quot;</span><span class="p">,</span> <span class="n">Qt</span><span class="o">.</span><span class="n">QueuedConnection</span><span class="p">)</span>
+<span class="linenos">159</span>        <span class="bp">self</span><span class="o">.</span><span class="n">toggle_streaming</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id7">
 <div class="code-block-caption"><span class="caption-text">Interface Was Killed - This method checks if the interface was killed (e.g. by the user closing the window).</span><a class="headerlink" href="#id7" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">164</span>    <span class="k">def</span><span class="w"> </span><span class="nf">interface_was_killed</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">165</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle the case when the Virtual Hand Interface was killed.&quot;&quot;&quot;</span>
-<span class="linenos">166</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-<span class="linenos">167</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Open&quot;</span><span class="p">)</span>
-<span class="linenos">168</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
-<span class="linenos">169</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
-<span class="linenos">170</span>            <span class="n">NOT_CONNECTED_STYLESHEET</span>
-<span class="linenos">171</span>        <span class="p">)</span>
-<span class="linenos">172</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">False</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">161</span>    <span class="k">def</span><span class="w"> </span><span class="nf">interface_was_killed</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">162</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle the case when the Virtual Hand Interface was killed.&quot;&quot;&quot;</span>
+<span class="linenos">163</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+<span class="linenos">164</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Open&quot;</span><span class="p">)</span>
+<span class="linenos">165</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+<span class="linenos">166</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
+<span class="linenos">167</span>            <span class="n">NOT_CONNECTED_STYLESHEET</span>
+<span class="linenos">168</span>        <span class="p">)</span>
+<span class="linenos">169</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">False</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id8">
 <div class="code-block-caption"><span class="caption-text">Update Status - This method updates the interface’s status. If the interface is not running, it will be set to “Stopped”.</span><a class="headerlink" href="#id8" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">187</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_update_status</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">188</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Update the status of the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">189</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="linenos">190</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
-<span class="linenos">191</span>            <span class="n">NOT_CONNECTED_STYLESHEET</span>
-<span class="linenos">192</span>        <span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">184</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_update_status</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">185</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Update the status of the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">186</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="linenos">187</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
+<span class="linenos">188</span>            <span class="n">NOT_CONNECTED_STYLESHEET</span>
+<span class="linenos">189</span>        <span class="p">)</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id9">
 <div class="code-block-caption"><span class="caption-text">Toggle Virtual Hand Interface - This method toggles the Virtual Hand Interface. If the interface is running, it will be stopped. If it is stopped, it will be started.</span><a class="headerlink" href="#id9" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">194</span>    <span class="k">def</span><span class="w"> </span><span class="nf">toggle_virtual_hand_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="linenos">195</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Toggle the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">196</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">197</span>            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Opening Virtual Hand Interface&quot;</span><span class="p">)</span>
-<span class="linenos">198</span>            <span class="bp">self</span><span class="o">.</span><span class="n">start_interface</span><span class="p">()</span>
-<span class="linenos">199</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-<span class="linenos">200</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Close&quot;</span><span class="p">)</span>
-<span class="linenos">201</span>        <span class="k">else</span><span class="p">:</span>
-<span class="linenos">202</span>            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Closing Virtual Hand Interface&quot;</span><span class="p">)</span>
-<span class="linenos">203</span>            <span class="bp">self</span><span class="o">.</span><span class="n">stop_interface</span><span class="p">()</span>
-<span class="linenos">204</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
-<span class="linenos">205</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Open&quot;</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">191</span>    <span class="k">def</span><span class="w"> </span><span class="nf">toggle_virtual_hand_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="linenos">192</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Toggle the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">193</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+<span class="linenos">194</span>            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Opening Virtual Hand Interface&quot;</span><span class="p">)</span>
+<span class="linenos">195</span>            <span class="bp">self</span><span class="o">.</span><span class="n">start_interface</span><span class="p">()</span>
+<span class="linenos">196</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+<span class="linenos">197</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Close&quot;</span><span class="p">)</span>
+<span class="linenos">198</span>        <span class="k">else</span><span class="p">:</span>
+<span class="linenos">199</span>            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Closing Virtual Hand Interface&quot;</span><span class="p">)</span>
+<span class="linenos">200</span>            <span class="bp">self</span><span class="o">.</span><span class="n">stop_interface</span><span class="p">()</span>
+<span class="linenos">201</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+<span class="linenos">202</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Open&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -640,118 +637,118 @@ It also ensures that the interface is correctly set up and ready for use.</p>
 It ensures that the interface is correctly set up and ready for use.</p>
 <div class="literal-block-wrapper docutils container" id="id10">
 <div class="code-block-caption"><span class="caption-text">Toggle Streaming - This method toggles the streaming of data from MyoGestic to the Virtual Hand Interface.</span><a class="headerlink" href="#id10" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">207</span>    <span class="k">def</span><span class="w"> </span><span class="nf">toggle_streaming</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">208</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Toggle the streaming of the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">209</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">210</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span> <span class="o">=</span> <span class="n">QUdpSocket</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-<span class="linenos">211</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">readyRead</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">read_message</span><span class="p">)</span>
-<span class="linenos">212</span>            <span class="bp">self</span><span class="o">.</span><span class="n">outgoing_message_signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">write_message</span><span class="p">)</span>
-<span class="linenos">213</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span>
-<span class="linenos">214</span>                <span class="n">QHostAddress</span><span class="p">(</span><span class="n">SOCKET_IP</span><span class="p">),</span> <span class="n">MYOGESTIC_UDP_PORT</span>
-<span class="linenos">215</span>            <span class="p">)</span>
-<span class="linenos">216</span>
-<span class="linenos">217</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span> <span class="o">=</span> <span class="n">QUdpSocket</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-<span class="linenos">218</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span>
-<span class="linenos">219</span>                <span class="n">QHostAddress</span><span class="p">(</span><span class="n">SOCKET_IP</span><span class="p">),</span> <span class="n">VHI_PREDICTION__UDP_PORT</span>
-<span class="linenos">220</span>            <span class="p">)</span>
-<span class="linenos">221</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">readyRead</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">read_predicted_hand</span><span class="p">)</span>
-<span class="linenos">222</span>
-<span class="linenos">223</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_last_message_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-<span class="linenos">224</span>        <span class="k">else</span><span class="p">:</span>
-<span class="linenos">225</span>            <span class="k">try</span><span class="p">:</span>
-<span class="linenos">226</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-<span class="linenos">227</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-<span class="linenos">228</span>            <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
-<span class="linenos">229</span>                <span class="k">pass</span>
-<span class="linenos">230</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span> <span class="o">=</span> <span class="kc">None</span>
-<span class="linenos">231</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span> <span class="o">=</span> <span class="kc">None</span>
-<span class="linenos">232</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="linenos">233</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
-<span class="linenos">234</span>                <span class="n">NOT_CONNECTED_STYLESHEET</span>
-<span class="linenos">235</span>            <span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">204</span>    <span class="k">def</span><span class="w"> </span><span class="nf">toggle_streaming</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">205</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Toggle the streaming of the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">206</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+<span class="linenos">207</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span> <span class="o">=</span> <span class="n">QUdpSocket</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+<span class="linenos">208</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">readyRead</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">read_message</span><span class="p">)</span>
+<span class="linenos">209</span>            <span class="bp">self</span><span class="o">.</span><span class="n">outgoing_message_signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">write_message</span><span class="p">)</span>
+<span class="linenos">210</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span>
+<span class="linenos">211</span>                <span class="n">QHostAddress</span><span class="p">(</span><span class="n">SOCKET_IP</span><span class="p">),</span> <span class="n">MYOGESTIC_UDP_PORT</span>
+<span class="linenos">212</span>            <span class="p">)</span>
+<span class="linenos">213</span>
+<span class="linenos">214</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span> <span class="o">=</span> <span class="n">QUdpSocket</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+<span class="linenos">215</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span>
+<span class="linenos">216</span>                <span class="n">QHostAddress</span><span class="p">(</span><span class="n">SOCKET_IP</span><span class="p">),</span> <span class="n">VHI_PREDICTION__UDP_PORT</span>
+<span class="linenos">217</span>            <span class="p">)</span>
+<span class="linenos">218</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">readyRead</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">read_predicted_hand</span><span class="p">)</span>
+<span class="linenos">219</span>
+<span class="linenos">220</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_last_message_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="linenos">221</span>        <span class="k">else</span><span class="p">:</span>
+<span class="linenos">222</span>            <span class="k">try</span><span class="p">:</span>
+<span class="linenos">223</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<span class="linenos">224</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<span class="linenos">225</span>            <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+<span class="linenos">226</span>                <span class="k">pass</span>
+<span class="linenos">227</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="linenos">228</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="linenos">229</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="linenos">230</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
+<span class="linenos">231</span>                <span class="n">NOT_CONNECTED_STYLESHEET</span>
+<span class="linenos">232</span>            <span class="p">)</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id11">
 <div class="code-block-caption"><span class="caption-text">Read Predicted Hand - This method reads the predicted hand from MyoGestic.</span><a class="headerlink" href="#id11" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">237</span>    <span class="k">def</span><span class="w"> </span><span class="nf">read_predicted_hand</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">238</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read the predicted hand data from the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">239</span>        <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">hasPendingDatagrams</span><span class="p">():</span>
-<span class="linenos">240</span>            <span class="n">datagram</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">readDatagram</span><span class="p">(</span>
-<span class="linenos">241</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">pendingDatagramSize</span><span class="p">()</span>
-<span class="linenos">242</span>            <span class="p">)</span>
-<span class="linenos">243</span>
-<span class="linenos">244</span>            <span class="n">data</span> <span class="o">=</span> <span class="n">datagram</span><span class="o">.</span><span class="n">data</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
-<span class="linenos">245</span>            <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
-<span class="linenos">246</span>                <span class="k">return</span>
-<span class="linenos">247</span>
-<span class="linenos">248</span>            <span class="bp">self</span><span class="o">.</span><span class="n">predicted_hand__signal</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span><span class="n">data</span><span class="p">)))</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">234</span>    <span class="k">def</span><span class="w"> </span><span class="nf">read_predicted_hand</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">235</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read the predicted hand data from the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">236</span>        <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">hasPendingDatagrams</span><span class="p">():</span>
+<span class="linenos">237</span>            <span class="n">datagram</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">readDatagram</span><span class="p">(</span>
+<span class="linenos">238</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">pendingDatagramSize</span><span class="p">()</span>
+<span class="linenos">239</span>            <span class="p">)</span>
+<span class="linenos">240</span>
+<span class="linenos">241</span>            <span class="n">data</span> <span class="o">=</span> <span class="n">datagram</span><span class="o">.</span><span class="n">data</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+<span class="linenos">242</span>            <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
+<span class="linenos">243</span>                <span class="k">return</span>
+<span class="linenos">244</span>
+<span class="linenos">245</span>            <span class="bp">self</span><span class="o">.</span><span class="n">predicted_hand__signal</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span><span class="n">data</span><span class="p">)))</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id12">
 <div class="code-block-caption"><span class="caption-text">Read/Write Message - This methods read and write messages from/to MyoGestic.</span><a class="headerlink" href="#id12" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">266</span>    <span class="k">def</span><span class="w"> </span><span class="nf">read_message</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">267</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read a message from the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">268</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">269</span>            <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">hasPendingDatagrams</span><span class="p">():</span>
-<span class="linenos">270</span>                <span class="n">datagram</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">readDatagram</span><span class="p">(</span>
-<span class="linenos">271</span>                    <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">pendingDatagramSize</span><span class="p">()</span>
-<span class="linenos">272</span>                <span class="p">)</span>
-<span class="linenos">273</span>
-<span class="linenos">274</span>                <span class="n">data</span> <span class="o">=</span> <span class="n">datagram</span><span class="o">.</span><span class="n">data</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
-<span class="linenos">275</span>                <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
-<span class="linenos">276</span>                    <span class="k">return</span>
-<span class="linenos">277</span>
-<span class="linenos">278</span>                <span class="k">try</span><span class="p">:</span>
-<span class="linenos">279</span>                    <span class="k">if</span> <span class="n">data</span> <span class="o">==</span> <span class="n">STATUS_RESPONSE</span><span class="p">:</span>
-<span class="linenos">280</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">True</span>
-<span class="linenos">281</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
-<span class="linenos">282</span>                            <span class="n">CONNECTED_STYLESHEET</span>
-<span class="linenos">283</span>                        <span class="p">)</span>
-<span class="linenos">284</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
-<span class="linenos">285</span>                        <span class="k">return</span>
-<span class="linenos">286</span>
-<span class="linenos">287</span>                    <span class="bp">self</span><span class="o">.</span><span class="n">incoming_message_signal</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span><span class="n">data</span><span class="p">)))</span>
-<span class="linenos">288</span>                <span class="k">except</span> <span class="p">(</span><span class="ne">UnicodeDecodeError</span><span class="p">,</span> <span class="ne">SyntaxError</span><span class="p">):</span>
-<span class="linenos">289</span>                    <span class="k">pass</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">263</span>    <span class="k">def</span><span class="w"> </span><span class="nf">read_message</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">264</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read a message from the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">265</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+<span class="linenos">266</span>            <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">hasPendingDatagrams</span><span class="p">():</span>
+<span class="linenos">267</span>                <span class="n">datagram</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">readDatagram</span><span class="p">(</span>
+<span class="linenos">268</span>                    <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">pendingDatagramSize</span><span class="p">()</span>
+<span class="linenos">269</span>                <span class="p">)</span>
+<span class="linenos">270</span>
+<span class="linenos">271</span>                <span class="n">data</span> <span class="o">=</span> <span class="n">datagram</span><span class="o">.</span><span class="n">data</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+<span class="linenos">272</span>                <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
+<span class="linenos">273</span>                    <span class="k">return</span>
+<span class="linenos">274</span>
+<span class="linenos">275</span>                <span class="k">try</span><span class="p">:</span>
+<span class="linenos">276</span>                    <span class="k">if</span> <span class="n">data</span> <span class="o">==</span> <span class="n">STATUS_RESPONSE</span><span class="p">:</span>
+<span class="linenos">277</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="linenos">278</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
+<span class="linenos">279</span>                            <span class="n">CONNECTED_STYLESHEET</span>
+<span class="linenos">280</span>                        <span class="p">)</span>
+<span class="linenos">281</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+<span class="linenos">282</span>                        <span class="k">return</span>
+<span class="linenos">283</span>
+<span class="linenos">284</span>                    <span class="bp">self</span><span class="o">.</span><span class="n">incoming_message_signal</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span><span class="n">data</span><span class="p">)))</span>
+<span class="linenos">285</span>                <span class="k">except</span> <span class="p">(</span><span class="ne">UnicodeDecodeError</span><span class="p">,</span> <span class="ne">SyntaxError</span><span class="p">):</span>
+<span class="linenos">286</span>                    <span class="k">pass</span>
 </pre></div>
 </div>
 </div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">250</span>    <span class="k">def</span><span class="w"> </span><span class="nf">write_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">QByteArray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">251</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Write a message to the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">252</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="ow">and</span> <span class="p">(</span>
-<span class="linenos">253</span>            <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_message_time</span> <span class="o">&gt;=</span> <span class="n">TIME_BETWEEN_MESSAGES</span>
-<span class="linenos">254</span>        <span class="p">):</span>
-<span class="linenos">255</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_last_message_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-<span class="linenos">256</span>            <span class="n">output_bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">writeDatagram</span><span class="p">(</span>
-<span class="linenos">257</span>                <span class="n">message</span><span class="p">,</span> <span class="n">QHostAddress</span><span class="p">(</span><span class="n">SOCKET_IP</span><span class="p">),</span> <span class="n">VHI__UDP_PORT</span>
-<span class="linenos">258</span>            <span class="p">)</span>
-<span class="linenos">259</span>
-<span class="linenos">260</span>            <span class="k">if</span> <span class="n">output_bytes</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
-<span class="linenos">261</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-<span class="linenos">262</span>                    <span class="s2">&quot;Error in sending message to Virtual Hand Interface!&quot;</span><span class="p">,</span>
-<span class="linenos">263</span>                    <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
-<span class="linenos">264</span>                <span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">247</span>    <span class="k">def</span><span class="w"> </span><span class="nf">write_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">QByteArray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">248</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Write a message to the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">249</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="ow">and</span> <span class="p">(</span>
+<span class="linenos">250</span>            <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_message_time</span> <span class="o">&gt;=</span> <span class="n">TIME_BETWEEN_MESSAGES</span>
+<span class="linenos">251</span>        <span class="p">):</span>
+<span class="linenos">252</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_last_message_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="linenos">253</span>            <span class="n">output_bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">writeDatagram</span><span class="p">(</span>
+<span class="linenos">254</span>                <span class="n">message</span><span class="p">,</span> <span class="n">QHostAddress</span><span class="p">(</span><span class="n">SOCKET_IP</span><span class="p">),</span> <span class="n">VHI__UDP_PORT</span>
+<span class="linenos">255</span>            <span class="p">)</span>
+<span class="linenos">256</span>
+<span class="linenos">257</span>            <span class="k">if</span> <span class="n">output_bytes</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+<span class="linenos">258</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+<span class="linenos">259</span>                    <span class="s2">&quot;Error in sending message to Virtual Hand Interface!&quot;</span><span class="p">,</span>
+<span class="linenos">260</span>                    <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+<span class="linenos">261</span>                <span class="p">)</span>
 </pre></div>
 </div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">291</span>    <span class="k">def</span><span class="w"> </span><span class="nf">write_status_message</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">292</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Write a status message to the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">293</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">294</span>            <span class="n">output_bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">writeDatagram</span><span class="p">(</span>
-<span class="linenos">295</span>                <span class="n">STATUS_REQUEST</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">),</span>
-<span class="linenos">296</span>                <span class="n">QHostAddress</span><span class="p">(</span><span class="n">SOCKET_IP</span><span class="p">),</span>
-<span class="linenos">297</span>                <span class="n">VHI__UDP_PORT</span><span class="p">,</span>
-<span class="linenos">298</span>            <span class="p">)</span>
-<span class="linenos">299</span>
-<span class="linenos">300</span>            <span class="k">if</span> <span class="n">output_bytes</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
-<span class="linenos">301</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-<span class="linenos">302</span>                    <span class="s2">&quot;Error in sending status message to Virtual Hand Interface!&quot;</span><span class="p">,</span>
-<span class="linenos">303</span>                    <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
-<span class="linenos">304</span>                <span class="p">)</span>
-<span class="linenos">305</span>                <span class="k">return</span>
-<span class="linenos">306</span>
-<span class="linenos">307</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">288</span>    <span class="k">def</span><span class="w"> </span><span class="nf">write_status_message</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">289</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Write a status message to the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">290</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+<span class="linenos">291</span>            <span class="n">output_bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">writeDatagram</span><span class="p">(</span>
+<span class="linenos">292</span>                <span class="n">STATUS_REQUEST</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">),</span>
+<span class="linenos">293</span>                <span class="n">QHostAddress</span><span class="p">(</span><span class="n">SOCKET_IP</span><span class="p">),</span>
+<span class="linenos">294</span>                <span class="n">VHI__UDP_PORT</span><span class="p">,</span>
+<span class="linenos">295</span>            <span class="p">)</span>
+<span class="linenos">296</span>
+<span class="linenos">297</span>            <span class="k">if</span> <span class="n">output_bytes</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+<span class="linenos">298</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+<span class="linenos">299</span>                    <span class="s2">&quot;Error in sending status message to Virtual Hand Interface!&quot;</span><span class="p">,</span>
+<span class="linenos">300</span>                    <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+<span class="linenos">301</span>                <span class="p">)</span>
+<span class="linenos">302</span>                <span class="k">return</span>
+<span class="linenos">303</span>
+<span class="linenos">304</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
 </pre></div>
 </div>
 </section>
@@ -761,43 +758,43 @@ It ensures that the interface is correctly set up and ready for use.</p>
 It ensures that the interface is correctly set up and ready for use.</p>
 <div class="literal-block-wrapper docutils container" id="id13">
 <div class="code-block-caption"><span class="caption-text">Connect/Disconnect Custom Signals - This method connects/disconnects custom signals.</span><a class="headerlink" href="#id13" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">309</span>    <span class="k">def</span><span class="w"> </span><span class="nf">connect_custom_signals</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">310</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Connect custom signals for the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">311</span>        <span class="bp">self</span><span class="o">.</span><span class="n">predicted_hand__signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">online_predicted_hand_update</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">306</span>    <span class="k">def</span><span class="w"> </span><span class="nf">connect_custom_signals</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">307</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Connect custom signals for the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">308</span>        <span class="bp">self</span><span class="o">.</span><span class="n">predicted_hand__signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">online_predicted_hand_update</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id14">
 <div class="code-block-caption"><span class="caption-text">Online Predicted Hand Update - This method updates the predicted hand buffer with the current data.</span><a class="headerlink" href="#id14" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">332</span>    <span class="k">def</span><span class="w"> </span><span class="nf">online_predicted_hand_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">333</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Update the predicted hand data for the online protocol.&quot;&quot;&quot;</span>
-<span class="linenos">334</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_online_protocol</span><span class="o">.</span><span class="n">online_record_toggle_push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">335</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<span class="linenos">336</span>                <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_online_protocol</span><span class="o">.</span><span class="n">recording_start_time</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
-<span class="linenos">337</span>            <span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">329</span>    <span class="k">def</span><span class="w"> </span><span class="nf">online_predicted_hand_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">330</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Update the predicted hand data for the online protocol.&quot;&quot;&quot;</span>
+<span class="linenos">331</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_online_protocol</span><span class="o">.</span><span class="n">online_record_toggle_push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+<span class="linenos">332</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<span class="linenos">333</span>                <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_online_protocol</span><span class="o">.</span><span class="n">recording_start_time</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+<span class="linenos">334</span>            <span class="p">)</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id15">
 <div class="code-block-caption"><span class="caption-text">Clear Custom Signal Buffers - This method clears the custom signal buffers.</span><a class="headerlink" href="#id15" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">328</span>    <span class="k">def</span><span class="w"> </span><span class="nf">clear_custom_signal_buffers</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">329</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Clear custom signal buffers for the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">330</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span> <span class="o">=</span> <span class="p">[]</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">325</span>    <span class="k">def</span><span class="w"> </span><span class="nf">clear_custom_signal_buffers</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">326</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Clear custom signal buffers for the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">327</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span> <span class="o">=</span> <span class="p">[]</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id16">
 <div class="code-block-caption"><span class="caption-text">Get Custom Save Data - This method will be called when saving the interface’s data. This should return a dictionary with the data that needs to be saved.</span><a class="headerlink" href="#id16" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">317</span>    <span class="k">def</span><span class="w"> </span><span class="nf">get_custom_save_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-<span class="linenos">318</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Get custom save data for the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">319</span>        <span class="k">return</span> <span class="p">{</span>
-<span class="linenos">320</span>            <span class="s2">&quot;predicted_hand&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">(</span>
-<span class="linenos">321</span>                <span class="p">[</span><span class="n">data</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="p">],</span>
-<span class="linenos">322</span>            <span class="p">)</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
-<span class="linenos">323</span>            <span class="s2">&quot;predicted_hand_timings&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
-<span class="linenos">324</span>                <span class="p">[</span><span class="n">time</span> <span class="k">for</span> <span class="n">time</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="p">],</span>
-<span class="linenos">325</span>            <span class="p">),</span>
-<span class="linenos">326</span>        <span class="p">}</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">314</span>    <span class="k">def</span><span class="w"> </span><span class="nf">get_custom_save_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="linenos">315</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Get custom save data for the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">316</span>        <span class="k">return</span> <span class="p">{</span>
+<span class="linenos">317</span>            <span class="s2">&quot;predicted_hand&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">(</span>
+<span class="linenos">318</span>                <span class="p">[</span><span class="n">data</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="p">],</span>
+<span class="linenos">319</span>            <span class="p">)</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+<span class="linenos">320</span>            <span class="s2">&quot;predicted_hand_timings&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+<span class="linenos">321</span>                <span class="p">[</span><span class="n">time</span> <span class="k">for</span> <span class="n">time</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="p">],</span>
+<span class="linenos">322</span>            <span class="p">),</span>
+<span class="linenos">323</span>        <span class="p">}</span>
 </pre></div>
 </div>
 </div>
@@ -817,7 +814,7 @@ Once registered, the interface becomes available for use in the framework.</p>
 <span class="p">)</span>
 </pre></div>
 </div>
-<p class="sphx-glr-timing"><strong>Total running time of the script:</strong> (0 minutes 0.252 seconds)</p>
+<p class="sphx-glr-timing"><strong>Total running time of the script:</strong> (0 minutes 0.230 seconds)</p>
 <p><strong>Estimated memory usage:</strong>  577 MB</p>
 <div class="sphx-glr-footer sphx-glr-footer-example docutils container" id="sphx-glr-download-auto-examples-02-add-visual-interface-1-setup-interface-py">
 <div class="sphx-glr-download sphx-glr-download-jupyter docutils container">
