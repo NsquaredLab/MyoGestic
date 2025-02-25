@@ -59,3 +59,7 @@ bin/
 
 catboost_info/
 /docs/build/
+
+/.idea/
+/docs/source/auto_examples/
+/docs/source/modules/generated/

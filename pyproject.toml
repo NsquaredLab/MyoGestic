@@ -19,11 +19,13 @@ dependencies = [
     "toml>=0.10.2",
 ]
 
+[tool.uv]
+package = false
+
 [tool.uv.sources]
-myoverse = { git = "https://github.com/NsquaredLab/MyoVerse.git" }
 biosignal-device-interface = { git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git" }
 sphinxcontrib-pdfembed = { git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git" }
-myogestic = { workspace = true }
+myoverse = { git = "https://github.com/NsquaredLab/MyoVerse.git" }
 
 [dependency-groups]
 dev = [
