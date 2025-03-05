@@ -6,7 +6,7 @@
 
 Computation times
 =================
-**00:02.348** total execution time for 8 files **from all galleries**:
+**00:02.362** total execution time for 8 files **from all galleries**:
 
 .. container::
 
@@ -33,26 +33,26 @@ Computation times
      - Time
      - Mem (MB)
    * - :ref:`sphx_glr_auto_examples_01_add_functionality_2_add_model.py` (``../../examples/01_add_functionality/2_add_model.py``)
-     - 00:00.707
-     - 577.6
+     - 00:00.704
+     - 577.2
    * - :ref:`sphx_glr_auto_examples_01_add_functionality_3_add_biosignal_feature.py` (``../../examples/01_add_functionality/3_add_biosignal_feature.py``)
-     - 00:00.581
-     - 577.6
+     - 00:00.574
+     - 577.2
    * - :ref:`sphx_glr_auto_examples_01_add_functionality_1_add_post_prediction_filter.py` (``../../examples/01_add_functionality/1_add_post_prediction_filter.py``)
-     - 00:00.366
+     - 00:00.378
      - 577.6
    * - :ref:`sphx_glr_auto_examples_01_add_functionality_4_add_output_system.py` (``../../examples/01_add_functionality/4_add_output_system.py``)
-     - 00:00.346
-     - 577.6
+     - 00:00.359
+     - 577.2
    * - :ref:`sphx_glr_auto_examples_02_add_visual_interface_1_setup_interface.py` (``../../examples/02_add_visual_interface/1_setup_interface.py``)
-     - 00:00.230
-     - 577.6
+     - 00:00.232
+     - 577.2
    * - :ref:`sphx_glr_auto_examples_02_add_visual_interface_3_output_system.py` (``../../examples/02_add_visual_interface/3_output_system.py``)
-     - 00:00.118
-     - 577.6
+     - 00:00.115
+     - 577.2
    * - :ref:`sphx_glr_auto_examples_02_add_visual_interface_2_recording_interface.py` (``../../examples/02_add_visual_interface/2_recording_interface.py``)
      - 00:00.000
-     - 577.6
+     - 577.2
    * - :ref:`sphx_glr_auto_examples_02_add_visual_interface_0_add_ui.py` (``../../examples/02_add_visual_interface/0_add_ui.py``)
      - 00:00.000
-     - 577.6
+     - 577.2

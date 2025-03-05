@@ -181,7 +181,7 @@ This step resets the recording interface to its initial state.
 
    **Total running time of the script:** (0 minutes 0.000 seconds)
 
-**Estimated memory usage:**  578 MB
+**Estimated memory usage:**  577 MB
 
 
 .. _sphx_glr_download_auto_examples_02_add_visual_interface_2_recording_interface.py:

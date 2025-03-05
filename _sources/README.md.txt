@@ -7,18 +7,6 @@ Take a look at our [documentation](https://nsquaredlab.github.io/MyoGestic/).
 ```
 
 
-(label-table-of-contents)=
-
-## Table of Contents
-- {ref}`Introduction`
-- {ref}`Features`
-- {ref}`Requirements`
-- {ref}`Installation`
-- {ref}`How to Use`
-- {ref}`Development`
-- {ref}`Troubleshooting`
-- {ref}`How to Cite`
-
 (label-introduction)=
 
 ## Introduction
