@@ -72,7 +72,85 @@ def process_readme(readme_path: Path) -> str:
             
         # Close the admonition
         lines[end] += "\n```\n"
-
+    
+    # Process Markdown-style headers to work with Sphinx
+    headers = {}
+    toc_range = None
+    
+    # Find all section headers and the Table of Contents section
+    for i, line in enumerate(lines):
+        # Check for headers (lines followed by ===, --- or starting with #)
+        if i < len(lines) - 1 and lines[i+1].startswith('==='):
+            # H1 header
+            headers[i] = (line.strip(), 'h1')
+        elif i < len(lines) - 1 and lines[i+1].startswith('---'):
+            # H2 header
+            headers[i] = (line.strip(), 'h2')
+        elif line.startswith('# '):
+            # H1 header with #
+            headers[i] = (line[2:].strip(), 'h1')
+        elif line.startswith('## '):
+            # H2 header with ##
+            headers[i] = (line[3:].strip(), 'h2')
+        elif line.startswith('### '):
+            # H3 header with ###
+            headers[i] = (line[4:].strip(), 'h3')
+        
+        # Find the Table of Contents section
+        if line.strip() == "## Table of Contents":
+            toc_start = i
+            for j in range(i + 1, len(lines)):
+                if j < len(lines) and lines[j].startswith('## '):
+                    toc_range = (toc_start, j - 1)
+                    break
+            if toc_range is None:  # If we didn't find the end
+                toc_range = (toc_start, len(lines) - 1)
+    
+    # Create a mapping of anchor names to sanitized anchor names
+    anchor_mapping = {}
+    for i, (header_text, header_type) in headers.items():
+        # Create a sanitized anchor name (lowercase, spaces to hyphens)
+        sanitized_anchor = header_text.lower().replace(' ', '-')
+        # Remove any non-alphanumeric or hyphen characters
+        sanitized_anchor = ''.join(c for c in sanitized_anchor if c.isalnum() or c == '-')
+        anchor_mapping[header_text.lower()] = sanitized_anchor
+    
+    # If we found the Table of Contents, update its links
+    if toc_range:
+        toc_start, toc_end = toc_range
+        for i in range(toc_start + 1, toc_end + 1):
+            line = lines[i]
+            # Look for markdown-style links: [text](#anchor)
+            if "[" in line and "](#" in line and ")" in line:
+                link_start = line.find("[")
+                link_mid = line.find("](#", link_start)
+                link_end = line.find(")", link_mid)
+                
+                if link_start != -1 and link_mid != -1 and link_end != -1:
+                    link_text = line[link_start + 1:link_mid]
+                    anchor = line[link_mid + 3:link_end]
+                    
+                    # Convert to Sphinx-compatible reference
+                    # Use the sanitized anchor if available
+                    if anchor in anchor_mapping:
+                        sanitized_anchor = anchor_mapping[anchor]
+                        lines[i] = line[:link_start] + f":ref:`{link_text} <{sanitized_anchor}>`" + line[link_end + 1:]
+                    else:
+                        # Try with a direct match to header text
+                        for header_text, sanitized in anchor_mapping.items():
+                            if anchor == sanitized or anchor.replace('-', '') == header_text.replace(' ', '').lower():
+                                lines[i] = line[:link_start] + f":ref:`{link_text} <{sanitized}>`" + line[link_end + 1:]
+                                break
+    
+    # Add labels before each header for Sphinx references
+    for i, (header_text, header_type) in sorted(headers.items(), reverse=True):
+        sanitized_anchor = header_text.lower().replace(' ', '-')
+        sanitized_anchor = ''.join(c for c in sanitized_anchor if c.isalnum() or c == '-')
+        
+        # Add a Sphinx label before the header
+        label_line = f".. _{sanitized_anchor}:\n\n"
+        lines.insert(i, label_line)
+    
     return "\n".join(lines)
 
 
