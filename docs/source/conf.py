@@ -33,39 +33,52 @@ copyright = (
 
 
 def process_readme(readme_path: Path) -> str:
-    """Processes the README.md file and generates the modified content."""
+    """Processes the README.md file and generates the modified content for Sphinx."""
     print(readme_path)
 
-    with readme_path.open() as f:
+    with readme_path.open(encoding='utf-8') as f:
         lines = f.read().split("\n")
 
-    line_indices = [i for i, line in enumerate(lines) if "[!" in line]
-    line_ranges = find_line_ranges(lines, line_indices)
+    # Find blockquote admonitions with emojis
+    admonition_starts = []
+    for i, line in enumerate(lines):
+        if line.startswith("> 💡 **Tip**:"):
+            admonition_starts.append((i, "tip"))
+        elif line.startswith("> ⚠️ **Important**:"):
+            admonition_starts.append((i, "important"))
+        elif line.startswith("> 📝 **Note**:"):
+            admonition_starts.append((i, "note"))
 
-    # Format lines
-    for start, end in line_ranges.items():
-        lines[start] = f"```{{{lines[start][4:].strip().replace(']', '').lower()}}}\n"
+    # Find the end of each admonition (the next line that doesn't start with ">")
+    admonition_ranges = {}
+    for start, admonition_type in admonition_starts:
+        for j in range(start + 1, len(lines)):
+            if j >= len(lines) or not lines[j].startswith(">"):
+                admonition_ranges[start] = (j - 1, admonition_type)
+                break
+            if j == len(lines) - 1:  # If we reach the end of the file
+                admonition_ranges[start] = (j, admonition_type)
+
+    # Convert blockquote admonitions to Sphinx admonitions
+    # Process in reverse order to avoid changing indices
+    for start, (end, admonition_type) in sorted(admonition_ranges.items(), reverse=True):
+        # Replace the first line with the admonition directive
+        content = lines[start].replace("> 💡 **Tip**:", "").replace("> ⚠️ **Important**:", "").replace("> 📝 **Note**:", "").strip()
+        lines[start] = f"```{{{admonition_type}}}\n{content}"
+        
+        # Process content lines, removing the blockquote marker
         for i in range(start + 1, end + 1):
             lines[i] = lines[i].replace("> ", "") + "\n"
-        lines[end] += "```\n"
+            
+        # Close the admonition
+        lines[end] += "\n```\n"
 
     return "\n".join(lines)
 
 
-def find_line_ranges(lines, indices):
-    """Finds the range of lines connected to each matched line index."""
-    line_ranges = {}
-    for i, start in enumerate(indices):
-        for j in range(start, len(lines) - 1):
-            if ">" in lines[j] and ">" not in lines[j + 1]:
-                line_ranges[start] = j
-                break
-    return line_ranges
-
-
 # Process README and save
 modified_readme = process_readme(base_dir / "README.md")
-with (Path.cwd()/ "README.md").open("w+") as readme_file:
+with (Path.cwd()/ "README.md").open("w+", encoding='utf-8') as readme_file:
     readme_file.write(modified_readme)
 
 # Sphinx Configuration
