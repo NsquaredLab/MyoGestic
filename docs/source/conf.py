@@ -31,9 +31,14 @@ copyright = (
     f"2023 - {datetime.now().year}, n-squared lab, FAU Erlangen-Nürnberg, Germany"
 )
 
-def process_readme(readme_path: Path) -> str:
-    """Processes the README.md file and generates the modified content for Sphinx."""
-    print(f"Processing README from {readme_path}")
+def process_readme(readme_path: Path, output_path: Path) -> None:
+    """Processes the README.md file and generates a modified version for Sphinx.
+    
+    Args:
+        readme_path: Path to the original README.md
+        output_path: Path where the processed file should be saved
+    """
+    print(f"Processing README from {readme_path} to {output_path}")
 
     with readme_path.open(encoding='utf-8') as f:
         lines = f.read().split("\n")
@@ -126,27 +131,19 @@ def process_readme(readme_path: Path) -> str:
             label_line = f"(label-{header_text.lower().replace(' ', '-')})=\n"
             lines.insert(i, label_line)
     
-    return "\n".join(lines)
+    # Write the processed content to the output file
+    with output_path.open("w+", encoding='utf-8') as outfile:
+        outfile.write("\n".join(lines))
 
 
-# Create a symlink to README.md in docs/source directory if not exists
+# Get paths for README and the output file
 readme_source = base_dir / "README.md"
-readme_target = Path.cwd() / "README.md"
+index_target = Path.cwd() / "README.md"
 
-# Create symlink or copy if symlink not supported
-if not readme_target.exists():
-    try:
-        # Try creating a symlink first
-        readme_target.symlink_to(readme_source)
-    except (OSError, NotImplementedError):
-        # If symlink fails, copy the file
-        import shutil
-        shutil.copy2(readme_source, readme_target)
+# Process README and save as index.md for Sphinx documentation
+process_readme(readme_source, index_target)
 
-# Process README and save
-modified_readme = process_readme(readme_source)
-with (Path.cwd() / "README.md").open("w+", encoding='utf-8') as readme_file:
-    readme_file.write(modified_readme)
+# No symlinks or copies of the original README needed
 
 # Sphinx Configuration
 extensions = [
