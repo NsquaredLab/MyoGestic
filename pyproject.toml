@@ -36,6 +36,7 @@ dev = [
 ]
 docs = [
     "enum-tools[sphinx]>=0.12.0",
+    "linkify-it-py>=2.0.3",
     "memory-profiler>=0.61.0",
     "pydata-sphinx-theme>=0.16.1",
     "rinohtype>=0.5.5",
