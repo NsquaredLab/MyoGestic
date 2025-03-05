@@ -327,12 +327,53 @@
                   
   <section id="getting-started-with-myogestic">
 <h1>Getting Started with MyoGestic<a class="headerlink" href="#getting-started-with-myogestic" title="Link to this heading">#</a></h1>
-<p>MyoGestic is a software framework made to help the myocontrol community to develop and test new myocontrol algorithms.
-It is made to be easily extensible and to minimize dead time when testing on injured individuals.</p>
+<p>MyoGestic: A software framework for developing and testing myocontrol algorithms with minimal setup time.</p>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
 <p>Take a look at our <a class="reference external" href="https://nsquaredlab.github.io/MyoGestic/">documentation</a>.</p>
 </div>
+<section id="table-of-contents">
+<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/reference/introduction.html#introduction" title="Python 3.13"><span class="xref myst">Introduction</span></a></p></li>
+<li><p><a class="reference external" href="https://scikit-learn.org/stable/glossary.html#term-features" title="scikit-learn 1.6"><span class="xref myst">Features</span></a></p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/importlib.metadata.html#requirements" title="Python 3.13"><span class="xref myst">Requirements</span></a></p></li>
+<li><p><a class="reference internal" href="#installation"><span class="xref myst">Installation</span></a></p></li>
+<li><p><a class="reference internal" href="#how-to-use"><span class="xref myst">How to Use</span></a></p></li>
+<li><p><a class="reference external" href="https://pandas.pydata.org/docs/development/index.html#development" title="pandas 2.2.3"><span class="xref myst">Development</span></a></p></li>
+<li><p><a class="reference internal" href="#troubleshooting"><span class="xref myst">Troubleshooting</span></a></p></li>
+<li><p><a class="reference internal" href="#how-to-cite"><span class="xref myst">How to Cite</span></a></p></li>
+</ul>
+</section>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Link to this heading">#</a></h2>
+<p>MyoGestic is a software framework designed to help the myocontrol community develop and test new myocontrol algorithms. For researchers and clinicians working with individuals with neural lesions, MyoGestic streamlines the process of creating, implementing, and evaluating myoelectric control systems.</p>
+<p>The framework is designed with two primary goals:</p>
+<ol class="arabic simple">
+<li><p><strong>Easy extensibility</strong>: Add your own algorithms without extensive knowledge of the codebase</p></li>
+<li><p><strong>Minimal setup time</strong>: Especially important when working with clinical populations where time is limited</p></li>
+</ol>
+</section>
+<section id="features">
+<h2>Features<a class="headerlink" href="#features" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>User-friendly interface</strong>: Simple setup for clinical testing</p></li>
+<li><p><strong>Real-time processing</strong>: Low-latency signal processing and control</p></li>
+<li><p><strong>Multiple device support</strong>: Works with various EMG acquisition hardware</p></li>
+<li><p><strong>Customizable algorithms</strong>: Implement your own control strategies</p></li>
+<li><p><strong>Data logging</strong>: Capture and analyze performance metrics</p></li>
+<li><p><strong>Visualization tools</strong>: Monitor signals and control outputs in real-time</p></li>
+</ul>
+</section>
+<section id="requirements">
+<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>Windows 10 or later (for installer)</p></li>
+<li><p>Any OS supported by Python for manual installation (for maximum performance consider using Ubuntu 24.10)</p></li>
+<li><p>Python 3.12 or higher</p></li>
+<li><p>Compatible EMG acquisition hardware</p></li>
+</ul>
+</section>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
 <div class="admonition important">
@@ -349,38 +390,122 @@ It is made to be easily extensible and to minimize dead time when testing on inj
 </div>
 <section id="manual-installation">
 <h3>Manual installation<a class="headerlink" href="#manual-installation" title="Link to this heading">#</a></h3>
-<p>The installation is made using Poetry. You can install it using the following command:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>poetry
-</pre></div>
-</div>
-<p>Then, you can install the dependencies using the following command:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>poetry<span class="w"> </span>install
+<p>The installation is made using uv. You can install it following the instructions at <a class="github reference external" href="https://github.com/astral-sh/uv">astral-sh/uv</a>.</p>
+<p>Then, you can install MyoGestic using the following command:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>sync
 </pre></div>
 </div>
 </section>
 </section>
 <section id="how-to-use">
-<h2>How to use<a class="headerlink" href="#how-to-use" title="Link to this heading">#</a></h2>
+<h2>How to Use<a class="headerlink" href="#how-to-use" title="Link to this heading">#</a></h2>
 <p><a class="reference external" href="https://youtu.be/Re3VfgKhjCM"><img alt="MyoGestic Tutorial" src="https://img.youtube.com/vi/Re3VfgKhjCM/maxresdefault.jpg" /></a></p>
 <p>If you prefer a PDF version, you can download it <a class="reference external" href="https://github.com/NsquaredLab/MyoGestic/tree/main/docs/source/_static/MyoGestic_Tutorial.pdf">here</a>.</p>
+<section id="quick-start-guide">
+<h3>Quick Start Guide<a class="headerlink" href="#quick-start-guide" title="Link to this heading">#</a></h3>
+<ol class="arabic simple">
+<li><p>Install MyoGestic using one of the methods described above</p></li>
+<li><p>Connect your EMG acquisition hardware</p></li>
+<li><p>Launch the application</p></li>
+<li><p>Select the desired algorithm and parameters</p></li>
+<li><p>Begin recording and testing</p></li>
+</ol>
 </section>
-<section id="development-installation">
-<h2>Development installation<a class="headerlink" href="#development-installation" title="Link to this heading">#</a></h2>
+</section>
+<section id="development">
+<h2>Development<a class="headerlink" href="#development" title="Link to this heading">#</a></h2>
 <p>If you want to contribute to the project, you can install the development dependencies using the following command:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>poetry<span class="w"> </span>install<span class="w"> </span>--with<span class="w"> </span>dev,docs
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>dev<span class="w"> </span>--group<span class="w"> </span>docs
 </pre></div>
 </div>
-<p>Then you need to install the development version of the submodule <code class="docutils literal notranslate"><span class="pre">device_interface</span></code> using the following command:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>poetry<span class="w"> </span>run<span class="w"> </span>poe<span class="w"> </span>install-dev
+<section id="project-structure">
+<h3>Project Structure<a class="headerlink" href="#project-structure" title="Link to this heading">#</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>MyoGestic/
+├── myogestic/           # Main package
+│   ├── models/          # Algorithm models and interfaces
+│   │   ├── core/        # Core model implementations
+│   │   └── definitions/ # Model definitions and specifications
+│   ├── gui/             # User interface components
+│   ├── utils/           # Helper functions and utilities
+│   ├── main.py          # Application entry point
+│   └── default_config.py # Default configuration settings
+├── docs/                # Documentation
+├── tests/               # Test suite
+├── examples/            # Example usage and demonstrations
+├── setup/               # Installation and setup files
+└── pyproject.toml       # Project metadata and dependencies
 </pre></div>
 </div>
+</section>
+<section id="adding-your-own-algorithm">
+<h3>Adding Your Own Algorithm<a class="headerlink" href="#adding-your-own-algorithm" title="Link to this heading">#</a></h3>
+<p>To add a new algorithm:</p>
+<ol class="arabic simple">
+<li><p>Create a custom model class with the required methods:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">save</span></code>: Save model state to a file</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">load</span></code>: Load model state from a file</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">train</span></code>: Train the model on input data</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">predict</span></code>: Make predictions with the model</p></li>
+</ul>
+</li>
+<li><p>Define the required lifecycle functions:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">save_function</span></code>: Function to save the model</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">load_function</span></code>: Function to load the model</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">train_function</span></code>: Function to train the model</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">predict_function</span></code>: Function to make predictions</p></li>
+</ul>
+</li>
+<li><p>Define parameter configurations:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">changeable_parameters</span></code>: Parameters that can be modified through the UI</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">unchangeable_parameters</span></code>: Parameters that remain fixed</p></li>
+</ul>
+</li>
+<li><p>Register your model in the <code class="docutils literal notranslate"><span class="pre">CONFIG_REGISTRY</span></code> in <code class="docutils literal notranslate"><span class="pre">user_config.py</span></code></p></li>
+</ol>
+<p>Example implementation can be found in <code class="docutils literal notranslate"><span class="pre">examples/01_add_functionality/2_add_model.py</span></code>.</p>
+<p>Refer to the <a class="reference external" href="https://nsquaredlab.github.io/MyoGestic/">documentation</a> for detailed instructions on implementing custom algorithms.</p>
+</section>
+</section>
+<section id="troubleshooting">
+<h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">#</a></h2>
+<section id="common-issues">
+<h3>Common Issues<a class="headerlink" href="#common-issues" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Hardware not detected</strong>: Ensure your EMG device is properly connected and drivers are installed</p></li>
+<li><p><strong>Algorithm fails to load</strong>: Check for missing dependencies or syntax errors in your implementation</p></li>
+<li><p><strong>Performance issues</strong>: Consider optimizing your algorithm or checking system resources</p></li>
+</ul>
+<p>For more detailed troubleshooting, please refer to the <a class="reference external" href="https://nsquaredlab.github.io/MyoGestic/">documentation</a>.</p>
+</section>
 </section>
 <section id="how-to-cite">
-<h2>How to cite<a class="headerlink" href="#how-to-cite" title="Link to this heading">#</a></h2>
+<h2>How to Cite<a class="headerlink" href="#how-to-cite" title="Link to this heading">#</a></h2>
 <p>If you use MyoGestic in your research, please cite the following paper:</p>
 <div class="highlight-bibtex notranslate"><div class="highlight"><pre><span></span><span class="c">TBD</span>
 </pre></div>
 </div>
+</section>
+<section id="license">
+<h2>License<a class="headerlink" href="#license" title="Link to this heading">#</a></h2>
+<p>MyoGestic is licensed under the <a class="reference internal" href="#LICENSE"><span class="xref myst">GNU General Public License v3.0</span></a> (GPL-3.0).</p>
+<p>This means you are free to:</p>
+<ul class="simple">
+<li><p>Use the software for any purpose</p></li>
+<li><p>Change the software to suit your needs</p></li>
+<li><p>Share the software with others</p></li>
+<li><p>Share the changes you make</p></li>
+</ul>
+<p>Under the following conditions:</p>
+<ul class="simple">
+<li><p>You must disclose your source code when you share the software</p></li>
+<li><p>You must license any derivative work under the same or a compatible license</p></li>
+<li><p>You must state changes made to the software</p></li>
+<li><p>You must include the license and copyright notice with the software</p></li>
+</ul>
+<p>This is a simplified explanation. For the full license text, see the <a class="reference internal" href="#LICENSE"><span class="xref myst">LICENSE</span></a> file or visit <a class="reference external" href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3</a>.</p>
 </section>
 </section>
 
@@ -431,13 +556,29 @@ It is made to be easily extensible and to minimize dead time when testing on inj
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#table-of-contents">Table of Contents</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#introduction">Introduction</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#features">Features</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#requirements">Requirements</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#manual-installation">Manual installation</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-use">How to use</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#development-installation">Development installation</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-cite">How to cite</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-use">How to Use</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start-guide">Quick Start Guide</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#development">Development</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#project-structure">Project Structure</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#adding-your-own-algorithm">Adding Your Own Algorithm</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#troubleshooting">Troubleshooting</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#common-issues">Common Issues</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-cite">How to Cite</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license">License</a></li>
 </ul>
   </nav></div>
 
