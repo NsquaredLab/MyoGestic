@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.13' and sys_platform != 'linux'",
@@ -521,6 +522,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ae/ed/aefcc8cd0ba62a0560c3c18c33925362d46c6075480bfa4df87b28e169a9/docutils-0.21.2.tar.gz", hash = "sha256:3a6b18732edf182daa3cd12775bbb338cf5691468f91eeeb109deff6ebfa986f", size = 2204444 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8f/d7/9322c609343d929e75e7e5e6255e614fcc67572cfd083959cdef3b7aad79/docutils-0.21.2-py3-none-any.whl", hash = "sha256:dafca5b9e384f0e419294eb4d2ff9fa826435bf15f15b7bd45723e8ad76811b2", size = 587408 },
+]
+
+[[package]]
+name = "docutils-stubs"
+version = "0.0.22"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "docutils" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/31/fb/3eda037eed8b98d6b2169e4198a8f12a03a461c4d4dc44de1a7790d0f7c7/docutils-stubs-0.0.22.tar.gz", hash = "sha256:1736d9650cfc20cff8c72582806c33a5c642694e2df9e430717e7da7e73efbdf", size = 43699 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/59/85/10507e1011d5370b94567e4b57f93086a2476d1da73caf98dc53aa87004b/docutils_stubs-0.0.22-py3-none-any.whl", hash = "sha256:157807309de24e8c96af9a13afe207410f1fc6e5aab5d974fd6b9191f04de327", size = 87506 },
 ]
 
 [[package]]
@@ -1180,6 +1193,7 @@ compile = [
     { name = "pyinstaller" },
 ]
 dev = [
+    { name = "docutils-stubs" },
     { name = "matplotlib" },
     { name = "prospector" },
 ]
@@ -1211,6 +1225,7 @@ compile = [
     { name = "pyinstaller", specifier = ">=6.12.0" },
 ]
 dev = [
+    { name = "docutils-stubs", specifier = ">=0.0.22" },
     { name = "matplotlib", specifier = ">=3.10.0" },
     { name = "prospector", specifier = ">=1.14.1" },
 ]
