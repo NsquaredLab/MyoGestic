@@ -239,9 +239,9 @@ Once registered, the interface becomes available for use in the framework.
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** (0 minutes 0.233 seconds)
+   **Total running time of the script:** (0 minutes 0.230 seconds)
 
-**Estimated memory usage:**  577 MB
+**Estimated memory usage:**  578 MB
 
 
 .. _sphx_glr_download_auto_examples_02_add_visual_interface_1_setup_interface.py:

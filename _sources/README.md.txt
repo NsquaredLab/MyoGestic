@@ -1,6 +1,3 @@
-.. _getting-started-with-myogestic:
-
-
 # Getting Started with MyoGestic
 
 MyoGestic: A software framework for developing and testing myocontrol algorithms with minimal setup time.
@@ -10,21 +7,19 @@ Take a look at our [documentation](https://nsquaredlab.github.io/MyoGestic/).
 ```
 
 
-.. _table-of-contents:
-
+(label-table-of-contents)=
 
 ## Table of Contents
-- :ref:`Introduction <introduction>`
-- :ref:`Features <features>`
-- :ref:`Requirements <requirements>`
-- :ref:`Installation <installation>`
-- :ref:`How to Use <how-to-use>`
-- :ref:`Development <development>`
-- :ref:`Troubleshooting <troubleshooting>`
-- :ref:`How to Cite <how-to-cite>`
+- {ref}`Introduction`
+- {ref}`Features`
+- {ref}`Requirements`
+- {ref}`Installation`
+- {ref}`How to Use`
+- {ref}`Development`
+- {ref}`Troubleshooting`
+- {ref}`How to Cite`
 
-.. _introduction:
-
+(label-introduction)=
 
 ## Introduction
 
@@ -34,8 +29,7 @@ The framework is designed with two primary goals:
 1. **Easy extensibility**: Add your own algorithms without extensive knowledge of the codebase
 2. **Minimal setup time**: Especially important when working with clinical populations where time is limited
 
-.. _features:
-
+(label-features)=
 
 ## Features
 
@@ -46,8 +40,7 @@ The framework is designed with two primary goals:
 - **Data logging**: Capture and analyze performance metrics
 - **Visualization tools**: Monitor signals and control outputs in real-time
 
-.. _requirements:
-
+(label-requirements)=
 
 ## Requirements
 
@@ -56,8 +49,7 @@ The framework is designed with two primary goals:
 - Python 3.12 or higher
 - Compatible EMG acquisition hardware
 
-.. _installation:
-
+(label-installation)=
 
 ## Installation
 ```{important}
@@ -76,9 +68,6 @@ This does not allow you to add your own myocontrol algorithms. This is only for 
 
 
 
-.. _manual-installation:
-
-
 ### Manual installation
 The installation is made using uv. You can install it following the instructions at [https://github.com/astral-sh/uv](https://github.com/astral-sh/uv).
 
@@ -87,17 +76,13 @@ Then, you can install MyoGestic using the following command:
 uv sync
 ```
 
-.. _how-to-use:
-
+(label-how-to-use)=
 
 ## How to Use
 [![MyoGestic Tutorial](https://img.youtube.com/vi/Re3VfgKhjCM/maxresdefault.jpg)](https://youtu.be/Re3VfgKhjCM)
 
 If you prefer a PDF version, you can download it [here](
 https://github.com/NsquaredLab/MyoGestic/tree/main/docs/source/_static/MyoGestic_Tutorial.pdf).
-
-.. _quick-start-guide:
-
 
 ### Quick Start Guide
 
@@ -107,8 +92,7 @@ https://github.com/NsquaredLab/MyoGestic/tree/main/docs/source/_static/MyoGestic
 4. Select the desired algorithm and parameters
 5. Begin recording and testing
 
-.. _development:
-
+(label-development)=
 
 ## Development
 
@@ -116,9 +100,6 @@ If you want to contribute to the project, you can install the development depend
 ```bash
 uv sync --group dev --group docs
 ```
-
-.. _project-structure:
-
 
 ### Project Structure
 
@@ -138,9 +119,6 @@ MyoGestic/
 ├── setup/               # Installation and setup files
 └── pyproject.toml       # Project metadata and dependencies
 ```
-
-.. _adding-your-own-algorithm:
-
 
 ### Adding Your Own Algorithm
 
@@ -168,13 +146,9 @@ Example implementation can be found in `examples/01_add_functionality/2_add_mode
 
 Refer to the [documentation](https://nsquaredlab.github.io/MyoGestic/) for detailed instructions on implementing custom algorithms.
 
-.. _troubleshooting:
-
+(label-troubleshooting)=
 
 ## Troubleshooting
-
-.. _common-issues:
-
 
 ### Common Issues
 
@@ -184,8 +158,7 @@ Refer to the [documentation](https://nsquaredlab.github.io/MyoGestic/) for detai
 
 For more detailed troubleshooting, please refer to the [documentation](https://nsquaredlab.github.io/MyoGestic/).
 
-.. _how-to-cite:
-
+(label-how-to-cite)=
 
 ## How to Cite
 If you use MyoGestic in your research, please cite the following paper:
@@ -193,8 +166,7 @@ If you use MyoGestic in your research, please cite the following paper:
 TBD
 ```
 
-.. _license:
-
+(label-license)=
 
 ## License
 
