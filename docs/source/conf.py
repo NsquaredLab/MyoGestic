@@ -31,10 +31,9 @@ copyright = (
     f"2023 - {datetime.now().year}, n-squared lab, FAU Erlangen-Nürnberg, Germany"
 )
 
-
 def process_readme(readme_path: Path) -> str:
     """Processes the README.md file and generates the modified content for Sphinx."""
-    print(readme_path)
+    print(f"Processing README from {readme_path}")
 
     with readme_path.open(encoding='utf-8') as f:
         lines = f.read().split("\n")
@@ -73,51 +72,38 @@ def process_readme(readme_path: Path) -> str:
         # Close the admonition
         lines[end] += "\n```\n"
     
-    # Process Markdown-style headers to work with Sphinx
+    # Find all headers and create a map of GitHub-style anchors to Sphinx references
     headers = {}
-    toc_range = None
-    
-    # Find all section headers and the Table of Contents section
     for i, line in enumerate(lines):
-        # Check for headers (lines followed by ===, --- or starting with #)
-        if i < len(lines) - 1 and lines[i+1].startswith('==='):
-            # H1 header
-            headers[i] = (line.strip(), 'h1')
-        elif i < len(lines) - 1 and lines[i+1].startswith('---'):
-            # H2 header
-            headers[i] = (line.strip(), 'h2')
-        elif line.startswith('# '):
-            # H1 header with #
-            headers[i] = (line[2:].strip(), 'h1')
-        elif line.startswith('## '):
-            # H2 header with ##
-            headers[i] = (line[3:].strip(), 'h2')
-        elif line.startswith('### '):
-            # H3 header with ###
-            headers[i] = (line[4:].strip(), 'h3')
-        
-        # Find the Table of Contents section
+        if line.startswith('## '):
+            # Extract the header text and create a GitHub-style anchor
+            header_text = line[3:].strip()
+            # GitHub style: lowercase, spaces to hyphens, remove non-alphanumerics except hyphens
+            github_anchor = header_text.lower().replace(' ', '-')
+            github_anchor = ''.join(c for c in github_anchor if c.isalnum() or c == '-')
+            headers[github_anchor] = header_text
+    
+    # Fix Table of Contents links - convert GitHub style to Sphinx references
+    toc_start = None
+    toc_end = None
+    
+    # Find the Table of Contents section
+    for i, line in enumerate(lines):
         if line.strip() == "## Table of Contents":
             toc_start = i
-            for j in range(i + 1, len(lines)):
-                if j < len(lines) and lines[j].startswith('## '):
-                    toc_range = (toc_start, j - 1)
-                    break
-            if toc_range is None:  # If we didn't find the end
-                toc_range = (toc_start, len(lines) - 1)
+            break
     
-    # Create a mapping of anchor names to sanitized anchor names
-    anchor_mapping = {}
-    for i, (header_text, header_type) in headers.items():
-        # Create a sanitized anchor name (lowercase, spaces to hyphens)
-        sanitized_anchor = header_text.lower().replace(' ', '-')
-        # Remove any non-alphanumeric or hyphen characters
-        sanitized_anchor = ''.join(c for c in sanitized_anchor if c.isalnum() or c == '-')
-        anchor_mapping[header_text.lower()] = sanitized_anchor
+    # Find the end of the Table of Contents section
+    if toc_start is not None:
+        for i in range(toc_start + 1, len(lines)):
+            if i < len(lines) and (lines[i].startswith('## ') or lines[i].startswith('# ')):
+                toc_end = i - 1
+                break
+        if toc_end is None:  # If we reach the end of the file
+            toc_end = len(lines) - 1
     
-    # If we found the Table of Contents, update its links
-    if toc_range:
-        toc_start, toc_end = toc_range
+    # Process the table of contents links
+    if toc_start is not None and toc_end is not None:
         for i in range(toc_start + 1, toc_end + 1):
             line = lines[i]
             # Look for markdown-style links: [text](#anchor)
@@ -130,33 +116,36 @@ def process_readme(readme_path: Path) -> str:
                     link_text = line[link_start + 1:link_mid]
                     anchor = line[link_mid + 3:link_end]
                     
-                    # Convert to Sphinx-compatible reference
-                    # Use the sanitized anchor if available
-                    if anchor in anchor_mapping:
-                        sanitized_anchor = anchor_mapping[anchor]
-                        lines[i] = line[:link_start] + f":ref:`{link_text} <{sanitized_anchor}>`" + line[link_end + 1:]
-                    else:
-                        # Try with a direct match to header text
-                        for header_text, sanitized in anchor_mapping.items():
-                            if anchor == sanitized or anchor.replace('-', '') == header_text.replace(' ', '').lower():
-                                lines[i] = line[:link_start] + f":ref:`{link_text} <{sanitized}>`" + line[link_end + 1:]
-                                break
+                    # Create a Sphinx-compatible reference
+                    lines[i] = line[:link_start] + f"{{ref}}`{link_text}`" + line[link_end + 1:]
     
-    # Add labels before each header for Sphinx references
-    for i, (header_text, header_type) in sorted(headers.items(), reverse=True):
-        sanitized_anchor = header_text.lower().replace(' ', '-')
-        sanitized_anchor = ''.join(c for c in sanitized_anchor if c.isalnum() or c == '-')
-        
-        # Add a Sphinx label before the header
-        label_line = f".. _{sanitized_anchor}:\n\n"
-        lines.insert(i, label_line)
+    # Add reference labels before each section header
+    for i, line in reversed(list(enumerate(lines))):
+        if line.startswith('## '):
+            header_text = line[3:].strip()
+            label_line = f"(label-{header_text.lower().replace(' ', '-')})=\n"
+            lines.insert(i, label_line)
     
     return "\n".join(lines)
 
 
+# Create a symlink to README.md in docs/source directory if not exists
+readme_source = base_dir / "README.md"
+readme_target = Path.cwd() / "README.md"
+
+# Create symlink or copy if symlink not supported
+if not readme_target.exists():
+    try:
+        # Try creating a symlink first
+        readme_target.symlink_to(readme_source)
+    except (OSError, NotImplementedError):
+        # If symlink fails, copy the file
+        import shutil
+        shutil.copy2(readme_source, readme_target)
+
 # Process README and save
-modified_readme = process_readme(base_dir / "README.md")
-with (Path.cwd()/ "README.md").open("w+", encoding='utf-8') as readme_file:
+modified_readme = process_readme(readme_source)
+with (Path.cwd() / "README.md").open("w+", encoding='utf-8') as readme_file:
     readme_file.write(modified_readme)
 
 # Sphinx Configuration
@@ -176,6 +165,33 @@ extensions = [
     "sphinxcontrib.youtube",
     "sphinxcontrib.pdfembed",
 ]
+
+# MyST-Parser configuration
+myst_enable_extensions = [
+    "colon_fence",
+    "deflist",
+    "dollarmath",
+    "fieldlist",
+    "html_admonition",
+    "html_image",
+    "linkify",
+    "replacements",
+    "smartquotes",
+    "substitution",
+    "tasklist",
+]
+
+# Auto-generate targets for section headers
+myst_heading_anchors = 3
+
+# Enable use of MyST-style admonitions in Markdown
+myst_admonition_enable = True
+
+# Configure how external links are handled
+myst_url_schemes = ["http", "https", "mailto", "ftp"]
+
+# Set MyST to parse all references to section headers as references
+myst_ref_domains = ["std"]
 
 numpydoc_class_members_toctree = False
 autodoc_default_options = {"members": True, "inherited-members": False}
@@ -220,7 +236,12 @@ sphinx_gallery_conf = {
     "download_all_examples": False,
 }
 
-suppress_warnings = ["config.cache"]
+# Suppress specific warnings
+suppress_warnings = [
+    "config.cache",
+    "myst.header",  # Suppress warnings about duplicate headers
+    "myst.xref_missing"  # Suppress warnings about missing references initially
+]
 
 
 class PrettyPrintIterable(Directive):

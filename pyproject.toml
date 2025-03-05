@@ -30,6 +30,7 @@ myoverse = { git = "https://github.com/NsquaredLab/MyoVerse.git" }
 
 [dependency-groups]
 dev = [
+    "docutils-stubs>=0.0.22",
     "matplotlib>=3.10.0",
     "prospector>=1.14.1",
 ]

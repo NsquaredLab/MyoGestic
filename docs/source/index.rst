@@ -1,4 +1,19 @@
-.. MyoGestic Documentation — Landing Page
+===========================
+MyoGestic Documentation
+===========================
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   README.md
+   
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
 
 MyoGestic (💪👑 ➡️ 💻 ➡️ 🦾) Documentation
 ==========================================
@@ -9,7 +24,7 @@ Key Features
 ------------
 - **Extensibility:** Easily incorporate new sensors, algorithms, or device interfaces.
 - **Rapid Prototyping:** Minimize time spent configuring, so you can start testing and iterating right away.
-- **Community-Driven:** Built with close collaboration in mind—learn from others’ examples and share your own.
+- **Community-Driven:** Built with close collaboration in mind—learn from others' examples and share your own.
 - **Efficient Testing:** Streamline your workflow for real-world studies with motor-impaired individuals.
 
 .. toctree::
