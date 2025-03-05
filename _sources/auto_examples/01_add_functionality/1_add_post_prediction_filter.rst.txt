@@ -111,7 +111,7 @@ Step 2: Register the Filter in user_config.py
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** (0 minutes 0.346 seconds)
+   **Total running time of the script:** (0 minutes 0.380 seconds)
 
 **Estimated memory usage:**  577 MB
 
