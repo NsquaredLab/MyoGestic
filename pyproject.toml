@@ -21,6 +21,7 @@ dependencies = [
 
 [tool.uv]
 package = false
+config-settings = { editable_mode = "compat" }
 
 [tool.uv.sources]
 biosignal-device-interface = { git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git" }
