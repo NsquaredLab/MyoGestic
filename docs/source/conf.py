@@ -88,11 +88,10 @@ def process_readme(readme_path: Path, output_path: Path) -> None:
             github_anchor = ''.join(c for c in github_anchor if c.isalnum() or c == '-')
             headers[github_anchor] = header_text
     
-    # Fix Table of Contents links - convert GitHub style to Sphinx references
+    # Find the Table of Contents section
     toc_start = None
     toc_end = None
     
-    # Find the Table of Contents section
     for i, line in enumerate(lines):
         if line.strip() == "## Table of Contents":
             toc_start = i
@@ -107,22 +106,9 @@ def process_readme(readme_path: Path, output_path: Path) -> None:
         if toc_end is None:  # If we reach the end of the file
             toc_end = len(lines) - 1
     
-    # Process the table of contents links
+    # Remove the Table of Contents section
     if toc_start is not None and toc_end is not None:
-        for i in range(toc_start + 1, toc_end + 1):
-            line = lines[i]
-            # Look for markdown-style links: [text](#anchor)
-            if "[" in line and "](#" in line and ")" in line:
-                link_start = line.find("[")
-                link_mid = line.find("](#", link_start)
-                link_end = line.find(")", link_mid)
-                
-                if link_start != -1 and link_mid != -1 and link_end != -1:
-                    link_text = line[link_start + 1:link_mid]
-                    anchor = line[link_mid + 3:link_end]
-                    
-                    # Create a Sphinx-compatible reference
-                    lines[i] = line[:link_start] + f"{{ref}}`{link_text}`" + line[link_end + 1:]
+        del lines[toc_start:toc_end + 1]
     
     # Add reference labels before each section header
     for i, line in reversed(list(enumerate(lines))):
