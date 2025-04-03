@@ -7,10 +7,11 @@ from pathlib import Path
 import lightning as L
 import numpy as np
 import torch
-from myoverse.datasets.filters.generic import IndexDataFilter
-from myoverse.datasets.loader import EMGDatasetLoader
 from lightning.pytorch.callbacks import StochasticWeightAveraging, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
+from myoverse.datasets.filters.generic import IndexDataFilter
+from myoverse.datasets.loader import EMGDatasetLoader
+from myoverse.datatypes import _Data
 
 from myogestic.gui.widgets.logger import CustomLogger
 
@@ -89,7 +90,7 @@ def load(model_path: str, model: L.LightningModule) -> L.LightningModule:
     """
     return model.__class__.load_from_checkpoint(model_path).to(
         "cuda" if torch.cuda.is_available() else "cpu"
-    )
+    ).eval().requires_grad_(False)
 
 
 def load_per_finger(
@@ -154,9 +155,23 @@ def train(
 
     model = model.__class__(**hparams)
 
+    class CustomDataClass(_Data):
+        def __init__(
+            self,
+            raw_data,
+            sampling_frequency=dataset["device_information"]["sampling_frequency"],
+        ):
+            # Initialize parent class with raw data
+            super().__init__(
+                raw_data.reshape(1, -1),
+                sampling_frequency,
+                nr_of_dimensions_when_unchunked=2,
+            )
+
     loader = EMGDatasetLoader(
         Path(r"data/datasets/" + dataset["zarr_file_path"]).resolve(),
-        dataloader_parameters={
+        target_data_class=CustomDataClass,
+        dataloader_params={
             "batch_size": 64,
             "drop_last": True,
             "num_workers": 10,
@@ -231,7 +246,6 @@ def train_per_finger(model: L.LightningModule, dataset, _: bool, __: CustomLogge
             )
             + 1
         )
-
     except Exception:
         version_nr = 0
 
@@ -241,17 +255,35 @@ def train_per_finger(model: L.LightningModule, dataset, _: bool, __: CustomLogge
 
         model = model.__class__(**hparams)
 
+        class CustomDataClass(_Data):
+            def __init__(
+                self,
+                raw_data,
+                sampling_frequency=dataset["device_information"]["sampling_frequency"],
+            ):
+                # Initialize parent class with raw data
+                super().__init__(
+                    raw_data.reshape(1, -1),
+                    sampling_frequency,
+                    nr_of_dimensions_when_unchunked=2,
+                )
+
         loader = EMGDatasetLoader(
             Path(r"data/datasets/" + dataset["zarr_file_path"]).resolve(),
-            dataloader_parameters={
+            target_data_class=CustomDataClass,
+            dataloader_params={
                 "batch_size": 64,
                 "drop_last": True,
                 "num_workers": 10,
                 "pin_memory": True,
                 "persistent_workers": True,
             },
-            ground_truth_augmentation_pipeline=[
-                [IndexDataFilter(indices=(0, [i + 1]), is_output=True)]
+            target_augmentation_pipeline=[
+                [
+                    IndexDataFilter(
+                        indices=(0, [i + 1]), is_output=True, input_is_chunked=False
+                    )
+                ]
             ],
         )
 

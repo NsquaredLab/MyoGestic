@@ -11,7 +11,7 @@ from myoverse.datasets.filters.temporal import (
     MAVFilter,
     RMSFilter,
 )
-from myoverse.models.definitions.raul_net.online.v16 import RaulNetV16
+from myoverse.models.definitions.raul_net.online.v17 import RaulNetV17
 from scipy.ndimage import gaussian_filter
 from scipy.signal import savgol_filter
 from sklearn.ensemble import AdaBoostClassifier
@@ -19,20 +19,19 @@ from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
 
-from myogestic.gui.widgets.output_systems.neuroorthosis import NeuroOrthosisOutputSystem
-from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.output_interface import (
-    VirtualHandInterface_OutputSystem,
-)
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
     VirtualHandInterface_RecordingInterface,
     VirtualHandInterface_SetupInterface,
+)
+from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.output_interface import (
+    VirtualHandInterface_OutputSystem,
 )
 from myogestic.models.definitions import raulnet_models, sklearn_models, catboost_models
 from myogestic.utils.config import CONFIG_REGISTRY
 
 CONFIG_REGISTRY.register_model(
     "RaulNet Regressor",
-    RaulNetV16,
+    RaulNetV17,
     False,
     raulnet_models.save,
     raulnet_models.load,
@@ -54,7 +53,7 @@ CONFIG_REGISTRY.register_model(
 
 CONFIG_REGISTRY.register_model(
     "RaulNet Regressor per Finger",
-    RaulNetV16,
+    RaulNetV17,
     False,
     raulnet_models.save_per_finger,
     raulnet_models.load_per_finger,
@@ -219,4 +218,3 @@ CONFIG_REGISTRY.register_visual_interface(
     recording_interface_ui=VirtualHandInterface_RecordingInterface,
 )
 CONFIG_REGISTRY.register_output_system("VHI", VirtualHandInterface_OutputSystem)
-CONFIG_REGISTRY.register_output_system("NEUROORTHOSIS", NeuroOrthosisOutputSystem)

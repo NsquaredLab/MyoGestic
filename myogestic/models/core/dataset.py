@@ -119,19 +119,37 @@ class MyoGesticDataset(QObject):
 
         biosignal_filter_pipeline_after_chunking = []
         for feature in selected_features:
+            temp = [
+                # SOSFrequencyFilter(
+                #     sos_filter_coefficients=butter(
+                #         4,
+                #         (47, 53),
+                #         "bandstop",
+                #         output="sos",
+                #         fs=self.sampling_frequency,
+                #     ),
+                #     input_is_chunked=True,
+                #     use_continuous_approach=True,
+                #     forwards_and_backwards=False,
+                #     real_time_mode=False,
+                # )
+            ]
             try:
-                biosignal_filter_pipeline_after_chunking.append(
-                    [
-                        CONFIG_REGISTRY.features_map[feature](
-                            is_output=True,
-                            window_size=self.buffer_size__samples,  # noqa
-                        )
-                    ]
+                temp.append(
+                    CONFIG_REGISTRY.features_map[feature](
+                        is_output=True,
+                        window_size=self.buffer_size__samples,  # noqa
+                        input_is_chunked=True,
+                    )
                 )
             except TypeError:
-                biosignal_filter_pipeline_after_chunking.append(
-                    [CONFIG_REGISTRY.features_map[feature](is_output=True)]  # noqa
+                temp.append(
+                    CONFIG_REGISTRY.features_map[feature](
+                        is_output=True, input_is_chunked=True
+                    )
                 )
+
+            biosignal_filter_pipeline_after_chunking.append(temp)
 
         ground_truth_indices_to_keep = (
             tuple(
@@ -152,31 +170,26 @@ class MyoGesticDataset(QObject):
             tasks_to_use=list(biosignal_data.keys()),
             chunk_size=self.buffer_size__samples,
             chunk_shift=self.samples_per_frame,
-            emg_filter_pipeline_before_chunking=[
+            emg_filter_pipeline_after_chunking=biosignal_filter_pipeline_after_chunking,
+            emg_representations_to_filter_after_chunking=[["EMG_Chunkizer"]]
+            * len(selected_features),
+            ground_truth_filter_pipeline_before_chunking=[
                 [
-                    SOSFrequencyFilter(
-                        sos_filter_coefficients=butter(
-                            4,
-                            (47, 53),
-                            "bandstop",
-                            output="sos",
-                            fs=self.sampling_frequency,
-                        )
+                    IndexDataFilter(
+                        indices=(ground_truth_indices_to_keep,), input_is_chunked=False
                     )
                 ]
             ],
-            emg_representations_to_filter_before_chunking=["Input"],
-            emg_filter_pipeline_after_chunking=biosignal_filter_pipeline_after_chunking,
-            emg_representations_to_filter_after_chunking=["EMG_Chunkizer"]
-            * len(selected_features),
-            ground_truth_filter_pipeline_before_chunking=[
-                [IndexDataFilter(indices=(ground_truth_indices_to_keep,))]
-            ],
-            ground_truth_representations_to_filter_before_chunking=["Input"],
+            ground_truth_representations_to_filter_before_chunking=[["Input"]],
             ground_truth_filter_pipeline_after_chunking=[
-                [ApplyFunctionFilter(is_output=True, function=np.mean, axis=-1)]
+                [
+                    ApplyFunctionFilter(
+                        is_output=True, function=np.mean, axis=-1, input_is_chunked=True
+                    )
+                ]
             ],
-            ground_truth_representations_to_filter_after_chunking=["Last"],
+            ground_truth_representations_to_filter_after_chunking=[["Last"]],
+            debug_level=1,
         )
 
         dataset.create_dataset()
@@ -237,19 +250,22 @@ class MyoGesticDataset(QObject):
                 input_data=frame_data, sampling_frequency=self.sampling_frequency
             )
 
-            frame_data.apply_filter(
-                SOSFrequencyFilter(
-                    sos_filter_coefficients=butter(
-                        4,
-                        (47, 53),
-                        "bandstop",
-                        output="sos",
-                        fs=self.sampling_frequency,
-                    ),
-                    name="SOSFilter",
-                ),
-                representation_to_filter="Input",
-            )
+            # frame_data.apply_filter(
+            #     SOSFrequencyFilter(
+            #         sos_filter_coefficients=butter(
+            #             4,
+            #             (47, 53),
+            #             "bandstop",
+            #             output="sos",
+            #             fs=self.sampling_frequency,
+            #         ),
+            #         name="SOSFilter",
+            #         forwards_and_backwards=False,
+            #         use_continuous_approach=True,
+            #         input_is_chunked=False,
+            #     ),
+            #     representations_to_filter=["Input"],
+            # )
 
             emg_filters = []
             for feature in selected_features:
@@ -257,12 +273,13 @@ class MyoGesticDataset(QObject):
                     emg_filters.append(
                         CONFIG_REGISTRY.features_map[feature](
                             is_output=False,
-                            window_size=self.buffer_size__samples,  # noqa
+                            window_size=self.buffer_size__samples,
+                            input_is_chunked=False,
                         )
                     )
                 except TypeError:
                     emg_filters.append(
-                        CONFIG_REGISTRY.features_map[feature](is_output=False)
+                        CONFIG_REGISTRY.features_map[feature](is_output=False, input_is_chunked=False)
                     )  # noqa
 
             frame_data.apply_filter_pipeline(
@@ -275,11 +292,12 @@ class MyoGesticDataset(QObject):
                             mean=self.dataset_mean[feature],
                             std=self.dataset_std[feature],
                             name=feature,
+                            input_is_chunked=False,
                         ),
                     ]
                     for feature, emg_filter in zip(selected_features, emg_filters)
                 ],
-                representations_to_filter=["SOSFilter"] * len(selected_features),
+                representations_to_filter=[["Input"] * len(selected_features)],
             )
 
             frame_data = np.concatenate(

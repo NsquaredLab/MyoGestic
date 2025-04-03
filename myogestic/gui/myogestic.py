@@ -23,7 +23,7 @@ from myogestic.gui.main_window import Ui_MyoGestic
 from myogestic.gui.protocols.protocol import Protocol
 from myogestic.gui.widgets.logger import CustomLogger
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface
-from myogestic.user_config import DEFAULT_DEVICE_TO_USE
+from myogestic.user_config import DEFAULT_DEVICE_TO_USE, CHANNELS
 from myogestic.utils.config import _custom_message_handler, CONFIG_REGISTRY  # noqa
 from myogestic.utils.constants import BASE_PATH
 
