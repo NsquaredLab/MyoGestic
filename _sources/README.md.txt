@@ -1,26 +1,23 @@
-# Getting Started with MyoGestic
+<img src="./docs/source/_static/myogestic_logo.png" height="250">
 
-MyoGestic: A software framework for developing and testing myocontrol algorithms with minimal setup time.
+<a href="https://www.python.org/downloads/release/python-3100/"><img alt="Code style: black" src="https://img.shields.io/badge/python-%3E=3.10,%20%3C=3.13-blue"></a>
 
 ```{tip}
-Take a look at our [documentation](https://nsquaredlab.github.io/MyoGestic/).
+
+Dive deeper into our features and usage with the official [documentation](https://nsquaredlab.github.io/MyoGestic/).
 ```
 
 
-(label-introduction)=
+# MyoGestic - Why start myocontrol research from zero?
 
-## Introduction
-
+## What is MyoGestic?
 MyoGestic is a software framework designed to help the myocontrol community develop and test new myocontrol algorithms. For researchers and clinicians working with individuals with neural lesions, MyoGestic streamlines the process of creating, implementing, and evaluating myoelectric control systems.
 
 The framework is designed with two primary goals:
 1. **Easy extensibility**: Add your own algorithms without extensive knowledge of the codebase
 2. **Minimal setup time**: Especially important when working with clinical populations where time is limited
 
-(label-features)=
-
-## Features
-
+Key features include:
 - **User-friendly interface**: Simple setup for clinical testing
 - **Real-time processing**: Low-latency signal processing and control
 - **Multiple device support**: Works with various EMG acquisition hardware
@@ -28,7 +25,21 @@ The framework is designed with two primary goals:
 - **Data logging**: Capture and analyze performance metrics
 - **Visualization tools**: Monitor signals and control outputs in real-time
 
-(label-requirements)=
+```{note}
+
+MyoGestic is actively developed at the [n-squared lab](https://www.nsquared.tf.fau.de/) at Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU) by our dedicated team of PhD candidates, along with the Bachelor and Master students they supervise. 
+
+>
+
+As development is closely tied to ongoing research and academic timelines, major updates often align with the completion of student theses. 
+
+While we strive to incorporate improvements regularly, much of the cutting-edge development remains internal until research milestones are reached. 
+
+
+
+We appreciate your understanding and interest in the project!
+```
+
 
 ## Requirements
 
@@ -37,127 +48,99 @@ The framework is designed with two primary goals:
 - Python 3.12 or higher
 - Compatible EMG acquisition hardware
 
-(label-installation)=
-
 ## Installation
-```{important}
-The simplest way is to install MyoGestic using the installer. You can download the installer from the [releases page](https://github.com/NsquaredLab/MyoGestic/releases).
+
+### Using `uv` - the preferred way
+
+1.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/NsquaredLab/MyoGestic.git
+    cd MyoGestic
+    ```
+
+2.  **Install uv:** If you don't have it yet, install `uv`. Follow the instructions on the [uv GitHub page](https://github.com/astral-sh/uv).
+
+3.  **Set up Virtual Environment & Install Dependencies:** Use `uv` to create and sync your virtual environment with the project's dependencies.
+    ```bash
+    # Install base dependencies
+    uv sync
+
+    # To contribute or run documentation/examples, install optional groups:
+    uv sync --group dev --group docs
+    ```
+
+### Using the Installer
+
+```{warning}
+
+The installer is for a very old version of MyoGestic. Until we find a better and/or reliable way of creating an executable we highly recommend using `uv` and installing is in the programmers way.
 ```
 
 
-```{note}
-The installer is only available for Windows. If you are using another operating system, you can follow the manual installation instructions.
-```
+> 📝 **Note**: The installer is only available for Windows. If you are using another operating system, please follow the developer installation instructions below.
 
+> 📝 **Note**: Using the installer does not allow you to add your own myocontrol algorithms. This is only for using the existing ones.
 
-```{note}
-This does not allow you to add your own myocontrol algorithms. This is only for using the existing ones.
-```
-
-
-
-### Manual installation
-The installation is made using uv. You can install it following the instructions at [https://github.com/astral-sh/uv](https://github.com/astral-sh/uv).
-
-Then, you can install MyoGestic using the following command:
-```bash
-uv sync
-```
-
-(label-how-to-use)=
-
-## How to Use
-[![MyoGestic Tutorial](https://img.youtube.com/vi/Re3VfgKhjCM/maxresdefault.jpg)](https://youtu.be/Re3VfgKhjCM)
-
-If you prefer a PDF version, you can download it [here](
-https://github.com/NsquaredLab/MyoGestic/tree/main/docs/source/_static/MyoGestic_Tutorial.pdf).
+## How to Use / Tutorial
 
 ### Quick Start Guide
 
 1. Install MyoGestic using one of the methods described above
 2. Connect your EMG acquisition hardware
-3. Launch the application
+3. Launch the application: `python -m myogestic.main` (or use the installed executable if using the installer)
 4. Select the desired algorithm and parameters
 5. Begin recording and testing
 
-(label-development)=
+### Video tutorial
+
+[![MyoGestic Tutorial](https://img.youtube.com/vi/Re3VfgKhjCM/maxresdefault.jpg)](https://youtu.be/Re3VfgKhjCM)
+
+If you prefer a PDF version, you can download it [here](
+https://github.com/NsquaredLab/MyoGestic/tree/main/docs/source/_static/MyoGestic_Tutorial.pdf).
 
 ## Development
 
-If you want to contribute to the project, you can install the development dependencies using the following command:
-```bash
-uv sync --group dev --group docs
-```
-
-### Project Structure
+### What is what?
 
 ```
 MyoGestic/
-├── myogestic/           # Main package
-│   ├── models/          # Algorithm models and interfaces
-│   │   ├── core/        # Core model implementations
-│   │   └── definitions/ # Model definitions and specifications
-│   ├── gui/             # User interface components
+├── myogestic/           # Main package source code
+│   ├── data/            # Default data/configurations used by the package
+│   ├── gui/             # Graphical User Interface components
+│   ├── models/          # Myocontrol algorithm models and interfaces
+│   │   ├── core/        # Core model implementations (assuming this still exists)
+│   │   └── definitions/ # Model definitions and specifications (assuming this still exists)
 │   ├── utils/           # Helper functions and utilities
-│   ├── main.py          # Application entry point
-│   └── default_config.py # Default configuration settings
-├── docs/                # Documentation
-├── tests/               # Test suite
-├── examples/            # Example usage and demonstrations
-├── setup/               # Installation and setup files
-└── pyproject.toml       # Project metadata and dependencies
+│   ├── main.py          # Main application entry point
+│   ├── default_config.py # Default configuration settings
+│   └── user_config.py   # User-specific configuration
+├── docs/                # Documentation source files
+├── examples/            # Example usage scripts and notebooks
+├── tests/               # Automated tests
+├── pyproject.toml       # Project metadata, dependencies, and build configuration
+└── uv.lock              # Pinned versions of dependencies managed by uv
 ```
 
-### Adding Your Own Algorithm
+# How to Cite
+If you use MyoGestic in your research, please cite the following [paper](https://www.science.org/doi/abs/10.1126/sciadv.ads9150):
 
-To add a new algorithm:
-
-1. Create a custom model class with the required methods:
-   - `save`: Save model state to a file
-   - `load`: Load model state from a file
-   - `train`: Train the model on input data
-   - `predict`: Make predictions with the model
-
-2. Define the required lifecycle functions:
-   - `save_function`: Function to save the model
-   - `load_function`: Function to load the model
-   - `train_function`: Function to train the model
-   - `predict_function`: Function to make predictions
-
-3. Define parameter configurations:
-   - `changeable_parameters`: Parameters that can be modified through the UI
-   - `unchangeable_parameters`: Parameters that remain fixed
-
-4. Register your model in the `CONFIG_REGISTRY` in `user_config.py`
-
-Example implementation can be found in `examples/01_add_functionality/2_add_model.py`.
-
-Refer to the [documentation](https://nsquaredlab.github.io/MyoGestic/) for detailed instructions on implementing custom algorithms.
-
-(label-troubleshooting)=
-
-## Troubleshooting
-
-### Common Issues
-
-- **Hardware not detected**: Ensure your EMG device is properly connected and drivers are installed
-- **Algorithm fails to load**: Check for missing dependencies or syntax errors in your implementation
-- **Performance issues**: Consider optimizing your algorithm or checking system resources
-
-For more detailed troubleshooting, please refer to the [documentation](https://nsquaredlab.github.io/MyoGestic/).
-
-(label-how-to-cite)=
-
-## How to Cite
-If you use MyoGestic in your research, please cite the following paper:
 ```bibtex
-TBD
+    @article{
+        Sîmpetru2025,
+        author = {Raul C. Sîmpetru  and Dominik I. Braun  and Arndt U. Simon  and Michael März  and Vlad Cnejevici  and Daniela Souza de Oliveira  and Nico Weber  and Jonas Walter  and Jörg Franke  and Daniel Höglinger  and Cosima Prahm  and Matthias Ponfick  and Alessandro Del Vecchio },
+        title = {MyoGestic: EMG interfacing framework for decoding multiple spared motor dimensions in individuals with neural lesions},
+        journal = {Science Advances},
+        volume = {11},
+        number = {15},
+        pages = {eads9150},
+        year = {2025},
+        doi = {10.1126/sciadv.ads9150},
+        URL = {https://www.science.org/doi/abs/10.1126/sciadv.ads9150},
+        eprint = {https://www.science.org/doi/pdf/10.1126/sciadv.ads9150},
+    }
 ```
 
-(label-license)=
-
-## License
-
+# License
 MyoGestic is licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0).
 
 This means you are free to:
