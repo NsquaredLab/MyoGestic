@@ -138,7 +138,7 @@ It logs the closure and ensures that resources are properly released.
 
    **Total running time of the script:** (0 minutes 0.113 seconds)
 
-**Estimated memory usage:**  570 MB
+**Estimated memory usage:**  569 MB
 
 
 .. _sphx_glr_download_auto_examples_02_add_visual_interface_3_output_system.py:

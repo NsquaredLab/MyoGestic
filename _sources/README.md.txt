@@ -73,7 +73,9 @@ We appreciate your understanding and interest in the project!
 
 ```{warning}
 
-The installer is for a very old version of MyoGestic. Until we find a better and/or reliable way of creating an executable we highly recommend using `uv` and installing is in the programmers way.
+The installer is for a very old version of MyoGestic. 
+
+Until we find a better and/or reliable way of creating an executable we highly recommend using `uv`.
 ```
 
 
@@ -125,19 +127,19 @@ MyoGestic/
 If you use MyoGestic in your research, please cite the following [paper](https://www.science.org/doi/abs/10.1126/sciadv.ads9150):
 
 ```bibtex
-    @article{
-        Sîmpetru2025,
-        author = {Raul C. Sîmpetru  and Dominik I. Braun  and Arndt U. Simon  and Michael März  and Vlad Cnejevici  and Daniela Souza de Oliveira  and Nico Weber  and Jonas Walter  and Jörg Franke  and Daniel Höglinger  and Cosima Prahm  and Matthias Ponfick  and Alessandro Del Vecchio },
-        title = {MyoGestic: EMG interfacing framework for decoding multiple spared motor dimensions in individuals with neural lesions},
-        journal = {Science Advances},
-        volume = {11},
-        number = {15},
-        pages = {eads9150},
-        year = {2025},
-        doi = {10.1126/sciadv.ads9150},
-        URL = {https://www.science.org/doi/abs/10.1126/sciadv.ads9150},
-        eprint = {https://www.science.org/doi/pdf/10.1126/sciadv.ads9150},
-    }
+ @article{
+     Sîmpetru2025,
+     author = {Raul C. Sîmpetru  and Dominik I. Braun  and Arndt U. Simon  and Michael März  and Vlad Cnejevici  and Daniela Souza de Oliveira  and Nico Weber  and Jonas Walter  and Jörg Franke  and Daniel Höglinger  and Cosima Prahm  and Matthias Ponfick  and Alessandro Del Vecchio },
+     title = {MyoGestic: EMG interfacing framework for decoding multiple spared motor dimensions in individuals with neural lesions},
+     journal = {Science Advances},
+     volume = {11},
+     number = {15},
+     pages = {eads9150},
+     year = {2025},
+     doi = {10.1126/sciadv.ads9150},
+     URL = {https://www.science.org/doi/abs/10.1126/sciadv.ads9150},
+     eprint = {https://www.science.org/doi/pdf/10.1126/sciadv.ads9150},
+ }
 ```
 
 # License
