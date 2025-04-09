@@ -120,19 +120,19 @@ class MyoGesticDataset(QObject):
         biosignal_filter_pipeline_after_chunking = []
         for feature in selected_features:
             temp = [
-                # SOSFrequencyFilter(
-                #     sos_filter_coefficients=butter(
-                #         4,
-                #         (47, 53),
-                #         "bandstop",
-                #         output="sos",
-                #         fs=self.sampling_frequency,
-                #     ),
-                #     input_is_chunked=True,
-                #     use_continuous_approach=True,
-                #     forwards_and_backwards=False,
-                #     real_time_mode=False,
-                # )
+                SOSFrequencyFilter(
+                    sos_filter_coefficients=butter(
+                        4,
+                        (47, 53),
+                        "bandstop",
+                        output="sos",
+                        fs=self.sampling_frequency,
+                    ),
+                    input_is_chunked=True,
+                    use_continuous_approach=True,
+                    forwards_and_backwards=False,
+                    real_time_mode=False,
+                )
             ]
             try:
                 temp.append(
@@ -250,22 +250,22 @@ class MyoGesticDataset(QObject):
                 input_data=frame_data, sampling_frequency=self.sampling_frequency
             )
 
-            # frame_data.apply_filter(
-            #     SOSFrequencyFilter(
-            #         sos_filter_coefficients=butter(
-            #             4,
-            #             (47, 53),
-            #             "bandstop",
-            #             output="sos",
-            #             fs=self.sampling_frequency,
-            #         ),
-            #         name="SOSFilter",
-            #         forwards_and_backwards=False,
-            #         use_continuous_approach=True,
-            #         input_is_chunked=False,
-            #     ),
-            #     representations_to_filter=["Input"],
-            # )
+            frame_data.apply_filter(
+                SOSFrequencyFilter(
+                    sos_filter_coefficients=butter(
+                        4,
+                        (47, 53),
+                        "bandstop",
+                        output="sos",
+                        fs=self.sampling_frequency,
+                    ),
+                    name="SOSFilter",
+                    forwards_and_backwards=False,
+                    use_continuous_approach=True,
+                    input_is_chunked=False,
+                ),
+                representations_to_filter=["Input"],
+            )
 
             emg_filters = []
             for feature in selected_features:
@@ -297,7 +297,7 @@ class MyoGesticDataset(QObject):
                     ]
                     for feature, emg_filter in zip(selected_features, emg_filters)
                 ],
-                representations_to_filter=[["Input"] * len(selected_features)],
+                representations_to_filter=[["SOSFilter"] * len(selected_features)],
             )
 
             frame_data = np.concatenate(
