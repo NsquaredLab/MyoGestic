@@ -12,124 +12,68 @@ from sphinx_gallery.sorting import FileNameSortKey
 import torch._dynamo  # noqa
 # Setup paths
 base_dir = Path.cwd().parent.parent
-sys.path.insert(0, str(base_dir))
-sys.path.insert(0, os.path.abspath('..'))
-sys.path.insert(0, os.path.abspath('../..'))
-sys.path.insert(0, os.path.abspath('../../myogestic'))
-sys.path.insert(0, os.path.abspath('../../../myogestic'))
-
-print(os.path.abspath('..'))
-
-import myogestic # noqa
+sys.path.insert(0, str(base_dir)) # Add project root
+# sys.path.insert(0, os.path.abspath('..')) # Remove redundant/potentially problematic paths
+# sys.path.insert(0, os.path.abspath('../..')) # Remove redundant/potentially problematic paths
+# sys.path.insert(0, os.path.abspath('../../myogestic')) # Remove redundant/potentially problematic paths
+# sys.path.insert(0, os.path.abspath('../../../myogestic')) # Remove redundant/potentially problematic paths
 
 # Project Information
-poetry_info = toml.load(base_dir / "pyproject.toml")["project"]
-project = "MyoGestic"
-author = ", ".join([x["name"] + f" ({x['email']})" for x in poetry_info["authors"]])
-release = poetry_info["version"]
+poetry_info = toml.load(base_dir / "pyproject.toml")["project"] # Reverted to using [project]
+project = poetry_info["name"]
+# Parse authors based on PEP 621 standard ([{name = "...", email = "..."}, ...])
+authors_list = poetry_info.get("authors", [])
+author = ", ".join([f"{a.get('name', '')} ({a.get('email', '')})" for a in authors_list])
+release = version = poetry_info["version"]
 copyright = (
     f"2023 - {datetime.now().year}, n-squared lab, FAU Erlangen-Nürnberg, Germany"
 )
 
-def process_readme(readme_path: Path, output_path: Path) -> None:
-    """Processes the README.md file and generates a modified version for Sphinx.
-    
-    Args:
-        readme_path: Path to the original README.md
-        output_path: Path where the processed file should be saved
-    """
-    print(f"Processing README from {readme_path} to {output_path}")
+print(os.path.abspath('..'))
 
-    with readme_path.open(encoding='utf-8') as f:
+# import myogestic # noqa - Keep specific import for now, might need adjustment based on actual project structure
+# Use dynamic import based on project name from pyproject.toml
+# project_module_name = poetry_info["name"].lower() # Assuming module name is lowercase project name
+# __import__(project_module_name)
+import myogestic # Revert to explicit import
+
+# Re-add the removed process_readme function and its call as it might be needed
+def process_readme(readme_path: Path) -> str:
+    """Processes the README.md file and generates the modified content."""
+    print(readme_path)
+
+    with readme_path.open() as f:
         lines = f.read().split("\n")
 
-    # Find blockquote admonitions with emojis
-    admonition_starts = []
-    for i, line in enumerate(lines):
-        if line.startswith("> 💡 **Tip**:"):
-            admonition_starts.append((i, "tip"))
-        elif line.startswith("> ⚠️ **Important**:"):
-            admonition_starts.append((i, "important"))
-        elif line.startswith("> 📝 **Note**:"):
-            admonition_starts.append((i, "note"))
+    line_indices = [i for i, line in enumerate(lines) if "[!" in line]
+    line_ranges = find_line_ranges(lines, line_indices)
 
-    # Find the end of each admonition (the next line that doesn't start with ">")
-    admonition_ranges = {}
-    for start, admonition_type in admonition_starts:
-        for j in range(start + 1, len(lines)):
-            if j >= len(lines) or not lines[j].startswith(">"):
-                admonition_ranges[start] = (j - 1, admonition_type)
-                break
-            if j == len(lines) - 1:  # If we reach the end of the file
-                admonition_ranges[start] = (j, admonition_type)
-
-    # Convert blockquote admonitions to Sphinx admonitions
-    # Process in reverse order to avoid changing indices
-    for start, (end, admonition_type) in sorted(admonition_ranges.items(), reverse=True):
-        # Replace the first line with the admonition directive
-        content = lines[start].replace("> 💡 **Tip**:", "").replace("> ⚠️ **Important**:", "").replace("> 📝 **Note**:", "").strip()
-        lines[start] = f"```{{{admonition_type}}}\n{content}"
-        
-        # Process content lines, removing the blockquote marker
+    # Format lines
+    for start, end in line_ranges.items():
+        lines[start] = f"```{{{lines[start][4:].strip().replace(']', '').lower()}}}\n"
         for i in range(start + 1, end + 1):
             lines[i] = lines[i].replace("> ", "") + "\n"
-            
-        # Close the admonition
-        lines[end] += "\n```\n"
-    
-    # Find all headers and create a map of GitHub-style anchors to Sphinx references
-    headers = {}
-    for i, line in enumerate(lines):
-        if line.startswith('## '):
-            # Extract the header text and create a GitHub-style anchor
-            header_text = line[3:].strip()
-            # GitHub style: lowercase, spaces to hyphens, remove non-alphanumerics except hyphens
-            github_anchor = header_text.lower().replace(' ', '-')
-            github_anchor = ''.join(c for c in github_anchor if c.isalnum() or c == '-')
-            headers[github_anchor] = header_text
-    
-    # Find the Table of Contents section
-    toc_start = None
-    toc_end = None
-    
-    for i, line in enumerate(lines):
-        if line.strip() == "## Table of Contents":
-            toc_start = i
-            break
-    
-    # Find the end of the Table of Contents section
-    if toc_start is not None:
-        for i in range(toc_start + 1, len(lines)):
-            if i < len(lines) and (lines[i].startswith('## ') or lines[i].startswith('# ')):
-                toc_end = i - 1
+        lines[end] += "```\n"
+
+    return "\n".join(lines)
+
+
+def find_line_ranges(lines, indices):
+    """Finds the range of lines connected to each matched line index."""
+    line_ranges = {}
+    for i, start in enumerate(indices):
+        for j in range(start, len(lines) - 1):
+            if ">" in lines[j] and ">" not in lines[j + 1]:
+                line_ranges[start] = j
                 break
-        if toc_end is None:  # If we reach the end of the file
-            toc_end = len(lines) - 1
-    
-    # Remove the Table of Contents section
-    if toc_start is not None and toc_end is not None:
-        del lines[toc_start:toc_end + 1]
-    
-    # Add reference labels before each section header
-    for i, line in reversed(list(enumerate(lines))):
-        if line.startswith('## '):
-            header_text = line[3:].strip()
-            label_line = f"(label-{header_text.lower().replace(' ', '-')})=\n"
-            lines.insert(i, label_line)
-    
-    # Write the processed content to the output file
-    with output_path.open("w+", encoding='utf-8') as outfile:
-        outfile.write("\n".join(lines))
+    return line_ranges
 
 
-# Get paths for README and the output file
-readme_source = base_dir / "README.md"
-index_target = Path.cwd() / "README.md"
+# Process README and save
+modified_readme = process_readme(base_dir / "README.md")
+with (Path.cwd()/ "README.md").open("w+") as readme_file:
+    readme_file.write(modified_readme)
 
-# Process README and save as index.md for Sphinx documentation
-process_readme(readme_source, index_target)
-
-# No symlinks or copies of the original README needed
 
 # Sphinx Configuration
 extensions = [
@@ -140,16 +84,16 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
     "sphinx_gallery.gen_gallery",
-    "sphinx_toolbox.more_autodoc.autotypeddict",
+    # "sphinx_toolbox.more_autodoc.autotypeddict", # Removed
     "sphinx.ext.doctest",
     "rinoh.frontend.sphinx",
-    "enum_tools.autoenum",
-    "myst_parser",
-    "sphinxcontrib.youtube",
-    "sphinxcontrib.pdfembed",
+    # "enum_tools.autoenum", # Removed
+    "myst_parser", # Re-add myst_parser as it was likely needed
+    "sphinxcontrib.youtube", # Removed -> Re-enabled
+    # "sphinxcontrib.pdfembed", # Removed
 ]
 
-# MyST-Parser configuration
+# MyST-Parser configuration # Uncommented MyST specific config
 myst_enable_extensions = [
     "attrs_inline",
     "attrs_block",
@@ -187,13 +131,31 @@ autodoc_member_order = "groupwise"
 autosummary_generate = True
 autosummary_generate_overwrite = True
 autosummary_imported_members = False
+# autodoc_mock_imports = ["PySide6"] # Add PySide6 to mock imports
 
 templates_path = ["templates"]
 exclude_patterns = ["auto_examples/", "Thumbs.db", ".DS_Store"]
 
+html_context = { # Added html_context
+    "AUTHOR": author,
+    "VERSION": version,
+    "DESCRIPTION": poetry_info.get("description", ""), # Use .get for safety - Fetch from [project] table
+    "github_user": "NsquaredLab", # Assuming same user/repo for now
+    "github_repo": project, # Use dynamic project name
+    "github_version": "master",
+    "doc_path": "docs",
+}
+
 html_theme = "pydata_sphinx_theme"
+html_theme_options = { # Added html_theme_options
+    "github_url": f"https://github.com/NsquaredLab/{project}", # Use dynamic project name
+    "navbar_start": ["navbar-logo", "navbar-version.html", "header-text.html"],
+    "show_prev_next": False,
+}
 html_static_path = ["_static"]
+html_logo = "_static/myogestic_logo.png" # Adjusted logo name assumption
 html_css_files = ["custom.css"]
+html_title = f"{project} {version} Documentation" # Added html_title
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
@@ -222,10 +184,10 @@ sphinx_gallery_conf = {
 }
 
 # Suppress specific warnings
-suppress_warnings = [
+suppress_warnings = [ # Updated suppress_warnings
     "config.cache",
-    "myst.header",  # Suppress warnings about duplicate headers
-    "myst.xref_missing"  # Suppress warnings about missing references initially
+    # "myst.header",  # Removed
+    # "myst.xref_missing" # Removed
 ]
 
 
