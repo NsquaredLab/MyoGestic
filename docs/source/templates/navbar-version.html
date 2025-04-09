@@ -1,0 +1,15 @@
+{# templates/navbar-version.html #}
+{%- set nav_version = version %}
+{%- if READTHEDOCS and current_version %}
+   {%- set nav_version = current_version %}
+{%- endif %}
+<div class="nav-item">
+  <div class="version-switcher__container dropdown">
+      <button id="version-switcher-button" type="button" class="version-switcher__button btn btn-sm navbar-btn" aria-haspopup="true" aria-expanded="false">
+          Version {{ nav_version }}
+      </button>
+      {# If you don't need a dropdown, remove the div below #}
+      {# <div class="dropdown-menu" aria-labelledby="version-switcher-button"> #}
+      {# </div> #}
+  </div>
+</div> 

@@ -1,12 +1,21 @@
-.sphx-glr-footer.sphx-glr-footer-example.docutils.container {
-    display: none;
+html[data-theme="dark"] img {
+    filter: none;
+}
+html[data-theme="dark"] .bd-content img:not(.only-dark):not(.dark-light) {
+    background: unset;
 }
 
-div.sphx-glr-download-link-note {
-  height: 0px;
-  visibility: hidden;
+/* Add bottom margin to the logo image */
+.top-logo-spacing {
+    margin-bottom: 2em; /* Adjust value as needed */
 }
 
-.view-this-page {
-    display: none;
+/* Increase main article width */
+/* https://pydata-sphinx-theme.readthedocs.io/en/stable/user_guide/layout.html */
+.bd-main .bd-content .bd-article-container {
+    max-width: 80em;  /* default is 60em */
+}
+
+.bd-page-width {
+    max-width: 100em;  /* default is 88rem */
 }
