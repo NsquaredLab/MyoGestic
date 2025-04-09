@@ -13,6 +13,7 @@ dependencies = [
     "biosignal-device-interface",
     "catboost>=1.2.7",
     "myoverse",
+    "numcodecs!=0.16",
     "pyside6>=6.8.2.1",
     "qdarkstyle>=3.2.3",
     "scikit-learn>=1.6.1",
