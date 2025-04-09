@@ -221,7 +221,7 @@ class OnlineProtocol(QObject):
         if self.online_prediction_toggle_push_button.isChecked():
             self.online_prediction_toggle_push_button.setText("Stop Prediction")
             self.online_load_model_push_button.setEnabled(False)
-            self._main_window.device__widget.biosignal_data_arrived.connect(
+            self._main_window.device__widget.data_arrived.connect(
                 self.online_emg_update
             )
             self.online_record_toggle_push_button.setEnabled(True)
@@ -229,7 +229,7 @@ class OnlineProtocol(QObject):
         else:
             self.online_prediction_toggle_push_button.setText("Start Prediction")
             self.online_load_model_push_button.setEnabled(True)
-            self._main_window.device__widget.biosignal_data_arrived.disconnect(
+            self._main_window.device__widget.data_arrived.disconnect(
                 self.online_emg_update
             )
             self.online_record_toggle_push_button.setEnabled(False)
