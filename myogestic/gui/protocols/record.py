@@ -87,7 +87,7 @@ class RecordProtocol(QObject):
         self.is_biosignal_recording_complete = False
         self.recording_start_time = time.time()
 
-        device_widget.biosignal_data_arrived.connect(self.update_biosignal_buffer)
+        device_widget.data_arrived.connect(self.update_biosignal_buffer)
         return True
 
     def update_biosignal_buffer(self, data: np.ndarray) -> None:
@@ -120,7 +120,7 @@ class RecordProtocol(QObject):
         )
 
         self.is_biosignal_recording_complete = True
-        self._main_window.device__widget.biosignal_data_arrived.disconnect(
+        self._main_window.device__widget.data_arrived.disconnect(
             self.update_biosignal_buffer
         )
 
