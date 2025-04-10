@@ -96,8 +96,8 @@ Explore the fundamentals in our comprehensive tutorial:
 
 .. raw:: html
 
-   <div style="text-align: center; margin-bottom: 1em;">
-       <object data="_static/MyoGestic_Tutorial.pdf#view=Fit#toolbar=0#statusbar=0#navpanes=0" type="application/pdf" width="960" height="540">
+   <div style="text-align: center; margin-bottom: 1em; max-width: 960px; margin-left: auto; margin-right: auto;">
+       <object data="_static/MyoGestic_Tutorial.pdf#view=Fit#toolbar=0#statusbar=0#navpanes=0" type="application/pdf" width="100%" height="540">
            <p>Your browser does not support PDFs. <a href="_static/MyoGestic_Tutorial.pdf">Download the PDF</a>.</p>
        </object>
    </div>
@@ -106,7 +106,7 @@ Or download it for offline use: :download:`Download the PDF <_static/MyoGestic_T
 
 How to Cite
 -----------
-If you use MyoGestic in your research, please cite the following paper:
+If you use MyoGestic in your research, please cite the following paper: `MyoGestic <https://www.science.org/doi/abs/10.1126/sciadv.ads9150>`_
 
 .. code-block:: bibtex
 
