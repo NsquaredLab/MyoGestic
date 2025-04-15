@@ -111,9 +111,9 @@ Step 2: Register the Filter in user_config.py
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** (0 minutes 0.339 seconds)
+   **Total running time of the script:** (0 minutes 0.348 seconds)
 
-**Estimated memory usage:**  571 MB
+**Estimated memory usage:**  570 MB
 
 
 .. _sphx_glr_download_auto_examples_01_add_functionality_1_add_post_prediction_filter.py:
