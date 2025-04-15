@@ -2,7 +2,12 @@
    :height: 80px
    :align: middle
 
-Welcome to |logo|
+.. |altmetric| raw:: html
+
+    <script type="text/javascript" src="https://d1bxh8uas1mnw7.cloudfront.net/assets/embed.js"></script>
+    <div class="altmetric-embed"  data-badge-type='donut' data-badge-popover='left' data-altmetric-id="175990955" style="float: right; background-color: white; border-radius: 50%; padding: 3px;"></div>
+
+Welcome to |logo| |altmetric|
 ==========================================
 **Why start myocontrol research from zero?**
 
