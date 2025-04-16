@@ -9,7 +9,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from myogestic.gui.myogestic import MyoGestic
-from utils.config import CONFIG_REGISTRY  # noqa
+from myogestic.utils.config import CONFIG_REGISTRY  # noqa
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
