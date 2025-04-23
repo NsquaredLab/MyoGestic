@@ -129,9 +129,7 @@ class MyoGesticDataset(QObject):
                         fs=self.sampling_frequency,
                     ),
                     input_is_chunked=True,
-                    use_continuous_approach=True,
                     forwards_and_backwards=False,
-                    real_time_mode=False,
                 )
             ]
             try:
@@ -261,7 +259,6 @@ class MyoGesticDataset(QObject):
                     ),
                     name="SOSFilter",
                     forwards_and_backwards=False,
-                    use_continuous_approach=True,
                     input_is_chunked=False,
                 ),
                 representations_to_filter=["Input"],
@@ -304,9 +301,8 @@ class MyoGesticDataset(QObject):
                 [x for x in frame_data.output_representations.values()], axis=1
             )
 
-            # frame_data = frame_data.reshape(1, -1)
-
             return frame_data
+        return None
 
     def set_online_parameters(self, dataset_information: dict) -> None:
         self.dataset_bad_channels = dataset_information["bad_channels"]
