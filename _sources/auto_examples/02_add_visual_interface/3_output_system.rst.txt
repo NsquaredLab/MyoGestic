@@ -136,7 +136,7 @@ It logs the closure and ensures that resources are properly released.
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** (0 minutes 0.121 seconds)
+   **Total running time of the script:** (0 minutes 0.115 seconds)
 
 **Estimated memory usage:**  570 MB
 
