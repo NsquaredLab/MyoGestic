@@ -1,7 +1,8 @@
 """
 This module contains the functions to save, load, train and predict using RaulNet models.
 """
-
+import multiprocessing
+import platform
 from pathlib import Path
 from typing import Any
 
@@ -89,9 +90,12 @@ def load(model_path: str, model: L.LightningModule) -> L.LightningModule:
         The loaded RaulNet model.
 
     """
-    return model.__class__.load_from_checkpoint(model_path).to(
-        "cuda" if torch.cuda.is_available() else "cpu"
-    ).eval().requires_grad_(False)
+    return (
+        model.__class__.load_from_checkpoint(model_path)
+        .to("cuda" if torch.cuda.is_available() else "cpu")
+        .eval()
+        .requires_grad_(False)
+    )
 
 
 def load_per_finger(
@@ -175,9 +179,9 @@ def train(
         dataloader_params={
             "batch_size": 64,
             "drop_last": True,
-            "num_workers": 10,
+            "num_workers": 0 if platform.system() == "Windows" else multiprocessing.cpu_count() - 1,
             "pin_memory": True,
-            "persistent_workers": True,
+            "persistent_workers": platform.system() != "Windows",
         },
     )
 
