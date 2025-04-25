@@ -3,6 +3,7 @@ This module contains the functions to save, load, train and predict using RaulNe
 """
 
 from pathlib import Path
+from typing import Any
 
 import lightning as L
 import numpy as np
@@ -318,7 +319,7 @@ def train_per_finger(model: L.LightningModule, dataset, _: bool, __: CustomLogge
 
 def predict(
     model: L.LightningModule, input: np.ndarray, is_classifier: bool
-) -> list[float]:
+) -> list[Any] | None:
     """
     Predict with a RaulNet model.
 
@@ -349,11 +350,12 @@ def predict(
                 .cpu()
                 .numpy()[0]
             )
+    return None
 
 
 def predict_per_finger(
     model: list[L.LightningModule], input: np.ndarray, is_classifier: bool
-) -> list[float]:
+) -> list[int] | None:
     """
     Predict with a RaulNet model.
 
@@ -393,3 +395,4 @@ def predict_per_finger(
                 )
                 + [0]
             )
+    return None
