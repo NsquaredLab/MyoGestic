@@ -276,12 +276,12 @@ def train_per_finger(model: L.LightningModule, dataset, _: bool, __: CustomLogge
         loader = EMGDatasetLoader(
             Path(r"data/datasets/" + dataset["zarr_file_path"]).resolve(),
             target_data_class=CustomDataClass,
-            dataloader_params={
+                dataloader_params={
                 "batch_size": 64,
                 "drop_last": True,
-                "num_workers": 10,
+                "num_workers": 0 if platform.system() == "Windows" else multiprocessing.cpu_count() - 1,
                 "pin_memory": True,
-                "persistent_workers": True,
+                "persistent_workers": platform.system() != "Windows",
             },
             target_augmentation_pipeline=[
                 [
