@@ -239,7 +239,7 @@ Once registered, the interface becomes available for use in the framework.
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** (0 minutes 0.273 seconds)
+   **Total running time of the script:** (0 minutes 0.229 seconds)
 
 **Estimated memory usage:**  622 MB
 

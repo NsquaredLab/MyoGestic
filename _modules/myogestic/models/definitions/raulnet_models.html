@@ -644,12 +644,12 @@
         <span class="n">loader</span> <span class="o">=</span> <span class="n">EMGDatasetLoader</span><span class="p">(</span>
             <span class="n">Path</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;data/datasets/&quot;</span> <span class="o">+</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">&quot;zarr_file_path&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">resolve</span><span class="p">(),</span>
             <span class="n">target_data_class</span><span class="o">=</span><span class="n">CustomDataClass</span><span class="p">,</span>
-            <span class="n">dataloader_params</span><span class="o">=</span><span class="p">{</span>
+                <span class="n">dataloader_params</span><span class="o">=</span><span class="p">{</span>
                 <span class="s2">&quot;batch_size&quot;</span><span class="p">:</span> <span class="mi">64</span><span class="p">,</span>
                 <span class="s2">&quot;drop_last&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-                <span class="s2">&quot;num_workers&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+                <span class="s2">&quot;num_workers&quot;</span><span class="p">:</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;Windows&quot;</span> <span class="k">else</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span>
                 <span class="s2">&quot;pin_memory&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-                <span class="s2">&quot;persistent_workers&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;persistent_workers&quot;</span><span class="p">:</span> <span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span> <span class="o">!=</span> <span class="s2">&quot;Windows&quot;</span><span class="p">,</span>
             <span class="p">},</span>
             <span class="n">target_augmentation_pipeline</span><span class="o">=</span><span class="p">[</span>
                 <span class="p">[</span>
