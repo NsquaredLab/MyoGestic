@@ -28,6 +28,12 @@
      <layout class="QGridLayout" name="gridLayout_9">
       <item row="1" column="0">
        <widget class="QLabel" name="label_7">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="text">
          <string>Duration</string>
         </property>
@@ -35,24 +41,24 @@
       </item>
       <item row="0" column="1">
        <widget class="QComboBox" name="recordTaskComboBox">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="sizeAdjustPolicy">
+         <enum>QComboBox::SizeAdjustPolicy::AdjustToContentsOnFirstShow</enum>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
         <item>
          <property name="text">
           <string>Rest</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Fist</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Pinch</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>3FPinch</string>
          </property>
         </item>
         <item>
@@ -78,6 +84,21 @@
         <item>
          <property name="text">
           <string>Pinky</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Power Grasp</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Pinch</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Tripod Pinch</string>
          </property>
         </item>
        </widget>
@@ -114,6 +135,12 @@
       </item>
       <item row="0" column="0">
        <widget class="QLabel" name="label">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="text">
          <string>Task</string>
         </property>
