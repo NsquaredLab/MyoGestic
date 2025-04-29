@@ -5,7 +5,7 @@
 .. |altmetric| raw:: html
 
     <script type="text/javascript" src="https://d1bxh8uas1mnw7.cloudfront.net/assets/embed.js"></script>
-    <div class="altmetric-embed"  data-badge-type='donut' data-badge-popover='left' data-altmetric-id="175990955" style="float: right; background-color: white; border-radius: 50%; padding: 3px;"></div>
+    <div class="altmetric-embed"  data-badge-type='donut' data-badge-popover='left' data-doi='10.1126/sciadv.ads9150' style="float: right; background-color: white; border-radius: 50%; padding: 3px;"></div>
 
 Welcome to |logo| |altmetric|
 ==========================================
