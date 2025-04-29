@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'recording.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.0
+## Created by: Qt User Interface Compiler version 6.7.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -176,9 +176,9 @@ class Ui_RecordingVirtualHandInterface(object):
         self.recordRecordingGroupBox.setTitle(QCoreApplication.translate("RecordingVirtualHandInterface", u"Record", None))
         self.label_7.setText(QCoreApplication.translate("RecordingVirtualHandInterface", u"Duration", None))
         self.recordTaskComboBox.setItemText(0, QCoreApplication.translate("RecordingVirtualHandInterface", u"Rest", None))
-        self.recordTaskComboBox.setItemText(1, QCoreApplication.translate("RecordingVirtualHandInterface", u"Fist", None))
+        self.recordTaskComboBox.setItemText(1, QCoreApplication.translate("RecordingVirtualHandInterface", u"Power Grasp", None))
         self.recordTaskComboBox.setItemText(2, QCoreApplication.translate("RecordingVirtualHandInterface", u"Pinch", None))
-        self.recordTaskComboBox.setItemText(3, QCoreApplication.translate("RecordingVirtualHandInterface", u"3FPinch", None))
+        self.recordTaskComboBox.setItemText(3, QCoreApplication.translate("RecordingVirtualHandInterface", u"Tripod Pinch", None))
         self.recordTaskComboBox.setItemText(4, QCoreApplication.translate("RecordingVirtualHandInterface", u"Thumb", None))
         self.recordTaskComboBox.setItemText(5, QCoreApplication.translate("RecordingVirtualHandInterface", u"Index", None))
         self.recordTaskComboBox.setItemText(6, QCoreApplication.translate("RecordingVirtualHandInterface", u"Middle", None))
