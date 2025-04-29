@@ -51,9 +51,9 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
                 "middle": 3,
                 "ring": 4,
                 "pinky": 5,
-                "fist": 6,
+                "power grasp": 6,
                 "pinch": 7,
-                "3fpinch": 8,
+                "tripod pinch": 8,
                 "pointing": 9,
             }
         )

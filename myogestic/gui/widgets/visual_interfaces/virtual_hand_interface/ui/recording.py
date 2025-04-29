@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'recording.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.0
+## Created by: Qt User Interface Compiler version 6.7.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -38,6 +38,11 @@ class Ui_RecordingVirtualHandInterface(object):
         self.gridLayout_9.setObjectName(u"gridLayout_9")
         self.label_7 = QLabel(self.recordRecordingGroupBox)
         self.label_7.setObjectName(u"label_7")
+        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+        sizePolicy1.setHorizontalStretch(0)
+        sizePolicy1.setVerticalStretch(0)
+        sizePolicy1.setHeightForWidth(self.label_7.sizePolicy().hasHeightForWidth())
+        self.label_7.setSizePolicy(sizePolicy1)
 
         self.gridLayout_9.addWidget(self.label_7, 1, 0, 1, 1)
 
@@ -52,6 +57,13 @@ class Ui_RecordingVirtualHandInterface(object):
         self.recordTaskComboBox.addItem("")
         self.recordTaskComboBox.addItem("")
         self.recordTaskComboBox.setObjectName(u"recordTaskComboBox")
+        sizePolicy2 = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        sizePolicy2.setHorizontalStretch(0)
+        sizePolicy2.setVerticalStretch(0)
+        sizePolicy2.setHeightForWidth(self.recordTaskComboBox.sizePolicy().hasHeightForWidth())
+        self.recordTaskComboBox.setSizePolicy(sizePolicy2)
+        self.recordTaskComboBox.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContentsOnFirstShow)
+        self.recordTaskComboBox.setIconSize(QSize(0, 0))
 
         self.gridLayout_9.addWidget(self.recordTaskComboBox, 0, 1, 1, 1)
 
@@ -77,6 +89,8 @@ class Ui_RecordingVirtualHandInterface(object):
 
         self.label = QLabel(self.recordRecordingGroupBox)
         self.label.setObjectName(u"label")
+        sizePolicy1.setHeightForWidth(self.label.sizePolicy().hasHeightForWidth())
+        self.label.setSizePolicy(sizePolicy1)
 
         self.gridLayout_9.addWidget(self.label, 0, 0, 1, 1)
 
@@ -91,11 +105,11 @@ class Ui_RecordingVirtualHandInterface(object):
 
         self.recordReviewRecordingStackedWidget = QStackedWidget(RecordingVirtualHandInterface)
         self.recordReviewRecordingStackedWidget.setObjectName(u"recordReviewRecordingStackedWidget")
-        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        sizePolicy1.setHorizontalStretch(0)
-        sizePolicy1.setVerticalStretch(0)
-        sizePolicy1.setHeightForWidth(self.recordReviewRecordingStackedWidget.sizePolicy().hasHeightForWidth())
-        self.recordReviewRecordingStackedWidget.setSizePolicy(sizePolicy1)
+        sizePolicy3 = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        sizePolicy3.setHorizontalStretch(0)
+        sizePolicy3.setVerticalStretch(0)
+        sizePolicy3.setHeightForWidth(self.recordReviewRecordingStackedWidget.sizePolicy().hasHeightForWidth())
+        self.recordReviewRecordingStackedWidget.setSizePolicy(sizePolicy3)
         self.emptyWidget_2 = QWidget()
         self.emptyWidget_2.setObjectName(u"emptyWidget_2")
         self.recordReviewRecordingStackedWidget.addWidget(self.emptyWidget_2)
@@ -105,8 +119,8 @@ class Ui_RecordingVirtualHandInterface(object):
         self.gridLayout_11.setObjectName(u"gridLayout_11")
         self.reviewRecordingGroupBox = QGroupBox(self.reviewRecordingWidget)
         self.reviewRecordingGroupBox.setObjectName(u"reviewRecordingGroupBox")
-        sizePolicy1.setHeightForWidth(self.reviewRecordingGroupBox.sizePolicy().hasHeightForWidth())
-        self.reviewRecordingGroupBox.setSizePolicy(sizePolicy1)
+        sizePolicy3.setHeightForWidth(self.reviewRecordingGroupBox.sizePolicy().hasHeightForWidth())
+        self.reviewRecordingGroupBox.setSizePolicy(sizePolicy3)
         self.gridLayout_10 = QGridLayout(self.reviewRecordingGroupBox)
         self.gridLayout_10.setObjectName(u"gridLayout_10")
         self.reviewRecordingTaskLabel = QLabel(self.reviewRecordingGroupBox)
@@ -116,22 +130,22 @@ class Ui_RecordingVirtualHandInterface(object):
 
         self.reviewRecordingAcceptPushButton = QPushButton(self.reviewRecordingGroupBox)
         self.reviewRecordingAcceptPushButton.setObjectName(u"reviewRecordingAcceptPushButton")
-        sizePolicy2 = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        sizePolicy2.setHorizontalStretch(0)
-        sizePolicy2.setVerticalStretch(0)
-        sizePolicy2.setHeightForWidth(self.reviewRecordingAcceptPushButton.sizePolicy().hasHeightForWidth())
-        self.reviewRecordingAcceptPushButton.setSizePolicy(sizePolicy2)
+        sizePolicy4 = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        sizePolicy4.setHorizontalStretch(0)
+        sizePolicy4.setVerticalStretch(0)
+        sizePolicy4.setHeightForWidth(self.reviewRecordingAcceptPushButton.sizePolicy().hasHeightForWidth())
+        self.reviewRecordingAcceptPushButton.setSizePolicy(sizePolicy4)
         self.reviewRecordingAcceptPushButton.setStyleSheet(u"color: rgb(0, 0, 0); background-color: rgb(170, 255, 0);")
 
         self.gridLayout_10.addWidget(self.reviewRecordingAcceptPushButton, 3, 0, 1, 1)
 
         self.reviewRecordingLabelLineEdit = QLineEdit(self.reviewRecordingGroupBox)
         self.reviewRecordingLabelLineEdit.setObjectName(u"reviewRecordingLabelLineEdit")
-        sizePolicy3 = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        sizePolicy3.setHorizontalStretch(0)
-        sizePolicy3.setVerticalStretch(0)
-        sizePolicy3.setHeightForWidth(self.reviewRecordingLabelLineEdit.sizePolicy().hasHeightForWidth())
-        self.reviewRecordingLabelLineEdit.setSizePolicy(sizePolicy3)
+        sizePolicy5 = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        sizePolicy5.setHorizontalStretch(0)
+        sizePolicy5.setVerticalStretch(0)
+        sizePolicy5.setHeightForWidth(self.reviewRecordingLabelLineEdit.sizePolicy().hasHeightForWidth())
+        self.reviewRecordingLabelLineEdit.setSizePolicy(sizePolicy5)
 
         self.gridLayout_10.addWidget(self.reviewRecordingLabelLineEdit, 1, 1, 1, 1)
 
@@ -147,8 +161,8 @@ class Ui_RecordingVirtualHandInterface(object):
 
         self.reviewRecordingRejectPushButton = QPushButton(self.reviewRecordingGroupBox)
         self.reviewRecordingRejectPushButton.setObjectName(u"reviewRecordingRejectPushButton")
-        sizePolicy2.setHeightForWidth(self.reviewRecordingRejectPushButton.sizePolicy().hasHeightForWidth())
-        self.reviewRecordingRejectPushButton.setSizePolicy(sizePolicy2)
+        sizePolicy4.setHeightForWidth(self.reviewRecordingRejectPushButton.sizePolicy().hasHeightForWidth())
+        self.reviewRecordingRejectPushButton.setSizePolicy(sizePolicy4)
         self.reviewRecordingRejectPushButton.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
         self.reviewRecordingRejectPushButton.setStyleSheet(u"background-color: rgb(255, 0, 0);\n"
 "color: rgb(0, 0, 0);")
@@ -176,14 +190,14 @@ class Ui_RecordingVirtualHandInterface(object):
         self.recordRecordingGroupBox.setTitle(QCoreApplication.translate("RecordingVirtualHandInterface", u"Record", None))
         self.label_7.setText(QCoreApplication.translate("RecordingVirtualHandInterface", u"Duration", None))
         self.recordTaskComboBox.setItemText(0, QCoreApplication.translate("RecordingVirtualHandInterface", u"Rest", None))
-        self.recordTaskComboBox.setItemText(1, QCoreApplication.translate("RecordingVirtualHandInterface", u"Fist", None))
-        self.recordTaskComboBox.setItemText(2, QCoreApplication.translate("RecordingVirtualHandInterface", u"Pinch", None))
-        self.recordTaskComboBox.setItemText(3, QCoreApplication.translate("RecordingVirtualHandInterface", u"3FPinch", None))
-        self.recordTaskComboBox.setItemText(4, QCoreApplication.translate("RecordingVirtualHandInterface", u"Thumb", None))
-        self.recordTaskComboBox.setItemText(5, QCoreApplication.translate("RecordingVirtualHandInterface", u"Index", None))
-        self.recordTaskComboBox.setItemText(6, QCoreApplication.translate("RecordingVirtualHandInterface", u"Middle", None))
-        self.recordTaskComboBox.setItemText(7, QCoreApplication.translate("RecordingVirtualHandInterface", u"Ring", None))
-        self.recordTaskComboBox.setItemText(8, QCoreApplication.translate("RecordingVirtualHandInterface", u"Pinky", None))
+        self.recordTaskComboBox.setItemText(1, QCoreApplication.translate("RecordingVirtualHandInterface", u"Thumb", None))
+        self.recordTaskComboBox.setItemText(2, QCoreApplication.translate("RecordingVirtualHandInterface", u"Index", None))
+        self.recordTaskComboBox.setItemText(3, QCoreApplication.translate("RecordingVirtualHandInterface", u"Middle", None))
+        self.recordTaskComboBox.setItemText(4, QCoreApplication.translate("RecordingVirtualHandInterface", u"Ring", None))
+        self.recordTaskComboBox.setItemText(5, QCoreApplication.translate("RecordingVirtualHandInterface", u"Pinky", None))
+        self.recordTaskComboBox.setItemText(6, QCoreApplication.translate("RecordingVirtualHandInterface", u"Power Grasp", None))
+        self.recordTaskComboBox.setItemText(7, QCoreApplication.translate("RecordingVirtualHandInterface", u"Pinch", None))
+        self.recordTaskComboBox.setItemText(8, QCoreApplication.translate("RecordingVirtualHandInterface", u"Tripod Pinch", None))
 
         self.recordUseKinematicsCheckBox.setText(QCoreApplication.translate("RecordingVirtualHandInterface", u"Use Kinematics of Virtual Hand Interface", None))
         self.label.setText(QCoreApplication.translate("RecordingVirtualHandInterface", u"Task", None))
