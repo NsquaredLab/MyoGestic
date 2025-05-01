@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1]
+### Changed
+- Updated dependencies and sources in lockfile and config
+- Replaced `myoverse` Git source with versioned PyPI source (`>=1.1.2`)
+- Simplified `torch` and `torchvision` specifications by removing platform-specific markers and redundant configurations
+
 ## [0.5.0]
 Enhanced Virtual Hand Interface integration and improved user experience.
 
@@ -35,6 +41,7 @@ Enhanced user interface and improved cross-platform compatibility.
 ### Removed
 - Redundant parameters and dead code in dataset module.
 
-[Unreleased]: https://github.com/NsquaredLab/MyoGestic/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/NsquaredLab/MyoGestic/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/NsquaredLab/MyoGestic/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.1.0...v0.4.0
