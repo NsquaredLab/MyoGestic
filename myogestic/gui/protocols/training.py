@@ -25,11 +25,10 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
-    QWidget, QApplication,
-)
+    QWidget, )
+
 from myogestic.gui.widgets.logger import LoggerLevel, CustomLogger
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface
-
 from myogestic.models.interface import MyoGesticModelInterface
 from myogestic.utils.config import (
     UnchangeableParameter,
@@ -481,10 +480,24 @@ class TrainingProtocol(QObject):
         if not label:
             label = "default"
 
-        file_name = f"{self._selected_visual_interface.name}_Dataset_{datetime.now().strftime("%Y%m%d_%H%M%S%f")}_{label.lower()}"
+        # check if all recordings come from the same visual interface
+        set_of_visual_interfaces = set(
+            [
+                recording["visual_interface"]
+                for recording in self._selected_recordings__dict.values()
+            ]
+        )
+        if len(set_of_visual_interfaces) > 1:
+            self._open_warning_dialog(
+                "Recordings are not from the same visual interface!"
+            )
+            return
+        self._selected_visual_interface = list(set_of_visual_interfaces)[0]
+
+        file_name = f"{self._selected_visual_interface}_Dataset_{datetime.now().strftime("%Y%m%d_%H%M%S%f")}_{label.lower()}"
 
         dataset_dict = self._model_interface.create_dataset(
-            self._selected_recordings__dict, self._selected_features__list, file_name
+            self._selected_recordings__dict, self._selected_features__list, file_name, self._selected_visual_interface
         )
 
         dataset_dict["dataset_file_path"] = str(DATASETS_DIR_PATH / f"{file_name}.pkl")
@@ -583,7 +596,17 @@ class TrainingProtocol(QObject):
             )
             return
 
-        file_name = f"{self._selected_visual_interface.name}_Model_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{label.lower()}.pkl"
+        if self._selected_visual_interface is None:
+            self._selected_visual_interface = dataset["visual_interface"]
+        else:
+            if self._selected_visual_interface != dataset["visual_interface"]:
+                self._open_warning_dialog(
+                    "Visual interface {} is open, but the dataset is from {}!".format(
+                        self._selected_visual_interface, dataset["visual_interface"]
+                    )
+                )
+                return
+        file_name = f"{self._selected_visual_interface}_Model_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{label.lower()}.pkl"
 
         model_filepath = MODELS_DIR_PATH / file_name
 
