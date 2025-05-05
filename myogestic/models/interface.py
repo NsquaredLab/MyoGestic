@@ -35,10 +35,10 @@ class MyoGesticModelInterface(QObject):
         self.model_is_loaded: bool = False
 
     def create_dataset(
-        self, dataset: Dict, selected_features: list[str], file_name: str
+        self, dataset: Dict, selected_features: list[str], file_name: str, recording_interface_from_recordings:str
     ) -> Dict[str, Dict[str, Any]]:
         self.input_dataset = self.dataset.create_dataset(
-            dataset, selected_features, file_name
+            dataset, selected_features, file_name, recording_interface_from_recordings
         )
         return self.input_dataset
 
