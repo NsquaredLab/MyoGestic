@@ -494,7 +494,7 @@ class TrainingProtocol(QObject):
             return
         self._selected_visual_interface = list(set_of_visual_interfaces)[0]
 
-        file_name = f"{self._selected_visual_interface}_Dataset_{datetime.now().strftime("%Y%m%d_%H%M%S%f")}_{label.lower()}"
+        file_name = f"{self._selected_visual_interface}_Dataset_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{label.lower()}"
 
         dataset_dict = self._model_interface.create_dataset(
             self._selected_recordings__dict, self._selected_features__list, file_name, self._selected_visual_interface
