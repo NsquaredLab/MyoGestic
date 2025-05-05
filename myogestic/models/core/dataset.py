@@ -65,25 +65,38 @@ class MyoGesticDataset(QObject):
         self.dataset_std: float = 1.0
 
     def create_dataset(
-        self, dataset: dict[str, dict], selected_features: list[str], file_name: str
+        self, dataset: dict[str, dict], selected_features: list[str], file_name: str, recording_interface_from_recordings: str
     ) -> dict:
         # Accumulate bad channels. Maybe more channels get added between recordings
         bad_channels: list[int] = []
 
-        self.task_to_class_map: dict[str, int] = (
-            self._main_window.selected_visual_interface.recording_interface_ui.ground_truth__task_map
-        )
+        if self._main_window.selected_visual_interface is None:
+            visual_interface_to_use=CONFIG_REGISTRY.visual_interfaces_map[recording_interface_from_recordings]
+            ground_truth__task_map=visual_interface_to_use[1].ground_truth__task_map
+            ground_truth__nr_of_recording_values=visual_interface_to_use[1].ground_truth__nr_of_recording_values
+        else:
+            visual_interface_to_use = self._main_window.selected_visual_interface
+            ground_truth__task_map = visual_interface_to_use.recording_interface_ui.ground_truth__task_map
+            ground_truth__nr_of_recording_values = visual_interface_to_use.recording_interface_ui.ground_truth__nr_of_recording_values
+
+            if visual_interface_to_use.name != recording_interface_from_recordings:
+                self.logger.print(
+                    f"Warning: The selected visual interface is not the same as the one used for recording. "
+                    f"Using {recording_interface_from_recordings} instead of {visual_interface_to_use.name}.",
+                    LoggerLevel.WARNING,
+                )
+
 
         biosignal_data = {}
         ground_truth_data = {}
         for task, recording in dataset.items():
-            if task.lower() not in self.task_to_class_map.keys():
+            if task.lower() not in ground_truth__task_map.keys():
                 self.logger.print(
                     f"Task not recognized: {task.lower()}", LoggerLevel.WARNING
                 )
                 continue
 
-            task_label: str = str(self.task_to_class_map[task.lower()])
+            task_label: str = str(ground_truth__task_map[task.lower()])
 
             recording_bad_channels = recording["bad_channels"]
             bad_channels.extend(recording_bad_channels)
@@ -110,7 +123,7 @@ class MyoGesticDataset(QObject):
             else:
                 ground_truth_data[task_label] = np.zeros(
                     (
-                        self._main_window.selected_visual_interface.recording_interface_ui.ground_truth__nr_of_recording_values,
+                        ground_truth__nr_of_recording_values,
                         biosignal.shape[-1],
                     )
                 )
@@ -228,6 +241,7 @@ class MyoGesticDataset(QObject):
             "bad_channels": list(set(bad_channels)),
             "selected_features": selected_features,
             "device_information": self.device_information,
+            "visual_interface": recording_interface_from_recordings,
             "zarr_file_path": file_name + ".zarr",
         }
 
