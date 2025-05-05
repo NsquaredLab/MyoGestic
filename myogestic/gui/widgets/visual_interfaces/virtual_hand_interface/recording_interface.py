@@ -32,6 +32,20 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
         The signal instance used to receive incoming messages from the device.
     """
 
+    ground_truth__task_map: dict[str, int] = {
+        "rest": 0,
+        "index": 1,
+        "thumb": 2,
+        "middle": 3,
+        "ring": 4,
+        "pinky": 5,
+        "power grasp": 6,
+        "pinch": 7,
+        "tripod pinch": 8,
+        "pointing": 9,
+    }
+    ground_truth__nr_of_recording_values: int = 9
+
     def __init__(
         self,
         main_window,
@@ -43,19 +57,8 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
             name,
             ui=Ui_RecordingVirtualHandInterface(),
             incoming_message_signal=incoming_message_signal,
-            ground_truth__nr_of_recording_values=9,
-            ground_truth__task_map={
-                "rest": 0,
-                "index": 1,
-                "thumb": 2,
-                "middle": 3,
-                "ring": 4,
-                "pinky": 5,
-                "power grasp": 6,
-                "pinch": 7,
-                "tripod pinch": 8,
-                "pointing": 9,
-            }
+            ground_truth__nr_of_recording_values=self.ground_truth__nr_of_recording_values,
+            ground_truth__task_map=self.ground_truth__task_map
         )
 
         RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
