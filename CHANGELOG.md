@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2]
+### Changed
+- Made it possible to train without having a visual interface open.
+
 ## [0.5.1]
 ### Changed
 - Updated dependencies and sources in lockfile and config
