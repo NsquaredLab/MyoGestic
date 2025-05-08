@@ -12,6 +12,14 @@ from myogestic.gui.widgets.output_systems.neuroorthosis import NeuroOrthosisOutp
 from myogestic.models.definitions import sklearn_models
 from myogestic.utils.config import CONFIG_REGISTRY
 
+from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface import (
+    VirtualCursorInterface_RecordingInterface,
+    VirtualCursorInterface_SetupInterface,
+)
+from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.output_interface import (
+    VirtualCursorInterface_OutputSystem,
+)
+
 # What channels to use for training
 CHANNELS: list[int] = list(np.arange(32))
 

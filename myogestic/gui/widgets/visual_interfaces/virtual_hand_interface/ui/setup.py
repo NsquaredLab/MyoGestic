@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'setup.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.0
+## Created by: Qt User Interface Compiler version 6.6.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -22,7 +22,7 @@ class Ui_SetupVirtualHandInterface(object):
     def setupUi(self, SetupVirtualHandInterface):
         if not SetupVirtualHandInterface.objectName():
             SetupVirtualHandInterface.setObjectName(u"SetupVirtualHandInterface")
-        SetupVirtualHandInterface.resize(342, 78)
+        SetupVirtualHandInterface.resize(361, 78)
         self.gridLayout = QGridLayout(SetupVirtualHandInterface)
         self.gridLayout.setObjectName(u"gridLayout")
         self.groupBox = QGroupBox(SetupVirtualHandInterface)
