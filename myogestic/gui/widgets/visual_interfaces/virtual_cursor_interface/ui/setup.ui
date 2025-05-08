@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>SetupVirtualHandInterface</class>
- <widget class="QWidget" name="SetupVirtualHandInterface">
+ <class>SetupVirtualCursorInterface</class>
+ <widget class="QWidget" name="SetupVirtualCursorInterface">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>361</width>
+    <width>360</width>
     <height>78</height>
    </rect>
   </property>
@@ -17,18 +17,28 @@
    <item row="0" column="0">
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
-      <string>Virtual Hand Interface</string>
+      <string>Virtual Cursor Interface</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_31">
-      <item row="0" column="4">
-       <widget class="QCheckBox" name="useExternalVirtualHandInterfaceCheckBox">
+      <item row="0" column="0" colspan="2">
+       <widget class="QPushButton" name="toggleVirtualCursorInterfacePushButton">
         <property name="text">
-         <string>Use external Virtual Hand Interface</string>
+         <string>Open</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
         </property>
        </widget>
       </item>
       <item row="0" column="3">
-       <widget class="QWidget" name="virtualHandInterfaceStatusWidget" native="true">
+       <widget class="QCheckBox" name="useExternalVirtualCursorInterfaceCheckBox">
+        <property name="text">
+         <string>Use external Virtual Cursor Interface</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QWidget" name="virtualCursorInterfaceStatusWidget" native="true">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
           <horstretch>0</horstretch>
@@ -43,16 +53,6 @@
         </property>
         <property name="styleSheet">
          <string notr="true">border-radius: 5px;</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0" colspan="2">
-       <widget class="QPushButton" name="toggleVirtualHandInterfacePushButton">
-        <property name="text">
-         <string>Open</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
         </property>
        </widget>
       </item>
