@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1528</width>
-    <height>836</height>
+    <height>844</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -19,7 +19,7 @@
      <x>20</x>
      <y>10</y>
      <width>371</width>
-     <height>641</height>
+     <height>601</height>
     </rect>
    </property>
    <property name="currentIndex">
@@ -470,19 +470,22 @@
        </property>
        <layout class="QGridLayout" name="gridLayout_6">
         <item row="1" column="1">
-         <widget class="QSpinBox" name="predictedCursorRefreshRateSpinBox">
+         <widget class="QSpinBox" name="predictedCursorFreqDivFactorSpinBox">
+          <property name="minimum">
+           <number>1</number>
+          </property>
           <property name="maximum">
-           <number>100</number>
+           <number>10</number>
           </property>
           <property name="value">
-           <number>60</number>
+           <number>1</number>
           </property>
          </widget>
         </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_14">
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_13">
           <property name="text">
-           <string>Prediction refresh rate (Hz)</string>
+           <string>Smoothening factor</string>
           </property>
          </widget>
         </item>
@@ -495,14 +498,14 @@
            <number>500</number>
           </property>
           <property name="value">
-           <number>50</number>
+           <number>25</number>
           </property>
          </widget>
         </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_13">
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_14">
           <property name="text">
-           <string>Smoothening factor</string>
+           <string>Prediction freq. division factor</string>
           </property>
          </widget>
         </item>
@@ -545,47 +548,71 @@
    <property name="geometry">
     <rect>
      <x>19</x>
-     <y>660</y>
+     <y>620</y>
      <width>371</width>
-     <height>171</height>
+     <height>201</height>
     </rect>
    </property>
    <property name="title">
     <string>Logging</string>
    </property>
-   <widget class="QScrollArea" name="loggingScrollArea">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>20</y>
-      <width>351</width>
-      <height>141</height>
-     </rect>
-    </property>
-    <property name="widgetResizable">
-     <bool>true</bool>
-    </property>
-    <widget class="QWidget" name="scrollAreaWidgetContents">
-     <property name="geometry">
-      <rect>
-       <x>0</x>
-       <y>0</y>
-       <width>349</width>
-       <height>139</height>
-      </rect>
-     </property>
-     <widget class="QTextEdit" name="loggingTextEdit">
-      <property name="geometry">
-       <rect>
-        <x>13</x>
-        <y>13</y>
-        <width>321</width>
-        <height>111</height>
-       </rect>
+   <layout class="QGridLayout" name="gridLayout_9">
+    <item row="0" column="0">
+     <widget class="QLabel" name="label_8">
+      <property name="text">
+       <string>FPS reference:</string>
       </property>
      </widget>
-    </widget>
-   </widget>
+    </item>
+    <item row="2" column="0" colspan="2">
+     <widget class="QScrollArea" name="loggingScrollArea">
+      <property name="widgetResizable">
+       <bool>true</bool>
+      </property>
+      <widget class="QWidget" name="scrollAreaWidgetContents">
+       <property name="geometry">
+        <rect>
+         <x>0</x>
+         <y>0</y>
+         <width>349</width>
+         <height>119</height>
+        </rect>
+       </property>
+       <widget class="QTextEdit" name="loggingTextEdit">
+        <property name="geometry">
+         <rect>
+          <x>13</x>
+          <y>13</y>
+          <width>321</width>
+          <height>91</height>
+         </rect>
+        </property>
+       </widget>
+      </widget>
+     </widget>
+    </item>
+    <item row="0" column="1">
+     <widget class="QLabel" name="refCursorUpdateFPSLabel">
+      <property name="text">
+       <string>Placeholder</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QLabel" name="label_18">
+      <property name="text">
+       <string>FPS prediction:</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QLabel" name="predCursorUpdateFPSLabel">
+      <property name="text">
+       <string>Placeholder</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
   </widget>
  </widget>
  <resources/>
