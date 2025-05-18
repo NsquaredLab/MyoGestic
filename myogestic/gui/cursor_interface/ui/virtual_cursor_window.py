@@ -24,10 +24,10 @@ class Ui_CursorInterface(object):
     def setupUi(self, CursorInterface):
         if not CursorInterface.objectName():
             CursorInterface.setObjectName(u"CursorInterface")
-        CursorInterface.resize(1528, 836)
+        CursorInterface.resize(1528, 844)
         self.tabWidget = QTabWidget(CursorInterface)
         self.tabWidget.setObjectName(u"tabWidget")
-        self.tabWidget.setGeometry(QRect(20, 10, 371, 641))
+        self.tabWidget.setGeometry(QRect(20, 10, 371, 601))
         self.taskMappingTab = QWidget()
         self.taskMappingTab.setObjectName(u"taskMappingTab")
         self.groupBox = QGroupBox(self.taskMappingTab)
@@ -265,30 +265,31 @@ class Ui_CursorInterface(object):
         self.groupBox_6.setObjectName(u"groupBox_6")
         self.gridLayout_6 = QGridLayout(self.groupBox_6)
         self.gridLayout_6.setObjectName(u"gridLayout_6")
-        self.predictedCursorRefreshRateSpinBox = QSpinBox(self.groupBox_6)
-        self.predictedCursorRefreshRateSpinBox.setObjectName(u"predictedCursorRefreshRateSpinBox")
-        self.predictedCursorRefreshRateSpinBox.setMaximum(100)
-        self.predictedCursorRefreshRateSpinBox.setValue(60)
+        self.predictedCursorFreqDivFactorSpinBox = QSpinBox(self.groupBox_6)
+        self.predictedCursorFreqDivFactorSpinBox.setObjectName(u"predictedCursorFreqDivFactorSpinBox")
+        self.predictedCursorFreqDivFactorSpinBox.setMinimum(1)
+        self.predictedCursorFreqDivFactorSpinBox.setMaximum(10)
+        self.predictedCursorFreqDivFactorSpinBox.setValue(1)
 
-        self.gridLayout_6.addWidget(self.predictedCursorRefreshRateSpinBox, 1, 1, 1, 1)
-
-        self.label_14 = QLabel(self.groupBox_6)
-        self.label_14.setObjectName(u"label_14")
-
-        self.gridLayout_6.addWidget(self.label_14, 1, 0, 1, 1)
-
-        self.smootheningFactorSpinBox = QSpinBox(self.groupBox_6)
-        self.smootheningFactorSpinBox.setObjectName(u"smootheningFactorSpinBox")
-        self.smootheningFactorSpinBox.setMinimum(1)
-        self.smootheningFactorSpinBox.setMaximum(500)
-        self.smootheningFactorSpinBox.setValue(50)
-
-        self.gridLayout_6.addWidget(self.smootheningFactorSpinBox, 0, 1, 1, 1)
+        self.gridLayout_6.addWidget(self.predictedCursorFreqDivFactorSpinBox, 1, 1, 1, 1)
 
         self.label_13 = QLabel(self.groupBox_6)
         self.label_13.setObjectName(u"label_13")
 
         self.gridLayout_6.addWidget(self.label_13, 0, 0, 1, 1)
+
+        self.smootheningFactorSpinBox = QSpinBox(self.groupBox_6)
+        self.smootheningFactorSpinBox.setObjectName(u"smootheningFactorSpinBox")
+        self.smootheningFactorSpinBox.setMinimum(1)
+        self.smootheningFactorSpinBox.setMaximum(500)
+        self.smootheningFactorSpinBox.setValue(25)
+
+        self.gridLayout_6.addWidget(self.smootheningFactorSpinBox, 0, 1, 1, 1)
+
+        self.label_14 = QLabel(self.groupBox_6)
+        self.label_14.setObjectName(u"label_14")
+
+        self.gridLayout_6.addWidget(self.label_14, 1, 0, 1, 1)
 
 
         self.gridLayout_8.addWidget(self.groupBox_6, 2, 0, 1, 1)
@@ -311,18 +312,42 @@ class Ui_CursorInterface(object):
         self.CursorDisplayWidget.setSizePolicy(sizePolicy1)
         self.groupBox_7 = QGroupBox(CursorInterface)
         self.groupBox_7.setObjectName(u"groupBox_7")
-        self.groupBox_7.setGeometry(QRect(19, 660, 371, 171))
+        self.groupBox_7.setGeometry(QRect(19, 620, 371, 201))
+        self.gridLayout_9 = QGridLayout(self.groupBox_7)
+        self.gridLayout_9.setObjectName(u"gridLayout_9")
+        self.label_8 = QLabel(self.groupBox_7)
+        self.label_8.setObjectName(u"label_8")
+
+        self.gridLayout_9.addWidget(self.label_8, 0, 0, 1, 1)
+
         self.loggingScrollArea = QScrollArea(self.groupBox_7)
         self.loggingScrollArea.setObjectName(u"loggingScrollArea")
-        self.loggingScrollArea.setGeometry(QRect(10, 20, 351, 141))
         self.loggingScrollArea.setWidgetResizable(True)
         self.scrollAreaWidgetContents = QWidget()
         self.scrollAreaWidgetContents.setObjectName(u"scrollAreaWidgetContents")
-        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 349, 139))
+        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 349, 119))
         self.loggingTextEdit = QTextEdit(self.scrollAreaWidgetContents)
         self.loggingTextEdit.setObjectName(u"loggingTextEdit")
-        self.loggingTextEdit.setGeometry(QRect(13, 13, 321, 111))
+        self.loggingTextEdit.setGeometry(QRect(13, 13, 321, 91))
         self.loggingScrollArea.setWidget(self.scrollAreaWidgetContents)
+
+        self.gridLayout_9.addWidget(self.loggingScrollArea, 2, 0, 1, 2)
+
+        self.refCursorUpdateFPSLabel = QLabel(self.groupBox_7)
+        self.refCursorUpdateFPSLabel.setObjectName(u"refCursorUpdateFPSLabel")
+
+        self.gridLayout_9.addWidget(self.refCursorUpdateFPSLabel, 0, 1, 1, 1)
+
+        self.label_18 = QLabel(self.groupBox_7)
+        self.label_18.setObjectName(u"label_18")
+
+        self.gridLayout_9.addWidget(self.label_18, 1, 0, 1, 1)
+
+        self.predCursorUpdateFPSLabel = QLabel(self.groupBox_7)
+        self.predCursorUpdateFPSLabel.setObjectName(u"predCursorUpdateFPSLabel")
+
+        self.gridLayout_9.addWidget(self.predCursorUpdateFPSLabel, 1, 1, 1, 1)
+
 
         self.retranslateUi(CursorInterface)
 
@@ -392,10 +417,14 @@ class Ui_CursorInterface(object):
         self.label_10.setText(QCoreApplication.translate("CursorInterface", u"Inner bound range (%)", None))
         self.label_17.setText(QCoreApplication.translate("CursorInterface", u"Outer bound range (%)", None))
         self.groupBox_6.setTitle(QCoreApplication.translate("CursorInterface", u"Predicted cursor", None))
-        self.label_14.setText(QCoreApplication.translate("CursorInterface", u"Prediction refresh rate (Hz)", None))
         self.label_13.setText(QCoreApplication.translate("CursorInterface", u"Smoothening factor", None))
+        self.label_14.setText(QCoreApplication.translate("CursorInterface", u"Prediction freq. division factor", None))
         self.streamingPushButton.setText(QCoreApplication.translate("CursorInterface", u"Start Streaming", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.cursorSettingsTab), QCoreApplication.translate("CursorInterface", u"Cursor settings", None))
         self.groupBox_7.setTitle(QCoreApplication.translate("CursorInterface", u"Logging", None))
+        self.label_8.setText(QCoreApplication.translate("CursorInterface", u"FPS reference:", None))
+        self.refCursorUpdateFPSLabel.setText(QCoreApplication.translate("CursorInterface", u"Placeholder", None))
+        self.label_18.setText(QCoreApplication.translate("CursorInterface", u"FPS prediction:", None))
+        self.predCursorUpdateFPSLabel.setText(QCoreApplication.translate("CursorInterface", u"Placeholder", None))
     # retranslateUi
 
