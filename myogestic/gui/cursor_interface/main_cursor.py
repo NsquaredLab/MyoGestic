@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QGroupBox,
     QPushButton,
-    QRadioButton,
+    QLabel,
 )
 import qdarkstyle
 from PySide6.QtNetwork import QUdpSocket, QHostAddress
@@ -18,17 +18,25 @@ import math
 import numpy as np
 from PySide6.QtCore import QByteArray
 from PySide6.QtCore import QTimer
-import ast # For safely evaluating string literals
+from PySide6.QtCore import Signal
+import ast  # For safely evaluating string literals
+import time  # Added for timestamping
 
 from myogestic.utils.constants import MYOGESTIC_UDP_PORT
 
 # Import the cursor-specific constant for logging
-from myogestic.gui.cursor_interface.utils.constants import CURSOR_SAMPLING_RATE, DIRECTIONS, CURSOR_STREAMING_RATE
+from myogestic.gui.cursor_interface.utils.constants import (
+    CURSOR_SAMPLING_RATE,
+    DIRECTIONS,
+    CURSOR_STREAMING_RATE,
+    CURSOR_TASK_LABEL_MAP,
+)
 
 # Define constants locally (Ideally move these to a shared constants file)
 SOCKET_IP = "127.0.0.1"
-VCI__UDP_PORT = 1246  # on this port the VCI listens for and incoming messages from MyoGestic
-VCI_PREDICTION__UDP_PORT = 1244  # on this port the VCI receives the predicted cursor data from the VCI
+VCI_STREAM_PRED__UDP_PORT = 1234  # on this port the cursor sends the interpolated cursor coordinates to the VCI
+VCI_READ_STATUS__UDP_PORT = 1235  # on this port the cursor received the status check to which it responds as active
+VCI_READ_PRED__UDP_PORT = 1236  # on this port the cursor receives the predicted cursor coordinates from the VCI
 STATUS_REQUEST = "status"
 STATUS_RESPONSE = "active"
 
@@ -43,8 +51,21 @@ from myogestic.gui.cursor_interface.setup_cursor import VispyWidget
 class MyoGestic_Cursor(QMainWindow):
     """Main window for the Virtual Cursor Interface."""
 
+    outgoing_prediction_signal = Signal(list)  # Signal for outgoing predicted cursor data
+    window_closed = Signal()  # Signal emitted when window is closed
+    is_connected = False  # Class variable to track connection status
+
+    # Add FPS tracking lists
+    _ref_cursor_fps_history = []  # Store last 5 reference cursor FPS values
+    _pred_cursor_fps_history = []  # Store last 5 predicted cursor FPS values
+    _FPS_WINDOW_SIZE = 5  # Number of values to average
+
     def __init__(self):
         super().__init__()
+
+        # Initialize FPS history lists
+        self._ref_cursor_fps_history = []
+        self._pred_cursor_fps_history = []
 
         # Load the UI from the compiled Python file
         self.ui = Ui_CursorInterface()
@@ -54,14 +75,14 @@ class MyoGestic_Cursor(QMainWindow):
         self.logger: CustomLogger = CustomLogger(self.ui.loggingTextEdit)
         self.logger.print("Cursor interface started!")
 
-        # UDP Socket for listening to status requests
-        self._udp_socket = QUdpSocket(self)
-        # UDP Socket for streaming cursor data
-        self._streaming_socket = QUdpSocket(self)
-        # UDP Socket for receiving predicted cursor data
-        self._predicted_cursor_socket = QUdpSocket(self)
-        # Timer for streaming cursor data
-        self._streaming_timer = QTimer(self)
+        # UDP Sockets
+        # self._udp_socket = QUdpSocket(self) # Removed as _predicted_cursor_read_socket will send STATUS_RESPONSE
+        self._reference_cursor_stream_socket = QUdpSocket(self)
+        self._predicted_status_read_socket = QUdpSocket(self)
+        self._predicted_cursor_stream_socket = QUdpSocket(self)
+        self._predicted_cursor_read_socket = QUdpSocket(self)  # Socket for VCI_READ_PRED__UDP_PORT
+
+        self._streaming_timer = QTimer(self)  # For reference cursor streaming
 
         # Store start/stop streaming button
         self.streaming_push_button: QPushButton = self.ui.streamingPushButton
@@ -79,7 +100,6 @@ class MyoGestic_Cursor(QMainWindow):
         # Store frequencies for the cursor movement and the refresh rate of the reference and predicted cursors
         self.cursor_frequency_double_spin_box: QDoubleSpinBox = self.ui.cursorFrequencyDoubleSpinBox
         self.reference_cursor_refresh_rate_combo_box: QComboBox = self.ui.referenceCursorRefreshRateComboBox
-        self.predicted_cursor_refresh_rate_spin_box: QSpinBox = self.ui.predictedCursorRefreshRateSpinBox
 
         # Store reference activation levels and durations for cursor states
         self.middle_upper_activation_level_spin_box: QSpinBox = self.ui.middleUpperActivationLevelSpinBox
@@ -93,6 +113,14 @@ class MyoGestic_Cursor(QMainWindow):
         self.targetBoxGroupBox: QGroupBox = self.ui.targetBoxGroupBox
         self.lowerTargetRangeLevelSpinBox: QSpinBox = self.ui.lowerTargetRangeLevelSpinBox
         self.upperTargetRangeLevelSpinBox: QSpinBox = self.ui.upperTargetRangeLevelSpinBox
+
+        # Store predicted cursor parameters
+        self.smoothening_factor_spin_box: QSpinBox = self.ui.smootheningFactorSpinBox
+        self.predicted_cursor_freq_div_factor_spin_box: QSpinBox = self.ui.predictedCursorFreqDivFactorSpinBox
+
+        # Store FPS indicators
+        self.ref_cursor_fps_label: QLabel = self.ui.refCursorUpdateFPSLabel
+        self.pred_cursor_fps_label: QLabel = self.ui.predCursorUpdateFPSLabel
 
         # Setup the initial selected movement for each direction
         self._selected_up_movement = self.up_movement_combobox.currentText() if self.up_movement_combobox else None
@@ -127,8 +155,6 @@ class MyoGestic_Cursor(QMainWindow):
             self.cursor_frequency_double_spin_box.valueChanged.connect(self._on_timing_params_changed)
         if self.reference_cursor_refresh_rate_combo_box:
             self.reference_cursor_refresh_rate_combo_box.currentTextChanged.connect(self._on_timing_params_changed)
-        if self.predicted_cursor_refresh_rate_spin_box:
-            self.predicted_cursor_refresh_rate_spin_box.valueChanged.connect(self._on_predicted_refresh_rate_changed)
 
         # Connect spinbox/doublespinbox value changes for hold parameters
         if self.rest_duration_double_spin_box:
@@ -143,6 +169,14 @@ class MyoGestic_Cursor(QMainWindow):
         # Connect cursor stop condition combobox
         if self.cursor_stop_condition_combo_box:  # Assuming self.cursor_stop_condition_combo_box is already initialized
             self.cursor_stop_condition_combo_box.currentTextChanged.connect(self._on_activation_params_changed)
+
+        # Connect smoothening factor spinbox
+        if self.smoothening_factor_spin_box:
+            self.smoothening_factor_spin_box.valueChanged.connect(self._on_smoothening_factor_changed)
+
+        # Connect predicted cursor frequency division factor spinbox
+        if self.predicted_cursor_freq_div_factor_spin_box:
+            self.predicted_cursor_freq_div_factor_spin_box.valueChanged.connect(self._on_freq_div_factor_changed)
 
         # Connect target box related widgets to the activation params handler
         if self.targetBoxGroupBox:
@@ -162,36 +196,53 @@ class MyoGestic_Cursor(QMainWindow):
         }
         self._setup_vispy_display(initial_mappings)
 
-        # Flag to track if the status response has been logged
-        self._status_response_logged = False
+        # Connect FPS update signals - connect to the signal handler's signals
+        if hasattr(self, 'vispy_widget') and self.vispy_widget:
+            # Connect using the signal handler's signals
+            self.vispy_widget._signal_handler.ref_cursor_fps_updated.connect(self._update_ref_cursor_fps_label)
+            self.vispy_widget._signal_handler.pred_cursor_fps_updated.connect(self._update_pred_cursor_fps_label)
+            # Initialize labels with 0 Hz
+            self._update_ref_cursor_fps_label(0.0)
+            self._update_pred_cursor_fps_label(0.0)
 
-        # Listen on the port the setup interface sends status requests to
-        bound = self._udp_socket.bind(QHostAddress(SOCKET_IP), VCI__UDP_PORT)
-        if bound:
-            self.logger.print(f"Listening for status requests on UDP {SOCKET_IP}:{VCI__UDP_PORT}")
-            self._udp_socket.readyRead.connect(self._read_datagrams)
-        else:
-            self.logger.print(f"Error: Could not bind to UDP {SOCKET_IP}:{VCI__UDP_PORT}", level="ERROR")
-            self.logger.print(f"Socket Error: {self._udp_socket.errorString()}", level="ERROR")
-
-        # Configure streaming timer
+        # Configure streaming timer for reference cursor
         if CURSOR_STREAMING_RATE > 0:
             self._streaming_timer.setInterval(int(1000 / CURSOR_STREAMING_RATE))
             self._streaming_timer.timeout.connect(self._send_cursor_position_datagram)
         else:
-            self.logger.print(f"CURSOR_STREAMING_RATE ({CURSOR_STREAMING_RATE} Hz) is not positive. Streaming disabled.", level="WARNING")
+            self.logger.print(
+                f"CURSOR_STREAMING_RATE ({CURSOR_STREAMING_RATE} Hz) is not positive. Reference cursor streaming disabled.",
+                level="WARNING",
+            )
 
-        # Bind the predicted cursor socket and connect its readyRead signal
-        predicted_bound = self._predicted_cursor_socket.bind(QHostAddress(SOCKET_IP), VCI_PREDICTION__UDP_PORT)
-        if predicted_bound:
-            self.logger.print(f"Listening for predicted cursor data on UDP {SOCKET_IP}:{VCI_PREDICTION__UDP_PORT}")
-            self._predicted_cursor_socket.readyRead.connect(self._read_predicted_cursor_datagrams)
+        # Bind the predicted cursor read socket (incoming for status requests and predictions)
+        status_read_bound = self._predicted_status_read_socket.bind(QHostAddress(SOCKET_IP), VCI_READ_STATUS__UDP_PORT)
+        if status_read_bound:
+            self.logger.print(f"Listening for status requests on UDP {SOCKET_IP}:{VCI_READ_STATUS__UDP_PORT}")
+            self._predicted_status_read_socket.readyRead.connect(self._process_received_status_datagrams)
         else:
-            self.logger.print(f"Error: Could not bind to UDP {SOCKET_IP}:{VCI_PREDICTION__UDP_PORT} for predicted data", level="ERROR")
-            self.logger.print(f"Socket Error: {self._predicted_cursor_socket.errorString()}", level="ERROR")
+            self.logger.print(
+                f"Error: Could not bind to UDP {SOCKET_IP}:{VCI_READ_STATUS__UDP_PORT} for reading", level="ERROR"
+            )
+            self.logger.print(f"Socket Error: {self._predicted_status_read_socket.errorString()}", level="ERROR")
 
-        # Example: Accessing a widget (replace 'widgetName' with an actual name from your UI, e.g., self.ui.pushButton)
-        # self.ui.pushButton.clicked.connect(self.on_button_click)
+        predicted_read_bound = self._predicted_cursor_read_socket.bind(QHostAddress(SOCKET_IP), VCI_READ_PRED__UDP_PORT)
+        if predicted_read_bound:
+            self.logger.print(f"Listening for predictions on UDP {SOCKET_IP}:{VCI_READ_PRED__UDP_PORT}")
+            self._predicted_cursor_read_socket.readyRead.connect(
+                self._process_received_prediction_datagrams
+            )  # Changed to new single handler
+        else:
+            self.logger.print(
+                f"Error: Could not bind to UDP {SOCKET_IP}:{VCI_READ_PRED__UDP_PORT} for reading", level="ERROR"
+            )
+            self.logger.print(f"Socket Error: {self._predicted_cursor_read_socket.errorString()}", level="ERROR")
+
+        self.outgoing_prediction_signal.connect(self._send_predicted_cursor_datagram)
+
+        # Bind other sockets if necessary for sending (often not required to bind source port for sending)
+        # self._reference_cursor_stream_socket.bind(...)
+        # self._predicted_cursor_stream_socket.bind(...)
 
         self.setWindowTitle("MyoGestic Virtual Cursor")
 
@@ -230,95 +281,113 @@ class MyoGestic_Cursor(QMainWindow):
         placeholder_widget.setLayout(layout)
         self.logger.print("Vispy display widget setup complete.")
 
-    def _read_datagrams(self):
-        """Read incoming UDP datagrams and respond to status requests."""
-        while self._udp_socket.hasPendingDatagrams():
-            datagram_size = self._udp_socket.pendingDatagramSize()
-            datagram, sender_address, sender_port = self._udp_socket.readDatagram(datagram_size)
+    def _process_received_status_datagrams(self):
+        """Handles incoming status check datagrams on VCI_READ_STATUS__UDP_PORT"""
+        while self._predicted_status_read_socket.hasPendingDatagrams():
+            datagram_size = self._predicted_status_read_socket.pendingDatagramSize()
+            datagram, sender_address, sender_port = self._predicted_status_read_socket.readDatagram(datagram_size)
 
+            message_str = ""
             try:
-                message = datagram.data().decode("utf-8")
-                # self.logger.print(f"Received UDP from {sender_address.toString()}:{sender_port}: {message}")
-
-                if message == STATUS_REQUEST:
-                    response_data = STATUS_RESPONSE.encode("utf-8")
-                    # Send response back to the original sender's port (MYOGESTIC_UDP_PORT)
-                    # Note: setup_interface listens on MYOGESTIC_UDP_PORT
-                    bytes_written = self._udp_socket.writeDatagram(response_data, sender_address, MYOGESTIC_UDP_PORT)
-                    if bytes_written > 0:
-                        # Log only the first time the response is sent successfully
-                        if not self._status_response_logged:
-                            self.logger.print(
-                                f"Sent initial status response '{STATUS_RESPONSE}' to {sender_address.toString()}:{MYOGESTIC_UDP_PORT}"
-                            )
-                            self._status_response_logged = True
-                        # pass # Original commented-out logger removed for clarity
-                        # self.logger.print(f"Sent status response '{STATUS_RESPONSE}' to {sender_address.toString()}:{MYOGESTIC_UDP_PORT}")
-                    else:
-                        self.logger.print(
-                            f"Error sending status response: {self._udp_socket.errorString()}", level="ERROR"
-                        )
-
+                message_str = datagram.data().decode("utf-8")
             except UnicodeDecodeError:
                 self.logger.print(
                     f"Received undecodable UDP data from {sender_address.toString()}:{sender_port}", level="WARNING"
                 )
-            except Exception as e:
-                self.logger.print(f"Error processing UDP datagram: {e}", level="ERROR")
+                continue  # Skip this datagram
 
-    def _read_predicted_cursor_datagrams(self):
-        """Reads and processes incoming UDP datagrams for predicted cursor position."""
-        while self._predicted_cursor_socket.hasPendingDatagrams():
-            datagram_size = self._predicted_cursor_socket.pendingDatagramSize()
-            datagram, sender_address, sender_port = self._predicted_cursor_socket.readDatagram(datagram_size)
+            # self.logger.print(f"Processing message: '{message_str}' from {sender_address.toString()}:{sender_port} at {current_time}")
 
+            if message_str == STATUS_REQUEST:
+                self.is_connected = True
+                response_data = STATUS_RESPONSE.encode("utf-8")
+                # Send response back to the original sender's port (MYOGESTIC_UDP_PORT)
+                # Use the socket that received the request to send the reply.
+                bytes_written = self._predicted_status_read_socket.writeDatagram(
+                    response_data, sender_address, MYOGESTIC_UDP_PORT
+                )
+                if bytes_written > 0:
+                    pass
+                    # self.logger.print(
+                    #     f"STATUS_REQUEST received from {sender_address.toString()}:{sender_port} (>=1s). Sent '{STATUS_RESPONSE}'. is_connected=True.")
+                else:
+                    self.logger.print(
+                        f"Error sending STATUS_RESPONSE: {self._predicted_status_read_socket.errorString()}",
+                        level="ERROR",
+                    )
+            else:
+                self.is_connected = False  # As per user request
+                self.logger.print(
+                    f"STATUS_REQUEST received from {sender_address.toString()}:{sender_port} too soon (<1s). is_connected set to False."
+                )
+
+    def _process_received_prediction_datagrams(self):
+        """Handles all incoming datagrams on VCI_READ_PRED__UDP_PORT (status requests or predictions)."""
+        while self._predicted_cursor_read_socket.hasPendingDatagrams():
+            datagram_size = self._predicted_cursor_read_socket.pendingDatagramSize()
+            datagram, sender_address, sender_port = self._predicted_cursor_read_socket.readDatagram(datagram_size)
+
+            message_str = ""
             try:
                 message_str = datagram.data().decode("utf-8")
-
-                # Safely evaluate the string representation of the list "[[x, y]]"
-                coord_list_outer = ast.literal_eval(message_str)
-                
-                if isinstance(coord_list_outer, list) and len(coord_list_outer) == 1 and \
-                   isinstance(coord_list_outer[0], list) and len(coord_list_outer[0]) == 2:
-                    
-                    x_raw, y_raw = coord_list_outer[0]
-                    
-                    if isinstance(x_raw, (int, float)) and isinstance(y_raw, (int, float)):
-                        pred_x = float(x_raw) / 100.0
-                        pred_y = float(y_raw) / 100.0
-
-                        if hasattr(self, 'vispy_widget') and self.vispy_widget:
-                            self.vispy_widget.update_predicted_cursor(pred_x, pred_y)
-                            # Optional: self.logger.print(f"Updated predicted cursor to ({pred_x:.2f}, {pred_y:.2f}) from {sender_address.toString()}:{sender_port}")
-                        else:
-                            self.logger.print("Vispy widget not available to update predicted cursor.", level="WARNING")
-                    else:
-                        self.logger.print(f"Invalid coordinate types in predicted data message: {message_str}", level="WARNING")
-                else:
-                    self.logger.print(f"Invalid predicted cursor data format: {message_str}", level="WARNING")
-
             except UnicodeDecodeError:
                 self.logger.print(
-                    f"Received undecodable UDP data for predicted cursor from {sender_address.toString()}:{sender_port}", level="WARNING"
+                    f"Received undecodable UDP data from {sender_address.toString()}:{sender_port}", level="WARNING"
                 )
-            except (SyntaxError, ValueError) as e: # ast.literal_eval can raise SyntaxError or ValueError
-                self.logger.print(f"Error parsing predicted cursor data '{message_str}': {e}", level="ERROR")
-            except Exception as e:
-                self.logger.print(f"Error processing predicted cursor UDP datagram: {e}", level="ERROR")
+                continue  # Skip this datagram
+            # self.logger.print(f"Processing message: '{message_str}' from {sender_address.toString()}:{sender_port} at {current_time}")
 
-    # Example slot for a button click (replace with actual slots using self.ui.widgetName)
-    # def on_button_click(self):
-    #     print("Button clicked!")
+            # If we reach here, the message was not a STATUS_REQUEST.
+            if self.is_connected:  # Only process as prediction if connected
+                # self.logger.print(f"Connected. Processing message as prediction: '{message_str}'")
+                try:
+                    coord_list_outer = ast.literal_eval(message_str)
+                    if isinstance(coord_list_outer, tuple) and len(coord_list_outer) == 2:
+
+                        x_raw, y_raw = coord_list_outer
+                        if isinstance(x_raw, (int, float)) and isinstance(y_raw, (int, float)):
+                            pred_x = float(x_raw)
+                            pred_y = float(y_raw)
+
+                            if hasattr(self, 'vispy_widget') and self.vispy_widget:
+                                self.vispy_widget.update_predicted_cursor(pred_x, pred_y)
+                            self.outgoing_prediction_signal.emit(self.vispy_widget.predicted_cursor.center)
+                        else:
+                            self.logger.print(
+                                f"Invalid coordinate types in predicted data message: '{message_str}'", level="WARNING"
+                            )
+                    else:
+                        self.logger.print(f"Invalid predicted cursor data format: '{message_str}'", level="WARNING")
+                except (SyntaxError, ValueError) as e:
+                    self.logger.print(f"Error parsing presumed prediction data '{message_str}': {e}", level="ERROR")
+                except Exception as e:
+                    self.logger.print(f"Error processing presumed prediction UDP datagram: {e}", level="ERROR")
+            else:  # Not connected and not a STATUS_REQUEST
+                self.logger.print(
+                    f"Not connected. Discarding unexpected non-status message '{message_str}' from {sender_address.toString()}:{sender_port}."
+                )
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Ensure the UDP socket is closed when the window closes."""
-        self.logger.print("Closing UDP socket.")
-        self._udp_socket.close()
-        self._stop_cursor_streaming() # Ensure streaming timer is stopped
-        if hasattr(self, '_streaming_socket'):
-            self._streaming_socket.close()
-        if hasattr(self, '_predicted_cursor_socket'):
-            self._predicted_cursor_socket.close()
+        """Ensure the UDP sockets and timers are closed/stopped when the window closes."""
+        self.logger.print("Closing UDP sockets and stopping timers.")
+
+        # Emit signal that window is closing
+        self.window_closed.emit()
+
+        if hasattr(self, '_streaming_timer') and self._streaming_timer.isActive():
+            self._streaming_timer.stop()
+
+        if hasattr(self, '_reference_cursor_stream_socket'):
+            self._reference_cursor_stream_socket.close()
+        if hasattr(self, '_predicted_cursor_read_socket'):
+            self._predicted_cursor_read_socket.close()
+        if hasattr(self, '_predicted_cursor_stream_socket'):
+            self._predicted_cursor_stream_socket.close()
+
+        # Accept the event to allow the window to close
+        event.accept()
+
+        # Call parent's closeEvent
         super().closeEvent(event)
 
     # Method to update VispyWidget mappings
@@ -363,8 +432,6 @@ class MyoGestic_Cursor(QMainWindow):
                     sampling_rate=CURSOR_SAMPLING_RATE,
                     # Amplitude defaults to 1.0 in helper
                 )
-                # Debug print shape
-                # print(f"  Direction: {direction}, Trajectory shape: {trajectories[direction].shape}")
 
         # Pass the calculated trajectories to the VispyWidget
         self.vispy_widget.set_trajectories(trajectories)
@@ -417,7 +484,6 @@ class MyoGestic_Cursor(QMainWindow):
             rest_duration_s = self.rest_duration_double_spin_box.value() if self.rest_duration_double_spin_box else 0.0
 
             # Peak (Hold): Fixed threshold 100%, read duration
-            peak_threshold_percent = 100
             peak_duration_s = self.hold_duration_double_spin_box.value() if self.hold_duration_double_spin_box else 0.0
 
             # Middle: Read threshold and duration
@@ -494,15 +560,23 @@ class MyoGestic_Cursor(QMainWindow):
         """Handles changes in any activation threshold or duration."""
         self._update_vispy_activation_params()
 
-    # Slot for predicted refresh rate changes
-    def _on_predicted_refresh_rate_changed(self):
-        """Handles changes in predicted cursor refresh rate."""
-        # This slot is now empty as the predicted cursor refresh rate is no longer used
-        pass
+    def _on_smoothening_factor_changed(self):
+        """Handles changes in the smoothening factor spinbox value."""
+        if hasattr(self, 'vispy_widget') and self.vispy_widget:
+            factor = self.smoothening_factor_spin_box.value()
+            self.vispy_widget.update_smoothening_factor(factor)
+            self.logger.print(f"Updated cursor smoothening factor to: {factor}")
+
+    def _on_freq_div_factor_changed(self):
+        """Handles changes in the predicted cursor frequency division factor spinbox value."""
+        if hasattr(self, 'vispy_widget') and self.vispy_widget:
+            factor = self.predicted_cursor_freq_div_factor_spin_box.value()
+            self.vispy_widget.update_freq_div_factor(factor)
+            self.logger.print(f"Updated predicted cursor frequency division factor to: {factor}")
 
     def _on_streaming_button_clicked(self):
         """Handles the streaming push button click to toggle data streaming."""
-        if not self.streaming_push_button: # Should not happen if UI is set up
+        if not self.streaming_push_button:  # Should not happen if UI is set up
             return
 
         if self.streaming_push_button.isChecked():
@@ -523,7 +597,7 @@ class MyoGestic_Cursor(QMainWindow):
 
     def _stop_cursor_streaming(self):
         """Stops the timer for streaming cursor position data."""
-        if self._streaming_timer.isActive(): # Check if timer is active before trying to stop associated processes
+        if self._streaming_timer.isActive():  # Check if timer is active before trying to stop associated processes
             self.logger.print("Stopping cursor position streaming.")
             self._streaming_timer.stop()
 
@@ -531,7 +605,7 @@ class MyoGestic_Cursor(QMainWindow):
         """Sends the current reference cursor position and task label via UDP."""
         if hasattr(self, 'vispy_widget') and self.vispy_widget:
             try:
-                current_pos_xy = self.vispy_widget.get_reference_cursor_position() # (x, y) tuple
+                current_pos_xy = self.vispy_widget.get_reference_cursor_position()  # (x, y) tuple
                 current_direction_string = self.vispy_widget.get_current_direction_string()
                 task_label = "Inactive"
 
@@ -545,26 +619,80 @@ class MyoGestic_Cursor(QMainWindow):
                     elif current_direction_string == "Right":
                         task_label = self._selected_right_movement
                     elif current_direction_string == "Rest":
-                        task_label = "Rest" # Or specific mapping if you have one for Rest
+                        task_label = "Rest"  # Or specific mapping if you have one for Rest
 
                 if current_pos_xy is not None and task_label is not None:
                     # Format as [[x_int, y_int]] (transposed from user's previous change)
-                    pos_array_to_send = np.array([
-                        [int(current_pos_xy[0] * 100)],  # x-coordinate scaled
-                        [int(current_pos_xy[1] * 100)]   # y-coordinate scaled
-                    ], dtype=np.int16).T # Transpose to get [[x_int, y_int]] and use int32 for integer values
+                    pos_array_to_send = np.array(
+                        [
+                            [current_pos_xy[0]],  # x-coordinate scaled
+                            [current_pos_xy[1]],  # y-coordinate scaled
+                            [CURSOR_TASK_LABEL_MAP[task_label]],
+                        ],
+                        dtype=np.float32,
+                    ).T  # Transpose to get [[x_int, y_int]] and use float32 for integer values
 
                     # Construct the data string: "[[x, y]]_TaskLabel"
-                    data_string = f"{pos_array_to_send.tolist()}_{task_label}"
+                    data_string = f"{pos_array_to_send.tolist()}"
                     byte_data = data_string.encode("utf-8")
 
-                    bytes_sent = self._streaming_socket.writeDatagram(
+                    bytes_sent = self._reference_cursor_stream_socket.writeDatagram(
                         byte_data, QHostAddress(SOCKET_IP), MYOGESTIC_UDP_PORT
                     )
-                    # print(f"Sent: {data_string}") # Optional: for high-frequency logging
 
             except Exception as e:
                 self.logger.print(f"Error sending cursor position datagram: {e}", level="ERROR")
+
+    def _send_predicted_cursor_datagram(self, prediction_data_list: list):
+        """Sends the predicted cursor data (received from VCI) via UDP."""
+        try:
+            # prediction_data_list is expected to be like [[x, y]]
+            # Convert the list to its string representation for sending
+            data_string = str(prediction_data_list)
+            byte_data = data_string.encode("utf-8")
+
+            # Send to VCI_STREAM_PRED__UDP_PORT on SOCKET_IP
+            # (self._predicted_cursor_stream_socket is bound to this port as its source)
+            bytes_sent = self._predicted_cursor_stream_socket.writeDatagram(
+                byte_data, QHostAddress(SOCKET_IP), VCI_STREAM_PRED__UDP_PORT
+            )
+            if bytes_sent > 0:
+                self.logger.print(
+                    f"Sent predicted cursor data: {data_string} to {SOCKET_IP}:{VCI_STREAM_PRED__UDP_PORT}"
+                )
+            else:
+                self.logger.print(
+                    f"Error sending predicted cursor data via _predicted_cursor_stream_socket: {self._predicted_cursor_stream_socket.errorString()}",
+                    level="ERROR",
+                )
+        except Exception as e:
+            self.logger.print(f"Error in _send_predicted_cursor_datagram: {e}", level="ERROR")
+
+    def _update_ref_cursor_fps_label(self, fps: float):
+        """Updates the reference cursor FPS label with averaged value."""
+        if self.ref_cursor_fps_label:
+            # Add new FPS value to history
+            self._ref_cursor_fps_history.append(fps)
+            # Keep only last 5 values
+            if len(self._ref_cursor_fps_history) > self._FPS_WINDOW_SIZE:
+                self._ref_cursor_fps_history.pop(0)
+            # Calculate average
+            avg_fps = sum(self._ref_cursor_fps_history) / len(self._ref_cursor_fps_history)
+            # Update label with averaged value
+            self.ref_cursor_fps_label.setText(f"{avg_fps:.1f}")
+
+    def _update_pred_cursor_fps_label(self, fps: float):
+        """Updates the predicted cursor FPS label with averaged value."""
+        if self.pred_cursor_fps_label:
+            # Add new FPS value to history
+            self._pred_cursor_fps_history.append(fps)
+            # Keep only last 5 values
+            if len(self._pred_cursor_fps_history) > self._FPS_WINDOW_SIZE:
+                self._pred_cursor_fps_history.pop(0)
+            # Calculate average
+            avg_fps = sum(self._pred_cursor_fps_history) / len(self._pred_cursor_fps_history)
+            # Update label with averaged value
+            self.pred_cursor_fps_label.setText(f"{avg_fps:.1f}")
 
 
 def main():

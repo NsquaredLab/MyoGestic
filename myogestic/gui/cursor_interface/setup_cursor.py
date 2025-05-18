@@ -7,7 +7,8 @@ from PySide6.QtCore import QTimer  # Import QTimer for timed updates
 import math  # Import math for sine function
 import vispy.visuals.rectangle  # Import for explicit RectangleVisual path
 from vispy.color import Color
-from PySide6.QtCore import Signal # Changed to PySide6.QtCore.Signal
+from PySide6.QtCore import Signal, QObject  # Add QObject import
+import time  # Add time import for FPS tracking
 
 # Import the helper function
 from myogestic.gui.cursor_interface.utils.helper_functions import generate_sinusoid_trajectory
@@ -18,11 +19,20 @@ from utils.constants import TASKS, DIRECTIONS
 from myogestic.gui.cursor_interface.utils.constants import CURSOR_SAMPLING_RATE, AXIS_END_VALUES
 
 
-class VispyWidget(scene.SceneCanvas):
+class SignalHandler(QObject):
+    """Separate QObject to handle signals for VispyWidget."""
+
+    ref_cursor_fps_updated = Signal(float)  # Signal to emit reference cursor FPS
+    pred_cursor_fps_updated = Signal(float)  # Signal to emit predicted cursor FPS
+    movement_started = Signal()  # Signal for movement start
+    movement_stopped = Signal()  # Signal for movement stop
+
+
+class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
     """Vispy canvas widget displaying axes, cursors, task info, and handling key events."""
 
     def __init__(self, *args, initial_mappings=None, **kwargs):
-        # Pass keys='interactive' to enable key events
+        # Then initialize SceneCanvas
         scene.SceneCanvas.__init__(self, *args, keys='interactive', bgcolor='black', **kwargs)
 
         # Initialize initial_mappings if None is passed
@@ -31,6 +41,16 @@ class VispyWidget(scene.SceneCanvas):
 
         # Task and movement state
         self.unfreeze()  # Allow adding attributes
+
+        # Create signal handler
+        self._signal_handler = SignalHandler()
+
+        # Add FPS tracking attributes after unfreezing
+        self._last_ref_cursor_update = time.time()
+        self._last_pred_cursor_update = time.time()
+        self._ref_cursor_fps = 0.0
+        self._pred_cursor_fps = 0.0
+
         self._current_direction_index = 0  # Index for DIRECTIONS list
         self._current_direction = DIRECTIONS[self._current_direction_index]  # Store current direction string
         self.movement_active = False
@@ -38,6 +58,9 @@ class VispyWidget(scene.SceneCanvas):
         self._trajectories = {}  # Dictionary to hold pre-calculated trajectories
         self._current_trajectory_index = 0  # Index for stepping through trajectory
         self._trajectory_step_size = 1  # Step size for iterating through trajectory points
+
+        # Define task label
+        self.task_label = "Inactive"  # Initial task label when cursor is inactive
 
         # Hold state attributes
         self._rest_hold_threshold = 0.0
@@ -62,6 +85,15 @@ class VispyWidget(scene.SceneCanvas):
         self._target_box_visible_flag = False
         self._target_box_lower_pct = 0
         self._target_box_upper_pct = 0
+
+        # Add smoothening factor and last predicted position for cursor smoothing
+        self._smoothening_factor = 25.0  # Default to no smoothing
+        self._last_predicted_x = 0.0
+        self._last_predicted_y = 0.0
+
+        # Add frequency division tracking
+        self._freq_div_factor = 1  # Default to display every prediction
+        self._prediction_counter = 0  # Counter for received predictions
 
         # Timing and Sine Wave Parameters
         self._display_frequency = 60.0  # Hz (default), controlled by main_cursor combo box
@@ -186,15 +218,11 @@ class VispyWidget(scene.SceneCanvas):
 
         self.freeze()  # Prevent adding more attributes
 
-    # Signals for movement state
-    movement_started = Signal()
-    movement_stopped = Signal()
-
     def get_reference_cursor_position(self):
         """Returns the current (x, y) position of the reference cursor."""
         if hasattr(self, 'reference_cursor') and self.reference_cursor:
-            return self.reference_cursor.center # center is a tuple (x,y)
-        return (0.0, 0.0) # Default if not available
+            return self.reference_cursor.center  # center is a tuple (x,y)
+        return (0.0, 0.0)  # Default if not available
 
     def get_current_direction_string(self):
         """Returns the current active direction string (e.g., "Up", "Rest")."""
@@ -420,7 +448,7 @@ class VispyWidget(scene.SceneCanvas):
                         f"Starting timer for {self._current_direction} with interval {self._timer.interval()} ms"
                     )  # Debug
                     self._timer.start()
-                    self.movement_started.emit() # Emit signal
+                    self._signal_handler.movement_started.emit()  # Use signal handler
                     # Optionally update position immediately to first step
                     # self._on_timer_tick()
                 else:
@@ -430,7 +458,7 @@ class VispyWidget(scene.SceneCanvas):
             else:  # Deactivating
                 print("Stopping timer")  # Debug
                 self._timer.stop()
-                self.movement_stopped.emit() # Emit signal
+                self._signal_handler.movement_stopped.emit()  # Use signal handler
                 self._is_rest_holding = False  # Reset all hold flags
                 self._is_peak_holding = False
                 self._is_middle_holding = False
@@ -444,12 +472,46 @@ class VispyWidget(scene.SceneCanvas):
         self.update()
 
     def update_reference_cursor(self, x, y):
+        """Updates the reference cursor position and calculates FPS."""
         self.reference_cursor.center = (x, y)
+
+        # Calculate reference cursor FPS
+        current_time = time.time()
+        time_diff = current_time - self._last_ref_cursor_update
+        if time_diff > 0:  # Avoid division by zero
+            self._ref_cursor_fps = 1.0 / time_diff
+            self._signal_handler.ref_cursor_fps_updated.emit(self._ref_cursor_fps)
+        self._last_ref_cursor_update = current_time
+
         self.update()
 
     def update_predicted_cursor(self, x, y):
-        self.predicted_cursor.center = (x, y)
-        self.update()
+        """Updates the predicted cursor position with smoothing and frequency division applied."""
+        # Always calculate smoothed position
+        if self._smoothening_factor > 1:
+            self._last_predicted_x = (x - self._last_predicted_x) / self._smoothening_factor + self._last_predicted_x
+            self._last_predicted_y = (y - self._last_predicted_y) / self._smoothening_factor + self._last_predicted_y
+        else:
+            # No smoothing, update directly
+            self._last_predicted_x = x
+            self._last_predicted_y = y
+
+        # Apply frequency division
+        self._prediction_counter += 1
+        if self._prediction_counter >= self._freq_div_factor:
+            # Update cursor display only when counter reaches division factor
+            self.predicted_cursor.center = (self._last_predicted_x, self._last_predicted_y)
+
+            # Calculate predicted cursor FPS only when actually displaying
+            current_time = time.time()
+            time_diff = current_time - self._last_pred_cursor_update
+            if time_diff > 0:  # Avoid division by zero
+                self._pred_cursor_fps = 1.0 / time_diff
+                self._signal_handler.pred_cursor_fps_updated.emit(self._pred_cursor_fps)
+            self._last_pred_cursor_update = current_time
+
+            self._prediction_counter = 0  # Reset counter after display
+            self.update()
 
     def _on_timer_tick(self):
         """Handles the timer tick: updates cursor, checking for activation holds."""
@@ -667,3 +729,14 @@ class VispyWidget(scene.SceneCanvas):
         self.target_line_left.visible = True
         self.target_line_right.visible = True
         self.update()
+
+    def update_smoothening_factor(self, factor: int):
+        """Updates the smoothening factor for predicted cursor movement."""
+        self._smoothening_factor = max(1, factor)  # Ensure factor is at least 1
+        print(f"Updated smoothening factor to: {self._smoothening_factor}")
+
+    def update_freq_div_factor(self, factor: int):
+        """Updates the frequency division factor for predicted cursor display."""
+        self._freq_div_factor = max(1, factor)  # Ensure factor is at least 1
+        self._prediction_counter = 0  # Reset counter when factor changes
+        print(f"Updated frequency division factor to: {self._freq_div_factor}")
