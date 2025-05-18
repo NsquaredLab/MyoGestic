@@ -32,6 +32,15 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
         The signal instance used to receive incoming messages from the device.
     """
 
+    ground_truth__task_map: dict[str, int] = {
+        "rest": 0,
+        "dorsiflexion": 1,
+        "plantarflexion": 2,
+        "inversion": 3,
+        "eversion": 4,
+    }
+    ground_truth__nr_of_recording_values: int = 2
+
     def __init__(
         self,
         main_window,
@@ -43,14 +52,8 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
             name,
             ui=Ui_RecordingVirtualCursorInterface(),
             incoming_message_signal=incoming_message_signal,
-            ground_truth__nr_of_recording_values=2,
-            ground_truth__task_map={
-                "rest": 0,
-                "dorsiflexion": 1,
-                "plantarflexion": 2,
-                "inversion": 3,
-                "eversion": 4,
-            }
+            ground_truth__nr_of_recording_values=self.ground_truth__nr_of_recording_values,
+            ground_truth__task_map=self.ground_truth__task_map,
         )
 
         RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
@@ -70,9 +73,7 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
         ui: Ui_RecordingVirtualCursorInterface = self.ui
 
         self._main_window.ui.recordVerticalLayout.addWidget(ui.recordRecordingGroupBox)
-        self._main_window.ui.recordVerticalLayout.addWidget(
-            ui.recordReviewRecordingStackedWidget
-        )
+        self._main_window.ui.recordVerticalLayout.addWidget(ui.recordReviewRecordingStackedWidget)
 
         self.record_group_box = ui.recordRecordingGroupBox
         self.record_task_combo_box = ui.recordTaskComboBox
@@ -102,9 +103,7 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
                 self.record_toggle_push_button.setChecked(False)
                 return
 
-            if not self._recording_protocol.start_recording_preparation(
-                self.record_duration_spin_box.value()
-            ):
+            if not self._recording_protocol.start_recording_preparation(self.record_duration_spin_box.value()):
                 self.record_toggle_push_button.setChecked(False)
                 return
 
@@ -117,32 +116,24 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
             if self.use_kinematics_check_box.isChecked():
                 self.incoming_message_signal.connect(self.update_ground_truth_buffer)
 
-            self._has_finished_kinematics = (
-                not self.use_kinematics_check_box.isChecked()
-            )
+            self._has_finished_kinematics = not self.use_kinematics_check_box.isChecked()
 
     def start_recording_preparation(self) -> bool:
         """Prepares the recording process by checking if the device is streaming."""
-        if (
-            not self._main_window.device__widget._get_current_widget()._device._is_streaming
-        ):
-            self._main_window.logger.print(
-                "Biosignal device not streaming!", level=LoggerLevel.ERROR
-            )
+        if not self._main_window.device__widget._get_current_widget()._device._is_streaming:
+            self._main_window.logger.print("Biosignal device not streaming!", level=LoggerLevel.ERROR)
             return False
 
-        self.kinematics_recording_time = int(
-            self.record_duration_spin_box.value() * KINEMATICS_SAMPLING_FREQUENCY
-        )
+        self.kinematics_recording_time = int(self.record_duration_spin_box.value() * KINEMATICS_SAMPLING_FREQUENCY)
         self._kinematics__buffer = []
         return True
 
-    def update_ground_truth_buffer(self, data: np.ndarray, task_label: str) -> None:
+    def update_ground_truth_buffer(self, data: np.ndarray) -> None:
         """Updates the buffer with the incoming kinematics data."""
         if not self.use_kinematics_check_box.isChecked():
             return
 
-        self._kinematics__buffer.append((time.time(), data, task_label))
+        self._kinematics__buffer.append((time.time(), data))
         current_samples = len(self._kinematics__buffer)
         self._set_progress_bar(
             self.record_ground_truth_progress_bar,
@@ -160,10 +151,7 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
 
     def check_recording_completion(self) -> None:
         """Checks if the recording process is complete and finishes it if so."""
-        if (
-            self._recording_protocol.is_biosignal_recording_complete
-            and self._has_finished_kinematics
-        ):
+        if self._recording_protocol.is_biosignal_recording_complete and self._has_finished_kinematics:
             self.finish_recording()
 
     def finish_recording(self) -> None:
@@ -201,12 +189,12 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
             biosignal=biosignal_data,
             biosignal_timings=biosignal_timings,
             ground_truth_timings=(
-                np.array([time_stamp for time_stamp, _, _ in self._kinematics__buffer])
+                np.array([time_stamp for time_stamp, _ in self._kinematics__buffer])
                 if self.use_kinematics_check_box.isChecked()
                 else np.array([])
             ),
             ground_truth=(
-                np.vstack([data for _, data, _ in self._kinematics__buffer]).T
+                np.vstack([data for _, data in self._kinematics__buffer]).T
                 if self.use_kinematics_check_box.isChecked()
                 else np.array([])
             ),
@@ -218,9 +206,7 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
         )
 
         self.reset_ui()
-        self._main_window.logger.print(
-            f"Recording of task {self._current_task.lower()} with label {label} accepted!"
-        )
+        self._main_window.logger.print(f"Recording of task {self._current_task.lower()} with label {label} accepted!")
 
     def reject_recording(self) -> None:
         """Rejects the current recording and resets the recording interface."""
