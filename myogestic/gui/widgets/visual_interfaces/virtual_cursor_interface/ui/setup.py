@@ -16,7 +16,7 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QGridLayout, QGroupBox,
-    QPushButton, QSizePolicy, QWidget)
+    QPushButton, QSizePolicy, QSpacerItem, QWidget)
 
 class Ui_SetupVirtualCursorInterface(object):
     def setupUi(self, SetupVirtualCursorInterface):
@@ -29,16 +29,16 @@ class Ui_SetupVirtualCursorInterface(object):
         self.groupBox.setObjectName(u"groupBox")
         self.gridLayout_31 = QGridLayout(self.groupBox)
         self.gridLayout_31.setObjectName(u"gridLayout_31")
+        self.useExternalVirtualCursorInterfaceCheckBox = QCheckBox(self.groupBox)
+        self.useExternalVirtualCursorInterfaceCheckBox.setObjectName(u"useExternalVirtualCursorInterfaceCheckBox")
+
+        self.gridLayout_31.addWidget(self.useExternalVirtualCursorInterfaceCheckBox, 0, 4, 1, 1)
+
         self.toggleVirtualCursorInterfacePushButton = QPushButton(self.groupBox)
         self.toggleVirtualCursorInterfacePushButton.setObjectName(u"toggleVirtualCursorInterfacePushButton")
         self.toggleVirtualCursorInterfacePushButton.setCheckable(True)
 
         self.gridLayout_31.addWidget(self.toggleVirtualCursorInterfacePushButton, 0, 0, 1, 2)
-
-        self.useExternalVirtualCursorInterfaceCheckBox = QCheckBox(self.groupBox)
-        self.useExternalVirtualCursorInterfaceCheckBox.setObjectName(u"useExternalVirtualCursorInterfaceCheckBox")
-
-        self.gridLayout_31.addWidget(self.useExternalVirtualCursorInterfaceCheckBox, 0, 3, 1, 1)
 
         self.virtualCursorInterfaceStatusWidget = QWidget(self.groupBox)
         self.virtualCursorInterfaceStatusWidget.setObjectName(u"virtualCursorInterfaceStatusWidget")
@@ -52,6 +52,10 @@ class Ui_SetupVirtualCursorInterface(object):
 
         self.gridLayout_31.addWidget(self.virtualCursorInterfaceStatusWidget, 0, 2, 1, 1)
 
+        self.horizontalSpacer = QSpacerItem(17, 20, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+
+        self.gridLayout_31.addItem(self.horizontalSpacer, 0, 5, 1, 1)
+
 
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
 
@@ -64,7 +68,7 @@ class Ui_SetupVirtualCursorInterface(object):
     def retranslateUi(self, SetupVirtualCursorInterface):
         SetupVirtualCursorInterface.setWindowTitle(QCoreApplication.translate("SetupVirtualCursorInterface", u"Form", None))
         self.groupBox.setTitle(QCoreApplication.translate("SetupVirtualCursorInterface", u"Virtual Cursor Interface", None))
+        self.useExternalVirtualCursorInterfaceCheckBox.setText(QCoreApplication.translate("SetupVirtualCursorInterface", u"Use ext. Virtual Cursor Interface", None))
         self.toggleVirtualCursorInterfacePushButton.setText(QCoreApplication.translate("SetupVirtualCursorInterface", u"Open", None))
-        self.useExternalVirtualCursorInterfaceCheckBox.setText(QCoreApplication.translate("SetupVirtualCursorInterface", u"Use external Virtual Cursor Interface", None))
     # retranslateUi
 
