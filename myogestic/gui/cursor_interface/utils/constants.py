@@ -1,7 +1,7 @@
 """Constants specific to the Cursor Interface utilities."""
 
-TASKS = ["Rest", "Dorsiflexion", "Plantarflexion", "Inversion", "Eversion"] # Define the tasks (movements)
-DIRECTIONS = ["Rest", "Up", "Down", "Left", "Right"]    # Define the directions the user can select
+TASKS = ["Rest", "Dorsiflexion", "Plantarflexion", "Inversion", "Eversion"]  # Define the tasks (movements)
+DIRECTIONS = ["Rest", "Up", "Down", "Left", "Right"]  # Define the directions the user can select
 
 # Cursor Interface Constants
 CURSOR_SAMPLING_RATE = 60  # Hz - Rate at which cursor position is updated
@@ -12,5 +12,14 @@ AXIS_END_VALUES = {
     "Down": (0.0, -1.0),
     "Left": (-1.0, 0.0),
     "Right": (1.0, 0.0),
-    "Rest": (0.0, 0.0), # Added Rest for completeness, though movement won't occur
+    "Rest": (0.0, 0.0),  # Added Rest for completeness, though movement won't occur
+}
+
+CURSOR_TASK_LABEL_MAP = {
+    "Inactive": -1,
+    "Rest": 0,
+    "Dorsiflexion": 1,
+    "Plantarflexion": 2,
+    "Inversion": 3,
+    "Eversion": 4,
 }
