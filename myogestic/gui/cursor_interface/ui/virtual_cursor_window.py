@@ -16,9 +16,9 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QGridLayout,
-    QGroupBox, QLabel, QPushButton, QScrollArea,
-    QSizePolicy, QSpinBox, QTabWidget, QTextEdit,
-    QWidget)
+    QGroupBox, QLabel, QLineEdit, QPushButton,
+    QScrollArea, QSizePolicy, QSpacerItem, QSpinBox,
+    QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
 class Ui_CursorInterface(object):
     def setupUi(self, CursorInterface):
@@ -27,7 +27,7 @@ class Ui_CursorInterface(object):
         CursorInterface.resize(1528, 844)
         self.tabWidget = QTabWidget(CursorInterface)
         self.tabWidget.setObjectName(u"tabWidget")
-        self.tabWidget.setGeometry(QRect(20, 10, 371, 601))
+        self.tabWidget.setGeometry(QRect(20, 10, 381, 602))
         self.taskMappingTab = QWidget()
         self.taskMappingTab.setObjectName(u"taskMappingTab")
         self.groupBox = QGroupBox(self.taskMappingTab)
@@ -302,6 +302,175 @@ class Ui_CursorInterface(object):
         self.gridLayout_8.addWidget(self.streamingPushButton, 3, 0, 1, 1)
 
         self.tabWidget.addTab(self.cursorSettingsTab, "")
+        self.tab = QWidget()
+        self.tab.setObjectName(u"tab")
+        self.gridLayout_13 = QGridLayout(self.tab)
+        self.gridLayout_13.setObjectName(u"gridLayout_13")
+        self.stimStreamGroupBox = QGroupBox(self.tab)
+        self.stimStreamGroupBox.setObjectName(u"stimStreamGroupBox")
+        self.gridLayout_12 = QGridLayout(self.stimStreamGroupBox)
+        self.gridLayout_12.setObjectName(u"gridLayout_12")
+        self.externalDeviceConnectPushButton = QPushButton(self.stimStreamGroupBox)
+        self.externalDeviceConnectPushButton.setObjectName(u"externalDeviceConnectPushButton")
+        self.externalDeviceConnectPushButton.setEnabled(True)
+        self.externalDeviceConnectPushButton.setCheckable(True)
+
+        self.gridLayout_12.addWidget(self.externalDeviceConnectPushButton, 4, 0, 1, 3)
+
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.gridLayout_12.addItem(self.horizontalSpacer, 0, 1, 1, 1)
+
+        self.externalDeviceStreamPushButton = QPushButton(self.stimStreamGroupBox)
+        self.externalDeviceStreamPushButton.setObjectName(u"externalDeviceStreamPushButton")
+        self.externalDeviceStreamPushButton.setCheckable(True)
+
+        self.gridLayout_12.addWidget(self.externalDeviceStreamPushButton, 6, 0, 1, 3)
+
+        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.gridLayout_12.addItem(self.horizontalSpacer_2, 1, 1, 1, 1)
+
+        self.externalDeviceIPLineEdit = QLineEdit(self.stimStreamGroupBox)
+        self.externalDeviceIPLineEdit.setObjectName(u"externalDeviceIPLineEdit")
+
+        self.gridLayout_12.addWidget(self.externalDeviceIPLineEdit, 0, 2, 1, 1)
+
+        self.label_25 = QLabel(self.stimStreamGroupBox)
+        self.label_25.setObjectName(u"label_25")
+
+        self.gridLayout_12.addWidget(self.label_25, 0, 0, 1, 1)
+
+        self.label_26 = QLabel(self.stimStreamGroupBox)
+        self.label_26.setObjectName(u"label_26")
+
+        self.gridLayout_12.addWidget(self.label_26, 1, 0, 1, 1)
+
+        self.externalDevicePortLineEdit = QLineEdit(self.stimStreamGroupBox)
+        self.externalDevicePortLineEdit.setObjectName(u"externalDevicePortLineEdit")
+
+        self.gridLayout_12.addWidget(self.externalDevicePortLineEdit, 1, 2, 1, 1)
+
+        self.externalDeviceConfigurePushButton = QPushButton(self.stimStreamGroupBox)
+        self.externalDeviceConfigurePushButton.setObjectName(u"externalDeviceConfigurePushButton")
+        self.externalDeviceConfigurePushButton.setCheckable(True)
+        self.externalDeviceConfigurePushButton.setChecked(False)
+
+        self.gridLayout_12.addWidget(self.externalDeviceConfigurePushButton, 3, 0, 1, 3)
+
+
+        self.gridLayout_13.addWidget(self.stimStreamGroupBox, 2, 0, 1, 1)
+
+        self.stimPulseParamsGroupBox = QGroupBox(self.tab)
+        self.stimPulseParamsGroupBox.setObjectName(u"stimPulseParamsGroupBox")
+        self.gridLayout_14 = QGridLayout(self.stimPulseParamsGroupBox)
+        self.gridLayout_14.setObjectName(u"gridLayout_14")
+        self.label_27 = QLabel(self.stimPulseParamsGroupBox)
+        self.label_27.setObjectName(u"label_27")
+
+        self.gridLayout_14.addWidget(self.label_27, 0, 0, 1, 1)
+
+        self.stimFrequencySpinBox = QSpinBox(self.stimPulseParamsGroupBox)
+        self.stimFrequencySpinBox.setObjectName(u"stimFrequencySpinBox")
+        self.stimFrequencySpinBox.setMinimum(1)
+        self.stimFrequencySpinBox.setValue(35)
+
+        self.gridLayout_14.addWidget(self.stimFrequencySpinBox, 0, 1, 1, 1)
+
+
+        self.gridLayout_13.addWidget(self.stimPulseParamsGroupBox, 1, 0, 1, 1)
+
+        self.stimUserParamsGroupBox = QGroupBox(self.tab)
+        self.stimUserParamsGroupBox.setObjectName(u"stimUserParamsGroupBox")
+        self.stimUserParamsGroupBox.setCheckable(True)
+        self.stimUserParamsGroupBox.setChecked(False)
+        self.gridLayout_10 = QGridLayout(self.stimUserParamsGroupBox)
+        self.gridLayout_10.setObjectName(u"gridLayout_10")
+        self.label_16 = QLabel(self.stimUserParamsGroupBox)
+        self.label_16.setObjectName(u"label_16")
+
+        self.gridLayout_10.addWidget(self.label_16, 0, 0, 1, 1)
+
+        self.cursorDownStimThresholdSpinBox = QSpinBox(self.stimUserParamsGroupBox)
+        self.cursorDownStimThresholdSpinBox.setObjectName(u"cursorDownStimThresholdSpinBox")
+        self.cursorDownStimThresholdSpinBox.setMinimum(1)
+        self.cursorDownStimThresholdSpinBox.setValue(99)
+
+        self.gridLayout_10.addWidget(self.cursorDownStimThresholdSpinBox, 1, 1, 1, 1)
+
+        self.label_24 = QLabel(self.stimUserParamsGroupBox)
+        self.label_24.setObjectName(u"label_24")
+
+        self.gridLayout_10.addWidget(self.label_24, 5, 0, 1, 1)
+
+        self.label_19 = QLabel(self.stimUserParamsGroupBox)
+        self.label_19.setObjectName(u"label_19")
+
+        self.gridLayout_10.addWidget(self.label_19, 1, 0, 1, 1)
+
+        self.cursorLeftStimThresholdSpinBox = QSpinBox(self.stimUserParamsGroupBox)
+        self.cursorLeftStimThresholdSpinBox.setObjectName(u"cursorLeftStimThresholdSpinBox")
+        self.cursorLeftStimThresholdSpinBox.setMinimum(1)
+        self.cursorLeftStimThresholdSpinBox.setValue(99)
+
+        self.gridLayout_10.addWidget(self.cursorLeftStimThresholdSpinBox, 3, 1, 1, 1)
+
+        self.stimOnTimeSpinBox = QSpinBox(self.stimUserParamsGroupBox)
+        self.stimOnTimeSpinBox.setObjectName(u"stimOnTimeSpinBox")
+        self.stimOnTimeSpinBox.setMaximum(10000)
+        self.stimOnTimeSpinBox.setSingleStep(10)
+
+        self.gridLayout_10.addWidget(self.stimOnTimeSpinBox, 5, 1, 1, 1)
+
+        self.label_28 = QLabel(self.stimUserParamsGroupBox)
+        self.label_28.setObjectName(u"label_28")
+
+        self.gridLayout_10.addWidget(self.label_28, 9, 0, 1, 1)
+
+        self.label_21 = QLabel(self.stimUserParamsGroupBox)
+        self.label_21.setObjectName(u"label_21")
+
+        self.gridLayout_10.addWidget(self.label_21, 3, 0, 1, 1)
+
+        self.label_20 = QLabel(self.stimUserParamsGroupBox)
+        self.label_20.setObjectName(u"label_20")
+
+        self.gridLayout_10.addWidget(self.label_20, 2, 0, 1, 1)
+
+        self.stimOffTimeSpinBox = QSpinBox(self.stimUserParamsGroupBox)
+        self.stimOffTimeSpinBox.setObjectName(u"stimOffTimeSpinBox")
+        self.stimOffTimeSpinBox.setMaximum(10000)
+        self.stimOffTimeSpinBox.setSingleStep(10)
+
+        self.gridLayout_10.addWidget(self.stimOffTimeSpinBox, 9, 1, 1, 1)
+
+        self.cursorRightStimThresholdSpinBox = QSpinBox(self.stimUserParamsGroupBox)
+        self.cursorRightStimThresholdSpinBox.setObjectName(u"cursorRightStimThresholdSpinBox")
+        self.cursorRightStimThresholdSpinBox.setMinimum(1)
+        self.cursorRightStimThresholdSpinBox.setValue(99)
+
+        self.gridLayout_10.addWidget(self.cursorRightStimThresholdSpinBox, 2, 1, 1, 1)
+
+        self.cursorUpStimThresholdSpinBox = QSpinBox(self.stimUserParamsGroupBox)
+        self.cursorUpStimThresholdSpinBox.setObjectName(u"cursorUpStimThresholdSpinBox")
+        self.cursorUpStimThresholdSpinBox.setMinimum(1)
+        self.cursorUpStimThresholdSpinBox.setValue(99)
+
+        self.gridLayout_10.addWidget(self.cursorUpStimThresholdSpinBox, 0, 1, 1, 1)
+
+        self.verticalSpacer = QSpacerItem(20, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+
+        self.gridLayout_10.addItem(self.verticalSpacer, 4, 1, 1, 1)
+
+
+        self.gridLayout_13.addWidget(self.stimUserParamsGroupBox, 0, 0, 1, 1)
+
+        self.verticalLayout = QVBoxLayout()
+        self.verticalLayout.setObjectName(u"verticalLayout")
+
+        self.gridLayout_13.addLayout(self.verticalLayout, 3, 0, 1, 1)
+
+        self.tabWidget.addTab(self.tab, "")
         self.CursorDisplayWidget = QWidget(CursorInterface)
         self.CursorDisplayWidget.setObjectName(u"CursorDisplayWidget")
         self.CursorDisplayWidget.setGeometry(QRect(409, 19, 1101, 791))
@@ -351,7 +520,7 @@ class Ui_CursorInterface(object):
 
         self.retranslateUi(CursorInterface)
 
-        self.tabWidget.setCurrentIndex(1)
+        self.tabWidget.setCurrentIndex(2)
 
 
         QMetaObject.connectSlotsByName(CursorInterface)
@@ -419,12 +588,30 @@ class Ui_CursorInterface(object):
         self.groupBox_6.setTitle(QCoreApplication.translate("CursorInterface", u"Predicted cursor", None))
         self.label_13.setText(QCoreApplication.translate("CursorInterface", u"Smoothening factor", None))
         self.label_14.setText(QCoreApplication.translate("CursorInterface", u"Prediction freq. division factor", None))
-        self.streamingPushButton.setText(QCoreApplication.translate("CursorInterface", u"Start Streaming", None))
+        self.streamingPushButton.setText(QCoreApplication.translate("CursorInterface", u"Start Reference Streaming", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.cursorSettingsTab), QCoreApplication.translate("CursorInterface", u"Cursor settings", None))
+        self.stimStreamGroupBox.setTitle(QCoreApplication.translate("CursorInterface", u"Stimulation external streaming", None))
+        self.externalDeviceConnectPushButton.setText(QCoreApplication.translate("CursorInterface", u"Connect", None))
+        self.externalDeviceStreamPushButton.setText(QCoreApplication.translate("CursorInterface", u"Stream", None))
+        self.externalDeviceIPLineEdit.setText(QCoreApplication.translate("CursorInterface", u"192.168.14.10", None))
+        self.label_25.setText(QCoreApplication.translate("CursorInterface", u"Ext. IP", None))
+        self.label_26.setText(QCoreApplication.translate("CursorInterface", u"Ext. Port", None))
+        self.externalDevicePortLineEdit.setText(QCoreApplication.translate("CursorInterface", u"12345", None))
+        self.externalDeviceConfigurePushButton.setText(QCoreApplication.translate("CursorInterface", u"Configure", None))
+        self.stimPulseParamsGroupBox.setTitle(QCoreApplication.translate("CursorInterface", u"Stimulation pulse parameters", None))
+        self.label_27.setText(QCoreApplication.translate("CursorInterface", u"Frequency (Hz)", None))
+        self.stimUserParamsGroupBox.setTitle(QCoreApplication.translate("CursorInterface", u"Stimulation ON/FF (checked) / Proportional (unchecked)", None))
+        self.label_16.setText(QCoreApplication.translate("CursorInterface", u"UP stim threshold (%)", None))
+        self.label_24.setText(QCoreApplication.translate("CursorInterface", u"Stimulation ON time (ms)", None))
+        self.label_19.setText(QCoreApplication.translate("CursorInterface", u"DOWN stim threshold (%)", None))
+        self.label_28.setText(QCoreApplication.translate("CursorInterface", u"Stimulation OFF time (ms)", None))
+        self.label_21.setText(QCoreApplication.translate("CursorInterface", u"LEFT stim threshold (%)", None))
+        self.label_20.setText(QCoreApplication.translate("CursorInterface", u"RIGHT stim threshold (%)", None))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), QCoreApplication.translate("CursorInterface", u"Stimulation settings", None))
         self.groupBox_7.setTitle(QCoreApplication.translate("CursorInterface", u"Logging", None))
-        self.label_8.setText(QCoreApplication.translate("CursorInterface", u"FPS reference:", None))
+        self.label_8.setText(QCoreApplication.translate("CursorInterface", u"FPS display reference:", None))
         self.refCursorUpdateFPSLabel.setText(QCoreApplication.translate("CursorInterface", u"Placeholder", None))
-        self.label_18.setText(QCoreApplication.translate("CursorInterface", u"FPS prediction:", None))
+        self.label_18.setText(QCoreApplication.translate("CursorInterface", u"FPS display prediction:", None))
         self.predCursorUpdateFPSLabel.setText(QCoreApplication.translate("CursorInterface", u"Placeholder", None))
     # retranslateUi
 

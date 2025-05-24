@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QPushButton,
     QLabel,
+    QLineEdit,
 )
 import qdarkstyle
 from PySide6.QtNetwork import QUdpSocket, QHostAddress
@@ -23,13 +24,14 @@ import ast  # For safely evaluating string literals
 import time  # Added for timestamping
 
 from myogestic.utils.constants import MYOGESTIC_UDP_PORT
+from myogestic.gui.cursor_interface.electrical_stimulation import ElectricalStimulationControl
 
 # Import the cursor-specific constant for logging
 from myogestic.gui.cursor_interface.utils.constants import (
     CURSOR_SAMPLING_RATE,
     DIRECTIONS,
     CURSOR_STREAMING_RATE,
-    CURSOR_TASK_LABEL_MAP,
+    CURSOR_TASK2LABEL_MAP,
 )
 
 # Define constants locally (Ideally move these to a shared constants file)
@@ -122,7 +124,22 @@ class MyoGestic_Cursor(QMainWindow):
         self.ref_cursor_fps_label: QLabel = self.ui.refCursorUpdateFPSLabel
         self.pred_cursor_fps_label: QLabel = self.ui.predCursorUpdateFPSLabel
 
-        # Setup the initial selected movement for each direction
+        # Store stimulation threshold parameters
+        self.cursor_up_stim_threshold: QSpinBox = self.ui.cursorUpStimThresholdSpinBox
+        self.cursor_down_stim_threshold: QSpinBox = self.ui.cursorDownStimThresholdSpinBox
+        self.cursor_right_stim_threshold: QSpinBox = self.ui.cursorRightStimThresholdSpinBox
+        self.cursor_left_stim_threshold: QSpinBox = self.ui.cursorLeftStimThresholdSpinBox
+        self.stim_user_params_group_box: QGroupBox = self.ui.stimUserParamsGroupBox
+        self.stim_proportional: bool = not self.ui.stimUserParamsGroupBox.isChecked()
+
+        # Connect stimulation threshold related widgets
+        self.stim_user_params_group_box.toggled.connect(self._on_stimulation_thresholds_changed)
+        self.cursor_up_stim_threshold.valueChanged.connect(self._on_stimulation_thresholds_changed)
+        self.cursor_down_stim_threshold.valueChanged.connect(self._on_stimulation_thresholds_changed)
+        self.cursor_left_stim_threshold.valueChanged.connect(self._on_stimulation_thresholds_changed)
+        self.cursor_right_stim_threshold.valueChanged.connect(self._on_stimulation_thresholds_changed)
+
+        # Set the initial selected movement for each direction
         self._selected_up_movement = self.up_movement_combobox.currentText() if self.up_movement_combobox else None
         self._selected_down_movement = (
             self.down_movement_combobox.currentText() if self.down_movement_combobox else None
@@ -196,11 +213,15 @@ class MyoGestic_Cursor(QMainWindow):
         }
         self._setup_vispy_display(initial_mappings)
 
+        # Store cursor-stimulation parameters
+        self.external_electrical_stimulator = ElectricalStimulationControl(main_window=self)
+        print("New class:", type(self.external_electrical_stimulator))
+
         # Connect FPS update signals - connect to the signal handler's signals
         if hasattr(self, 'vispy_widget') and self.vispy_widget:
             # Connect using the signal handler's signals
-            self.vispy_widget._signal_handler.ref_cursor_fps_updated.connect(self._update_ref_cursor_fps_label)
-            self.vispy_widget._signal_handler.pred_cursor_fps_updated.connect(self._update_pred_cursor_fps_label)
+            self.vispy_widget.signal_handler.ref_cursor_fps_updated.connect(self._update_ref_cursor_fps_label)
+            self.vispy_widget.signal_handler.pred_cursor_fps_updated.connect(self._update_pred_cursor_fps_label)
             # Initialize labels with 0 Hz
             self._update_ref_cursor_fps_label(0.0)
             self._update_pred_cursor_fps_label(0.0)
@@ -267,8 +288,34 @@ class MyoGestic_Cursor(QMainWindow):
         # Get the placeholder widget from the UI
         placeholder_widget: QWidget = self.ui.CursorDisplayWidget
 
-        # Create the Vispy widget instance, passing initial mappings
-        self.vispy_widget = VispyWidget(initial_mappings=initial_mappings)
+        # Get initial stimulation threshold values from UI
+        initial_stim_thresholds = {
+            'Up': (
+                self.cursor_up_stim_threshold.value()
+                if self.cursor_up_stim_threshold
+                else 0
+            ),
+            'Down': (
+                self.cursor_down_stim_threshold.value()
+                if self.cursor_down_stim_threshold
+                else 0
+            ),
+            'Left': (
+                self.cursor_left_stim_threshold.value()
+                if self.cursor_left_stim_threshold
+                else 0
+            ),
+            'Right': (
+                self.cursor_right_stim_threshold.value()
+                if self.cursor_right_stim_threshold
+                else 0
+            ),
+        }
+
+        # Create the Vispy widget instance, passing initial mappings and stimulation thresholds
+        self.vispy_widget = VispyWidget(
+            initial_mappings=initial_mappings, initial_stim_thresholds=initial_stim_thresholds
+        )
 
         # Create a layout for the placeholder widget
         layout = QVBoxLayout(placeholder_widget)
@@ -295,8 +342,6 @@ class MyoGestic_Cursor(QMainWindow):
                     f"Received undecodable UDP data from {sender_address.toString()}:{sender_port}", level="WARNING"
                 )
                 continue  # Skip this datagram
-
-            # self.logger.print(f"Processing message: '{message_str}' from {sender_address.toString()}:{sender_port} at {current_time}")
 
             if message_str == STATUS_REQUEST:
                 self.is_connected = True
@@ -581,10 +626,32 @@ class MyoGestic_Cursor(QMainWindow):
 
         if self.streaming_push_button.isChecked():
             self._start_cursor_streaming()
-            self.streaming_push_button.setText("Stop Streaming")
+            self.streaming_push_button.setText("Stop Reference Streaming")
         else:
             self._stop_cursor_streaming()
-            self.streaming_push_button.setText("Start Streaming")
+            self.streaming_push_button.setText("Start Reference Streaming")
+
+    def _on_stimulation_thresholds_changed(self):
+        """Handles changes in stimulation threshold values or visibility."""
+        if hasattr(self, 'vispy_widget') and self.vispy_widget:
+            thresholds = {
+                'Up': self.cursor_up_stim_threshold.value() if self.cursor_up_stim_threshold else 0,
+                'Down': self.cursor_down_stim_threshold.value() if self.cursor_down_stim_threshold else 0,
+                'Left': self.cursor_left_stim_threshold.value() if self.cursor_left_stim_threshold else 0,
+                'Right': self.cursor_right_stim_threshold.value() if self.cursor_right_stim_threshold else 0,
+            }
+
+            # Get visibility state from group box
+            visible = self.stim_user_params_group_box.isChecked() if self.stim_user_params_group_box else False
+            # Set stimulator control if proportional or ON/OFF
+            self.stim_proportional = not self.stim_user_params_group_box.isChecked()
+
+            # Update the visual elements
+            self.vispy_widget.update_stimulation_thresholds(thresholds, visible)
+            self.logger.print(
+                f"Updated stimulation thresholds: Up={thresholds['Up']}%, Down={thresholds['Down']}%, "
+                f"Left={thresholds['Left']}%, Right={thresholds['Right']}%, Visible={visible}"
+            )
 
     # --- Cursor Data Streaming Methods ---
     def _start_cursor_streaming(self):
@@ -627,7 +694,7 @@ class MyoGestic_Cursor(QMainWindow):
                         [
                             [current_pos_xy[0]],  # x-coordinate scaled
                             [current_pos_xy[1]],  # y-coordinate scaled
-                            [CURSOR_TASK_LABEL_MAP[task_label]],
+                            [CURSOR_TASK2LABEL_MAP[task_label]],
                         ],
                         dtype=np.float32,
                     ).T  # Transpose to get [[x_int, y_int]] and use float32 for integer values
