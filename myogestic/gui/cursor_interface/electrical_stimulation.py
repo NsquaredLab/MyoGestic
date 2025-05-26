@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Optional
 
 import re
 import time
+import numpy as np
 
 from PySide6.QtCore import QObject, Signal, QByteArray, QIODevice
 from PySide6.QtNetwork import QTcpSocket, QHostAddress
@@ -22,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QCloseEvent
 
-from myogestic.gui.cursor_interface.utils.constants import CURSOR_LABEL2TASK_MAP
+from myogestic.gui.cursor_interface.utils.constants import CURSOR_LABEL2TASK_MAP, CURSOR_TASK2LABEL_MAP
 from myogestic.gui.cursor_interface.utils.helper_functions import convert_cursor2stimulation
 
 if TYPE_CHECKING:
@@ -31,36 +32,37 @@ if TYPE_CHECKING:
 
 class ElectricalStimulationControl(QObject):
     """Control class for electrical stimulation that interfaces with the main cursor window.
-    
+
     This class is a QObject that maintains a reference to the main window (MyoGestic_Cursor)
     to access its UI elements and parameters. It handles the electrical stimulation control
     logic while the main window handles the display and user interface.
     """
+
     output_message_signal = Signal(QByteArray)  # use to trigger message writing via the opened TCP port
 
     def __init__(self, main_window: Optional['MyoGestic_Cursor'] = None) -> None:
         """Initialize the electrical stimulation control.
-        
+
         Args:
             main_window: Reference to the main cursor window instance. This is required
                         to access UI elements and parameters.
-        
+
         Raises:
             ValueError: If main_window is None or not an instance of MyoGestic_Cursor
         """
         # Set the Qt parent to None since we're managing our own reference to main_window
         super().__init__(None)
-        
+
         if main_window is None:
             raise ValueError("main_window must be provided to ElectricalStimulationControl")
-            
+
         # Store reference to main window
         self.main_window: 'MyoGestic_Cursor' = main_window
-        
+
         # Validate that we have access to required UI elements
         if not hasattr(self.main_window, 'ui'):
             raise ValueError("main_window must have a 'ui' attribute")
-            
+
         # Check if connection to the server has been made via the defined user
         self.is_connected: bool = False
 
@@ -79,8 +81,8 @@ class ElectricalStimulationControl(QObject):
         # Store TCP communication parameters with external device
         self.external_data_streaming_group_box: QGroupBox = self.main_window.ui.stimStreamGroupBox
         self.stim_pulse_params_group_box: QGroupBox = self.main_window.ui.stimPulseParamsGroupBox
-        self.external_device_IP: QLineEdit = self.main_window.ui.externalDeviceIPLineEdit
-        self.external_device_port: QLineEdit = self.main_window.ui.externalDevicePortLineEdit
+        self.external_device_IP = self.main_window.ui.externalDeviceIPLineEdit
+        self.external_device_port = self.main_window.ui.externalDevicePortLineEdit
 
         self.external_device_connect_push_button: QPushButton = self.main_window.ui.externalDeviceConnectPushButton
         self.external_device_configure_push_button: QPushButton = self.main_window.ui.externalDeviceConfigurePushButton
@@ -105,6 +107,7 @@ class ElectricalStimulationControl(QObject):
 
         Returns:
             list: A list containing the stimulation parameters:
+                - stim_proportional (bool): Whether the stimulation shall be proportional to stimulation level or ON/OFF
                 - trigger_stimulation (bool): Whether to trigger stimulation.
                 - target_movement (str): The target movement to be stimulated.
                 - stimulation_level (float): The stimulation level (0-100%).
@@ -112,7 +115,6 @@ class ElectricalStimulationControl(QObject):
                 - stim_off_time (int): The time duration for stimulation OFF.
                 - stimulation_freq (int): The frequency of stimulation.
         """
-
         trigger_stimulation = False  # initialized if prediction below threshold
 
         if self.main_window.ui.externalDeviceStreamPushButton.isChecked():
@@ -131,27 +133,48 @@ class ElectricalStimulationControl(QObject):
                 trigger_stimulation = True
             else:  # Check if cursor above threshold for current task
                 if target_direction == "Up":
-                    trigger_stimulation = True if abs(pred_cursor_y) >= self.main_window.cursor_up_stim_threshold.value() else False
+                    trigger_stimulation = (
+                        True if abs(pred_cursor_y) >= self.main_window.cursor_up_stim_threshold.value() / 100 else False
+                    )
                 elif target_direction == "Down":
-                    trigger_stimulation = True if abs(pred_cursor_y) >= self.main_window.cursor_down_stim_threshold.value() else False
+                    trigger_stimulation = (
+                        True
+                        if abs(pred_cursor_y) >= self.main_window.cursor_down_stim_threshold.value() / 100
+                        else False
+                    )
                 elif target_direction == "Right":
-                    trigger_stimulation = True if abs(pred_cursor_x) >= self.main_window.cursor_right_stim_threshold.value() else False
+                    trigger_stimulation = (
+                        True
+                        if abs(pred_cursor_x) >= self.main_window.cursor_right_stim_threshold.value() / 100
+                        else False
+                    )
                 elif target_direction == "Left":
-                    trigger_stimulation = True if abs(pred_cursor_x) >= self.main_window.cursor_left_stim_threshold.value() else False
+                    trigger_stimulation = (
+                        True
+                        if abs(pred_cursor_x) >= self.main_window.cursor_left_stim_threshold.value() / 100
+                        else False
+                    )
                 else:
                     trigger_stimulation = False
 
-            output_message = [
-                trigger_stimulation,
-                target_movement,
-                stimulation_level,
-                self.stim_on_time,
-                self.stim_off_time,
-                self.stimulation_freq,
-            ]
+            self.main_window.logger.print(f"{stimulation_level}")
 
-            print("Output message:", output_message)
-            self.output_message_signal.emit(str(output_message).encode("utf-8"))
+            output_message = np.array(
+                [
+                    int(self.main_window.stim_proportional),
+                    int(trigger_stimulation),
+                    CURSOR_TASK2LABEL_MAP[target_movement],
+                    stimulation_level,
+                    self.stim_on_time,
+                    self.stim_off_time,
+                    self.stimulation_freq,
+                ],
+                dtype=np.int32,
+            )
+
+            self.main_window.logger.print(f"Output message: {output_message}")
+            # self.output_message_signal.emit(str(output_message).encode("utf-8"))
+            self.output_message_signal.emit(output_message.tobytes())
 
     def _update_stim_time_freq_parameters(self):
         """Handles UI updates for the time duration and frequency of stimulation"""
@@ -161,6 +184,7 @@ class ElectricalStimulationControl(QObject):
 
     def _write_message(self, message: QByteArray) -> None:
         if self.is_streaming:
+            # self.main_window.logger.print("Stream freq:", 1 / (time.time() - self.last_message_time), "Hz")
             self.last_message_time = time.time()
 
             # Clear socket before streaming new data
@@ -180,7 +204,6 @@ class ElectricalStimulationControl(QObject):
         if self.external_device_connect_push_button.isChecked():
             self.external_device_connect_push_button.setText("Disconnect")
             self.external_device_configure_push_button.setEnabled(False)
-            print("About to connect to server")
             self._connect_to_server()
 
         else:
@@ -193,22 +216,16 @@ class ElectricalStimulationControl(QObject):
             self.external_streaming_tcp_ip = self.external_device_IP.text()
             self.external_streaming_tcp_port = int(self.external_device_port.text())
 
-            self.main_window.ui.stimUserParamsGroupBox.setEnabled(False)
-            self.main_window.stim_user_params_group_box.setEnabled(False)
-            self.main_window.ui.stimPulseParamsGroupBox.setEnabled(False)
-            self.stim_pulse_params_group_box.setEnabled(False)
+            self.external_device_IP.setEnabled(False)
+            self.external_device_port.setEnabled(False)
 
             self.external_device_configure_push_button.setText("Change Configuration")
-
             print("External data streaming configured")
 
         else:
-            self.main_window.ui.stimUserParamsGroupBox.setEnabled(True)
-            self.main_window.stim_user_params_group_box.setEnabled(True)
-            self.main_window.ui.stimPulseParamsGroupBox.setEnabled(True)
-            self.stim_pulse_params_group_box.setEnabled(True)
-
-            self.external_device_configure_push_button.setText("Configure")
+            self.main_window.ui.externalDeviceIPLineEdit.setEnabled(True)
+            self.main_window.ui.externalDevicePortLineEdit.setEnabled(True)
+            self.external_device_configure_push_button.setText("Configure connection")
 
     def _toggle_streaming(self) -> None:
         """
@@ -288,6 +305,7 @@ class ElectricalStimulationControl(QObject):
         """
 
         # Create socket and connect to server
+        print(self.external_streaming_tcp_ip, self.external_streaming_tcp_port)
         self.external_streaming_tcp_socket = QTcpSocket(self)
         self.external_streaming_tcp_socket.connectToHost(
             self.external_streaming_tcp_ip, self.external_streaming_tcp_port, QIODevice.ReadWrite
@@ -295,7 +313,7 @@ class ElectricalStimulationControl(QObject):
 
         # Check if connection has been established
         if not self.external_streaming_tcp_socket.waitForConnected(1000):
-            print("Connection to device failed.")
+            self.main_window.logger.print("Connection to device failed.")
             self.is_connected = False
 
     def _disconnect_from_server(self) -> None:

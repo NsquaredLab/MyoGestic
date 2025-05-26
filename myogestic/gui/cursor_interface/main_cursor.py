@@ -723,15 +723,6 @@ class MyoGestic_Cursor(QMainWindow):
             bytes_sent = self._predicted_cursor_stream_socket.writeDatagram(
                 byte_data, QHostAddress(SOCKET_IP), VCI_STREAM_PRED__UDP_PORT
             )
-            if bytes_sent > 0:
-                self.logger.print(
-                    f"Sent predicted cursor data: {data_string} to {SOCKET_IP}:{VCI_STREAM_PRED__UDP_PORT}"
-                )
-            else:
-                self.logger.print(
-                    f"Error sending predicted cursor data via _predicted_cursor_stream_socket: {self._predicted_cursor_stream_socket.errorString()}",
-                    level="ERROR",
-                )
         except Exception as e:
             self.logger.print(f"Error in _send_predicted_cursor_datagram: {e}", level="ERROR")
 

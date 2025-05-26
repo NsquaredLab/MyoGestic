@@ -597,7 +597,7 @@ class Ui_CursorInterface(object):
         self.label_25.setText(QCoreApplication.translate("CursorInterface", u"Ext. IP", None))
         self.label_26.setText(QCoreApplication.translate("CursorInterface", u"Ext. Port", None))
         self.externalDevicePortLineEdit.setText(QCoreApplication.translate("CursorInterface", u"12345", None))
-        self.externalDeviceConfigurePushButton.setText(QCoreApplication.translate("CursorInterface", u"Configure", None))
+        self.externalDeviceConfigurePushButton.setText(QCoreApplication.translate("CursorInterface", u"Save Configuration", None))
         self.stimPulseParamsGroupBox.setTitle(QCoreApplication.translate("CursorInterface", u"Stimulation pulse parameters", None))
         self.label_27.setText(QCoreApplication.translate("CursorInterface", u"Frequency (Hz)", None))
         self.stimUserParamsGroupBox.setTitle(QCoreApplication.translate("CursorInterface", u"Stimulation ON/FF (checked) / Proportional (unchecked)", None))
