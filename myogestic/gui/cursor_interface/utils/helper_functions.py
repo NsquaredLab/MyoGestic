@@ -23,7 +23,7 @@ def convert_cursor2stimulation(
     Returns:
         A string for the desired movement to be stimulated.
         A string for the direction mapped to the current movement.
-        A float for the desired stimulation level to be applied (converted from 0-1 to 0-100%).
+        An int for the desired stimulation level to be applied (converted from 0-1 to 0-100%).
     """
 
     # Check if the dominant task is on the x-axis or y-axis and what the cursor sign is
@@ -34,7 +34,7 @@ def convert_cursor2stimulation(
         stimulation_level = abs(pred_x_axis)
         target_movement, target_direction = (task_right, "Right") if pred_x_axis >= 0 else (task_left, "Left")
 
-    return target_movement, target_direction, stimulation_level * 100
+    return target_movement, target_direction, int(stimulation_level * 100)
 
 
 def generate_sinusoid_trajectory(
