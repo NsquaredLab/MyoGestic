@@ -270,6 +270,75 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         with (RECORDING_DIR_PATH / file_name).open("wb") as f:
             pickle.dump(save_pickle_dict, f)
 
+    def save_recording_cursor(
+        self,
+        biosignal: np.ndarray,
+        biosignal_timings: np.ndarray,
+        ground_truth: np.ndarray,
+        ground_truth_timings: np.ndarray,
+        record_duration: int | float,
+        use_as_classification: bool,
+        recording_label: str,
+        task: str,
+        movement: str,
+        task_label_map: dict[str, int],
+        ground_truth_sampling_frequency: int | float,
+        **kwargs,
+    ) -> None:
+        """Save the recording for the cursor.
+
+        Parameters
+        ----------
+        biosignal : numpy.ndarray
+            The recorded biosignal data.
+        biosignal_timings : numpy.ndarray
+            The recorded biosignal timings.
+        ground_truth : numpy.ndarray
+            The recorded ground truth data.
+        ground_truth_timings : numpy.ndarray
+            The recorded ground truth timings.
+        record_duration : int | float
+            The duration of the recording in seconds.
+        use_as_classification : bool
+            Whether to use the recording as classification data.
+        recording_label : str
+            The label of the recording.
+        task : str
+            The task of the recording (cursor direction).
+        movement : str
+            The movement associated with the cursor task label.
+        task_label_map : dict[str, int]
+            String task to numerical table mapping.
+        ground_truth_sampling_frequency : int | float
+            The sampling frequency of the ground truth data.
+        kwargs : dict
+            Additional custom data to save.
+        """
+
+        save_pickle_dict = {
+            "biosignal": biosignal,
+            "biosignal_timings": biosignal_timings,
+            "ground_truth": ground_truth,
+            "ground_truth_timings": ground_truth_timings,
+            "recording_label": recording_label,
+            "task": task,
+            "movement": movement,
+            "task_label_map": task_label_map,
+            "ground_truth_sampling_frequency": ground_truth_sampling_frequency,
+            "device_information": self._main_window.device__widget.get_device_information(),
+            "bad_channels": self._main_window.current_bad_channels__list,
+            "recording_time": record_duration,
+            "use_as_classification": use_as_classification,
+            "visual_interface": self._main_window.selected_visual_interface.name,
+        }
+
+        save_pickle_dict.update(kwargs)
+
+        file_name = f"{save_pickle_dict['visual_interface']}_Recording_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{task.lower()}_{recording_label.lower()}.pkl"
+
+        with (RECORDING_DIR_PATH / file_name).open("wb") as f:
+            pickle.dump(save_pickle_dict, f)
+
     @abstractmethod
     def initialize_ui_logic(self) -> None:
         """Initialize the logic of the UI elements."""
