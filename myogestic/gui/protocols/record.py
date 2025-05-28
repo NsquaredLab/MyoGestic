@@ -74,14 +74,10 @@ class RecordProtocol(QObject):
         device_widget = self._main_window.device__widget
 
         if not device_widget._get_current_widget()._device._is_streaming:  # noqa
-            self._main_window.logger.print(
-                "Biosignal device is not streaming!", level=LoggerLevel.ERROR
-            )
+            self._main_window.logger.print("Biosignal device is not streaming!", level=LoggerLevel.ERROR)
             return False
 
-        self._sampling_frequency = device_widget.get_device_information()[
-            "sampling_frequency"
-        ]
+        self._sampling_frequency = device_widget.get_device_information()["sampling_frequency"]
         self._total_samples_to_record = int(duration * self._sampling_frequency)
         self._biosignal__buffer.clear()
         self.is_biosignal_recording_complete = False
@@ -99,15 +95,10 @@ class RecordProtocol(QObject):
             New EMG data sample.
         """
         self._biosignal__buffer.append((time.time(), data))
-        total_collected_samples = sum(
-            sample.shape[1] for _, sample in self._biosignal__buffer
-        )
+        total_collected_samples = sum(sample.shape[1] for _, sample in self._biosignal__buffer)
 
         self._main_window.ui.recordEMGProgressBar.setValue(
-            int(
-                (total_collected_samples / self._total_samples_to_record)
-                * PROGRESS_BAR_MAX
-            )
+            int((total_collected_samples / self._total_samples_to_record) * PROGRESS_BAR_MAX)
         )
 
         if total_collected_samples >= self._total_samples_to_record:
@@ -120,9 +111,7 @@ class RecordProtocol(QObject):
         )
 
         self.is_biosignal_recording_complete = True
-        self._main_window.device__widget.data_arrived.disconnect(
-            self.update_biosignal_buffer
-        )
+        self._main_window.device__widget.data_arrived.disconnect(self.update_biosignal_buffer)
 
         if self._selected_visual_interface:
             self._selected_visual_interface.recording_interface_ui.check_recording_completion()
@@ -141,9 +130,7 @@ class RecordProtocol(QObject):
             emg.append(sample)
             timings.append(timestamp)
 
-        return np.stack(emg, axis=-1)[..., : self._total_samples_to_record], np.array(
-            timings
-        )
+        return np.stack(emg, axis=-1)[..., : self._total_samples_to_record], np.array(timings)
 
     def _reset_recording_ui(self) -> None:
         """Reset the recording UI and clear the buffer."""

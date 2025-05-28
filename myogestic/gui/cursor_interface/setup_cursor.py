@@ -124,25 +124,9 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
         # Set initial zoom/pan
         self.view.camera.set_range(x=(-1.2, 1.2), y=(-1.2, 1.2))
 
-        # Add X and Y axes
-        self.xaxis = visuals.Axis(
-            pos=[[-1.0, 0], [1.0, 0]],
-            tick_direction=(0, -1),
-            domain=(-1.0, 1.0),
-            text_color=None,
-            tick_color=None,
-            axis_color='white',
-            parent=self.view.scene,
-        )
-
-        self.yaxis = visuals.Axis(
-            pos=[[0, -1.0], [0, 1.0]],
-            tick_direction=(-1, 0),
-            domain=(-1.0, 1.0),
-            text_color=None,
-            tick_color=None,
-            axis_color='white',
-            parent=self.view.scene,
+        # Add a blue predicted cursor, slightly larger, drawn on top (order=2)
+        self.predicted_cursor = visuals.Ellipse(
+            center=(0, 0), radius=0.09, color='#6696ff', border_width=0, parent=self.view.scene
         )
 
         # Add a red reference cursor at the center, drawn on top of axes (order=1)
@@ -150,9 +134,25 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
             center=(0, 0), radius=0.07, color='#ff4e4e', border_width=0, parent=self.view.scene
         )
 
-        # Add a blue predicted cursor, slightly larger, drawn on top (order=2)
-        self.predicted_cursor = visuals.Ellipse(
-            center=(0, 0), radius=0.09, color='#6696ff', border_width=0, parent=self.view.scene
+        self.yaxis = visuals.Axis(
+            pos=[[0, -1.0], [0, 1.0]],
+            # tick_direction=(-1, 0),
+            domain=(-1.0, 1.0),
+            text_color=None,
+            tick_color=None,
+            axis_color='white',
+            parent=self.view.scene,
+        )
+
+        # Add X and Y axes
+        self.xaxis = visuals.Axis(
+            pos=[[-1.0, 0], [1.0, 0]],
+            # tick_direction=(0, -1),
+            domain=(-1.0, 1.0),
+            text_color=None,
+            tick_color=None,
+            axis_color='white',
+            parent=self.view.scene,
         )
 
         # Add Legend

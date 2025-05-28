@@ -26,10 +26,10 @@ TARGET2AXIS_VALUES = {
 CURSOR_TASK2LABEL_MAP = {
     "Inactive": -1,
     "Rest": 0,
-    "Dorsiflexion": 1,
-    "Plantarflexion": 2,
-    "Inversion": 3,
-    "Eversion": 4,
+    "Up": 1,
+    "Down": 2,
+    "Right": 3,
+    "Left": 4,
 }
 
 CURSOR_LABEL2TASK_MAP = {

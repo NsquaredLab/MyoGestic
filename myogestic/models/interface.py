@@ -86,6 +86,13 @@ class MyoGesticModelInterface(QObject):
         model_information = self.model.load(model_path)
         self.dataset.set_online_parameters(model_information)
 
+        # Write to user if task and movement labels are not matched and how should they be matched
+        if "task_name_to_movement_map" in list(model_information.keys()):
+            self.logger.print(
+                f"Task and movement label not the same! Task-movement mapping for current model: "
+                f"{model_information["task_name_to_movement_map"]}!"
+            )
+
         self.predict_function = CONFIG_REGISTRY.models_functions_map[
             model_information["model_name"]
         ]["predict"]

@@ -281,6 +281,10 @@ class TrainingProtocol(QObject):
         self._create_dataset__thread: PyQtThread | None = None
         self._train_model__thread: PyQtThread | None = None
 
+        # Task to movement mapping (if they are not the same):
+        self._task_label_to_movement_map: dict = {}
+        self._task_name_to_movement_map: dict = {}
+
         # File management:
         RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
         MODELS_DIR_PATH.mkdir(parents=True, exist_ok=True)
@@ -347,6 +351,15 @@ class TrainingProtocol(QObject):
                 #     continue
 
                 selected_recordings_key = recording["task"].capitalize()
+
+                # Check if "movement" key is also included in the recording
+                if "movement" in list(recording.keys()):
+                    self._task_label_to_movement_map[recording["task_label_map"][recording["task"].lower()]] = recording["movement"].capitalize()
+                    self._task_name_to_movement_map[recording["task"]] = recording["movement"].capitalize()
+                else:
+                    self._task_label_to_movement_map = None
+                    self._task_name_to_movement_map = None
+
                 if selected_recordings_key in self._selected_recordings__dict.keys():
                     current_recording = self._selected_recordings__dict[
                         selected_recordings_key
@@ -408,6 +421,7 @@ class TrainingProtocol(QObject):
                     recording["recording_time"] += current_recording["recording_time"]
 
                     recording["task"] = selected_recordings_key
+
 
                 self._selected_recordings__dict[selected_recordings_key] = recording
 
@@ -502,6 +516,9 @@ class TrainingProtocol(QObject):
 
         dataset_dict["dataset_file_path"] = str(DATASETS_DIR_PATH / f"{file_name}.pkl")
         dataset_dict["device_information"] = self._current_device_information
+        if self._task_label_to_movement_map is not None and self._task_name_to_movement_map is not None:
+            dataset_dict["task_label_to_movement_map"] = self._task_label_to_movement_map
+            dataset_dict["task_name_to_movement_map"] = self._task_name_to_movement_map
 
         with (DATASETS_DIR_PATH / f"{file_name}.pkl").open("wb") as f:
             pickle.dump(dataset_dict, f)

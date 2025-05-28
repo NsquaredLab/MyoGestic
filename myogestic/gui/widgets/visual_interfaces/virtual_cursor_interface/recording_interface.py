@@ -34,10 +34,10 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
 
     ground_truth__task_map: dict[str, int] = {
         "rest": 0,
-        "dorsiflexion": 1,
-        "plantarflexion": 2,
-        "inversion": 3,
-        "eversion": 4,
+        "up": 1,
+        "down": 2,
+        "right": 3,
+        "left": 4,
     }
     ground_truth__nr_of_recording_values: int = 2
 
@@ -59,6 +59,7 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
         RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
 
         self._current_task: str = ""
+        self._current_movement: str = ""
         self._kinematics__buffer = []
 
         self._recording_protocol = self._main_window.protocols[0]
@@ -77,6 +78,7 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
 
         self.record_group_box = ui.recordRecordingGroupBox
         self.record_task_combo_box = ui.recordTaskComboBox
+        self.record_movement_combo_box = ui.recordMovementComboBox
         self.record_duration_spin_box = ui.recordDurationSpinBox
         self.record_toggle_push_button = ui.recordRecordPushButton
 
@@ -112,6 +114,7 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
             self.record_toggle_push_button.setText("Recording...")
             self.record_group_box.setEnabled(False)
             self._current_task = self.record_task_combo_box.currentText()
+            self._current_movement = self.record_movement_combo_box.currentText()
 
             if self.use_kinematics_check_box.isChecked():
                 self.incoming_message_signal.connect(self.update_ground_truth_buffer)
@@ -185,7 +188,7 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
             biosignal_timings,
         ) = self._recording_protocol.retrieve_recorded_data()
 
-        self.save_recording(
+        self.save_recording_cursor(
             biosignal=biosignal_data,
             biosignal_timings=biosignal_timings,
             ground_truth_timings=(
@@ -194,19 +197,21 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
                 else np.array([])
             ),
             ground_truth=(
-                np.vstack([data for _, data in self._kinematics__buffer]).T
+                np.vstack([data[:, :2] for _, data in self._kinematics__buffer]).T
                 if self.use_kinematics_check_box.isChecked()
                 else np.array([])
             ),
             recording_label=label,
             task=self._current_task,
+            movement=self._current_movement,
+            task_label_map=self.ground_truth__task_map,
             ground_truth_sampling_frequency=KINEMATICS_SAMPLING_FREQUENCY,
             use_as_classification=not self.use_kinematics_check_box.isChecked(),
             record_duration=self.record_duration_spin_box.value(),
         )
 
         self.reset_ui()
-        self._main_window.logger.print(f"Recording of task {self._current_task.lower()} with label {label} accepted!")
+        self._main_window.logger.print(f"Recording of task {self._current_task.lower()} and movement {self._current_movement.lower()} with label {label} accepted!")
 
     def reject_recording(self) -> None:
         """Rejects the current recording and resets the recording interface."""

@@ -83,9 +83,7 @@ class OnlineProtocol(QObject):
         self._time_since_last_prediction: float = 0
 
         self._model_interface: MyoGesticModelInterface | None = None
-        self._main_window.device__widget.configure_toggled.connect(
-            self._update_device_configuration
-        )
+        self._main_window.device__widget.configure_toggled.connect(self._update_device_configuration)
 
         # Initialize Buffers
         self._biosignal_recording__buffer: list[(float, np.ndarray)] = []
@@ -106,18 +104,14 @@ class OnlineProtocol(QObject):
         PREDICTIONS_DIR_PATH.mkdir(exist_ok=True, parents=True)
         MODELS_DIR_PATH.mkdir(exist_ok=True, parents=True)
 
-        self.real_time_filter_combo_box.addItems(
-            CONFIG_REGISTRY.real_time_filters_map.keys()
-        )
+        self.real_time_filter_combo_box.addItems(CONFIG_REGISTRY.real_time_filters_map.keys())
 
         self.active_monitoring_widgets = {}
 
         self._output_systems__dict: dict[str, OutputSystemTemplate] = {}
 
     def _update_real_time_filter(self) -> None:
-        self._model_interface.set_real_time_filter(
-            self.real_time_filter_combo_box.currentText()
-        )
+        self._model_interface.set_real_time_filter(self.real_time_filter_combo_box.currentText())
 
     def _update_device_configuration(self, is_configured: bool) -> None:
         if not is_configured:
@@ -127,9 +121,7 @@ class OnlineProtocol(QObject):
             )
             return
 
-        self._device_information__dict = (
-            self._main_window.device__widget.get_device_information()
-        )
+        self._device_information__dict = self._main_window.device__widget.get_device_information()
 
         self._model_interface = MyoGesticModelInterface(
             device_information=self._device_information__dict,
@@ -151,9 +143,7 @@ class OnlineProtocol(QObject):
                 selected_real_time_filter=self.real_time_filter_combo_box.currentText(),
             )
         except Exception as e:
-            self._main_window.logger.print(
-                f"Error in prediction: {e}", LoggerLevel.ERROR
-            )
+            self._main_window.logger.print(f"Error in prediction: {e}", LoggerLevel.ERROR)
             return
 
         try:
@@ -163,17 +153,12 @@ class OnlineProtocol(QObject):
             pass
 
         if len(self._output_systems__dict) == 0:
-            self._main_window.logger.print(
-                "No output systems available!", LoggerLevel.ERROR
-            )
+            self._main_window.logger.print("No output systems available!", LoggerLevel.ERROR)
             raise ValueError("No output systems available!")
 
         prediction = (
             prediction_before_filter
-            if (
-                prediction_after_filter is None
-                or np.isnan(prediction_after_filter).any()
-            )
+            if (prediction_after_filter is None or np.isnan(prediction_after_filter).any())
             else prediction_after_filter
         )
 
@@ -184,9 +169,7 @@ class OnlineProtocol(QObject):
         if self.online_record_toggle_push_button.isChecked():
             current_time = time.time()
 
-            self._biosignal_recording__buffer.append(
-                (current_time - self.recording_start_time, data)
-            )
+            self._biosignal_recording__buffer.append((current_time - self.recording_start_time, data))
 
             self._prediction_before_filter_recording__buffer.append(
                 (current_time - self.recording_start_time, prediction_before_filter)
@@ -200,9 +183,7 @@ class OnlineProtocol(QObject):
 
     def online_ground_truth_update(self, data: np.ndarray) -> None:
         if self.online_record_toggle_push_button.isChecked():
-            self._ground_truth_recording__buffer.append(
-                (time.time() - self.recording_start_time, data)
-            )
+            self._ground_truth_recording__buffer.append((time.time() - self.recording_start_time, data))
 
     def _set_conformal_prediction(self) -> None:
         params = {
@@ -221,17 +202,13 @@ class OnlineProtocol(QObject):
         if self.online_prediction_toggle_push_button.isChecked():
             self.online_prediction_toggle_push_button.setText("Stop Prediction")
             self.online_load_model_push_button.setEnabled(False)
-            self._main_window.device__widget.data_arrived.connect(
-                self.online_emg_update
-            )
+            self._main_window.device__widget.data_arrived.connect(self.online_emg_update)
             self.online_record_toggle_push_button.setEnabled(True)
             self.conformal_prediction_group_box.setEnabled(False)
         else:
             self.online_prediction_toggle_push_button.setText("Start Prediction")
             self.online_load_model_push_button.setEnabled(True)
-            self._main_window.device__widget.data_arrived.disconnect(
-                self.online_emg_update
-            )
+            self._main_window.device__widget.data_arrived.disconnect(self.online_emg_update)
             self.online_record_toggle_push_button.setEnabled(False)
             # self.conformal_prediction_group_box.setEnabled(True)
 
@@ -239,9 +216,7 @@ class OnlineProtocol(QObject):
         if self.online_record_toggle_push_button.isChecked():
             self.online_prediction_toggle_push_button.setEnabled(False)
 
-            self._main_window.selected_visual_interface.incoming_message_signal.connect(
-                self.online_ground_truth_update
-            )
+            self._main_window.selected_visual_interface.incoming_message_signal.connect(self.online_ground_truth_update)
 
             self._selected_visual_interface.setup_interface_ui.connect_custom_signals()
 
@@ -269,19 +244,15 @@ class OnlineProtocol(QObject):
             self._save_data()
 
     def _save_data(self) -> None:
+        # Add "Inactive" state to task_label mapping if task does not match movement label
+        if "task_label_to_movement_map" in list(self._model_information__dict.keys()):
+            self._model_information__dict["task_label_to_movement_map"][-1] = "Inactive"
+
         save_pickle_dict = {
-            "biosignal": np.stack(
-                [data for _, data in self._biosignal_recording__buffer], axis=-1
-            ),
-            "biosignal_timings": np.array(
-                [time for time, _ in self._biosignal_recording__buffer]
-            ),
-            "ground_truth": np.vstack(
-                [data for _, data in self._ground_truth_recording__buffer]
-            ).T,
-            "ground_truth_timings": np.array(
-                [time for time, _ in self._ground_truth_recording__buffer]
-            ),
+            "biosignal": np.stack([data for _, data in self._biosignal_recording__buffer], axis=-1),
+            "biosignal_timings": np.array([time for time, _ in self._biosignal_recording__buffer]),
+            "ground_truth": np.vstack([data for _, data in self._ground_truth_recording__buffer]).T,
+            "ground_truth_timings": np.array([time for time, _ in self._ground_truth_recording__buffer]),
             "predictions_before_filters": np.stack(
                 [data for _, data in self._prediction_before_filter_recording__buffer],
                 axis=-1,
@@ -300,18 +271,20 @@ class OnlineProtocol(QObject):
                 [data for _, data in self._selected_real_time_filter_recording__buffer]
             ),
             "label": self.online_model_label.text().split(" ")[0],
+            "online_task_to_movement_label_map": (
+                self._model_information__dict["task_label_to_movement_map"]
+                if "task_label_to_movement_map" in list(self._model_information__dict.keys())
+                else None
+            ),
             "model_information": self._model_information__dict,
             "device_information": self._device_information__dict,
             "bad_channels": set(
-                self._main_window.current_bad_channels__list
-                + self._model_information__dict["bad_channels"]
+                self._main_window.current_bad_channels__list + self._model_information__dict["bad_channels"]
             ),
             "channels": CHANNELS,
         }
 
-        save_pickle_dict.update(
-            self._selected_visual_interface.setup_interface_ui.get_custom_save_data()
-        )
+        save_pickle_dict.update(self._selected_visual_interface.setup_interface_ui.get_custom_save_data())
 
         file_name = f"{self._selected_visual_interface.name}_Prediction_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{self.online_model_label.text().lower().split(' ')[0]}.pkl"
 
@@ -337,9 +310,7 @@ class OnlineProtocol(QObject):
         try:
             self._model_information__dict = self._model_interface.load_model(file_name)
         except Exception as e:
-            self._main_window.logger.print(
-                f"Error in loading models: {e}", LoggerLevel.ERROR
-            )
+            self._main_window.logger.print(f"Error in loading models: {e}", LoggerLevel.ERROR)
             return
 
         label = file_name.split("/")[-1].split("_")[-1].split(".")[0]
@@ -358,9 +329,16 @@ class OnlineProtocol(QObject):
         if len(self.active_monitoring_widgets) != 0:
             self._send_model_information()
 
+        # Remove virtual interface which is not used
+        current_output_map = CONFIG_REGISTRY.output_systems_map
+
+        if "VHI" == self._model_information__dict["visual_interface"]:
+            del current_output_map["VCI"]
+        elif "VCI" == self._model_information__dict["visual_interface"]:
+            del current_output_map["VHI"]
+
         self._output_systems__dict = {
-            k: v(self._main_window, self._model_interface.model.is_classifier)
-            for k, v in CONFIG_REGISTRY.output_systems_map.items()
+            k: v(self._main_window, self._model_interface.model.is_classifier) for k, v in current_output_map.items()
         }
 
     def close_event(self, event) -> None:
@@ -388,12 +366,8 @@ class OnlineProtocol(QObject):
     def _send_model_information(self) -> None:
         self.model_information_signal.emit(
             {
-                "models_map": CONFIG_REGISTRY.models_map[
-                    self._model_information__dict["model_name"]
-                ],
-                "functions_map": CONFIG_REGISTRY.models_functions_map[
-                    self._model_information__dict["model_name"]
-                ],
+                "models_map": CONFIG_REGISTRY.models_map[self._model_information__dict["model_name"]],
+                "functions_map": CONFIG_REGISTRY.models_functions_map[self._model_information__dict["model_name"]],
                 "model_path": self._model_information__dict["model_path"],
                 "model_params": self._model_information__dict["model_params"],
             }
@@ -445,9 +419,7 @@ class OnlineProtocol(QObject):
     def _setup_protocol_ui(self) -> None:
         self.online_load_model_group_box = self._main_window.ui.onlineLoadModelGroupBox
 
-        self.online_load_model_push_button = (
-            self._main_window.ui.onlineLoadModelPushButton
-        )
+        self.online_load_model_push_button = self._main_window.ui.onlineLoadModelPushButton
         self.online_load_model_push_button.setEnabled(False)
         self.online_load_model_push_button.clicked.connect(self._load_model)
         self.online_model_label = self._main_window.ui.onlineModelLabel
@@ -455,55 +427,29 @@ class OnlineProtocol(QObject):
 
         self.online_commands_group_box = self._main_window.ui.onlineCommandsGroupBox
         self.online_commands_group_box.setEnabled(False)
-        self.online_record_toggle_push_button = (
-            self._main_window.ui.onlineRecordTogglePushButton
-        )
+        self.online_record_toggle_push_button = self._main_window.ui.onlineRecordTogglePushButton
         self.online_record_toggle_push_button.clicked.connect(self._toggle_recording)
 
-        self.online_prediction_toggle_push_button = (
-            self._main_window.ui.onlinePredictionTogglePushButton
-        )
-        self.online_prediction_toggle_push_button.clicked.connect(
-            self._toggle_prediction
-        )
+        self.online_prediction_toggle_push_button = self._main_window.ui.onlinePredictionTogglePushButton
+        self.online_prediction_toggle_push_button.clicked.connect(self._toggle_prediction)
 
         # Conformal Prediction
-        self.conformal_prediction_set_pushbutton = (
-            self._main_window.ui.conformalPredictionSetPushButton
-        )
-        self.conformal_prediction_set_pushbutton.clicked.connect(
-            self._set_conformal_prediction
-        )
+        self.conformal_prediction_set_pushbutton = self._main_window.ui.conformalPredictionSetPushButton
+        self.conformal_prediction_set_pushbutton.clicked.connect(self._set_conformal_prediction)
         self.conformal_prediction_set_pushbutton.setEnabled(False)
 
-        self.conformal_prediction_type_combo_box = (
-            self._main_window.ui.conformalPredictionTypeComboBox
-        )
-        self.conformal_prediction_solving_combo_box = (
-            self._main_window.ui.conformalPredictionSolvingComboBox
-        )
-        self.conformal_prediction_alpha_spin_box = (
-            self._main_window.ui.conformalPredictionAlphaDoubleSpinBox
-        )
-        self.conformal_prediction_kernel_spin_box = (
-            self._main_window.ui.conformalPredictionSolvingKernel
-        )
-        self.conformal_prediction_type_combo_box.currentIndexChanged.connect(
-            self._toggle_conformal_prediction_widget
-        )
+        self.conformal_prediction_type_combo_box = self._main_window.ui.conformalPredictionTypeComboBox
+        self.conformal_prediction_solving_combo_box = self._main_window.ui.conformalPredictionSolvingComboBox
+        self.conformal_prediction_alpha_spin_box = self._main_window.ui.conformalPredictionAlphaDoubleSpinBox
+        self.conformal_prediction_kernel_spin_box = self._main_window.ui.conformalPredictionSolvingKernel
+        self.conformal_prediction_type_combo_box.currentIndexChanged.connect(self._toggle_conformal_prediction_widget)
 
-        self.conformal_prediction_group_box = (
-            self._main_window.ui.conformalPredictionGroupBox
-        )
+        self.conformal_prediction_group_box = self._main_window.ui.conformalPredictionGroupBox
         self.conformal_prediction_group_box.setEnabled(False)
 
-        self.conformal_prediction_label_kernel_size = (
-            self._main_window.ui.labelCpKernelSize
-        )
+        self.conformal_prediction_label_kernel_size = self._main_window.ui.labelCpKernelSize
         self.conformal_prediction_label_alpha = self._main_window.ui.labelCpAlpha
-        self.conformal_prediction_label_solving_method = (
-            self._main_window.ui.labelCpSolvingMethod
-        )
+        self.conformal_prediction_label_solving_method = self._main_window.ui.labelCpSolvingMethod
 
         self.real_time_filter_combo_box = self._main_window.ui.onlineFiltersComboBox
 

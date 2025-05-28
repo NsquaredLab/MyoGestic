@@ -330,7 +330,6 @@ class VirtualCursorInterface_SetupInterface(SetupInterfaceTemplate):
 
     def online_predicted_cursor_update(self, data: np.ndarray) -> None:
         """Update the predicted cursor data for the online protocol."""
-        print("Received data:", data)
         if self._online_protocol.online_record_toggle_push_button.isChecked():
             self._predicted_cursor_recording__buffer.append(
                 (time.time() - self._online_protocol.recording_start_time, data)
