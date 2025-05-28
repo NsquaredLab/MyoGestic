@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QCloseEvent
 
-from myogestic.gui.cursor_interface.utils.constants import CURSOR_LABEL2TASK_MAP, CURSOR_TASK2LABEL_MAP
+from myogestic.gui.cursor_interface.utils.constants import CURSOR_TASK2LABEL_MAP, FES_MOVEMENT2LABEL_MAP
 from myogestic.gui.cursor_interface.utils.helper_functions import convert_cursor2stimulation
 
 if TYPE_CHECKING:
@@ -163,7 +163,7 @@ class ElectricalStimulationControl(QObject):
                 [
                     int(self.main_window.stim_proportional),
                     int(trigger_stimulation),
-                    CURSOR_TASK2LABEL_MAP[target_movement],
+                    FES_MOVEMENT2LABEL_MAP[target_movement],
                     stimulation_level,
                     self.stim_on_time,
                     self.stim_off_time,
