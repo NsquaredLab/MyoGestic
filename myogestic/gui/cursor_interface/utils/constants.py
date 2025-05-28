@@ -32,11 +32,10 @@ CURSOR_TASK2LABEL_MAP = {
     "Left": 4,
 }
 
-CURSOR_LABEL2TASK_MAP = {
-    -1: "No task",
-    0: "Rest",
-    1: "Dorsiflexion",
-    2: "Plantarflexion",
-    3: "Inversion",
-    4: "Eversion",
+FES_MOVEMENT2LABEL_MAP = {
+    "Rest": 0,
+    "Dorsiflexion": 1,
+    "Plantarflexion": 2,
+    "Inversion": 3,
+    "Eversion": 4,
 }
