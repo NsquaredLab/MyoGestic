@@ -566,7 +566,7 @@ class Ui_CursorInterface(object):
         self.leftMovementComboBox.setItemText(4, QCoreApplication.translate("CursorInterface", u"Eversion", None))
 
         self.leftMovementComboBox.setCurrentText(QCoreApplication.translate("CursorInterface", u"Rest", None))
-        self.updateMovementTaskMapPushButton.setText(QCoreApplication.translate("CursorInterface", u"Update task-Movement Map", None))
+        self.updateMovementTaskMapPushButton.setText(QCoreApplication.translate("CursorInterface", u"Update movement-task mapping", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.taskMappingTab), QCoreApplication.translate("CursorInterface", u"Task mapping", None))
         self.groupBox_2.setTitle(QCoreApplication.translate("CursorInterface", u"Reference cursor", None))
         self.groupBox_5.setTitle(QCoreApplication.translate("CursorInterface", u"Partial activation state", None))
