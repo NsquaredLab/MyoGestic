@@ -286,6 +286,6 @@ CONFIG_REGISTRY.register_visual_interface(
     setup_interface_ui=VirtualCursorInterface_SetupInterface,
     recording_interface_ui=VirtualCursorInterface_RecordingInterface,
 )
-# TODO: uncomment VHI when done
-# CONFIG_REGISTRY.register_output_system("VHI", VirtualHandInterface_OutputSystem)
+
+CONFIG_REGISTRY.register_output_system("VHI", VirtualHandInterface_OutputSystem)
 CONFIG_REGISTRY.register_output_system("VCI", VirtualCursorInterface_OutputSystem)
