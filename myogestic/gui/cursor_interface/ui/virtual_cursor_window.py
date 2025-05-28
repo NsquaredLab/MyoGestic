@@ -40,16 +40,6 @@ class Ui_CursorInterface(object):
         self.groupBox.setSizePolicy(sizePolicy)
         self.gridLayout = QGridLayout(self.groupBox)
         self.gridLayout.setObjectName(u"gridLayout")
-        self.downMovementComboBox = QComboBox(self.groupBox)
-        self.downMovementComboBox.addItem("")
-        self.downMovementComboBox.addItem("")
-        self.downMovementComboBox.addItem("")
-        self.downMovementComboBox.addItem("")
-        self.downMovementComboBox.addItem("")
-        self.downMovementComboBox.setObjectName(u"downMovementComboBox")
-
-        self.gridLayout.addWidget(self.downMovementComboBox, 1, 1, 1, 1)
-
         self.label_4 = QLabel(self.groupBox)
         self.label_4.setObjectName(u"label_4")
 
@@ -65,25 +55,30 @@ class Ui_CursorInterface(object):
 
         self.gridLayout.addWidget(self.rightMovementComboBox, 2, 1, 1, 1)
 
+        self.label_2 = QLabel(self.groupBox)
+        self.label_2.setObjectName(u"label_2")
+
+        self.gridLayout.addWidget(self.label_2, 1, 0, 1, 1)
+
+        self.label = QLabel(self.groupBox)
+        self.label.setObjectName(u"label")
+
+        self.gridLayout.addWidget(self.label, 0, 0, 1, 1)
+
         self.label_3 = QLabel(self.groupBox)
         self.label_3.setObjectName(u"label_3")
 
         self.gridLayout.addWidget(self.label_3, 2, 0, 1, 1)
 
-        self.upMovementComboBox = QComboBox(self.groupBox)
-        self.upMovementComboBox.addItem("")
-        self.upMovementComboBox.addItem("")
-        self.upMovementComboBox.addItem("")
-        self.upMovementComboBox.addItem("")
-        self.upMovementComboBox.addItem("")
-        self.upMovementComboBox.setObjectName(u"upMovementComboBox")
+        self.downMovementComboBox = QComboBox(self.groupBox)
+        self.downMovementComboBox.addItem("")
+        self.downMovementComboBox.addItem("")
+        self.downMovementComboBox.addItem("")
+        self.downMovementComboBox.addItem("")
+        self.downMovementComboBox.addItem("")
+        self.downMovementComboBox.setObjectName(u"downMovementComboBox")
 
-        self.gridLayout.addWidget(self.upMovementComboBox, 0, 1, 1, 1)
-
-        self.label_2 = QLabel(self.groupBox)
-        self.label_2.setObjectName(u"label_2")
-
-        self.gridLayout.addWidget(self.label_2, 1, 0, 1, 1)
+        self.gridLayout.addWidget(self.downMovementComboBox, 1, 1, 1, 1)
 
         self.leftMovementComboBox = QComboBox(self.groupBox)
         self.leftMovementComboBox.addItem("")
@@ -97,10 +92,21 @@ class Ui_CursorInterface(object):
 
         self.gridLayout.addWidget(self.leftMovementComboBox, 3, 1, 1, 1)
 
-        self.label = QLabel(self.groupBox)
-        self.label.setObjectName(u"label")
+        self.upMovementComboBox = QComboBox(self.groupBox)
+        self.upMovementComboBox.addItem("")
+        self.upMovementComboBox.addItem("")
+        self.upMovementComboBox.addItem("")
+        self.upMovementComboBox.addItem("")
+        self.upMovementComboBox.addItem("")
+        self.upMovementComboBox.setObjectName(u"upMovementComboBox")
 
-        self.gridLayout.addWidget(self.label, 0, 0, 1, 1)
+        self.gridLayout.addWidget(self.upMovementComboBox, 0, 1, 1, 1)
+
+        self.updateMovementTaskMapPushButton = QPushButton(self.groupBox)
+        self.updateMovementTaskMapPushButton.setObjectName(u"updateMovementTaskMapPushButton")
+        self.updateMovementTaskMapPushButton.setCheckable(False)
+
+        self.gridLayout.addWidget(self.updateMovementTaskMapPushButton, 4, 0, 1, 2)
 
         self.tabWidget.addTab(self.taskMappingTab, "")
         self.cursorSettingsTab = QWidget()
@@ -351,7 +357,7 @@ class Ui_CursorInterface(object):
 
         self.retranslateUi(CursorInterface)
 
-        self.tabWidget.setCurrentIndex(1)
+        self.tabWidget.setCurrentIndex(0)
 
 
         QMetaObject.connectSlotsByName(CursorInterface)
@@ -360,13 +366,6 @@ class Ui_CursorInterface(object):
     def retranslateUi(self, CursorInterface):
         CursorInterface.setWindowTitle(QCoreApplication.translate("CursorInterface", u"MyoGestic Virtual Cursor", None))
         self.groupBox.setTitle(QCoreApplication.translate("CursorInterface", u"Movement directions", None))
-        self.downMovementComboBox.setItemText(0, QCoreApplication.translate("CursorInterface", u"Rest", None))
-        self.downMovementComboBox.setItemText(1, QCoreApplication.translate("CursorInterface", u"Dorsiflexion", None))
-        self.downMovementComboBox.setItemText(2, QCoreApplication.translate("CursorInterface", u"Plantarflexion", None))
-        self.downMovementComboBox.setItemText(3, QCoreApplication.translate("CursorInterface", u"Inversion", None))
-        self.downMovementComboBox.setItemText(4, QCoreApplication.translate("CursorInterface", u"Eversion", None))
-
-        self.downMovementComboBox.setCurrentText(QCoreApplication.translate("CursorInterface", u"Rest", None))
         self.label_4.setText(QCoreApplication.translate("CursorInterface", u"LEFT movement", None))
         self.rightMovementComboBox.setItemText(0, QCoreApplication.translate("CursorInterface", u"Rest", None))
         self.rightMovementComboBox.setItemText(1, QCoreApplication.translate("CursorInterface", u"Dorsiflexion", None))
@@ -374,24 +373,32 @@ class Ui_CursorInterface(object):
         self.rightMovementComboBox.setItemText(3, QCoreApplication.translate("CursorInterface", u"Inversion", None))
         self.rightMovementComboBox.setItemText(4, QCoreApplication.translate("CursorInterface", u"Eversion", None))
 
-        self.rightMovementComboBox.setCurrentText(QCoreApplication.translate("CursorInterface", u"Rest", None))
-        self.label_3.setText(QCoreApplication.translate("CursorInterface", u"RIGHT movement", None))
-        self.upMovementComboBox.setItemText(0, QCoreApplication.translate("CursorInterface", u"Rest", None))
-        self.upMovementComboBox.setItemText(1, QCoreApplication.translate("CursorInterface", u"Dorsiflexion", None))
-        self.upMovementComboBox.setItemText(2, QCoreApplication.translate("CursorInterface", u"Plantarflexion", None))
-        self.upMovementComboBox.setItemText(3, QCoreApplication.translate("CursorInterface", u"Inversion", None))
-        self.upMovementComboBox.setItemText(4, QCoreApplication.translate("CursorInterface", u"Eversion", None))
-
-        self.upMovementComboBox.setCurrentText(QCoreApplication.translate("CursorInterface", u"Rest", None))
+        self.rightMovementComboBox.setCurrentText(QCoreApplication.translate("CursorInterface", u"Inversion", None))
         self.label_2.setText(QCoreApplication.translate("CursorInterface", u"DOWN movment", None))
+        self.label.setText(QCoreApplication.translate("CursorInterface", u"UP movement", None))
+        self.label_3.setText(QCoreApplication.translate("CursorInterface", u"RIGHT movement", None))
+        self.downMovementComboBox.setItemText(0, QCoreApplication.translate("CursorInterface", u"Rest", None))
+        self.downMovementComboBox.setItemText(1, QCoreApplication.translate("CursorInterface", u"Dorsiflexion", None))
+        self.downMovementComboBox.setItemText(2, QCoreApplication.translate("CursorInterface", u"Plantarflexion", None))
+        self.downMovementComboBox.setItemText(3, QCoreApplication.translate("CursorInterface", u"Inversion", None))
+        self.downMovementComboBox.setItemText(4, QCoreApplication.translate("CursorInterface", u"Eversion", None))
+
+        self.downMovementComboBox.setCurrentText(QCoreApplication.translate("CursorInterface", u"Plantarflexion", None))
         self.leftMovementComboBox.setItemText(0, QCoreApplication.translate("CursorInterface", u"Rest", None))
         self.leftMovementComboBox.setItemText(1, QCoreApplication.translate("CursorInterface", u"Dorsiflexion", None))
         self.leftMovementComboBox.setItemText(2, QCoreApplication.translate("CursorInterface", u"Plantarflexion", None))
         self.leftMovementComboBox.setItemText(3, QCoreApplication.translate("CursorInterface", u"Inversion", None))
         self.leftMovementComboBox.setItemText(4, QCoreApplication.translate("CursorInterface", u"Eversion", None))
 
-        self.leftMovementComboBox.setCurrentText(QCoreApplication.translate("CursorInterface", u"Rest", None))
-        self.label.setText(QCoreApplication.translate("CursorInterface", u"UP movement", None))
+        self.leftMovementComboBox.setCurrentText(QCoreApplication.translate("CursorInterface", u"Eversion", None))
+        self.upMovementComboBox.setItemText(0, QCoreApplication.translate("CursorInterface", u"Rest", None))
+        self.upMovementComboBox.setItemText(1, QCoreApplication.translate("CursorInterface", u"Dorsiflexion", None))
+        self.upMovementComboBox.setItemText(2, QCoreApplication.translate("CursorInterface", u"Plantarflexion", None))
+        self.upMovementComboBox.setItemText(3, QCoreApplication.translate("CursorInterface", u"Inversion", None))
+        self.upMovementComboBox.setItemText(4, QCoreApplication.translate("CursorInterface", u"Eversion", None))
+
+        self.upMovementComboBox.setCurrentText(QCoreApplication.translate("CursorInterface", u"Dorsiflexion", None))
+        self.updateMovementTaskMapPushButton.setText(QCoreApplication.translate("CursorInterface", u"Update movement-task mapping", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.taskMappingTab), QCoreApplication.translate("CursorInterface", u"Task mapping", None))
         self.groupBox_2.setTitle(QCoreApplication.translate("CursorInterface", u"Reference cursor", None))
         self.groupBox_5.setTitle(QCoreApplication.translate("CursorInterface", u"Partial activation state", None))

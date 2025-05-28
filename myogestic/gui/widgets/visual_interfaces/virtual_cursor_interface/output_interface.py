@@ -50,7 +50,7 @@ class VirtualCursorInterface_OutputSystem(OutputSystemTemplate):
 
     def _process_prediction__regression(self, prediction: Any) -> bytes:
         """Process the prediction for regression."""
-        return str(prediction[0], prediction[1]).encode("utf-8")
+        return str((prediction[0], prediction[1])).encode("utf-8")
 
     def send_prediction(self, prediction: Any) -> None:
         """Send the prediction to the visual interface."""
