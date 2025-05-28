@@ -45,7 +45,7 @@ STATUS_RESPONSE = "active"
 # Import necessary components for trajectory calculation
 from myogestic.gui.cursor_interface.utils.helper_functions import generate_sinusoid_trajectory
 
-from myogestic.gui.widgets.logger import CustomLogger
+from myogestic.gui.widgets.logger import CustomLogger, LoggerLevel
 from myogestic.gui.cursor_interface.ui.virtual_cursor_window import Ui_CursorInterface
 from myogestic.gui.cursor_interface.setup_cursor import VispyWidget
 
@@ -98,6 +98,7 @@ class MyoGestic_Cursor(QMainWindow):
         self.down_movement_combobox: QComboBox = self.ui.downMovementComboBox
         self.right_movement_combobox: QComboBox = self.ui.rightMovementComboBox
         self.left_movement_combobox: QComboBox = self.ui.leftMovementComboBox
+        self.update_movement_task_map_push_button: QPushButton = self.ui.updateMovementTaskMapPushButton
 
         # Store frequencies for the cursor movement and the refresh rate of the reference and predicted cursors
         self.cursor_frequency_double_spin_box: QDoubleSpinBox = self.ui.cursorFrequencyDoubleSpinBox
@@ -157,15 +158,12 @@ class MyoGestic_Cursor(QMainWindow):
             f"Right='{self._selected_right_movement}'"
         )
 
-        # Connect combobox changes to handler methods
-        if self.up_movement_combobox:
-            self.up_movement_combobox.currentTextChanged.connect(self._on_up_movement_changed)
-        if self.down_movement_combobox:
-            self.down_movement_combobox.currentTextChanged.connect(self._on_down_movement_changed)
-        if self.left_movement_combobox:
-            self.left_movement_combobox.currentTextChanged.connect(self._on_left_movement_changed)
-        if self.right_movement_combobox:
-            self.right_movement_combobox.currentTextChanged.connect(self._on_right_movement_changed)
+        self.update_movement_task_map_push_button.clicked.connect(self._on_movement_map_changed)
+
+        self.up_movement_combobox.currentTextChanged.connect(self._on_movement_map_text_changed)
+        self.down_movement_combobox.currentTextChanged.connect(self._on_movement_map_text_changed)
+        self.right_movement_combobox.currentTextChanged.connect(self._on_movement_map_text_changed)
+        self.left_movement_combobox.currentTextChanged.connect(self._on_movement_map_text_changed)
 
         # Connect spinbox value changes to handler methods
         if self.cursor_frequency_double_spin_box:
@@ -575,25 +573,16 @@ class MyoGestic_Cursor(QMainWindow):
             self.logger.print("Cannot update Vispy activation params: vispy_widget not initialized.", level="WARNING")
 
     # Signal Handlers (Slots)
-    def _on_up_movement_changed(self, text: str):
-        self._selected_up_movement = text
-        self.logger.print(f"Up movement changed to: {text}")
+    def _on_movement_map_changed(self, text: str):
+        self._selected_up_movement = self.up_movement_combobox.currentText()
+        self._selected_down_movement = self.down_movement_combobox.currentText()
+        self._selected_right_movement = self.right_movement_combobox.currentText()
+        self._selected_left_movement = self.left_movement_combobox.currentText()
+        self.logger.print(f"Task-movement mappings updated: Up-{self._selected_up_movement}, Down-{self._selected_down_movement}, Right-{self._selected_right_movement}, Left-{self._selected_left_movement}")
         self._update_vispy_mappings()  # Update display
 
-    def _on_down_movement_changed(self, text: str):
-        self._selected_down_movement = text
-        self.logger.print(f"Down movement changed to: {text}")
-        self._update_vispy_mappings()  # Update display
-
-    def _on_left_movement_changed(self, text: str):
-        self._selected_left_movement = text
-        self.logger.print(f"Left movement changed to: {text}")
-        self._update_vispy_mappings()  # Update display
-
-    def _on_right_movement_changed(self, text: str):
-        self._selected_right_movement = text
-        self.logger.print(f"Right movement changed to: {text}")
-        self._update_vispy_mappings()  # Update display
+    def _on_movement_map_text_changed(self):
+        self.logger.print("Check if task-movement mapping here matches mapping from loaded model", LoggerLevel.WARNING)
 
     # Slot for timing parameter changes
     def _on_timing_params_changed(self):
@@ -677,16 +666,7 @@ class MyoGestic_Cursor(QMainWindow):
                 task_label = "Inactive"
 
                 if self.vispy_widget.movement_active:
-                    if current_direction_string == "Up":
-                        task_label = self._selected_up_movement
-                    elif current_direction_string == "Down":
-                        task_label = self._selected_down_movement
-                    elif current_direction_string == "Left":
-                        task_label = self._selected_left_movement
-                    elif current_direction_string == "Right":
-                        task_label = self._selected_right_movement
-                    elif current_direction_string == "Rest":
-                        task_label = "Rest"  # Or specific mapping if you have one for Rest
+                    task_label = current_direction_string
 
                 if current_pos_xy is not None and task_label is not None:
                     # Format as [[x_int, y_int]] (transposed from user's previous change)

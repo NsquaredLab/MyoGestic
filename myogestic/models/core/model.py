@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from PySide6.QtCore import QObject, Signal
 from myogestic.user_config import GROUND_TRUTH_INDICES_TO_KEEP
+from myogestic.default_config import CONFIG_REGISTRY
 
 
 class MyoGesticModel(QObject):
@@ -61,9 +62,7 @@ class MyoGesticModel(QObject):
         self.load_function = load_function
         self.train_function = train_function
 
-        self.model = self.train_function(
-            self.model, dataset, self.is_classifier, self.logger
-        )
+        self.model = self.train_function(self.model, dataset, self.is_classifier, self.logger)
 
     def predict(
         self, input: np.ndarray, prediction_function, selected_real_time_filter: str
@@ -82,10 +81,15 @@ class MyoGesticModel(QObject):
             else prediction
         )
         if GROUND_TRUTH_INDICES_TO_KEEP != "all":
-            for index, value in enumerate(GROUND_TRUTH_INDICES_TO_KEEP):
+            # Check which virtual interface is active
+            for index, value in enumerate(GROUND_TRUTH_INDICES_TO_KEEP[self.model_information["visual_interface"]]):
                 prediction_before_filter[value] = prediction[index]
 
-        prediction_before_filter = list(np.clip(prediction_before_filter, 0, 1))
+        prediction_before_filter = (
+            list(np.clip(prediction_before_filter, 0, 1))
+            if self.model_information["visual_interface"] == "VHI"
+            else list(np.clip(prediction_before_filter, -1, 1))
+        )
         self.past_predictions.append(prediction_before_filter)
         if (
             len(self.past_predictions)
@@ -96,9 +100,9 @@ class MyoGesticModel(QObject):
             * 5
         ):
             self.past_predictions.pop(0)
-            prediction_after_filter = CONFIG_REGISTRY.real_time_filters_map[
-                selected_real_time_filter
-            ](self.past_predictions)
+            prediction_after_filter = CONFIG_REGISTRY.real_time_filters_map[selected_real_time_filter](
+                self.past_predictions
+            )
             prediction_after_filter = list(prediction_after_filter[-1])
         else:
             prediction_after_filter = [np.nan] * len(prediction_before_filter)
@@ -111,9 +115,7 @@ class MyoGesticModel(QObject):
 
     def save(self, model_path: str) -> dict[str, Union[str, Any]]:
         self.model_information["model_params"] = self.model_params
-        self.model_information["model_path"] = self.save_function(
-            model_path, self.model
-        )
+        self.model_information["model_path"] = self.save_function(model_path, self.model)
         self.model_information["model_name"] = self.model_name
 
         return self.model_information
@@ -122,13 +124,9 @@ class MyoGesticModel(QObject):
         with open(model_path, "rb") as f:
             self.model_information = pickle.load(f)
 
-        self.load_function = CONFIG_REGISTRY.models_functions_map[
-            self.model_information["model_name"]
-        ]["load"]
+        self.load_function = CONFIG_REGISTRY.models_functions_map[self.model_information["model_name"]]["load"]
 
-        model_class, self.is_classifier = CONFIG_REGISTRY.models_map[
-            self.model_information["model_name"]
-        ]
+        model_class, self.is_classifier = CONFIG_REGISTRY.models_map[self.model_information["model_name"]]
 
         self.model = self.load_function(
             self.model_information["model_path"],

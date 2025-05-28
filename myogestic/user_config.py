@@ -39,6 +39,7 @@ BUFFER_SIZE__CHUNKS: int = 20
 
 # Ground Truth Settings
 # The indices of the ground truth to keep. This can be useful if you know for your experiment that some ground truth indices are always 0.
+
 GROUND_TRUTH_INDICES_TO_KEEP: dict[Literal, list] | Literal["all"] = {
     "VHI": [0, 2, 3, 4, 5],
     "VCI": [0, 1],

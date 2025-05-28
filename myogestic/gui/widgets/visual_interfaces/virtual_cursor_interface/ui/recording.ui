@@ -32,18 +32,37 @@
     <string>Record Cursor</string>
    </property>
    <layout class="QGridLayout" name="gridLayout_9">
-    <item row="3" column="0" colspan="2">
-     <widget class="QPushButton" name="recordRecordPushButton">
-      <property name="text">
-       <string>Record</string>
+    <item row="4" column="0">
+     <widget class="QLabel" name="label_7">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
       </property>
-      <property name="checkable">
-       <bool>true</bool>
+      <property name="text">
+       <string>Duration</string>
       </property>
      </widget>
     </item>
-    <item row="0" column="1">
-     <widget class="QComboBox" name="recordTaskComboBox">
+    <item row="5" column="0">
+     <widget class="QCheckBox" name="recordUseCursorKinematicsCheckBox">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="layoutDirection">
+       <enum>Qt::LayoutDirection::LeftToRight</enum>
+      </property>
+      <property name="text">
+       <string>Use Kinematics of Virtual Cursor Interface</string>
+      </property>
+      <property name="checked">
+       <bool>false</bool>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="1">
+     <widget class="QComboBox" name="recordMovementComboBox">
       <item>
        <property name="text">
         <string>Rest</string>
@@ -71,34 +90,14 @@
       </item>
      </widget>
     </item>
-    <item row="1" column="0">
-     <widget class="QLabel" name="label_7">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="text">
-       <string>Duration</string>
-      </property>
-     </widget>
-    </item>
-    <item row="4" column="0" colspan="2">
+    <item row="7" column="0" colspan="2">
      <widget class="QProgressBar" name="groundTruthProgressBar">
       <property name="value">
        <number>24</number>
       </property>
      </widget>
     </item>
-    <item row="0" column="0">
-     <widget class="QLabel" name="label_4">
-      <property name="text">
-       <string>Leg Task</string>
-      </property>
-     </widget>
-    </item>
-    <item row="1" column="1">
+    <item row="4" column="1">
      <widget class="QSpinBox" name="recordDurationSpinBox">
       <property name="value">
        <number>10</number>
@@ -106,19 +105,56 @@
      </widget>
     </item>
     <item row="2" column="0">
-     <widget class="QCheckBox" name="recordUseCursorKinematicsCheckBox">
-      <property name="enabled">
+     <widget class="QLabel" name="label_4">
+      <property name="text">
+       <string>Leg Movement</string>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="0" colspan="2">
+     <widget class="QPushButton" name="recordRecordPushButton">
+      <property name="text">
+       <string>Record</string>
+      </property>
+      <property name="checkable">
        <bool>true</bool>
       </property>
-      <property name="layoutDirection">
-       <enum>Qt::LayoutDirection::LeftToRight</enum>
-      </property>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QLabel" name="label">
       <property name="text">
-       <string>Use Kinematics of Virtual Cursor Interface</string>
+       <string>Task cursor direction</string>
       </property>
-      <property name="checked">
-       <bool>false</bool>
-      </property>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QComboBox" name="recordTaskComboBox">
+      <item>
+       <property name="text">
+        <string>Rest</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Up</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Down</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Right</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Left</string>
+       </property>
+      </item>
      </widget>
     </item>
    </layout>
