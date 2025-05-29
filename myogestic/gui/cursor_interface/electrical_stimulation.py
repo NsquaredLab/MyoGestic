@@ -261,8 +261,7 @@ class ElectricalStimulationControl(QObject):
             port_line_edit.setText(str(default))
 
     def _check_for_valid_ip(self, ip: str) -> bool:
-        """
-        Checks if the provided IP is valid.
+        """Checks if the provided IP is a valid IPv4 address.
 
         Args:
             ip (str): IP to be checked.
@@ -270,14 +269,24 @@ class ElectricalStimulationControl(QObject):
         Returns:
             bool: True if IP is valid. False if not.
         """
-        ip_pattern = re.compile(
-            r"^([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\."
-            r"([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\."
-            r"([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\."
-            r"([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
-        )
+        # Split the IP into octets
+        octets = ip.split('.')
 
-        return bool(ip_pattern.match(ip))
+        # Check if we have exactly 4 octets
+        if len(octets) != 4:
+            return False
+
+        # Check each octet
+        for octet in octets:
+            try:
+                # Convert to integer and check range
+                num = int(octet)
+                if not (0 <= num <= 255):
+                    return False
+            except ValueError:
+                return False
+
+        return True
 
     def _check_for_correct_port(self, port: int) -> bool:
         """
