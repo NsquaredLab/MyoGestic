@@ -1,3 +1,20 @@
+"""Electrical stimulation control module for MyoGestic.
+
+This module implements the electrical stimulation control system which provides:
+- TCP-based communication with external stimulation hardware
+- Real-time stimulation parameter control based on cursor movement
+- Configurable stimulation thresholds and timing parameters
+- Connection management and status monitoring
+- Streaming control for continuous stimulation updates
+- Error handling and validation for network communication
+
+The stimulation control integrates with the main cursor interface to:
+- Receive cursor position updates
+- Apply stimulation thresholds and timing parameters
+- Convert cursor movements into stimulation commands
+- Manage stimulation intensity based on movement patterns
+"""
+
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -33,9 +50,7 @@ if TYPE_CHECKING:
 class ElectricalStimulationControl(QObject):
     """Control class for electrical stimulation that interfaces with the main cursor window.
 
-    This class is a QObject that maintains a reference to the main window (MyoGestic_Cursor)
-    to access its UI elements and parameters. It handles the electrical stimulation control
-    logic while the main window handles the display and user interface.
+    It handles the electrical stimulation control logic while the main window handles the display and user interface.
     """
 
     output_message_signal = Signal(QByteArray)  # use to trigger message writing via the opened TCP port
@@ -173,7 +188,6 @@ class ElectricalStimulationControl(QObject):
             )
 
             self.main_window.logger.print(f"Output message: {output_message}")
-            # self.output_message_signal.emit(str(output_message).encode("utf-8"))
             self.output_message_signal.emit(output_message.tobytes())
 
     def _update_stim_time_freq_parameters(self):
