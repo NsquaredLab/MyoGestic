@@ -1,3 +1,28 @@
+"""Main cursor interface module for MyoGestic.
+
+This module implements the main cursor interface window which provides:
+- A visual interface for cursor movement and control
+- UDP communication for cursor position streaming and prediction
+- Integration with electrical stimulation control
+- Real-time cursor movement visualization
+- Task-movement mapping configuration
+- Activation parameter controls
+- FPS monitoring and display
+
+It communicates with external systems via UDP sockets for:
+- Streaming reference cursor positions to external systems
+- Receiving predicted cursor positions from ML models
+- Status checks and responses for system synchronization
+
+Constants:
+    SOCKET_IP (str): Default IP address for socket communication (127.0.0.1)
+    VCI_STREAM_PRED__UDP_PORT (int): Port for streaming predicted cursor coordinates
+    VCI_READ_STATUS__UDP_PORT (int): Port for receiving status checks
+    VCI_READ_PRED__UDP_PORT (int): Port for receiving predicted cursor coordinates
+    STATUS_REQUEST (str): Message for status check requests
+    STATUS_RESPONSE (str): Message for status check responses
+"""
+
 import sys
 from PySide6.QtWidgets import (
     QApplication,
@@ -230,8 +255,8 @@ class MyoGestic_Cursor(QMainWindow):
             self._streaming_timer.timeout.connect(self._send_cursor_position_datagram)
         else:
             self.logger.print(
-                f"CURSOR_STREAMING_RATE ({CURSOR_STREAMING_RATE} Hz) is not positive. Reference cursor streaming disabled.",
-                level="WARNING",
+                f"CURSOR_STREAMING_RATE ({CURSOR_STREAMING_RATE} Hz) is not positive. Reference cursor streaming "
+                f"disabled.", level="WARNING",
             )
 
         # Bind the predicted cursor read socket (incoming for status requests and predictions)
@@ -259,10 +284,6 @@ class MyoGestic_Cursor(QMainWindow):
 
         self.outgoing_prediction_signal.connect(self._send_predicted_cursor_datagram)
 
-        # Bind other sockets if necessary for sending (often not required to bind source port for sending)
-        # self._reference_cursor_stream_socket.bind(...)
-        # self._predicted_cursor_stream_socket.bind(...)
-
         self.setWindowTitle("MyoGestic Virtual Cursor")
 
         # Pass initial timing parameters to VispyWidget
@@ -288,26 +309,10 @@ class MyoGestic_Cursor(QMainWindow):
 
         # Get initial stimulation threshold values from UI
         initial_stim_thresholds = {
-            'Up': (
-                self.cursor_up_stim_threshold.value()
-                if self.cursor_up_stim_threshold
-                else 0
-            ),
-            'Down': (
-                self.cursor_down_stim_threshold.value()
-                if self.cursor_down_stim_threshold
-                else 0
-            ),
-            'Left': (
-                self.cursor_left_stim_threshold.value()
-                if self.cursor_left_stim_threshold
-                else 0
-            ),
-            'Right': (
-                self.cursor_right_stim_threshold.value()
-                if self.cursor_right_stim_threshold
-                else 0
-            ),
+            'Up': (self.cursor_up_stim_threshold.value() if self.cursor_up_stim_threshold else 0),
+            'Down': (self.cursor_down_stim_threshold.value() if self.cursor_down_stim_threshold else 0),
+            'Left': (self.cursor_left_stim_threshold.value() if self.cursor_left_stim_threshold else 0),
+            'Right': (self.cursor_right_stim_threshold.value() if self.cursor_right_stim_threshold else 0),
         }
 
         # Create the Vispy widget instance, passing initial mappings and stimulation thresholds
@@ -351,8 +356,6 @@ class MyoGestic_Cursor(QMainWindow):
                 )
                 if bytes_written > 0:
                     pass
-                    # self.logger.print(
-                    #     f"STATUS_REQUEST received from {sender_address.toString()}:{sender_port} (>=1s). Sent '{STATUS_RESPONSE}'. is_connected=True.")
                 else:
                     self.logger.print(
                         f"Error sending STATUS_RESPONSE: {self._predicted_status_read_socket.errorString()}",
@@ -361,7 +364,8 @@ class MyoGestic_Cursor(QMainWindow):
             else:
                 self.is_connected = False  # As per user request
                 self.logger.print(
-                    f"STATUS_REQUEST received from {sender_address.toString()}:{sender_port} too soon (<1s). is_connected set to False."
+                    f"STATUS_REQUEST received from {sender_address.toString()}:{sender_port} too soon (<1s). "
+                    f"is_connected set to False."
                 )
 
     def _process_received_prediction_datagrams(self):
@@ -378,11 +382,9 @@ class MyoGestic_Cursor(QMainWindow):
                     f"Received undecodable UDP data from {sender_address.toString()}:{sender_port}", level="WARNING"
                 )
                 continue  # Skip this datagram
-            # self.logger.print(f"Processing message: '{message_str}' from {sender_address.toString()}:{sender_port} at {current_time}")
 
             # If we reach here, the message was not a STATUS_REQUEST.
             if self.is_connected:  # Only process as prediction if connected
-                # self.logger.print(f"Connected. Processing message as prediction: '{message_str}'")
                 try:
                     coord_list_outer = ast.literal_eval(message_str)
                     if isinstance(coord_list_outer, tuple) and len(coord_list_outer) == 2:
@@ -397,17 +399,22 @@ class MyoGestic_Cursor(QMainWindow):
                             self.outgoing_prediction_signal.emit(self.vispy_widget.predicted_cursor.center)
                         else:
                             self.logger.print(
-                                f"Invalid coordinate types in predicted data message: '{message_str}'", level="WARNING"
+                                f"Invalid coordinate types in predicted data message: '{message_str}'",
+                                level="WARNING"
                             )
                     else:
-                        self.logger.print(f"Invalid predicted cursor data format: '{message_str}'", level="WARNING")
+                        self.logger.print(f"Invalid predicted cursor data format: '{message_str}'",
+                                          level="WARNING")
                 except (SyntaxError, ValueError) as e:
-                    self.logger.print(f"Error parsing presumed prediction data '{message_str}': {e}", level="ERROR")
+                    self.logger.print(f"Error parsing presumed prediction data '{message_str}': {e}",
+                                      level="ERROR")
                 except Exception as e:
-                    self.logger.print(f"Error processing presumed prediction UDP datagram: {e}", level="ERROR")
+                    self.logger.print(f"Error processing presumed prediction UDP datagram: {e}",
+                                      level="ERROR")
             else:  # Not connected and not a STATUS_REQUEST
                 self.logger.print(
-                    f"Not connected. Discarding unexpected non-status message '{message_str}' from {sender_address.toString()}:{sender_port}."
+                    f"Not connected. Discarding unexpected non-status message '{message_str}' from "
+                    f"{sender_address.toString()}:{sender_port}."
                 )
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -463,7 +470,8 @@ class MyoGestic_Cursor(QMainWindow):
             return
 
         self.logger.print(
-            f"Recalculating trajectories for signal freq: {signal_freq:.2f} Hz using sampling rate: {CURSOR_SAMPLING_RATE} Hz"
+            f"Recalculating trajectories for signal freq: {signal_freq:.2f} Hz using sampling rate: "
+            f"{CURSOR_SAMPLING_RATE} Hz"
         )
         trajectories = {}
         # Calculate for movement directions only (exclude "Rest")
@@ -567,10 +575,12 @@ class MyoGestic_Cursor(QMainWindow):
                 f"Updated Vispy activation params: Rest=(0%, {rest_duration_s}s), "
                 f"Peak=(100%, {peak_duration_s}s), "
                 f"Middle=({middle_threshold_percent}%, {middle_duration_s}s, Stop: {middle_stop_condition}), "
-                f"TargetBox=(Visible: {target_box_visible}, Lower: {target_box_lower_percent}%, Upper: {target_box_upper_percent}%)"
+                f"TargetBox=(Visible: {target_box_visible}, Lower: {target_box_lower_percent}%, "
+                f"Upper: {target_box_upper_percent}%)"
             )
         else:
-            self.logger.print("Cannot update Vispy activation params: vispy_widget not initialized.", level="WARNING")
+            self.logger.print("Cannot update Vispy activation params: vispy_widget not initialized.",
+                              level="WARNING")
 
     # Signal Handlers (Slots)
     def _on_movement_map_changed(self, text: str):
@@ -578,11 +588,15 @@ class MyoGestic_Cursor(QMainWindow):
         self._selected_down_movement = self.down_movement_combobox.currentText()
         self._selected_right_movement = self.right_movement_combobox.currentText()
         self._selected_left_movement = self.left_movement_combobox.currentText()
-        self.logger.print(f"Task-movement mappings updated: Up-{self._selected_up_movement}, Down-{self._selected_down_movement}, Right-{self._selected_right_movement}, Left-{self._selected_left_movement}")
+        self.logger.print(
+            f"Task-movement mappings updated: Up-{self._selected_up_movement}, Down-{self._selected_down_movement}, "
+            f"Right-{self._selected_right_movement}, Left-{self._selected_left_movement}"
+        )
         self._update_vispy_mappings()  # Update display
 
     def _on_movement_map_text_changed(self):
-        self.logger.print("Check if task-movement mapping here matches mapping from loaded model", LoggerLevel.WARNING)
+        self.logger.print("Check if task-movement mapping here matches mapping from loaded model",
+                          LoggerLevel.WARNING)
 
     # Slot for timing parameter changes
     def _on_timing_params_changed(self):
