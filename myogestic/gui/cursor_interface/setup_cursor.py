@@ -1,3 +1,22 @@
+"""Cursor visualization and control module for MyoGestic.
+
+This module implements the core cursor visualization and control functionality:
+- Real-time cursor movement visualization with reference and predicted cursors
+- Trajectory-based movement patterns with customizable parameters
+- Activation hold points (rest, peak, middle) with configurable thresholds
+- Target box visualization for movement guidance
+- Stimulation threshold visualization
+- FPS monitoring for both reference and predicted cursors
+- Smooth cursor movement with configurable parameters
+- Interactive control via keyboard input
+
+The module provides the following:
+- A canvas widget that can be embedded in PySide6 applications
+- Signal-based communication for cursor updates and status changes
+- Configurable movement patterns and activation parameters
+- Real-time performance monitoring
+"""
+
 import numpy as np
 from vispy import scene
 from vispy.scene import visuals
@@ -492,10 +511,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
             except Exception as e:
                 print(f"Warning: Error calculating activation indices for {direction}: {e}")
 
-        # print(f"Rest Indices: {self._rest_hold_point_indices}")
-        # print(f"Peak Indices: {self._peak_hold_point_indices}")
-        # print(f"Middle Indices: {self._middle_hold_point_indices}")
-
     def on_key_press(self, event):
         """Handle key press events for direction switching."""
         num_directions = len(DIRECTIONS)
@@ -565,8 +580,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
                 self.update_reference_cursor(0, 0)
                 self.update_predicted_cursor(0, 0)  # Also reset predicted for consistency
                 self._update_target_box_visual()  # Update box state (might hide if direction was Rest)
-        # else: # Optional: handle other keys or pass to superclass
-        #     super().on_key_press(event)
         self.update()
 
     def update_reference_cursor(self, x, y):
@@ -624,8 +637,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
         if trajectory is None or trajectory.shape[0] == 0:
             return
 
-        # candidate_display_index is where cursor would land this tick if no hold.
-        # _current_trajectory_index is already advanced by _trajectory_step_size from the previous displayed point.
         candidate_display_index = self._current_trajectory_index
 
         # prev_displayed_index is the index that was shown in the last tick.
@@ -883,8 +894,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
 
             self.stim_line_up.set_data(pos=np.array([[x_left, y_up], [x_right, y_up]], dtype=np.float32))
             self.stim_line_down.set_data(pos=np.array([[x_left, y_down], [x_right, y_down]], dtype=np.float32))
-            # self.stim_line_left.set_data(pos=default_pos)  # Hide vertical lines
-            # self.stim_line_right.set_data(pos=default_pos)
 
             # Only show the Up threshold line for Up direction
             self.stim_line_up.visible = True
@@ -900,8 +909,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
 
             self.stim_line_up.set_data(pos=np.array([[x_left, y_up], [x_right, y_up]], dtype=np.float32))
             self.stim_line_down.set_data(pos=np.array([[x_left, y_down], [x_right, y_down]], dtype=np.float32))
-            # self.stim_line_left.set_data(pos=default_pos)
-            # self.stim_line_right.set_data(pos=default_pos)
 
             # Only show the Down threshold line for Down direction
             self.stim_line_up.visible = False
@@ -917,8 +924,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
 
             self.stim_line_left.set_data(pos=np.array([[x_left, y_bottom], [x_left, y_top]], dtype=np.float32))
             self.stim_line_right.set_data(pos=np.array([[x_right, y_bottom], [x_right, y_top]], dtype=np.float32))
-            # self.stim_line_up.set_data(pos=default_pos)  # Hide horizontal lines
-            # self.stim_line_down.set_data(pos=default_pos)
 
             # Only show the Right threshold line for Right direction
             self.stim_line_up.visible = False
@@ -934,8 +939,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
 
             self.stim_line_left.set_data(pos=np.array([[x_left, y_bottom], [x_left, y_top]], dtype=np.float32))
             self.stim_line_right.set_data(pos=np.array([[x_right, y_bottom], [x_right, y_top]], dtype=np.float32))
-            # self.stim_line_up.set_data(pos=default_pos)
-            # self.stim_line_down.set_data(pos=default_pos)
 
             # Only show the Left threshold line for Left direction
             self.stim_line_up.visible = False
