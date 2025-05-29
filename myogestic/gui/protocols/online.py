@@ -330,7 +330,7 @@ class OnlineProtocol(QObject):
             self._send_model_information()
 
         # Remove virtual interface which is not used
-        current_output_map = CONFIG_REGISTRY.output_systems_map
+        current_output_map = CONFIG_REGISTRY.output_systems_map.copy()
 
         if "VHI" == self._model_information__dict["visual_interface"]:
             del current_output_map["VCI"]
@@ -372,49 +372,6 @@ class OnlineProtocol(QObject):
                 "model_params": self._model_information__dict["model_params"],
             }
         )
-
-    # def _setup_monitoring_widget(
-    #     self,
-    #     name_of_monitoring_widget: str,
-    #     monitoring_widget: Type[_MonitoringWidgetBaseClass],
-    #     state: int,
-    # ) -> None:
-    #     if state.value == 2:
-    #         self.active_monitoring_widgets[name_of_monitoring_widget] = (
-    #             monitoring_widget(None, self.model_interface.model.predicted_emg_signal)
-    #         )
-    #         self.active_monitoring_widgets[name_of_monitoring_widget].show()
-    #
-    #         self.model_information_signal.connect(
-    #             self.active_monitoring_widgets[
-    #                 name_of_monitoring_widget
-    #             ].update_model_information
-    #         )
-    #
-    #         self._send_model_information()
-    #
-    #     else:
-    #         self.active_monitoring_widgets[name_of_monitoring_widget].close()
-    #         del self.active_monitoring_widgets[name_of_monitoring_widget]
-
-    # def _setup_monitoring_widgets_ui(self) -> None:
-    #     container_widget = QWidget()
-    #
-    #     layout = QVBoxLayout(container_widget)
-    #     # For each monitoring widget in CONFIG_REGISTRY.monitoring_widgets add a push button to the monitoring list
-    #     for k, v in CONFIG_REGISTRY.monitoring_widgets_map.items():
-    #         monitoring_push_button = QCheckBox(k)
-    #         monitoring_push_button.checkStateChanged.connect(
-    #             partial(
-    #                 self._setup_monitoring_widget,
-    #                 k,
-    #                 v,
-    #             )
-    #         )
-    #
-    #         layout.addWidget(monitoring_push_button)
-    #
-    #     self.monitoring_widgets_scroll_area.setWidget(container_widget)
 
     def _setup_protocol_ui(self) -> None:
         self.online_load_model_group_box = self._main_window.ui.onlineLoadModelGroupBox
