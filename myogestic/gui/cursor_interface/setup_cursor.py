@@ -73,8 +73,8 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
         # Add FPS tracking attributes after unfreezing
         self._last_ref_cursor_update = time.time()
         self._last_pred_cursor_update = time.time()
-        self._ref_cursor_fps = 0.0
-        self._pred_cursor_fps = 0.0
+        self._ref_cursor_display_fps = 0.0
+        self._pred_cursor_display_fps = 0.0
 
         self._current_direction_index = 0  # Index for DIRECTIONS list
         self._current_direction = DIRECTIONS[self._current_direction_index]  # Store current direction string
@@ -113,10 +113,12 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
 
         # Add smoothening factor and last predicted position for cursor smoothing
         self._smoothening_factor = 25.0  # Default to no smoothing
-        self._last_predicted_x = 0.0
-        self._last_predicted_y = 0.0
+        self.last_predicted_x = 0.0
+        self.last_predicted_y = 0.0
+        self.pred_is_read = False  # checks whether prediction should be read based on set sampling frequency
 
         # Add frequency division tracking
+        self._pred_freq = 60  # Default freq of prediction
         self._freq_div_factor = 1  # Default to display every prediction
         self._prediction_counter = 0  # Counter for received predictions
 
@@ -345,7 +347,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
         """Receives and stores the pre-calculated trajectory arrays."""
         self._trajectories = trajectories.copy()
         self._current_trajectory_index = 0  # Reset index when trajectories change
-        print(f"VispyWidget received trajectories for directions: {list(self._trajectories.keys())}")  # Debug print
         self._calculate_activation_point_indices()  # Calculate all hold indices when trajectories update
 
     def update_movement_mappings(self, mappings):
@@ -360,7 +361,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
             self._timer.stop()
 
         self._display_frequency = display_frequency
-        print(f"VispyWidget updating display frequency to: {self._display_frequency} Hz")  # Debug
 
         # Calculate trajectory step size based on sampling rate and display frequency
         if self._display_frequency > 0:
@@ -368,7 +368,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
             step_size = int(CURSOR_SAMPLING_RATE // self._display_frequency)
             # Ensure step size is at least 1
             self._trajectory_step_size = max(1, step_size)
-            print(f"Calculated trajectory step size: {self._trajectory_step_size}")  # Debug
         else:
             # Default step size if frequency is invalid
             self._trajectory_step_size = 1
@@ -430,14 +429,6 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
         self._target_box_visible_flag = target_box_visible
         self._target_box_lower_pct = target_box_lower_percent
         self._target_box_upper_pct = target_box_upper_percent
-
-        print(
-            f"Vispy updated activation params: "
-            f"Rest(Th={self._rest_hold_threshold:.2f}, Dur={self._rest_hold_duration_ms}ms), "
-            f"Peak(Th={self._peak_hold_threshold:.2f}, Dur={self._peak_hold_duration_ms}ms), "
-            f"Middle(Th={self._middle_hold_threshold:.2f}, Dur={self._middle_hold_duration_ms}ms, Stop={self._middle_hold_stop_condition}), "
-            f"TargetBox=(Visible: {self._target_box_visible_flag}, Lower: {self._target_box_lower_pct}%, Upper: {self._target_box_upper_pct}%)"
-        )
 
         # Recalculate hold indices whenever parameters change
         self._calculate_activation_point_indices()
@@ -525,7 +516,7 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
             self._is_middle_holding = False
             self._current_index_at_hold_trigger = -1  # Reset hold trigger index
             self.update_reference_cursor(0, 0)
-            self.update_predicted_cursor(0, 0)
+            # self.update_predicted_cursor(0, 0)
             self._current_direction = DIRECTIONS[self._current_direction_index]  # Update direction string
             self._current_trajectory_index = 0  # Reset index for new direction
             self._update_task_display()
@@ -543,7 +534,7 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
             self._is_middle_holding = False
             self._current_index_at_hold_trigger = -1  # Reset hold trigger index
             self.update_reference_cursor(0, 0)
-            self.update_predicted_cursor(0, 0)
+            # self.update_predicted_cursor(0, 0)
             self._current_direction = DIRECTIONS[self._current_direction_index]  # Update direction string
             self._current_trajectory_index = 0  # Reset index for new direction
             self._update_task_display()
@@ -578,7 +569,7 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
                 self._current_index_at_hold_trigger = -1  # Reset hold trigger index
                 # Reset cursor position when paused
                 self.update_reference_cursor(0, 0)
-                self.update_predicted_cursor(0, 0)  # Also reset predicted for consistency
+                # self.update_predicted_cursor(0, 0)  # Also reset predicted for consistency
                 self._update_target_box_visual()  # Update box state (might hide if direction was Rest)
         self.update()
 
@@ -590,42 +581,43 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
         current_time = time.time()
         time_diff = current_time - self._last_ref_cursor_update
         if time_diff > 0:  # Avoid division by zero
-            self._ref_cursor_fps = 1.0 / time_diff
-            self.signal_handler.ref_cursor_fps_updated.emit(self._ref_cursor_fps)
+            self._ref_cursor_display_fps = 1.0 / time_diff
+            self.signal_handler.ref_cursor_fps_updated.emit(self._ref_cursor_display_fps)
         self._last_ref_cursor_update = current_time
 
         self.update()
 
     def update_predicted_cursor(self, x, y):
         """Updates the predicted cursor position with smoothing and frequency division applied."""
-        # Always calculate smoothed position
-        if self._smoothening_factor > 1:
-            self._last_predicted_x = (x - self._last_predicted_x) / self._smoothening_factor + self._last_predicted_x
-            self._last_predicted_y = (y - self._last_predicted_y) / self._smoothening_factor + self._last_predicted_y
+        # Check if it is time to update predicted position
+        if time.time() - self._last_pred_cursor_update >= 1 / self._pred_freq:
+            # Always calculate smoothed position
+            if self._smoothening_factor > 1:
+                self.last_predicted_x = (x - self.last_predicted_x) / self._smoothening_factor + self.last_predicted_x
+                self.last_predicted_y = (y - self.last_predicted_y) / self._smoothening_factor + self.last_predicted_y
+            else:
+                # No smoothing, update directly
+                self.last_predicted_x = x
+                self.last_predicted_y = y
+
+            # Stream prediction to the stimulator
+            self.signal_handler.send_interpolated_prediction.emit(self.last_predicted_x, self.last_predicted_y)
+
+            # Apply frequency division
+            self._prediction_counter += 1
+            if self._prediction_counter >= self._freq_div_factor:
+                # Update cursor display only when counter reaches division factor
+                self.predicted_cursor.center = (self.last_predicted_x, self.last_predicted_y)
+                # Calculate predicted cursor FPS only when actually displaying
+                self._pred_cursor_display_fps = 1.0 / (time.time() - self._last_pred_cursor_update)
+                self.signal_handler.pred_cursor_fps_updated.emit(self._pred_cursor_display_fps)
+
+                self._last_pred_cursor_update = time.time()
+                self._prediction_counter = 0  # Reset counter after display
+                self.update()
+                self.pred_is_read = True
         else:
-            # No smoothing, update directly
-            self._last_predicted_x = x
-            self._last_predicted_y = y
-
-        # Stream prediction to the stimulator
-        self.signal_handler.send_interpolated_prediction.emit(self._last_predicted_x, self._last_predicted_y)
-
-        # Apply frequency division
-        self._prediction_counter += 1
-        if self._prediction_counter >= self._freq_div_factor:
-            # Update cursor display only when counter reaches division factor
-            self.predicted_cursor.center = (self._last_predicted_x, self._last_predicted_y)
-
-            # Calculate predicted cursor FPS only when actually displaying
-            current_time = time.time()
-            time_diff = current_time - self._last_pred_cursor_update
-            if time_diff > 0:  # Avoid division by zero
-                self._pred_cursor_fps = 1.0 / time_diff
-                self.signal_handler.pred_cursor_fps_updated.emit(self._pred_cursor_fps)
-            self._last_pred_cursor_update = current_time
-
-            self._prediction_counter = 0  # Reset counter after display
-            self.update()
+            self.pred_is_read = False
 
     def _on_timer_tick(self):
         """Handles the timer tick: updates cursor, checking for activation holds."""
@@ -692,9 +684,7 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
                 break
 
         if found_hold_type:
-            print(
-                f"{found_hold_type} hold triggered at actual index {actual_trigger_index_for_hold} (orig candidate: {candidate_display_index}). Holding for {found_hold_duration} ms."
-            )
+            print(f"{found_hold_type} hold triggered for {found_hold_duration} ms.")
             self._current_index_at_hold_trigger = actual_trigger_index_for_hold  # Store the exact trigger index
 
             if found_hold_type == "Rest":
@@ -845,13 +835,15 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
     def update_smoothening_factor(self, factor: int):
         """Updates the smoothening factor for predicted cursor movement."""
         self._smoothening_factor = max(1, factor)  # Ensure factor is at least 1
-        print(f"Updated smoothening factor to: {self._smoothening_factor}")
 
     def update_freq_div_factor(self, factor: int):
         """Updates the frequency division factor for predicted cursor display."""
         self._freq_div_factor = max(1, factor)  # Ensure factor is at least 1
         self._prediction_counter = 0  # Reset counter when factor changes
-        print(f"Updated frequency division factor to: {self._freq_div_factor}")
+
+    def update_pred_freq(self, pred_freq: float):
+        """Updates the frequency for predicted cursor display and streaming."""
+        self._pred_freq = pred_freq
 
     def update_stimulation_thresholds(self, thresholds: dict, visible: bool):
         """Updates the stimulation threshold lines based on UI values.
