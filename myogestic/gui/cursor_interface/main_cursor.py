@@ -100,7 +100,7 @@ class MyoGestic_Cursor(QMainWindow):
 
         # Initialize logger first to catch potential errors
         self.logger: CustomLogger = CustomLogger(self.ui.loggingTextEdit)
-        self.logger.print("Cursor interface started!")
+        self.logger.print("Cursor interface started")
 
         # UDP Sockets
         # self._udp_socket = QUdpSocket(self) # Removed as _predicted_cursor_read_socket will send STATUS_RESPONSE
@@ -144,6 +144,9 @@ class MyoGestic_Cursor(QMainWindow):
 
         # Store predicted cursor parameters
         self.smoothening_factor_spin_box: QSpinBox = self.ui.smootheningFactorSpinBox
+        self.predicted_cursor_stream_rate_double_spin_box: QDoubleSpinBox = (
+            self.ui.predictedCursorStreamRateDoubleSpinBox
+        )
         self.predicted_cursor_freq_div_factor_spin_box: QSpinBox = self.ui.predictedCursorFreqDivFactorSpinBox
 
         # Store FPS indicators
@@ -218,6 +221,9 @@ class MyoGestic_Cursor(QMainWindow):
         if self.predicted_cursor_freq_div_factor_spin_box:
             self.predicted_cursor_freq_div_factor_spin_box.valueChanged.connect(self._on_freq_div_factor_changed)
 
+        if self.predicted_cursor_stream_rate_double_spin_box:
+            self.predicted_cursor_stream_rate_double_spin_box.valueChanged.connect(self._on_pred_freq_changed)
+
         # Connect target box related widgets to the activation params handler
         if self.targetBoxGroupBox:
             self.targetBoxGroupBox.toggled.connect(self._on_activation_params_changed)
@@ -238,7 +244,6 @@ class MyoGestic_Cursor(QMainWindow):
 
         # Store cursor-stimulation parameters
         self.external_electrical_stimulator = ElectricalStimulationControl(main_window=self)
-        print("New class:", type(self.external_electrical_stimulator))
 
         # Connect FPS update signals - connect to the signal handler's signals
         if hasattr(self, 'vispy_widget') and self.vispy_widget:
@@ -256,7 +261,8 @@ class MyoGestic_Cursor(QMainWindow):
         else:
             self.logger.print(
                 f"CURSOR_STREAMING_RATE ({CURSOR_STREAMING_RATE} Hz) is not positive. Reference cursor streaming "
-                f"disabled.", level="WARNING",
+                f"disabled.",
+                level="WARNING",
             )
 
         # Bind the predicted cursor read socket (incoming for status requests and predictions)
@@ -396,21 +402,21 @@ class MyoGestic_Cursor(QMainWindow):
 
                             if hasattr(self, 'vispy_widget') and self.vispy_widget:
                                 self.vispy_widget.update_predicted_cursor(pred_x, pred_y)
-                            self.outgoing_prediction_signal.emit(self.vispy_widget.predicted_cursor.center)
+
+                                if self.vispy_widget.pred_is_read:
+                                    self.outgoing_prediction_signal.emit(
+                                        (self.vispy_widget.last_predicted_x, self.vispy_widget.last_predicted_y)
+                                    )
                         else:
                             self.logger.print(
-                                f"Invalid coordinate types in predicted data message: '{message_str}'",
-                                level="WARNING"
+                                f"Invalid coordinate types in predicted data message: '{message_str}'", level="WARNING"
                             )
                     else:
-                        self.logger.print(f"Invalid predicted cursor data format: '{message_str}'",
-                                          level="WARNING")
+                        self.logger.print(f"Invalid predicted cursor data format: '{message_str}'", level="WARNING")
                 except (SyntaxError, ValueError) as e:
-                    self.logger.print(f"Error parsing presumed prediction data '{message_str}': {e}",
-                                      level="ERROR")
+                    self.logger.print(f"Error parsing presumed prediction data '{message_str}': {e}", level="ERROR")
                 except Exception as e:
-                    self.logger.print(f"Error processing presumed prediction UDP datagram: {e}",
-                                      level="ERROR")
+                    self.logger.print(f"Error processing presumed prediction UDP datagram: {e}", level="ERROR")
             else:  # Not connected and not a STATUS_REQUEST
                 self.logger.print(
                     f"Not connected. Discarding unexpected non-status message '{message_str}' from "
@@ -470,7 +476,7 @@ class MyoGestic_Cursor(QMainWindow):
             return
 
         self.logger.print(
-            f"Recalculating trajectories for signal freq: {signal_freq:.2f} Hz using sampling rate: "
+            f"Recalculating trajectories for signal freq.: {signal_freq:.2f} Hz using sampling rate: "
             f"{CURSOR_SAMPLING_RATE} Hz"
         )
         trajectories = {}
@@ -520,7 +526,7 @@ class MyoGestic_Cursor(QMainWindow):
 
             # Pass display frequency to VispyWidget
             self.vispy_widget.update_timing_parameters(display_freq)
-            self.logger.print(f"Updated Vispy display timing: Display Freq={display_freq} Hz")
+            self.logger.print(f"Updated reference display freq. to {display_freq} Hz")
             # The log message about signal freq might be misleading now, as it's only used for calc.
             # Consider removing or changing: (Sampling Freq fixed at {CURSOR_SAMPLING_RATE} Hz)
         else:
@@ -571,16 +577,8 @@ class MyoGestic_Cursor(QMainWindow):
                 target_box_lower_percent,
                 target_box_upper_percent,
             )
-            self.logger.print(
-                f"Updated Vispy activation params: Rest=(0%, {rest_duration_s}s), "
-                f"Peak=(100%, {peak_duration_s}s), "
-                f"Middle=({middle_threshold_percent}%, {middle_duration_s}s, Stop: {middle_stop_condition}), "
-                f"TargetBox=(Visible: {target_box_visible}, Lower: {target_box_lower_percent}%, "
-                f"Upper: {target_box_upper_percent}%)"
-            )
         else:
-            self.logger.print("Cannot update Vispy activation params: vispy_widget not initialized.",
-                              level="WARNING")
+            self.logger.print("Cannot update Vispy activation params: vispy_widget not initialized.", level="WARNING")
 
     # Signal Handlers (Slots)
     def _on_movement_map_changed(self, text: str):
@@ -595,8 +593,7 @@ class MyoGestic_Cursor(QMainWindow):
         self._update_vispy_mappings()  # Update display
 
     def _on_movement_map_text_changed(self):
-        self.logger.print("Check if task-movement mapping here matches mapping from loaded model",
-                          LoggerLevel.WARNING)
+        self.logger.print("Check if task-movement mapping here matches mapping from loaded model", LoggerLevel.WARNING)
 
     # Slot for timing parameter changes
     def _on_timing_params_changed(self):
@@ -613,14 +610,27 @@ class MyoGestic_Cursor(QMainWindow):
         if hasattr(self, 'vispy_widget') and self.vispy_widget:
             factor = self.smoothening_factor_spin_box.value()
             self.vispy_widget.update_smoothening_factor(factor)
-            self.logger.print(f"Updated cursor smoothening factor to: {factor}")
 
     def _on_freq_div_factor_changed(self):
         """Handles changes in the predicted cursor frequency division factor spinbox value."""
         if hasattr(self, 'vispy_widget') and self.vispy_widget:
-            factor = self.predicted_cursor_freq_div_factor_spin_box.value()
-            self.vispy_widget.update_freq_div_factor(factor)
-            self.logger.print(f"Updated predicted cursor frequency division factor to: {factor}")
+            self.vispy_widget.update_freq_div_factor(self.predicted_cursor_freq_div_factor_spin_box.value())
+            current_pred_freq = (
+                self.predicted_cursor_stream_rate_double_spin_box.value()
+                / self.predicted_cursor_freq_div_factor_spin_box.value()
+            )
+            self.logger.print(f"Current prediction refresh rate: {current_pred_freq} Hz")
+
+    def _on_pred_freq_changed(self):
+        """Handles changes in the predicted cursor frequency spinbox value."""
+        if hasattr(self, 'vispy_widget') and self.vispy_widget:
+            self.vispy_widget.update_pred_freq(self.predicted_cursor_stream_rate_double_spin_box.value())
+            current_pred_freq = (
+                self.predicted_cursor_stream_rate_double_spin_box.value()
+                / self.predicted_cursor_freq_div_factor_spin_box.value()
+            )
+            self.logger.print(f"Current prediction refresh rate: {current_pred_freq} Hz")
+            self.logger.print("Ensure prediction refresh rate does not exceed device refresh rate", LoggerLevel.WARNING)
 
     def _on_streaming_button_clicked(self):
         """Handles the streaming push button click to toggle data streaming."""
@@ -651,10 +661,6 @@ class MyoGestic_Cursor(QMainWindow):
 
             # Update the visual elements
             self.vispy_widget.update_stimulation_thresholds(thresholds, visible)
-            self.logger.print(
-                f"Updated stimulation thresholds: Up={thresholds['Up']}%, Down={thresholds['Down']}%, "
-                f"Left={thresholds['Left']}%, Right={thresholds['Right']}%, Visible={visible}"
-            )
 
     # --- Cursor Data Streaming Methods ---
     def _start_cursor_streaming(self):

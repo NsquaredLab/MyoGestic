@@ -172,8 +172,6 @@ class ElectricalStimulationControl(QObject):
                 else:
                     trigger_stimulation = False
 
-            self.main_window.logger.print(f"{stimulation_level}")
-
             output_message = np.array(
                 [
                     int(self.main_window.stim_proportional),
@@ -198,7 +196,6 @@ class ElectricalStimulationControl(QObject):
 
     def _write_message(self, message: QByteArray) -> None:
         if self.is_streaming:
-            # self.main_window.logger.print("Stream freq:", 1 / (time.time() - self.last_message_time), "Hz")
             self.last_message_time = time.time()
 
             # Clear socket before streaming new data
@@ -206,7 +203,7 @@ class ElectricalStimulationControl(QObject):
             output_bytes = self.external_streaming_tcp_socket.write(message)
 
             if output_bytes == -1:
-                print("Error sending message")
+                print("Error sending message through TCP socket for external streaming.")
 
                 return
 
@@ -328,7 +325,9 @@ class ElectricalStimulationControl(QObject):
         """
 
         # Create socket and connect to server
-        print(self.external_streaming_tcp_ip, self.external_streaming_tcp_port)
+        self.main_window.logger.print(
+            f"Connection attempt to: {self.external_streaming_tcp_ip}: {self.external_streaming_tcp_port}"
+        )
         self.external_streaming_tcp_socket = QTcpSocket(self)
         self.external_streaming_tcp_socket.connectToHost(
             self.external_streaming_tcp_ip, self.external_streaming_tcp_port, QIODevice.ReadWrite
@@ -338,6 +337,8 @@ class ElectricalStimulationControl(QObject):
         if not self.external_streaming_tcp_socket.waitForConnected(1000):
             self.main_window.logger.print("Connection to device failed.")
             self.is_connected = False
+        else:
+            self.main_window.logger.print("Connection to device succeeded.")
 
     def _disconnect_from_server(self) -> None:
         """
@@ -354,6 +355,7 @@ class ElectricalStimulationControl(QObject):
         self.external_streaming_tcp_socket.close()
         self.external_streaming_tcp_socket = None
         self.is_connected = False
+        self.main_window.logger.print("Connection to device stopped.")
 
     def clear_socket(self) -> None:
         """Reads all the bytes from the buffer."""

@@ -19,11 +19,11 @@
      <x>20</x>
      <y>10</y>
      <width>381</width>
-     <height>602</height>
+     <height>621</height>
     </rect>
    </property>
    <property name="currentIndex">
-    <number>0</number>
+    <number>1</number>
    </property>
    <widget class="QWidget" name="taskMappingTab">
     <attribute name="title">
@@ -227,23 +227,57 @@
     <layout class="QGridLayout" name="gridLayout_8">
      <item row="0" column="0">
       <widget class="QGroupBox" name="groupBox_2">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="title">
         <string>Reference cursor</string>
        </property>
        <layout class="QGridLayout" name="gridLayout_2">
-        <item row="5" column="0" colspan="2">
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_12">
+          <property name="text">
+           <string>Reference display rate (Hz)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QDoubleSpinBox" name="cursorFrequencyDoubleSpinBox">
+          <property name="decimals">
+           <number>1</number>
+          </property>
+          <property name="minimum">
+           <double>0.100000000000000</double>
+          </property>
+          <property name="maximum">
+           <double>10.000000000000000</double>
+          </property>
+          <property name="singleStep">
+           <double>0.100000000000000</double>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0" colspan="2">
          <widget class="QGroupBox" name="groupBox_5">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>0</height>
+           </size>
+          </property>
           <property name="title">
            <string>Partial activation state</string>
           </property>
           <layout class="QGridLayout" name="gridLayout_5">
-           <item row="2" column="0">
-            <widget class="QLabel" name="label_11">
-             <property name="text">
-              <string>Duration (s)</string>
-             </property>
-            </widget>
-           </item>
            <item row="2" column="1">
             <widget class="QDoubleSpinBox" name="middleDurationDoubleSpinBox">
              <property name="decimals">
@@ -251,13 +285,6 @@
              </property>
              <property name="singleStep">
               <double>0.100000000000000</double>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QLabel" name="label_15">
-             <property name="text">
-              <string>Activation level (%)</string>
              </property>
             </widget>
            </item>
@@ -297,15 +324,36 @@
              </property>
             </widget>
            </item>
+           <item row="2" column="0">
+            <widget class="QLabel" name="label_11">
+             <property name="text">
+              <string>Duration (s)</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="label_15">
+             <property name="text">
+              <string>Activation level (%)</string>
+             </property>
+            </widget>
+           </item>
           </layout>
          </widget>
         </item>
         <item row="3" column="0" colspan="2">
          <widget class="QGroupBox" name="groupBox_3">
           <property name="title">
-           <string>Resting state (0%)</string>
+           <string>Rest state (0%) and full activation state (100%)</string>
           </property>
           <layout class="QGridLayout" name="gridLayout_3">
+           <item row="0" column="0">
+            <widget class="QLabel" name="label_7">
+             <property name="text">
+              <string>Rest duration (s)</string>
+             </property>
+            </widget>
+           </item>
            <item row="0" column="1">
             <widget class="QDoubleSpinBox" name="restDurationDoubleSpinBox">
              <property name="decimals">
@@ -322,30 +370,7 @@
              </property>
             </widget>
            </item>
-           <item row="0" column="0">
-            <widget class="QLabel" name="label_7">
-             <property name="text">
-              <string>Duration (s)</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_12">
-          <property name="text">
-           <string>Reference refresh rate (Hz)</string>
-          </property>
-         </widget>
-        </item>
-        <item row="4" column="0" colspan="2">
-         <widget class="QGroupBox" name="groupBox_4">
-          <property name="title">
-           <string>Full activation state (100%)</string>
-          </property>
-          <layout class="QGridLayout" name="gridLayout_4">
-           <item row="0" column="1">
+           <item row="1" column="1">
             <widget class="QDoubleSpinBox" name="holdDurationDoubleSpinBox">
              <property name="decimals">
               <number>1</number>
@@ -358,37 +383,14 @@
              </property>
             </widget>
            </item>
-           <item row="0" column="0">
+           <item row="1" column="0">
             <widget class="QLabel" name="label_9">
              <property name="text">
-              <string>Duration (s)</string>
+              <string>Full activation duration (s)</string>
              </property>
             </widget>
            </item>
           </layout>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QDoubleSpinBox" name="cursorFrequencyDoubleSpinBox">
-          <property name="decimals">
-           <number>1</number>
-          </property>
-          <property name="minimum">
-           <double>0.100000000000000</double>
-          </property>
-          <property name="maximum">
-           <double>10.000000000000000</double>
-          </property>
-          <property name="singleStep">
-           <double>0.100000000000000</double>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_5">
-          <property name="text">
-           <string>Cursor frequency (Hz)</string>
-          </property>
          </widget>
         </item>
         <item row="1" column="1">
@@ -415,6 +417,13 @@
           </item>
          </widget>
         </item>
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_5">
+          <property name="text">
+           <string>Cursor frequency (Hz)</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>
@@ -423,8 +432,14 @@
        <property name="enabled">
         <bool>true</bool>
        </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="title">
-        <string>Target box</string>
+        <string>Target box for reaching partial activation state</string>
        </property>
        <property name="checkable">
         <bool>true</bool>
@@ -433,15 +448,8 @@
         <bool>false</bool>
        </property>
        <layout class="QGridLayout" name="gridLayout_7">
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_10">
-          <property name="text">
-           <string>Inner bound range (%)</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="QSpinBox" name="upperTargetRangeLevelSpinBox">
+        <item row="1" column="0">
+         <widget class="QSpinBox" name="lowerTargetRangeLevelSpinBox">
           <property name="maximum">
            <number>100</number>
           </property>
@@ -457,8 +465,8 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="0">
-         <widget class="QSpinBox" name="lowerTargetRangeLevelSpinBox">
+        <item row="1" column="1">
+         <widget class="QSpinBox" name="upperTargetRangeLevelSpinBox">
           <property name="maximum">
            <number>100</number>
           </property>
@@ -467,32 +475,32 @@
           </property>
          </widget>
         </item>
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_10">
+          <property name="text">
+           <string>Inner bound range (%)</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>
      <item row="2" column="0">
       <widget class="QGroupBox" name="groupBox_6">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="title">
         <string>Predicted cursor</string>
        </property>
        <layout class="QGridLayout" name="gridLayout_6">
-        <item row="1" column="1">
-         <widget class="QSpinBox" name="predictedCursorFreqDivFactorSpinBox">
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>10</number>
-          </property>
-          <property name="value">
-           <number>1</number>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_13">
+        <item row="2" column="0">
+         <widget class="QLabel" name="label_14">
           <property name="text">
-           <string>Smoothening factor</string>
+           <string>Pred. display rate division factor</string>
           </property>
          </widget>
         </item>
@@ -509,10 +517,43 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_14">
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_13">
           <property name="text">
-           <string>Prediction freq. division factor</string>
+           <string>Smoothening factor</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QSpinBox" name="predictedCursorFreqDivFactorSpinBox">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>10</number>
+          </property>
+          <property name="value">
+           <number>1</number>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_22">
+          <property name="text">
+           <string>Prediction refresh rate (Hz)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QDoubleSpinBox" name="predictedCursorStreamRateDoubleSpinBox">
+          <property name="minimum">
+           <double>0.100000000000000</double>
+          </property>
+          <property name="maximum">
+           <double>200.000000000000000</double>
+          </property>
+          <property name="value">
+           <double>60.000000000000000</double>
           </property>
          </widget>
         </item>
@@ -542,76 +583,29 @@
      <item row="2" column="0">
       <widget class="QGroupBox" name="stimStreamGroupBox">
        <property name="title">
-        <string>Stimulation external streaming</string>
+        <string>Stimulation external device streaming</string>
        </property>
        <layout class="QGridLayout" name="gridLayout_12">
-        <item row="4" column="0" colspan="3">
-         <widget class="QPushButton" name="externalDeviceConnectPushButton">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="text">
-           <string>Connect</string>
-          </property>
-          <property name="checkable">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
         <item row="0" column="1">
          <spacer name="horizontalSpacer">
           <property name="orientation">
            <enum>Qt::Orientation::Horizontal</enum>
           </property>
+          <property name="sizeType">
+           <enum>QSizePolicy::Policy::Fixed</enum>
+          </property>
           <property name="sizeHint" stdset="0">
            <size>
-            <width>40</width>
+            <width>93</width>
             <height>20</height>
            </size>
           </property>
          </spacer>
-        </item>
-        <item row="6" column="0" colspan="3">
-         <widget class="QPushButton" name="externalDeviceStreamPushButton">
-          <property name="text">
-           <string>Stream</string>
-          </property>
-          <property name="checkable">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <spacer name="horizontalSpacer_2">
-          <property name="orientation">
-           <enum>Qt::Orientation::Horizontal</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>40</width>
-            <height>20</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-        <item row="0" column="2">
-         <widget class="QLineEdit" name="externalDeviceIPLineEdit">
-          <property name="text">
-           <string>192.168.14.10</string>
-          </property>
-         </widget>
         </item>
         <item row="0" column="0">
          <widget class="QLabel" name="label_25">
           <property name="text">
-           <string>Ext. IP</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_26">
-          <property name="text">
-           <string>Ext. Port</string>
+           <string>External IP</string>
           </property>
          </widget>
         </item>
@@ -635,6 +629,59 @@
           </property>
          </widget>
         </item>
+        <item row="4" column="0" colspan="3">
+         <widget class="QPushButton" name="externalDeviceConnectPushButton">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="text">
+           <string>Connect</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <spacer name="horizontalSpacer_2">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeType">
+           <enum>QSizePolicy::Policy::Fixed</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>93</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item row="6" column="0" colspan="3">
+         <widget class="QPushButton" name="externalDeviceStreamPushButton">
+          <property name="text">
+           <string>Stream</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_26">
+          <property name="text">
+           <string>External Port</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="2">
+         <widget class="QLineEdit" name="externalDeviceIPLineEdit">
+          <property name="text">
+           <string>192.168.14.10</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>
@@ -647,7 +694,7 @@
         <item row="0" column="0">
          <widget class="QLabel" name="label_27">
           <property name="text">
-           <string>Frequency (Hz)</string>
+           <string>Pulse frequency (Hz)</string>
           </property>
          </widget>
         </item>
@@ -679,7 +726,7 @@
         <item row="0" column="0">
          <widget class="QLabel" name="label_16">
           <property name="text">
-           <string>UP stim threshold (%)</string>
+           <string>UP stimulation threshold (%)</string>
           </property>
          </widget>
         </item>
@@ -703,7 +750,7 @@
         <item row="1" column="0">
          <widget class="QLabel" name="label_19">
           <property name="text">
-           <string>DOWN stim threshold (%)</string>
+           <string>DOWN stimulation threshold (%)</string>
           </property>
          </widget>
         </item>
@@ -737,14 +784,14 @@
         <item row="3" column="0">
          <widget class="QLabel" name="label_21">
           <property name="text">
-           <string>LEFT stim threshold (%)</string>
+           <string>LEFT stimulation threshold (%)</string>
           </property>
          </widget>
         </item>
         <item row="2" column="0">
          <widget class="QLabel" name="label_20">
           <property name="text">
-           <string>RIGHT stim threshold (%)</string>
+           <string>RIGHT stimulation threshold (%)</string>
           </property>
          </widget>
         </item>
@@ -823,10 +870,16 @@
    <property name="geometry">
     <rect>
      <x>19</x>
-     <y>620</y>
+     <y>640</y>
      <width>371</width>
      <height>201</height>
     </rect>
+   </property>
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
    </property>
    <property name="title">
     <string>Logging</string>
