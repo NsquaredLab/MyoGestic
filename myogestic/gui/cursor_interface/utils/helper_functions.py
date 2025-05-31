@@ -80,7 +80,3 @@ def generate_sinusoid_trajectory(
         trajectory[i] = [x_pos, y_pos]
 
     return trajectory
-
-
-# Remove the old function if it exists (or keep if needed elsewhere)
-# def calculate_sinusoidal_displacement(...)
