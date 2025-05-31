@@ -20,17 +20,12 @@ The module provides the following:
 import numpy as np
 from vispy import scene
 from vispy.scene import visuals
+from vispy.io import read_png
+from vispy.util.keys import Key
+from PySide6.QtCore import QTimer
 from vispy.visuals.transforms import STTransform
-from vispy.util.keys import Key  # Import Key for event handling
-from PySide6.QtCore import QTimer  # Import QTimer for timed updates
-import math  # Import math for sine function
-import vispy.visuals.rectangle  # Import for explicit RectangleVisual path
-from vispy.color import Color
-from PySide6.QtCore import Signal, QObject  # Add QObject import
-import time  # Add time import for FPS tracking
-
-# Import the helper function
-from myogestic.gui.cursor_interface.utils.helper_functions import generate_sinusoid_trajectory
+from PySide6.QtCore import Signal, QObject
+import time
 
 from utils.constants import TASKS, DIRECTIONS
 
@@ -49,7 +44,7 @@ class SignalHandler(QObject):
     send_interpolated_prediction = Signal(float, float)  # Signal for streaming the interpolated prediction
 
 
-class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
+class VispyWidget(scene.SceneCanvas):
     """Vispy canvas widget displaying axes, cursors, task info, and handling key events."""
 
     def __init__(self, *args, initial_mappings=None, initial_stim_thresholds=None, **kwargs):
@@ -112,7 +107,7 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
         self._target_box_upper_pct = 0
 
         # Add smoothening factor and last predicted position for cursor smoothing
-        self._smoothening_factor = 25.0  # Default to no smoothing
+        self._smoothening_factor = 25.0  # Default smoothening factor
         self.last_predicted_x = 0.0
         self.last_predicted_y = 0.0
         self.pred_is_read = False  # checks whether prediction should be read based on set sampling frequency
@@ -123,7 +118,7 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
         self._prediction_counter = 0  # Counter for received predictions
 
         # Timing and Sine Wave Parameters
-        self._display_frequency = 60.0  # Hz (default), controlled by main_cursor combo box
+        self._display_frequency = 60.0  # Hz (default)
         self._timer = QTimer()
         self._timer.timeout.connect(self._on_timer_tick)  # Connect to new timer handler
 
@@ -143,17 +138,41 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
         self.view = self.central_widget.add_view()
         self.view.camera = scene.PanZoomCamera(aspect=1)
         # Set initial zoom/pan
-        self.view.camera.set_range(x=(-1.2, 1.2), y=(-1.2, 1.2))
+        self.view.camera.set_range(x=(-0.1, 0.1), y=(-1.3, 1.4))
 
-        # Add a blue predicted cursor, slightly larger, drawn on top (order=2)
-        self.predicted_cursor = visuals.Ellipse(
-            center=(0, 0), radius=0.09, color='#6696ff', border_width=0, parent=self.view.scene
+        # Add lab image to canvas
+        try:    # try this path if accessed from main script of MyoGestic
+            lab_logo = np.flipud(read_png('gui/cursor_interface/assets/n-squared lab Logo.png'))
+        except FileNotFoundError:   # try this path if accessed from main_cursor script
+            lab_logo = np.flipud(read_png('assets/n-squared lab Logo.png'))
+
+        self.lab_logo = visuals.Image(lab_logo, parent=self.view.scene)
+        self.lab_logo.transform = STTransform(scale=(1/3000, 1/3000), translate=(-0.1, 1.2))   # scale and shift logo
+        self.lab_logo.set_gl_state(depth_test=False)
+
+        # Add Uni logo to canvas
+        try:
+            uni_logo = np.flipud(read_png('gui/cursor_interface/assets/FAU_logo.png'))
+        except FileNotFoundError:
+            uni_logo = np.flipud(read_png('assets/FAU_logo.png'))
+
+        self.uni_logo = visuals.Image(uni_logo, parent=self.view.scene)
+        self.uni_logo.transform = STTransform(scale=(1/10000, 1/10000), translate=(-1.0, 1.15))   # scale and shift logo
+        self.uni_logo.set_gl_state(depth_test=False)
+
+        self.xaxis = visuals.Axis(
+            pos=[[-1.0, 0], [1.0, 0]],
+            # tick_direction=(0, -1),
+            domain=(-1.0, 1.0),
+            text_color=None,
+            tick_color=None,
+            minor_tick_length=0,
+            major_tick_length=0,
+            axis_color='white',
+            parent=self.view.scene,
         )
 
-        # Add a red reference cursor at the center, drawn on top of axes (order=1)
-        self.reference_cursor = visuals.Ellipse(
-            center=(0, 0), radius=0.07, color='#ff4e4e', border_width=0, parent=self.view.scene
-        )
+        self.xaxis.set_gl_state(depth_test=False)
 
         self.yaxis = visuals.Axis(
             pos=[[0, -1.0], [0, 1.0]],
@@ -162,26 +181,31 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
             text_color=None,
             tick_color=None,
             axis_color='white',
+            minor_tick_length=0,
+            major_tick_length=0,
             parent=self.view.scene,
         )
 
-        # Add X and Y axes
-        self.xaxis = visuals.Axis(
-            pos=[[-1.0, 0], [1.0, 0]],
-            # tick_direction=(0, -1),
-            domain=(-1.0, 1.0),
-            text_color=None,
-            tick_color=None,
-            axis_color='white',
-            parent=self.view.scene,
+        self.yaxis.set_gl_state(depth_test=False)
+
+        # Add a blue predicted cursor, slightly larger, drawn on top (order=2)
+        self.predicted_cursor = visuals.Ellipse(
+            center=(0, 0), radius=0.09, color='#6696ff', border_width=0, parent=self.view.scene
         )
+        self.predicted_cursor.set_gl_state(depth_test=False)
+
+        # Add a red reference cursor at the center, drawn on top of axes (order=1)
+        self.reference_cursor = visuals.Ellipse(
+            center=(0, 0), radius=0.07, color='#ff4e4e', border_width=0, parent=self.view.scene
+        )
+        self.reference_cursor.set_gl_state(depth_test=False)
 
         # Add Legend
         legend_font_size = 10
-        legend_pos_x = -1.1  # Position in top-left relative to view range
-        legend_pos_y_ref = 1.1
-        legend_pos_y_pred = 1.0
-        legend_pos_y_stim = 0.9  # Add position for stimulation threshold legend
+        legend_pos_x = 1.1  # Position in top-left relative to view range
+        legend_pos_y_ref = 1.0
+        legend_pos_y_pred = 0.9
+        legend_pos_y_stim = 0.8  # Add position for stimulation threshold legend
 
         self.legend_ref = visuals.Text(
             "Reference",
@@ -412,11 +436,11 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
         target_box_upper_percent: int,
     ):
         """Updates the parameters for all activation holds and target box."""
-        # Rest Hold parameters: Fixed threshold 0.0
+        # Rest Hold parameters
         self._rest_hold_threshold = 0.0
         self._rest_hold_duration_ms = max(0, int(rest_duration_s * 1000))
 
-        # Peak Hold parameters: Fixed threshold 1.0
+        # Peak Hold parameters
         self._peak_hold_threshold = 1.0
         self._peak_hold_duration_ms = max(0, int(peak_duration_s * 1000))
 
@@ -452,10 +476,8 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
             # Helper function to find closest index
             def find_closest(target_thresh, data_axis, search_first_half=True):
                 if target_thresh == 0 and direction in ["Up", "Right"] and search_first_half:
-                    return 0  # Closest to 0 on outward for Up/Right is start
+                    return 0
                 elif target_thresh == 0 and direction in ["Down", "Left"] and search_first_half:
-                    # This case for 0% contracting for Down/Left doesn't make sense as it starts at 0
-                    # However, if we strictly search first half for 0 for Down/Left, it's also 0.
                     return 0
 
                 num_points = data_axis.shape[0]
@@ -557,7 +579,8 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
                     # self._on_timer_tick()
                 else:
                     print(
-                        f"Warning: Cannot start timer. Direction: {self._current_direction}, Display Freq: {self._display_frequency}, Timer Interval: {self._timer.interval()}"
+                        f"Warning: Cannot start timer. Direction: {self._current_direction}, "
+                        f"Display Freq: {self._display_frequency}, Timer Interval: {self._timer.interval()}"
                     )
             else:  # Deactivating
                 print("Stopping timer")  # Debug
@@ -794,8 +817,8 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
             x_left, x_right = -off_axis_half_width, off_axis_half_width
             self.target_line_bottom.set_data(
                 pos=np.array([[x_left, y1], [x_right, y1]], dtype=np.float32)
-            )  # Visually bottom
-            self.target_line_top.set_data(pos=np.array([[x_left, y2], [x_right, y2]], dtype=np.float32))  # Visually top
+            )  # Bottom
+            self.target_line_top.set_data(pos=np.array([[x_left, y2], [x_right, y2]], dtype=np.float32))    # Top
             self.target_line_left.set_data(pos=np.array([[x_left, y1], [x_left, y2]], dtype=np.float32))
             self.target_line_right.set_data(pos=np.array([[x_right, y1], [x_right, y2]], dtype=np.float32))
         elif self._current_direction == "Right":
@@ -803,14 +826,14 @@ class VispyWidget(scene.SceneCanvas):  # Inherit from QObject for signals
             y_bottom, y_top = -off_axis_half_width, off_axis_half_width
             self.target_line_left.set_data(
                 pos=np.array([[x1, y_bottom], [x1, y_top]], dtype=np.float32)
-            )  # Visually left
+            )  # Left
             self.target_line_right.set_data(
                 pos=np.array([[x2, y_bottom], [x2, y_top]], dtype=np.float32)
-            )  # Visually right
+            )  # Right
             self.target_line_bottom.set_data(
                 pos=np.array([[x1, y_bottom], [x2, y_bottom]], dtype=np.float32)
-            )  # Visually bottom
-            self.target_line_top.set_data(pos=np.array([[x1, y_top], [x2, y_top]], dtype=np.float32))  # Visually top
+            )  # Bottom
+            self.target_line_top.set_data(pos=np.array([[x1, y_top], [x2, y_top]], dtype=np.float32))  # Top
         elif self._current_direction == "Left":
             x1, x2 = -p_axis_2, -p_axis_1  # Note: signs and order
             y_bottom, y_top = -off_axis_half_width, off_axis_half_width

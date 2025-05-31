@@ -18,29 +18,20 @@ The stimulation control integrates with the main cursor interface to:
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
-import re
 import time
 import numpy as np
 
 from PySide6.QtCore import QObject, Signal, QByteArray, QIODevice
 from PySide6.QtNetwork import QTcpSocket, QHostAddress
 from PySide6.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QVBoxLayout,
-    QWidget,
-    QComboBox,
-    QSpinBox,
-    QDoubleSpinBox,
     QGroupBox,
     QPushButton,
-    QLabel,
     QLineEdit,
     QMessageBox,
 )
 from PySide6.QtGui import QCloseEvent
 
-from myogestic.gui.cursor_interface.utils.constants import CURSOR_TASK2LABEL_MAP, FES_MOVEMENT2LABEL_MAP
+from myogestic.gui.cursor_interface.utils.constants import FES_MOVEMENT2LABEL_MAP
 from myogestic.gui.cursor_interface.utils.helper_functions import convert_cursor2stimulation
 
 if TYPE_CHECKING:
@@ -49,7 +40,6 @@ if TYPE_CHECKING:
 
 class ElectricalStimulationControl(QObject):
     """Control class for electrical stimulation that interfaces with the main cursor window.
-
     It handles the electrical stimulation control logic while the main window handles the display and user interface.
     """
 
