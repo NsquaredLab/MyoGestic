@@ -46,7 +46,6 @@ from PySide6.QtCore import QByteArray
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Signal
 import ast  # For safely evaluating string literals
-import time  # Added for timestamping
 
 from myogestic.utils.constants import MYOGESTIC_UDP_PORT
 from myogestic.gui.cursor_interface.electrical_stimulation import ElectricalStimulationControl
@@ -103,11 +102,10 @@ class MyoGestic_Cursor(QMainWindow):
         self.logger.print("Cursor interface started")
 
         # UDP Sockets
-        # self._udp_socket = QUdpSocket(self) # Removed as _predicted_cursor_read_socket will send STATUS_RESPONSE
         self._reference_cursor_stream_socket = QUdpSocket(self)
         self._predicted_status_read_socket = QUdpSocket(self)
         self._predicted_cursor_stream_socket = QUdpSocket(self)
-        self._predicted_cursor_read_socket = QUdpSocket(self)  # Socket for VCI_READ_PRED__UDP_PORT
+        self._predicted_cursor_read_socket = QUdpSocket(self)
 
         self._streaming_timer = QTimer(self)  # For reference cursor streaming
 
@@ -517,18 +515,13 @@ class MyoGestic_Cursor(QMainWindow):
                 display_freq = 60.0  # Default value on conversion error
 
             # Check if signal frequency changed, if so, recalculate trajectories
-            # Note: Accessing _signal_frequency directly is not ideal, consider storing previous value
             current_vispy_signal_freq = getattr(self.vispy_widget, '_signal_frequency', None)
             if current_vispy_signal_freq is None or not math.isclose(signal_freq, current_vispy_signal_freq):
-                # We need the signal frequency for recalculation, but VispyWidget no longer stores it directly.
-                # Let's recalculate based on the current spinbox value directly.
                 self._recalculate_trajectories()  # Recalculate before updating VispyWidget
 
             # Pass display frequency to VispyWidget
             self.vispy_widget.update_timing_parameters(display_freq)
             self.logger.print(f"Updated reference display freq. to {display_freq} Hz")
-            # The log message about signal freq might be misleading now, as it's only used for calc.
-            # Consider removing or changing: (Sampling Freq fixed at {CURSOR_SAMPLING_RATE} Hz)
         else:
             self.logger.print("Cannot update Vispy timing params: vispy_widget not initialized.", level="WARNING")
 
@@ -697,7 +690,7 @@ class MyoGestic_Cursor(QMainWindow):
                             [CURSOR_TASK2LABEL_MAP[task_label]],
                         ],
                         dtype=np.float32,
-                    ).T  # Transpose to get [[x_int, y_int]] and use float32 for integer values
+                    ).T
 
                     # Construct the data string: "[[x, y]]_TaskLabel"
                     data_string = f"{pos_array_to_send.tolist()}"
