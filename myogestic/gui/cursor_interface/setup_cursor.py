@@ -5,7 +5,6 @@ This module implements the core cursor visualization and control functionality:
 - Trajectory-based movement patterns with customizable parameters
 - Activation hold points (rest, peak, middle) with configurable thresholds
 - Target box visualization for movement guidance
-- Stimulation threshold visualization
 - FPS monitoring for both reference and predicted cursors
 - Smooth cursor movement with configurable parameters
 - Interactive control via keyboard input
@@ -41,23 +40,16 @@ class SignalHandler(QObject):
     movement_started = Signal()  # Signal for movement start
     movement_stopped = Signal()  # Signal for movement stop
 
-    send_interpolated_prediction = Signal(float, float)  # Signal for streaming the interpolated prediction
-
-
 class VispyWidget(scene.SceneCanvas):
     """Vispy canvas widget displaying axes, cursors, task info, and handling key events."""
 
-    def __init__(self, *args, initial_mappings=None, initial_stim_thresholds=None, **kwargs):
+    def __init__(self, *args, initial_mappings=None, **kwargs):
         # Then initialize SceneCanvas
         scene.SceneCanvas.__init__(self, *args, keys='interactive', bgcolor='black', **kwargs)
 
         # Initialize initial_mappings if None is passed
         if initial_mappings is None:
             initial_mappings = {}
-
-        # Initialize initial_stim_thresholds if None is passed
-        if initial_stim_thresholds is None:
-            initial_stim_thresholds = {'Up': 0, 'Down': 0, 'Left': 0, 'Right': 0}
 
         # Task and movement state
         self.unfreeze()  # Allow adding attributes
@@ -205,7 +197,6 @@ class VispyWidget(scene.SceneCanvas):
         legend_pos_x = 1.1  # Position in top-left relative to view range
         legend_pos_y_ref = 1.0
         legend_pos_y_pred = 0.9
-        legend_pos_y_stim = 0.8  # Add position for stimulation threshold legend
 
         self.legend_ref = visuals.Text(
             "Reference",
@@ -224,93 +215,6 @@ class VispyWidget(scene.SceneCanvas):
             font_size=legend_font_size,
             anchor_x='left',
         )
-
-        # Add stimulation threshold legend
-        self.legend_stim = visuals.Text(
-            "Stimulation",
-            parent=self.view.scene,
-            color='#5178cc',  # Match the line color
-            pos=(legend_pos_x, legend_pos_y_stim),
-            font_size=legend_font_size,
-            anchor_x='left',
-        )
-
-        # Add stimulation threshold lines
-        stim_line_color = '#5178cc'
-        stim_line_width = 8.0
-        self.stim_threshold_length = 0.5
-
-        # Convert UI values (0-99) to normalized values (0-0.99)
-        self._stim_thresholds = {
-            'Up': initial_stim_thresholds['Up'] / 100.0,
-            'Down': initial_stim_thresholds['Down'] / 100.0,
-            'Left': initial_stim_thresholds['Left'] / 100.0,
-            'Right': initial_stim_thresholds['Right'] / 100.0,
-        }
-
-        # Create lines for each direction's stimulation threshold
-        self.stim_line_up = visuals.Line(
-            pos=np.array(
-                [
-                    [-self.stim_threshold_length, self._stim_thresholds['Up']],
-                    [self.stim_threshold_length, self._stim_thresholds['Up']],
-                ],
-                dtype=np.float32,
-            ),
-            color=stim_line_color,
-            width=stim_line_width,
-            connect='segments',
-            parent=self.view.scene,
-        )
-
-        self.stim_line_down = visuals.Line(
-            pos=np.array(
-                [
-                    [-self.stim_threshold_length, -self._stim_thresholds['Down']],
-                    [self.stim_threshold_length, -self._stim_thresholds['Down']],
-                ],
-                dtype=np.float32,
-            ),
-            color=stim_line_color,
-            width=stim_line_width,
-            connect='segments',
-            parent=self.view.scene,
-        )
-
-        self.stim_line_left = visuals.Line(
-            pos=np.array(
-                [
-                    [-self._stim_thresholds['Left'], -self.stim_threshold_length],
-                    [-self._stim_thresholds['Left'], self.stim_threshold_length],
-                ],
-                dtype=np.float32,
-            ),
-            color=stim_line_color,
-            width=stim_line_width,
-            connect='segments',
-            parent=self.view.scene,
-        )
-
-        self.stim_line_right = visuals.Line(
-            pos=np.array(
-                [
-                    [self._stim_thresholds['Right'], -self.stim_threshold_length],
-                    [self._stim_thresholds['Right'], self.stim_threshold_length],
-                ],
-                dtype=np.float32,
-            ),
-            color=stim_line_color,
-            width=stim_line_width,
-            connect='segments',
-            parent=self.view.scene,
-        )
-
-        self._stim_thresholds_visible = False
-        self.stim_line_up.visible = False
-        self.stim_line_down.visible = False
-        self.stim_line_left.visible = False
-        self.stim_line_right.visible = False
-        self.legend_stim.visible = False
 
         # Target Box Lines (replacing RectangleVisual)
         line_color = 'yellow'
@@ -543,8 +447,6 @@ class VispyWidget(scene.SceneCanvas):
             self._current_trajectory_index = 0  # Reset index for new direction
             self._update_task_display()
             self._update_target_box_visual()  # Update box on direction change
-            # Update stimulation threshold lines for new direction
-            self.update_stimulation_thresholds(self._stim_thresholds, self._stim_thresholds_visible)
         elif event.key == Key('Right'):
             self._current_direction_index = (self._current_direction_index + 1) % num_directions
             # Stop any active movement and reset state when changing direction
@@ -561,8 +463,6 @@ class VispyWidget(scene.SceneCanvas):
             self._current_trajectory_index = 0  # Reset index for new direction
             self._update_task_display()
             self._update_target_box_visual()  # Update box on direction change
-            # Update stimulation threshold lines for new direction
-            self.update_stimulation_thresholds(self._stim_thresholds, self._stim_thresholds_visible)
         elif event.key == Key('Space'):
             self.movement_active = not self.movement_active
             self._update_task_display()
@@ -622,9 +522,6 @@ class VispyWidget(scene.SceneCanvas):
                 # No smoothing, update directly
                 self.last_predicted_x = x
                 self.last_predicted_y = y
-
-            # Stream prediction to the stimulator
-            self.signal_handler.send_interpolated_prediction.emit(self.last_predicted_x, self.last_predicted_y)
 
             # Apply frequency division
             self._prediction_counter += 1
@@ -867,100 +764,3 @@ class VispyWidget(scene.SceneCanvas):
     def update_pred_freq(self, pred_freq: float):
         """Updates the frequency for predicted cursor display and streaming."""
         self._pred_freq = pred_freq
-
-    def update_stimulation_thresholds(self, thresholds: dict, visible: bool):
-        """Updates the stimulation threshold lines based on UI values.
-
-        Args:
-            thresholds: Dictionary with keys 'Up', 'Down', 'Left', 'Right' and values 0-99
-            visible: Whether the stimulation thresholds should be visible
-        """
-        # Update internal values (convert from 0-99 to 0-0.99)
-        for direction, value in thresholds.items():
-            # Check if stimulation threshold value already between 0 and 1 or between 100
-            if value >= 1:
-                self._stim_thresholds[direction] = value / 100.0
-            else:
-                self._stim_thresholds[direction] = value
-
-        self._stim_thresholds_visible = visible
-        self.legend_stim.visible = visible
-
-        # Define the extent of the lines perpendicular to the movement direction
-        off_axis_half_width = 0.15  # Same as target box width
-
-        # First hide all lines by default
-        self.stim_line_up.visible = False
-        self.stim_line_down.visible = False
-        self.stim_line_left.visible = False
-        self.stim_line_right.visible = False
-
-        # Only proceed with showing lines if the group box is checked
-        if not visible:
-            self.update()
-            return
-
-        # Update line positions based on current direction and thresholds
-        if self._current_direction == "Up":
-            # Show horizontal lines for Up/Down thresholds
-            y_up = self._stim_thresholds['Up']
-            y_down = -self._stim_thresholds['Down']
-            x_left, x_right = -off_axis_half_width, off_axis_half_width
-
-            self.stim_line_up.set_data(pos=np.array([[x_left, y_up], [x_right, y_up]], dtype=np.float32))
-            self.stim_line_down.set_data(pos=np.array([[x_left, y_down], [x_right, y_down]], dtype=np.float32))
-
-            # Only show the Up threshold line for Up direction
-            self.stim_line_up.visible = True
-            self.stim_line_down.visible = False
-            self.stim_line_left.visible = False
-            self.stim_line_right.visible = False
-
-        elif self._current_direction == "Down":
-            # Same as Up but with inverted y values
-            y_up = self._stim_thresholds['Up']
-            y_down = -self._stim_thresholds['Down']
-            x_left, x_right = -off_axis_half_width, off_axis_half_width
-
-            self.stim_line_up.set_data(pos=np.array([[x_left, y_up], [x_right, y_up]], dtype=np.float32))
-            self.stim_line_down.set_data(pos=np.array([[x_left, y_down], [x_right, y_down]], dtype=np.float32))
-
-            # Only show the Down threshold line for Down direction
-            self.stim_line_up.visible = False
-            self.stim_line_down.visible = True
-            self.stim_line_left.visible = False
-            self.stim_line_right.visible = False
-
-        elif self._current_direction == "Right":
-            # Show vertical lines for Left/Right thresholds
-            x_left = -self._stim_thresholds['Left']
-            x_right = self._stim_thresholds['Right']
-            y_bottom, y_top = -off_axis_half_width, off_axis_half_width
-
-            self.stim_line_left.set_data(pos=np.array([[x_left, y_bottom], [x_left, y_top]], dtype=np.float32))
-            self.stim_line_right.set_data(pos=np.array([[x_right, y_bottom], [x_right, y_top]], dtype=np.float32))
-
-            # Only show the Right threshold line for Right direction
-            self.stim_line_up.visible = False
-            self.stim_line_down.visible = False
-            self.stim_line_left.visible = False
-            self.stim_line_right.visible = True
-
-        elif self._current_direction == "Left":
-            # Same as Right but with inverted x values
-            x_left = -self._stim_thresholds['Left']
-            x_right = self._stim_thresholds['Right']
-            y_bottom, y_top = -off_axis_half_width, off_axis_half_width
-
-            self.stim_line_left.set_data(pos=np.array([[x_left, y_bottom], [x_left, y_top]], dtype=np.float32))
-            self.stim_line_right.set_data(pos=np.array([[x_right, y_bottom], [x_right, y_top]], dtype=np.float32))
-
-            # Only show the Left threshold line for Left direction
-            self.stim_line_up.visible = False
-            self.stim_line_down.visible = False
-            self.stim_line_left.visible = True
-            self.stim_line_right.visible = False
-
-        # For Rest direction, all lines remain hidden (handled by initial hide)
-
-        self.update()
