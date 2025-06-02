@@ -40,6 +40,7 @@ class SignalHandler(QObject):
     movement_started = Signal()  # Signal for movement start
     movement_stopped = Signal()  # Signal for movement stop
 
+
 class VispyWidget(scene.SceneCanvas):
     """Vispy canvas widget displaying axes, cursors, task info, and handling key events."""
 
@@ -105,23 +106,23 @@ class VispyWidget(scene.SceneCanvas):
         self.pred_is_read = False  # checks whether prediction should be read based on set sampling frequency
 
         # Add frequency division tracking
-        self._pred_freq = 60  # Default freq of prediction
+        self._pred_freq = CURSOR_SAMPLING_RATE  # Default freq of prediction
         self._freq_div_factor = 1  # Default to display every prediction
         self._prediction_counter = 0  # Counter for received predictions
 
         # Timing and Sine Wave Parameters
-        self._display_frequency = 60.0  # Hz (default)
+        self.reference_samp_frequency = CURSOR_SAMPLING_RATE  # Hz (default)
         self._timer = QTimer()
         self._timer.timeout.connect(self._on_timer_tick)  # Connect to new timer handler
 
         # Set initial timer interval based on default display frequency
-        if self._display_frequency > 0:
-            initial_interval_ms = int(1000 / self._display_frequency)
+        if self.reference_samp_frequency > 0:
+            initial_interval_ms = int(1000 / self.reference_samp_frequency)
             if initial_interval_ms > 0:
                 self._timer.setInterval(initial_interval_ms)
             else:
                 print(
-                    f"Warning: Initial display frequency ({self._display_frequency} Hz) too high, timer interval <= 0 ms."
+                    f"Warning: Initial display frequency ({self.reference_samp_frequency} Hz) too high, timer interval <= 0 ms."
                 )
         else:
             print("Warning: Initial display frequency <= 0 Hz.")
@@ -133,13 +134,13 @@ class VispyWidget(scene.SceneCanvas):
         self.view.camera.set_range(x=(-0.1, 0.1), y=(-1.3, 1.4))
 
         # Add lab image to canvas
-        try:    # try this path if accessed from main script of MyoGestic
+        try:  # try this path if accessed from main script of MyoGestic
             lab_logo = np.flipud(read_png('gui/cursor_interface/assets/n-squared lab Logo.png'))
-        except FileNotFoundError:   # try this path if accessed from main_cursor script
+        except FileNotFoundError:  # try this path if accessed from main_cursor script
             lab_logo = np.flipud(read_png('assets/n-squared lab Logo.png'))
 
         self.lab_logo = visuals.Image(lab_logo, parent=self.view.scene)
-        self.lab_logo.transform = STTransform(scale=(1/3000, 1/3000), translate=(-0.1, 1.2))   # scale and shift logo
+        self.lab_logo.transform = STTransform(scale=(1 / 3000, 1 / 3000), translate=(-0.1, 1.2))  # scale and shift logo
         self.lab_logo.set_gl_state(depth_test=False)
 
         # Add Uni logo to canvas
@@ -149,7 +150,9 @@ class VispyWidget(scene.SceneCanvas):
             uni_logo = np.flipud(read_png('assets/FAU_logo.png'))
 
         self.uni_logo = visuals.Image(uni_logo, parent=self.view.scene)
-        self.uni_logo.transform = STTransform(scale=(1/10000, 1/10000), translate=(-1.0, 1.15))   # scale and shift logo
+        self.uni_logo.transform = STTransform(
+            scale=(1 / 10000, 1 / 10000), translate=(-1.0, 1.15)
+        )  # scale and shift logo
         self.uni_logo.set_gl_state(depth_test=False)
 
         self.xaxis = visuals.Axis(
@@ -282,34 +285,37 @@ class VispyWidget(scene.SceneCanvas):
         self._movement_mappings = mappings.copy()
         self._update_task_display()  # Update text when mappings change
 
-    def update_timing_parameters(self, display_frequency: float):
+    def update_timing_parameters(self, reference_samp_frequency: float):
         """Updates the display frequency and resets the timer interval."""
         was_active = self._timer.isActive()
         if was_active:
             self._timer.stop()
 
-        self._display_frequency = display_frequency
+        self.reference_samp_frequency = reference_samp_frequency
 
         # Calculate trajectory step size based on sampling rate and display frequency
-        if self._display_frequency > 0:
-            # Explicitly cast the result of floor division to int
-            step_size = int(CURSOR_SAMPLING_RATE // self._display_frequency)
-            # Ensure step size is at least 1
-            self._trajectory_step_size = max(1, step_size)
-        else:
-            # Default step size if frequency is invalid
-            self._trajectory_step_size = 1
-            print(f"Warning: Display frequency <= 0 Hz. Using default step size: {self._trajectory_step_size}")
+        # TODO: check if you keep this code
+        # if self.reference_samp_frequency > 0:
+        #     # Explicitly cast the result of floor division to int
+        #     step_size = int(CURSOR_SAMPLING_RATE // self.reference_samp_frequency)
+        #     # Ensure step size is at least 1
+        #     self._trajectory_step_size = max(1, step_size)
+        # else:
+        #     # Default step size if frequency is invalid
+        #     self._trajectory_step_size = 1
+        #     print(f"Warning: Display frequency <= 0 Hz. Using default step size: {self._trajectory_step_size}")
 
-        if self._display_frequency > 0:
-            interval_ms = int(1000 / self._display_frequency)
+        if self.reference_samp_frequency > 0:
+            interval_ms = int(1000 / self.reference_samp_frequency)
             if interval_ms > 0:
                 self._timer.setInterval(interval_ms)  # Set interval based on display freq
                 if was_active:
                     # Don't reset index here, only when direction changes or movement starts
                     self._timer.start()  # Restart timer with new interval if it was running
             else:
-                print(f"Warning: Display frequency ({self._display_frequency} Hz) too high, timer interval <= 0 ms.")
+                print(
+                    f"Warning: Display frequency ({self.reference_samp_frequency} Hz) too high, timer interval <= 0 ms."
+                )
         else:
             print("Warning: Cannot start timer with display frequency <= 0 Hz.")
 
@@ -468,19 +474,21 @@ class VispyWidget(scene.SceneCanvas):
             self._update_task_display()
             if self.movement_active:
                 # Start timer only if direction is not Rest and display freq is valid
-                if self._current_direction != "Rest" and self._display_frequency > 0 and self._timer.interval() > 0:
+                if (
+                    self._current_direction != "Rest"
+                    and self.reference_samp_frequency > 0
+                    and self._timer.interval() > 0
+                ):
                     self._current_trajectory_index = 0  # Reset index on activation
                     print(
                         f"Starting timer for {self._current_direction} with interval {self._timer.interval()} ms"
                     )  # Debug
                     self._timer.start()
                     self.signal_handler.movement_started.emit()  # Use signal handler
-                    # Optionally update position immediately to first step
-                    # self._on_timer_tick()
                 else:
                     print(
                         f"Warning: Cannot start timer. Direction: {self._current_direction}, "
-                        f"Display Freq: {self._display_frequency}, Timer Interval: {self._timer.interval()}"
+                        f"Display Freq: {self.reference_samp_frequency}, Timer Interval: {self._timer.interval()}"
                     )
             else:  # Deactivating
                 print("Stopping timer")  # Debug
@@ -712,24 +720,16 @@ class VispyWidget(scene.SceneCanvas):
         elif self._current_direction == "Down":
             y1, y2 = -p_axis_2, -p_axis_1  # Note: signs and order for negative direction
             x_left, x_right = -off_axis_half_width, off_axis_half_width
-            self.target_line_bottom.set_data(
-                pos=np.array([[x_left, y1], [x_right, y1]], dtype=np.float32)
-            )  # Bottom
-            self.target_line_top.set_data(pos=np.array([[x_left, y2], [x_right, y2]], dtype=np.float32))    # Top
+            self.target_line_bottom.set_data(pos=np.array([[x_left, y1], [x_right, y1]], dtype=np.float32))  # Bottom
+            self.target_line_top.set_data(pos=np.array([[x_left, y2], [x_right, y2]], dtype=np.float32))  # Top
             self.target_line_left.set_data(pos=np.array([[x_left, y1], [x_left, y2]], dtype=np.float32))
             self.target_line_right.set_data(pos=np.array([[x_right, y1], [x_right, y2]], dtype=np.float32))
         elif self._current_direction == "Right":
             x1, x2 = p_axis_1, p_axis_2
             y_bottom, y_top = -off_axis_half_width, off_axis_half_width
-            self.target_line_left.set_data(
-                pos=np.array([[x1, y_bottom], [x1, y_top]], dtype=np.float32)
-            )  # Left
-            self.target_line_right.set_data(
-                pos=np.array([[x2, y_bottom], [x2, y_top]], dtype=np.float32)
-            )  # Right
-            self.target_line_bottom.set_data(
-                pos=np.array([[x1, y_bottom], [x2, y_bottom]], dtype=np.float32)
-            )  # Bottom
+            self.target_line_left.set_data(pos=np.array([[x1, y_bottom], [x1, y_top]], dtype=np.float32))  # Left
+            self.target_line_right.set_data(pos=np.array([[x2, y_bottom], [x2, y_top]], dtype=np.float32))  # Right
+            self.target_line_bottom.set_data(pos=np.array([[x1, y_bottom], [x2, y_bottom]], dtype=np.float32))  # Bottom
             self.target_line_top.set_data(pos=np.array([[x1, y_top], [x2, y_top]], dtype=np.float32))  # Top
         elif self._current_direction == "Left":
             x1, x2 = -p_axis_2, -p_axis_1  # Note: signs and order

@@ -221,6 +221,9 @@ class Ui_CursorInterface(object):
         self.referenceCursorRefreshRateComboBox.addItem("")
         self.referenceCursorRefreshRateComboBox.addItem("")
         self.referenceCursorRefreshRateComboBox.addItem("")
+        self.referenceCursorRefreshRateComboBox.addItem("")
+        self.referenceCursorRefreshRateComboBox.addItem("")
+        self.referenceCursorRefreshRateComboBox.addItem("")
         self.referenceCursorRefreshRateComboBox.setObjectName(u"referenceCursorRefreshRateComboBox")
 
         self.gridLayout_2.addWidget(self.referenceCursorRefreshRateComboBox, 1, 1, 1, 1)
@@ -376,7 +379,7 @@ class Ui_CursorInterface(object):
 
         self.retranslateUi(CursorInterface)
 
-        self.tabWidget.setCurrentIndex(0)
+        self.tabWidget.setCurrentIndex(1)
 
 
         QMetaObject.connectSlotsByName(CursorInterface)
@@ -436,6 +439,9 @@ class Ui_CursorInterface(object):
         self.referenceCursorRefreshRateComboBox.setItemText(1, QCoreApplication.translate("CursorInterface", u"30", None))
         self.referenceCursorRefreshRateComboBox.setItemText(2, QCoreApplication.translate("CursorInterface", u"20", None))
         self.referenceCursorRefreshRateComboBox.setItemText(3, QCoreApplication.translate("CursorInterface", u"10", None))
+        self.referenceCursorRefreshRateComboBox.setItemText(4, QCoreApplication.translate("CursorInterface", u"5", None))
+        self.referenceCursorRefreshRateComboBox.setItemText(5, QCoreApplication.translate("CursorInterface", u"2", None))
+        self.referenceCursorRefreshRateComboBox.setItemText(6, QCoreApplication.translate("CursorInterface", u"1", None))
 
         self.label_5.setText(QCoreApplication.translate("CursorInterface", u"Cursor frequency (Hz)", None))
         self.targetBoxGroupBox.setTitle(QCoreApplication.translate("CursorInterface", u"Target box for reaching partial activation state", None))
