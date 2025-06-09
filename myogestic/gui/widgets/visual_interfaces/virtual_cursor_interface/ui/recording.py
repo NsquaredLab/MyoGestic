@@ -45,13 +45,10 @@ class Ui_RecordingVirtualCursorInterface(object):
 
         self.gridLayout_9.addWidget(self.label_7, 4, 0, 1, 1)
 
-        self.recordUseCursorKinematicsCheckBox = QCheckBox(self.recordRecordingGroupBox)
-        self.recordUseCursorKinematicsCheckBox.setObjectName(u"recordUseCursorKinematicsCheckBox")
-        self.recordUseCursorKinematicsCheckBox.setEnabled(True)
-        self.recordUseCursorKinematicsCheckBox.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
-        self.recordUseCursorKinematicsCheckBox.setChecked(False)
+        self.label_4 = QLabel(self.recordRecordingGroupBox)
+        self.label_4.setObjectName(u"label_4")
 
-        self.gridLayout_9.addWidget(self.recordUseCursorKinematicsCheckBox, 5, 0, 1, 1)
+        self.gridLayout_9.addWidget(self.label_4, 2, 0, 1, 1)
 
         self.recordMovementComboBox = QComboBox(self.recordRecordingGroupBox)
         self.recordMovementComboBox.addItem("")
@@ -67,7 +64,20 @@ class Ui_RecordingVirtualCursorInterface(object):
         self.groundTruthProgressBar.setObjectName(u"groundTruthProgressBar")
         self.groundTruthProgressBar.setValue(24)
 
-        self.gridLayout_9.addWidget(self.groundTruthProgressBar, 7, 0, 1, 2)
+        self.gridLayout_9.addWidget(self.groundTruthProgressBar, 9, 0, 1, 2)
+
+        self.label = QLabel(self.recordRecordingGroupBox)
+        self.label.setObjectName(u"label")
+
+        self.gridLayout_9.addWidget(self.label, 1, 0, 1, 1)
+
+        self.recordUseCursorKinematicsCheckBox = QCheckBox(self.recordRecordingGroupBox)
+        self.recordUseCursorKinematicsCheckBox.setObjectName(u"recordUseCursorKinematicsCheckBox")
+        self.recordUseCursorKinematicsCheckBox.setEnabled(True)
+        self.recordUseCursorKinematicsCheckBox.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.recordUseCursorKinematicsCheckBox.setChecked(False)
+
+        self.gridLayout_9.addWidget(self.recordUseCursorKinematicsCheckBox, 7, 0, 1, 1)
 
         self.recordDurationSpinBox = QSpinBox(self.recordRecordingGroupBox)
         self.recordDurationSpinBox.setObjectName(u"recordDurationSpinBox")
@@ -75,21 +85,16 @@ class Ui_RecordingVirtualCursorInterface(object):
 
         self.gridLayout_9.addWidget(self.recordDurationSpinBox, 4, 1, 1, 1)
 
-        self.label_4 = QLabel(self.recordRecordingGroupBox)
-        self.label_4.setObjectName(u"label_4")
-
-        self.gridLayout_9.addWidget(self.label_4, 2, 0, 1, 1)
-
         self.recordRecordPushButton = QPushButton(self.recordRecordingGroupBox)
         self.recordRecordPushButton.setObjectName(u"recordRecordPushButton")
         self.recordRecordPushButton.setCheckable(True)
 
-        self.gridLayout_9.addWidget(self.recordRecordPushButton, 6, 0, 1, 2)
+        self.gridLayout_9.addWidget(self.recordRecordPushButton, 8, 0, 1, 2)
 
-        self.label = QLabel(self.recordRecordingGroupBox)
-        self.label.setObjectName(u"label")
+        self.label_3 = QLabel(self.recordRecordingGroupBox)
+        self.label_3.setObjectName(u"label_3")
 
-        self.gridLayout_9.addWidget(self.label, 1, 0, 1, 1)
+        self.gridLayout_9.addWidget(self.label_3, 5, 0, 1, 1)
 
         self.recordTaskComboBox = QComboBox(self.recordRecordingGroupBox)
         self.recordTaskComboBox.addItem("")
@@ -100,6 +105,14 @@ class Ui_RecordingVirtualCursorInterface(object):
         self.recordTaskComboBox.setObjectName(u"recordTaskComboBox")
 
         self.gridLayout_9.addWidget(self.recordTaskComboBox, 1, 1, 1, 1)
+
+        self.kinematicsSampFreqSpinBox = QSpinBox(self.recordRecordingGroupBox)
+        self.kinematicsSampFreqSpinBox.setObjectName(u"kinematicsSampFreqSpinBox")
+        self.kinematicsSampFreqSpinBox.setMinimum(1)
+        self.kinematicsSampFreqSpinBox.setMaximum(120)
+        self.kinematicsSampFreqSpinBox.setValue(60)
+
+        self.gridLayout_9.addWidget(self.kinematicsSampFreqSpinBox, 5, 1, 1, 1)
 
         self.recordReviewRecordingStackedWidget = QStackedWidget(RecordingVirtualCursorInterface)
         self.recordReviewRecordingStackedWidget.setObjectName(u"recordReviewRecordingStackedWidget")
@@ -185,16 +198,17 @@ class Ui_RecordingVirtualCursorInterface(object):
         RecordingVirtualCursorInterface.setWindowTitle(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Form", None))
         self.recordRecordingGroupBox.setTitle(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Record Cursor", None))
         self.label_7.setText(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Duration", None))
-        self.recordUseCursorKinematicsCheckBox.setText(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Use Kinematics of Virtual Cursor Interface", None))
+        self.label_4.setText(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Leg Movement", None))
         self.recordMovementComboBox.setItemText(0, QCoreApplication.translate("RecordingVirtualCursorInterface", u"Rest", None))
         self.recordMovementComboBox.setItemText(1, QCoreApplication.translate("RecordingVirtualCursorInterface", u"Dorsiflexion", None))
         self.recordMovementComboBox.setItemText(2, QCoreApplication.translate("RecordingVirtualCursorInterface", u"Plantarflexion", None))
         self.recordMovementComboBox.setItemText(3, QCoreApplication.translate("RecordingVirtualCursorInterface", u"Inversion", None))
         self.recordMovementComboBox.setItemText(4, QCoreApplication.translate("RecordingVirtualCursorInterface", u"Eversion", None))
 
-        self.label_4.setText(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Leg Movement", None))
-        self.recordRecordPushButton.setText(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Record", None))
         self.label.setText(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Task cursor direction", None))
+        self.recordUseCursorKinematicsCheckBox.setText(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Use Kinematics of Virtual Cursor Interface", None))
+        self.recordRecordPushButton.setText(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Record", None))
+        self.label_3.setText(QCoreApplication.translate("RecordingVirtualCursorInterface", u"Kinematics samp freq", None))
         self.recordTaskComboBox.setItemText(0, QCoreApplication.translate("RecordingVirtualCursorInterface", u"Rest", None))
         self.recordTaskComboBox.setItemText(1, QCoreApplication.translate("RecordingVirtualCursorInterface", u"Up", None))
         self.recordTaskComboBox.setItemText(2, QCoreApplication.translate("RecordingVirtualCursorInterface", u"Down", None))

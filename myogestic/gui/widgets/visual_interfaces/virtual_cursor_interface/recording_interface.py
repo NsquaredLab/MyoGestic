@@ -11,8 +11,6 @@ from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.ui import 
 )
 from myogestic.utils.constants import RECORDING_DIR_PATH
 
-KINEMATICS_SAMPLING_FREQUENCY = 60
-
 
 class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
     """
@@ -91,6 +89,11 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
 
         self.use_kinematics_check_box = ui.recordUseCursorKinematicsCheckBox
 
+        # Store kinematics sampling frequency
+        self.kinematics_samp_freq_spin_box = ui.kinematicsSampFreqSpinBox
+        self.kinematics_samp_freq = int(self.kinematics_samp_freq_spin_box.value())
+        self.kinematics_samp_freq_spin_box.valueChanged.connect(self.update_kinematics_samp_freq)
+
         self.record_toggle_push_button.toggled.connect(self.start_recording)
         self.review_recording_accept_push_button.clicked.connect(self.accept_recording)
         self.review_recording_reject_push_button.clicked.connect(self.reject_recording)
@@ -127,7 +130,7 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
             self._main_window.logger.print("Biosignal device not streaming!", level=LoggerLevel.ERROR)
             return False
 
-        self.kinematics_recording_time = int(self.record_duration_spin_box.value() * KINEMATICS_SAMPLING_FREQUENCY)
+        self.kinematics_recording_time = int(self.record_duration_spin_box.value() * self.kinematics_samp_freq)
         self._kinematics__buffer = []
         return True
 
@@ -151,6 +154,12 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
             self._has_finished_kinematics = True
             self.incoming_message_signal.disconnect(self.update_ground_truth_buffer)
             self.check_recording_completion()
+
+    def update_kinematics_samp_freq(self) -> None:
+        """Updates the kinematics sampling frequency of the cursor."""
+        self.kinematics_samp_freq = int(self.kinematics_samp_freq_spin_box.value())
+        self._main_window.logger.print("Check that kinematics samp freq matches one set in"
+                                       " cursor interface.", level=LoggerLevel.WARNING)
 
     def check_recording_completion(self) -> None:
         """Checks if the recording process is complete and finishes it if so."""
@@ -205,7 +214,7 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
             task=self._current_task,
             movement=self._current_movement,
             task_label_map=self.ground_truth__task_map,
-            ground_truth_sampling_frequency=KINEMATICS_SAMPLING_FREQUENCY,
+            ground_truth_sampling_frequency=self.kinematics_samp_freq,
             use_as_classification=not self.use_kinematics_check_box.isChecked(),
             record_duration=self.record_duration_spin_box.value(),
         )

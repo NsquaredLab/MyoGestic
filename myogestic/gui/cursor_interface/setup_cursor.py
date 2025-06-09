@@ -28,9 +28,6 @@ import time
 
 from utils.constants import TASKS, DIRECTIONS
 
-# Import necessary constants
-from myogestic.gui.cursor_interface.utils.constants import CURSOR_SAMPLING_RATE
-
 
 class SignalHandler(QObject):
     """Separate QObject to handle signals for VispyWidget."""
@@ -57,6 +54,9 @@ class VispyWidget(scene.SceneCanvas):
 
         # Create signal handler
         self.signal_handler = SignalHandler()
+
+        # Add cursor sampling frequency
+        self.cursor_sampling_rate: int = 60  # initial value
 
         # Add FPS tracking attributes after unfreezing
         self._last_ref_cursor_update = time.time()
@@ -106,26 +106,16 @@ class VispyWidget(scene.SceneCanvas):
         self.pred_is_read = False  # checks whether prediction should be read based on set sampling frequency
 
         # Add frequency division tracking
-        self._pred_freq = CURSOR_SAMPLING_RATE  # Default freq of prediction
+        self._pred_freq: int = 60  # Default freq of prediction
         self._freq_div_factor = 1  # Default to display every prediction
         self._prediction_counter = 0  # Counter for received predictions
 
-        # Timing and Sine Wave Parameters
-        self.reference_samp_frequency = CURSOR_SAMPLING_RATE  # Hz (default)
-        self._timer = QTimer()
-        self._timer.timeout.connect(self._on_timer_tick)  # Connect to new timer handler
+        # Set up cursor timer
+        self.cursor_timer = QTimer()
+        self.cursor_timer.timeout.connect(self._on_timer_tick)  # Connect to new timer handler
 
-        # Set initial timer interval based on default display frequency
-        if self.reference_samp_frequency > 0:
-            initial_interval_ms = int(1000 / self.reference_samp_frequency)
-            if initial_interval_ms > 0:
-                self._timer.setInterval(initial_interval_ms)
-            else:
-                print(
-                    f"Warning: Initial display frequency ({self.reference_samp_frequency} Hz) too high, timer interval <= 0 ms."
-                )
-        else:
-            print("Warning: Initial display frequency <= 0 Hz.")
+        self.cursor_timer.setInterval(int(1000 / self.cursor_sampling_rate))  # Set interval based on display freq
+        self.cursor_timer.start()  # Start timer
 
         # Get the default view
         self.view = self.central_widget.add_view()
@@ -285,40 +275,6 @@ class VispyWidget(scene.SceneCanvas):
         self._movement_mappings = mappings.copy()
         self._update_task_display()  # Update text when mappings change
 
-    def update_timing_parameters(self, reference_samp_frequency: float):
-        """Updates the display frequency and resets the timer interval."""
-        was_active = self._timer.isActive()
-        if was_active:
-            self._timer.stop()
-
-        self.reference_samp_frequency = reference_samp_frequency
-
-        # Calculate trajectory step size based on sampling rate and display frequency
-        # TODO: check if you keep this code
-        # if self.reference_samp_frequency > 0:
-        #     # Explicitly cast the result of floor division to int
-        #     step_size = int(CURSOR_SAMPLING_RATE // self.reference_samp_frequency)
-        #     # Ensure step size is at least 1
-        #     self._trajectory_step_size = max(1, step_size)
-        # else:
-        #     # Default step size if frequency is invalid
-        #     self._trajectory_step_size = 1
-        #     print(f"Warning: Display frequency <= 0 Hz. Using default step size: {self._trajectory_step_size}")
-
-        if self.reference_samp_frequency > 0:
-            interval_ms = int(1000 / self.reference_samp_frequency)
-            if interval_ms > 0:
-                self._timer.setInterval(interval_ms)  # Set interval based on display freq
-                if was_active:
-                    # Don't reset index here, only when direction changes or movement starts
-                    self._timer.start()  # Restart timer with new interval if it was running
-            else:
-                print(
-                    f"Warning: Display frequency ({self.reference_samp_frequency} Hz) too high, timer interval <= 0 ms."
-                )
-        else:
-            print("Warning: Cannot start timer with display frequency <= 0 Hz.")
-
     def _update_task_display(self):
         """Updates the text element showing the selected direction and mapped task."""
         selected_direction = DIRECTIONS[self._current_direction_index]
@@ -332,7 +288,6 @@ class VispyWidget(scene.SceneCanvas):
             display_text = f"{status}: {selected_direction} (Mapped: {mapped_task})"
 
         self.task_display.text = display_text
-        self.update()  # Trigger redraw
 
     def update_activation_parameters(
         self,
@@ -439,9 +394,9 @@ class VispyWidget(scene.SceneCanvas):
         num_directions = len(DIRECTIONS)
         if event.key == Key('Left'):
             self._current_direction_index = (self._current_direction_index - 1 + num_directions) % num_directions
-            # Stop any active movement and reset state when changing direction
-            if self._timer.isActive():
-                self._timer.stop()
+            # # Stop any active movement and reset state when changing direction
+            # if self.cursor_timer.isActive():
+            #     self.cursor_timer.stop()
             self.movement_active = False
             self._is_rest_holding = False  # Reset all hold flags
             self._is_peak_holding = False
@@ -456,8 +411,8 @@ class VispyWidget(scene.SceneCanvas):
         elif event.key == Key('Right'):
             self._current_direction_index = (self._current_direction_index + 1) % num_directions
             # Stop any active movement and reset state when changing direction
-            if self._timer.isActive():
-                self._timer.stop()
+            # if self.cursor_timer.isActive():
+            #     self.cursor_timer.stop()
             self.movement_active = False
             self._is_rest_holding = False  # Reset all hold flags
             self._is_peak_holding = False
@@ -474,25 +429,10 @@ class VispyWidget(scene.SceneCanvas):
             self._update_task_display()
             if self.movement_active:
                 # Start timer only if direction is not Rest and display freq is valid
-                if (
-                    self._current_direction != "Rest"
-                    and self.reference_samp_frequency > 0
-                    and self._timer.interval() > 0
-                ):
+                if self._current_direction != "Rest":
                     self._current_trajectory_index = 0  # Reset index on activation
-                    print(
-                        f"Starting timer for {self._current_direction} with interval {self._timer.interval()} ms"
-                    )  # Debug
-                    self._timer.start()
                     self.signal_handler.movement_started.emit()  # Use signal handler
-                else:
-                    print(
-                        f"Warning: Cannot start timer. Direction: {self._current_direction}, "
-                        f"Display Freq: {self.reference_samp_frequency}, Timer Interval: {self._timer.interval()}"
-                    )
             else:  # Deactivating
-                print("Stopping timer")  # Debug
-                self._timer.stop()
                 self.signal_handler.movement_stopped.emit()  # Use signal handler
                 self._is_rest_holding = False  # Reset all hold flags
                 self._is_peak_holding = False
@@ -502,7 +442,6 @@ class VispyWidget(scene.SceneCanvas):
                 self.update_reference_cursor(0, 0)
                 # self.update_predicted_cursor(0, 0)  # Also reset predicted for consistency
                 self._update_target_box_visual()  # Update box state (might hide if direction was Rest)
-        self.update()
 
     def update_reference_cursor(self, x, y):
         """Updates the reference cursor position and calculates FPS."""
@@ -515,8 +454,6 @@ class VispyWidget(scene.SceneCanvas):
             self._ref_cursor_display_fps = 1.0 / time_diff
             self.signal_handler.ref_cursor_fps_updated.emit(self._ref_cursor_display_fps)
         self._last_ref_cursor_update = current_time
-
-        self.update()
 
     def update_predicted_cursor(self, x, y):
         """Updates the predicted cursor position with smoothing and frequency division applied."""
@@ -542,105 +479,106 @@ class VispyWidget(scene.SceneCanvas):
 
                 self._last_pred_cursor_update = time.time()
                 self._prediction_counter = 0  # Reset counter after display
-                self.update()
                 self.pred_is_read = True
         else:
             self.pred_is_read = False
 
+    # TODO: make _on_timer_tick more efficient
     def _on_timer_tick(self):
         """Handles the timer tick: updates cursor, checking for activation holds."""
+
         # If currently holding for any reason, do nothing until the hold timer finishes
-        if self._is_rest_holding or self._is_peak_holding or self._is_middle_holding:
-            return
+        if self.movement_active:
+            if self._is_rest_holding or self._is_peak_holding or self._is_middle_holding:
+                return
 
-        trajectory = self._trajectories.get(self._current_direction)
-        if trajectory is None or trajectory.shape[0] == 0:
-            return
+            trajectory = self._trajectories.get(self._current_direction)
+            if trajectory is None or trajectory.shape[0] == 0:
+                return
 
-        candidate_display_index = self._current_trajectory_index
+            candidate_display_index = self._current_trajectory_index
 
-        # prev_displayed_index is the index that was shown in the last tick.
-        prev_displayed_index = (
-            candidate_display_index - self._trajectory_step_size + trajectory.shape[0]
-        ) % trajectory.shape[0]
+            # prev_displayed_index is the index that was shown in the last tick.
+            prev_displayed_index = (
+                candidate_display_index - self._trajectory_step_size + trajectory.shape[0]
+            ) % trajectory.shape[0]
 
-        found_hold_type = None
-        found_hold_duration = 0
-        actual_trigger_index_for_hold = -1
+            found_hold_type = None
+            found_hold_duration = 0
+            actual_trigger_index_for_hold = -1
 
-        # Iterate through each "sub-index" covered by the last macro-step.
-        # The step can be from 1 to trajectory_step_size.
-        for s_offset in range(self._trajectory_step_size):
-            idx_in_segment = (prev_displayed_index + s_offset + 1) % trajectory.shape[0]
+            # Iterate through each "sub-index" covered by the last macro-step.
+            # The step can be from 1 to trajectory_step_size.
+            for s_offset in range(self._trajectory_step_size):
+                idx_in_segment = (prev_displayed_index + s_offset + 1) % trajectory.shape[0]
 
-            # Check Middle Hold first
-            if not found_hold_type and self._middle_hold_duration_ms > 0:
-                middle_contract_idx = self._middle_hold_contracting_indices.get(self._current_direction)
-                middle_relax_idx = self._middle_hold_relaxing_indices.get(self._current_direction)
-                triggered_this_segment = False
-                if self._middle_hold_stop_condition == "When contracting" and middle_contract_idx == idx_in_segment:
-                    triggered_this_segment = True
-                elif self._middle_hold_stop_condition == "When relaxing" and middle_relax_idx == idx_in_segment:
-                    triggered_this_segment = True
-                elif self._middle_hold_stop_condition == "Both directions" and (
-                    middle_contract_idx == idx_in_segment or middle_relax_idx == idx_in_segment
-                ):
-                    triggered_this_segment = True
+                # Check Middle Hold first
+                if not found_hold_type and self._middle_hold_duration_ms > 0:
+                    middle_contract_idx = self._middle_hold_contracting_indices.get(self._current_direction)
+                    middle_relax_idx = self._middle_hold_relaxing_indices.get(self._current_direction)
+                    triggered_this_segment = False
+                    if self._middle_hold_stop_condition == "When contracting" and middle_contract_idx == idx_in_segment:
+                        triggered_this_segment = True
+                    elif self._middle_hold_stop_condition == "When relaxing" and middle_relax_idx == idx_in_segment:
+                        triggered_this_segment = True
+                    elif self._middle_hold_stop_condition == "Both directions" and (
+                        middle_contract_idx == idx_in_segment or middle_relax_idx == idx_in_segment
+                    ):
+                        triggered_this_segment = True
 
-                if triggered_this_segment:
-                    found_hold_type = "Middle"
-                    actual_trigger_index_for_hold = idx_in_segment
-                    found_hold_duration = self._middle_hold_duration_ms
+                    if triggered_this_segment:
+                        found_hold_type = "Middle"
+                        actual_trigger_index_for_hold = idx_in_segment
+                        found_hold_duration = self._middle_hold_duration_ms
 
-            # Check Peak Hold (only if middle wasn't triggered yet in this segment scan)
-            if not found_hold_type and self._peak_hold_duration_ms > 0:
-                target_peak_index = self._peak_hold_point_indices.get(self._current_direction)
-                if target_peak_index == idx_in_segment:
-                    found_hold_type = "Peak"
-                    actual_trigger_index_for_hold = idx_in_segment
-                    found_hold_duration = self._peak_hold_duration_ms
+                # Check Peak Hold (only if middle wasn't triggered yet in this segment scan)
+                if not found_hold_type and self._peak_hold_duration_ms > 0:
+                    target_peak_index = self._peak_hold_point_indices.get(self._current_direction)
+                    if target_peak_index == idx_in_segment:
+                        found_hold_type = "Peak"
+                        actual_trigger_index_for_hold = idx_in_segment
+                        found_hold_duration = self._peak_hold_duration_ms
 
-            # Check Rest Hold (only if middle/peak weren't triggered yet in this segment scan)
-            if not found_hold_type and self._rest_hold_duration_ms > 0:
-                target_rest_index = self._rest_hold_point_indices.get(self._current_direction)
-                if target_rest_index == idx_in_segment:
-                    found_hold_type = "Rest"
-                    actual_trigger_index_for_hold = idx_in_segment
-                    found_hold_duration = self._rest_hold_duration_ms
+                # Check Rest Hold (only if middle/peak weren't triggered yet in this segment scan)
+                if not found_hold_type and self._rest_hold_duration_ms > 0:
+                    target_rest_index = self._rest_hold_point_indices.get(self._current_direction)
+                    if target_rest_index == idx_in_segment:
+                        found_hold_type = "Rest"
+                        actual_trigger_index_for_hold = idx_in_segment
+                        found_hold_duration = self._rest_hold_duration_ms
 
-            if found_hold_type:  # If a hold was found for this idx_in_segment, break from checking further sub-indices.
-                break
+                if found_hold_type:  # If a hold was found for this idx_in_segment, break from checking further sub-indices.
+                    break
 
-        if found_hold_type:
-            print(f"{found_hold_type} hold triggered for {found_hold_duration} ms.")
-            self._current_index_at_hold_trigger = actual_trigger_index_for_hold  # Store the exact trigger index
+            if found_hold_type:
+                print(f"{found_hold_type} hold triggered for {found_hold_duration} ms.")
+                self._current_index_at_hold_trigger = actual_trigger_index_for_hold  # Store the exact trigger index
 
-            if found_hold_type == "Rest":
-                self._is_rest_holding = True
-            elif found_hold_type == "Peak":
-                self._is_peak_holding = True
-            elif found_hold_type == "Middle":
-                self._is_middle_holding = True
+                if found_hold_type == "Rest":
+                    self._is_rest_holding = True
+                elif found_hold_type == "Peak":
+                    self._is_peak_holding = True
+                elif found_hold_type == "Middle":
+                    self._is_middle_holding = True
 
-            x_pos_hold, y_pos_hold = trajectory[actual_trigger_index_for_hold]
-            self.update_reference_cursor(x_pos_hold, y_pos_hold)
-            self._timer.stop()
+                x_pos_hold, y_pos_hold = trajectory[actual_trigger_index_for_hold]
+                self.update_reference_cursor(x_pos_hold, y_pos_hold)
 
-            if found_hold_type == "Rest":
-                QTimer.singleShot(found_hold_duration, self._resume_rest_hold)
-            elif found_hold_type == "Peak":
-                QTimer.singleShot(found_hold_duration, self._resume_peak_hold)
-            elif found_hold_type == "Middle":
-                QTimer.singleShot(found_hold_duration, self._resume_middle_hold)
-            return
+                if found_hold_type == "Rest":
+                    QTimer.singleShot(found_hold_duration, self._resume_rest_hold)
+                elif found_hold_type == "Peak":
+                    QTimer.singleShot(found_hold_duration, self._resume_peak_hold)
+                elif found_hold_type == "Middle":
+                    QTimer.singleShot(found_hold_duration, self._resume_middle_hold)
+                return
 
-        # --- Normal Movement (No hold triggered in the entire segment) ---
-        # Display cursor at the candidate_display_index (which is current _current_trajectory_index)
-        x_pos, y_pos = trajectory[candidate_display_index]
-        self.update_reference_cursor(x_pos, y_pos)
+            # --- Normal Movement (No hold triggered in the entire segment) ---
+            # Display cursor at the candidate_display_index (which is current _current_trajectory_index)
+            x_pos, y_pos = trajectory[candidate_display_index]
+            self.update_reference_cursor(x_pos, y_pos)
 
-        # Increment _current_trajectory_index for the *next* tick
-        self._current_trajectory_index = (candidate_display_index + self._trajectory_step_size) % trajectory.shape[0]
+            # Increment _current_trajectory_index for the *next* tick
+            self._current_trajectory_index = (candidate_display_index + self._trajectory_step_size) % trajectory.shape[0]
 
     def _resume_movement_base(self, hold_type: str):
         """Base logic for resuming movement after any hold."""
@@ -655,15 +593,6 @@ class VispyWidget(scene.SceneCanvas):
             self._current_trajectory_index = 0
 
         self._current_index_at_hold_trigger = -1  # Reset after use
-
-        if self.movement_active:
-            if self._timer.interval() > 0:
-                print("Restarting main timer.")
-                self._timer.start()
-            else:
-                print("Warning: Cannot restart main timer, interval invalid.")
-        else:
-            print("Movement not active, not restarting main timer.")
 
     def _resume_rest_hold(self):
         """Called by the rest hold timer to resume movement."""
@@ -691,7 +620,6 @@ class VispyWidget(scene.SceneCanvas):
             self.target_line_bottom.visible = False
             self.target_line_left.visible = False
             self.target_line_right.visible = False
-            self.update()
             return
 
         # Middle activation level (0.0 to 1.0)
@@ -743,14 +671,12 @@ class VispyWidget(scene.SceneCanvas):
             self.target_line_bottom.visible = False
             self.target_line_left.visible = False
             self.target_line_right.visible = False
-            self.update()
             return
 
         self.target_line_top.visible = True
         self.target_line_bottom.visible = True
         self.target_line_left.visible = True
         self.target_line_right.visible = True
-        self.update()
 
     def update_smoothening_factor(self, factor: int):
         """Updates the smoothening factor for predicted cursor movement."""
@@ -761,6 +687,6 @@ class VispyWidget(scene.SceneCanvas):
         self._freq_div_factor = max(1, factor)  # Ensure factor is at least 1
         self._prediction_counter = 0  # Reset counter when factor changes
 
-    def update_pred_freq(self, pred_freq: float):
+    def update_pred_freq(self, pred_freq: int):
         """Updates the frequency for predicted cursor display and streaming."""
         self._pred_freq = pred_freq

@@ -3,13 +3,6 @@
 TASKS = ["Rest", "Dorsiflexion", "Plantarflexion", "Inversion", "Eversion"]  # Define the tasks (movements)
 DIRECTIONS = ["Rest", "Up", "Down", "Right", "Left"]  # Define the directions the user can select
 
-# Cursor Interface Constants
-# TODO: merge sampling and streaming rate in one constant
-
-CURSOR_SAMPLING_RATE = 60  # Hz - Rate at which cursor position is updated
-# TODO: remove streaming rate
-# CURSOR_STREAMING_RATE = 60  # Hz - Rate at which cursor positions are being transmitted
-
 AXIS2TARGET_VALUES = {
     "Up": (0.0, 1.0),
     "Down": (0.0, -1.0),

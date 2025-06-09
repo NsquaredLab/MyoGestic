@@ -50,7 +50,6 @@ from myogestic.utils.constants import MYOGESTIC_UDP_PORT
 
 # Import the cursor-specific constant for logging
 from myogestic.gui.cursor_interface.utils.constants import (
-    CURSOR_SAMPLING_RATE,
     DIRECTIONS,
     CURSOR_TASK2LABEL_MAP,
 )
@@ -104,8 +103,6 @@ class MyoGestic_Cursor(QMainWindow):
         self._predicted_cursor_stream_socket = QUdpSocket(self)
         self._predicted_cursor_read_socket = QUdpSocket(self)
 
-        self._streaming_timer = QTimer(self)  # For reference cursor streaming
-
         # Store start/stop streaming button
         self.streaming_push_button: QPushButton = self.ui.streamingPushButton
         if self.streaming_push_button:
@@ -122,7 +119,7 @@ class MyoGestic_Cursor(QMainWindow):
 
         # Store frequencies for the cursor movement and the refresh rate of the reference and predicted cursors
         self.cursor_frequency_double_spin_box: QDoubleSpinBox = self.ui.cursorFrequencyDoubleSpinBox
-        self.reference_cursor_refresh_rate_combo_box: QComboBox = self.ui.referenceCursorRefreshRateComboBox
+        self.reference_cursor_refresh_rate_spin_box: QSpinBox = self.ui.referenceCursorRefreshRateSpinBox
 
         # Store reference activation levels and durations for cursor states
         self.middle_upper_activation_level_spin_box: QSpinBox = self.ui.middleUpperActivationLevelSpinBox
@@ -139,8 +136,8 @@ class MyoGestic_Cursor(QMainWindow):
 
         # Store predicted cursor parameters
         self.smoothening_factor_spin_box: QSpinBox = self.ui.smootheningFactorSpinBox
-        self.predicted_cursor_stream_rate_double_spin_box: QDoubleSpinBox = (
-            self.ui.predictedCursorStreamRateDoubleSpinBox
+        self.predicted_cursor_stream_rate_spin_box: QSpinBox = (
+            self.ui.predictedCursorStreamRateSpinBox
         )
         self.predicted_cursor_freq_div_factor_spin_box: QSpinBox = self.ui.predictedCursorFreqDivFactorSpinBox
 
@@ -175,9 +172,9 @@ class MyoGestic_Cursor(QMainWindow):
 
         # Connect spinbox value changes to handler methods
         if self.cursor_frequency_double_spin_box:
-            self.cursor_frequency_double_spin_box.valueChanged.connect(self._on_timing_params_changed)
-        if self.reference_cursor_refresh_rate_combo_box:
-            self.reference_cursor_refresh_rate_combo_box.currentTextChanged.connect(self._on_timing_params_changed)
+            self.cursor_frequency_double_spin_box.valueChanged.connect(self._update_vispy_timing_params)
+        if self.reference_cursor_refresh_rate_spin_box:
+            self.reference_cursor_refresh_rate_spin_box.valueChanged.connect(self._on_cursor_rate_changed)
 
         # Connect spinbox/doublespinbox value changes for hold parameters
         if self.rest_duration_double_spin_box:
@@ -201,8 +198,8 @@ class MyoGestic_Cursor(QMainWindow):
         if self.predicted_cursor_freq_div_factor_spin_box:
             self.predicted_cursor_freq_div_factor_spin_box.valueChanged.connect(self._on_freq_div_factor_changed)
 
-        if self.predicted_cursor_stream_rate_double_spin_box:
-            self.predicted_cursor_stream_rate_double_spin_box.valueChanged.connect(self._on_pred_freq_changed)
+        if self.predicted_cursor_stream_rate_spin_box:
+            self.predicted_cursor_stream_rate_spin_box.valueChanged.connect(self._on_pred_freq_changed)
 
         # Connect target box related widgets to the activation params handler
         if self.targetBoxGroupBox:
@@ -230,17 +227,6 @@ class MyoGestic_Cursor(QMainWindow):
             # Initialize labels with 0 Hz
             self._update_ref_cursor_fps_label(0.0)
             self._update_pred_cursor_fps_label(0.0)
-
-        # Configure streaming timer for reference cursor
-        if CURSOR_SAMPLING_RATE > 0:
-            self._streaming_timer.setInterval(int(1000 / CURSOR_SAMPLING_RATE))
-            self._streaming_timer.timeout.connect(self._send_cursor_position_datagram)
-        else:
-            self.logger.print(
-                f"CURSOR_SAMPLING_RATE ({CURSOR_SAMPLING_RATE} Hz) is not positive. Reference cursor streaming "
-                f"disabled.",
-                level="WARNING",
-            )
 
         # Bind the predicted cursor read socket (incoming for status requests and predictions)
         status_read_bound = self._predicted_status_read_socket.bind(QHostAddress(SOCKET_IP), VCI_READ_STATUS__UDP_PORT)
@@ -397,8 +383,8 @@ class MyoGestic_Cursor(QMainWindow):
         # Emit signal that window is closing
         self.window_closed.emit()
 
-        if hasattr(self, '_streaming_timer') and self._streaming_timer.isActive():
-            self._streaming_timer.stop()
+        if hasattr(self.vispy_widget, 'cursor_timer') and self.vispy_widget.cursor_timer.isActive():
+            self.vispy_widget.cursor_timer.stop()
 
         if hasattr(self, '_reference_cursor_stream_socket'):
             self._reference_cursor_stream_socket.close()
@@ -444,7 +430,7 @@ class MyoGestic_Cursor(QMainWindow):
 
         self.logger.print(
             f"Recalculating trajectories for signal freq.: {signal_freq:.2f} Hz using sampling rate: "
-            f"{self.vispy_widget.reference_samp_frequency} Hz"
+            f"{self.vispy_widget.cursor_sampling_rate} Hz"
         )
         trajectories = {}
         # Calculate for movement directions only (exclude "Rest")
@@ -453,7 +439,7 @@ class MyoGestic_Cursor(QMainWindow):
                 trajectories[direction] = generate_sinusoid_trajectory(
                     signal_frequency=signal_freq,
                     direction=direction,
-                    sampling_rate=self.vispy_widget.reference_samp_frequency,
+                    sampling_rate=self.vispy_widget.cursor_sampling_rate,
                     # Amplitude defaults to 1.0 in helper
                 )
 
@@ -468,28 +454,10 @@ class MyoGestic_Cursor(QMainWindow):
                 self.cursor_frequency_double_spin_box.value() if self.cursor_frequency_double_spin_box else 0.1
             )
 
-            # Get display frequency from ComboBox
-            try:
-                self.vispy_widget.reference_samp_frequency = float(
-                    self.reference_cursor_refresh_rate_combo_box.currentText()
-                )
-            except ValueError:
-                self.logger.print(
-                    f"Invalid value in reference refresh rate ComboBox: '{self.reference_cursor_refresh_rate_combo_box.currentText()}'. Using default {CURSOR_SAMPLING_RATE}",
-                    level="WARNING",
-                )
-                self.vispy_widget.reference_samp_frequency = CURSOR_SAMPLING_RATE  # Default value on conversion error
-
             # Check if signal frequency changed, if so, recalculate trajectories
             current_vispy_signal_freq = getattr(self.vispy_widget, '_signal_frequency', None)
             if current_vispy_signal_freq is None or not math.isclose(signal_freq, current_vispy_signal_freq):
                 self._recalculate_trajectories()  # Recalculate before updating VispyWidget
-
-            # Pass display frequency to VispyWidget
-            self.vispy_widget.update_timing_parameters(self.vispy_widget.reference_samp_frequency)
-            self.logger.print(f"Updated reference display freq. to {self.vispy_widget.reference_samp_frequency} Hz")
-        else:
-            self.logger.print("Cannot update Vispy timing params: vispy_widget not initialized.", level="WARNING")
 
     # Method to update VispyWidget hold parameters
     def _update_vispy_activation_params(self):
@@ -554,9 +522,21 @@ class MyoGestic_Cursor(QMainWindow):
     def _on_movement_map_text_changed(self):
         self.logger.print("Check if task-movement mapping here matches mapping from loaded model", LoggerLevel.WARNING)
 
-    # Slot for timing parameter changes
-    def _on_timing_params_changed(self):
-        """Handles changes in cursor frequency or reference refresh rate."""
+    # Update cursor sampling frequency
+    def _on_cursor_rate_changed(self):
+        """Handles changes to cursor refresh rate frequency."""
+        self.vispy_widget.cursor_sampling_rate = int(self.reference_cursor_refresh_rate_spin_box.value())
+
+        if self.vispy_widget.cursor_timer.isActive():
+            self.vispy_widget.cursor_timer.stop()
+
+        self.vispy_widget.cursor_timer.setInterval(int(1000 / self.vispy_widget.cursor_sampling_rate))
+        self.vispy_widget.cursor_timer.start()
+        self.logger.print(
+            f"Check that cursor sampling frequency matches kinematics sampling frequency set in MyoGestic for the "
+            f"recording.",
+            level=LoggerLevel.WARNING
+        )
         self._update_vispy_timing_params()
 
     # Slot for hold parameter changes
@@ -575,7 +555,7 @@ class MyoGestic_Cursor(QMainWindow):
         if hasattr(self, 'vispy_widget') and self.vispy_widget:
             self.vispy_widget.update_freq_div_factor(self.predicted_cursor_freq_div_factor_spin_box.value())
             current_pred_freq = (
-                self.predicted_cursor_stream_rate_double_spin_box.value()
+                self.predicted_cursor_stream_rate_spin_box.value()
                 / self.predicted_cursor_freq_div_factor_spin_box.value()
             )
             self.logger.print(f"Current prediction refresh rate: {current_pred_freq} Hz")
@@ -583,9 +563,9 @@ class MyoGestic_Cursor(QMainWindow):
     def _on_pred_freq_changed(self):
         """Handles changes in the predicted cursor frequency spinbox value."""
         if hasattr(self, 'vispy_widget') and self.vispy_widget:
-            self.vispy_widget.update_pred_freq(self.predicted_cursor_stream_rate_double_spin_box.value())
+            self.vispy_widget.update_pred_freq(self.predicted_cursor_stream_rate_spin_box.value())
             current_pred_freq = (
-                self.predicted_cursor_stream_rate_double_spin_box.value()
+                self.predicted_cursor_stream_rate_spin_box.value()
                 / self.predicted_cursor_freq_div_factor_spin_box.value()
             )
             self.logger.print(f"Current prediction refresh rate: {current_pred_freq} Hz")
@@ -606,20 +586,13 @@ class MyoGestic_Cursor(QMainWindow):
     # --- Cursor Data Streaming Methods ---
     def _start_cursor_streaming(self):
         """Starts the timer for streaming cursor position data."""
-        if self.vispy_widget.reference_samp_frequency > 0:
-            self.logger.print(f"Starting cursor position streaming at {self.vispy_widget.reference_samp_frequency} Hz.")
-            self._streaming_timer.start()
-        else:
-            self.logger.print(
-                f"Cannot start streaming: {self.vispy_widget.reference_samp_frequency} is not positive.",
-                level="WARNING",
-            )
+        self.logger.print(f"Starting cursor position streaming at {self.vispy_widget.cursor_sampling_rate} Hz.")
+        self.vispy_widget.cursor_timer.timeout.connect(self._send_cursor_position_datagram)
 
     def _stop_cursor_streaming(self):
         """Stops the timer for streaming cursor position data."""
-        if self._streaming_timer.isActive():  # Check if timer is active before trying to stop associated processes
-            self.logger.print("Stopping cursor position streaming.")
-            self._streaming_timer.stop()
+        self.logger.print("Stopping cursor position streaming.")
+        self.vispy_widget.cursor_timer.timeout.disconnect(self._send_cursor_position_datagram)
 
     def _send_cursor_position_datagram(self):
         """Sends the current reference cursor position and task label via UDP."""
@@ -647,7 +620,7 @@ class MyoGestic_Cursor(QMainWindow):
                     data_string = f"{pos_array_to_send.tolist()}"
                     byte_data = data_string.encode("utf-8")
 
-                    bytes_sent = self._reference_cursor_stream_socket.writeDatagram(
+                    self._reference_cursor_stream_socket.writeDatagram(
                         byte_data, QHostAddress(SOCKET_IP), MYOGESTIC_UDP_PORT
                     )
 

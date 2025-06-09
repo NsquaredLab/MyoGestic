@@ -45,19 +45,10 @@
       </property>
      </widget>
     </item>
-    <item row="5" column="0">
-     <widget class="QCheckBox" name="recordUseCursorKinematicsCheckBox">
-      <property name="enabled">
-       <bool>true</bool>
-      </property>
-      <property name="layoutDirection">
-       <enum>Qt::LayoutDirection::LeftToRight</enum>
-      </property>
+    <item row="2" column="0">
+     <widget class="QLabel" name="label_4">
       <property name="text">
-       <string>Use Kinematics of Virtual Cursor Interface</string>
-      </property>
-      <property name="checked">
-       <bool>false</bool>
+       <string>Leg Movement</string>
       </property>
      </widget>
     </item>
@@ -90,10 +81,33 @@
       </item>
      </widget>
     </item>
-    <item row="7" column="0" colspan="2">
+    <item row="9" column="0" colspan="2">
      <widget class="QProgressBar" name="groundTruthProgressBar">
       <property name="value">
        <number>24</number>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QLabel" name="label">
+      <property name="text">
+       <string>Task cursor direction</string>
+      </property>
+     </widget>
+    </item>
+    <item row="7" column="0">
+     <widget class="QCheckBox" name="recordUseCursorKinematicsCheckBox">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="layoutDirection">
+       <enum>Qt::LayoutDirection::LeftToRight</enum>
+      </property>
+      <property name="text">
+       <string>Use Kinematics of Virtual Cursor Interface</string>
+      </property>
+      <property name="checked">
+       <bool>false</bool>
       </property>
      </widget>
     </item>
@@ -104,14 +118,7 @@
       </property>
      </widget>
     </item>
-    <item row="2" column="0">
-     <widget class="QLabel" name="label_4">
-      <property name="text">
-       <string>Leg Movement</string>
-      </property>
-     </widget>
-    </item>
-    <item row="6" column="0" colspan="2">
+    <item row="8" column="0" colspan="2">
      <widget class="QPushButton" name="recordRecordPushButton">
       <property name="text">
        <string>Record</string>
@@ -121,10 +128,10 @@
       </property>
      </widget>
     </item>
-    <item row="1" column="0">
-     <widget class="QLabel" name="label">
+    <item row="5" column="0">
+     <widget class="QLabel" name="label_3">
       <property name="text">
-       <string>Task cursor direction</string>
+       <string>Kinematics samp freq</string>
       </property>
      </widget>
     </item>
@@ -155,6 +162,19 @@
         <string>Left</string>
        </property>
       </item>
+     </widget>
+    </item>
+    <item row="5" column="1">
+     <widget class="QSpinBox" name="kinematicsSampFreqSpinBox">
+      <property name="minimum">
+       <number>1</number>
+      </property>
+      <property name="maximum">
+       <number>120</number>
+      </property>
+      <property name="value">
+       <number>60</number>
+      </property>
      </widget>
     </item>
    </layout>

@@ -3,7 +3,6 @@ import numpy as np  # Import numpy
 
 from myogestic.gui.cursor_interface.utils.constants import (
     AXIS2TARGET_VALUES,
-    CURSOR_SAMPLING_RATE,
 )  # Corrected import path
 
 
@@ -38,7 +37,7 @@ def convert_cursor2stimulation(
 
 
 def generate_sinusoid_trajectory(
-    signal_frequency: float, direction: str, sampling_rate: float = CURSOR_SAMPLING_RATE, amplitude: float = 1.0
+    signal_frequency: float, direction: str, sampling_rate: float = 60, amplitude: float = 1.0
 ) -> np.ndarray:
     """Generates a full period trajectory array (x, y) for sinusoidal movement.
 
