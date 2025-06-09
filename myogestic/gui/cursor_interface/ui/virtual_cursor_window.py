@@ -121,10 +121,44 @@ class Ui_CursorInterface(object):
         self.groupBox_2.setSizePolicy(sizePolicy1)
         self.gridLayout_2 = QGridLayout(self.groupBox_2)
         self.gridLayout_2.setObjectName(u"gridLayout_2")
-        self.label_12 = QLabel(self.groupBox_2)
-        self.label_12.setObjectName(u"label_12")
+        self.groupBox_3 = QGroupBox(self.groupBox_2)
+        self.groupBox_3.setObjectName(u"groupBox_3")
+        self.gridLayout_3 = QGridLayout(self.groupBox_3)
+        self.gridLayout_3.setObjectName(u"gridLayout_3")
+        self.label_7 = QLabel(self.groupBox_3)
+        self.label_7.setObjectName(u"label_7")
 
-        self.gridLayout_2.addWidget(self.label_12, 1, 0, 1, 1)
+        self.gridLayout_3.addWidget(self.label_7, 0, 0, 1, 1)
+
+        self.restDurationDoubleSpinBox = QDoubleSpinBox(self.groupBox_3)
+        self.restDurationDoubleSpinBox.setObjectName(u"restDurationDoubleSpinBox")
+        self.restDurationDoubleSpinBox.setDecimals(1)
+        self.restDurationDoubleSpinBox.setMaximum(100.000000000000000)
+        self.restDurationDoubleSpinBox.setSingleStep(0.100000000000000)
+        self.restDurationDoubleSpinBox.setValue(0.500000000000000)
+
+        self.gridLayout_3.addWidget(self.restDurationDoubleSpinBox, 0, 1, 1, 1)
+
+        self.holdDurationDoubleSpinBox = QDoubleSpinBox(self.groupBox_3)
+        self.holdDurationDoubleSpinBox.setObjectName(u"holdDurationDoubleSpinBox")
+        self.holdDurationDoubleSpinBox.setDecimals(1)
+        self.holdDurationDoubleSpinBox.setSingleStep(0.100000000000000)
+        self.holdDurationDoubleSpinBox.setValue(0.500000000000000)
+
+        self.gridLayout_3.addWidget(self.holdDurationDoubleSpinBox, 1, 1, 1, 1)
+
+        self.label_9 = QLabel(self.groupBox_3)
+        self.label_9.setObjectName(u"label_9")
+
+        self.gridLayout_3.addWidget(self.label_9, 1, 0, 1, 1)
+
+
+        self.gridLayout_2.addWidget(self.groupBox_3, 4, 0, 1, 2)
+
+        self.label_5 = QLabel(self.groupBox_2)
+        self.label_5.setObjectName(u"label_5")
+
+        self.gridLayout_2.addWidget(self.label_5, 0, 0, 1, 1)
 
         self.cursorFrequencyDoubleSpinBox = QDoubleSpinBox(self.groupBox_2)
         self.cursorFrequencyDoubleSpinBox.setObjectName(u"cursorFrequencyDoubleSpinBox")
@@ -180,58 +214,20 @@ class Ui_CursorInterface(object):
         self.gridLayout_5.addWidget(self.label_15, 1, 0, 1, 1)
 
 
-        self.gridLayout_2.addWidget(self.groupBox_5, 4, 0, 1, 2)
+        self.gridLayout_2.addWidget(self.groupBox_5, 5, 0, 1, 2)
 
-        self.groupBox_3 = QGroupBox(self.groupBox_2)
-        self.groupBox_3.setObjectName(u"groupBox_3")
-        self.gridLayout_3 = QGridLayout(self.groupBox_3)
-        self.gridLayout_3.setObjectName(u"gridLayout_3")
-        self.label_7 = QLabel(self.groupBox_3)
-        self.label_7.setObjectName(u"label_7")
+        self.label_12 = QLabel(self.groupBox_2)
+        self.label_12.setObjectName(u"label_12")
 
-        self.gridLayout_3.addWidget(self.label_7, 0, 0, 1, 1)
+        self.gridLayout_2.addWidget(self.label_12, 1, 0, 1, 1)
 
-        self.restDurationDoubleSpinBox = QDoubleSpinBox(self.groupBox_3)
-        self.restDurationDoubleSpinBox.setObjectName(u"restDurationDoubleSpinBox")
-        self.restDurationDoubleSpinBox.setDecimals(1)
-        self.restDurationDoubleSpinBox.setMaximum(100.000000000000000)
-        self.restDurationDoubleSpinBox.setSingleStep(0.100000000000000)
-        self.restDurationDoubleSpinBox.setValue(0.500000000000000)
+        self.referenceCursorRefreshRateSpinBox = QSpinBox(self.groupBox_2)
+        self.referenceCursorRefreshRateSpinBox.setObjectName(u"referenceCursorRefreshRateSpinBox")
+        self.referenceCursorRefreshRateSpinBox.setMinimum(1)
+        self.referenceCursorRefreshRateSpinBox.setMaximum(120)
+        self.referenceCursorRefreshRateSpinBox.setValue(60)
 
-        self.gridLayout_3.addWidget(self.restDurationDoubleSpinBox, 0, 1, 1, 1)
-
-        self.holdDurationDoubleSpinBox = QDoubleSpinBox(self.groupBox_3)
-        self.holdDurationDoubleSpinBox.setObjectName(u"holdDurationDoubleSpinBox")
-        self.holdDurationDoubleSpinBox.setDecimals(1)
-        self.holdDurationDoubleSpinBox.setSingleStep(0.100000000000000)
-        self.holdDurationDoubleSpinBox.setValue(0.500000000000000)
-
-        self.gridLayout_3.addWidget(self.holdDurationDoubleSpinBox, 1, 1, 1, 1)
-
-        self.label_9 = QLabel(self.groupBox_3)
-        self.label_9.setObjectName(u"label_9")
-
-        self.gridLayout_3.addWidget(self.label_9, 1, 0, 1, 1)
-
-
-        self.gridLayout_2.addWidget(self.groupBox_3, 3, 0, 1, 2)
-
-        self.referenceCursorRefreshRateComboBox = QComboBox(self.groupBox_2)
-        self.referenceCursorRefreshRateComboBox.addItem("")
-        self.referenceCursorRefreshRateComboBox.addItem("")
-        self.referenceCursorRefreshRateComboBox.addItem("")
-        self.referenceCursorRefreshRateComboBox.addItem("")
-        self.referenceCursorRefreshRateComboBox.addItem("")
-        self.referenceCursorRefreshRateComboBox.addItem("")
-        self.referenceCursorRefreshRateComboBox.addItem("")
-        self.referenceCursorRefreshRateComboBox.setObjectName(u"referenceCursorRefreshRateComboBox")
-
-        self.gridLayout_2.addWidget(self.referenceCursorRefreshRateComboBox, 1, 1, 1, 1)
-
-        self.label_5 = QLabel(self.groupBox_2)
-        self.label_5.setObjectName(u"label_5")
-
-        self.gridLayout_2.addWidget(self.label_5, 0, 0, 1, 1)
+        self.gridLayout_2.addWidget(self.referenceCursorRefreshRateSpinBox, 1, 1, 1, 1)
 
 
         self.gridLayout_8.addWidget(self.groupBox_2, 0, 0, 1, 1)
@@ -278,10 +274,23 @@ class Ui_CursorInterface(object):
         self.groupBox_6.setSizePolicy(sizePolicy1)
         self.gridLayout_6 = QGridLayout(self.groupBox_6)
         self.gridLayout_6.setObjectName(u"gridLayout_6")
+        self.predictedCursorFreqDivFactorSpinBox = QSpinBox(self.groupBox_6)
+        self.predictedCursorFreqDivFactorSpinBox.setObjectName(u"predictedCursorFreqDivFactorSpinBox")
+        self.predictedCursorFreqDivFactorSpinBox.setMinimum(1)
+        self.predictedCursorFreqDivFactorSpinBox.setMaximum(10)
+        self.predictedCursorFreqDivFactorSpinBox.setValue(1)
+
+        self.gridLayout_6.addWidget(self.predictedCursorFreqDivFactorSpinBox, 3, 1, 1, 1)
+
         self.label_14 = QLabel(self.groupBox_6)
         self.label_14.setObjectName(u"label_14")
 
-        self.gridLayout_6.addWidget(self.label_14, 2, 0, 1, 1)
+        self.gridLayout_6.addWidget(self.label_14, 3, 0, 1, 1)
+
+        self.label_13 = QLabel(self.groupBox_6)
+        self.label_13.setObjectName(u"label_13")
+
+        self.gridLayout_6.addWidget(self.label_13, 0, 0, 1, 1)
 
         self.smootheningFactorSpinBox = QSpinBox(self.groupBox_6)
         self.smootheningFactorSpinBox.setObjectName(u"smootheningFactorSpinBox")
@@ -291,31 +300,18 @@ class Ui_CursorInterface(object):
 
         self.gridLayout_6.addWidget(self.smootheningFactorSpinBox, 0, 1, 1, 1)
 
-        self.label_13 = QLabel(self.groupBox_6)
-        self.label_13.setObjectName(u"label_13")
-
-        self.gridLayout_6.addWidget(self.label_13, 0, 0, 1, 1)
-
-        self.predictedCursorFreqDivFactorSpinBox = QSpinBox(self.groupBox_6)
-        self.predictedCursorFreqDivFactorSpinBox.setObjectName(u"predictedCursorFreqDivFactorSpinBox")
-        self.predictedCursorFreqDivFactorSpinBox.setMinimum(1)
-        self.predictedCursorFreqDivFactorSpinBox.setMaximum(10)
-        self.predictedCursorFreqDivFactorSpinBox.setValue(1)
-
-        self.gridLayout_6.addWidget(self.predictedCursorFreqDivFactorSpinBox, 2, 1, 1, 1)
-
         self.label_22 = QLabel(self.groupBox_6)
         self.label_22.setObjectName(u"label_22")
 
         self.gridLayout_6.addWidget(self.label_22, 1, 0, 1, 1)
 
-        self.predictedCursorStreamRateDoubleSpinBox = QDoubleSpinBox(self.groupBox_6)
-        self.predictedCursorStreamRateDoubleSpinBox.setObjectName(u"predictedCursorStreamRateDoubleSpinBox")
-        self.predictedCursorStreamRateDoubleSpinBox.setMinimum(0.100000000000000)
-        self.predictedCursorStreamRateDoubleSpinBox.setMaximum(200.000000000000000)
-        self.predictedCursorStreamRateDoubleSpinBox.setValue(60.000000000000000)
+        self.predictedCursorStreamRateSpinBox = QSpinBox(self.groupBox_6)
+        self.predictedCursorStreamRateSpinBox.setObjectName(u"predictedCursorStreamRateSpinBox")
+        self.predictedCursorStreamRateSpinBox.setMinimum(1)
+        self.predictedCursorStreamRateSpinBox.setMaximum(200)
+        self.predictedCursorStreamRateSpinBox.setValue(60)
 
-        self.gridLayout_6.addWidget(self.predictedCursorStreamRateDoubleSpinBox, 1, 1, 1, 1)
+        self.gridLayout_6.addWidget(self.predictedCursorStreamRateSpinBox, 1, 1, 1, 1)
 
 
         self.gridLayout_8.addWidget(self.groupBox_6, 2, 0, 1, 1)
@@ -423,7 +419,10 @@ class Ui_CursorInterface(object):
         self.updateMovementTaskMapPushButton.setText(QCoreApplication.translate("CursorInterface", u"Update movement-task mapping", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.taskMappingTab), QCoreApplication.translate("CursorInterface", u"Task mapping", None))
         self.groupBox_2.setTitle(QCoreApplication.translate("CursorInterface", u"Reference cursor", None))
-        self.label_12.setText(QCoreApplication.translate("CursorInterface", u"Reference display rate (Hz)", None))
+        self.groupBox_3.setTitle(QCoreApplication.translate("CursorInterface", u"Rest state (0%) and full activation state (100%)", None))
+        self.label_7.setText(QCoreApplication.translate("CursorInterface", u"Rest duration (s)", None))
+        self.label_9.setText(QCoreApplication.translate("CursorInterface", u"Full activation duration (s)", None))
+        self.label_5.setText(QCoreApplication.translate("CursorInterface", u"Cursor frequency (Hz)", None))
         self.groupBox_5.setTitle(QCoreApplication.translate("CursorInterface", u"Partial activation state", None))
         self.cursorStopConditionComboBox.setItemText(0, QCoreApplication.translate("CursorInterface", u"When contracting", None))
         self.cursorStopConditionComboBox.setItemText(1, QCoreApplication.translate("CursorInterface", u"When relaxing", None))
@@ -432,18 +431,7 @@ class Ui_CursorInterface(object):
         self.label_6.setText(QCoreApplication.translate("CursorInterface", u"Cursor stop condition", None))
         self.label_11.setText(QCoreApplication.translate("CursorInterface", u"Duration (s)", None))
         self.label_15.setText(QCoreApplication.translate("CursorInterface", u"Activation level (%)", None))
-        self.groupBox_3.setTitle(QCoreApplication.translate("CursorInterface", u"Rest state (0%) and full activation state (100%)", None))
-        self.label_7.setText(QCoreApplication.translate("CursorInterface", u"Rest duration (s)", None))
-        self.label_9.setText(QCoreApplication.translate("CursorInterface", u"Full activation duration (s)", None))
-        self.referenceCursorRefreshRateComboBox.setItemText(0, QCoreApplication.translate("CursorInterface", u"60", None))
-        self.referenceCursorRefreshRateComboBox.setItemText(1, QCoreApplication.translate("CursorInterface", u"30", None))
-        self.referenceCursorRefreshRateComboBox.setItemText(2, QCoreApplication.translate("CursorInterface", u"20", None))
-        self.referenceCursorRefreshRateComboBox.setItemText(3, QCoreApplication.translate("CursorInterface", u"10", None))
-        self.referenceCursorRefreshRateComboBox.setItemText(4, QCoreApplication.translate("CursorInterface", u"5", None))
-        self.referenceCursorRefreshRateComboBox.setItemText(5, QCoreApplication.translate("CursorInterface", u"2", None))
-        self.referenceCursorRefreshRateComboBox.setItemText(6, QCoreApplication.translate("CursorInterface", u"1", None))
-
-        self.label_5.setText(QCoreApplication.translate("CursorInterface", u"Cursor frequency (Hz)", None))
+        self.label_12.setText(QCoreApplication.translate("CursorInterface", u"Reference refresh rate (Hz)", None))
         self.targetBoxGroupBox.setTitle(QCoreApplication.translate("CursorInterface", u"Target box for reaching partial activation state", None))
         self.label_17.setText(QCoreApplication.translate("CursorInterface", u"Outer bound range (%)", None))
         self.label_10.setText(QCoreApplication.translate("CursorInterface", u"Inner bound range (%)", None))
