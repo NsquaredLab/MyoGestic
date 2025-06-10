@@ -42,14 +42,12 @@ class VispyWidget(scene.SceneCanvas):
     """Vispy canvas widget displaying axes, cursors, task info, and handling key events."""
 
     def __init__(self, *args, initial_mappings=None, **kwargs):
-        # Then initialize SceneCanvas
         scene.SceneCanvas.__init__(self, *args, keys='interactive', bgcolor='black', **kwargs)
 
-        # Initialize initial_mappings if None is passed
+        # Initialize movement to cursor direction mapping if argument different from None
         if initial_mappings is None:
             initial_mappings = {}
 
-        # Task and movement state
         self.unfreeze()  # Allow adding attributes
 
         # Create signal handler
@@ -58,12 +56,13 @@ class VispyWidget(scene.SceneCanvas):
         # Add cursor sampling frequency
         self.cursor_sampling_rate: int = 60  # initial value
 
-        # Add FPS tracking attributes after unfreezing
-        self._last_ref_cursor_update = time.time()
-        self._last_pred_cursor_update = time.time()
+        # Add FPS tracking attributes
+        self._last_ref_cursor_update = time.time()  # used to estimate current FPS of reference cursor
+        self._last_pred_cursor_update = time.time()  # used to estimate current FPS of predicted cursor
         self._ref_cursor_display_fps = 0.0
         self._pred_cursor_display_fps = 0.0
 
+        # Initialize cursor direction and trajectory index
         self._current_direction_index = 0  # Index for DIRECTIONS list
         self._current_direction = DIRECTIONS[self._current_direction_index]  # Store current direction string
         self.movement_active = False
@@ -76,7 +75,6 @@ class VispyWidget(scene.SceneCanvas):
         self.task_label = "Inactive"  # Initial task label when cursor is inactive
 
         # Hold state attributes
-        self._rest_hold_threshold = 0.0
         self._rest_hold_duration_ms = 0
         self._rest_hold_point_indices = {}
         self._is_rest_holding = False
@@ -88,7 +86,7 @@ class VispyWidget(scene.SceneCanvas):
 
         self._middle_hold_threshold = 0.0
         self._middle_hold_duration_ms = 0
-        self._middle_hold_stop_condition = "Both directions"  # Default value
+        self._middle_hold_stop_condition = "When contracting"  # Default value
         self._middle_hold_contracting_indices = {}
         self._middle_hold_relaxing_indices = {}
         self._is_middle_holding = False
@@ -110,18 +108,17 @@ class VispyWidget(scene.SceneCanvas):
         self._freq_div_factor = 1  # Default to display every prediction
         self._prediction_counter = 0  # Counter for received predictions
 
-        # Set up cursor timer
+        # Set up cursor timer for iterating through reference cursor trajectory points
         self.cursor_timer = QTimer()
         self.cursor_timer.timeout.connect(self._on_timer_tick)  # Connect to new timer handler
 
-        self.cursor_timer.setInterval(int(1000 / self.cursor_sampling_rate))  # Set interval based on display freq
+        self.cursor_timer.setInterval(int(1000 / self.cursor_sampling_rate))  # Set interval based on sampling freq
         self.cursor_timer.start()  # Start timer
 
         # Get the default view
         self.view = self.central_widget.add_view()
         self.view.camera = scene.PanZoomCamera(aspect=1)
-        # Set initial zoom/pan
-        self.view.camera.set_range(x=(-0.1, 0.1), y=(-1.3, 1.4))
+        self.view.camera.set_range(x=(-0.1, 0.1), y=(-1.3, 1.4))  # Set initial zoom/pan
 
         # Add lab image to canvas
         try:  # try this path if accessed from main script of MyoGestic
@@ -145,6 +142,7 @@ class VispyWidget(scene.SceneCanvas):
         )  # scale and shift logo
         self.uni_logo.set_gl_state(depth_test=False)
 
+        # Add axes to canvas
         self.xaxis = visuals.Axis(
             pos=[[-1.0, 0], [1.0, 0]],
             # tick_direction=(0, -1),
@@ -173,13 +171,13 @@ class VispyWidget(scene.SceneCanvas):
 
         self.yaxis.set_gl_state(depth_test=False)
 
-        # Add a blue predicted cursor, slightly larger, drawn on top (order=2)
+        # Add a blue predicted cursor at the center
         self.predicted_cursor = visuals.Ellipse(
             center=(0, 0), radius=0.09, color='#6696ff', border_width=0, parent=self.view.scene
         )
         self.predicted_cursor.set_gl_state(depth_test=False)
 
-        # Add a red reference cursor at the center, drawn on top of axes (order=1)
+        # Add a red reference cursor at the center
         self.reference_cursor = visuals.Ellipse(
             center=(0, 0), radius=0.07, color='#ff4e4e', border_width=0, parent=self.view.scene
         )
@@ -209,7 +207,7 @@ class VispyWidget(scene.SceneCanvas):
             anchor_x='left',
         )
 
-        # Target Box Lines (replacing RectangleVisual)
+        # Target Box Lines
         line_color = 'yellow'
         line_width = 2.0  # Make it a bit thicker for visibility
         default_pos = np.array([[0, 0], [0, 0]], dtype=np.float32)
@@ -239,7 +237,7 @@ class VispyWidget(scene.SceneCanvas):
         self.target_line_left.visible = False
         self.target_line_right.visible = False
 
-        # --- New Task Display ---
+        # --- Task Display ---
         task_display_font_size = 12
         task_display_pos = (0, -1.25)  # Bottom center
         self.task_display = visuals.Text(
@@ -258,7 +256,7 @@ class VispyWidget(scene.SceneCanvas):
         """Returns the current (x, y) position of the reference cursor."""
         if hasattr(self, 'reference_cursor') and self.reference_cursor:
             return self.reference_cursor.center  # center is a tuple (x,y)
-        return (0.0, 0.0)  # Default if not available
+        return 0.0, 0.0  # Default if not available
 
     def get_current_direction_string(self):
         """Returns the current active direction string (e.g., "Up", "Rest")."""
@@ -279,7 +277,6 @@ class VispyWidget(scene.SceneCanvas):
         """Updates the text element showing the selected direction and mapped task."""
         selected_direction = DIRECTIONS[self._current_direction_index]
         status = "Active" if self.movement_active else "Paused"  # Removed status
-        # self.task_display.text = f"{status}: {task_name}" # Old text format
 
         if selected_direction == "Rest":
             display_text = f"{status}: Middle (Mapped: Rest)"
@@ -302,14 +299,13 @@ class VispyWidget(scene.SceneCanvas):
     ):
         """Updates the parameters for all activation holds and target box."""
         # Rest Hold parameters
-        self._rest_hold_threshold = 0.0
         self._rest_hold_duration_ms = max(0, int(rest_duration_s * 1000))
 
         # Peak Hold parameters
         self._peak_hold_threshold = 1.0
         self._peak_hold_duration_ms = max(0, int(peak_duration_s * 1000))
 
-        # Middle Hold parameters: Read from argument
+        # Middle Hold parameters
         self._middle_hold_threshold = max(0.0, min(1.0, middle_threshold_percent / 100.0))
         self._middle_hold_duration_ms = max(0, int(middle_duration_s * 1000))
         self._middle_hold_stop_condition = middle_stop_condition
@@ -340,6 +336,17 @@ class VispyWidget(scene.SceneCanvas):
 
             # Helper function to find closest index
             def find_closest(target_thresh, data_axis, search_first_half=True):
+                """Finds the index of the closest value to target_thresh in data_axis.
+
+                Args:
+                    target_thresh: The target threshold value to find.
+                    data_axis: The axis data to search in.
+                    search_first_half: If True, searches in the first half of the data; otherwise, searches in the
+                        second half.
+
+                Returns:
+                    The index of the closest value to target_thresh in data_axis.
+                """
                 if target_thresh == 0 and direction in ["Up", "Right"] and search_first_half:
                     return 0
                 elif target_thresh == 0 and direction in ["Down", "Left"] and search_first_half:
@@ -394,32 +401,24 @@ class VispyWidget(scene.SceneCanvas):
         num_directions = len(DIRECTIONS)
         if event.key == Key('Left'):
             self._current_direction_index = (self._current_direction_index - 1 + num_directions) % num_directions
-            # # Stop any active movement and reset state when changing direction
-            # if self.cursor_timer.isActive():
-            #     self.cursor_timer.stop()
             self.movement_active = False
             self._is_rest_holding = False  # Reset all hold flags
             self._is_peak_holding = False
             self._is_middle_holding = False
             self._current_index_at_hold_trigger = -1  # Reset hold trigger index
             self.update_reference_cursor(0, 0)
-            # self.update_predicted_cursor(0, 0)
             self._current_direction = DIRECTIONS[self._current_direction_index]  # Update direction string
             self._current_trajectory_index = 0  # Reset index for new direction
             self._update_task_display()
             self._update_target_box_visual()  # Update box on direction change
         elif event.key == Key('Right'):
             self._current_direction_index = (self._current_direction_index + 1) % num_directions
-            # Stop any active movement and reset state when changing direction
-            # if self.cursor_timer.isActive():
-            #     self.cursor_timer.stop()
             self.movement_active = False
             self._is_rest_holding = False  # Reset all hold flags
             self._is_peak_holding = False
             self._is_middle_holding = False
             self._current_index_at_hold_trigger = -1  # Reset hold trigger index
             self.update_reference_cursor(0, 0)
-            # self.update_predicted_cursor(0, 0)
             self._current_direction = DIRECTIONS[self._current_direction_index]  # Update direction string
             self._current_trajectory_index = 0  # Reset index for new direction
             self._update_task_display()
@@ -440,7 +439,6 @@ class VispyWidget(scene.SceneCanvas):
                 self._current_index_at_hold_trigger = -1  # Reset hold trigger index
                 # Reset cursor position when paused
                 self.update_reference_cursor(0, 0)
-                # self.update_predicted_cursor(0, 0)  # Also reset predicted for consistency
                 self._update_target_box_visual()  # Update box state (might hide if direction was Rest)
 
     def update_reference_cursor(self, x, y):
@@ -468,7 +466,7 @@ class VispyWidget(scene.SceneCanvas):
                 self.last_predicted_x = x
                 self.last_predicted_y = y
 
-            # Apply frequency division
+            # Apply prediction frequency division
             self._prediction_counter += 1
             if self._prediction_counter >= self._freq_div_factor:
                 # Update cursor display only when counter reaches division factor
@@ -483,7 +481,6 @@ class VispyWidget(scene.SceneCanvas):
         else:
             self.pred_is_read = False
 
-    # TODO: make _on_timer_tick more efficient
     def _on_timer_tick(self):
         """Handles the timer tick: updates cursor, checking for activation holds."""
 
@@ -498,7 +495,7 @@ class VispyWidget(scene.SceneCanvas):
 
             candidate_display_index = self._current_trajectory_index
 
-            # prev_displayed_index is the index that was shown in the last tick.
+            # Calculate the previous displayed index based on the step size
             prev_displayed_index = (
                 candidate_display_index - self._trajectory_step_size + trajectory.shape[0]
             ) % trajectory.shape[0]
@@ -507,8 +504,7 @@ class VispyWidget(scene.SceneCanvas):
             found_hold_duration = 0
             actual_trigger_index_for_hold = -1
 
-            # Iterate through each "sub-index" covered by the last macro-step.
-            # The step can be from 1 to trajectory_step_size.
+            # Iterate through the trajectory segment to check for holds
             for s_offset in range(self._trajectory_step_size):
                 idx_in_segment = (prev_displayed_index + s_offset + 1) % trajectory.shape[0]
 
@@ -547,7 +543,9 @@ class VispyWidget(scene.SceneCanvas):
                         actual_trigger_index_for_hold = idx_in_segment
                         found_hold_duration = self._rest_hold_duration_ms
 
-                if found_hold_type:  # If a hold was found for this idx_in_segment, break from checking further sub-indices.
+                if (
+                    found_hold_type
+                ):  # If a hold was found for this idx_in_segment, break from checking further sub-indices.
                     break
 
             if found_hold_type:
@@ -577,8 +575,10 @@ class VispyWidget(scene.SceneCanvas):
             x_pos, y_pos = trajectory[candidate_display_index]
             self.update_reference_cursor(x_pos, y_pos)
 
-            # Increment _current_trajectory_index for the *next* tick
-            self._current_trajectory_index = (candidate_display_index + self._trajectory_step_size) % trajectory.shape[0]
+            # Increment the trajectory index for the next step
+            self._current_trajectory_index = (candidate_display_index + self._trajectory_step_size) % trajectory.shape[
+                0
+            ]
 
     def _resume_movement_base(self, hold_type: str):
         """Base logic for resuming movement after any hold."""
@@ -586,7 +586,7 @@ class VispyWidget(scene.SceneCanvas):
 
         trajectory = self._trajectories.get(self._current_direction)
         if trajectory is not None and trajectory.shape[0] > 0:
-            # Increment index from the *actual hold point* for the next step
+            # Increment index from the actual hold point for the next step
             base_idx_for_resume = self._current_index_at_hold_trigger
             self._current_trajectory_index = (base_idx_for_resume + self._trajectory_step_size) % trajectory.shape[0]
         else:

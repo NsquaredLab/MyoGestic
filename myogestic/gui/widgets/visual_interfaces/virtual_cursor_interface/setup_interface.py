@@ -265,8 +265,6 @@ class VirtualCursorInterface_SetupInterface(SetupInterfaceTemplate):
                         if len(parts) == 2:
                             coord_data_str = parts[0]
                             task_label = parts[1]
-                        # If rsplit doesn't return 2 parts (e.g., message starts with "_"),
-                        # coord_data_str remains the full data_str, which might be intended or lead to parse error below.
 
                     try:
                         # Convert the coordinate part to a numpy array
