@@ -15,9 +15,9 @@ It communicates with external systems via UDP sockets for:
 
 Constants:
     SOCKET_IP (str): Default IP address for socket communication (127.0.0.1)
-    VCI_STREAM_PRED__UDP_PORT (int): Port for streaming predicted cursor coordinates
-    VCI_READ_STATUS__UDP_PORT (int): Port for receiving status checks
-    VCI_READ_PRED__UDP_PORT (int): Port for receiving predicted cursor coordinates
+    VCI_STREAM_PRED__UDP_PORT (int): Port for streaming predicted cursor coordinates to VCI
+    VCI_READ_STATUS__UDP_PORT (int): Port for receiving status checks from VCI
+    VCI_READ_PRED__UDP_PORT (int): Port for receiving predicted cursor coordinates from VCI
     STATUS_REQUEST (str): Message for status check requests
     STATUS_RESPONSE (str): Message for status check responses
 """
@@ -41,10 +41,8 @@ from PySide6.QtNetwork import QUdpSocket, QHostAddress
 from PySide6.QtGui import QCloseEvent
 import math
 import numpy as np
-from PySide6.QtCore import QByteArray
-from PySide6.QtCore import QTimer
 from PySide6.QtCore import Signal
-import ast  # For safely evaluating string literals
+import ast
 
 from myogestic.utils.constants import MYOGESTIC_UDP_PORT
 
@@ -110,7 +108,7 @@ class MyoGestic_Cursor(QMainWindow):
             self.streaming_push_button.setText("Start Streaming")
             self.streaming_push_button.clicked.connect(self._on_streaming_button_clicked)
 
-        # Store reference to the movement and cursor direction upMovementComboBox
+        # Store reference to the movement and cursor direction
         self.up_movement_combobox: QComboBox = self.ui.upMovementComboBox
         self.down_movement_combobox: QComboBox = self.ui.downMovementComboBox
         self.right_movement_combobox: QComboBox = self.ui.rightMovementComboBox
@@ -170,13 +168,13 @@ class MyoGestic_Cursor(QMainWindow):
         self.right_movement_combobox.currentTextChanged.connect(self._on_movement_map_text_changed)
         self.left_movement_combobox.currentTextChanged.connect(self._on_movement_map_text_changed)
 
-        # Connect spinbox value changes to handler methods
+        # Connect cursor frequency and sampling rate value changes to handler methods
         if self.cursor_frequency_double_spin_box:
             self.cursor_frequency_double_spin_box.valueChanged.connect(self._update_vispy_timing_params)
         if self.reference_cursor_refresh_rate_spin_box:
             self.reference_cursor_refresh_rate_spin_box.valueChanged.connect(self._on_cursor_rate_changed)
 
-        # Connect spinbox/doublespinbox value changes for hold parameters
+        # Connect value changes for hold parameters
         if self.rest_duration_double_spin_box:
             self.rest_duration_double_spin_box.valueChanged.connect(self._on_activation_params_changed)
         if self.hold_duration_double_spin_box:
@@ -186,15 +184,15 @@ class MyoGestic_Cursor(QMainWindow):
             self.middle_upper_activation_level_spin_box.valueChanged.connect(self._on_activation_params_changed)
         if self.middle_duration_double_spin_box:
             self.middle_duration_double_spin_box.valueChanged.connect(self._on_activation_params_changed)
-        # Connect cursor stop condition combobox
+        # Connect cursor stop condition
         if self.cursor_stop_condition_combo_box:  # Assuming self.cursor_stop_condition_combo_box is already initialized
             self.cursor_stop_condition_combo_box.currentTextChanged.connect(self._on_activation_params_changed)
 
-        # Connect smoothening factor spinbox
+        # Connect smoothening factor
         if self.smoothening_factor_spin_box:
             self.smoothening_factor_spin_box.valueChanged.connect(self._on_smoothening_factor_changed)
 
-        # Connect predicted cursor frequency division factor spinbox
+        # Connect predicted cursor frequency division factor
         if self.predicted_cursor_freq_div_factor_spin_box:
             self.predicted_cursor_freq_div_factor_spin_box.valueChanged.connect(self._on_freq_div_factor_changed)
 
@@ -396,7 +394,7 @@ class MyoGestic_Cursor(QMainWindow):
         # Accept the event to allow the window to close
         event.accept()
 
-        # Call parent's closeEvent
+        # Call parent method closeEvent
         super().closeEvent(event)
 
     # Method to update VispyWidget mappings
@@ -505,7 +503,8 @@ class MyoGestic_Cursor(QMainWindow):
                 target_box_upper_percent,
             )
         else:
-            self.logger.print("Cannot update Vispy activation params: vispy_widget not initialized.", level="WARNING")
+            self.logger.print("Cannot update Vispy activation params: vispy_widget not initialized.",
+                              level="WARNING")
 
     # Signal Handlers (Slots)
     def _on_movement_map_changed(self, text: str):
@@ -520,7 +519,8 @@ class MyoGestic_Cursor(QMainWindow):
         self._update_vispy_mappings()  # Update display
 
     def _on_movement_map_text_changed(self):
-        self.logger.print("Check if task-movement mapping here matches mapping from loaded model", LoggerLevel.WARNING)
+        self.logger.print("Check if task-movement mapping here matches mapping from loaded model",
+                          LoggerLevel.WARNING)
 
     # Update cursor sampling frequency
     def _on_cursor_rate_changed(self):
@@ -545,13 +545,13 @@ class MyoGestic_Cursor(QMainWindow):
         self._update_vispy_activation_params()
 
     def _on_smoothening_factor_changed(self):
-        """Handles changes in the smoothening factor spinbox value."""
+        """Handles changes in the smoothening factor values."""
         if hasattr(self, 'vispy_widget') and self.vispy_widget:
             factor = self.smoothening_factor_spin_box.value()
             self.vispy_widget.update_smoothening_factor(factor)
 
     def _on_freq_div_factor_changed(self):
-        """Handles changes in the predicted cursor frequency division factor spinbox value."""
+        """Handles changes in the predicted cursor frequency division factor value."""
         if hasattr(self, 'vispy_widget') and self.vispy_widget:
             self.vispy_widget.update_freq_div_factor(self.predicted_cursor_freq_div_factor_spin_box.value())
             current_pred_freq = (
@@ -561,7 +561,7 @@ class MyoGestic_Cursor(QMainWindow):
             self.logger.print(f"Current prediction refresh rate: {current_pred_freq} Hz")
 
     def _on_pred_freq_changed(self):
-        """Handles changes in the predicted cursor frequency spinbox value."""
+        """Handles changes in the predicted cursor frequency value."""
         if hasattr(self, 'vispy_widget') and self.vispy_widget:
             self.vispy_widget.update_pred_freq(self.predicted_cursor_stream_rate_spin_box.value())
             current_pred_freq = (
@@ -606,7 +606,6 @@ class MyoGestic_Cursor(QMainWindow):
                     task_label = current_direction_string
 
                 if current_pos_xy is not None and task_label is not None:
-                    # Format as [[x_int, y_int]] (transposed from user's previous change)
                     pos_array_to_send = np.array(
                         [
                             [current_pos_xy[0]],  # x-coordinate scaled
@@ -630,7 +629,7 @@ class MyoGestic_Cursor(QMainWindow):
     def _send_predicted_cursor_datagram(self, prediction_data_list: list):
         """Sends the predicted cursor data (received from VCI) via UDP."""
         try:
-            # prediction_data_list is expected to be like [[x, y]]
+            # Check if the prediction data is a list of two elements (x, y)
             # Convert the list to its string representation for sending
             data_string = str(prediction_data_list)
             byte_data = data_string.encode("utf-8")

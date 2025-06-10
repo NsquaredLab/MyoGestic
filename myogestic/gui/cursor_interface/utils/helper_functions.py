@@ -1,15 +1,14 @@
 import math
 import numpy as np  # Import numpy
 
-from myogestic.gui.cursor_interface.utils.constants import (
-    AXIS2TARGET_VALUES,
-)  # Corrected import path
+from myogestic.gui.cursor_interface.utils.constants import AXIS2TARGET_VALUES
 
 
 def convert_cursor2stimulation(
     pred_x_axis: float, pred_y_axis: float, task_up: str, task_down: str, task_right: str, task_left: str
 ):
     """Convert cursor position into a desired task and stimulation level for the electrical stimulator.
+    This function is only used for the cursor interface version containing the external stimulator control.
 
     Args:
         pred_x_axis: Predicted cursor x-axis position (between -1.0 and 1.0).
@@ -45,7 +44,7 @@ def generate_sinusoid_trajectory(
     and back to (0,0) sinusoidally over one period.
 
     Args:
-        signal_frequency: The frequency of the sine wave in Hz (how many periods per second).
+        signal_frequency: The frequency of the sine wave in Hz (nr. periods per second).
         direction: The target direction ("Up", "Down", "Left", "Right").
         sampling_rate: The number of points to calculate for the trajectory (Hz).
         amplitude: The maximum displacement factor (defaults to 1.0).

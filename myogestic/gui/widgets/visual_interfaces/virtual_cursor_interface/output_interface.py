@@ -6,6 +6,7 @@ from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.setup_inte
     VirtualCursorInterface_SetupInterface,
 )
 
+# Mapping from cursor prediction to interface coordinates
 CURSOR_PREDICTION2INTERFACE_MAP = {
     0: (0, 0),
     1: (0, 1),

@@ -375,7 +375,7 @@ class Ui_CursorInterface(object):
 
         self.retranslateUi(CursorInterface)
 
-        self.tabWidget.setCurrentIndex(1)
+        self.tabWidget.setCurrentIndex(0)
 
 
         QMetaObject.connectSlotsByName(CursorInterface)
