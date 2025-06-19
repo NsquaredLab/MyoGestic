@@ -327,7 +327,7 @@ Step 4: Register the model into CONFIG_REGISTRY
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** (0 minutes 0.682 seconds)
+   **Total running time of the script:** (0 minutes 0.688 seconds)
 
 **Estimated memory usage:**  623 MB
 
