@@ -440,14 +440,10 @@
         <span class="n">device_widget</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">device__widget</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">device_widget</span><span class="o">.</span><span class="n">_get_current_widget</span><span class="p">()</span><span class="o">.</span><span class="n">_device</span><span class="o">.</span><span class="n">_is_streaming</span><span class="p">:</span>  <span class="c1"># noqa</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-                <span class="s2">&quot;Biosignal device is not streaming!&quot;</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span>
-            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;Biosignal device is not streaming!&quot;</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">_sampling_frequency</span> <span class="o">=</span> <span class="n">device_widget</span><span class="o">.</span><span class="n">get_device_information</span><span class="p">()[</span>
-            <span class="s2">&quot;sampling_frequency&quot;</span>
-        <span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sampling_frequency</span> <span class="o">=</span> <span class="n">device_widget</span><span class="o">.</span><span class="n">get_device_information</span><span class="p">()[</span><span class="s2">&quot;sampling_frequency&quot;</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_total_samples_to_record</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">duration</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sampling_frequency</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_biosignal__buffer</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">is_biosignal_recording_complete</span> <span class="o">=</span> <span class="kc">False</span>
@@ -468,15 +464,10 @@
 <span class="sd">            New EMG data sample.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_biosignal__buffer</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span> <span class="n">data</span><span class="p">))</span>
-        <span class="n">total_collected_samples</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
-            <span class="n">sample</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">sample</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_biosignal__buffer</span>
-        <span class="p">)</span>
+        <span class="n">total_collected_samples</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">sample</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">sample</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_biosignal__buffer</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordEMGProgressBar</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span>
-            <span class="nb">int</span><span class="p">(</span>
-                <span class="p">(</span><span class="n">total_collected_samples</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">_total_samples_to_record</span><span class="p">)</span>
-                <span class="o">*</span> <span class="n">PROGRESS_BAR_MAX</span>
-            <span class="p">)</span>
+            <span class="nb">int</span><span class="p">((</span><span class="n">total_collected_samples</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">_total_samples_to_record</span><span class="p">)</span> <span class="o">*</span> <span class="n">PROGRESS_BAR_MAX</span><span class="p">)</span>
         <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">total_collected_samples</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_total_samples_to_record</span><span class="p">:</span>
@@ -492,9 +483,7 @@
         <span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">is_biosignal_recording_complete</span> <span class="o">=</span> <span class="kc">True</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">device__widget</span><span class="o">.</span><span class="n">data_arrived</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">update_biosignal_buffer</span>
-        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">device__widget</span><span class="o">.</span><span class="n">data_arrived</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">update_biosignal_buffer</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_visual_interface</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_selected_visual_interface</span><span class="o">.</span><span class="n">recording_interface_ui</span><span class="o">.</span><span class="n">check_recording_completion</span><span class="p">()</span></div>
@@ -516,9 +505,7 @@
             <span class="n">emg</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span>
             <span class="n">timings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">emg</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_total_samples_to_record</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
-            <span class="n">timings</span>
-        <span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">emg</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_total_samples_to_record</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">timings</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="RecordProtocol._reset_recording_ui">

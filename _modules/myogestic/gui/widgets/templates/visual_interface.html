@@ -679,6 +679,78 @@
             <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">save_pickle_dict</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span></div>
 
 
+<div class="viewcode-block" id="RecordingInterfaceTemplate.save_recording_cursor">
+<a class="viewcode-back" href="../../../../../modules/generated/visual_interface/myogestic.gui.widgets.templates.RecordingInterfaceTemplate.html#myogestic.gui.widgets.templates.RecordingInterfaceTemplate.save_recording_cursor">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save_recording_cursor</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">biosignal</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">biosignal_timings</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">ground_truth</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">ground_truth_timings</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">record_duration</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">use_as_classification</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+        <span class="n">recording_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">task</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">movement</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">task_label_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+        <span class="n">ground_truth_sampling_frequency</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Save the recording for the cursor.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        biosignal : numpy.ndarray</span>
+<span class="sd">            The recorded biosignal data.</span>
+<span class="sd">        biosignal_timings : numpy.ndarray</span>
+<span class="sd">            The recorded biosignal timings.</span>
+<span class="sd">        ground_truth : numpy.ndarray</span>
+<span class="sd">            The recorded ground truth data.</span>
+<span class="sd">        ground_truth_timings : numpy.ndarray</span>
+<span class="sd">            The recorded ground truth timings.</span>
+<span class="sd">        record_duration : int | float</span>
+<span class="sd">            The duration of the recording in seconds.</span>
+<span class="sd">        use_as_classification : bool</span>
+<span class="sd">            Whether to use the recording as classification data.</span>
+<span class="sd">        recording_label : str</span>
+<span class="sd">            The label of the recording.</span>
+<span class="sd">        task : str</span>
+<span class="sd">            The task of the recording (cursor direction).</span>
+<span class="sd">        movement : str</span>
+<span class="sd">            The movement associated with the cursor task label.</span>
+<span class="sd">        task_label_map : dict[str, int]</span>
+<span class="sd">            String task to numerical table mapping.</span>
+<span class="sd">        ground_truth_sampling_frequency : int | float</span>
+<span class="sd">            The sampling frequency of the ground truth data.</span>
+<span class="sd">        kwargs : dict</span>
+<span class="sd">            Additional custom data to save.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">save_pickle_dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;biosignal&quot;</span><span class="p">:</span> <span class="n">biosignal</span><span class="p">,</span>
+            <span class="s2">&quot;biosignal_timings&quot;</span><span class="p">:</span> <span class="n">biosignal_timings</span><span class="p">,</span>
+            <span class="s2">&quot;ground_truth&quot;</span><span class="p">:</span> <span class="n">ground_truth</span><span class="p">,</span>
+            <span class="s2">&quot;ground_truth_timings&quot;</span><span class="p">:</span> <span class="n">ground_truth_timings</span><span class="p">,</span>
+            <span class="s2">&quot;recording_label&quot;</span><span class="p">:</span> <span class="n">recording_label</span><span class="p">,</span>
+            <span class="s2">&quot;task&quot;</span><span class="p">:</span> <span class="n">task</span><span class="p">,</span>
+            <span class="s2">&quot;movement&quot;</span><span class="p">:</span> <span class="n">movement</span><span class="p">,</span>
+            <span class="s2">&quot;task_label_map&quot;</span><span class="p">:</span> <span class="n">task_label_map</span><span class="p">,</span>
+            <span class="s2">&quot;ground_truth_sampling_frequency&quot;</span><span class="p">:</span> <span class="n">ground_truth_sampling_frequency</span><span class="p">,</span>
+            <span class="s2">&quot;device_information&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">device__widget</span><span class="o">.</span><span class="n">get_device_information</span><span class="p">(),</span>
+            <span class="s2">&quot;bad_channels&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">current_bad_channels__list</span><span class="p">,</span>
+            <span class="s2">&quot;recording_time&quot;</span><span class="p">:</span> <span class="n">record_duration</span><span class="p">,</span>
+            <span class="s2">&quot;use_as_classification&quot;</span><span class="p">:</span> <span class="n">use_as_classification</span><span class="p">,</span>
+            <span class="s2">&quot;visual_interface&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">selected_visual_interface</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="n">save_pickle_dict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">file_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">save_pickle_dict</span><span class="p">[</span><span class="s1">&#39;visual_interface&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">_Recording_</span><span class="si">{</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y%m</span><span class="si">%d</span><span class="s1">_%H%M%S</span><span class="si">%f</span><span class="s1">&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">task</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">recording_label</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2">.pkl&quot;</span>
+
+        <span class="k">with</span> <span class="p">(</span><span class="n">RECORDING_DIR_PATH</span> <span class="o">/</span> <span class="n">file_name</span><span class="p">)</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">save_pickle_dict</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span></div>
+
+
 <div class="viewcode-block" id="RecordingInterfaceTemplate.initialize_ui_logic">
 <a class="viewcode-back" href="../../../../../modules/generated/visual_interface/myogestic.gui.widgets.templates.RecordingInterfaceTemplate.html#myogestic.gui.widgets.templates.RecordingInterfaceTemplate.initialize_ui_logic">[docs]</a>
     <span class="nd">@abstractmethod</span>

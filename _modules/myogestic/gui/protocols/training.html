@@ -644,6 +644,10 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_create_dataset__thread</span><span class="p">:</span> <span class="n">PyQtThread</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_train_model__thread</span><span class="p">:</span> <span class="n">PyQtThread</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
+        <span class="c1"># Task to movement mapping (if they are not the same):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_task_label_to_movement_map</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_task_name_to_movement_map</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{}</span>
+
         <span class="c1"># File management:</span>
         <span class="n">RECORDING_DIR_PATH</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="n">MODELS_DIR_PATH</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -722,6 +726,15 @@
                 <span class="c1">#     continue</span>
 
                 <span class="n">selected_recordings_key</span> <span class="o">=</span> <span class="n">recording</span><span class="p">[</span><span class="s2">&quot;task&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">capitalize</span><span class="p">()</span>
+
+                <span class="c1"># Check if &quot;movement&quot; key is also included in the recording</span>
+                <span class="k">if</span> <span class="s2">&quot;movement&quot;</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">recording</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_task_label_to_movement_map</span><span class="p">[</span><span class="n">recording</span><span class="p">[</span><span class="s2">&quot;task_label_map&quot;</span><span class="p">][</span><span class="n">recording</span><span class="p">[</span><span class="s2">&quot;task&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()]]</span> <span class="o">=</span> <span class="n">recording</span><span class="p">[</span><span class="s2">&quot;movement&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">capitalize</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_task_name_to_movement_map</span><span class="p">[</span><span class="n">recording</span><span class="p">[</span><span class="s2">&quot;task&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">recording</span><span class="p">[</span><span class="s2">&quot;movement&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">capitalize</span><span class="p">()</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_task_label_to_movement_map</span> <span class="o">=</span> <span class="kc">None</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_task_name_to_movement_map</span> <span class="o">=</span> <span class="kc">None</span>
+
                 <span class="k">if</span> <span class="n">selected_recordings_key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_recordings__dict</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
                     <span class="n">current_recording</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_recordings__dict</span><span class="p">[</span>
                         <span class="n">selected_recordings_key</span>
@@ -783,6 +796,7 @@
                     <span class="n">recording</span><span class="p">[</span><span class="s2">&quot;recording_time&quot;</span><span class="p">]</span> <span class="o">+=</span> <span class="n">current_recording</span><span class="p">[</span><span class="s2">&quot;recording_time&quot;</span><span class="p">]</span>
 
                     <span class="n">recording</span><span class="p">[</span><span class="s2">&quot;task&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">selected_recordings_key</span>
+
 
                 <span class="bp">self</span><span class="o">.</span><span class="n">_selected_recordings__dict</span><span class="p">[</span><span class="n">selected_recordings_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">recording</span>
 
@@ -886,6 +900,9 @@
 
         <span class="n">dataset_dict</span><span class="p">[</span><span class="s2">&quot;dataset_file_path&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">DATASETS_DIR_PATH</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">file_name</span><span class="si">}</span><span class="s2">.pkl&quot;</span><span class="p">)</span>
         <span class="n">dataset_dict</span><span class="p">[</span><span class="s2">&quot;device_information&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_device_information</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task_label_to_movement_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task_name_to_movement_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dataset_dict</span><span class="p">[</span><span class="s2">&quot;task_label_to_movement_map&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task_label_to_movement_map</span>
+            <span class="n">dataset_dict</span><span class="p">[</span><span class="s2">&quot;task_name_to_movement_map&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task_name_to_movement_map</span>
 
         <span class="k">with</span> <span class="p">(</span><span class="n">DATASETS_DIR_PATH</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">file_name</span><span class="si">}</span><span class="s2">.pkl&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
             <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">dataset_dict</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span></div>

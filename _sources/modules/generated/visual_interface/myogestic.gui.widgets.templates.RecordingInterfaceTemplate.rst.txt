@@ -20,5 +20,6 @@
             ~RecordingInterfaceTemplate.enable
             ~RecordingInterfaceTemplate.initialize_ui_logic
             ~RecordingInterfaceTemplate.save_recording
+            ~RecordingInterfaceTemplate.save_recording_cursor
         
         
