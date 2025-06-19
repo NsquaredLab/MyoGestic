@@ -169,7 +169,7 @@ class MyoGesticDataset(QObject):
                 )
             )
             if GROUND_TRUTH_INDICES_TO_KEEP == "all"
-            else tuple(GROUND_TRUTH_INDICES_TO_KEEP)
+            else tuple(GROUND_TRUTH_INDICES_TO_KEEP[recording_interface_from_recordings])
         )
 
         dataset = EMGDataset(

@@ -12,6 +12,17 @@ from myogestic.gui.widgets.output_systems.neuroorthosis import NeuroOrthosisOutp
 from myogestic.models.definitions import sklearn_models
 from myogestic.utils.config import CONFIG_REGISTRY
 
+from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface import (
+    VirtualCursorInterface_RecordingInterface,
+    VirtualCursorInterface_SetupInterface,
+)
+from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.output_interface import (
+    VirtualHandInterface_OutputSystem,
+)
+from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.output_interface import (
+    VirtualCursorInterface_OutputSystem,
+)
+
 # What channels to use for training
 CHANNELS: list[int] = list(np.arange(32))
 
@@ -28,7 +39,11 @@ BUFFER_SIZE__CHUNKS: int = 20
 
 # Ground Truth Settings
 # The indices of the ground truth to keep. This can be useful if you know for your experiment that some ground truth indices are always 0.
-GROUND_TRUTH_INDICES_TO_KEEP: list[int] | Literal["all"] = [0, 2, 3, 4, 5]
+
+GROUND_TRUTH_INDICES_TO_KEEP: dict[Literal, list] | Literal["all"] = {
+    "VHI": [0, 2, 3, 4, 5],
+    "VCI": [0, 1],
+}
 
 # Register models
 CONFIG_REGISTRY.register_model(
