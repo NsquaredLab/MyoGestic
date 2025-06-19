@@ -18,6 +18,7 @@ from sklearn.ensemble import AdaBoostClassifier
 from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
     VirtualHandInterface_RecordingInterface,
@@ -25,6 +26,13 @@ from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
 )
 from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.output_interface import (
     VirtualHandInterface_OutputSystem,
+)
+from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface import (
+    VirtualCursorInterface_RecordingInterface,
+    VirtualCursorInterface_SetupInterface,
+)
+from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.output_interface import (
+    VirtualCursorInterface_OutputSystem,
 )
 from myogestic.models.definitions import raulnet_models, sklearn_models, catboost_models
 from myogestic.utils.config import CONFIG_REGISTRY
@@ -100,6 +108,52 @@ CONFIG_REGISTRY.register_model(
             "step": 1,
             "default_value": 254,
         },
+    },
+    {
+        "task_type": "GPU" if get_gpu_device_count() > 0 else "CPU",
+        "train_dir": None,
+    },
+)
+
+CONFIG_REGISTRY.register_model(
+    "Cursor CatBoost Classifier",
+    CatBoostClassifier,
+    True,
+    catboost_models.save,
+    catboost_models.load,
+    catboost_models.train,
+    catboost_models.predict,
+    {
+        "iterations": {
+            "start_value": 10,
+            "end_value": 10000,
+            "step": 10,
+            "default_value": 300,
+        },
+        "depth": {
+            "start_value": 1,
+            "end_value": 100,
+            "step": 1,
+            "default_value": 10,
+        },
+        "l2_leaf_reg": {
+            "start_value": 0.001,
+            "end_value": 10,
+            "step": 0.001,
+            "default_value": 0.014,
+        },
+        "border_count": {
+            "start_value": 1,
+            "end_value": 255,
+            "step": 1,
+            "default_value": 254,
+        },
+        "learning_rate": {
+            "start_value": 0.01,
+            "end_value": 10,
+            "step": 0.01,
+            "default_value": 0.04,
+        }
     },
     {
         "task_type": "GPU" if get_gpu_device_count() > 0 else "CPU",
@@ -192,6 +246,16 @@ CONFIG_REGISTRY.register_model(
     {"activation": "relu"},
 )
 
+CONFIG_REGISTRY.register_model(
+    "LDA Classifier",
+    LinearDiscriminantAnalysis,
+    True,
+    sklearn_models.save,
+    sklearn_models.load,
+    sklearn_models.train,
+    sklearn_models.predict,
+)
+
 # Register features
 CONFIG_REGISTRY.register_feature("Root Mean Square", RMSFilter)
 CONFIG_REGISTRY.register_feature("Mean Absolute Value", MAVFilter)
@@ -217,4 +281,11 @@ CONFIG_REGISTRY.register_visual_interface(
     setup_interface_ui=VirtualHandInterface_SetupInterface,
     recording_interface_ui=VirtualHandInterface_RecordingInterface,
 )
+CONFIG_REGISTRY.register_visual_interface(
+    "VCI",
+    setup_interface_ui=VirtualCursorInterface_SetupInterface,
+    recording_interface_ui=VirtualCursorInterface_RecordingInterface,
+)
+
 CONFIG_REGISTRY.register_output_system("VHI", VirtualHandInterface_OutputSystem)
+CONFIG_REGISTRY.register_output_system("VCI", VirtualCursorInterface_OutputSystem)
