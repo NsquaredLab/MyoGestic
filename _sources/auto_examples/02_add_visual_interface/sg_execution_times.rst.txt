@@ -6,7 +6,7 @@
 
 Computation times
 =================
-**00:00.347** total execution time for 4 files **from auto_examples/02_add_visual_interface**:
+**00:00.379** total execution time for 4 files **from auto_examples/02_add_visual_interface**:
 
 .. container::
 
@@ -33,14 +33,14 @@ Computation times
      - Time
      - Mem (MB)
    * - :ref:`sphx_glr_auto_examples_02_add_visual_interface_1_setup_interface.py` (``1_setup_interface.py``)
-     - 00:00.232
-     - 622.5
+     - 00:00.252
+     - 622.6
    * - :ref:`sphx_glr_auto_examples_02_add_visual_interface_3_output_system.py` (``3_output_system.py``)
-     - 00:00.115
-     - 622.5
+     - 00:00.126
+     - 622.6
    * - :ref:`sphx_glr_auto_examples_02_add_visual_interface_2_recording_interface.py` (``2_recording_interface.py``)
      - 00:00.000
-     - 622.5
+     - 622.6
    * - :ref:`sphx_glr_auto_examples_02_add_visual_interface_0_add_ui.py` (``0_add_ui.py``)
      - 00:00.000
-     - 622.5
+     - 622.6
