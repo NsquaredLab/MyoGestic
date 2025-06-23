@@ -19,3 +19,12 @@ html[data-theme="dark"] .bd-content img:not(.only-dark):not(.dark-light) {
 .bd-page-width {
     max-width: 100em;  /* default is 88rem */
 }
+
+/* Hide Sphinx gallery download link notes */
+.sphx-glr-download-link-note.admonition.note {
+    display: none;
+}
+
+.sphx-glr-footer.sphx-glr-footer-example.docutils.container {
+    display: none;
+}
