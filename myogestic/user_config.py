@@ -11,7 +11,7 @@ from myogestic.utils.config import CONFIG_REGISTRY
 CHANNELS: list[int] = list(range(32))
 
 # What device to show in the GUI by default. Useful for experiments.
-DEFAULT_DEVICE_TO_USE = DeviceType.OTB_QUATTROCENTO_LIGHT.value
+DEFAULT_DEVICE_TO_USE = 5
 
 # Processing buffer sizes
 # If BUFFER_SIZE__SAMPLES is set, the buffer for all devices will be this many samples long

@@ -40,6 +40,66 @@ if TYPE_CHECKING:
 from PySide6.QtCore import qInstallMessageHandler
 
 
+class ExponentialMovingAverage:
+    """Real-time exponential moving average filter for multi-channel data.
+
+    Uses RC filter formulas:
+        RC = 1 / (2π * fc)
+        Low-pass:  α = 1 / (1 + fs * RC)
+        High-pass: α = RC / (RC + 1/fs)
+    """
+
+    def __init__(self, fc: float, fs: float, filter_type: str = "lowpass", ch_numb: int = 64):
+        """Initialize EMA filter with cutoff frequency.
+
+        Args:
+            fc: Cutoff frequency (Hz)
+            fs: Sampling frequency (Hz)
+            filter_type: "lowpass" or "highpass"
+            ch_numb: Number of channels.
+        """
+        self.fc = fc
+        self.fs = fs
+        self.filter_type = filter_type
+        self.ch_numb = ch_numb
+
+        # Calculate RC and alpha
+        self.RC = 1 / (2 * np.pi * fc)
+        if filter_type == "lowpass":
+            self.alpha = 1 / (1 + fs * self.RC)
+        else:  # highpass
+            self.alpha = self.RC / (self.RC + 1 / fs)
+
+        self.state = None
+        self.initialized = False
+
+    def initialize(self, first_sample: np.ndarray):
+        """Initialize filter state with first sample."""
+        self.state = first_sample[0, :].copy()
+        self.initialized = True
+
+    def filter(self, data: np.ndarray) -> np.ndarray:
+        """Apply EMA filter to data.
+
+        Args:
+            data: Input data of shape (samples, channels)
+
+        Returns:
+            Filtered data of same shape
+        """
+        if not self.initialized:
+            self.initialize(data)
+
+        output = np.empty_like(data)
+        for i in range(data.shape[0]):
+            self.state = self.alpha * data[i, :] + (1 - self.alpha) * self.state
+            if self.filter_type == "lowpass":
+                output[i, :] = self.state
+            else:  # highpass: output = input - lowpass
+                output[i, :] = data[i, :] - self.state
+        return output
+
+
 class EMGfilters:
     """Real-time EMG filtering class for multi-channel biosignal data."""
 
@@ -203,6 +263,8 @@ class MyoGestic(ScalableMainWindow):
 
         # EMG Filters for real-time processing (sessantaquattro)
         self._emg_filters: EMGfilters | None = None
+        self._ema_highpass: ExponentialMovingAverage | None = None
+        self._ema_lowpass: ExponentialMovingAverage | None = None
 
         BASE_PATH.mkdir(exist_ok=True, parents=True)
         self.ui.statusbar.showMessage(f"Data path: {Path.cwd() / BASE_PATH}")
@@ -427,28 +489,18 @@ class MyoGestic(ScalableMainWindow):
 
         # EMG Data
         if self._toggle_vispy_plot__check_box.isChecked():
-            # Apply real-time EMG filters for sessantaquattro
-            if self._device_name == "Sessantaquattro" and self._emg_filters is not None:
+            # Apply real-time EMA filters for sessantaquattro
+            if self._device_name == "Sessantaquattro" and self._ema_highpass is not None:
                 # Reshape data for filtering: (samples, channels)
                 filtered_data = data[: self._number_of_channels].T
 
-                # Initialize filter states on first data chunk
-                if not self._emg_filters.initialized:
-                    self._emg_filters.initialize_states(filtered_data)
-
-                # Apply filter chain:
-                # 1. Highpass filter (remove DC offset and low-freq drift)
-                filtered_data = self._emg_filters.butter_highpass_filter(filtered_data)
-
-                # 2. Bandstop filter (remove 50Hz powerline noise)
-                filtered_data = self._emg_filters.butter_bandstop_filter(filtered_data)
-
-                # 3. Lowpass filter (anti-aliasing and noise reduction)
-                filtered_data = self._emg_filters.butter_lowpass_filter(filtered_data)
+                # Apply filter chain: highpass (10 Hz) -> lowpass (500 Hz)
+                filtered_data = self._ema_highpass.filter(filtered_data)
+                filtered_data = self._ema_lowpass.filter(filtered_data)
 
                 # Reshape back to (channels, samples)
                 filtered_data = filtered_data.T
-                scale_factor = 0.5  # Use higher scale for filtered data
+                scale_factor = 5
 
             else:
                 # Default processing for other devices
@@ -498,19 +550,28 @@ class MyoGestic(ScalableMainWindow):
         self._samples_per_frame = device_information["samples_per_frame"]
         self._number_of_channels = device_information["number_of_biosignal_channels"]
 
-        # Initialize EMG filters for sessantaquattro
+        # Initialize EMA filters for sessantaquattro
         if self._device_name == "Sessantaquattro":
-            self.logger.print("Initializing EMG filters for Sessantaquattro...")
-            self._emg_filters = EMGfilters(
-                hp_cutOff=20,      # 20 Hz highpass (remove DC and low-freq drift)
-                lp_cutOff=450,     # 450 Hz lowpass (anti-aliasing)
-                env_cutOff=10,     # 10 Hz envelope extraction
+            self.logger.print("Initializing EMA filters for Sessantaquattro...")
+            hp_fc = 10   # Highpass cutoff (Hz)
+            lp_fc = 500  # Lowpass cutoff (Hz)
+            self._ema_highpass = ExponentialMovingAverage(
+                fc=hp_fc,
                 fs=self._sampling_frequency,
-                order=5,
+                filter_type="highpass",
                 ch_numb=self._number_of_channels
             )
-            self.logger.print(f"EMG filters initialized: HP=20Hz, LP=450Hz, Notch=50Hz, Env=10Hz, FS={self._sampling_frequency}Hz")
+            self._ema_lowpass = ExponentialMovingAverage(
+                fc=lp_fc,
+                fs=self._sampling_frequency,
+                filter_type="lowpass",
+                ch_numb=self._number_of_channels
+            )
+            self.logger.print(f"EMA filters: HP={hp_fc}Hz (α={self._ema_highpass.alpha:.4f}), LP={lp_fc}Hz (α={self._ema_lowpass.alpha:.4f})")
+            self._emg_filters = None  # Keep for legacy, not used
         else:
+            self._ema_highpass = None
+            self._ema_lowpass = None
             self._emg_filters = None
 
         self._reconfigure_plot(self._biosignal_plot_display_time_range__value)
