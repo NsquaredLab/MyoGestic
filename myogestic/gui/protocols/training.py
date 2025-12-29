@@ -438,6 +438,11 @@ class TrainingProtocol(QObject):
                 self._selected_recordings__dict = {}
                 self.training_create_dataset_push_button.setEnabled(False)
 
+        # Clean up old model interface to avoid Qt timer threading issues
+        if self._model_interface is not None:
+            self._model_interface.deleteLater()
+            self._model_interface = None
+
         self._model_interface = MyoGesticModelInterface(
             device_information=self._current_device_information,
             logger=self._main_window.logger,
@@ -502,8 +507,9 @@ class TrainingProtocol(QObject):
             ]
         )
         if len(set_of_visual_interfaces) > 1:
-            self._open_warning_dialog(
-                "Recordings are not from the same visual interface!"
+            # Can't open dialog from background thread - just log and return
+            self._main_window.logger.print(
+                "Recordings are not from the same visual interface!", LoggerLevel.ERROR
             )
             return
         self._selected_visual_interface = list(set_of_visual_interfaces)[0]
@@ -555,6 +561,17 @@ class TrainingProtocol(QObject):
         self.train_model_push_button.setEnabled(False)
         self.training_select_dataset_push_button.setEnabled(False)
 
+        # Create model interface on main thread if needed
+        if self._model_interface is None:
+            with open(self._selected_dataset__filepath, "rb") as file:
+                dataset = pickle.load(file)
+            self._current_device_information = dataset["device_information"]
+            self._model_interface = MyoGesticModelInterface(
+                device_information=self._current_device_information,
+                logger=self._main_window.logger,
+                parent=self._main_window,
+            )
+
         self._train_model__thread = PyQtThread(
             target=self._train_model_thread, parent=self._main_window
         )
@@ -580,15 +597,6 @@ class TrainingProtocol(QObject):
                     self._selected_model_name
                 ]["changeable"].items()
             }
-
-        if not self._model_interface:
-            self._current_device_information = dataset["device_information"]
-
-            self._model_interface = MyoGesticModelInterface(
-                device_information=self._current_device_information,
-                logger=self._main_window.logger,
-                parent=self._main_window,
-            )
 
         try:
             func_map = CONFIG_REGISTRY.models_functions_map[self._selected_model_name]
@@ -617,10 +625,10 @@ class TrainingProtocol(QObject):
             self._selected_visual_interface = dataset["visual_interface"]
         else:
             if self._selected_visual_interface != dataset["visual_interface"]:
-                self._open_warning_dialog(
-                    "Visual interface {} is open, but the dataset is from {}!".format(
-                        self._selected_visual_interface, dataset["visual_interface"]
-                    )
+                # Can't open dialog from background thread - just log and return
+                self._main_window.logger.print(
+                    f"Visual interface {self._selected_visual_interface} is open, but the dataset is from {dataset['visual_interface']}!",
+                    LoggerLevel.ERROR
                 )
                 return
         file_name = f"{self._selected_visual_interface}_Model_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{label.lower()}.pkl"
