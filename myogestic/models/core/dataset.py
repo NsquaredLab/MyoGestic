@@ -308,7 +308,7 @@ class MyoGesticDataset(QObject):
                     ]
                     for feature, emg_filter in zip(selected_features, emg_filters)
                 ],
-                representations_to_filter=[["SOSFilter"] * len(selected_features)],
+                representations_to_filter=[["SOSFilter"]] * len(selected_features),
             )
 
             frame_data = np.concatenate(
