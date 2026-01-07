@@ -813,6 +813,11 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">_selected_recordings__dict</span> <span class="o">=</span> <span class="p">{}</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">training_create_dataset_push_button</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
 
+        <span class="c1"># Clean up old model interface to avoid Qt timer threading issues</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model_interface</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_model_interface</span><span class="o">.</span><span class="n">deleteLater</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_model_interface</span> <span class="o">=</span> <span class="kc">None</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">_model_interface</span> <span class="o">=</span> <span class="n">MyoGesticModelInterface</span><span class="p">(</span>
             <span class="n">device_information</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_device_information</span><span class="p">,</span>
             <span class="n">logger</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="p">,</span>
@@ -886,8 +891,9 @@
             <span class="p">]</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">set_of_visual_interfaces</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_open_warning_dialog</span><span class="p">(</span>
-                <span class="s2">&quot;Recordings are not from the same visual interface!&quot;</span>
+            <span class="c1"># Can&#39;t open dialog from background thread - just log and return</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                <span class="s2">&quot;Recordings are not from the same visual interface!&quot;</span><span class="p">,</span> <span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span>
             <span class="p">)</span>
             <span class="k">return</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_selected_visual_interface</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">set_of_visual_interfaces</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
@@ -948,6 +954,17 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">train_model_push_button</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">training_select_dataset_push_button</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
 
+        <span class="c1"># Create model interface on main thread if needed</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model_interface</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_selected_dataset__filepath</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+                <span class="n">dataset</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_current_device_information</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">&quot;device_information&quot;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_model_interface</span> <span class="o">=</span> <span class="n">MyoGesticModelInterface</span><span class="p">(</span>
+                <span class="n">device_information</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_device_information</span><span class="p">,</span>
+                <span class="n">logger</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="p">,</span>
+                <span class="n">parent</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="p">,</span>
+            <span class="p">)</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">_train_model__thread</span> <span class="o">=</span> <span class="n">PyQtThread</span><span class="p">(</span>
             <span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_train_model_thread</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span>
         <span class="p">)</span>
@@ -977,15 +994,6 @@
                 <span class="p">][</span><span class="s2">&quot;changeable&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
             <span class="p">}</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model_interface</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_current_device_information</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">&quot;device_information&quot;</span><span class="p">]</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">_model_interface</span> <span class="o">=</span> <span class="n">MyoGesticModelInterface</span><span class="p">(</span>
-                <span class="n">device_information</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_device_information</span><span class="p">,</span>
-                <span class="n">logger</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="p">,</span>
-                <span class="n">parent</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="p">,</span>
-            <span class="p">)</span>
-
         <span class="k">try</span><span class="p">:</span>
             <span class="n">func_map</span> <span class="o">=</span> <span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">models_functions_map</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_selected_model_name</span><span class="p">]</span>
 
@@ -1013,10 +1021,10 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">_selected_visual_interface</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">&quot;visual_interface&quot;</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_visual_interface</span> <span class="o">!=</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">&quot;visual_interface&quot;</span><span class="p">]:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_open_warning_dialog</span><span class="p">(</span>
-                    <span class="s2">&quot;Visual interface </span><span class="si">{}</span><span class="s2"> is open, but the dataset is from </span><span class="si">{}</span><span class="s2">!&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">_selected_visual_interface</span><span class="p">,</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">&quot;visual_interface&quot;</span><span class="p">]</span>
-                    <span class="p">)</span>
+                <span class="c1"># Can&#39;t open dialog from background thread - just log and return</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Visual interface </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_selected_visual_interface</span><span class="si">}</span><span class="s2"> is open, but the dataset is from </span><span class="si">{</span><span class="n">dataset</span><span class="p">[</span><span class="s1">&#39;visual_interface&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">!&quot;</span><span class="p">,</span>
+                    <span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span>
                 <span class="p">)</span>
                 <span class="k">return</span>
         <span class="n">file_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_selected_visual_interface</span><span class="si">}</span><span class="s2">_Model_</span><span class="si">{</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y%m</span><span class="si">%d</span><span class="s1">_%H%M%S</span><span class="si">%f</span><span class="s1">&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">label</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2">.pkl&quot;</span>
@@ -1251,7 +1259,7 @@
 
   <p class="copyright">
     
-      © Copyright 2023 - 2025, n-squared lab, FAU Erlangen-Nürnberg, Germany.
+      © Copyright 2023 - 2026, n-squared lab, FAU Erlangen-Nürnberg, Germany.
       <br/>
     
   </p>

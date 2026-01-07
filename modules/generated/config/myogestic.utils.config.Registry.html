@@ -528,7 +528,7 @@
 <dd><p>A dictionary that maps model names to tuples of model classes and whether the model is a classifier, by default {}. The tuple is in the form (model_class, is_classifier).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)">tuple</a>[Any, <a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)">bool</a>]], optional</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a>[Any, <a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>]], optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -539,7 +539,7 @@
 <dd><p>A dictionary that maps model names to dictionaries of model functions, by default {}. The functions are <cite>save</cite>, <cite>load</cite>, <cite>train</cite>, and <cite>predict</cite>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[Literal[“save”, “load”, “train”, “predict”], callable]], optional</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[Literal[“save”, “load”, “train”, “predict”], callable]], optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -552,7 +552,7 @@ The <cite>changeable</cite> parameters are dictionaries of changeable parameters
 See the <cite>ChangeableParameter</cite> and <cite>UnchangeableParameter</cite> types for more information.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[Literal[“changeable”, “unchangeable”], Union[ChangeableParameter, UnchangeableParameter]]], optional</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[Literal[“changeable”, “unchangeable”], Union[ChangeableParameter, UnchangeableParameter]]], optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -564,7 +564,7 @@ See the <cite>ChangeableParameter</cite> and <cite>UnchangeableParameter</cite> 
 The feature class must be subclasses of <cite>FilterBaseClass</cite>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.13)">type</a>[FilterBaseClass]], optional</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)">type</a>[FilterBaseClass]], optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -577,7 +577,7 @@ A filter function is a callable that takes a single argument, which is the data 
 The data will be a list of floats that represent the regression output of a model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, callable], optional</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, callable], optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -589,7 +589,7 @@ The data will be a list of floats that represent the regression output of a mode
 The setup interface class must be a subclass of <cite>SetupInterfaceTemplate</cite>, while the recording interface class must be a subclass of <cite>RecordingInterfaceTemplate</cite>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)">tuple</a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.13)">type</a>[<a class="reference internal" href="../visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate">SetupInterfaceTemplate</a>], <a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.13)">type</a>[<a class="reference internal" href="../visual_interface/myogestic.gui.widgets.templates.RecordingInterfaceTemplate.html#myogestic.gui.widgets.templates.RecordingInterfaceTemplate" title="myogestic.gui.widgets.templates.RecordingInterfaceTemplate">RecordingInterfaceTemplate</a>]]], optional</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)">type</a>[<a class="reference internal" href="../visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate">SetupInterfaceTemplate</a>], <a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)">type</a>[<a class="reference internal" href="../visual_interface/myogestic.gui.widgets.templates.RecordingInterfaceTemplate.html#myogestic.gui.widgets.templates.RecordingInterfaceTemplate" title="myogestic.gui.widgets.templates.RecordingInterfaceTemplate">RecordingInterfaceTemplate</a>]]], optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -601,7 +601,7 @@ The setup interface class must be a subclass of <cite>SetupInterfaceTemplate</ci
 The output system class must be a subclass of <cite>OutputSystemTemplate</cite>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.13)">type</a>[<a class="reference internal" href="../visual_interface/myogestic.gui.widgets.templates.OutputSystemTemplate.html#myogestic.gui.widgets.templates.OutputSystemTemplate" title="myogestic.gui.widgets.templates.OutputSystemTemplate">OutputSystemTemplate</a>]], optional</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)">type</a>[<a class="reference internal" href="../visual_interface/myogestic.gui.widgets.templates.OutputSystemTemplate.html#myogestic.gui.widgets.templates.OutputSystemTemplate" title="myogestic.gui.widgets.templates.OutputSystemTemplate">OutputSystemTemplate</a>]], optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -641,12 +641,12 @@ The output system class must be a subclass of <cite>OutputSystemTemplate</cite>.
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The name of the feature.</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The name of the feature.</p></li>
 <li><p><strong>feature</strong> (<em>Type</em><em>[</em><em>FilterBaseClass</em><em>]</em>) – The feature to register.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the feature is already registered</p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the feature is already registered</p>
 </dd>
 </dl>
 </dd></dl>
@@ -659,19 +659,19 @@ The output system class must be a subclass of <cite>OutputSystemTemplate</cite>.
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The name of the model.</p></li>
-<li><p><strong>model_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.13)"><em>type</em></a>) – The class of the model.</p></li>
-<li><p><strong>is_classifier</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – Whether the model is a classifier.</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The name of the model.</p></li>
+<li><p><strong>model_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><em>type</em></a>) – The class of the model.</p></li>
+<li><p><strong>is_classifier</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Whether the model is a classifier.</p></li>
 <li><p><strong>save_function</strong> (<em>callable</em>) – The function to save the model.</p></li>
 <li><p><strong>load_function</strong> (<em>callable</em>) – The function to load the model.</p></li>
 <li><p><strong>train_function</strong> (<em>callable</em>) – The function to train the model.</p></li>
 <li><p><strong>predict_function</strong> (<em>callable</em>) – The function to make predictions with the model.</p></li>
-<li><p><strong>changeable_parameters</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a><em> of </em><em>str to ChangeableParameter</em><em>, </em><em>optional</em>) – A dictionary of changeable parameters for the model. Default is None.</p></li>
-<li><p><strong>unchangeable_parameters</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a><em> of </em><em>str to UnchangeableParameter</em><em>, </em><em>optional</em>) – A dictionary of unchangeable parameters for the model. Default is None.</p></li>
+<li><p><strong>changeable_parameters</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em> of </em><em>str to ChangeableParameter</em><em>, </em><em>optional</em>) – A dictionary of changeable parameters for the model. Default is None.</p></li>
+<li><p><strong>unchangeable_parameters</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em> of </em><em>str to UnchangeableParameter</em><em>, </em><em>optional</em>) – A dictionary of unchangeable parameters for the model. Default is None.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the model is already registered.</p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the model is already registered.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -687,12 +687,12 @@ The output system class must be a subclass of <cite>OutputSystemTemplate</cite>.
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The name of the output system.</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The name of the output system.</p></li>
 <li><p><strong>output_system</strong> (<em>callable</em>) – The output system class.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the output system is already registered.</p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the output system is already registered.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -708,12 +708,12 @@ The output system class must be a subclass of <cite>OutputSystemTemplate</cite>.
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The name of the filter.</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The name of the filter.</p></li>
 <li><p><strong>function</strong> (<em>callable</em>) – The filter function.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the filter is already registered.</p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the filter is already registered.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -729,13 +729,13 @@ The output system class must be a subclass of <cite>OutputSystemTemplate</cite>.
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The name of the visual interface.</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The name of the visual interface.</p></li>
 <li><p><strong>setup_interface_ui</strong> (<em>Type</em><em>[</em><a class="reference internal" href="../visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate"><em>SetupInterfaceTemplate</em></a><em>]</em>) – The setup interface class.</p></li>
 <li><p><strong>recording_interface_ui</strong> (<em>Type</em><em>[</em><a class="reference internal" href="../visual_interface/myogestic.gui.widgets.templates.RecordingInterfaceTemplate.html#myogestic.gui.widgets.templates.RecordingInterfaceTemplate" title="myogestic.gui.widgets.templates.RecordingInterfaceTemplate"><em>RecordingInterfaceTemplate</em></a><em>]</em>) – The recording interface class.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the visual interface is already registered.</p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the visual interface is already registered.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -819,7 +819,7 @@ The output system class must be a subclass of <cite>OutputSystemTemplate</cite>.
 
   <p class="copyright">
     
-      © Copyright 2023 - 2025, n-squared lab, FAU Erlangen-Nürnberg, Germany.
+      © Copyright 2023 - 2026, n-squared lab, FAU Erlangen-Nürnberg, Germany.
       <br/>
     
   </p>
