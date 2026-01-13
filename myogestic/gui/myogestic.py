@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
-from scipy.signal import butter, lfilter, lfilter_zi
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -37,83 +36,6 @@ if TYPE_CHECKING:
     )
 
 from PySide6.QtCore import qInstallMessageHandler
-
-
-class EMGfilters:
-    """Real-time EMG filtering class for multi-channel biosignal data."""
-
-    def __init__(self, hp_cutOff, lp_cutOff, env_cutOff, fs, order=5, ch_numb=64):
-        """Initialize EMG filters with state preservation for real-time processing.
-
-        Args:
-            hp_cutOff: Highpass filter cutoff frequency (Hz)
-            lp_cutOff: Lowpass filter cutoff frequency (Hz)
-            env_cutOff: Envelope lowpass filter cutoff frequency (Hz)
-            fs: Sampling frequency (Hz)
-            order: Filter order (default 5)
-            ch_numb: Number of channels (default 64)
-        """
-        self.ch_numb = ch_numb
-        self.order = order
-        self.initialized = False  # Track if states have been initialized with signal
-
-        # Normalize cutoff frequencies
-        Wn_hp = hp_cutOff * 2 / fs
-        Wn_lp = lp_cutOff * 2 / fs
-        Wn_env = env_cutOff * 2 / fs
-        Wn_bsl = 45 * 2 / fs
-        Wn_bsh = 55 * 2 / fs
-
-        # Design Butterworth filters and get initial state vectors
-        self.b_hp, self.a_hp = butter(order, Wn_hp, btype='high', analog=False)
-        self.b_lp, self.a_lp = butter(order, Wn_lp, btype='low', analog=False)
-        self.b_env, self.a_env = butter(2, Wn_env, btype='low', analog=False)
-        self.b_bs, self.a_bs = butter(2, [Wn_bsl, Wn_bsh], btype='bandstop', analog=False)
-
-        # Get steady-state initial conditions for each filter
-        self.zi_hp_template = lfilter_zi(self.b_hp, self.a_hp)
-        self.zi_lp_template = lfilter_zi(self.b_lp, self.a_lp)
-        self.zi_env_template = lfilter_zi(self.b_env, self.a_env)
-        self.zi_bs_template = lfilter_zi(self.b_bs, self.a_bs)
-
-        # Initialize filter states (will be set properly on first data)
-        self.zil = None
-        self.zie = None
-        self.zih = None
-        self.zibs = None
-
-    def initialize_states(self, first_sample):
-        """Initialize filter states based on the first data sample.
-
-        Args:
-            first_sample: First data sample (samples, channels) to initialize states
-        """
-        # Scale initial conditions by first sample for each channel
-        self.zih = self.zi_hp_template[:, np.newaxis] * first_sample[0, :]
-        self.zibs = self.zi_bs_template[:, np.newaxis] * first_sample[0, :]
-        self.zil = self.zi_lp_template[:, np.newaxis] * first_sample[0, :]
-        self.zie = self.zi_env_template[:, np.newaxis] * first_sample[0, :]
-        self.initialized = True
-
-    def butter_bandstop_filter(self, data):
-        """Apply 50Hz notch filter (bandstop 45-55Hz)."""
-        y, self.zibs = lfilter(self.b_bs, self.a_bs, data, axis=0, zi=self.zibs)
-        return y
-
-    def butter_lowpass_filter(self, data):
-        """Apply lowpass filter."""
-        y, self.zil = lfilter(self.b_lp, self.a_lp, data, axis=0, zi=self.zil)
-        return y
-
-    def butter_lowpassEnv_filter(self, data):
-        """Apply envelope extraction lowpass filter."""
-        y, self.zie = lfilter(self.b_env, self.a_env, data, axis=0, zi=self.zie)
-        return y
-
-    def butter_highpass_filter(self, data):
-        """Apply highpass filter."""
-        y, self.zih = lfilter(self.b_hp, self.a_hp, data, axis=0, zi=self.zih)
-        return y
 
 
 class MyoGestic(QMainWindow):
@@ -186,9 +108,6 @@ class MyoGestic(QMainWindow):
         self._sampling_frequency = None
         self._samples_per_frame = None
         self._number_of_channels = None
-
-        # EMG Filters for real-time processing (sessantaquattro)
-        self._emg_filters: EMGfilters | None = None
 
         BASE_PATH.mkdir(exist_ok=True, parents=True)
         self.ui.statusbar.showMessage(f"Data path: {Path.cwd() / BASE_PATH}")
@@ -312,38 +231,7 @@ class MyoGestic(QMainWindow):
 
         # EMG Data
         if self._toggle_vispy_plot__check_box.isChecked():
-            # Apply real-time EMG filters for sessantaquattro
-            if self._device_name == "Sessantaquattro" and self._emg_filters is not None:
-                # Reshape data for filtering: (samples, channels)
-                filtered_data = data[: self._number_of_channels].T
-
-                # Initialize filter states on first data chunk
-                if not self._emg_filters.initialized:
-                    self._emg_filters.initialize_states(filtered_data)
-
-                # Apply filter chain:
-                # 1. Highpass filter (remove DC offset and low-freq drift)
-                filtered_data = self._emg_filters.butter_highpass_filter(filtered_data)
-
-                # 2. Bandstop filter (remove 50Hz powerline noise)
-                filtered_data = self._emg_filters.butter_bandstop_filter(filtered_data)
-
-                # 3. Lowpass filter (anti-aliasing and noise reduction)
-                filtered_data = self._emg_filters.butter_lowpass_filter(filtered_data)
-
-                # Reshape back to (channels, samples)
-                filtered_data = filtered_data.T
-                scale_factor = 0.5  # Use higher scale for filtered data
-
-            elif self._device_name == "NSwitch":
-                filtered_data = data[: self._number_of_channels]
-                scale_factor = 1000  # Default scale
-            else:
-                # Default processing for other devices
-                filtered_data = data[: self._number_of_channels]
-                scale_factor = 5  # Default scale
-
-            self._plot__widget.update_plot(filtered_data * scale_factor)
+            self._plot__widget.update_plot(data[: self._number_of_channels] * 5)
 
     def _prepare_plot(self, is_configured: bool) -> None:
         """
@@ -364,21 +252,6 @@ class MyoGestic(QMainWindow):
         self._sampling_frequency = device_information["sampling_frequency"]
         self._samples_per_frame = device_information["samples_per_frame"]
         self._number_of_channels = device_information["number_of_biosignal_channels"]
-
-        # Initialize EMG filters for sessantaquattro
-        if self._device_name == "Sessantaquattro":
-            self.logger.print("Initializing EMG filters for Sessantaquattro...")
-            self._emg_filters = EMGfilters(
-                hp_cutOff=20,      # 20 Hz highpass (remove DC and low-freq drift)
-                lp_cutOff=450,     # 450 Hz lowpass (anti-aliasing)
-                env_cutOff=10,     # 10 Hz envelope extraction
-                fs=self._sampling_frequency,
-                order=5,
-                ch_numb=self._number_of_channels
-            )
-            self.logger.print(f"EMG filters initialized: HP=20Hz, LP=450Hz, Notch=50Hz, Env=10Hz, FS={self._sampling_frequency}Hz")
-        else:
-            self._emg_filters = None
 
         self._reconfigure_plot(self._biosignal_plot_display_time_range__value)
 
