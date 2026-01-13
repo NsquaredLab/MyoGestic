@@ -12,6 +12,10 @@ from myogestic.gui.myogestic import MyoGestic
 from myogestic.utils.config import CONFIG_REGISTRY  # noqa
 
 if __name__ == "__main__":
+    # Force X11 backend on Linux/Wayland to fix white plot rendering
+    if sys.platform == "linux":
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api="pyside6"))
