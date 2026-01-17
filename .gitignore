@@ -69,3 +69,5 @@ catboost_info/
 /docs/source/modules/generated/
 docs/source/sg_execution_times.rst
 docs/source/README.md
+recordings/
+target/
