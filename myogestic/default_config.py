@@ -1,32 +1,24 @@
 import numpy as np
 from catboost import CatBoostClassifier
 from catboost.utils import get_gpu_device_count
-from myoverse.datasets.filters.generic import IdentityFilter
-from myoverse.datasets.filters.temporal import (
-    SSCFilter,
-    ZCFilter,
-    WFLFilter,
-    VARFilter,
-    IAVFilter,
-    MAVFilter,
-    RMSFilter,
+from myoverse.models.raul_net.v17 import RaulNetV17
+from myoverse.transforms import (
+    Identity,
+    MAV,
+    RMS,
+    SlopeSignChanges,
+    VAR,
+    WaveformLength,
+    ZeroCrossings,
 )
-from myoverse.models.definitions.raul_net.online.v17 import RaulNetV17
 from scipy.ndimage import gaussian_filter
 from scipy.signal import savgol_filter
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
-    VirtualHandInterface_RecordingInterface,
-    VirtualHandInterface_SetupInterface,
-)
-from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.output_interface import (
-    VirtualHandInterface_OutputSystem,
-)
 from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface import (
     VirtualCursorInterface_RecordingInterface,
     VirtualCursorInterface_SetupInterface,
@@ -34,7 +26,14 @@ from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface import (
 from myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.output_interface import (
     VirtualCursorInterface_OutputSystem,
 )
-from myogestic.models.definitions import raulnet_models, sklearn_models, catboost_models
+from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface import (
+    VirtualHandInterface_RecordingInterface,
+    VirtualHandInterface_SetupInterface,
+)
+from myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.output_interface import (
+    VirtualHandInterface_OutputSystem,
+)
+from myogestic.models.definitions import catboost_models, raulnet_models, sklearn_models
 from myogestic.utils.config import CONFIG_REGISTRY
 
 CONFIG_REGISTRY.register_model(
@@ -153,7 +152,7 @@ CONFIG_REGISTRY.register_model(
             "end_value": 10,
             "step": 0.01,
             "default_value": 0.04,
-        }
+        },
     },
     {
         "task_type": "GPU" if get_gpu_device_count() > 0 else "CPU",
@@ -256,15 +255,16 @@ CONFIG_REGISTRY.register_model(
     sklearn_models.predict,
 )
 
-# Register features
-CONFIG_REGISTRY.register_feature("Root Mean Square", RMSFilter)
-CONFIG_REGISTRY.register_feature("Mean Absolute Value", MAVFilter)
-CONFIG_REGISTRY.register_feature("Integrated Absolute Value", IAVFilter)
-CONFIG_REGISTRY.register_feature("Variance", VARFilter)
-CONFIG_REGISTRY.register_feature("Waveform Length", WFLFilter)
-CONFIG_REGISTRY.register_feature("Zero Crossings", ZCFilter)
-CONFIG_REGISTRY.register_feature("Slope Sign Change", SSCFilter)
-CONFIG_REGISTRY.register_feature("Identity", IdentityFilter)
+# Register features (TensorTransform classes from MyoVerse v2)
+# Note: These are transform CLASSES, not instances. They will be instantiated
+# with window_size parameter when used in dataset creation/preprocessing.
+CONFIG_REGISTRY.register_feature("Root Mean Square", RMS)
+CONFIG_REGISTRY.register_feature("Mean Absolute Value", MAV)
+CONFIG_REGISTRY.register_feature("Variance", VAR)
+CONFIG_REGISTRY.register_feature("Waveform Length", WaveformLength)
+CONFIG_REGISTRY.register_feature("Zero Crossings", ZeroCrossings)
+CONFIG_REGISTRY.register_feature("Slope Sign Change", SlopeSignChanges)
+CONFIG_REGISTRY.register_feature("Identity", Identity)
 
 # Register real-time filters
 CONFIG_REGISTRY.register_real_time_filter("Identity", lambda x: x)
