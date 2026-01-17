@@ -1,12 +1,11 @@
-import copy
-from typing import TypedDict, Union, Dict, Type, Callable, Any, Literal, Optional, Tuple
+from typing import Any, Callable, Literal, TypedDict
 
-from myoverse.datasets.filters._template import FilterBaseClass  # noqa
+from myoverse.transforms import Transform
 
 from myogestic.gui.widgets.templates.output_system import OutputSystemTemplate
 from myogestic.gui.widgets.templates.visual_interface import (
-    SetupInterfaceTemplate,
     RecordingInterfaceTemplate,
+    SetupInterfaceTemplate,
 )
 
 
@@ -60,10 +59,10 @@ class CategoricalParameter(TypedDict):
     default_value: str
 
 
-ChangeableParameter = Union[
-    IntParameter, FloatParameter, StringParameter, BoolParameter, CategoricalParameter
-]
-UnchangeableParameter = Union[int, float, str, bool, list[str], None]
+ChangeableParameter = (
+    IntParameter | FloatParameter | StringParameter | BoolParameter | CategoricalParameter
+)
+UnchangeableParameter = int | float | str | bool | list[str] | None
 
 
 class Registry:
@@ -80,9 +79,9 @@ class Registry:
         A dictionary that maps model names to dictionaries of model parameters, by default {}. The parameters are `changeable` and `unchangeable`.
         The `changeable` parameters are dictionaries of changeable parameters, while the `unchangeable` parameters are dictionaries of unchangeable parameters.
         See the `ChangeableParameter` and `UnchangeableParameter` types for more information.
-    features_map : dict[str, type[FilterBaseClass]], optional
+    features_map : dict[str, type[Transform]], optional
         A dictionary that maps feature names to feature classes, by default {}.
-        The feature class must be subclasses of `FilterBaseClass`.
+        The feature class must be subclasses of `Transform` (TensorTransform).
     real_time_filters_map : dict[str, callable], optional
         A dictionary that maps filter names to filter functions, by default {}.
         A filter function is a callable that takes a single argument, which is the data to filter.
@@ -96,39 +95,37 @@ class Registry:
     """
 
     def __init__(self):
-        self.models_map: Dict[str, tuple[Any, bool]] = {}
-        self.models_functions_map: Dict[
-            str, Dict[Literal["save", "load", "train", "predict"], Callable]
+        self.models_map: dict[str, tuple[Any, bool]] = {}
+        self.models_functions_map: dict[
+            str, dict[Literal["save", "load", "train", "predict"], Callable]
         ] = {}
-        self.models_parameters_map: Dict[
+        self.models_parameters_map: dict[
             str,
-            Dict[
+            dict[
                 Literal["changeable", "unchangeable"],
-                Union[ChangeableParameter, UnchangeableParameter],
+                ChangeableParameter | UnchangeableParameter,
             ],
         ] = {}
 
-        self.features_map: Dict[str, Type[FilterBaseClass]] = {}
-
-        self.real_time_filters_map: Dict[str, callable] = {}
-
-        self.visual_interfaces_map: Dict[
-            str, Tuple[Type[SetupInterfaceTemplate], Type[RecordingInterfaceTemplate]]
+        self.features_map: dict[str, type[Transform]] = {}
+        self.real_time_filters_map: dict[str, Callable] = {}
+        self.visual_interfaces_map: dict[
+            str, tuple[type[SetupInterfaceTemplate], type[RecordingInterfaceTemplate]]
         ] = {}
-        self.output_systems_map: Dict[str, Type[OutputSystemTemplate]] = {}
+        self.output_systems_map: dict[str, type[OutputSystemTemplate]] = {}
 
     def register_model(
         self,
         name: str,
-        model_class: Type,
+        model_class: type,
         is_classifier: bool,
         save_function: Callable,
         load_function: Callable,
         train_function: Callable,
         predict_function: Callable,
-        changeable_parameters: Optional[Dict[str, ChangeableParameter]] = None,
-        unchangeable_parameters: Optional[Dict[str, UnchangeableParameter]] = None,
-    ):
+        changeable_parameters: dict[str, ChangeableParameter] | None = None,
+        unchangeable_parameters: dict[str, UnchangeableParameter] | None = None,
+    ) -> None:
         """
         Register a model in the registry.
 
@@ -180,18 +177,18 @@ class Registry:
             "unchangeable": unchangeable_parameters or {},
         }
 
-    def register_feature(self, name: str, feature: Type[FilterBaseClass]):
+    def register_feature(self, name: str, feature: type[Transform]) -> None:
         """
         Register a feature in the registry.
 
-        .. note:: The feature name must be unique and the attribute `name` of the feature will be set to the feature name.
+        .. note:: The feature name must be unique.
 
         Parameters
         ----------
         name : str
             The name of the feature.
-        feature : Type[FilterBaseClass]
-            The feature to register.
+        feature : type[Transform]
+            The feature transform class to register.
 
         Raises
         ------
@@ -203,11 +200,9 @@ class Registry:
                 f'Feature "{name}" is already registered. Please choose a different name.'
             )
 
-        feature.name = name
+        self.features_map[name] = feature
 
-        self.features_map[name] = copy.deepcopy(feature)
-
-    def register_real_time_filter(self, name: str, function: callable):
+    def register_real_time_filter(self, name: str, function: Callable) -> None:
         """
         Register a real-time filter in the registry.
 
@@ -235,9 +230,9 @@ class Registry:
     def register_visual_interface(
         self,
         name: str,
-        setup_interface_ui: Type[SetupInterfaceTemplate],
-        recording_interface_ui: Type[RecordingInterfaceTemplate],
-    ):
+        setup_interface_ui: type[SetupInterfaceTemplate],
+        recording_interface_ui: type[RecordingInterfaceTemplate],
+    ) -> None:
         """
         Register a visual interface in the registry.
 
@@ -247,9 +242,9 @@ class Registry:
         ----------
         name : str
             The name of the visual interface.
-        setup_interface_ui : Type[SetupInterfaceTemplate]
+        setup_interface_ui : type[SetupInterfaceTemplate]
             The setup interface class.
-        recording_interface_ui : Type[RecordingInterfaceTemplate]
+        recording_interface_ui : type[RecordingInterfaceTemplate]
             The recording interface class.
 
         Raises
@@ -265,8 +260,8 @@ class Registry:
         self.visual_interfaces_map[name] = (setup_interface_ui, recording_interface_ui)
 
     def register_output_system(
-        self, name: str, output_system: Type[OutputSystemTemplate]
-    ):
+        self, name: str, output_system: type[OutputSystemTemplate]
+    ) -> None:
         """
         Register an output system in the registry.
 
