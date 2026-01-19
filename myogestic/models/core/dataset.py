@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import math
 import pickle
 from pathlib import Path
@@ -24,6 +25,9 @@ from myogestic.utils.config import CONFIG_REGISTRY
 if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger
 
+# Small constant to prevent division by zero in standardization
+EPSILON = 1e-8
+
 
 class MyoGesticDataset(QObject):
     def __init__(
@@ -42,10 +46,11 @@ class MyoGesticDataset(QObject):
         self.samples_per_frame: int = self.device_information["samples_per_frame"]
 
         # Offline processing buffer size
-        if BUFFER_SIZE__SAMPLES == -1:
-            self.buffer_size__chunks = BUFFER_SIZE__CHUNKS
-        else:
-            self.buffer_size__chunks = math.ceil(BUFFER_SIZE__SAMPLES / self.samples_per_frame)
+        self.buffer_size__chunks = (
+            BUFFER_SIZE__CHUNKS
+            if BUFFER_SIZE__SAMPLES == -1
+            else math.ceil(BUFFER_SIZE__SAMPLES / self.samples_per_frame)
+        )
         self.buffer_size__samples = self.buffer_size__chunks * self.samples_per_frame
 
         # Online processing state
@@ -57,17 +62,46 @@ class MyoGesticDataset(QObject):
         # Store device for online preprocessing
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        # Cache for feature transforms to avoid repeated instantiation
+        self._feature_transform_cache: dict = {}
+
         # Precompute notch filter coefficients
         self._notch_sos = butter(
             4, (47, 53), "bandstop", output="sos", fs=self.sampling_frequency
         )
 
     def _create_feature_transform(self, feature_name: str):
-        """Create a feature transform instance for the given feature name."""
+        """Create a feature transform instance for the given feature name.
+
+        Uses introspection to determine if the transform accepts window_size parameter,
+        making this compatible with custom features that don't require it.
+        """
         feature_cls = CONFIG_REGISTRY.features_map[feature_name]
-        if feature_name == "Identity":
-            return feature_cls()
-        return feature_cls(window_size=self.buffer_size__samples)
+        params = inspect.signature(feature_cls.__init__).parameters
+
+        if "window_size" in params:
+            return feature_cls(window_size=self.buffer_size__samples)
+        return feature_cls()
+
+    def _get_or_create_feature_transform(self, feature_name: str):
+        """Get a cached feature transform or create and cache a new one.
+
+        This avoids repeated instantiation of the same transform which can be
+        expensive during dataset creation (thousands of windows) and real-time
+        preprocessing.
+        """
+        if feature_name not in self._feature_transform_cache:
+            self._feature_transform_cache[feature_name] = self._create_feature_transform(
+                feature_name
+            )
+        return self._feature_transform_cache[feature_name]
+
+    def _clear_feature_transform_cache(self):
+        """Clear the feature transform cache.
+
+        Call this when buffer_size changes or when transforms need to be recreated.
+        """
+        self._feature_transform_cache.clear()
 
     def _extract_feature_vector(self, feature_result: torch.Tensor) -> torch.Tensor:
         """Extract the feature vector from transform output, handling different shapes."""
@@ -199,60 +233,64 @@ class MyoGesticDataset(QObject):
         gt_pkl_path.unlink()
 
         # Open dataset to compute feature statistics
-        store = zarr.open(zarr.storage.ZipStore(save_path, mode="r"), mode="r")
+        zip_store = zarr.storage.ZipStore(save_path, mode="r")
+        try:
+            store = zarr.open(zip_store, mode="r")
 
-        # Compute features and their statistics for each task
-        training_means = {feature: [] for feature in selected_features}
-        training_stds = {feature: [] for feature in selected_features}
-        all_emg_features = []
-        all_kinematics = []
-        all_classes = []
+            # Compute features and their statistics for each task
+            training_means = {feature: [] for feature in selected_features}
+            training_stds = {feature: [] for feature in selected_features}
+            all_emg_features = []
+            all_kinematics = []
+            all_classes = []
 
-        for task_label in biosignal_data.keys():
-            # Load raw EMG data
-            emg_data = store["training"]["emg"][task_label][:]
+            for task_label in biosignal_data.keys():
+                # Load raw EMG data
+                emg_data = store["training"]["emg"][task_label][:]
 
-            # Chunk the data into windows
-            n_samples = emg_data.shape[-1]
-            n_windows = (n_samples - self.buffer_size__samples) // self.samples_per_frame + 1
+                # Chunk the data into windows
+                n_samples = emg_data.shape[-1]
+                n_windows = (n_samples - self.buffer_size__samples) // self.samples_per_frame + 1
 
-            task_features = []
-            for feature_name in selected_features:
-                feature_transform = self._create_feature_transform(feature_name)
+                task_features = []
+                for feature_name in selected_features:
+                    feature_transform = self._get_or_create_feature_transform(feature_name)
 
-                # Apply feature to each window
-                windows_features = []
+                    # Apply feature to each window
+                    windows_features = []
+                    for i in range(n_windows):
+                        start_idx = i * self.samples_per_frame
+                        end_idx = start_idx + self.buffer_size__samples
+                        window = emg_data[..., start_idx:end_idx]
+
+                        # Convert to tensor and apply transform
+                        window_tensor = torch.from_numpy(window).float().rename("channel", "time")
+                        feature_result = feature_transform(window_tensor)
+                        feature_vec = self._extract_feature_vector(feature_result)
+                        windows_features.append(feature_vec.rename(None).numpy())
+
+                    windows_features = np.stack(windows_features, axis=0)  # (n_windows, channels)
+                    task_features.append(windows_features)
+
+                # Stack features: (n_windows, n_features * channels)
+                task_features = np.concatenate(task_features, axis=-1)
+                all_emg_features.append(task_features)
+
+                # Get kinematics - average over each window
+                kinematics = store["training"]["kinematics"][task_label][:]
+                windows_kinematics = []
                 for i in range(n_windows):
                     start_idx = i * self.samples_per_frame
                     end_idx = start_idx + self.buffer_size__samples
-                    window = emg_data[..., start_idx:end_idx]
+                    window_kin = kinematics[..., start_idx:end_idx]
+                    windows_kinematics.append(np.mean(window_kin, axis=-1))
+                windows_kinematics = np.stack(windows_kinematics, axis=0)
+                all_kinematics.append(windows_kinematics)
 
-                    # Convert to tensor and apply transform
-                    window_tensor = torch.from_numpy(window).float().rename("channel", "time")
-                    feature_result = feature_transform(window_tensor)
-                    feature_vec = self._extract_feature_vector(feature_result)
-                    windows_features.append(feature_vec.rename(None).numpy())
-
-                windows_features = np.stack(windows_features, axis=0)  # (n_windows, channels)
-                task_features.append(windows_features)
-
-            # Stack features: (n_windows, n_features * channels)
-            task_features = np.concatenate(task_features, axis=-1)
-            all_emg_features.append(task_features)
-
-            # Get kinematics - average over each window
-            kinematics = store["training"]["kinematics"][task_label][:]
-            windows_kinematics = []
-            for i in range(n_windows):
-                start_idx = i * self.samples_per_frame
-                end_idx = start_idx + self.buffer_size__samples
-                window_kin = kinematics[..., start_idx:end_idx]
-                windows_kinematics.append(np.mean(window_kin, axis=-1))
-            windows_kinematics = np.stack(windows_kinematics, axis=0)
-            all_kinematics.append(windows_kinematics)
-
-            # Class labels
-            all_classes.extend([int(task_label)] * n_windows)
+                # Class labels
+                all_classes.extend([int(task_label)] * n_windows)
+        finally:
+            zip_store.close()
 
         # Concatenate all tasks
         training_emg = np.concatenate(all_emg_features, axis=0)
@@ -268,10 +306,11 @@ class MyoGesticDataset(QObject):
             training_means[feature_name] = float(feature_data.mean())
             training_stds[feature_name] = float(feature_data.std())
 
-            # Standardize this feature block
+            # Standardize this feature block (use EPSILON to prevent division by zero)
+            std_safe = max(training_stds[feature_name], EPSILON)
             training_emg[:, feature_start:feature_end] = (
                 feature_data - training_means[feature_name]
-            ) / training_stds[feature_name]
+            ) / std_safe
 
             feature_start = feature_end
 
@@ -305,10 +344,16 @@ class MyoGesticDataset(QObject):
             # Concatenate buffer
             frame_data = np.concatenate(self.emg_buffer, axis=-1)
 
-            # Remove bad channels
+            # Remove bad channels (axis=0 since shape is (channels, time))
             combined_bad_channels = list(set(bad_channels + self.dataset_bad_channels))
             if combined_bad_channels:
-                frame_data = np.delete(frame_data, combined_bad_channels, axis=1)
+                # Validate channel indices are within bounds
+                n_channels = frame_data.shape[0]
+                valid_bad_channels = [
+                    ch for ch in combined_bad_channels if 0 <= ch < n_channels
+                ]
+                if valid_bad_channels:
+                    frame_data = np.delete(frame_data, valid_bad_channels, axis=0)
 
             # Apply notch filter (numpy, on CPU)
             frame_data = sosfilt(self._notch_sos, frame_data, axis=-1)
@@ -319,16 +364,16 @@ class MyoGesticDataset(QObject):
             )
             frame_tensor = frame_tensor.rename("channel", "time")
 
-            # Apply feature transforms
+            # Apply feature transforms (using cached transforms for performance)
             all_features = []
             for feature_name in selected_features:
-                feature_transform = self._create_feature_transform(feature_name)
+                feature_transform = self._get_or_create_feature_transform(feature_name)
                 feature_result = feature_transform(frame_tensor)
                 feature_vec = self._extract_feature_vector(feature_result)
 
-                # Standardize
+                # Standardize (use EPSILON to prevent division by zero)
                 mean = self.dataset_mean[feature_name]
-                std = self.dataset_std[feature_name]
+                std = max(self.dataset_std[feature_name], EPSILON)
                 feature_vec = (feature_vec - mean) / std
 
                 all_features.append(feature_vec)
