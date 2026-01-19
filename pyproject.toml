@@ -29,7 +29,7 @@ config-settings = { editable_mode = "compat" }
 [tool.uv.sources]
 biosignal-device-interface = { git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git" }
 sphinxcontrib-pdfembed = { git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git" }
-myoverse = { path = "../MyoVerse", editable = true }
+myoverse = { git = "ssh://git@nsquared-nas.aibe.uni-erlangen.de/n-squared-lab/projects/processing/kinematic-prediction/MyoVerse.git", branch = "myoverse_v2" }
 torch = [
   { index = "torch-gpu", marker = "sys_platform != 'linux'" },
 ]
