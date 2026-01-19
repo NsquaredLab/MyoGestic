@@ -238,8 +238,8 @@ class MyoGesticDataset(QObject):
             store = zarr.open(zip_store, mode="r")
 
             # Compute features and their statistics for each task
-            training_means = {feature: [] for feature in selected_features}
-            training_stds = {feature: [] for feature in selected_features}
+            training_means = {}
+            training_stds = {}
             all_emg_features = []
             all_kinematics = []
             all_classes = []
@@ -266,14 +266,15 @@ class MyoGesticDataset(QObject):
                         # Convert to tensor and apply transform
                         window_tensor = torch.from_numpy(window).float().rename("channel", "time")
                         feature_result = feature_transform(window_tensor)
-                        feature_vec = self._extract_feature_vector(feature_result)
-                        windows_features.append(feature_vec.rename(None).numpy())
+                        # Keep full time dimension: (channels, time)
+                        windows_features.append(feature_result.rename(None).numpy())
 
-                    windows_features = np.stack(windows_features, axis=0)  # (n_windows, channels)
+                    # Stack windows: (n_windows, channels, time)
+                    windows_features = np.stack(windows_features, axis=0)
                     task_features.append(windows_features)
 
-                # Stack features: (n_windows, n_features * channels)
-                task_features = np.concatenate(task_features, axis=-1)
+                # Concatenate features along channel dim: (n_windows, n_features * channels, time)
+                task_features = np.concatenate(task_features, axis=1)
                 all_emg_features.append(task_features)
 
                 # Get kinematics - average over each window
@@ -298,17 +299,19 @@ class MyoGesticDataset(QObject):
         training_class = np.array(all_classes)
 
         # Compute mean and std per feature block
-        n_channels = biosignal_data[list(biosignal_data.keys())[0]].shape[0]
+        # training_emg shape: (n_samples, n_features * channels, time)
+        first_task_data = next(iter(biosignal_data.values()))
+        n_channels = first_task_data.shape[0]
         feature_start = 0
         for feature_name in selected_features:
             feature_end = feature_start + n_channels
-            feature_data = training_emg[:, feature_start:feature_end]
+            feature_data = training_emg[:, feature_start:feature_end, :]
             training_means[feature_name] = float(feature_data.mean())
             training_stds[feature_name] = float(feature_data.std())
 
             # Standardize this feature block (use EPSILON to prevent division by zero)
             std_safe = max(training_stds[feature_name], EPSILON)
-            training_emg[:, feature_start:feature_end] = (
+            training_emg[:, feature_start:feature_end, :] = (
                 feature_data - training_means[feature_name]
             ) / std_safe
 
@@ -369,20 +372,26 @@ class MyoGesticDataset(QObject):
             for feature_name in selected_features:
                 feature_transform = self._get_or_create_feature_transform(feature_name)
                 feature_result = feature_transform(frame_tensor)
-                feature_vec = self._extract_feature_vector(feature_result)
+
+                # Keep full time dimension, don't extract just last sample
+                # feature_result shape: (channels, time)
+                feature_result = feature_result.rename(None)
 
                 # Standardize (use EPSILON to prevent division by zero)
                 mean = self.dataset_mean[feature_name]
                 std = max(self.dataset_std[feature_name], EPSILON)
-                feature_vec = (feature_vec - mean) / std
+                feature_result = (feature_result - mean) / std
 
-                all_features.append(feature_vec)
+                all_features.append(feature_result)
 
-            # Stack features: (1, n_features * channels)
-            result = torch.cat(all_features, dim=-1).unsqueeze(0)
+            # Stack features along channel dimension: (n_features * channels, time)
+            result = torch.cat(all_features, dim=0)
+
+            # Add batch dimension: (1, n_features * channels, time)
+            result = result.unsqueeze(0)
 
             # Convert to numpy (move to CPU if needed)
-            return result.rename(None).cpu().numpy()
+            return result.cpu().numpy()
 
         return None
 
