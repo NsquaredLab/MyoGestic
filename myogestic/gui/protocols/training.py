@@ -291,22 +291,17 @@ class TrainingProtocol(QObject):
         DATASETS_DIR_PATH.mkdir(parents=True, exist_ok=True)
 
     def _check_if_recordings_selected(self) -> None:
-        if (
-            not self.training_create_dataset_selected_recordings_table_widget.selectedItems()
-        ):
-            self.training_remove_selected_recording_push_button.setEnabled(False)
-        else:
-            self.training_remove_selected_recording_push_button.setEnabled(True)
+        has_selection = bool(
+            self.training_create_dataset_selected_recordings_table_widget.selectedItems()
+        )
+        self.training_remove_selected_recording_push_button.setEnabled(has_selection)
 
     def _remove_selected_recording(self) -> None:
-        for row in reversed(
-            list(
-                set(
-                    index.row()
-                    for index in self.training_create_dataset_selected_recordings_table_widget.selectedIndexes()
-                )
-            )
-        ):
+        selected_rows = {
+            index.row()
+            for index in self.training_create_dataset_selected_recordings_table_widget.selectedIndexes()
+        }
+        for row in sorted(selected_rows, reverse=True):
             self.training_create_dataset_selected_recordings_table_widget.removeRow(row)
         self._check_if_recordings_selected()
 
@@ -319,6 +314,7 @@ class TrainingProtocol(QObject):
 
         # Open dialog to select recordings
         dialog = QFileDialog(self._main_window)
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
         dialog.setFileMode(QFileDialog.ExistingFiles)
         dialog.setNameFilter("Pickle files (*.pkl)")
         dialog.setDirectory(str(RECORDING_DIR_PATH))
@@ -326,7 +322,10 @@ class TrainingProtocol(QObject):
         self._selected_recordings__dict = {}
         self.training_create_dataset_selected_recordings_table_widget.setRowCount(0)
 
-        for file in dialog.getOpenFileNames()[0]:
+        if not dialog.exec():
+            return
+
+        for file in dialog.selectedFiles():
             with open(file, "rb") as f:
                 recording: dict = pickle.load(f)
 
@@ -391,9 +390,7 @@ class TrainingProtocol(QObject):
                     )
 
                     recording["bad_channels"].extend(current_recording["bad_channels"])
-                    recording["bad_channels"] = list(
-                        set([item for item in recording["bad_channels"]])
-                    )
+                    recording["bad_channels"] = list(set(recording["bad_channels"]))
 
                     recording["use_as_classification"] = (
                         recording["use_as_classification"]
@@ -532,11 +529,17 @@ class TrainingProtocol(QObject):
     def _select_dataset(self) -> None:
         # Open dialog to select dataset
         dialog = QFileDialog(self._main_window)
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
         dialog.setFileMode(QFileDialog.ExistingFile)
         dialog.setNameFilter("Pickle files (*.pkl)")
         dialog.setDirectory(str(DATASETS_DIR_PATH))
 
-        filename, _ = dialog.getOpenFileName()
+        if not dialog.exec():
+            self._open_warning_dialog(NO_DATASET_SELECTED_INFO)
+            self.training_selected_dataset_label.setText(NO_DATASET_SELECTED_INFO)
+            return
+
+        filename = dialog.selectedFiles()[0] if dialog.selectedFiles() else ""
 
         if not filename:
             self._open_warning_dialog(NO_DATASET_SELECTED_INFO)
@@ -624,14 +627,15 @@ class TrainingProtocol(QObject):
         if self._selected_visual_interface is None:
             self._selected_visual_interface = dataset["visual_interface"]
         else:
-            if self._selected_visual_interface != dataset["visual_interface"]:
-                # Can't open dialog from background thread - just log and return
+            # Get name whether _selected_visual_interface is a string or VisualInterface object
+            current_vi = getattr(self._selected_visual_interface, 'name', self._selected_visual_interface)
+            if current_vi != dataset["visual_interface"]:
                 self._main_window.logger.print(
-                    f"Visual interface {self._selected_visual_interface} is open, but the dataset is from {dataset['visual_interface']}!",
+                    f"Visual interface {current_vi} is open, but the dataset is from {dataset['visual_interface']}!",
                     LoggerLevel.ERROR
                 )
                 return
-        file_name = f"{self._selected_visual_interface}_Model_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{label.lower()}.pkl"
+        file_name = f"{dataset['visual_interface']}_Model_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{label.lower()}.pkl"
 
         model_filepath = MODELS_DIR_PATH / file_name
 
@@ -654,9 +658,7 @@ class TrainingProtocol(QObject):
         self._main_window.logger.print("Model trained", LoggerLevel.INFO)
 
     def _update_model_selection(self) -> None:
-        self._selected_model_name = (
-            self.training_model_selection_combo_box.currentText()
-        )
+        self._selected_model_name = self.training_model_selection_combo_box.currentText()
 
         self._model_changeable_parameters__dict = {
             key: value["default_value"]
@@ -665,10 +667,8 @@ class TrainingProtocol(QObject):
             ]["changeable"].items()
         }
 
-        if len(self._model_changeable_parameters__dict) > 0:
-            self.training_model_parameters_push_button.setEnabled(True)
-        else:
-            self.training_model_parameters_push_button.setEnabled(False)
+        has_parameters = bool(self._model_changeable_parameters__dict)
+        self.training_model_parameters_push_button.setEnabled(has_parameters)
 
     def _open_model_parameters_popup(self) -> None:
         self.popup_window = PopupWindowParameters(

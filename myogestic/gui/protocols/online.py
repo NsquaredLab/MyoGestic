@@ -245,7 +245,7 @@ class OnlineProtocol(QObject):
 
     def _save_data(self) -> None:
         # Add "Inactive" state to task_label mapping if task does not match movement label
-        if "task_label_to_movement_map" in list(self._model_information__dict.keys()):
+        if "task_label_to_movement_map" in self._model_information__dict:
             self._model_information__dict["task_label_to_movement_map"][-1] = "Inactive"
 
         save_pickle_dict = {
@@ -271,10 +271,8 @@ class OnlineProtocol(QObject):
                 [data for _, data in self._selected_real_time_filter_recording__buffer]
             ),
             "label": self.online_model_label.text().split(" ")[0],
-            "online_task_to_movement_label_map": (
-                self._model_information__dict["task_label_to_movement_map"]
-                if "task_label_to_movement_map" in list(self._model_information__dict.keys())
-                else None
+            "online_task_to_movement_label_map": self._model_information__dict.get(
+                "task_label_to_movement_map"
             ),
             "model_information": self._model_information__dict,
             "device_information": self._device_information__dict,
@@ -293,15 +291,16 @@ class OnlineProtocol(QObject):
 
     def _load_model(self) -> None:
         dialog = QFileDialog(self._main_window)
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
         dialog.setFileMode(QFileDialog.ExistingFile)
         dialog.setNameFilter("Checkpoint files (*.pkl)")
+        dialog.setDirectory(str(MODELS_DIR_PATH))
 
-        file_name = dialog.getOpenFileName(
-            self._main_window,
-            "Open Model",
-            str(MODELS_DIR_PATH),
-            "Checkpoint files (*.pkl)",
-        )[0]
+        if not dialog.exec():
+            print("Error in file selection!")
+            return
+
+        file_name = dialog.selectedFiles()[0] if dialog.selectedFiles() else ""
 
         if not file_name:
             print("Error in file selection!")
@@ -346,22 +345,14 @@ class OnlineProtocol(QObject):
             output_system.close_event(event)
 
     def _toggle_conformal_prediction_widget(self) -> None:
-        if self.conformal_prediction_type_combo_box.currentText() == "None":
-            self.conformal_prediction_solving_combo_box.setEnabled(False)
-            self.conformal_prediction_alpha_spin_box.setEnabled(False)
-            self.conformal_prediction_kernel_spin_box.setEnabled(False)
-            self.conformal_prediction_label_kernel_size.setEnabled(False)
-            self.conformal_prediction_label_alpha.setEnabled(False)
-            self.conformal_prediction_label_solving_method.setEnabled(False)
-            self.conformal_prediction_set_pushbutton.setEnabled(False)
-        else:
-            self.conformal_prediction_solving_combo_box.setEnabled(True)
-            self.conformal_prediction_alpha_spin_box.setEnabled(True)
-            self.conformal_prediction_kernel_spin_box.setEnabled(True)
-            self.conformal_prediction_label_kernel_size.setEnabled(True)
-            self.conformal_prediction_label_alpha.setEnabled(True)
-            self.conformal_prediction_label_solving_method.setEnabled(True)
-            self.conformal_prediction_set_pushbutton.setEnabled(True)
+        enabled = self.conformal_prediction_type_combo_box.currentText() != "None"
+        self.conformal_prediction_solving_combo_box.setEnabled(enabled)
+        self.conformal_prediction_alpha_spin_box.setEnabled(enabled)
+        self.conformal_prediction_kernel_spin_box.setEnabled(enabled)
+        self.conformal_prediction_label_kernel_size.setEnabled(enabled)
+        self.conformal_prediction_label_alpha.setEnabled(enabled)
+        self.conformal_prediction_label_solving_method.setEnabled(enabled)
+        self.conformal_prediction_set_pushbutton.setEnabled(enabled)
 
     def _send_model_information(self) -> None:
         self.model_information_signal.emit(
