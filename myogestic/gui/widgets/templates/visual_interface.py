@@ -267,6 +267,7 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
 
         file_name = f"{save_pickle_dict['visual_interface']}_Recording_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{task.lower()}_{recording_label.lower()}.pkl"
 
+        RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
         with (RECORDING_DIR_PATH / file_name).open("wb") as f:
             pickle.dump(save_pickle_dict, f)
 
@@ -336,6 +337,7 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
 
         file_name = f"{save_pickle_dict['visual_interface']}_Recording_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{task.lower()}_{recording_label.lower()}.pkl"
 
+        RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
         with (RECORDING_DIR_PATH / file_name).open("wb") as f:
             pickle.dump(save_pickle_dict, f)
 
