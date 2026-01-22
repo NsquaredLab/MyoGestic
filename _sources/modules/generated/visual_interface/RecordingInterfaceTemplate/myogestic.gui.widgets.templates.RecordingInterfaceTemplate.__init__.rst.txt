@@ -1,6 +1,0 @@
-myogestic.gui.widgets.templates.RecordingInterfaceTemplate.\_\_init\_\_
-=======================================================================
-
-.. currentmodule:: myogestic.gui.widgets.templates
-
-.. automethod:: RecordingInterfaceTemplate.__init__

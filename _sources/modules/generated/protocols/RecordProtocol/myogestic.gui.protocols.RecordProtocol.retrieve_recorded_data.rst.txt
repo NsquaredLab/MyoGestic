@@ -1,6 +1,0 @@
-myogestic.gui.protocols.RecordProtocol.retrieve\_recorded\_data
-===============================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: RecordProtocol.retrieve_recorded_data

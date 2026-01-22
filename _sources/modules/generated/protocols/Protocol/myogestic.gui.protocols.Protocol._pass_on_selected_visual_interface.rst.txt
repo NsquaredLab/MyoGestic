@@ -1,6 +1,0 @@
-myogestic.gui.protocols.Protocol.\_pass\_on\_selected\_visual\_interface
-========================================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: Protocol._pass_on_selected_visual_interface

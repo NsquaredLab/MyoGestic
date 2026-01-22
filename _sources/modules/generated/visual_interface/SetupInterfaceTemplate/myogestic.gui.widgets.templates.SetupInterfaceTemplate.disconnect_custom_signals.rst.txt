@@ -1,6 +1,0 @@
-myogestic.gui.widgets.templates.SetupInterfaceTemplate.disconnect\_custom\_signals
-==================================================================================
-
-.. currentmodule:: myogestic.gui.widgets.templates
-
-.. automethod:: SetupInterfaceTemplate.disconnect_custom_signals

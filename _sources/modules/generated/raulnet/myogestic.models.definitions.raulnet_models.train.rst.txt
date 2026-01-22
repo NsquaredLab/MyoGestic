@@ -1,8 +1,0 @@
-﻿myogestic.models.definitions.raulnet_models.train
-=====================================================================
-
-.. currentmodule:: myogestic.models.definitions.raulnet_models
-
-.. autofunction:: train
-
-.. include:: /modules/generated/backreferences/myogestic.models.definitions.raulnet_models.train.examples

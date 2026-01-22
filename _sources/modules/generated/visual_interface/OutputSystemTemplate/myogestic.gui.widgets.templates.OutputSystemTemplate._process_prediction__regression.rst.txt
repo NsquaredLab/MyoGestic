@@ -1,6 +1,0 @@
-myogestic.gui.widgets.templates.OutputSystemTemplate.\_process\_prediction\_\_regression
-========================================================================================
-
-.. currentmodule:: myogestic.gui.widgets.templates
-
-.. automethod:: OutputSystemTemplate._process_prediction__regression

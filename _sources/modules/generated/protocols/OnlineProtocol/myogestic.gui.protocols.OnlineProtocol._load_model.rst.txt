@@ -1,6 +1,0 @@
-myogestic.gui.protocols.OnlineProtocol.\_load\_model
-====================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: OnlineProtocol._load_model

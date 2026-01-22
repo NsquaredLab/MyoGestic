@@ -1,6 +1,0 @@
-myogestic.gui.widgets.templates.RecordingInterfaceTemplate.disable
-==================================================================
-
-.. currentmodule:: myogestic.gui.widgets.templates
-
-.. automethod:: RecordingInterfaceTemplate.disable

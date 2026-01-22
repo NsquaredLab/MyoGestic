@@ -1,6 +1,0 @@
-myogestic.gui.widgets.templates.RecordingInterfaceTemplate.close\_event
-=======================================================================
-
-.. currentmodule:: myogestic.gui.widgets.templates
-
-.. automethod:: RecordingInterfaceTemplate.close_event

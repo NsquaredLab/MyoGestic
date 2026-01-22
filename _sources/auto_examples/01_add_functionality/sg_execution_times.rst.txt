@@ -6,7 +6,7 @@
 
 Computation times
 =================
-**00:02.009** total execution time for 4 files **from auto_examples/01_add_functionality**:
+**00:00.000** total execution time for 4 files **from auto_examples/01_add_functionality**:
 
 .. container::
 
@@ -32,15 +32,15 @@ Computation times
    * - Example
      - Time
      - Mem (MB)
-   * - :ref:`sphx_glr_auto_examples_01_add_functionality_2_add_model.py` (``2_add_model.py``)
-     - 00:00.706
-     - 622.5
-   * - :ref:`sphx_glr_auto_examples_01_add_functionality_3_add_biosignal_feature.py` (``3_add_biosignal_feature.py``)
-     - 00:00.589
-     - 622.5
    * - :ref:`sphx_glr_auto_examples_01_add_functionality_1_add_post_prediction_filter.py` (``1_add_post_prediction_filter.py``)
-     - 00:00.362
-     - 622.5
+     - 00:00.000
+     - 0.0
+   * - :ref:`sphx_glr_auto_examples_01_add_functionality_2_add_model.py` (``2_add_model.py``)
+     - 00:00.000
+     - 0.0
+   * - :ref:`sphx_glr_auto_examples_01_add_functionality_3_add_biosignal_feature.py` (``3_add_biosignal_feature.py``)
+     - 00:00.000
+     - 0.0
    * - :ref:`sphx_glr_auto_examples_01_add_functionality_4_add_output_system.py` (``4_add_output_system.py``)
-     - 00:00.352
-     - 622.5
+     - 00:00.000
+     - 0.0

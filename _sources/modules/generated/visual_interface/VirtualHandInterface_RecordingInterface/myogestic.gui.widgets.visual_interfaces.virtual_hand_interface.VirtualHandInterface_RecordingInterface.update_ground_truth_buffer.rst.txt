@@ -1,6 +1,0 @@
-myogestic.gui.widgets.visual\_interfaces.virtual\_hand\_interface.VirtualHandInterface\_RecordingInterface.update\_ground\_truth\_buffer
-========================================================================================================================================
-
-.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_hand_interface
-
-.. automethod:: VirtualHandInterface_RecordingInterface.update_ground_truth_buffer

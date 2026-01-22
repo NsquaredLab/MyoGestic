@@ -1,6 +1,0 @@
-myogestic.gui.protocols.TrainingProtocol.\_check\_if\_recordings\_selected
-==========================================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: TrainingProtocol._check_if_recordings_selected

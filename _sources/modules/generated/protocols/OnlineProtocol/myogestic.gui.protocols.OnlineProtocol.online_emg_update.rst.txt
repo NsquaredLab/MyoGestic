@@ -1,6 +1,0 @@
-myogestic.gui.protocols.OnlineProtocol.online\_emg\_update
-==========================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: OnlineProtocol.online_emg_update

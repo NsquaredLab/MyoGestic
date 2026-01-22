@@ -1,6 +1,0 @@
-myogestic.gui.widgets.templates.SetupInterfaceTemplate.interface\_was\_killed
-=============================================================================
-
-.. currentmodule:: myogestic.gui.widgets.templates
-
-.. automethod:: SetupInterfaceTemplate.interface_was_killed

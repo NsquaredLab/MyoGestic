@@ -1,6 +1,0 @@
-myogestic.gui.widgets.templates.VisualInterface.\_log\_error
-============================================================
-
-.. currentmodule:: myogestic.gui.widgets.templates
-
-.. automethod:: VisualInterface._log_error

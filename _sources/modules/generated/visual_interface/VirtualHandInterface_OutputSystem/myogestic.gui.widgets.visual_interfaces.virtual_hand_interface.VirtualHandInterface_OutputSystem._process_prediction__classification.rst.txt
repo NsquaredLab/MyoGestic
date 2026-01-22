@@ -1,6 +1,0 @@
-myogestic.gui.widgets.visual\_interfaces.virtual\_hand\_interface.VirtualHandInterface\_OutputSystem.\_process\_prediction\_\_classification
-============================================================================================================================================
-
-.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_hand_interface
-
-.. automethod:: VirtualHandInterface_OutputSystem._process_prediction__classification

@@ -1,6 +1,0 @@
-myogestic.gui.protocols.RecordProtocol.start\_recording\_preparation
-====================================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: RecordProtocol.start_recording_preparation

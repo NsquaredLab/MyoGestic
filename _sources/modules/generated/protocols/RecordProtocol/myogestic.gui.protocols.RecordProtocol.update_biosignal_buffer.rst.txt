@@ -1,6 +1,0 @@
-myogestic.gui.protocols.RecordProtocol.update\_biosignal\_buffer
-================================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: RecordProtocol.update_biosignal_buffer

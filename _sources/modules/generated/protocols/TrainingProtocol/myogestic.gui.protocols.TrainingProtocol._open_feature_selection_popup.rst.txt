@@ -1,6 +1,0 @@
-myogestic.gui.protocols.TrainingProtocol.\_open\_feature\_selection\_popup
-==========================================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: TrainingProtocol._open_feature_selection_popup

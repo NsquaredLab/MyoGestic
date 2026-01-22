@@ -177,13 +177,6 @@ This step resets the recording interface to its initial state.
   :caption: Disable - This method disables the recording interface.
 
 
-.. rst-class:: sphx-glr-timing
-
-   **Total running time of the script:** (0 minutes 0.000 seconds)
-
-**Estimated memory usage:**  623 MB
-
-
 .. _sphx_glr_download_auto_examples_02_add_visual_interface_2_recording_interface.py:
 
 .. only:: html

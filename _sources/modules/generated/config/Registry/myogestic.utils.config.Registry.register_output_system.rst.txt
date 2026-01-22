@@ -1,6 +1,0 @@
-myogestic.utils.config.Registry.register\_output\_system
-========================================================
-
-.. currentmodule:: myogestic.utils.config
-
-.. automethod:: Registry.register_output_system

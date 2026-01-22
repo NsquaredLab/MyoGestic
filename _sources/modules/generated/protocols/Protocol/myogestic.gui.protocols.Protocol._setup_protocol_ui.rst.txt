@@ -1,6 +1,0 @@
-myogestic.gui.protocols.Protocol.\_setup\_protocol\_ui
-======================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: Protocol._setup_protocol_ui

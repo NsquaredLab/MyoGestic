@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Part 3: Output System &#8212; MyoGestic 0.6.0 Documentation</title>
+    <title>Part 3: Output System &#8212; MyoGestic 0.7.0 Documentation</title>
   
   
   
@@ -43,9 +43,9 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../_static/documentation_options.js?v=8fa8b3e9"></script>
-    <script src="../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'auto_examples/02_add_visual_interface/3_output_system';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
@@ -53,7 +53,7 @@
     <link rel="prev" title="Part 2: Recording Interface" href="2_recording_interface.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.6.0" />
+  <meta name="docsearch:version" content="0.7.0" />
   </head>
   
   
@@ -119,8 +119,8 @@
       
     
     
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.6.0 Documentation - Home"/>
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.6.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.7.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.7.0 Documentation - Home"/>
   
   
 </a></div>
@@ -129,7 +129,7 @@
 <div class="nav-item">
   <div class="version-switcher__container dropdown">
       <button id="version-switcher-button" type="button" class="version-switcher__button btn btn-sm navbar-btn" aria-haspopup="true" aria-expanded="false">
-          Version 0.6.0
+          Version 0.7.0
       </button>
       
       
@@ -434,7 +434,7 @@ It processes predictions (classification or regression) and communicates them to
 <h3>Predefined Mapping for Classification Predictions<a class="headerlink" href="#predefined-mapping-for-classification-predictions" title="Link to this heading">#</a></h3>
 <p>This dictionary maps classification labels to their respective predefined
 output strings for the Virtual Hand Interface.</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">PREDICTION2INTERFACE_MAP</span></a> <span class="o">=</span> <span class="p">{</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="n">PREDICTION2INTERFACE_MAP</span> <span class="o">=</span> <span class="p">{</span>
     <span class="o">-</span><span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;Rejected Sample&quot;</span><span class="p">,</span>
     <span class="mi">0</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 0, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
     <span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 1, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
@@ -463,7 +463,7 @@ It also establishes the connection for outgoing signals using the main window.</
 <span class="linenos"> 6</span>    <span class="n">VirtualHandInterface_SetupInterface</span><span class="p">,</span>
 <span class="linenos"> 7</span><span class="p">)</span>
 <span class="linenos"> 8</span>
-<span class="linenos"> 9</span><a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">PREDICTION2INTERFACE_MAP</span></a> <span class="o">=</span> <span class="p">{</span>
+<span class="linenos"> 9</span><span class="n">PREDICTION2INTERFACE_MAP</span> <span class="o">=</span> <span class="p">{</span>
 <span class="linenos">10</span>    <span class="o">-</span><span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;Rejected Sample&quot;</span><span class="p">,</span>
 <span class="linenos">11</span>    <span class="mi">0</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 0, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
 <span class="linenos">12</span>    <span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 1, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
@@ -522,7 +522,7 @@ into the appropriate format that can be used by the Virtual Hand Interface.</p>
 <div class="code-block-caption"><span class="caption-text">Processing Classification Predictions - Convert classification predictions into the required format to send them to the visual interface.</span><a class="headerlink" href="#id2" title="Link to this code">#</a></div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">56</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__classification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
 <span class="linenos">57</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Process the prediction for classification.&quot;&quot;&quot;</span>
-<span class="linenos">58</span>        <span class="k">return</span> <a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">PREDICTION2INTERFACE_MAP</span></a><span class="p">[</span><span class="n">prediction</span><span class="p">]</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+<span class="linenos">58</span>        <span class="k">return</span> <span class="n">PREDICTION2INTERFACE_MAP</span><span class="p">[</span><span class="n">prediction</span><span class="p">]</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -560,8 +560,6 @@ It logs the closure and ensures that resources are properly released.</p>
 </pre></div>
 </div>
 </div>
-<p class="sphx-glr-timing"><strong>Total running time of the script:</strong> (0 minutes 0.118 seconds)</p>
-<p><strong>Estimated memory usage:</strong>  623 MB</p>
 <div class="sphx-glr-footer sphx-glr-footer-example docutils container" id="sphx-glr-download-auto-examples-02-add-visual-interface-3-output-system-py">
 <div class="sphx-glr-download sphx-glr-download-jupyter docutils container">
 <p><a class="reference download internal" download="" href="../../_downloads/97c1ac171ca10d1fe7d1018d60025579/3_output_system.ipynb"><code class="xref download docutils literal notranslate"><span class="pre">Download</span> <span class="pre">Jupyter</span> <span class="pre">notebook:</span> <span class="pre">3_output_system.ipynb</span></code></a></p>
@@ -655,7 +653,7 @@ It logs the closure and ensures that resources are properly released.</p>
         <div class="footer-item">
 
   <p class="sphinx-version">
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
     <br/>
   </p>
 </div>

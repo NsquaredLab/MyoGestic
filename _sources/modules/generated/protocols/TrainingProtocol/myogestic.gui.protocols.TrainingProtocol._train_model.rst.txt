@@ -1,6 +1,0 @@
-myogestic.gui.protocols.TrainingProtocol.\_train\_model
-=======================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: TrainingProtocol._train_model

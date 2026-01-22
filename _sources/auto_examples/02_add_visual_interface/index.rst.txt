@@ -24,7 +24,7 @@ Add a New Visual Interface
   .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_0_add_ui_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_02_add_visual_interface_0_add_ui.py`
+  :doc:`/auto_examples/02_add_visual_interface/0_add_ui`
 
 .. raw:: html
 
@@ -41,7 +41,7 @@ Add a New Visual Interface
   .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_1_setup_interface_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_02_add_visual_interface_1_setup_interface.py`
+  :doc:`/auto_examples/02_add_visual_interface/1_setup_interface`
 
 .. raw:: html
 
@@ -58,7 +58,7 @@ Add a New Visual Interface
   .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_2_recording_interface_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_02_add_visual_interface_2_recording_interface.py`
+  :doc:`/auto_examples/02_add_visual_interface/2_recording_interface`
 
 .. raw:: html
 
@@ -75,7 +75,7 @@ Add a New Visual Interface
   .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_3_output_system_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_02_add_visual_interface_3_output_system.py`
+  :doc:`/auto_examples/02_add_visual_interface/3_output_system`
 
 .. raw:: html
 

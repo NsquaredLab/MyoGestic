@@ -1,6 +1,0 @@
-myogestic.gui.widgets.templates.SetupInterfaceTemplate.connect\_custom\_signals
-===============================================================================
-
-.. currentmodule:: myogestic.gui.widgets.templates
-
-.. automethod:: SetupInterfaceTemplate.connect_custom_signals

@@ -1,6 +1,0 @@
-myogestic.gui.widgets.templates.RecordingInterfaceTemplate.save\_recording
-==========================================================================
-
-.. currentmodule:: myogestic.gui.widgets.templates
-
-.. automethod:: RecordingInterfaceTemplate.save_recording

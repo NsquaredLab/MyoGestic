@@ -45,13 +45,6 @@ To integrate a new Visual Interface in MyoGestic you must add three components:
 3. **Output Interface**: Defines how results are presented (e.g., virtual hands, plots).
 
 
-.. rst-class:: sphx-glr-timing
-
-   **Total running time of the script:** (0 minutes 0.000 seconds)
-
-**Estimated memory usage:**  623 MB
-
-
 .. _sphx_glr_download_auto_examples_02_add_visual_interface_0_add_ui.py:
 
 .. only:: html

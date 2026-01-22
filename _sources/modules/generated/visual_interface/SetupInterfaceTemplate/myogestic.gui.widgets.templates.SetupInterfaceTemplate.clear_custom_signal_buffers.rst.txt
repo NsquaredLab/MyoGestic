@@ -1,6 +1,0 @@
-myogestic.gui.widgets.templates.SetupInterfaceTemplate.clear\_custom\_signal\_buffers
-=====================================================================================
-
-.. currentmodule:: myogestic.gui.widgets.templates
-
-.. automethod:: SetupInterfaceTemplate.clear_custom_signal_buffers

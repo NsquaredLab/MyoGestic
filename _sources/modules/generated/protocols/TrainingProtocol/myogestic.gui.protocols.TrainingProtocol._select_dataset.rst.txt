@@ -1,6 +1,0 @@
-myogestic.gui.protocols.TrainingProtocol.\_select\_dataset
-==========================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: TrainingProtocol._select_dataset

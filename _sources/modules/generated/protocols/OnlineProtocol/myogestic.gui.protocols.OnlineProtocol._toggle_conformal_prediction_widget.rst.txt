@@ -1,6 +1,0 @@
-myogestic.gui.protocols.OnlineProtocol.\_toggle\_conformal\_prediction\_widget
-==============================================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: OnlineProtocol._toggle_conformal_prediction_widget

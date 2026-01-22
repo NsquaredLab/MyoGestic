@@ -1,6 +1,0 @@
-myogestic.gui.protocols.TrainingProtocol.select\_recordings
-===========================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: TrainingProtocol.select_recordings

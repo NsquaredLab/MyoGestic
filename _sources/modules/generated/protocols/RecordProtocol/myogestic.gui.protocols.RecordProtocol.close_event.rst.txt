@@ -1,6 +1,0 @@
-myogestic.gui.protocols.RecordProtocol.close\_event
-===================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: RecordProtocol.close_event

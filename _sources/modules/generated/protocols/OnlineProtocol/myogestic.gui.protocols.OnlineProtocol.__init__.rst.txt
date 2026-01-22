@@ -1,6 +1,0 @@
-myogestic.gui.protocols.OnlineProtocol.\_\_init\_\_
-===================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: OnlineProtocol.__init__

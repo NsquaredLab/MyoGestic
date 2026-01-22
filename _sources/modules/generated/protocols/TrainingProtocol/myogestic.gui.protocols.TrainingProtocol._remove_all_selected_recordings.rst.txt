@@ -1,6 +1,0 @@
-myogestic.gui.protocols.TrainingProtocol.\_remove\_all\_selected\_recordings
-============================================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: TrainingProtocol._remove_all_selected_recordings

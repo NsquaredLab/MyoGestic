@@ -1,6 +1,0 @@
-myogestic.gui.protocols.OnlineProtocol.close\_event
-===================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: OnlineProtocol.close_event

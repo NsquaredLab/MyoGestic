@@ -1,8 +1,0 @@
-﻿myogestic.models.definitions.sklearn_models.train
-=====================================================================
-
-.. currentmodule:: myogestic.models.definitions.sklearn_models
-
-.. autofunction:: train
-
-.. include:: /modules/generated/backreferences/myogestic.models.definitions.sklearn_models.train.examples

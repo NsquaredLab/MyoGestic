@@ -1,6 +1,0 @@
-myogestic.gui.protocols.Protocol.\_protocol\_toggled
-====================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: Protocol._protocol_toggled

@@ -1,6 +1,0 @@
-myogestic.gui.protocols.RecordProtocol.\_\_init\_\_
-===================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: RecordProtocol.__init__

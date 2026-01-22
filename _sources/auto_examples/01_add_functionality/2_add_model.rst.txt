@@ -53,12 +53,6 @@ Example Overview
 
 
 
-
-
-
-
-
-
 .. GENERATED FROM PYTHON SOURCE LINES 34-37
 
 --------------------------------
@@ -156,12 +150,6 @@ Step 1: Define your custom model
 
 
 
-
-
-
-
-
-
 .. GENERATED FROM PYTHON SOURCE LINES 124-127
 
 ---------------------------------------------------------
@@ -255,12 +243,6 @@ Step 2: Define required functions for the model lifecycle
 
 
 
-
-
-
-
-
-
 .. GENERATED FROM PYTHON SOURCE LINES 210-216
 
 -----------------------------------------------------
@@ -290,12 +272,6 @@ ensuring seamless integration with MyoGestic's UI so that they may be changed at
     }  # Fixed value that cannot be changed dynamically
 
 
-
-
-
-
-
-
 .. GENERATED FROM PYTHON SOURCE LINES 232-235
 
 -----------------------------------------------
@@ -317,19 +293,6 @@ Step 4: Register the model into CONFIG_REGISTRY
         changeable_parameters=changeable_params,
         unchangeable_parameters=unchangeable_params,
     )
-
-
-
-
-
-
-
-
-.. rst-class:: sphx-glr-timing
-
-   **Total running time of the script:** (0 minutes 0.705 seconds)
-
-**Estimated memory usage:**  623 MB
 
 
 .. _sphx_glr_download_auto_examples_01_add_functionality_2_add_model.py:

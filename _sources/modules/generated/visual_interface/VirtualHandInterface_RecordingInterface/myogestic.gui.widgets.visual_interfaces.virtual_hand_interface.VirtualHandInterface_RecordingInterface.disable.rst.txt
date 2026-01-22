@@ -1,6 +1,0 @@
-myogestic.gui.widgets.visual\_interfaces.virtual\_hand\_interface.VirtualHandInterface\_RecordingInterface.disable
-==================================================================================================================
-
-.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_hand_interface
-
-.. automethod:: VirtualHandInterface_RecordingInterface.disable

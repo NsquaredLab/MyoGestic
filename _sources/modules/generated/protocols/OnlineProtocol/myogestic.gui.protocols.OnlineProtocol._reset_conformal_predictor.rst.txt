@@ -1,6 +1,0 @@
-myogestic.gui.protocols.OnlineProtocol.\_reset\_conformal\_predictor
-====================================================================
-
-.. currentmodule:: myogestic.gui.protocols
-
-.. automethod:: OnlineProtocol._reset_conformal_predictor

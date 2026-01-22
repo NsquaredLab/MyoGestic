@@ -42,7 +42,7 @@ Add Functionality
   .. image:: /auto_examples/01_add_functionality/images/thumb/sphx_glr_1_add_post_prediction_filter_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_01_add_functionality_1_add_post_prediction_filter.py`
+  :doc:`/auto_examples/01_add_functionality/1_add_post_prediction_filter`
 
 .. raw:: html
 
@@ -59,7 +59,7 @@ Add Functionality
   .. image:: /auto_examples/01_add_functionality/images/thumb/sphx_glr_2_add_model_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_01_add_functionality_2_add_model.py`
+  :doc:`/auto_examples/01_add_functionality/2_add_model`
 
 .. raw:: html
 
@@ -69,14 +69,14 @@ Add Functionality
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="Below is an example of how to create and register a new feature by inheriting from a base filter class from MyoVerse.">
+    <div class="sphx-glr-thumbcontainer" tooltip="Below is an example of how to create and register a new feature by inheriting from the base Transform class from MyoVerse.">
 
 .. only:: html
 
   .. image:: /auto_examples/01_add_functionality/images/thumb/sphx_glr_3_add_biosignal_feature_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_01_add_functionality_3_add_biosignal_feature.py`
+  :doc:`/auto_examples/01_add_functionality/3_add_biosignal_feature`
 
 .. raw:: html
 
@@ -93,7 +93,7 @@ Add Functionality
   .. image:: /auto_examples/01_add_functionality/images/thumb/sphx_glr_4_add_output_system_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_01_add_functionality_4_add_output_system.py`
+  :doc:`/auto_examples/01_add_functionality/4_add_output_system`
 
 .. raw:: html
 
@@ -129,7 +129,7 @@ Add a New Visual Interface
   .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_0_add_ui_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_02_add_visual_interface_0_add_ui.py`
+  :doc:`/auto_examples/02_add_visual_interface/0_add_ui`
 
 .. raw:: html
 
@@ -146,7 +146,7 @@ Add a New Visual Interface
   .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_1_setup_interface_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_02_add_visual_interface_1_setup_interface.py`
+  :doc:`/auto_examples/02_add_visual_interface/1_setup_interface`
 
 .. raw:: html
 
@@ -163,7 +163,7 @@ Add a New Visual Interface
   .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_2_recording_interface_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_02_add_visual_interface_2_recording_interface.py`
+  :doc:`/auto_examples/02_add_visual_interface/2_recording_interface`
 
 .. raw:: html
 
@@ -180,7 +180,7 @@ Add a New Visual Interface
   .. image:: /auto_examples/02_add_visual_interface/images/thumb/sphx_glr_3_output_system_thumb.png
     :alt:
 
-  :ref:`sphx_glr_auto_examples_02_add_visual_interface_3_output_system.py`
+  :doc:`/auto_examples/02_add_visual_interface/3_output_system`
 
 .. raw:: html
 

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Add a Custom Model &#8212; MyoGestic 0.6.0 Documentation</title>
+    <title>Add a Custom Model &#8212; MyoGestic 0.7.0 Documentation</title>
   
   
   
@@ -43,9 +43,9 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../_static/documentation_options.js?v=8fa8b3e9"></script>
-    <script src="../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'auto_examples/01_add_functionality/2_add_model';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
@@ -53,7 +53,7 @@
     <link rel="prev" title="Add a Post-Prediction Filter" href="1_add_post_prediction_filter.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.6.0" />
+  <meta name="docsearch:version" content="0.7.0" />
   </head>
   
   
@@ -119,8 +119,8 @@
       
     
     
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.6.0 Documentation - Home"/>
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.6.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.7.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.7.0 Documentation - Home"/>
   
   
 </a></div>
@@ -129,7 +129,7 @@
 <div class="nav-item">
   <div class="version-switcher__container dropdown">
       <button id="version-switcher-button" type="button" class="version-switcher__button btn btn-sm navbar-btn" aria-haspopup="true" aria-expanded="false">
-          Version 0.6.0
+          Version 0.7.0
       </button>
       
       
@@ -604,7 +604,7 @@ This structure is used to define the model’s hyperparameters and fixed setting
 ensuring seamless integration with MyoGestic’s UI so that they may be changed at runtime.</p>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.utils.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">ChangeableParameter</span><span class="p">,</span> <span class="n">UnchangeableParameter</span>  <span class="c1"># noqa</span>
 
-<a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">changeable_params</span></a><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ChangeableParameter</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="n">changeable_params</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ChangeableParameter</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">&quot;param1&quot;</span><span class="p">:</span> <span class="p">{</span>
         <span class="s2">&quot;default_value&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
         <span class="s2">&quot;start_value&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">,</span>
@@ -613,7 +613,7 @@ ensuring seamless integration with MyoGestic’s UI so that they may be changed 
     <span class="p">}</span>
 <span class="p">}</span>
 
-<a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">unchangeable_params</span></a><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">UnchangeableParameter</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="n">unchangeable_params</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">UnchangeableParameter</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">&quot;param2&quot;</span><span class="p">:</span> <span class="mi">10</span>
 <span class="p">}</span>  <span class="c1"># Fixed value that cannot be changed dynamically</span>
 </pre></div>
@@ -629,13 +629,11 @@ ensuring seamless integration with MyoGestic’s UI so that they may be changed 
     <span class="n">load_function</span><span class="o">=</span><span class="n">load_function</span><span class="p">,</span>
     <span class="n">train_function</span><span class="o">=</span><span class="n">train_function</span><span class="p">,</span>
     <span class="n">predict_function</span><span class="o">=</span><span class="n">predict_function</span><span class="p">,</span>
-    <span class="n">changeable_parameters</span><span class="o">=</span><a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">changeable_params</span></a><span class="p">,</span>
-    <span class="n">unchangeable_parameters</span><span class="o">=</span><a href="https://docs.python.org/3/library/stdtypes.html#dict" title="builtins.dict" class="sphx-glr-backref-module-builtins sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">unchangeable_params</span></a><span class="p">,</span>
+    <span class="n">changeable_parameters</span><span class="o">=</span><span class="n">changeable_params</span><span class="p">,</span>
+    <span class="n">unchangeable_parameters</span><span class="o">=</span><span class="n">unchangeable_params</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
-<p class="sphx-glr-timing"><strong>Total running time of the script:</strong> (0 minutes 0.705 seconds)</p>
-<p><strong>Estimated memory usage:</strong>  623 MB</p>
 <div class="sphx-glr-footer sphx-glr-footer-example docutils container" id="sphx-glr-download-auto-examples-01-add-functionality-2-add-model-py">
 <div class="sphx-glr-download sphx-glr-download-jupyter docutils container">
 <p><a class="reference download internal" download="" href="../../_downloads/795cc4c3bde08df280d8a1ff470f595a/2_add_model.ipynb"><code class="xref download docutils literal notranslate"><span class="pre">Download</span> <span class="pre">Jupyter</span> <span class="pre">notebook:</span> <span class="pre">2_add_model.ipynb</span></code></a></p>
@@ -728,7 +726,7 @@ ensuring seamless integration with MyoGestic’s UI so that they may be changed 
         <div class="footer-item">
 
   <p class="sphinx-version">
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
     <br/>
   </p>
 </div>
