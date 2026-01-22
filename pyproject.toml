@@ -1,6 +1,6 @@
 [project]
 name = "MyoGestic"
-version = "0.6.0"
+version = "0.7.0"
 description = "Software framework made to help the myocontrol community to develop and test new myocontrol algorithms."
 authors = [
     { name = "Raul C. Sîmpetru", email = "raul.simpetru@fau.de" },
@@ -40,7 +40,7 @@ override-dependencies = [
 [tool.uv.sources]
 biosignal-device-interface = { git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git" }
 sphinxcontrib-pdfembed = { git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git" }
-myoverse = { git = "ssh://git@nsquared-nas.aibe.uni-erlangen.de/n-squared-lab/projects/processing/kinematic-prediction/MyoVerse.git", branch = "myoverse_v2" }
+myoverse = { git = "https://github.com/NsquaredLab/MyoVerse.git" }
 torch = [
   { index = "torch-gpu", marker = "sys_platform == 'win32'" },
 ]
