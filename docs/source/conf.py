@@ -190,9 +190,9 @@ sphinx_gallery_conf = {
     "gallery_dirs": "auto_examples",
     "filename_pattern": r"\.py",
     "remove_config_comments": True,
-    "show_memory": True,
+    "show_memory": False,  # Disabled - requires executing examples
     "within_subsection_order": FileNameSortKey,
-    "plot_gallery": True,
+    "plot_gallery": False,  # Disabled - examples require torch/myoverse not installed in docs CI
     "download_all_examples": False,
 }
 
