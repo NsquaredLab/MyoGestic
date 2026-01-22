@@ -9,7 +9,10 @@ from docutils import nodes
 from docutils.parsers.rst import Directive
 from sphinx import addnodes
 from sphinx_gallery.sorting import FileNameSortKey
-import torch._dynamo  # noqa
+try:
+    import torch._dynamo  # noqa
+except ImportError:
+    pass  # torch not required for docs build
 # Setup paths
 base_dir = Path.cwd().parent.parent
 sys.path.insert(0, str(base_dir)) # Add project root
