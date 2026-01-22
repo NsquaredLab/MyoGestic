@@ -96,6 +96,15 @@ class VirtualHandInterface_RecordingInterface(RecordingInterfaceTemplate):
 
         self.use_kinematics_check_box = ui.recordUseKinematicsCheckBox
 
+        # Add tooltips for better usability
+        self.record_task_combo_box.setToolTip("Select the gesture/movement to record")
+        self.record_duration_spin_box.setToolTip("Recording duration in seconds")
+        self.record_toggle_push_button.setToolTip("Start recording EMG data for the selected task")
+        self.use_kinematics_check_box.setToolTip("Record hand position data from the Virtual Hand Interface")
+        self.review_recording_accept_push_button.setToolTip("Save this recording to disk")
+        self.review_recording_reject_push_button.setToolTip("Discard this recording and try again")
+        self.review_recording_label_line_edit.setToolTip("Optional label to identify this recording")
+
         self.record_toggle_push_button.toggled.connect(self.start_recording)
         self.review_recording_accept_push_button.clicked.connect(self.accept_recording)
         self.review_recording_reject_push_button.clicked.connect(self.reject_recording)
