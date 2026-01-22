@@ -117,9 +117,15 @@ class VirtualCursorInterface_SetupInterface(SetupInterfaceTemplate):
         self._virtual_cursor_interface__status_widget: QWidget = self.ui.virtualCursorInterfaceStatusWidget
 
         self._virtual_cursor_interface__status_widget.setStyleSheet(NOT_CONNECTED_STYLESHEET)
+        self._virtual_cursor_interface__status_widget.setToolTip(
+            "Connection status: Red = Not connected, Green = Connected"
+        )
 
         self._use_external_virtual_cursor_interface__check_box: QCheckBox = (
             self.ui.useExternalVirtualCursorInterfaceCheckBox
+        )
+        self._use_external_virtual_cursor_interface__check_box.setToolTip(
+            "Enable this to use an externally running Virtual Cursor Interface instead of launching the built-in one"
         )
 
     def start_interface(self):
