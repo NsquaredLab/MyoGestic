@@ -25,16 +25,30 @@ dependencies = [
 [tool.uv]
 package = false
 config-settings = { editable_mode = "compat" }
+environments = [
+    "sys_platform == 'darwin'",
+    "sys_platform == 'win32'",
+    "sys_platform == 'linux'",
+]
+override-dependencies = [
+    "torch>=2.6.0; sys_platform == 'darwin'",
+    "torchvision>=0.21.0; sys_platform == 'darwin'",
+    "torchaudio>=2.6.0; sys_platform == 'darwin'",
+    "vispy>=0.15.2; sys_platform == 'darwin'",
+]
 
 [tool.uv.sources]
 biosignal-device-interface = { git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git" }
 sphinxcontrib-pdfembed = { git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git" }
 myoverse = { git = "ssh://git@nsquared-nas.aibe.uni-erlangen.de/n-squared-lab/projects/processing/kinematic-prediction/MyoVerse.git", branch = "myoverse_v2" }
 torch = [
-  { index = "torch-gpu", marker = "sys_platform != 'linux'" },
+  { index = "torch-gpu", marker = "sys_platform == 'win32'" },
 ]
 torchvision = [
-  { index = "torch-gpu", marker = "sys_platform != 'linux'" },
+  { index = "torch-gpu", marker = "sys_platform == 'win32'" },
+]
+torchaudio = [
+  { index = "torch-gpu", marker = "sys_platform == 'win32'" },
 ]
 
 [[tool.uv.index]]
