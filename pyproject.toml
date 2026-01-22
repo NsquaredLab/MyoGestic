@@ -31,10 +31,7 @@ environments = [
     "sys_platform == 'linux'",
 ]
 override-dependencies = [
-    "torch>=2.6.0; sys_platform == 'darwin'",
-    "torchvision>=0.21.0; sys_platform == 'darwin'",
-    "torchaudio>=2.6.0; sys_platform == 'darwin'",
-    "vispy>=0.15.2; sys_platform == 'darwin'",
+    "vispy>=0.15.2",
 ]
 
 [tool.uv.sources]
@@ -42,17 +39,25 @@ biosignal-device-interface = { git = "https://github.com/NsquaredLab/Biosignal-D
 sphinxcontrib-pdfembed = { git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git" }
 myoverse = { git = "https://github.com/NsquaredLab/MyoVerse.git" }
 torch = [
-  { index = "torch-gpu", marker = "sys_platform == 'win32'" },
+  { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
+  { index = "pytorch-cu124", marker = "sys_platform != 'darwin'" },
 ]
 torchvision = [
-  { index = "torch-gpu", marker = "sys_platform == 'win32'" },
+  { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
+  { index = "pytorch-cu124", marker = "sys_platform != 'darwin'" },
 ]
 torchaudio = [
-  { index = "torch-gpu", marker = "sys_platform == 'win32'" },
+  { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
+  { index = "pytorch-cu124", marker = "sys_platform != 'darwin'" },
 ]
 
 [[tool.uv.index]]
-name = "torch-gpu"
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
 url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
