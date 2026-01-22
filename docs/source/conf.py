@@ -134,7 +134,17 @@ autodoc_member_order = "groupwise"
 autosummary_generate = True
 autosummary_generate_overwrite = True
 autosummary_imported_members = False
-# autodoc_mock_imports = ["PySide6"] # Add PySide6 to mock imports
+autodoc_mock_imports = [
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "PySide6",
+    "vispy",
+    "catboost",
+    "sklearn",
+    "biosignal_device_interface",
+    "myoverse",
+]
 
 templates_path = ["templates"]
 exclude_patterns = ["auto_examples/", "Thumbs.db", ".DS_Store"]
