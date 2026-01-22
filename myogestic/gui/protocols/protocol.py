@@ -76,6 +76,9 @@ class Protocol(QObject):
             self.main_window.ui.protocolRecordRadioButton
         )
         self._protocol_record__radio_button.setChecked(True)
+        self._protocol_record__radio_button.setToolTip(
+            "Record EMG data with visual interface feedback for training"
+        )
         self._protocol_record__radio_button.toggled.connect(
             lambda checked: self._protocol_toggled(0, checked)
         )
@@ -83,12 +86,18 @@ class Protocol(QObject):
         self._protocol_training__radio_button = (
             self.main_window.ui.protocolTrainingRadioButton
         )
+        self._protocol_training__radio_button.setToolTip(
+            "Create datasets from recordings and train machine learning models"
+        )
         self._protocol_training__radio_button.toggled.connect(
             lambda checked: self._protocol_toggled(1, checked)
         )
 
         self._protocol_online__radio_button = (
             self.main_window.ui.protocolOnlineRadioButton
+        )
+        self._protocol_online__radio_button.setToolTip(
+            "Run real-time predictions using trained models"
         )
         self._protocol_online__radio_button.toggled.connect(
             lambda checked: self._protocol_toggled(2, checked)

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0]
+Improved UI/UX and macOS compatibility.
+
+### Added
+- Logging moved to separate tab for better vertical space management.
+- Tooltips throughout the UI explaining button functions and workflow steps.
+- Status bar feedback messages for device connection and streaming actions.
+- Visual hierarchy with color-coded buttons (Connect, Stream, active states).
+- Placeholder widget in EMG plot area when device is not connected.
+- macOS support for Virtual Hand Interface (automatic permissions and quarantine handling).
+
+### Changed
+- Platform-specific dependency overrides for torch and vispy on macOS.
+
 ## [0.6.0]
 ### Added
 - Add a virtual cursor interface for foot movement control.
@@ -49,7 +63,9 @@ Enhanced user interface and improved cross-platform compatibility.
 ### Removed
 - Redundant parameters and dead code in dataset module.
 
-[Unreleased]: https://github.com/NsquaredLab/MyoGestic/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/NsquaredLab/MyoGestic/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/NsquaredLab/MyoGestic/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.1.0...v0.4.0

@@ -1,5 +1,6 @@
 import ast
 import platform
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -65,7 +66,13 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
         super().__init__(main_window, name, ui=Ui_SetupVirtualHandInterface())
 
         self._unity_process = QProcess()
-        self._unity_process.setProgram(str(self._get_unity_executable()))
+        executable = self._get_unity_executable().resolve()  # Get absolute path
+        self._unity_process.setProgram(str(executable))
+
+        # On macOS, set working directory to the app's MacOS folder for Unity to find resources
+        if platform.system() == "Darwin":
+            self._unity_process.setWorkingDirectory(str(executable.parent))
+
         self._unity_process.started.connect(
             lambda: self._main_window.toggle_selected_visual_interface(self.name)
         )
@@ -73,6 +80,8 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
         self._unity_process.finished.connect(
             lambda: self._main_window.toggle_selected_visual_interface(self.name)
         )
+        self._unity_process.errorOccurred.connect(self._on_process_error)
+        self._unity_process.readyReadStandardError.connect(self._on_stderr)
 
         self._setup_timers()
 
@@ -108,6 +117,55 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
 
         raise FileNotFoundError(f"Unity executable not found for platform {platform.system()}.")
 
+    @staticmethod
+    def _prepare_macos_executable(executable_path: Path) -> None:
+        """Prepare macOS executable by adding execute permissions and removing quarantine."""
+        if platform.system() != "Darwin":
+            return
+
+        try:
+            # Make the executable file executable
+            subprocess.run(
+                ["chmod", "+x", str(executable_path)],
+                check=False,
+                capture_output=True
+            )
+
+            # Get the .app bundle path (go up from Contents/MacOS/executable)
+            app_bundle = executable_path.parent.parent.parent
+            if app_bundle.suffix == ".app":
+                # Remove quarantine attribute from the entire app bundle
+                subprocess.run(
+                    ["xattr", "-dr", "com.apple.quarantine", str(app_bundle)],
+                    check=False,
+                    capture_output=True
+                )
+        except Exception:
+            pass  # Silently ignore if commands fail
+
+    def _on_process_error(self, error):
+        """Handle process errors."""
+        error_messages = {
+            QProcess.ProcessError.FailedToStart: "Failed to start",
+            QProcess.ProcessError.Crashed: "Process crashed",
+            QProcess.ProcessError.Timedout: "Process timed out",
+            QProcess.ProcessError.ReadError: "Read error",
+            QProcess.ProcessError.WriteError: "Write error",
+            QProcess.ProcessError.UnknownError: "Unknown error",
+        }
+        msg = error_messages.get(error, f"Error code: {error}")
+        self._main_window.logger.print(
+            f"Virtual Hand Interface error: {msg}", level=LoggerLevel.ERROR
+        )
+
+    def _on_stderr(self):
+        """Handle stderr output from the process."""
+        stderr = self._unity_process.readAllStandardError().data().decode()
+        if stderr:
+            self._main_window.logger.print(
+                f"Virtual Hand Interface: {stderr}", level=LoggerLevel.WARNING
+            )
+
     def _setup_timers(self):
         """Setup the timers for the Virtual Hand Interface."""
         self._status_request__timer = QTimer(self)
@@ -136,14 +194,23 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
         self._virtual_hand_interface__status_widget.setStyleSheet(
             NOT_CONNECTED_STYLESHEET
         )
+        self._virtual_hand_interface__status_widget.setToolTip(
+            "Connection status: Red = Not connected, Green = Connected"
+        )
 
         self._use_external_virtual_hand_interface__check_box: QCheckBox = (
             self.ui.useExternalVirtualHandInterfaceCheckBox
+        )
+        self._use_external_virtual_hand_interface__check_box.setToolTip(
+            "Enable this to use an externally running Virtual Hand Interface instead of launching the built-in one"
         )
 
     def start_interface(self):
         """Start the Virtual Hand Interface."""
         if not self._use_external_virtual_hand_interface__check_box.isChecked():
+            # Prepare macOS executable (chmod +x and remove quarantine)
+            executable = self._get_unity_executable().resolve()
+            self._prepare_macos_executable(executable)
             self._unity_process.start()
             self._unity_process.waitForStarted()
         self._status_request__timer.start()

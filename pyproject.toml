@@ -1,6 +1,6 @@
 [project]
 name = "MyoGestic"
-version = "0.6.0"
+version = "0.7.0"
 description = "Software framework made to help the myocontrol community to develop and test new myocontrol algorithms."
 authors = [
     { name = "Raul C. Sîmpetru", email = "raul.simpetru@fau.de" },
@@ -25,15 +25,30 @@ dependencies = [
 [tool.uv]
 package = false
 config-settings = { editable_mode = "compat" }
+environments = [
+    "sys_platform == 'darwin'",
+    "sys_platform == 'win32'",
+    "sys_platform == 'linux'",
+]
+override-dependencies = [
+    "torch>=2.6.0; sys_platform == 'darwin'",
+    "torchvision>=0.21.0; sys_platform == 'darwin'",
+    "torchaudio>=2.6.0; sys_platform == 'darwin'",
+    "vispy>=0.15.2; sys_platform == 'darwin'",
+]
 
 [tool.uv.sources]
 biosignal-device-interface = { git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git" }
 sphinxcontrib-pdfembed = { git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git" }
+myoverse = { git = "https://github.com/NsquaredLab/MyoVerse.git" }
 torch = [
-  { index = "torch-gpu", marker = "sys_platform != 'linux'" },
+  { index = "torch-gpu", marker = "sys_platform == 'win32'" },
 ]
 torchvision = [
-  { index = "torch-gpu", marker = "sys_platform != 'linux'" },
+  { index = "torch-gpu", marker = "sys_platform == 'win32'" },
+]
+torchaudio = [
+  { index = "torch-gpu", marker = "sys_platform == 'win32'" },
 ]
 
 [[tool.uv.index]]
@@ -47,6 +62,7 @@ dev = [
     "docutils-stubs>=0.0.22",
     "matplotlib>=3.10.0",
     "prospector>=1.14.1",
+    "pytest>=9.0.2",
 ]
 
 docs = [
