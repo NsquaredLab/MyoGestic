@@ -1454,7 +1454,7 @@ wheels = [
 
 [[package]]
 name = "myogestic"
-version = "0.6.0"
+version = "0.7.0"
 source = { virtual = "." }
 dependencies = [
     { name = "biosignal-device-interface", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
@@ -1496,7 +1496,7 @@ docs = [
 requires-dist = [
     { name = "biosignal-device-interface", git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git" },
     { name = "catboost", specifier = ">=1.2.7" },
-    { name = "myoverse", git = "ssh://git@nsquared-nas.aibe.uni-erlangen.de/n-squared-lab/projects/processing/kinematic-prediction/MyoVerse.git?branch=myoverse_v2" },
+    { name = "myoverse", git = "https://github.com/NsquaredLab/MyoVerse.git" },
     { name = "numcodecs", specifier = "!=0.16" },
     { name = "pyside6", specifier = ">=6.8.2.1" },
     { name = "qdarkstyle", specifier = ">=3.2.3" },
@@ -1533,8 +1533,8 @@ docs = [
 
 [[package]]
 name = "myoverse"
-version = "1.1.6"
-source = { git = "ssh://git@nsquared-nas.aibe.uni-erlangen.de/n-squared-lab/projects/processing/kinematic-prediction/MyoVerse.git?branch=myoverse_v2#481bd5e4fc696c349c16b2aeb5c5b6769fabddc4" }
+version = "2.0.0"
+source = { git = "https://github.com/NsquaredLab/MyoVerse.git#7a003c45c5aca452f604bb5f844abf836b070c31" }
 dependencies = [
     { name = "lightning", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "mplcursors", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
