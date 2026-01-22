@@ -701,6 +701,9 @@ class TrainingProtocol(QObject):
         self.training_create_datasets_select_recordings_push_button = (
             self._main_window.ui.trainingCreateDatasetsSelectRecordingsPushButton
         )
+        self.training_create_datasets_select_recordings_push_button.setToolTip(
+            "Select recording files (.pkl) to include in the dataset"
+        )
         self.training_create_datasets_select_recordings_push_button.clicked.connect(
             self.select_recordings
         )
@@ -746,6 +749,9 @@ class TrainingProtocol(QObject):
         self.training_create_dataset_select_features_push_button = (
             self._main_window.ui.trainingCreateDatasetSelectFeaturesPushButton
         )
+        self.training_create_dataset_select_features_push_button.setToolTip(
+            "Choose which EMG features to extract for the model"
+        )
         self.training_create_dataset_select_features_push_button.clicked.connect(
             self._open_feature_selection_popup
         )
@@ -756,6 +762,9 @@ class TrainingProtocol(QObject):
         self.training_create_dataset_push_button = (
             self._main_window.ui.trainingCreateDatasetPushButton
         )
+        self.training_create_dataset_push_button.setToolTip(
+            "Create a dataset from selected recordings (select recordings first)"
+        )
         self.training_create_dataset_push_button.clicked.connect(self._create_dataset)
         self.training_create_dataset_push_button.setEnabled(False)
 
@@ -765,6 +774,9 @@ class TrainingProtocol(QObject):
         )
         self.training_select_dataset_push_button = (
             self._main_window.ui.trainingSelectDatasetPushButton
+        )
+        self.training_select_dataset_push_button.setToolTip(
+            "Select a previously created dataset to train a model"
         )
         self.training_select_dataset_push_button.clicked.connect(self._select_dataset)
         self.training_selected_dataset_label = (
@@ -800,5 +812,8 @@ class TrainingProtocol(QObject):
         )
 
         self.train_model_push_button = self._main_window.ui.trainingTrainModelPushButton
+        self.train_model_push_button.setToolTip(
+            "Train a machine learning model using the selected dataset"
+        )
         self.train_model_push_button.clicked.connect(self._train_model)
         self.train_model_push_button.setEnabled(False)

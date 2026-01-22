@@ -369,6 +369,9 @@ class OnlineProtocol(QObject):
 
         self.online_load_model_push_button = self._main_window.ui.onlineLoadModelPushButton
         self.online_load_model_push_button.setEnabled(False)
+        self.online_load_model_push_button.setToolTip(
+            "Load a trained model for real-time predictions (configure device first)"
+        )
         self.online_load_model_push_button.clicked.connect(self._load_model)
         self.online_model_label = self._main_window.ui.onlineModelLabel
         self.online_model_label.setText("No models loaded!")
@@ -376,9 +379,15 @@ class OnlineProtocol(QObject):
         self.online_commands_group_box = self._main_window.ui.onlineCommandsGroupBox
         self.online_commands_group_box.setEnabled(False)
         self.online_record_toggle_push_button = self._main_window.ui.onlineRecordTogglePushButton
+        self.online_record_toggle_push_button.setToolTip(
+            "Record predictions and ground truth for analysis"
+        )
         self.online_record_toggle_push_button.clicked.connect(self._toggle_recording)
 
         self.online_prediction_toggle_push_button = self._main_window.ui.onlinePredictionTogglePushButton
+        self.online_prediction_toggle_push_button.setToolTip(
+            "Start real-time predictions using the loaded model"
+        )
         self.online_prediction_toggle_push_button.clicked.connect(self._toggle_prediction)
 
         # Conformal Prediction
