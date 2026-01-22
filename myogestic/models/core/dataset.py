@@ -1,35 +1,32 @@
 from __future__ import annotations
 
+import inspect
 import math
+import pickle
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import torch
 import zarr
-from myoverse.datasets.filters.generic import ApplyFunctionFilter, IndexDataFilter
-from myoverse.datasets.filters.temporal import SOSFrequencyFilter
-from myoverse.datasets.supervised import EMGDataset
-from myoverse.datatypes import EMGData
-from scipy.signal import butter
+from myoverse.datasets import DatasetCreator, Modality
+from PySide6.QtCore import QObject
+from scipy.signal import butter, sosfilt
 
 from myogestic.gui.widgets.logger import LoggerLevel
+from myogestic.user_config import (
+    BUFFER_SIZE__CHUNKS,
+    BUFFER_SIZE__SAMPLES,
+    CHANNELS,
+    GROUND_TRUTH_INDICES_TO_KEEP,
+)
 from myogestic.utils.config import CONFIG_REGISTRY
 
 if TYPE_CHECKING:
     from myogestic.gui.widgets.logger import CustomLogger
 
-from PySide6.QtCore import QObject
-
-from myogestic.user_config import (
-    CHANNELS,
-    BUFFER_SIZE__CHUNKS,
-    BUFFER_SIZE__SAMPLES,
-    GROUND_TRUTH_INDICES_TO_KEEP,
-)
-
-
-def standardize_data(data: np.ndarray, mean: float, std: float) -> np.ndarray:
-    return (data - mean) / std
+# Small constant to prevent division by zero in standardization
+EPSILON = 1e-8
 
 
 class MyoGesticDataset(QObject):
@@ -48,44 +45,99 @@ class MyoGesticDataset(QObject):
         self.sampling_frequency: int = self.device_information["sampling_frequency"]
         self.samples_per_frame: int = self.device_information["samples_per_frame"]
 
-        # Offline processing
-        self.buffer_size__chunks: int = (
+        # Offline processing buffer size
+        self.buffer_size__chunks = (
             BUFFER_SIZE__CHUNKS
             if BUFFER_SIZE__SAMPLES == -1
             else math.ceil(BUFFER_SIZE__SAMPLES / self.samples_per_frame)
         )
-        self.buffer_size__samples: int = (
-            self.buffer_size__chunks * self.samples_per_frame
-        )
+        self.buffer_size__samples = self.buffer_size__chunks * self.samples_per_frame
 
-        # Online processing
+        # Online processing state
         self.emg_buffer: list[np.ndarray] | None = None
         self.dataset_bad_channels: list[int] | None = None
-        self.dataset_mean: float = 0.0
-        self.dataset_std: float = 1.0
+        self.dataset_mean: dict[str, float] = {}
+        self.dataset_std: dict[str, float] = {}
+
+        # Store device for online preprocessing
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Cache for feature transforms to avoid repeated instantiation
+        self._feature_transform_cache: dict = {}
+
+        # Precompute notch filter coefficients
+        self._notch_sos = butter(
+            4, (47, 53), "bandstop", output="sos", fs=self.sampling_frequency
+        )
+
+    def _create_feature_transform(self, feature_name: str):
+        """Create a feature transform instance for the given feature name.
+
+        Uses introspection to determine if the transform accepts window_size parameter,
+        making this compatible with custom features that don't require it.
+        """
+        feature_cls = CONFIG_REGISTRY.features_map[feature_name]
+        params = inspect.signature(feature_cls.__init__).parameters
+
+        if "window_size" in params:
+            return feature_cls(window_size=self.buffer_size__samples)
+        return feature_cls()
+
+    def _get_or_create_feature_transform(self, feature_name: str):
+        """Get a cached feature transform or create and cache a new one.
+
+        This avoids repeated instantiation of the same transform which can be
+        expensive during dataset creation (thousands of windows) and real-time
+        preprocessing.
+        """
+        if feature_name not in self._feature_transform_cache:
+            self._feature_transform_cache[feature_name] = self._create_feature_transform(
+                feature_name
+            )
+        return self._feature_transform_cache[feature_name]
+
+    def _clear_feature_transform_cache(self):
+        """Clear the feature transform cache.
+
+        Call this when buffer_size changes or when transforms need to be recreated.
+        """
+        self._feature_transform_cache.clear()
+
+    def _extract_feature_vector(self, feature_result: torch.Tensor) -> torch.Tensor:
+        """Extract the feature vector from transform output, handling different shapes."""
+        if feature_result.ndim == 1:
+            return feature_result
+        return feature_result[..., -1]
 
     def create_dataset(
-        self, dataset: dict[str, dict], selected_features: list[str], file_name: str, recording_interface_from_recordings: str
+        self,
+        dataset: dict[str, dict],
+        selected_features: list[str],
+        file_name: str,
+        recording_interface_from_recordings: str,
     ) -> dict:
         # Accumulate bad channels. Maybe more channels get added between recordings
         bad_channels: list[int] = []
 
-        if self._main_window.selected_visual_interface is None:
-            visual_interface_to_use=CONFIG_REGISTRY.visual_interfaces_map[recording_interface_from_recordings]
-            ground_truth__task_map=visual_interface_to_use[1].ground_truth__task_map
-            ground_truth__nr_of_recording_values=visual_interface_to_use[1].ground_truth__nr_of_recording_values
+        selected_interface = self._main_window.selected_visual_interface
+        if selected_interface is None:
+            interface_tuple = CONFIG_REGISTRY.visual_interfaces_map[
+                recording_interface_from_recordings
+            ]
+            ground_truth__task_map = interface_tuple[1].ground_truth__task_map
+            ground_truth__nr_of_recording_values = interface_tuple[1].ground_truth__nr_of_recording_values
         else:
-            visual_interface_to_use = self._main_window.selected_visual_interface
-            ground_truth__task_map = visual_interface_to_use.recording_interface_ui.ground_truth__task_map
-            ground_truth__nr_of_recording_values = visual_interface_to_use.recording_interface_ui.ground_truth__nr_of_recording_values
+            ground_truth__task_map = selected_interface.recording_interface_ui.ground_truth__task_map
+            ground_truth__nr_of_recording_values = (
+                selected_interface.recording_interface_ui.ground_truth__nr_of_recording_values
+            )
 
-            if visual_interface_to_use.name != recording_interface_from_recordings:
+            if selected_interface.name != recording_interface_from_recordings:
                 self.logger.print(
                     f"Warning: The selected visual interface is not the same as the one used for recording. "
-                    f"Using {recording_interface_from_recordings} instead of {visual_interface_to_use.name}.",
+                    f"Using {recording_interface_from_recordings} instead of {selected_interface.name}.",
                     LoggerLevel.WARNING,
                 )
-
 
         biosignal_data = {}
         ground_truth_data = {}
@@ -103,7 +155,7 @@ class MyoGesticDataset(QObject):
 
             biosignal = np.concatenate(recording["biosignal"][CHANNELS].T).T
 
-            if len(recording_bad_channels) > 0:
+            if recording_bad_channels:
                 biosignal = np.delete(biosignal, recording_bad_channels, axis=0)
 
             if not recording["use_as_classification"]:
@@ -130,105 +182,140 @@ class MyoGesticDataset(QObject):
 
             biosignal_data[task_label] = biosignal
 
-        biosignal_filter_pipeline_after_chunking = []
-        for feature in selected_features:
-            temp = [
-                SOSFrequencyFilter(
-                    sos_filter_coefficients=butter(
-                        4,
-                        (47, 53),
-                        "bandstop",
-                        output="sos",
-                        fs=self.sampling_frequency,
-                    ),
-                    input_is_chunked=True,
-                    forwards_and_backwards=False,
-                )
-            ]
-            try:
-                temp.append(
-                    CONFIG_REGISTRY.features_map[feature](
-                        is_output=True,
-                        window_size=self.buffer_size__samples,  # noqa
-                        input_is_chunked=True,
-                    )
-                )
-            except TypeError:
-                temp.append(
-                    CONFIG_REGISTRY.features_map[feature](
-                        is_output=True, input_is_chunked=True
-                    )
-                )
-
-            biosignal_filter_pipeline_after_chunking.append(temp)
-
-        ground_truth_indices_to_keep = (
-            tuple(
-                np.arange(
-                    self._main_window.selected_visual_interface.recording_interface_ui.ground_truth__nr_of_recording_values
-                )
+        # Determine ground truth indices to keep
+        if GROUND_TRUTH_INDICES_TO_KEEP == "all":
+            ground_truth_indices_to_keep = list(range(ground_truth__nr_of_recording_values))
+        else:
+            ground_truth_indices_to_keep = list(
+                GROUND_TRUTH_INDICES_TO_KEEP[recording_interface_from_recordings]
             )
-            if GROUND_TRUTH_INDICES_TO_KEEP == "all"
-            else tuple(GROUND_TRUTH_INDICES_TO_KEEP[recording_interface_from_recordings])
-        )
 
-        dataset = EMGDataset(
-            emg_data=biosignal_data,
-            ground_truth_data=ground_truth_data,
-            ground_truth_data_type="virtual_hand",
-            save_path=Path(f"data/datasets/{file_name}.zarr"),
-            sampling_frequency=self.sampling_frequency,
+        # Filter ground truth to only keep selected indices
+        for task_label in ground_truth_data:
+            ground_truth_data[task_label] = ground_truth_data[task_label][
+                ground_truth_indices_to_keep
+            ]
+
+        # Apply notch filter to biosignal data
+        for task_label in biosignal_data:
+            biosignal_data[task_label] = sosfilt(
+                self._notch_sos, biosignal_data[task_label], axis=-1
+            ).astype(np.float32)
+
+        # Save temporary pickle files for DatasetCreator
+        Path("data/datasets").mkdir(parents=True, exist_ok=True)
+        emg_pkl_path = Path(f"data/datasets/{file_name}_emg.pkl")
+        gt_pkl_path = Path(f"data/datasets/{file_name}_gt.pkl")
+
+        with open(emg_pkl_path, "wb") as f:
+            pickle.dump(biosignal_data, f)
+        with open(gt_pkl_path, "wb") as f:
+            pickle.dump(ground_truth_data, f)
+
+        # Create dataset using MyoVerse v2 DatasetCreator
+        save_path = Path(f"data/datasets/{file_name}.zip")
+        creator = DatasetCreator(
+            modalities={
+                "emg": Modality(path=emg_pkl_path, dims=("channel", "time")),
+                "kinematics": Modality(path=gt_pkl_path, dims=("joint", "time")),
+            },
+            sampling_frequency=float(self.sampling_frequency),
             tasks_to_use=list(biosignal_data.keys()),
-            chunk_size=self.buffer_size__samples,
-            chunk_shift=self.samples_per_frame,
-            emg_filter_pipeline_after_chunking=biosignal_filter_pipeline_after_chunking,
-            emg_representations_to_filter_after_chunking=[["EMG_Chunkizer"]]
-            * len(selected_features),
-            ground_truth_filter_pipeline_before_chunking=[
-                [
-                    IndexDataFilter(
-                        indices=(ground_truth_indices_to_keep,), input_is_chunked=False
-                    )
-                ]
-            ],
-            ground_truth_representations_to_filter_before_chunking=[["Input"]],
-            ground_truth_filter_pipeline_after_chunking=[
-                [
-                    ApplyFunctionFilter(
-                        is_output=True, function=np.mean, axis=-1, input_is_chunked=True
-                    )
-                ]
-            ],
-            ground_truth_representations_to_filter_after_chunking=[["Last"]],
+            save_path=save_path,
+            test_ratio=0.0,  # No test split for training datasets
+            val_ratio=0.2,
             debug_level=1,
         )
+        creator.create()
 
-        dataset.create_dataset()
+        # Clean up temporary pickle files
+        emg_pkl_path.unlink()
+        gt_pkl_path.unlink()
 
-        dataset = zarr.open(f"data/datasets/{file_name}.zarr", mode="r")
+        # Open dataset to compute feature statistics
+        zip_store = zarr.storage.ZipStore(save_path, mode="r")
+        try:
+            store = zarr.open(zip_store, mode="r")
 
-        feature_keys = list(dataset["training"]["emg"])
-        training_class = dataset["training"]["label"][:, 0].astype(int)
-        training_kinematics = dataset["training"]["ground_truth"][
-            "ApplyFunctionFilter"
-        ][()]
+            # Compute features and their statistics for each task
+            training_means = {}
+            training_stds = {}
+            all_emg_features = []
+            all_kinematics = []
+            all_classes = []
 
-        training_means = {}
-        training_stds = {}
-        training_emg = []
+            for task_label in biosignal_data.keys():
+                # Load raw EMG data
+                emg_data = store["training"]["emg"][task_label][:]
 
-        for key in feature_keys:
-            emg_per_key = dataset["training"]["emg"][key][()]
+                # Chunk the data into windows
+                n_samples = emg_data.shape[-1]
+                n_windows = (n_samples - self.buffer_size__samples) // self.samples_per_frame + 1
 
-            training_means[key], training_stds[key] = (
-                emg_per_key.mean(),
-                emg_per_key.std(),
-            )
-            training_emg.append(
-                (emg_per_key - training_means[key]) / training_stds[key]
-            )
+                task_features = []
+                for feature_name in selected_features:
+                    feature_transform = self._get_or_create_feature_transform(feature_name)
 
-        training_emg = np.concatenate(training_emg, axis=1)
+                    # Apply feature to each window
+                    windows_features = []
+                    for i in range(n_windows):
+                        start_idx = i * self.samples_per_frame
+                        end_idx = start_idx + self.buffer_size__samples
+                        window = emg_data[..., start_idx:end_idx]
+
+                        # Convert to tensor and apply transform
+                        window_tensor = torch.from_numpy(window).float().rename("channel", "time")
+                        feature_result = feature_transform(window_tensor)
+                        # Keep full time dimension: (channels, time)
+                        windows_features.append(feature_result.rename(None).numpy())
+
+                    # Stack windows: (n_windows, channels, time)
+                    windows_features = np.stack(windows_features, axis=0)
+                    task_features.append(windows_features)
+
+                # Concatenate features along channel dim: (n_windows, n_features * channels, time)
+                task_features = np.concatenate(task_features, axis=1)
+                all_emg_features.append(task_features)
+
+                # Get kinematics - average over each window
+                kinematics = store["training"]["kinematics"][task_label][:]
+                windows_kinematics = []
+                for i in range(n_windows):
+                    start_idx = i * self.samples_per_frame
+                    end_idx = start_idx + self.buffer_size__samples
+                    window_kin = kinematics[..., start_idx:end_idx]
+                    windows_kinematics.append(np.mean(window_kin, axis=-1))
+                windows_kinematics = np.stack(windows_kinematics, axis=0)
+                all_kinematics.append(windows_kinematics)
+
+                # Class labels
+                all_classes.extend([int(task_label)] * n_windows)
+        finally:
+            zip_store.close()
+
+        # Concatenate all tasks
+        training_emg = np.concatenate(all_emg_features, axis=0)
+        training_kinematics = np.concatenate(all_kinematics, axis=0)
+        training_class = np.array(all_classes)
+
+        # Compute mean and std per feature block
+        # training_emg shape: (n_samples, n_features * channels, time)
+        first_task_data = next(iter(biosignal_data.values()))
+        n_channels = first_task_data.shape[0]
+        feature_start = 0
+        for feature_name in selected_features:
+            feature_end = feature_start + n_channels
+            feature_data = training_emg[:, feature_start:feature_end, :]
+            training_means[feature_name] = float(feature_data.mean())
+            training_stds[feature_name] = float(feature_data.std())
+
+            # Standardize this feature block (use EPSILON to prevent division by zero)
+            std_safe = max(training_stds[feature_name], EPSILON)
+            training_emg[:, feature_start:feature_end, :] = (
+                feature_data - training_means[feature_name]
+            ) / std_safe
+
+            feature_start = feature_end
 
         print("Dataset created")
 
@@ -242,80 +329,70 @@ class MyoGesticDataset(QObject):
             "selected_features": selected_features,
             "device_information": self.device_information,
             "visual_interface": recording_interface_from_recordings,
-            "zarr_file_path": file_name + ".zarr",
+            "zarr_file_path": file_name + ".zip",
         }
 
     def preprocess_data(
-        self, data: np.ndarray, bad_channels: list[int], selected_features
-    ) -> np.ndarray:
+        self, data: np.ndarray, bad_channels: list[int], selected_features: list[str]
+    ) -> np.ndarray | None:
+        """
+        Preprocess incoming EMG data for real-time prediction.
+
+        Uses GPU-accelerated TensorTransforms from MyoVerse v2.
+        """
         self.emg_buffer.append(data[CHANNELS])
         if len(self.emg_buffer) > self.buffer_size__chunks:
             self.emg_buffer.pop(0)
 
-            frame_data = np.concatenate(self.emg_buffer, axis=-1)[None]
+            # Concatenate buffer
+            frame_data = np.concatenate(self.emg_buffer, axis=-1)
 
-            bad_channels = list(set(bad_channels + self.dataset_bad_channels))
-            if len(bad_channels) > 0:
-                frame_data = np.delete(frame_data, bad_channels, axis=2)
+            # Remove bad channels (axis=0 since shape is (channels, time))
+            combined_bad_channels = list(set(bad_channels + self.dataset_bad_channels))
+            if combined_bad_channels:
+                # Validate channel indices are within bounds
+                n_channels = frame_data.shape[0]
+                valid_bad_channels = [
+                    ch for ch in combined_bad_channels if 0 <= ch < n_channels
+                ]
+                if valid_bad_channels:
+                    frame_data = np.delete(frame_data, valid_bad_channels, axis=0)
 
-            frame_data = EMGData(
-                input_data=frame_data, sampling_frequency=self.sampling_frequency
+            # Apply notch filter (numpy, on CPU)
+            frame_data = sosfilt(self._notch_sos, frame_data, axis=-1)
+
+            # Convert to tensor on device (GPU if available)
+            frame_tensor = torch.from_numpy(frame_data.astype(np.float32)).to(
+                self._device
             )
+            frame_tensor = frame_tensor.rename("channel", "time")
 
-            frame_data.apply_filter(
-                SOSFrequencyFilter(
-                    sos_filter_coefficients=butter(
-                        4,
-                        (47, 53),
-                        "bandstop",
-                        output="sos",
-                        fs=self.sampling_frequency,
-                    ),
-                    name="SOSFilter",
-                    forwards_and_backwards=False,
-                    input_is_chunked=False,
-                ),
-                representations_to_filter=["Input"],
-            )
+            # Apply feature transforms (using cached transforms for performance)
+            all_features = []
+            for feature_name in selected_features:
+                feature_transform = self._get_or_create_feature_transform(feature_name)
+                feature_result = feature_transform(frame_tensor)
 
-            emg_filters = []
-            for feature in selected_features:
-                try:
-                    emg_filters.append(
-                        CONFIG_REGISTRY.features_map[feature](
-                            is_output=False,
-                            window_size=self.buffer_size__samples,
-                            input_is_chunked=False,
-                        )
-                    )
-                except TypeError:
-                    emg_filters.append(
-                        CONFIG_REGISTRY.features_map[feature](is_output=False, input_is_chunked=False)
-                    )  # noqa
+                # Keep full time dimension, don't extract just last sample
+                # feature_result shape: (channels, time)
+                feature_result = feature_result.rename(None)
 
-            frame_data.apply_filter_pipeline(
-                [
-                    [
-                        emg_filter,  # noqa
-                        ApplyFunctionFilter(
-                            is_output=True,
-                            function=standardize_data,
-                            mean=self.dataset_mean[feature],
-                            std=self.dataset_std[feature],
-                            name=feature,
-                            input_is_chunked=False,
-                        ),
-                    ]
-                    for feature, emg_filter in zip(selected_features, emg_filters)
-                ],
-                representations_to_filter=[["SOSFilter"]] * len(selected_features),
-            )
+                # Standardize (use EPSILON to prevent division by zero)
+                mean = self.dataset_mean[feature_name]
+                std = max(self.dataset_std[feature_name], EPSILON)
+                feature_result = (feature_result - mean) / std
 
-            frame_data = np.concatenate(
-                [x for x in frame_data.output_representations.values()], axis=1
-            )
+                all_features.append(feature_result)
 
-            return frame_data
+            # Stack features along channel dimension: (n_features * channels, time)
+            result = torch.cat(all_features, dim=0)
+
+            # Add batch dimension: (1, n_features * channels, time)
+            result = result.unsqueeze(0)
+
+            # Convert to numpy (move to CPU if needed)
+            return result.cpu().numpy()
+
         return None
 
     def set_online_parameters(self, dataset_information: dict) -> None:

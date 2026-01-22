@@ -114,70 +114,7 @@
       </item>
      </layout>
     </item>
-    <item row="1" column="0">
-     <widget class="QGroupBox" name="loggingGroupBox">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>200</height>
-       </size>
-      </property>
-      <property name="title">
-       <string>Logging</string>
-      </property>
-      <layout class="QGridLayout" name="gridLayout_14">
-       <item row="1" column="0" colspan="2">
-        <widget class="QScrollArea" name="loggingScrollArea">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="widgetResizable">
-          <bool>true</bool>
-         </property>
-         <widget class="QWidget" name="loggingScrollAreaWidgetContents">
-          <property name="geometry">
-           <rect>
-            <x>0</x>
-            <y>0</y>
-            <width>298</width>
-            <height>186</height>
-           </rect>
-          </property>
-          <layout class="QGridLayout" name="gridLayout_15">
-           <item row="0" column="0">
-            <widget class="QTextEdit" name="loggingTextEdit"/>
-           </item>
-          </layout>
-         </widget>
-        </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QLabel" name="label_4">
-         <property name="text">
-          <string>FPS:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="1">
-        <widget class="QLabel" name="appUpdateFPSLabel">
-         <property name="text">
-          <string>Placeholder</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-    </item>
-    <item row="0" column="0">
+    <item row="0" column="0" rowspan="2">
      <widget class="QTabWidget" name="mindMoveTabWidget">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
@@ -686,7 +623,7 @@
               </property>
               <property name="minimumSize">
                <size>
-                <width>122</width>
+                <width>0</width>
                 <height>0</height>
                </size>
               </property>
@@ -697,7 +634,7 @@
                </size>
               </property>
               <property name="title">
-               <string>Real-Time FIlters</string>
+               <string>Real-Time Filters</string>
               </property>
               <layout class="QGridLayout" name="gridLayout_16">
                <item row="0" column="0">
@@ -749,6 +686,47 @@
            </item>
           </layout>
          </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="loggingTab">
+       <attribute name="title">
+        <string>Logging</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="loggingTabLayout">
+        <item>
+         <layout class="QHBoxLayout" name="fpsLayout">
+          <item>
+           <widget class="QLabel" name="label_4">
+            <property name="text">
+             <string>FPS:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="appUpdateFPSLabel">
+            <property name="text">
+             <string>Placeholder</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="fpsHorizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QTextEdit" name="loggingTextEdit"/>
         </item>
        </layout>
       </widget>

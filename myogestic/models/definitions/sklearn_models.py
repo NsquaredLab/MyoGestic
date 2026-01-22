@@ -10,6 +10,20 @@ import numpy as np
 from myogestic.gui.widgets.logger import CustomLogger
 
 
+def _flatten_3d_to_2d(data: np.ndarray) -> np.ndarray:
+    """Flatten 3D data (samples, channels, time) to 2D (samples, features)."""
+    if data.ndim == 3:
+        return data.reshape(data.shape[0], data.shape[1] * data.shape[2])
+    return data
+
+
+def _extract_classifier_prediction(prediction: np.ndarray):
+    """Extract single prediction value for classifier output."""
+    if prediction.ndim == 2:
+        return prediction[0, 0]
+    return prediction[0]
+
+
 def save(model_path: str, model: object) -> str:
     """
     Save a sklearn model.
@@ -74,20 +88,15 @@ def train(model: object, dataset, is_classifier: bool, _: CustomLogger) -> objec
         The trained sklearn model.
 
     """
-    x_train = dataset["emg"][()]
-
-    x_train = np.reshape(
-        x_train, (x_train.shape[0], x_train.shape[1] * x_train.shape[2])
-    )
+    x_train = _flatten_3d_to_2d(dataset["emg"][()])
 
     if is_classifier:
         y_train = dataset["classes"][()]
     else:
         y_train = dataset["kinematics"][()]
-        # add small noise to the target to avoid errors
-        y_train[y_train == 0] = np.random.uniform(
-            0.0001, 0.001, y_train[y_train == 0].shape
-        )
+        # Add small noise to zero targets to avoid numerical errors
+        zero_mask = y_train == 0
+        y_train[zero_mask] = np.random.uniform(0.0001, 0.001, zero_mask.sum())
 
     model.fit(x_train, y_train)
     return model
@@ -115,16 +124,10 @@ def predict(
         Otherwise, the prediction is a list of floats.
 
     """
-    prediction = model.predict(
-        np.reshape(input, (input.shape[0], input.shape[1] * input.shape[2]))
-    )
+    input_2d = _flatten_3d_to_2d(input)
+    prediction = model.predict(input_2d)
 
     if is_classifier:
-        try:
-            prediction = prediction[0, 0]
-        except IndexError:
-            prediction = prediction[0]
-
-        return prediction
+        return _extract_classifier_prediction(prediction)
 
     return list(prediction[0])

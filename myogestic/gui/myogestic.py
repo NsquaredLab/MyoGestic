@@ -101,6 +101,14 @@ class MyoGestic(QMainWindow):
         self.device__widget.biosignal_data_arrived.connect(self.update)
         self.device__widget.configure_toggled.connect(self._prepare_plot)
 
+        # Connect device status signals for user feedback
+        self.device__widget.connect_toggled.connect(self._on_device_connect_toggled)
+        self.device__widget.stream_toggled.connect(self._on_device_stream_toggled)
+
+        # Add tooltips for better usability
+        self.ui.timeShownDoubleSpinBox.setToolTip("Adjust the time window displayed in the EMG plot (in seconds)")
+        self.ui.toggleVispyPlotCheckBox.setToolTip("Show/hide the EMG signal plot while streaming")
+
         self.ui.timeShownDoubleSpinBox.valueChanged.connect(self._reconfigure_plot)
 
         # Device parameters
@@ -233,6 +241,26 @@ class MyoGestic(QMainWindow):
         if self._toggle_vispy_plot__check_box.isChecked():
             self._plot__widget.update_plot(data[: self._number_of_channels] * 5)
 
+    def _on_device_connect_toggled(self, is_connected: bool) -> None:
+        """Handle device connection status changes."""
+        if is_connected:
+            self.logger.print("Device connected successfully!")
+            self.ui.statusbar.showMessage("Device connected - Ready to configure", 5000)
+        else:
+            self.logger.print("Device disconnected.")
+            self.ui.statusbar.showMessage("Device disconnected", 5000)
+            # Show placeholder when device disconnects
+            self._plot__widget.show_placeholder()
+
+    def _on_device_stream_toggled(self, is_streaming: bool) -> None:
+        """Handle device streaming status changes."""
+        if is_streaming:
+            self.logger.print("Streaming started!")
+            self.ui.statusbar.showMessage("Streaming EMG data...", 5000)
+        else:
+            self.logger.print("Streaming stopped.")
+            self.ui.statusbar.showMessage("Streaming stopped", 5000)
+
     def _prepare_plot(self, is_configured: bool) -> None:
         """
         Prepare the plot widget.
@@ -246,6 +274,9 @@ class MyoGestic(QMainWindow):
         if not is_configured:
             self.logger.print("Device not configured!")
             return
+
+        self.logger.print("Device configured successfully!")
+        self.ui.statusbar.showMessage("Device configured - Ready to stream", 5000)
 
         device_information = self.device__widget.get_device_information()
         self._device_name = device_information["name"]
