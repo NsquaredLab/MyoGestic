@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0]
+Improved stability, UI enhancements, and new recording capabilities.
+
+### Added
+- Ctrl+C signal handling for graceful application shutdown.
+- Default Recording Interface for recording without visual interface.
+
+### Changed
+- Improved main window UI layout and sizing.
+- Updated visual interface UIs.
+- Minor GUI improvements and fixes.
+- Updated dependencies.
+- Migrated biosignal-device-interface from git submodule to PyPI (>=0.2.4).
+
 ## [0.7.0]
 Improved UI/UX and macOS compatibility.
 
@@ -63,7 +77,8 @@ Enhanced user interface and improved cross-platform compatibility.
 ### Removed
 - Redundant parameters and dead code in dataset module.
 
-[Unreleased]: https://github.com/NsquaredLab/MyoGestic/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/NsquaredLab/MyoGestic/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/NsquaredLab/MyoGestic/compare/v0.5.0...v0.5.1
