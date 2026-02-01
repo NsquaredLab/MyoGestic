@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import numpy as np
 from PySide6.QtCore import QObject
@@ -12,6 +12,7 @@ from myogestic.gui.widgets.templates.visual_interface import VisualInterface
 
 if TYPE_CHECKING:
     from myogestic.gui.myogestic import MyoGestic
+    from myogestic.gui.widgets.default_recording import DefaultRecordingInterface
 
 
 PROGRESS_BAR_MAX = 100
@@ -50,6 +51,7 @@ class RecordProtocol(QObject):
 
         self._sampling_frequency: Optional[int] = None
         self._selected_visual_interface: Optional[VisualInterface] = None
+        self._default_recording_interface: Optional[DefaultRecordingInterface] = None
 
         self._recording_duration: float = 0.0
         self._biosignal__buffer: list[Tuple[float, np.ndarray]] = []
@@ -59,7 +61,7 @@ class RecordProtocol(QObject):
         self.recording_start_time: float = 0.0
 
     def start_recording_preparation(self, duration: float) -> bool:
-        """Prepare for EMG data recording.
+        """Prepare for EMG data recording with visual interface.
 
         Parameters
         ----------
@@ -78,11 +80,51 @@ class RecordProtocol(QObject):
             )
             return False
 
+        # Clear default recording interface reference when using VI
+        self._default_recording_interface = None
+
         device_widget = self._main_window.device__widget
 
         if not device_widget._get_current_widget()._device._is_streaming:  # noqa
             self._main_window.logger.print("Biosignal device is not streaming!", level=LoggerLevel.ERROR)
             return False
+
+        self._sampling_frequency = device_widget.get_device_information()["sampling_frequency"]
+        self._recording_duration = duration
+        self._biosignal__buffer.clear()
+        self.is_biosignal_recording_complete = False
+        self.recording_start_time = time.time()
+
+        device_widget.data_arrived.connect(self.update_biosignal_buffer)
+        return True
+
+    def start_recording_preparation_default(
+        self, duration: float, default_interface: DefaultRecordingInterface
+    ) -> bool:
+        """Prepare for EMG data recording with the default recording interface.
+
+        This is used when no visual interface is open.
+
+        Parameters
+        ----------
+        duration : float
+            Duration of the recording in seconds.
+        default_interface : DefaultRecordingInterface
+            The default recording interface instance.
+
+        Returns
+        -------
+        bool
+            True if preparation succeeds, False otherwise.
+        """
+        device_widget = self._main_window.device__widget
+
+        if not device_widget._get_current_widget()._device._is_streaming:  # noqa
+            self._main_window.logger.print("Biosignal device is not streaming!", level=LoggerLevel.ERROR)
+            return False
+
+        # Store reference to default interface for completion callback
+        self._default_recording_interface = default_interface
 
         self._sampling_frequency = device_widget.get_device_information()["sampling_frequency"]
         self._recording_duration = duration
@@ -120,7 +162,10 @@ class RecordProtocol(QObject):
         self.is_biosignal_recording_complete = True
         self._main_window.device__widget.data_arrived.disconnect(self.update_biosignal_buffer)
 
-        if self._selected_visual_interface:
+        # Handle completion callback for either VI recording or default recording
+        if self._default_recording_interface is not None:
+            self._default_recording_interface.check_recording_completion()
+        elif self._selected_visual_interface:
             self._selected_visual_interface.recording_interface_ui.check_recording_completion()
 
     def retrieve_recorded_data(self) -> Tuple[np.ndarray, np.ndarray]:
