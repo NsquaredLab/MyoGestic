@@ -256,7 +256,7 @@ wheels = [
 [[package]]
 name = "biosignal-device-interface"
 version = "0.2.2"
-source = { git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git#9c3f30c75ec9f0a598d8b22c2e43db184f28c340" }
+source = { editable = "../Biosignal-Device-Interface" }
 dependencies = [
     { name = "aenum", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "matplotlib", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
@@ -266,6 +266,18 @@ dependencies = [
     { name = "scipy", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "tornado", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "vispy", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aenum", specifier = ">=3.1.15,<4.0.0" },
+    { name = "matplotlib", specifier = ">=3.9.0,<4.0.0" },
+    { name = "numpy", specifier = ">=1.26.4,<2.0.0" },
+    { name = "psutil", specifier = ">=5.9.8,<6.0.0" },
+    { name = "pyside6", specifier = ">=6.7.0,<7.0.0" },
+    { name = "scipy", specifier = ">=1.14.0,<2.0.0" },
+    { name = "tornado", specifier = ">=6.4.2,<7.0.0" },
+    { name = "vispy", specifier = ">=0.14.3,<0.15.0" },
 ]
 
 [[package]]
@@ -1497,7 +1509,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "biosignal-device-interface", git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git" },
+    { name = "biosignal-device-interface", editable = "../Biosignal-Device-Interface" },
     { name = "catboost", specifier = ">=1.2.7" },
     { name = "myoverse", git = "https://github.com/NsquaredLab/MyoVerse.git" },
     { name = "numcodecs", specifier = "!=0.16" },
@@ -3332,11 +3344,11 @@ dependencies = [
     { name = "typing-extensions", marker = "sys_platform == 'darwin'" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp312-none-macosx_11_0_arm64.whl" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp313-cp313t-macosx_14_0_arm64.whl" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp313-none-macosx_11_0_arm64.whl" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp314-cp314-macosx_14_0_arm64.whl" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp314-cp314t-macosx_14_0_arm64.whl" },
+    { url = "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:45a1c5057629444aeb1c452c18298fa7f30f2f7aeadd4dc41f9d340980294407" },
+    { url = "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp313-cp313t-macosx_14_0_arm64.whl", hash = "sha256:339e05502b6c839db40e88720cb700f5a3b50cda332284873e851772d41b2c1e" },
+    { url = "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp313-none-macosx_11_0_arm64.whl", hash = "sha256:840351da59cedb7bcbc51981880050813c19ef6b898a7fecf73a3afc71aff3fe" },
+    { url = "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:c88b1129fd4e14f0f882963c6728315caae35d2f47374d17edeed1edc7697497" },
+    { url = "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp314-cp314t-macosx_14_0_arm64.whl", hash = "sha256:f4bea7dc451267c028593751612ad559299589304e68df54ae7672427893ff2c" },
 ]
 
 [[package]]

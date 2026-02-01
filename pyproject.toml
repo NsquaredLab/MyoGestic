@@ -35,7 +35,7 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-biosignal-device-interface = { git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git" }
+biosignal-device-interface = { path = "../Biosignal-Device-Interface", editable = true }
 sphinxcontrib-pdfembed = { git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git" }
 myoverse = { git = "https://github.com/NsquaredLab/MyoVerse.git" }
 torch = [
