@@ -30,6 +30,8 @@ BUFFER_SIZE__CHUNKS: int = 20
 GROUND_TRUTH_INDICES_TO_KEEP: dict[Literal, list] | Literal["all"] = {
     "VHI": [0, 2, 3, 4, 5],
     "VCI": [0, 1],
+    "KHI": [0, 1, 2, 3, 4, 5, 6],
+    "Default": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],  # All 10 VHI-style movements
 }
 
 # Register models
