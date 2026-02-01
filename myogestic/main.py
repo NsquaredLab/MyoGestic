@@ -1,7 +1,9 @@
 import os
+import signal
 import sys
 
 import qdarkstyle
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
 # add myogestic to sys.path
@@ -79,8 +81,23 @@ QToolTip {
 }
 """
 
+
+def sigint_handler(*args):
+    """Handle Ctrl+C by quitting the application."""
+    QApplication.quit()
+
+
 if __name__ == "__main__":
+    # Set up signal handler before creating QApplication
+    signal.signal(signal.SIGINT, sigint_handler)
+
     app = QApplication(sys.argv)
+
+    # Timer allows Python to process signals during Qt event loop
+    timer = QTimer()
+    timer.start(500)  # Check every 500ms
+    timer.timeout.connect(lambda: None)  # Empty handler keeps Python responsive
+
     app.setStyle("Fusion")
     # Combine qdarkstyle with custom improvements
     base_stylesheet = qdarkstyle.load_stylesheet(qt_api="pyside6")
