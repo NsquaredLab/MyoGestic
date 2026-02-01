@@ -21,6 +21,7 @@ from biosignal_device_interface.constants.devices.core.base_device_constants imp
 from myogestic.gui.biosignal import Ui_BioSignalInterface
 from myogestic.gui.main_window import Ui_MyoGestic
 from myogestic.gui.protocols.protocol import Protocol
+from myogestic.gui.widgets.default_recording import DefaultRecordingInterface
 from myogestic.gui.widgets.logger import CustomLogger
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface
 from myogestic.user_config import DEFAULT_DEVICE_TO_USE, CHANNELS
@@ -148,6 +149,14 @@ class MyoGestic(QMainWindow):
             ) in CONFIG_REGISTRY.visual_interfaces_map.items()
         }
 
+        # Default Recording Interface (shown when no VI is open)
+        self._default_recording_interface = DefaultRecordingInterface(self)
+        self._default_recording_interface.initialize()
+        # Hide VI-specific recording interfaces initially
+        for vi in self._visual_interfaces__dict.values():
+            vi.recording_interface_ui.ui.recordRecordingGroupBox.hide()
+            vi.recording_interface_ui.ui.recordReviewRecordingStackedWidget.hide()
+
         # Preferences
         self._toggle_vispy_plot__check_box: QCheckBox = self.ui.toggleVispyPlotCheckBox
 
@@ -169,6 +178,9 @@ class MyoGestic(QMainWindow):
         Toggles the selected visual interface.
 
         This methods sets all other visual interfaces to disabled and enables the selected visual interface.
+        It also manages the visibility of recording interfaces:
+        - When a VI is opened: hide default recording UI, show VI-specific recording UI
+        - When a VI is closed: show default recording UI, hide VI-specific recording UI
 
         Parameters
         ----------
@@ -180,14 +192,26 @@ class MyoGestic(QMainWindow):
         None
         """
         if self.selected_visual_interface:
+            # VI is being closed - hide its recording interface, show default
+            self.selected_visual_interface.recording_interface_ui.ui.recordRecordingGroupBox.hide()
+            self.selected_visual_interface.recording_interface_ui.ui.recordReviewRecordingStackedWidget.hide()
+            self._default_recording_interface.show()
+
             for visual_interface in self._visual_interfaces__dict.values():
                 visual_interface.enable_ui()
             self.selected_visual_interface = None
         else:
+            # VI is being opened - hide default recording interface, show VI-specific
+            self._default_recording_interface.hide()
+
             for visual_interface in self._visual_interfaces__dict.values():
                 if visual_interface.name != name:
                     visual_interface.disable_ui()
             self.selected_visual_interface = self._visual_interfaces__dict[name]
+
+            # Show the recording interface for the selected VI
+            self.selected_visual_interface.recording_interface_ui.ui.recordRecordingGroupBox.show()
+            self.selected_visual_interface.recording_interface_ui.ui.recordReviewRecordingStackedWidget.show()
 
         self._protocol__helper_class._pass_on_selected_visual_interface()
 
