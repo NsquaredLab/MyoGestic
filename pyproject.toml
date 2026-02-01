@@ -1,6 +1,6 @@
 [project]
 name = "MyoGestic"
-version = "0.7.0"
+version = "0.8.0"
 description = "Software framework made to help the myocontrol community to develop and test new myocontrol algorithms."
 authors = [
     { name = "Raul C. Sîmpetru", email = "raul.simpetru@fau.de" },
