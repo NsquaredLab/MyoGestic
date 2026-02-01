@@ -30,7 +30,9 @@ class Ui_MyoGestic(object):
     def setupUi(self, MyoGestic):
         if not MyoGestic.objectName():
             MyoGestic.setObjectName(u"MyoGestic")
-        MyoGestic.resize(945, 971)
+        MyoGestic.resize(1000, 960)
+        MyoGestic.setMinimumSize(QSize(1000, 960))
+        MyoGestic.setMaximumSize(QSize(1000, 16777215))
         MyoGestic.setWindowTitle(u"MyoGestic - n-squared lab @ AIBE @ FAU")
         self.actionPreferences = QAction(MyoGestic)
         self.actionPreferences.setObjectName(u"actionPreferences")
@@ -112,6 +114,10 @@ class Ui_MyoGestic(object):
         self.setupVerticalLayout.setObjectName(u"setupVerticalLayout")
 
         self.gridLayout_6.addLayout(self.setupVerticalLayout, 0, 0, 1, 1)
+
+        self.setupVerticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+
+        self.gridLayout_6.addItem(self.setupVerticalSpacer, 1, 0, 1, 1)
 
         self.mindMoveTabWidget.addTab(self.setupTab, "")
         self.procotolWidget = QWidget()
@@ -278,7 +284,7 @@ class Ui_MyoGestic(object):
         self.onlineWidget.setObjectName(u"onlineWidget")
         self.gridLayout_4 = QGridLayout(self.onlineWidget)
         self.gridLayout_4.setObjectName(u"gridLayout_4")
-        self.verticalSpacer_3 = QSpacerItem(10, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        self.verticalSpacer_3 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.gridLayout_4.addItem(self.verticalSpacer_3, 2, 0, 1, 1)
 
