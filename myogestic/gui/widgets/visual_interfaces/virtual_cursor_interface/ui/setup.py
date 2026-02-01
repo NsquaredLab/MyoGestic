@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'setup.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.6.2
+## Created by: Qt User Interface Compiler version 6.10.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -68,7 +68,7 @@ class Ui_SetupVirtualCursorInterface(object):
     def retranslateUi(self, SetupVirtualCursorInterface):
         SetupVirtualCursorInterface.setWindowTitle(QCoreApplication.translate("SetupVirtualCursorInterface", u"Form", None))
         self.groupBox.setTitle(QCoreApplication.translate("SetupVirtualCursorInterface", u"Virtual Cursor Interface", None))
-        self.useExternalVirtualCursorInterfaceCheckBox.setText(QCoreApplication.translate("SetupVirtualCursorInterface", u"Use ext. Virtual Cursor Interface", None))
+        self.useExternalVirtualCursorInterfaceCheckBox.setText(QCoreApplication.translate("SetupVirtualCursorInterface", u"Use external", None))
         self.toggleVirtualCursorInterfacePushButton.setText(QCoreApplication.translate("SetupVirtualCursorInterface", u"Open", None))
     # retranslateUi
 
