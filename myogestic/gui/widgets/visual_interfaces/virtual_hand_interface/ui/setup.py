@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'setup.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.6.2
+## Created by: Qt User Interface Compiler version 6.10.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -16,7 +16,7 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QGridLayout, QGroupBox,
-    QPushButton, QSizePolicy, QWidget)
+    QPushButton, QSizePolicy, QSpacerItem, QWidget)
 
 class Ui_SetupVirtualHandInterface(object):
     def setupUi(self, SetupVirtualHandInterface):
@@ -44,13 +44,17 @@ class Ui_SetupVirtualHandInterface(object):
         self.virtualHandInterfaceStatusWidget.setMinimumSize(QSize(10, 10))
         self.virtualHandInterfaceStatusWidget.setStyleSheet(u"border-radius: 5px;")
 
-        self.gridLayout_31.addWidget(self.virtualHandInterfaceStatusWidget, 0, 3, 1, 1)
+        self.gridLayout_31.addWidget(self.virtualHandInterfaceStatusWidget, 0, 2, 1, 1)
 
         self.toggleVirtualHandInterfacePushButton = QPushButton(self.groupBox)
         self.toggleVirtualHandInterfacePushButton.setObjectName(u"toggleVirtualHandInterfacePushButton")
         self.toggleVirtualHandInterfacePushButton.setCheckable(True)
 
         self.gridLayout_31.addWidget(self.toggleVirtualHandInterfacePushButton, 0, 0, 1, 2)
+
+        self.horizontalSpacer = QSpacerItem(17, 20, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+
+        self.gridLayout_31.addItem(self.horizontalSpacer, 0, 5, 1, 1)
 
 
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
@@ -64,7 +68,7 @@ class Ui_SetupVirtualHandInterface(object):
     def retranslateUi(self, SetupVirtualHandInterface):
         SetupVirtualHandInterface.setWindowTitle(QCoreApplication.translate("SetupVirtualHandInterface", u"Form", None))
         self.groupBox.setTitle(QCoreApplication.translate("SetupVirtualHandInterface", u"Virtual Hand Interface", None))
-        self.useExternalVirtualHandInterfaceCheckBox.setText(QCoreApplication.translate("SetupVirtualHandInterface", u"Use external Virtual Hand Interface", None))
+        self.useExternalVirtualHandInterfaceCheckBox.setText(QCoreApplication.translate("SetupVirtualHandInterface", u"Use external", None))
         self.toggleVirtualHandInterfacePushButton.setText(QCoreApplication.translate("SetupVirtualHandInterface", u"Open", None))
     # retranslateUi
 

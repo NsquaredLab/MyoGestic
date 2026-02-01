@@ -23,7 +23,7 @@
       <item row="0" column="4">
        <widget class="QCheckBox" name="useExternalVirtualCursorInterfaceCheckBox">
         <property name="text">
-         <string>Use ext. Virtual Cursor Interface</string>
+         <string>Use external</string>
         </property>
        </widget>
       </item>
