@@ -10,7 +10,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "biosignal-device-interface",
+    "biosignal-device-interface>=0.2.4",
     "catboost>=1.2.7",
     "myoverse>=1.1.3",
     "numcodecs!=0.16",
@@ -35,7 +35,6 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-biosignal-device-interface = { path = "../Biosignal-Device-Interface", editable = true }
 sphinxcontrib-pdfembed = { git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git" }
 myoverse = { git = "https://github.com/NsquaredLab/MyoVerse.git" }
 torch = [

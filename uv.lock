@@ -255,8 +255,8 @@ wheels = [
 
 [[package]]
 name = "biosignal-device-interface"
-version = "0.2.2"
-source = { editable = "../Biosignal-Device-Interface" }
+version = "0.2.4"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aenum", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "matplotlib", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
@@ -267,17 +267,9 @@ dependencies = [
     { name = "tornado", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "vispy", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "aenum", specifier = ">=3.1.15,<4.0.0" },
-    { name = "matplotlib", specifier = ">=3.9.0,<4.0.0" },
-    { name = "numpy", specifier = ">=1.26.4,<2.0.0" },
-    { name = "psutil", specifier = ">=5.9.8,<6.0.0" },
-    { name = "pyside6", specifier = ">=6.7.0,<7.0.0" },
-    { name = "scipy", specifier = ">=1.14.0,<2.0.0" },
-    { name = "tornado", specifier = ">=6.4.2,<7.0.0" },
-    { name = "vispy", specifier = ">=0.14.3,<0.15.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/0b/81/8c41d97cdd0adc7ffe11185616c13127f0475bd8a06156ad80525aadc803/biosignal_device_interface-0.2.4.tar.gz", hash = "sha256:d208c58402d1ed2029fe9b7dad2a149540ce54d707bfd497dad3d038d5e206a0", size = 52330, upload-time = "2026-02-01T21:16:58.72Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a3/df/3d49991e3c8968ddc365940f396042d73a50e51fb524f846b888553714af/biosignal_device_interface-0.2.4-py3-none-any.whl", hash = "sha256:ad7df13ea7f3caa9908ec0694afa4ebadd84d36f5b51aab7e2750872550a08c2", size = 81942, upload-time = "2026-02-01T21:16:59.568Z" },
 ]
 
 [[package]]
@@ -1509,7 +1501,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "biosignal-device-interface", editable = "../Biosignal-Device-Interface" },
+    { name = "biosignal-device-interface", specifier = ">=0.2.4" },
     { name = "catboost", specifier = ">=1.2.7" },
     { name = "myoverse", git = "https://github.com/NsquaredLab/MyoVerse.git" },
     { name = "numcodecs", specifier = "!=0.16" },
