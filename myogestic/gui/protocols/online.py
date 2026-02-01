@@ -328,13 +328,22 @@ class OnlineProtocol(QObject):
         if len(self.active_monitoring_widgets) != 0:
             self._send_model_information()
 
-        # Remove virtual interface which is not used
+        # Remove visual interface output systems that don't match the currently active one
         current_output_map = CONFIG_REGISTRY.output_systems_map.copy()
+        active_vi = self._main_window.selected_visual_interface
+        active_vi_name = active_vi.name if active_vi is not None else None
+        trained_vi_name = self._model_information__dict.get("visual_interface")
 
-        if "VHI" == self._model_information__dict["visual_interface"]:
-            del current_output_map["VCI"]
-        elif "VCI" == self._model_information__dict["visual_interface"]:
-            del current_output_map["VHI"]
+        if trained_vi_name and active_vi_name and trained_vi_name != active_vi_name:
+            self._main_window.logger.print(
+                f"Warning: Model was trained with visual interface '{trained_vi_name}' "
+                f"but the currently active interface is '{active_vi_name}'.",
+                LoggerLevel.WARNING,
+            )
+
+        for vi_name in CONFIG_REGISTRY.visual_interfaces_map:
+            if vi_name != active_vi_name and vi_name in current_output_map:
+                del current_output_map[vi_name]
 
         self._output_systems__dict = {
             k: v(self._main_window, self._model_interface.model.is_classifier) for k, v in current_output_map.items()
