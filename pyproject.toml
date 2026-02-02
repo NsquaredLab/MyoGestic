@@ -10,7 +10,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "biosignal-device-interface>=0.2.4",
+    "biosignal-device-interface>=0.2.5",
     "catboost>=1.2.7",
     "myoverse>=1.1.3",
     "numcodecs!=0.16",
