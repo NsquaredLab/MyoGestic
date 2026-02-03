@@ -10,7 +10,6 @@ from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
     QLabel,
-    QMainWindow,
     QGroupBox,
     QVBoxLayout,
 )
@@ -21,6 +20,7 @@ from biosignal_device_interface.constants.devices.core.base_device_constants imp
 from myogestic.gui.biosignal import Ui_BioSignalInterface
 from myogestic.gui.main_window import Ui_MyoGestic
 from myogestic.gui.protocols.protocol import Protocol
+from myogestic.gui.scalable_window import ScalableMainWindow
 from myogestic.gui.widgets.default_recording import DefaultRecordingInterface
 from myogestic.gui.widgets.logger import CustomLogger
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface
@@ -39,12 +39,15 @@ if TYPE_CHECKING:
 from PySide6.QtCore import qInstallMessageHandler
 
 
-class MyoGestic(QMainWindow):
+class MyoGestic(ScalableMainWindow):
     """
     Main window of the MyoGestic application.
 
     This class is the main window of the MyoGestic application. It contains the
     main user interface and connects the different parts of the application.
+
+    Inherits from ScalableMainWindow to provide zoom-like scaling behavior,
+    allowing the UI to scale proportionally when the window is resized.
 
     Attributes
     ----------
@@ -59,8 +62,10 @@ class MyoGestic(QMainWindow):
     """
 
     def __init__(self):
-        super().__init__()
+        # Initialize with the original design dimensions from main_window.ui
+        super().__init__(original_width=1000, original_height=960, allow_upscaling=True)
 
+        # Setup UI on self (requires QMainWindow methods like setCentralWidget)
         self.ui = Ui_MyoGestic()
         self.ui.setupUi(self)
 
@@ -172,6 +177,54 @@ class MyoGestic(QMainWindow):
 
         # Set the title of the main window
         self.setWindowTitle("MyoGestic")
+
+        # Enable hybrid scaling - the plot widget stays native (for OpenGL compatibility)
+        # while the tab widget (controls) scales proportionally
+        # This must be called AFTER all UI setup is complete
+        self._setup_hybrid_scaling()
+
+    def _setup_hybrid_scaling(self) -> None:
+        """
+        Set up hybrid scaling with the controls panel scaled and the plot native.
+
+        This extracts the tab widget and plot area, then uses enableHybridScaling
+        to make the controls scale while keeping the OpenGL plot native.
+        """
+        from PySide6.QtCore import QSize
+        from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+
+        # Create a container for the plot area (plot controls + plot widget)
+        plot_container = QWidget()
+        plot_layout = QVBoxLayout(plot_container)
+        plot_layout.setContentsMargins(5, 5, 5, 5)
+        plot_layout.setSpacing(5)
+
+        # Create a horizontal layout for the plot controls
+        controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.addWidget(self.ui.toggleVispyPlotCheckBox)
+        controls_layout.addWidget(self.ui.label_9)
+        controls_layout.addWidget(self.ui.timeShownDoubleSpinBox)
+        controls_layout.addStretch()
+
+        # Add controls and plot to the container
+        plot_layout.addLayout(controls_layout)
+        plot_layout.addWidget(self._plot__widget)
+
+        # Remove the minimum size constraint from the plot widget
+        # so the splitter can resize proportionally
+        self._plot__widget.setMinimumSize(QSize(0, 0))
+
+        # Get the tab widget - it will be scaled
+        tab_widget = self.ui.mindMoveTabWidget
+
+        # Use the original design size for the tab widget
+        # In the 1000x960 design, the tab widget is approximately 480px wide
+        # (~48% of 1000px) and 920px tall (full height minus padding)
+        scalable_size = QSize(480, 920)
+
+        # Enable hybrid scaling
+        self.enableHybridScaling(tab_widget, plot_container, scalable_size)
 
     def toggle_selected_visual_interface(self, name: str) -> None:
         """
