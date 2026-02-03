@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Optional, Any
 
 import numpy as np
 from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
+from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -133,7 +134,7 @@ class PopupWindowParameters(QDialog):
 
 
 class PopupWindowFeatures(QDialog):
-    def __init__(self, selected_features: list[str]):
+    def __init__(self, selected_features: list[str], model_name: str):
         super().__init__()
 
         self.selected_visual_interface: Optional[VisualInterface] = None
@@ -153,7 +154,23 @@ class PopupWindowFeatures(QDialog):
 
         self.checkboxes = []
 
+        # Get model's temporal preservation requirement
+        model_requires_temporal = CONFIG_REGISTRY.models_metadata_map.get(
+            model_name, {}
+        ).get("requires_temporal_preservation", False)
+
+        # Filter features based on model compatibility
         for feature in CONFIG_REGISTRY.features_map.keys():
+            feature_requires_temporal = CONFIG_REGISTRY.features_metadata_map.get(
+                feature, {}
+            ).get("requires_temporal_preservation", False)
+
+            # Only show features that match the model's temporal requirement
+            # - If model requires temporal preservation: show only temporal features
+            # - If model doesn't require temporal preservation: show only non-temporal features
+            if feature_requires_temporal != model_requires_temporal:
+                continue
+
             feature_checkbox = QCheckBox(feature)
             self.checkboxes.append(feature_checkbox)
             self.scroll_area_layout.addWidget(feature_checkbox)
@@ -268,9 +285,23 @@ class TrainingProtocol(QObject):
 
         self._selected_model_name: str = list(CONFIG_REGISTRY.models_map.keys())[0]
         self._model_changeable_parameters__dict = {}
-        self._selected_features__list: list[str] = [
-            list(CONFIG_REGISTRY.features_map.keys())[0]
+
+        # Select a default feature compatible with the initial model
+        model_requires_temporal = CONFIG_REGISTRY.models_metadata_map.get(
+            self._selected_model_name, {}
+        ).get("requires_temporal_preservation", False)
+
+        compatible_features = [
+            name
+            for name in CONFIG_REGISTRY.features_map.keys()
+            if CONFIG_REGISTRY.features_metadata_map.get(name, {}).get(
+                "requires_temporal_preservation", False
+            )
+            == model_requires_temporal
         ]
+        self._selected_features__list: list[str] = (
+            [compatible_features[0]] if compatible_features else []
+        )
 
         # Get configuration update
         # self._main_window.device__widget.configure_toggled.connect(
@@ -368,8 +399,15 @@ class TrainingProtocol(QObject):
                         [current_recording["biosignal"], recording["biosignal"]],
                         axis=-1,
                     )
+                    # Ensure ground_truth arrays have consistent dimensions before concatenating
+                    gt_current = current_recording["ground_truth"]
+                    gt_new = recording["ground_truth"]
+                    if gt_current.ndim == 1:
+                        gt_current = gt_current[np.newaxis, :]
+                    if gt_new.ndim == 1:
+                        gt_new = gt_new[np.newaxis, :]
                     recording["ground_truth"] = np.concatenate(
-                        [current_recording["ground_truth"], recording["ground_truth"]],
+                        [gt_current, gt_new],
                         axis=-1,
                     )
                     recording["biosignal_timings"] = np.concatenate(
@@ -489,6 +527,17 @@ class TrainingProtocol(QObject):
         self.training_create_dataset_label_line_edit.setText("")
         self.training_create_datasets_select_recordings_push_button.setEnabled(True)
         self._selected_recordings__dict = None
+
+        # Auto-select the newly created dataset
+        if hasattr(self, "_last_created_dataset_filepath"):
+            self._selected_dataset__filepath = self._last_created_dataset_filepath
+            self.training_selected_dataset_label.setText(
+                self._last_created_dataset_label.title()
+            )
+            self.train_model_push_button.setEnabled(True)
+            del self._last_created_dataset_filepath
+            del self._last_created_dataset_label
+
         self._main_window.logger.print("Dataset created!", LoggerLevel.INFO)
 
     def _create_dataset_thread(self) -> None:
@@ -513,8 +562,19 @@ class TrainingProtocol(QObject):
 
         file_name = f"{self._selected_visual_interface}_Dataset_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{label.lower()}"
 
+        # Determine feature window size based on selected model
+        # Models like RaulNet need smaller window sizes to preserve temporal dimension
+        model_metadata = CONFIG_REGISTRY.models_metadata_map.get(
+            self._selected_model_name, {}
+        )
+        feature_window_size = model_metadata.get("feature_window_size")  # None for sklearn
+
         dataset_dict = self._model_interface.create_dataset(
-            self._selected_recordings__dict, self._selected_features__list, file_name, self._selected_visual_interface
+            self._selected_recordings__dict,
+            self._selected_features__list,
+            file_name,
+            self._selected_visual_interface,
+            feature_window_size=feature_window_size,
         )
 
         dataset_dict["dataset_file_path"] = str(DATASETS_DIR_PATH / f"{file_name}.pkl")
@@ -523,8 +583,13 @@ class TrainingProtocol(QObject):
             dataset_dict["task_label_to_movement_map"] = self._task_label_to_movement_map
             dataset_dict["task_name_to_movement_map"] = self._task_name_to_movement_map
 
-        with (DATASETS_DIR_PATH / f"{file_name}.pkl").open("wb") as f:
+        dataset_filepath = DATASETS_DIR_PATH / f"{file_name}.pkl"
+        with dataset_filepath.open("wb") as f:
             pickle.dump(dataset_dict, f)
+
+        # Store for auto-selection after thread finishes
+        self._last_created_dataset_filepath = str(dataset_filepath)
+        self._last_created_dataset_label = label
 
     def _select_dataset(self) -> None:
         # Open dialog to select dataset
@@ -670,6 +735,25 @@ class TrainingProtocol(QObject):
         has_parameters = bool(self._model_changeable_parameters__dict)
         self.training_model_parameters_push_button.setEnabled(has_parameters)
 
+        # Reset selected features to the first compatible feature for the new model
+        model_requires_temporal = CONFIG_REGISTRY.models_metadata_map.get(
+            self._selected_model_name, {}
+        ).get("requires_temporal_preservation", False)
+
+        compatible_features = [
+            name
+            for name in CONFIG_REGISTRY.features_map.keys()
+            if CONFIG_REGISTRY.features_metadata_map.get(name, {}).get(
+                "requires_temporal_preservation", False
+            )
+            == model_requires_temporal
+        ]
+
+        if compatible_features:
+            self._selected_features__list = [compatible_features[0]]
+        else:
+            self._selected_features__list = []
+
     def _open_model_parameters_popup(self) -> None:
         self.popup_window = PopupWindowParameters(
             self._selected_model_name, self._main_window.logger
@@ -683,7 +767,9 @@ class TrainingProtocol(QObject):
         )
 
     def _open_feature_selection_popup(self) -> None:
-        self.popup_window = PopupWindowFeatures(self._selected_features__list)
+        self.popup_window = PopupWindowFeatures(
+            self._selected_features__list, self._selected_model_name
+        )
         self.popup_window.show()
         self.popup_window.finished.connect(self._get_features)
 
@@ -694,7 +780,57 @@ class TrainingProtocol(QObject):
         self._main_window.logger.print("Training Protocol Closed", LoggerLevel.INFO)
 
     def _setup_protocol_ui(self) -> None:
-        # Create Datasets
+        # 1. Select Model (first section - model determines feature window size)
+        self.training_model_selection_group_box = (
+            self._main_window.ui.trainingModelSelectionGroupBox
+        )
+        self.training_model_selection_combo_box = (
+            self._main_window.ui.trainingModelSelectionComboBox
+        )
+
+        # Create a model with groups (regressors and classifiers)
+        model = QStandardItemModel()
+
+        # Separate models into groups
+        regressors = []
+        classifiers = []
+        for name, (_, is_classifier) in CONFIG_REGISTRY.models_map.items():
+            if is_classifier:
+                classifiers.append(name)
+            else:
+                regressors.append(name)
+
+        # Add Regressors group
+        if regressors:
+            header = QStandardItem("── Regressors ──")
+            header.setEnabled(False)  # Non-selectable
+            model.appendRow(header)
+            for name in regressors:
+                model.appendRow(QStandardItem(name))
+
+        # Add Classifiers group
+        if classifiers:
+            header = QStandardItem("── Classifiers ──")
+            header.setEnabled(False)  # Non-selectable
+            model.appendRow(header)
+            for name in classifiers:
+                model.appendRow(QStandardItem(name))
+
+        self.training_model_selection_combo_box.setModel(model)
+
+        self.training_model_selection_combo_box.currentIndexChanged.connect(
+            self._update_model_selection
+        )
+        self.training_model_selection_combo_box.setCurrentIndex(1)  # First actual model (skip header)
+
+        self.training_model_parameters_push_button = (
+            self._main_window.ui.trainingModelParametersPushButton
+        )
+        self.training_model_parameters_push_button.clicked.connect(
+            self._open_model_parameters_popup
+        )
+
+        # 2. Create Datasets
         self.training_create_dataset_group_box = (
             self._main_window.ui.trainingCreateDatasetGroupBox
         )
@@ -768,7 +904,7 @@ class TrainingProtocol(QObject):
         self.training_create_dataset_push_button.clicked.connect(self._create_dataset)
         self.training_create_dataset_push_button.setEnabled(False)
 
-        # Train Model
+        # 3. Train Model
         self.training_train_model_group_box = (
             self._main_window.ui.trainingTrainModelGroupBox
         )
@@ -785,30 +921,8 @@ class TrainingProtocol(QObject):
 
         self.training_selected_dataset_label.setText(NO_DATASET_SELECTED_INFO)
 
-        self.training_model_selection_combo_box = (
-            self._main_window.ui.trainingModelSelectionComboBox
-        )
-        # set the models selection combo box
-        self.training_model_selection_combo_box.addItems(
-            list(CONFIG_REGISTRY.models_map.keys())
-        )
-        # connect the models selection combo box to the models selection function
-        self.training_model_selection_combo_box.currentIndexChanged.connect(
-            self._update_model_selection
-        )
-
-        self.training_model_selection_combo_box.setCurrentIndex(0)
-
         self.training_model_label_line_edit = (
             self._main_window.ui.trainingModelLabelLineEdit
-        )
-
-        self.training_model_parameters_push_button = (
-            self._main_window.ui.trainingModelParametersPushButton
-        )
-        # connect the models parameters push button to the models parameters popup
-        self.training_model_parameters_push_button.clicked.connect(
-            self._open_model_parameters_popup
         )
 
         self.train_model_push_button = self._main_window.ui.trainingTrainModelPushButton
