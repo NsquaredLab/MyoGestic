@@ -35,8 +35,15 @@ class MyoGesticModelInterface(QObject):
         self.model_is_loaded: bool = False
 
     def create_dataset(
-        self, dataset: Dict, selected_features: list[str], file_name: str, recording_interface_from_recordings:str
+        self,
+        dataset: Dict,
+        selected_features: list[str],
+        file_name: str,
+        recording_interface_from_recordings: str,
+        feature_window_size: int | None = None,
     ) -> Dict[str, Dict[str, Any]]:
+        # Set feature window size before creating dataset
+        self.dataset.set_feature_window_size(feature_window_size)
         self.input_dataset = self.dataset.create_dataset(
             dataset, selected_features, file_name, recording_interface_from_recordings
         )
