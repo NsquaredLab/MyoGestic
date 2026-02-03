@@ -14,7 +14,6 @@ from myoverse.transforms import (
 from scipy.ndimage import gaussian_filter
 from scipy.signal import savgol_filter
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.ensemble import AdaBoostClassifier
 from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
@@ -37,7 +36,7 @@ from myogestic.models.definitions import catboost_models, raulnet_models, sklear
 from myogestic.utils.config import CONFIG_REGISTRY
 
 CONFIG_REGISTRY.register_model(
-    "RaulNet Regressor",
+    "RaulNet",
     RaulNetV17,
     False,
     raulnet_models.save,
@@ -56,32 +55,12 @@ CONFIG_REGISTRY.register_model(
         "event_search_kernel_length": 31,
         "event_search_kernel_stride": 8,
     },
+    requires_temporal_preservation=True,
+    feature_window_size=120,
 )
 
 CONFIG_REGISTRY.register_model(
-    "RaulNet Regressor per Finger",
-    RaulNetV17,
-    False,
-    raulnet_models.save_per_finger,
-    raulnet_models.load_per_finger,
-    raulnet_models.train_per_finger,
-    raulnet_models.predict_per_finger,
-    unchangeable_parameters={
-        "learning_rate": 1e-4,
-        "nr_of_input_channels": 1,
-        "input_length__samples": 360,
-        "nr_of_outputs": 1,
-        "nr_of_electrode_grids": 1,
-        "nr_of_electrodes_per_grid": 32,
-        "cnn_encoder_channels": (64, 32, 32),
-        "mlp_encoder_channels": (128, 128),
-        "event_search_kernel_length": 31,
-        "event_search_kernel_stride": 8,
-    },
-)
-
-CONFIG_REGISTRY.register_model(
-    "CatBoost Classifier",
+    "CatBoost",
     CatBoostClassifier,
     True,
     catboost_models.save,
@@ -115,7 +94,7 @@ CONFIG_REGISTRY.register_model(
 )
 
 CONFIG_REGISTRY.register_model(
-    "Cursor CatBoost Classifier",
+    "Cursor CatBoost",
     CatBoostClassifier,
     True,
     catboost_models.save,
@@ -161,31 +140,7 @@ CONFIG_REGISTRY.register_model(
 )
 
 CONFIG_REGISTRY.register_model(
-    "AdaBoost Classifier",
-    AdaBoostClassifier,
-    True,
-    sklearn_models.save,
-    sklearn_models.load,
-    sklearn_models.train,
-    sklearn_models.predict,
-    {
-        "n_estimators": {
-            "start_value": 10,
-            "end_value": 1000,
-            "step": 10,
-            "default_value": 100,
-        },
-        "learning_rate": {
-            "start_value": 0.1,
-            "end_value": 1,
-            "step": 0.1,
-            "default_value": 0.1,
-        },
-    },
-)
-
-CONFIG_REGISTRY.register_model(
-    "Linear Regression",
+    "Linear",
     LinearRegression,
     False,
     sklearn_models.save,
@@ -196,7 +151,7 @@ CONFIG_REGISTRY.register_model(
 )
 
 CONFIG_REGISTRY.register_model(
-    "SVM Classifier",
+    "SVM",
     SVC,
     True,
     sklearn_models.save,
@@ -221,7 +176,7 @@ CONFIG_REGISTRY.register_model(
 )
 
 CONFIG_REGISTRY.register_model(
-    "MLP Classifier",
+    "MLP",
     MLPClassifier,
     True,
     sklearn_models.save,
@@ -246,7 +201,7 @@ CONFIG_REGISTRY.register_model(
 )
 
 CONFIG_REGISTRY.register_model(
-    "LDA Classifier",
+    "LDA",
     LinearDiscriminantAnalysis,
     True,
     sklearn_models.save,
@@ -264,7 +219,9 @@ CONFIG_REGISTRY.register_feature("Variance", VAR)
 CONFIG_REGISTRY.register_feature("Waveform Length", WaveformLength)
 CONFIG_REGISTRY.register_feature("Zero Crossings", ZeroCrossings)
 CONFIG_REGISTRY.register_feature("Slope Sign Change", SlopeSignChanges)
-CONFIG_REGISTRY.register_feature("Identity", Identity)
+CONFIG_REGISTRY.register_feature(
+    "Identity", Identity, requires_temporal_preservation=True
+)
 
 # Register real-time filters
 CONFIG_REGISTRY.register_real_time_filter("Identity", lambda x: x)

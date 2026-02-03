@@ -3,11 +3,8 @@ from typing import Literal
 import torch
 from biosignal_device_interface.constants.devices.core.base_device_constants import DeviceType
 from myoverse.transforms import RMS, Transform
-from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.multioutput import MultiOutputRegressor
 
 from myogestic.gui.widgets.output_systems.neuroorthosis import NeuroOrthosisOutputSystem
-from myogestic.models.definitions import sklearn_models
 from myogestic.utils.config import CONFIG_REGISTRY
 
 # What channels to use for training
@@ -34,39 +31,40 @@ GROUND_TRUTH_INDICES_TO_KEEP: dict[Literal, list] | Literal["all"] = {
     "Default": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],  # All 10 VHI-style movements
 }
 
-# Register models
-CONFIG_REGISTRY.register_model(
-    "Linear Regressor Per Finger",
-    lambda **params: MultiOutputRegressor(LinearRegression(**params)),
-    False,
-    sklearn_models.save,
-    sklearn_models.load,
-    sklearn_models.train,
-    sklearn_models.predict,
-)
-
-CONFIG_REGISTRY.register_model(
-    "Ridge Regressor Per Finger",
-    lambda **params: MultiOutputRegressor(Ridge(**params)),
-    False,
-    sklearn_models.save,
-    sklearn_models.load,
-    sklearn_models.train,
-    sklearn_models.predict,
-)
-
 CONFIG_REGISTRY.register_output_system("NEUROORTHOSIS", NeuroOrthosisOutputSystem)
 
 
 class RMSSmallWindow(Transform):
-    """RMS transform with a fixed small window size of 120 samples."""
+    """RMS transform with sliding window (120 samples, stride 1).
 
-    def __init__(self, dim: str = "time", **kwargs):
+    Computes RMS over a 120-sample window that slides 1 sample at a time.
+    For a 360-sample input, this produces 241 output time points (360 - 120 + 1).
+    """
+
+    def __init__(self, dim: str = "time", window_size: int = 120, stride: int = 1, **kwargs):
         super().__init__(dim=dim, **kwargs)
-        self._rms = RMS(window_size=120, dim=dim)
+        self.window_size = window_size
+        self.stride = stride
 
     def _apply(self, x: torch.Tensor) -> torch.Tensor:
-        return self._rms(x)
+        # x shape: (channels, time) with named dimensions
+        dim_idx = x.names.index(self.dim) if x.names[0] is not None else -1
+
+        # Remove names for unfold operation
+        x_unnamed = x.rename(None)
+
+        # Use unfold to create sliding windows: (channels, n_windows, window_size)
+        windows = x_unnamed.unfold(dim_idx, self.window_size, self.stride)
+
+        # Compute RMS over each window (last dimension)
+        rms = torch.sqrt(torch.mean(windows ** 2, dim=-1))
+
+        # Restore dimension names
+        return rms.rename(*x.names)
 
 
-CONFIG_REGISTRY.register_feature("RMS Small Window", RMSSmallWindow)
+# RMS Small Window now uses sliding window (stride=1), preserving temporal resolution.
+# 360 samples → 241 time points, compatible with RaulNet's Conv3d layers.
+CONFIG_REGISTRY.register_feature(
+    "RMS Small Window", RMSSmallWindow, requires_temporal_preservation=True
+)
