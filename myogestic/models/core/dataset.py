@@ -53,6 +53,10 @@ class MyoGesticDataset(QObject):
         )
         self.buffer_size__samples = self.buffer_size__chunks * self.samples_per_frame
 
+        # Feature window size (for model-aware feature extraction)
+        # If None, uses buffer_size__samples (default behavior)
+        self.feature_window_size: int | None = None
+
         # Online processing state
         self.emg_buffer: list[np.ndarray] | None = None
         self.dataset_bad_channels: list[int] | None = None
@@ -75,12 +79,18 @@ class MyoGesticDataset(QObject):
 
         Uses introspection to determine if the transform accepts window_size parameter,
         making this compatible with custom features that don't require it.
+
+        The window size is determined by self.feature_window_size if set (for models
+        requiring temporal preservation like RaulNet), otherwise defaults to
+        buffer_size__samples.
         """
         feature_cls = CONFIG_REGISTRY.features_map[feature_name]
         params = inspect.signature(feature_cls.__init__).parameters
 
         if "window_size" in params:
-            return feature_cls(window_size=self.buffer_size__samples)
+            # Use model-specific window size or default to buffer size
+            window_size = self.feature_window_size or self.buffer_size__samples
+            return feature_cls(window_size=window_size)
         return feature_cls()
 
     def _get_or_create_feature_transform(self, feature_name: str):
@@ -95,6 +105,22 @@ class MyoGesticDataset(QObject):
                 feature_name
             )
         return self._feature_transform_cache[feature_name]
+
+    def set_feature_window_size(self, window_size: int | None) -> None:
+        """Set the feature window size for model-aware feature extraction.
+
+        This should be called before create_dataset() to configure the window size
+        for feature extraction based on the model's requirements.
+
+        Parameters
+        ----------
+        window_size : int or None
+            The window size to use for feature extraction. If None, uses the
+            default buffer_size__samples. Models like RaulNet that require
+            temporal preservation should use smaller window sizes (e.g., 120).
+        """
+        self.feature_window_size = window_size
+        self._clear_feature_transform_cache()
 
     def _clear_feature_transform_cache(self):
         """Clear the feature transform cache.
@@ -223,7 +249,7 @@ class MyoGesticDataset(QObject):
             tasks_to_use=list(biosignal_data.keys()),
             save_path=save_path,
             test_ratio=0.0,  # No test split for training datasets
-            val_ratio=0.2,
+            val_ratio=0.0,  # Task-based splitting doesn't work well with few tasks
             debug_level=1,
         )
         creator.create()
@@ -317,7 +343,9 @@ class MyoGesticDataset(QObject):
 
             feature_start = feature_end
 
-        print("Dataset created")
+        print(f"Dataset created - EMG shape: {training_emg.shape}")
+        print(f"  feature_window_size used: {self.feature_window_size or self.buffer_size__samples}")
+        print(f"  buffer_size__samples: {self.buffer_size__samples}")
 
         return {
             "emg": training_emg,
@@ -330,6 +358,8 @@ class MyoGesticDataset(QObject):
             "device_information": self.device_information,
             "visual_interface": recording_interface_from_recordings,
             "zarr_file_path": file_name + ".zip",
+            "buffer_size__samples": self.buffer_size__samples,
+            "feature_window_size": self.feature_window_size or self.buffer_size__samples,
         }
 
     def preprocess_data(
@@ -400,3 +430,8 @@ class MyoGesticDataset(QObject):
         self.dataset_mean = dataset_information["mean"]
         self.dataset_std = dataset_information["std"]
         self.emg_buffer: list[np.ndarray] = []
+
+        # Restore feature window size for online prediction consistency
+        # Required - older models without this key will need to be regenerated
+        feature_window_size = dataset_information["feature_window_size"]
+        self.set_feature_window_size(feature_window_size)

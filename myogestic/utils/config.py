@@ -106,8 +106,10 @@ class Registry:
                 ChangeableParameter | UnchangeableParameter,
             ],
         ] = {}
+        self.models_metadata_map: dict[str, dict] = {}
 
         self.features_map: dict[str, type[Transform]] = {}
+        self.features_metadata_map: dict[str, dict] = {}
         self.real_time_filters_map: dict[str, Callable] = {}
         self.visual_interfaces_map: dict[
             str, tuple[type[SetupInterfaceTemplate], type[RecordingInterfaceTemplate]]
@@ -125,6 +127,8 @@ class Registry:
         predict_function: Callable,
         changeable_parameters: dict[str, ChangeableParameter] | None = None,
         unchangeable_parameters: dict[str, UnchangeableParameter] | None = None,
+        requires_temporal_preservation: bool = False,
+        feature_window_size: int | None = None,
     ) -> None:
         """
         Register a model in the registry.
@@ -151,6 +155,14 @@ class Registry:
             A dictionary of changeable parameters for the model. Default is None.
         unchangeable_parameters : dict of str to UnchangeableParameter, optional
             A dictionary of unchangeable parameters for the model. Default is None.
+        requires_temporal_preservation : bool, optional
+            Whether the model requires temporal preservation in features. Default is False.
+            Models like RaulNet with CNN layers need multiple temporal samples, so features
+            should use smaller window sizes to preserve time dimension.
+        feature_window_size : int, optional
+            The window size to use for feature extraction. Default is None, which uses
+            the full buffer size. For models requiring temporal preservation, this should
+            be smaller than the buffer size (e.g., 120 for RaulNet with buffer of 360).
 
         Raises
         ------
@@ -177,7 +189,17 @@ class Registry:
             "unchangeable": unchangeable_parameters or {},
         }
 
-    def register_feature(self, name: str, feature: type[Transform]) -> None:
+        self.models_metadata_map[name] = {
+            "requires_temporal_preservation": requires_temporal_preservation,
+            "feature_window_size": feature_window_size,
+        }
+
+    def register_feature(
+        self,
+        name: str,
+        feature: type[Transform],
+        requires_temporal_preservation: bool = False,
+    ) -> None:
         """
         Register a feature in the registry.
 
@@ -189,6 +211,10 @@ class Registry:
             The name of the feature.
         feature : type[Transform]
             The feature transform class to register.
+        requires_temporal_preservation : bool, optional
+            Whether this feature requires temporal preservation (keeps time dimension).
+            Features like RMS Small Window that preserve the time dimension should
+            set this to True. Default is False.
 
         Raises
         ------
@@ -201,6 +227,9 @@ class Registry:
             )
 
         self.features_map[name] = feature
+        self.features_metadata_map[name] = {
+            "requires_temporal_preservation": requires_temporal_preservation,
+        }
 
     def register_real_time_filter(self, name: str, function: Callable) -> None:
         """
