@@ -3,7 +3,7 @@ import signal
 import sys
 
 import qdarkstyle
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
 # add myogestic to sys.path
@@ -90,6 +90,11 @@ def sigint_handler(*args):
 if __name__ == "__main__":
     # Set up signal handler before creating QApplication
     signal.signal(signal.SIGINT, sigint_handler)
+
+    # Set high DPI scaling policy BEFORE creating QApplication
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
 
     app = QApplication(sys.argv)
 
