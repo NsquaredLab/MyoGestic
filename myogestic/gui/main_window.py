@@ -157,34 +157,43 @@ class Ui_MyoGestic(object):
         self.trainingWidget.setObjectName(u"trainingWidget")
         self.gridLayout_12 = QGridLayout(self.trainingWidget)
         self.gridLayout_12.setObjectName(u"gridLayout_12")
-        self.trainingCreateDatasetGroupBox = QGroupBox(self.trainingWidget)
-        self.trainingCreateDatasetGroupBox.setObjectName(u"trainingCreateDatasetGroupBox")
+        self.trainingModelSelectionGroupBox = QGroupBox(self.trainingWidget)
+        self.trainingModelSelectionGroupBox.setObjectName(u"trainingModelSelectionGroupBox")
         sizePolicy4 = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         sizePolicy4.setHorizontalStretch(0)
         sizePolicy4.setVerticalStretch(0)
+        sizePolicy4.setHeightForWidth(self.trainingModelSelectionGroupBox.sizePolicy().hasHeightForWidth())
+        self.trainingModelSelectionGroupBox.setSizePolicy(sizePolicy4)
+        self.gridLayout_14 = QGridLayout(self.trainingModelSelectionGroupBox)
+        self.gridLayout_14.setObjectName(u"gridLayout_14")
+        self.label_3 = QLabel(self.trainingModelSelectionGroupBox)
+        self.label_3.setObjectName(u"label_3")
+
+        self.gridLayout_14.addWidget(self.label_3, 0, 0, 1, 1)
+
+        self.trainingModelSelectionComboBox = QComboBox(self.trainingModelSelectionGroupBox)
+        self.trainingModelSelectionComboBox.setObjectName(u"trainingModelSelectionComboBox")
+
+        self.gridLayout_14.addWidget(self.trainingModelSelectionComboBox, 0, 1, 1, 1)
+
+        self.trainingModelParametersPushButton = QPushButton(self.trainingModelSelectionGroupBox)
+        self.trainingModelParametersPushButton.setObjectName(u"trainingModelParametersPushButton")
+
+        self.gridLayout_14.addWidget(self.trainingModelParametersPushButton, 1, 0, 1, 2)
+
+
+        self.gridLayout_12.addWidget(self.trainingModelSelectionGroupBox, 0, 0, 1, 1)
+
+        self.trainingCreateDatasetGroupBox = QGroupBox(self.trainingWidget)
+        self.trainingCreateDatasetGroupBox.setObjectName(u"trainingCreateDatasetGroupBox")
         sizePolicy4.setHeightForWidth(self.trainingCreateDatasetGroupBox.sizePolicy().hasHeightForWidth())
         self.trainingCreateDatasetGroupBox.setSizePolicy(sizePolicy4)
         self.gridLayout_13 = QGridLayout(self.trainingCreateDatasetGroupBox)
         self.gridLayout_13.setObjectName(u"gridLayout_13")
-        self.label_6 = QLabel(self.trainingCreateDatasetGroupBox)
-        self.label_6.setObjectName(u"label_6")
-
-        self.gridLayout_13.addWidget(self.label_6, 3, 0, 1, 1)
-
         self.trainingCreateDatasetsSelectRecordingsPushButton = QPushButton(self.trainingCreateDatasetGroupBox)
         self.trainingCreateDatasetsSelectRecordingsPushButton.setObjectName(u"trainingCreateDatasetsSelectRecordingsPushButton")
 
         self.gridLayout_13.addWidget(self.trainingCreateDatasetsSelectRecordingsPushButton, 0, 0, 1, 1)
-
-        self.trainingRemoveAllSelectedRecordingsPushButton = QPushButton(self.trainingCreateDatasetGroupBox)
-        self.trainingRemoveAllSelectedRecordingsPushButton.setObjectName(u"trainingRemoveAllSelectedRecordingsPushButton")
-
-        self.gridLayout_13.addWidget(self.trainingRemoveAllSelectedRecordingsPushButton, 2, 1, 1, 1)
-
-        self.trainingRemoveSelectedRecordingPushButton = QPushButton(self.trainingCreateDatasetGroupBox)
-        self.trainingRemoveSelectedRecordingPushButton.setObjectName(u"trainingRemoveSelectedRecordingPushButton")
-
-        self.gridLayout_13.addWidget(self.trainingRemoveSelectedRecordingPushButton, 2, 0, 1, 1)
 
         self.trainingCreateDatasetSelectedRecordingsTableWidget = QTableWidget(self.trainingCreateDatasetGroupBox)
         if (self.trainingCreateDatasetSelectedRecordingsTableWidget.columnCount() < 3):
@@ -204,6 +213,21 @@ class Ui_MyoGestic(object):
 
         self.gridLayout_13.addWidget(self.trainingCreateDatasetSelectedRecordingsTableWidget, 1, 0, 1, 2)
 
+        self.trainingRemoveSelectedRecordingPushButton = QPushButton(self.trainingCreateDatasetGroupBox)
+        self.trainingRemoveSelectedRecordingPushButton.setObjectName(u"trainingRemoveSelectedRecordingPushButton")
+
+        self.gridLayout_13.addWidget(self.trainingRemoveSelectedRecordingPushButton, 2, 0, 1, 1)
+
+        self.trainingRemoveAllSelectedRecordingsPushButton = QPushButton(self.trainingCreateDatasetGroupBox)
+        self.trainingRemoveAllSelectedRecordingsPushButton.setObjectName(u"trainingRemoveAllSelectedRecordingsPushButton")
+
+        self.gridLayout_13.addWidget(self.trainingRemoveAllSelectedRecordingsPushButton, 2, 1, 1, 1)
+
+        self.label_6 = QLabel(self.trainingCreateDatasetGroupBox)
+        self.label_6.setObjectName(u"label_6")
+
+        self.gridLayout_13.addWidget(self.label_6, 3, 0, 1, 1)
+
         self.trainingCreateDatasetLabelLineEdit = QLineEdit(self.trainingCreateDatasetGroupBox)
         self.trainingCreateDatasetLabelLineEdit.setObjectName(u"trainingCreateDatasetLabelLineEdit")
         sizePolicy4.setHeightForWidth(self.trainingCreateDatasetLabelLineEdit.sizePolicy().hasHeightForWidth())
@@ -211,18 +235,18 @@ class Ui_MyoGestic(object):
 
         self.gridLayout_13.addWidget(self.trainingCreateDatasetLabelLineEdit, 3, 1, 1, 1)
 
-        self.trainingCreateDatasetPushButton = QPushButton(self.trainingCreateDatasetGroupBox)
-        self.trainingCreateDatasetPushButton.setObjectName(u"trainingCreateDatasetPushButton")
-
-        self.gridLayout_13.addWidget(self.trainingCreateDatasetPushButton, 4, 1, 1, 1)
-
         self.trainingCreateDatasetSelectFeaturesPushButton = QPushButton(self.trainingCreateDatasetGroupBox)
         self.trainingCreateDatasetSelectFeaturesPushButton.setObjectName(u"trainingCreateDatasetSelectFeaturesPushButton")
 
         self.gridLayout_13.addWidget(self.trainingCreateDatasetSelectFeaturesPushButton, 4, 0, 1, 1)
 
+        self.trainingCreateDatasetPushButton = QPushButton(self.trainingCreateDatasetGroupBox)
+        self.trainingCreateDatasetPushButton.setObjectName(u"trainingCreateDatasetPushButton")
 
-        self.gridLayout_12.addWidget(self.trainingCreateDatasetGroupBox, 0, 0, 1, 1)
+        self.gridLayout_13.addWidget(self.trainingCreateDatasetPushButton, 4, 1, 1, 1)
+
+
+        self.gridLayout_12.addWidget(self.trainingCreateDatasetGroupBox, 1, 0, 1, 1)
 
         self.trainingTrainModelGroupBox = QGroupBox(self.trainingWidget)
         self.trainingTrainModelGroupBox.setObjectName(u"trainingTrainModelGroupBox")
@@ -230,54 +254,39 @@ class Ui_MyoGestic(object):
         self.trainingTrainModelGroupBox.setSizePolicy(sizePolicy4)
         self.gridLayout_7 = QGridLayout(self.trainingTrainModelGroupBox)
         self.gridLayout_7.setObjectName(u"gridLayout_7")
-        self.trainingModelSelectionComboBox = QComboBox(self.trainingTrainModelGroupBox)
-        self.trainingModelSelectionComboBox.setObjectName(u"trainingModelSelectionComboBox")
-
-        self.gridLayout_7.addWidget(self.trainingModelSelectionComboBox, 1, 1, 1, 1)
-
-        self.label_8 = QLabel(self.trainingTrainModelGroupBox)
-        self.label_8.setObjectName(u"label_8")
-
-        self.gridLayout_7.addWidget(self.label_8, 3, 0, 1, 1)
-
-        self.trainingTrainModelPushButton = QPushButton(self.trainingTrainModelGroupBox)
-        self.trainingTrainModelPushButton.setObjectName(u"trainingTrainModelPushButton")
-
-        self.gridLayout_7.addWidget(self.trainingTrainModelPushButton, 5, 0, 2, 2)
-
         self.trainingSelectDatasetPushButton = QPushButton(self.trainingTrainModelGroupBox)
         self.trainingSelectDatasetPushButton.setObjectName(u"trainingSelectDatasetPushButton")
 
         self.gridLayout_7.addWidget(self.trainingSelectDatasetPushButton, 0, 0, 1, 1)
-
-        self.label_3 = QLabel(self.trainingTrainModelGroupBox)
-        self.label_3.setObjectName(u"label_3")
-
-        self.gridLayout_7.addWidget(self.label_3, 1, 0, 1, 1)
 
         self.trainingSelectedDatasetLabel = QLabel(self.trainingTrainModelGroupBox)
         self.trainingSelectedDatasetLabel.setObjectName(u"trainingSelectedDatasetLabel")
 
         self.gridLayout_7.addWidget(self.trainingSelectedDatasetLabel, 0, 1, 1, 1)
 
+        self.label_8 = QLabel(self.trainingTrainModelGroupBox)
+        self.label_8.setObjectName(u"label_8")
+
+        self.gridLayout_7.addWidget(self.label_8, 1, 0, 1, 1)
+
         self.trainingModelLabelLineEdit = QLineEdit(self.trainingTrainModelGroupBox)
         self.trainingModelLabelLineEdit.setObjectName(u"trainingModelLabelLineEdit")
         sizePolicy4.setHeightForWidth(self.trainingModelLabelLineEdit.sizePolicy().hasHeightForWidth())
         self.trainingModelLabelLineEdit.setSizePolicy(sizePolicy4)
 
-        self.gridLayout_7.addWidget(self.trainingModelLabelLineEdit, 3, 1, 1, 1)
+        self.gridLayout_7.addWidget(self.trainingModelLabelLineEdit, 1, 1, 1, 1)
 
-        self.trainingModelParametersPushButton = QPushButton(self.trainingTrainModelGroupBox)
-        self.trainingModelParametersPushButton.setObjectName(u"trainingModelParametersPushButton")
+        self.trainingTrainModelPushButton = QPushButton(self.trainingTrainModelGroupBox)
+        self.trainingTrainModelPushButton.setObjectName(u"trainingTrainModelPushButton")
 
-        self.gridLayout_7.addWidget(self.trainingModelParametersPushButton, 2, 0, 1, 2)
+        self.gridLayout_7.addWidget(self.trainingTrainModelPushButton, 2, 0, 1, 2)
 
 
-        self.gridLayout_12.addWidget(self.trainingTrainModelGroupBox, 1, 0, 1, 1)
+        self.gridLayout_12.addWidget(self.trainingTrainModelGroupBox, 2, 0, 1, 1)
 
         self.verticalSpacer_2 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
-        self.gridLayout_12.addItem(self.verticalSpacer_2, 2, 0, 1, 1)
+        self.gridLayout_12.addItem(self.verticalSpacer_2, 3, 0, 1, 1)
 
         self.protocolModeStackedWidget.addWidget(self.trainingWidget)
         self.onlineWidget = QWidget()
@@ -515,26 +524,27 @@ class Ui_MyoGestic(object):
         self.label_9.setText(QCoreApplication.translate("MyoGestic", u"Time shown (s)", None))
         self.mindMoveTabWidget.setTabText(self.mindMoveTabWidget.indexOf(self.setupTab), QCoreApplication.translate("MyoGestic", u"Setup", None))
         self.groupBox.setTitle(QCoreApplication.translate("MyoGestic", u"EMG", None))
-        self.trainingCreateDatasetGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Create Training Dataset", None))
-        self.label_6.setText(QCoreApplication.translate("MyoGestic", u"Dataset Label", None))
+        self.trainingModelSelectionGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"1. Select Model", None))
+        self.label_3.setText(QCoreApplication.translate("MyoGestic", u"Model", None))
+        self.trainingModelParametersPushButton.setText(QCoreApplication.translate("MyoGestic", u"Change Parameters", None))
+        self.trainingCreateDatasetGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"2. Create Training Dataset", None))
         self.trainingCreateDatasetsSelectRecordingsPushButton.setText(QCoreApplication.translate("MyoGestic", u"Select Recordings", None))
-        self.trainingRemoveAllSelectedRecordingsPushButton.setText(QCoreApplication.translate("MyoGestic", u"Remove All", None))
-        self.trainingRemoveSelectedRecordingPushButton.setText(QCoreApplication.translate("MyoGestic", u"Remove Item", None))
         ___qtablewidgetitem = self.trainingCreateDatasetSelectedRecordingsTableWidget.horizontalHeaderItem(0)
         ___qtablewidgetitem.setText(QCoreApplication.translate("MyoGestic", u"Task", None));
         ___qtablewidgetitem1 = self.trainingCreateDatasetSelectedRecordingsTableWidget.horizontalHeaderItem(1)
         ___qtablewidgetitem1.setText(QCoreApplication.translate("MyoGestic", u"Recorded Time", None));
         ___qtablewidgetitem2 = self.trainingCreateDatasetSelectedRecordingsTableWidget.horizontalHeaderItem(2)
         ___qtablewidgetitem2.setText(QCoreApplication.translate("MyoGestic", u"Labels", None));
-        self.trainingCreateDatasetPushButton.setText(QCoreApplication.translate("MyoGestic", u"Create Dataset", None))
+        self.trainingRemoveSelectedRecordingPushButton.setText(QCoreApplication.translate("MyoGestic", u"Remove Item", None))
+        self.trainingRemoveAllSelectedRecordingsPushButton.setText(QCoreApplication.translate("MyoGestic", u"Remove All", None))
+        self.label_6.setText(QCoreApplication.translate("MyoGestic", u"Dataset Label", None))
         self.trainingCreateDatasetSelectFeaturesPushButton.setText(QCoreApplication.translate("MyoGestic", u"Select Features", None))
-        self.trainingTrainModelGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Train Model", None))
+        self.trainingCreateDatasetPushButton.setText(QCoreApplication.translate("MyoGestic", u"Create Dataset", None))
+        self.trainingTrainModelGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"3. Train Model", None))
+        self.trainingSelectDatasetPushButton.setText(QCoreApplication.translate("MyoGestic", u"Select Dataset", None))
+        self.trainingSelectedDatasetLabel.setText(QCoreApplication.translate("MyoGestic", u"Placeholder", None))
         self.label_8.setText(QCoreApplication.translate("MyoGestic", u"Model Label", None))
         self.trainingTrainModelPushButton.setText(QCoreApplication.translate("MyoGestic", u"Train", None))
-        self.trainingSelectDatasetPushButton.setText(QCoreApplication.translate("MyoGestic", u"Select Dataset", None))
-        self.label_3.setText(QCoreApplication.translate("MyoGestic", u"Model", None))
-        self.trainingSelectedDatasetLabel.setText(QCoreApplication.translate("MyoGestic", u"Placeholder", None))
-        self.trainingModelParametersPushButton.setText(QCoreApplication.translate("MyoGestic", u"Change Parameters", None))
         self.onlineLoadModelGroupBox.setTitle(QCoreApplication.translate("MyoGestic", u"Load Model", None))
         self.onlineLoadModelPushButton.setText(QCoreApplication.translate("MyoGestic", u"Select Model", None))
         self.onlineModelLabel.setText(QCoreApplication.translate("MyoGestic", u"Placeholder", None))
