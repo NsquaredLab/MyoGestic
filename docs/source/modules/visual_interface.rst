@@ -64,22 +64,6 @@ gestures.
     VirtualHandInterface_RecordingInterface
     VirtualHandInterface_OutputSystem
 
-.. _kappa_hand_interface:
-
-Kappa Hand Interface (KHI)
-------------------------------
-Similar to VHI with a different rendering backend.  Shares the **Hand** task
-category (``HAND_TASK_MAP`` -- 10 gestures).
-
-.. currentmodule:: myogestic.gui.widgets.visual_interfaces.kappa_hand_interface
-.. autosummary::
-    :toctree: generated/visual_interface
-    :template: class.rst
-
-    KappaHandInterface_SetupInterface
-    KappaHandInterface_RecordingInterface
-    KappaHandInterface_OutputSystem
-
 .. _virtual_cursor_interface:
 
 Virtual Cursor Interface (VCI)
