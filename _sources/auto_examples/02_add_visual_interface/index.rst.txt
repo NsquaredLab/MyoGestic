@@ -3,9 +3,12 @@
 .. _sphx_glr_auto_examples_02_add_visual_interface:
 
 
----------------------------
+-------------------------------
 Add a New Visual Interface
----------------------------
+-------------------------------
+
+Step-by-step guide to integrating a new Visual Interface (VI) into
+MyoGestic -- from UI setup to output system.
 
 
 
@@ -17,7 +20,7 @@ Add a New Visual Interface
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="A Visual Interface is a graphical user interface (GUI) that allows us to perform experiments, visualize data, and interact with the models trained in MyoGestic.">
+    <div class="sphx-glr-thumbcontainer" tooltip="A Visual Interface (VI) is an external graphical application that provides visual feedback to experiment participants (e.g., a virtual hand, a cursor, or a game).  MyoGestic communicates with VIs over UDP to stream predictions and receive kinematics.">
 
 .. only:: html
 
@@ -28,13 +31,13 @@ Add a New Visual Interface
 
 .. raw:: html
 
-      <div class="sphx-glr-thumbnail-title">Part 0: What is a Visual Interface?</div>
+      <div class="sphx-glr-thumbnail-title">Part 0: Overview and UI Setup</div>
     </div>
 
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="The setup interface is the first component of a visual interface in MyoGestic.">
+    <div class="sphx-glr-thumbcontainer" tooltip="The setup interface is the first component of a visual interface in MyoGestic.  It is responsible for:">
 
 .. only:: html
 
@@ -51,7 +54,7 @@ Add a New Visual Interface
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="The recording interface is the second component of a visual interface in MyoGestic.">
+    <div class="sphx-glr-thumbcontainer" tooltip="The recording interface is the second component of a visual interface in MyoGestic.  It manages per-VI recording settings and ground truth data collection.">
 
 .. only:: html
 
@@ -68,7 +71,7 @@ Add a New Visual Interface
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="This implementation demonstrates the creation of an Output System for the Virtual Hand Interface. It processes predictions (classification or regression) and communicates them to the visual interface.">
+    <div class="sphx-glr-thumbcontainer" tooltip="The output system is the third component of a visual interface.  It processes model predictions (classification or regression) and sends them to the external VI application.">
 
 .. only:: html
 

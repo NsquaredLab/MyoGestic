@@ -1,0 +1,40 @@
+﻿VirtualHandInterface_SetupInterface
+==================================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_hand_interface
+
+.. autoclass:: VirtualHandInterface_SetupInterface
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: VirtualHandInterface_SetupInterface
+       
+            ~VirtualHandInterface_SetupInterface.__init__
+            ~VirtualHandInterface_SetupInterface._get_unity_executable
+            ~VirtualHandInterface_SetupInterface._on_process_error
+            ~VirtualHandInterface_SetupInterface._on_stderr
+            ~VirtualHandInterface_SetupInterface._prepare_macos_executable
+            ~VirtualHandInterface_SetupInterface._setup_timers
+            ~VirtualHandInterface_SetupInterface._update_status
+            ~VirtualHandInterface_SetupInterface.clear_custom_signal_buffers
+            ~VirtualHandInterface_SetupInterface.close_event
+            ~VirtualHandInterface_SetupInterface.connect_custom_signals
+            ~VirtualHandInterface_SetupInterface.disconnect_custom_signals
+            ~VirtualHandInterface_SetupInterface.get_custom_save_data
+            ~VirtualHandInterface_SetupInterface.initialize_ui_logic
+            ~VirtualHandInterface_SetupInterface.interface_was_killed
+            ~VirtualHandInterface_SetupInterface.online_predicted_hand_update
+            ~VirtualHandInterface_SetupInterface.read_message
+            ~VirtualHandInterface_SetupInterface.read_predicted_hand
+            ~VirtualHandInterface_SetupInterface.start_interface
+            ~VirtualHandInterface_SetupInterface.stop_interface
+            ~VirtualHandInterface_SetupInterface.toggle_streaming
+            ~VirtualHandInterface_SetupInterface.toggle_virtual_hand_interface
+            ~VirtualHandInterface_SetupInterface.write_message
+            ~VirtualHandInterface_SetupInterface.write_status_message
+        
+        

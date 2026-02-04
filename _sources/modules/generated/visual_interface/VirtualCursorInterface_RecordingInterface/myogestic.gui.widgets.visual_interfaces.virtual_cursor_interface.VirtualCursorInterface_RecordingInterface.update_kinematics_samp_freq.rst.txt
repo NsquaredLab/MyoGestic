@@ -1,0 +1,6 @@
+myogestic.gui.widgets.visual\_interfaces.virtual\_cursor\_interface.VirtualCursorInterface\_RecordingInterface.update\_kinematics\_samp\_freq
+=============================================================================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface
+
+.. automethod:: VirtualCursorInterface_RecordingInterface.update_kinematics_samp_freq

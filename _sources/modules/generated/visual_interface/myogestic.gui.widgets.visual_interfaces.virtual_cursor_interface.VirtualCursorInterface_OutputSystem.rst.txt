@@ -1,0 +1,22 @@
+﻿VirtualCursorInterface_OutputSystem
+====================================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface
+
+.. autoclass:: VirtualCursorInterface_OutputSystem
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: VirtualCursorInterface_OutputSystem
+       
+            ~VirtualCursorInterface_OutputSystem.__init__
+            ~VirtualCursorInterface_OutputSystem._process_prediction__classification
+            ~VirtualCursorInterface_OutputSystem._process_prediction__regression
+            ~VirtualCursorInterface_OutputSystem.close_event
+            ~VirtualCursorInterface_OutputSystem.send_prediction
+        
+        

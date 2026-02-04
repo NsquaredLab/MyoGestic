@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Part 1: Setup Interface &#8212; MyoGestic 0.7.0 Documentation</title>
+    <title>Part 1: Setup Interface &#8212; MyoGestic 0.9.0 Documentation</title>
   
   
   
@@ -43,17 +43,17 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../_static/documentation_options.js?v=39bb1c6d"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'auto_examples/02_add_visual_interface/1_setup_interface';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Part 2: Recording Interface" href="2_recording_interface.html" />
-    <link rel="prev" title="Part 0: What is a Visual Interface?" href="0_add_ui.html" />
+    <link rel="prev" title="Part 0: Overview and UI Setup" href="0_add_ui.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.0" />
+  <meta name="docsearch:version" content="0.9.0" />
   </head>
   
   
@@ -119,8 +119,8 @@
       
     
     
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.7.0 Documentation - Home"/>
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.7.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.9.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.9.0 Documentation - Home"/>
   
   
 </a></div>
@@ -129,7 +129,7 @@
 <div class="nav-item">
   <div class="version-switcher__container dropdown">
       <button id="version-switcher-button" type="button" class="version-switcher__button btn btn-sm navbar-btn" aria-haspopup="true" aria-expanded="false">
-          Version 0.7.0
+          Version 0.9.0
       </button>
       
       
@@ -312,15 +312,15 @@
      aria-label="Section Navigation">
   <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
   <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../01_add_functionality/index.html">Add Functionality</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../01_add_functionality/index.html">Extend MyoGestic</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/1_add_post_prediction_filter.html">Add a Post-Prediction Filter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/2_add_model.html">Add a Custom Model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/3_add_biosignal_feature.html">Adding a Custom Biosignal Feature</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/4_add_output_system.html">Add a Custom Output System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/2_add_model.html">Add a Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/3_add_biosignal_feature.html">Add a Biosignal Feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/4_add_output_system.html">Add an Output System</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Add a New Visual Interface</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="0_add_ui.html">Part 0: What is a Visual Interface?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="0_add_ui.html">Part 0: Overview and UI Setup</a></li>
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">Part 1: Setup Interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2_recording_interface.html">Part 2: Recording Interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3_output_system.html">Part 3: Output System</a></li>
@@ -396,45 +396,132 @@ to download the full example code.</p>
 </div>
 <section class="sphx-glr-example-title" id="part-1-setup-interface">
 <span id="sphx-glr-auto-examples-02-add-visual-interface-1-setup-interface-py"></span><h1>Part 1: Setup Interface<a class="headerlink" href="#part-1-setup-interface" title="Link to this heading">#</a></h1>
-<p>The setup interface is the first component of a visual interface in MyoGestic.</p>
-<p>It is responsible for configuring the parameters, initializing the system, and managing the communication between MyoGestic and the visual interface.</p>
-<section id="step-1-create-the-setup-ui">
-<h2>Step 1: Create the setup UI<a class="headerlink" href="#step-1-create-the-setup-ui" title="Link to this heading">#</a></h2>
-<p>You will need an UI that will allow the user to start and stop the interface. This UI can be as simple as a button or as complex as you need.</p>
+<p>The setup interface is the first component of a visual interface in
+MyoGestic.  It is responsible for:</p>
+<ul class="simple">
+<li><p>Configuring VI-specific parameters (ports, executable paths, etc.).</p></li>
+<li><p>Launching and stopping the external VI process.</p></li>
+<li><p>Managing bi-directional communication (outgoing predictions, incoming
+kinematics) via UDP or another protocol.</p></li>
+<li><p>Providing custom signals and data buffers for the Online protocol.</p></li>
+</ul>
+<section id="step-1-create-the-ui">
+<h2>Step 1: Create the UI<a class="headerlink" href="#step-1-create-the-ui" title="Link to this heading">#</a></h2>
+<p>Design a Qt <code class="docutils literal notranslate"><span class="pre">.ui</span></code> file with at least a <code class="docutils literal notranslate"><span class="pre">groupBox</span></code> containing a
+start/stop button.  Convert it with <code class="docutils literal notranslate"><span class="pre">pyside6-uic</span></code>.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>To start copy the UI files in <code class="docutils literal notranslate"><span class="pre">myogestic</span> <span class="pre">&gt;</span> <span class="pre">gui</span> <span class="pre">&gt;</span> <span class="pre">widgets</span> <span class="pre">&gt;</span> <span class="pre">visual_interfaces</span> <span class="pre">&gt;</span> <span class="pre">ui</span></code> and adapt them with the functionality you need.</p>
-<p>You need to modify them with <a class="reference external" href="https://doc.qt.io/qtforpython-6/tools/pyside-designer.html">QT-Designer</a> and convert them using <a class="reference external" href="https://doc.qt.io/qtforpython-6/tools/pyside-uic.html">UIC</a> to a python file.</p>
+<p>Copy an existing UI file from
+<code class="docutils literal notranslate"><span class="pre">myogestic/gui/widgets/visual_interfaces/virtual_hand_interface/ui/</span></code>
+as a starting point.</p>
 </div>
 </section>
-<section id="step-2-understand-what-is-needed-in-the-setup-interface">
-<h2>Step 2: Understand what is needed in the setup interface<a class="headerlink" href="#step-2-understand-what-is-needed-in-the-setup-interface" title="Link to this heading">#</a></h2>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>A setup interface is a class that inherits from</p>
+<section id="step-2-understand-the-base-class">
+<h2>Step 2: Understand the Base Class<a class="headerlink" href="#step-2-understand-the-base-class" title="Link to this heading">#</a></h2>
+<p>Your setup interface must inherit from:</p>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table">
 <tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate" title="myogestic.gui.widgets.templates.visual_interface.SetupInterfaceTemplate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupInterfaceTemplate</span></code></a>(*args, **kwargs)</p></td>
+<td><p>Base class for the setup interface of a visual interface.</p></td>
+</tr>
 </tbody>
 </table>
 </div>
-</div>
-<p>Please read the documentation of the class and make a mental note of what you have to provide (e.g. signals, methods, attributes)
-and what you have to implement (e.g. start_interface, stop_interface, toggle_interface).</p>
+<p>The base class provides:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate.outgoing_message_signal" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.outgoing_message_signal"><code class="xref py py-attr docutils literal notranslate"><span class="pre">outgoing_message_signal</span></code></a> (<code class="docutils literal notranslate"><span class="pre">Signal(QByteArray)</span></code>) – Send data to
+the VI.</p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#id0" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.incoming_message_signal"><code class="xref py py-attr docutils literal notranslate"><span class="pre">incoming_message_signal</span></code></a> (<code class="docutils literal notranslate"><span class="pre">Signal(np.ndarray)</span></code>) – Receive data
+from the VI.</p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate._main_window" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate._main_window"><code class="xref py py-attr docutils literal notranslate"><span class="pre">_main_window</span></code></a> – Reference to the main MyoGestic application.</p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate._record_protocol" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate._record_protocol"><code class="xref py py-attr docutils literal notranslate"><span class="pre">_record_protocol</span></code></a>, <a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate._training_protocol" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate._training_protocol"><code class="xref py py-attr docutils literal notranslate"><span class="pre">_training_protocol</span></code></a>, <a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate._online_protocol" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate._online_protocol"><code class="xref py py-attr docutils literal notranslate"><span class="pre">_online_protocol</span></code></a> –
+Protocol references.</p></li>
+</ul>
+<p>You <strong>must</strong> implement these abstract methods:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate.initialize_ui_logic" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.initialize_ui_logic"><code class="xref py py-meth docutils literal notranslate"><span class="pre">initialize_ui_logic()</span></code></a> – Wire up UI widgets.</p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate.start_interface" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.start_interface"><code class="xref py py-meth docutils literal notranslate"><span class="pre">start_interface()</span></code></a> – Launch the VI process.</p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate.stop_interface" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.stop_interface"><code class="xref py py-meth docutils literal notranslate"><span class="pre">stop_interface()</span></code></a> – Stop the VI process.</p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate.interface_was_killed" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.interface_was_killed"><code class="xref py py-meth docutils literal notranslate"><span class="pre">interface_was_killed()</span></code></a> – Handle unexpected VI termination.</p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate.close_event" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.close_event"><code class="xref py py-meth docutils literal notranslate"><span class="pre">close_event()</span></code></a> – Clean up on application exit.</p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate.connect_custom_signals" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.connect_custom_signals"><code class="xref py py-meth docutils literal notranslate"><span class="pre">connect_custom_signals()</span></code></a> / <a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate.disconnect_custom_signals" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.disconnect_custom_signals"><code class="xref py py-meth docutils literal notranslate"><span class="pre">disconnect_custom_signals()</span></code></a> –
+Connect/disconnect data streaming signals.</p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate.clear_custom_signal_buffers" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.clear_custom_signal_buffers"><code class="xref py py-meth docutils literal notranslate"><span class="pre">clear_custom_signal_buffers()</span></code></a> – Reset internal data buffers.</p></li>
+</ul>
+<p>Optionally override:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.SetupInterfaceTemplate.html#myogestic.gui.widgets.templates.SetupInterfaceTemplate.get_custom_save_data" title="myogestic.gui.widgets.templates.SetupInterfaceTemplate.get_custom_save_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_custom_save_data()</span></code></a> – Return extra data to include
+when saving recordings (e.g., predicted hand positions).</p></li>
+</ul>
 </section>
-<section id="step-3-implement-a-setup-interface-example-virtual-hand-interface">
-<h2>Step 3: Implement a setup interface (Example Virtual Hand Interface)<a class="headerlink" href="#step-3-implement-a-setup-interface-example-virtual-hand-interface" title="Link to this heading">#</a></h2>
-<p>This example focuses on implementing and adding the <strong>setup interface</strong> for the <strong>Virtual Hand Interface</strong> using the <cite>VirtualHandInterface_SetupInterface</cite> class from <cite>setup_interface.py</cite>.
-We explain how it is constructed and registered into MyoGestic via <cite>CONFIG_REGISTRY</cite> in <cite>config.py</cite>.</p>
-<p>Steps:
-1. Define a custom <cite>SetupInterface</cite> class.
-2. Manage the interface’s state and initialization.
-3. Handle communication with MyoGestic’s runtime.
-4. Handle custom data signals and data processing.
-5. Register this class in MyoGestic’s configuration registry.</p>
-<section id="step-3-1-define-the-setup-interface-class">
-<h3>Step 3.1: Define the Setup Interface Class<a class="headerlink" href="#step-3-1-define-the-setup-interface-class" title="Link to this heading">#</a></h3>
-<p>This step implements the <cite>VirtualHandInterface_SetupInterface</cite> class, which initializes the
-Virtual Hand Interface, manages its state, and ensures communication with MyoGestic’s runtime.</p>
+<section id="step-3-implement-the-setup-interface">
+<h2>Step 3: Implement the Setup Interface<a class="headerlink" href="#step-3-implement-the-setup-interface" title="Link to this heading">#</a></h2>
+<p>Below is a minimal self-contained example, followed by references to
+the full VHI implementation.</p>
+<section id="step-3-1-minimal-setup-interface">
+<h3>Step 3.1: Minimal Setup Interface<a class="headerlink" href="#step-3-1-minimal-setup-interface" title="Link to this heading">#</a></h3>
+<p>This shows the skeleton of a setup interface.  In practice, you would
+add UDP socket management, process launching, and data streaming.</p>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtCore</span><span class="w"> </span><span class="kn">import</span> <span class="n">QByteArray</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtGui</span><span class="w"> </span><span class="kn">import</span> <a href="https://doc.qt.io/qtforpython-6/PySide6/QtGui/QCloseEvent.html#PySide6.QtGui.QCloseEvent" title="PySide6.QtGui.QCloseEvent" class="sphx-glr-backref-module-PySide6-QtGui sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">QCloseEvent</span></a>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.templates.visual_interface</span><span class="w"> </span><span class="kn">import</span> <span class="n">SetupInterfaceTemplate</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyInterface_SetupInterface</span><span class="p">(</span><span class="n">SetupInterfaceTemplate</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Minimal setup interface example.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">main_window</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;MyInterface&quot;</span><span class="p">):</span>
+        <span class="c1"># Import your generated UI class:</span>
+        <span class="c1"># from myogestic.gui.widgets.visual_interfaces.my_interface.ui import Ui_MySetup</span>
+        <span class="c1"># super().__init__(main_window, name, ui=Ui_MySetup())</span>
+        <span class="c1">#</span>
+        <span class="c1"># For this example we pass None (won&#39;t run without a real UI):</span>
+        <span class="k">pass</span>  <span class="c1"># Replace with super().__init__(...)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">initialize_ui_logic</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Wire up buttons, labels, and other UI elements.&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">start_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Launch the external VI process and start UDP communication.&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">stop_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Stop the VI process and close sockets.&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">interface_was_killed</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle unexpected VI termination (e.g., user closed window).&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">close_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <a href="https://doc.qt.io/qtforpython-6/PySide6/QtGui/QCloseEvent.html#PySide6.QtGui.QCloseEvent" title="PySide6.QtGui.QCloseEvent" class="sphx-glr-backref-module-PySide6-QtGui sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">QCloseEvent</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Clean up on application exit.&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">connect_custom_signals</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Connect data streaming signals (called when online starts).&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">disconnect_custom_signals</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Disconnect data streaming signals (called when online stops).&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear_custom_signal_buffers</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reset internal data buffers.&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_custom_save_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return extra data to include when saving recordings.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{}</span>
+</pre></div>
+</div>
+</section>
+<section id="step-3-2-vhi-reference-class-definition-and-helpers">
+<h3>Step 3.2: VHI Reference – Class Definition and Helpers<a class="headerlink" href="#step-3-2-vhi-reference-class-definition-and-helpers" title="Link to this heading">#</a></h3>
+<p>The VHI setup interface launches a Unity executable, manages UDP
+communication on multiple ports, and streams kinematics at 32 Hz.</p>
 <div class="literal-block-wrapper docutils container" id="id1">
 <div class="code-block-caption"><span class="caption-text">Imports</span><a class="headerlink" href="#id1" title="Link to this code">#</a></div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">import</span><span class="w"> </span><span class="nn">ast</span>
@@ -446,7 +533,7 @@ Virtual Hand Interface, manages its state, and ensures communication with MyoGes
 <span class="linenos"> 7</span>
 <span class="linenos"> 8</span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="linenos"> 9</span><span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtCore</span><span class="w"> </span><span class="kn">import</span> <span class="n">QByteArray</span><span class="p">,</span> <span class="n">QMetaObject</span><span class="p">,</span> <span class="n">QProcess</span><span class="p">,</span> <span class="n">QTimer</span><span class="p">,</span> <span class="n">Qt</span><span class="p">,</span> <span class="n">Signal</span>
-<span class="linenos">10</span><span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtGui</span><span class="w"> </span><span class="kn">import</span> <span class="n">QCloseEvent</span>
+<span class="linenos">10</span><span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtGui</span><span class="w"> </span><span class="kn">import</span> <a href="https://doc.qt.io/qtforpython-6/PySide6/QtGui/QCloseEvent.html#PySide6.QtGui.QCloseEvent" title="PySide6.QtGui.QCloseEvent" class="sphx-glr-backref-module-PySide6-QtGui sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">QCloseEvent</span></a>
 <span class="linenos">11</span><span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtNetwork</span><span class="w"> </span><span class="kn">import</span> <span class="n">QHostAddress</span><span class="p">,</span> <span class="n">QUdpSocket</span>
 <span class="linenos">12</span><span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtWidgets</span><span class="w"> </span><span class="kn">import</span> <span class="n">QCheckBox</span><span class="p">,</span> <span class="n">QPushButton</span><span class="p">,</span> <span class="n">QWidget</span>
 <span class="linenos">13</span>
@@ -481,32 +568,8 @@ Virtual Hand Interface, manages its state, and ensures communication with MyoGes
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id2">
-<div class="code-block-caption"><span class="caption-text">Class Definition</span><a class="headerlink" href="#id2" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">41</span>
-<span class="linenos">42</span><span class="k">class</span><span class="w"> </span><span class="nc">VirtualHandInterface_SetupInterface</span><span class="p">(</span><span class="n">SetupInterfaceTemplate</span><span class="p">):</span>
-<span class="linenos">43</span><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="linenos">44</span><span class="sd">    Setup interface for the Virtual Hand Interface.</span>
-<span class="linenos">45</span>
-<span class="linenos">46</span><span class="sd">    This class is responsible for setting up the Virtual Hand Interface.</span>
-<span class="linenos">47</span>
-<span class="linenos">48</span><span class="sd">    Attributes</span>
-<span class="linenos">49</span><span class="sd">    ----------</span>
-<span class="linenos">50</span><span class="sd">    predicted_hand__signal : Signal</span>
-<span class="linenos">51</span><span class="sd">        Signal that emits the predicted hand data.</span>
-<span class="linenos">52</span>
-<span class="linenos">53</span><span class="sd">    Parameters</span>
-<span class="linenos">54</span><span class="sd">    ----------</span>
-<span class="linenos">55</span><span class="sd">    main_window : QMainWindow</span>
-<span class="linenos">56</span><span class="sd">        The main window of the application.</span>
-<span class="linenos">57</span><span class="sd">    name : str</span>
-<span class="linenos">58</span><span class="sd">        The name of the interface. Default is &quot;VirtualHandInterface&quot;.</span>
-<span class="linenos">59</span>
-<span class="linenos">60</span><span class="sd">        .. important:: The name of the interface must be unique.</span>
-<span class="linenos">61</span><span class="sd">    &quot;&quot;&quot;</span>
-<span class="linenos">62</span>
-<span class="linenos">63</span>    <span class="n">predicted_hand__signal</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span>
-<span class="linenos">64</span>
-<span class="linenos">65</span>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">main_window</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;VirtualHandInterface&quot;</span><span class="p">):</span>
+<div class="code-block-caption"><span class="caption-text">Constructor</span><a class="headerlink" href="#id2" title="Link to this code">#</a></div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">65</span>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">main_window</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;VirtualHandInterface&quot;</span><span class="p">):</span>
 <span class="linenos">66</span>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">main_window</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">ui</span><span class="o">=</span><span class="n">Ui_SetupVirtualHandInterface</span><span class="p">())</span>
 <span class="linenos">67</span>
 <span class="linenos">68</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_unity_process</span> <span class="o">=</span> <span class="n">QProcess</span><span class="p">()</span>
@@ -531,85 +594,22 @@ Virtual Hand Interface, manages its state, and ensures communication with MyoGes
 <span class="linenos">87</span>
 <span class="linenos">88</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_last_message_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
 <span class="linenos">89</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-</pre></div>
-</div>
-</div>
-<div class="literal-block-wrapper docutils container" id="id3">
-<div class="code-block-caption"><span class="caption-text">Helper Functions</span><a class="headerlink" href="#id3" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 99</span>    <span class="nd">@staticmethod</span>
-<span class="linenos">100</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_get_unity_executable</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
-<span class="linenos">101</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the path to the Unity executable based on the platform.&quot;&quot;&quot;</span>
-<span class="linenos">102</span>        <span class="n">base_dirs</span> <span class="o">=</span> <span class="p">[</span>
-<span class="linenos">103</span>            <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;dist&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s2">&quot;_MEIPASS&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">Path</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">_MEIPASS</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">),</span>
-<span class="linenos">104</span>            <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;myogestic&quot;</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s2">&quot;_MEIPASS&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">Path</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">_MEIPASS</span><span class="p">,</span> <span class="s2">&quot;dist&quot;</span><span class="p">),</span>
-<span class="linenos">105</span>        <span class="p">]</span>
-<span class="linenos">106</span>
-<span class="linenos">107</span>        <span class="n">unity_executable_paths</span> <span class="o">=</span> <span class="p">{</span>
-<span class="linenos">108</span>            <span class="s2">&quot;Windows&quot;</span><span class="p">:</span> <span class="s2">&quot;windows/Virtual Hand Interface.exe&quot;</span><span class="p">,</span>
-<span class="linenos">109</span>            <span class="s2">&quot;Darwin&quot;</span><span class="p">:</span> <span class="s2">&quot;macOS/Virtual Hand Interface.app/Contents/MacOS/Virtual Hand Interface&quot;</span><span class="p">,</span>
-<span class="linenos">110</span>        <span class="s2">&quot;Linux&quot;</span><span class="p">:</span> <span class="s2">&quot;linux/VirtualHandInterface.x86_64&quot;</span><span class="p">,</span>
-<span class="linenos">111</span>    <span class="p">}</span>
-<span class="linenos">112</span>
-<span class="linenos">113</span>        <span class="k">for</span> <span class="n">base_dir</span> <span class="ow">in</span> <span class="n">base_dirs</span><span class="p">:</span>
-<span class="linenos">114</span>            <span class="n">executable</span> <span class="o">=</span> <span class="n">base_dir</span> <span class="o">/</span> <span class="n">unity_executable_paths</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">(),</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-<span class="linenos">115</span>            <span class="k">if</span> <span class="n">executable</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-<span class="linenos">116</span>                <span class="k">return</span> <span class="n">executable</span>
-<span class="linenos">117</span>
-<span class="linenos">118</span>        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unity executable not found for platform </span><span class="si">{</span><span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
-</pre></div>
-</div>
-</div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">169</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_setup_timers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="linenos">170</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Setup the timers for the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">171</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span> <span class="o">=</span> <span class="n">QTimer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-<span class="linenos">172</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span><span class="o">.</span><span class="n">setInterval</span><span class="p">(</span><span class="mi">2000</span><span class="p">)</span>
-<span class="linenos">173</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request__timer</span><span class="o">.</span><span class="n">timeout</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">write_status_message</span><span class="p">)</span>
-<span class="linenos">174</span>
-<span class="linenos">175</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span> <span class="o">=</span> <span class="n">QTimer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-<span class="linenos">176</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">setSingleShot</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
-<span class="linenos">177</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">setInterval</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
-<span class="linenos">178</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">timeout</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_update_status</span><span class="p">)</span>
-</pre></div>
-</div>
-<div class="literal-block-wrapper docutils container" id="id4">
-<div class="code-block-caption"><span class="caption-text">UI Setup</span><a class="headerlink" href="#id4" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">180</span>    <span class="k">def</span><span class="w"> </span><span class="nf">initialize_ui_logic</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="linenos">181</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize the UI logic for the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">182</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">visualInterfacesVerticalLayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">groupBox</span><span class="p">)</span>
-<span class="linenos">183</span>
-<span class="linenos">184</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="p">:</span> <span class="n">QPushButton</span> <span class="o">=</span> <span class="p">(</span>
-<span class="linenos">185</span>            <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">toggleVirtualHandInterfacePushButton</span>
-<span class="linenos">186</span>        <span class="p">)</span>
-<span class="linenos">187</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span>
-<span class="linenos">188</span>            <span class="bp">self</span><span class="o">.</span><span class="n">toggle_virtual_hand_interface</span>
-<span class="linenos">189</span>        <span class="p">)</span>
-<span class="linenos">190</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="p">:</span> <span class="n">QWidget</span> <span class="o">=</span> <span class="p">(</span>
-<span class="linenos">191</span>            <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">virtualHandInterfaceStatusWidget</span>
-<span class="linenos">192</span>        <span class="p">)</span>
-<span class="linenos">193</span>
-<span class="linenos">194</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
-<span class="linenos">195</span>            <span class="n">NOT_CONNECTED_STYLESHEET</span>
-<span class="linenos">196</span>        <span class="p">)</span>
-<span class="linenos">197</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span>
-<span class="linenos">198</span>            <span class="s2">&quot;Connection status: Red = Not connected, Green = Connected&quot;</span>
-<span class="linenos">199</span>        <span class="p">)</span>
-<span class="linenos">200</span>
-<span class="linenos">201</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="p">:</span> <span class="n">QCheckBox</span> <span class="o">=</span> <span class="p">(</span>
-<span class="linenos">202</span>            <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">useExternalVirtualHandInterfaceCheckBox</span>
-<span class="linenos">203</span>        <span class="p">)</span>
-<span class="linenos">204</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span>
-<span class="linenos">205</span>            <span class="s2">&quot;Enable this to use an externally running Virtual Hand Interface instead of launching the built-in one&quot;</span>
-<span class="linenos">206</span>        <span class="p">)</span>
+<span class="linenos">90</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="p">:</span> <span class="n">QUdpSocket</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="linenos">91</span>
+<span class="linenos">92</span>        <span class="c1"># Custom Stuff</span>
+<span class="linenos">93</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="p">:</span> <span class="n">QUdpSocket</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="linenos">94</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="p">:</span> <span class="nb">list</span><span class="p">[(</span><span class="nb">float</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="linenos">95</span>
+<span class="linenos">96</span>        <span class="c1"># Initialize Virtual Hand Interface UI</span>
+<span class="linenos">97</span>        <span class="bp">self</span><span class="o">.</span><span class="n">initialize_ui_logic</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
 </section>
-<section id="step-3-2-manage-the-interface-s-state-and-initialization">
-<h3>Step 3.2: Manage the Interface’s State and Initialization<a class="headerlink" href="#step-3-2-manage-the-interface-s-state-and-initialization" title="Link to this heading">#</a></h3>
-<p>This step manages the state of the Virtual Hand Interface and initializes the interface’s parameters.
-It also ensures that the interface is correctly set up and ready for use.</p>
-<div class="literal-block-wrapper docutils container" id="id5">
-<div class="code-block-caption"><span class="caption-text">Start Interface - This method starts the interface.</span><a class="headerlink" href="#id5" title="Link to this code">#</a></div>
+<section id="step-3-3-vhi-reference-lifecycle-methods">
+<h3>Step 3.3: VHI Reference – Lifecycle Methods<a class="headerlink" href="#step-3-3-vhi-reference-lifecycle-methods" title="Link to this heading">#</a></h3>
+<div class="literal-block-wrapper docutils container" id="id3">
+<div class="code-block-caption"><span class="caption-text">start_interface – Launch Unity and open UDP sockets</span><a class="headerlink" href="#id3" title="Link to this code">#</a></div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">208</span>    <span class="k">def</span><span class="w"> </span><span class="nf">start_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="linenos">209</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Start the Virtual Hand Interface.&quot;&quot;&quot;</span>
 <span class="linenos">210</span>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
@@ -623,8 +623,8 @@ It also ensures that the interface is correctly set up and ready for use.</p>
 </pre></div>
 </div>
 </div>
-<div class="literal-block-wrapper docutils container" id="id6">
-<div class="code-block-caption"><span class="caption-text">Stop Interface - This method stops the interface.</span><a class="headerlink" href="#id6" title="Link to this code">#</a></div>
+<div class="literal-block-wrapper docutils container" id="id4">
+<div class="code-block-caption"><span class="caption-text">stop_interface – Stop Unity and close sockets</span><a class="headerlink" href="#id4" title="Link to this code">#</a></div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">219</span>    <span class="k">def</span><span class="w"> </span><span class="nf">stop_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="linenos">220</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Stop the Virtual Hand Interface.&quot;&quot;&quot;</span>
 <span class="linenos">221</span>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
@@ -636,55 +636,11 @@ It also ensures that the interface is correctly set up and ready for use.</p>
 </pre></div>
 </div>
 </div>
-<div class="literal-block-wrapper docutils container" id="id7">
-<div class="code-block-caption"><span class="caption-text">Interface Was Killed - This method checks if the interface was killed (e.g. by the user closing the window).</span><a class="headerlink" href="#id7" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">228</span>    <span class="k">def</span><span class="w"> </span><span class="nf">interface_was_killed</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">229</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle the case when the Virtual Hand Interface was killed.&quot;&quot;&quot;</span>
-<span class="linenos">230</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-<span class="linenos">231</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Open&quot;</span><span class="p">)</span>
-<span class="linenos">232</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
-<span class="linenos">233</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
-<span class="linenos">234</span>            <span class="n">NOT_CONNECTED_STYLESHEET</span>
-<span class="linenos">235</span>        <span class="p">)</span>
-<span class="linenos">236</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">False</span>
-</pre></div>
-</div>
-</div>
-<div class="literal-block-wrapper docutils container" id="id8">
-<div class="code-block-caption"><span class="caption-text">Update Status - This method updates the interface’s status. If the interface is not running, it will be set to “Stopped”.</span><a class="headerlink" href="#id8" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">251</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_update_status</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">252</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Update the status of the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">253</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="linenos">254</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
-<span class="linenos">255</span>            <span class="n">NOT_CONNECTED_STYLESHEET</span>
-<span class="linenos">256</span>        <span class="p">)</span>
-</pre></div>
-</div>
-</div>
-<div class="literal-block-wrapper docutils container" id="id9">
-<div class="code-block-caption"><span class="caption-text">Toggle Virtual Hand Interface - This method toggles the Virtual Hand Interface. If the interface is running, it will be stopped. If it is stopped, it will be started.</span><a class="headerlink" href="#id9" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">258</span>    <span class="k">def</span><span class="w"> </span><span class="nf">toggle_virtual_hand_interface</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="linenos">259</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Toggle the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">260</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">261</span>            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Opening Virtual Hand Interface&quot;</span><span class="p">)</span>
-<span class="linenos">262</span>            <span class="bp">self</span><span class="o">.</span><span class="n">start_interface</span><span class="p">()</span>
-<span class="linenos">263</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-<span class="linenos">264</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Close&quot;</span><span class="p">)</span>
-<span class="linenos">265</span>        <span class="k">else</span><span class="p">:</span>
-<span class="linenos">266</span>            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Closing Virtual Hand Interface&quot;</span><span class="p">)</span>
-<span class="linenos">267</span>            <span class="bp">self</span><span class="o">.</span><span class="n">stop_interface</span><span class="p">()</span>
-<span class="linenos">268</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_use_external_virtual_hand_interface__check_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
-<span class="linenos">269</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Open&quot;</span><span class="p">)</span>
-</pre></div>
-</div>
-</div>
 </section>
-<section id="step-3-3-handle-communication-with-myogestic">
-<h3>Step 3.3: Handle Communication with MyoGestic<a class="headerlink" href="#step-3-3-handle-communication-with-myogestic" title="Link to this heading">#</a></h3>
-<p>This step manages the communication between the Virtual Hand Interface and MyoGestic’s runtime.
-It ensures that the interface is correctly set up and ready for use.</p>
-<div class="literal-block-wrapper docutils container" id="id10">
-<div class="code-block-caption"><span class="caption-text">Toggle Streaming - This method toggles the streaming of data from MyoGestic to the Virtual Hand Interface.</span><a class="headerlink" href="#id10" title="Link to this code">#</a></div>
+<section id="step-3-4-vhi-reference-communication-and-streaming">
+<h3>Step 3.4: VHI Reference – Communication and Streaming<a class="headerlink" href="#step-3-4-vhi-reference-communication-and-streaming" title="Link to this heading">#</a></h3>
+<div class="literal-block-wrapper docutils container" id="id5">
+<div class="code-block-caption"><span class="caption-text">toggle_streaming – Start/stop data streaming</span><a class="headerlink" href="#id5" title="Link to this code">#</a></div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">271</span>    <span class="k">def</span><span class="w"> </span><span class="nf">toggle_streaming</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="linenos">272</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Toggle the streaming of the Virtual Hand Interface.&quot;&quot;&quot;</span>
 <span class="linenos">273</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
@@ -717,25 +673,8 @@ It ensures that the interface is correctly set up and ready for use.</p>
 </pre></div>
 </div>
 </div>
-<div class="literal-block-wrapper docutils container" id="id11">
-<div class="code-block-caption"><span class="caption-text">Read Predicted Hand - This method reads the predicted hand from MyoGestic.</span><a class="headerlink" href="#id11" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">301</span>    <span class="k">def</span><span class="w"> </span><span class="nf">read_predicted_hand</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">302</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read the predicted hand data from the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">303</span>        <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">hasPendingDatagrams</span><span class="p">():</span>
-<span class="linenos">304</span>            <span class="n">datagram</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">readDatagram</span><span class="p">(</span>
-<span class="linenos">305</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand__udp_socket</span><span class="o">.</span><span class="n">pendingDatagramSize</span><span class="p">()</span>
-<span class="linenos">306</span>            <span class="p">)</span>
-<span class="linenos">307</span>
-<span class="linenos">308</span>            <span class="n">data</span> <span class="o">=</span> <span class="n">datagram</span><span class="o">.</span><span class="n">data</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
-<span class="linenos">309</span>            <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
-<span class="linenos">310</span>                <span class="k">return</span>
-<span class="linenos">311</span>
-<span class="linenos">312</span>            <span class="bp">self</span><span class="o">.</span><span class="n">predicted_hand__signal</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span><span class="n">data</span><span class="p">)))</span>
-</pre></div>
-</div>
-</div>
-<div class="literal-block-wrapper docutils container" id="id12">
-<div class="code-block-caption"><span class="caption-text">Read/Write Message - This methods read and write messages from/to MyoGestic.</span><a class="headerlink" href="#id12" title="Link to this code">#</a></div>
+<div class="literal-block-wrapper docutils container" id="id6">
+<div class="code-block-caption"><span class="caption-text">read_message – Read UDP messages from the VI</span><a class="headerlink" href="#id6" title="Link to this code">#</a></div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">330</span>    <span class="k">def</span><span class="w"> </span><span class="nf">read_message</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="linenos">331</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read a message from the Virtual Hand Interface.&quot;&quot;&quot;</span>
 <span class="linenos">332</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
@@ -763,76 +702,19 @@ It ensures that the interface is correctly set up and ready for use.</p>
 </pre></div>
 </div>
 </div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">314</span>    <span class="k">def</span><span class="w"> </span><span class="nf">write_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">QByteArray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">315</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Write a message to the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">316</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="ow">and</span> <span class="p">(</span>
-<span class="linenos">317</span>            <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_message_time</span> <span class="o">&gt;=</span> <span class="n">TIME_BETWEEN_MESSAGES</span>
-<span class="linenos">318</span>        <span class="p">):</span>
-<span class="linenos">319</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_last_message_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-<span class="linenos">320</span>            <span class="n">output_bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">writeDatagram</span><span class="p">(</span>
-<span class="linenos">321</span>                <span class="n">message</span><span class="p">,</span> <span class="n">QHostAddress</span><span class="p">(</span><span class="n">SOCKET_IP</span><span class="p">),</span> <span class="n">VHI__UDP_PORT</span>
-<span class="linenos">322</span>            <span class="p">)</span>
-<span class="linenos">323</span>
-<span class="linenos">324</span>            <span class="k">if</span> <span class="n">output_bytes</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
-<span class="linenos">325</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-<span class="linenos">326</span>                    <span class="s2">&quot;Error in sending message to Virtual Hand Interface!&quot;</span><span class="p">,</span>
-<span class="linenos">327</span>                    <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
-<span class="linenos">328</span>                <span class="p">)</span>
-</pre></div>
-</div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">355</span>    <span class="k">def</span><span class="w"> </span><span class="nf">write_status_message</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">356</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Write a status message to the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">357</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">358</span>            <span class="n">output_bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">writeDatagram</span><span class="p">(</span>
-<span class="linenos">359</span>                <span class="n">STATUS_REQUEST</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">),</span>
-<span class="linenos">360</span>                <span class="n">QHostAddress</span><span class="p">(</span><span class="n">SOCKET_IP</span><span class="p">),</span>
-<span class="linenos">361</span>                <span class="n">VHI__UDP_PORT</span><span class="p">,</span>
-<span class="linenos">362</span>            <span class="p">)</span>
-<span class="linenos">363</span>
-<span class="linenos">364</span>            <span class="k">if</span> <span class="n">output_bytes</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
-<span class="linenos">365</span>                <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-<span class="linenos">366</span>                    <span class="s2">&quot;Error in sending status message to Virtual Hand Interface!&quot;</span><span class="p">,</span>
-<span class="linenos">367</span>                    <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
-<span class="linenos">368</span>                <span class="p">)</span>
-<span class="linenos">369</span>                <span class="k">return</span>
-<span class="linenos">370</span>
-<span class="linenos">371</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-</pre></div>
-</div>
 </section>
-<section id="step-3-4-handle-custom-data-signals">
-<h3>Step 3.4: Handle Custom Data Signals<a class="headerlink" href="#step-3-4-handle-custom-data-signals" title="Link to this heading">#</a></h3>
-<p>This step manages custom data signals and data processing for the Virtual Hand Interface.
-It ensures that the interface is correctly set up and ready for use.</p>
-<div class="literal-block-wrapper docutils container" id="id13">
-<div class="code-block-caption"><span class="caption-text">Connect/Disconnect Custom Signals - This method connects/disconnects custom signals.</span><a class="headerlink" href="#id13" title="Link to this code">#</a></div>
+<section id="step-3-5-vhi-reference-custom-signals-and-data">
+<h3>Step 3.5: VHI Reference – Custom Signals and Data<a class="headerlink" href="#step-3-5-vhi-reference-custom-signals-and-data" title="Link to this heading">#</a></h3>
+<div class="literal-block-wrapper docutils container" id="id7">
+<div class="code-block-caption"><span class="caption-text">connect_custom_signals</span><a class="headerlink" href="#id7" title="Link to this code">#</a></div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">373</span>    <span class="k">def</span><span class="w"> </span><span class="nf">connect_custom_signals</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="linenos">374</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Connect custom signals for the Virtual Hand Interface.&quot;&quot;&quot;</span>
 <span class="linenos">375</span>        <span class="bp">self</span><span class="o">.</span><span class="n">predicted_hand__signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">online_predicted_hand_update</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
-<div class="literal-block-wrapper docutils container" id="id14">
-<div class="code-block-caption"><span class="caption-text">Online Predicted Hand Update - This method updates the predicted hand buffer with the current data.</span><a class="headerlink" href="#id14" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">396</span>    <span class="k">def</span><span class="w"> </span><span class="nf">online_predicted_hand_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">397</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Update the predicted hand data for the online protocol.&quot;&quot;&quot;</span>
-<span class="linenos">398</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_online_protocol</span><span class="o">.</span><span class="n">online_record_toggle_push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">399</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<span class="linenos">400</span>                <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_online_protocol</span><span class="o">.</span><span class="n">recording_start_time</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
-<span class="linenos">401</span>            <span class="p">)</span>
-</pre></div>
-</div>
-</div>
-<div class="literal-block-wrapper docutils container" id="id15">
-<div class="code-block-caption"><span class="caption-text">Clear Custom Signal Buffers - This method clears the custom signal buffers.</span><a class="headerlink" href="#id15" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">392</span>    <span class="k">def</span><span class="w"> </span><span class="nf">clear_custom_signal_buffers</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">393</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Clear custom signal buffers for the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">394</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span> <span class="o">=</span> <span class="p">[]</span>
-</pre></div>
-</div>
-</div>
-<div class="literal-block-wrapper docutils container" id="id16">
-<div class="code-block-caption"><span class="caption-text">Get Custom Save Data - This method will be called when saving the interface’s data. This should return a dictionary with the data that needs to be saved.</span><a class="headerlink" href="#id16" title="Link to this code">#</a></div>
+<div class="literal-block-wrapper docutils container" id="id8">
+<div class="code-block-caption"><span class="caption-text">get_custom_save_data – Extra recording data (predicted hand positions)</span><a class="headerlink" href="#id8" title="Link to this code">#</a></div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">381</span>    <span class="k">def</span><span class="w"> </span><span class="nf">get_custom_save_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
 <span class="linenos">382</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Get custom save data for the Virtual Hand Interface.&quot;&quot;&quot;</span>
 <span class="linenos">383</span>        <span class="k">return</span> <span class="p">{</span>
@@ -847,18 +729,20 @@ It ensures that the interface is correctly set up and ready for use.</p>
 </div>
 </div>
 </section>
-<section id="step-3-5-register-the-setup-interface-in-config">
-<h3>Step 3.5: Register the Setup Interface in Config<a class="headerlink" href="#step-3-5-register-the-setup-interface-in-config" title="Link to this heading">#</a></h3>
-<p>This step integrates the <cite>VirtualHandInterface_SetupInterface</cite> class into the MyoGestic configuration.
-Once registered, the interface becomes available for use in the framework.</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.visual_interfaces.virtual_hand_interface</span><span class="w"> </span><span class="kn">import</span> <span class="n">VirtualHandInterface_SetupInterface</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.utils.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONFIG_REGISTRY</span>
-
+<section id="step-3-6-registration-in-config-registry">
+<h3>Step 3.6: Registration in CONFIG_REGISTRY<a class="headerlink" href="#step-3-6-registration-in-config-registry" title="Link to this heading">#</a></h3>
+<p>Both the setup and recording interfaces are registered together.
+This is typically done in <a class="reference internal" href="../../modules/config.html#module-myogestic.default_config" title="myogestic.default_config"><code class="xref py py-mod docutils literal notranslate"><span class="pre">default_config</span></code></a> or <a class="reference internal" href="../../modules/config.html#module-myogestic.user_config" title="myogestic.user_config"><code class="xref py py-mod docutils literal notranslate"><span class="pre">user_config</span></code></a>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.utils.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONFIG_REGISTRY</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.visual_interfaces.virtual_hand_interface</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">VirtualHandInterface_SetupInterface</span><span class="p">,</span>
+    <span class="n">VirtualHandInterface_RecordingInterface</span><span class="p">,</span>
+<span class="p">)</span>
 
 <span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">register_visual_interface</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;VirtualHandInterface&quot;</span><span class="p">,</span>  <span class="c1"># Unique identifier for the visual interface.</span>
-    <span class="n">setup_interface_ui</span><span class="o">=</span><span class="n">VirtualHandInterface_SetupInterface</span><span class="p">,</span>  <span class="c1"># Associated setup class.</span>
-    <span class="n">recording_interface_ui</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># Placeholder (can be extended with a recording interface).</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;VHI&quot;</span><span class="p">,</span>
+    <span class="n">setup_interface_ui</span><span class="o">=</span><span class="n">VirtualHandInterface_SetupInterface</span><span class="p">,</span>
+    <span class="n">recording_interface_ui</span><span class="o">=</span><span class="n">VirtualHandInterface_RecordingInterface</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -901,14 +785,15 @@ Once registered, the interface becomes available for use in the framework.</p>
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-create-the-setup-ui">Step 1: Create the setup UI</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-understand-what-is-needed-in-the-setup-interface">Step 2: Understand what is needed in the setup interface</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-implement-a-setup-interface-example-virtual-hand-interface">Step 3: Implement a setup interface (Example Virtual Hand Interface)</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-1-define-the-setup-interface-class">Step 3.1: Define the Setup Interface Class</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-2-manage-the-interface-s-state-and-initialization">Step 3.2: Manage the Interface’s State and Initialization</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-3-handle-communication-with-myogestic">Step 3.3: Handle Communication with MyoGestic</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-4-handle-custom-data-signals">Step 3.4: Handle Custom Data Signals</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-5-register-the-setup-interface-in-config">Step 3.5: Register the Setup Interface in Config</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-create-the-ui">Step 1: Create the UI</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-understand-the-base-class">Step 2: Understand the Base Class</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-implement-the-setup-interface">Step 3: Implement the Setup Interface</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-1-minimal-setup-interface">Step 3.1: Minimal Setup Interface</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-2-vhi-reference-class-definition-and-helpers">Step 3.2: VHI Reference – Class Definition and Helpers</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-3-vhi-reference-lifecycle-methods">Step 3.3: VHI Reference – Lifecycle Methods</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-4-vhi-reference-communication-and-streaming">Step 3.4: VHI Reference – Communication and Streaming</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-5-vhi-reference-custom-signals-and-data">Step 3.5: VHI Reference – Custom Signals and Data</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-6-registration-in-config-registry">Step 3.6: Registration in CONFIG_REGISTRY</a></li>
 </ul>
 </li>
 </ul>

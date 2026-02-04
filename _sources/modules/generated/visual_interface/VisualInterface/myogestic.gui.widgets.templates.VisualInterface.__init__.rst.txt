@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.VisualInterface.\_\_init\_\_
+============================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: VisualInterface.__init__

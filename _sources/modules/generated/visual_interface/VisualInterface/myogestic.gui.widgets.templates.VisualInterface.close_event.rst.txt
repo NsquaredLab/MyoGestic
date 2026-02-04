@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.VisualInterface.close\_event
+============================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: VisualInterface.close_event

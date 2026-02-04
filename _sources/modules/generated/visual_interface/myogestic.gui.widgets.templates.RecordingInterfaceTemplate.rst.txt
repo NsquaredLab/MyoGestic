@@ -1,0 +1,29 @@
+﻿RecordingInterfaceTemplate
+==========================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. autoclass:: RecordingInterfaceTemplate
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: RecordingInterfaceTemplate
+       
+            ~RecordingInterfaceTemplate.__init__
+            ~RecordingInterfaceTemplate._set_progress_bar
+            ~RecordingInterfaceTemplate.check_recording_completion
+            ~RecordingInterfaceTemplate.close_event
+            ~RecordingInterfaceTemplate.disable
+            ~RecordingInterfaceTemplate.enable
+            ~RecordingInterfaceTemplate.get_ground_truth_data
+            ~RecordingInterfaceTemplate.initialize_ui_logic
+            ~RecordingInterfaceTemplate.save_recording
+            ~RecordingInterfaceTemplate.save_recording_cursor
+            ~RecordingInterfaceTemplate.start_recording_preparation
+            ~RecordingInterfaceTemplate.update_ground_truth_buffer
+        
+        

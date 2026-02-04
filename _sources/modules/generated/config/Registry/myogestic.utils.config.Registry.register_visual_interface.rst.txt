@@ -1,0 +1,6 @@
+myogestic.utils.config.Registry.register\_visual\_interface
+===========================================================
+
+.. currentmodule:: myogestic.utils.config
+
+.. automethod:: Registry.register_visual_interface

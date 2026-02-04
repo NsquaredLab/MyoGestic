@@ -22,110 +22,162 @@
 Part 3: Output System
 ==============================================
 
-This implementation demonstrates the creation of an **Output System** for the Virtual Hand Interface.
-It processes predictions (classification or regression) and communicates them to the visual interface.
+The output system is the third component of a visual interface.  It
+processes model predictions (classification or regression) and sends them
+to the external VI application.
 
-Steps:
---------------
-1. **Step 1: Class Initialization and Validation**
-    - Ensures the correct visual interface is selected and initializes helper objects.
+Multi-VI Architecture
+----------------------
+MyoGestic supports multiple active visual interfaces simultaneously.
+When a model is loaded in the Online tab, the :class:`~myogestic.gui.protocols.OnlineProtocol` creates
+one output system per active VI:
 
-2. **Step 2: Processing Predictions**
-    - Converts classification and regression predictions into an appropriate format.
+.. code-block:: python
 
-3. **Step 3: Sending Predictions**
-    - Sends processed predictions to the visual interface via output signals.
+    active_vis = self._main_window.active_visual_interfaces  # dict[str, VI]
+    self._output_systems = {
+        vi_name: CONFIG_REGISTRY.output_systems_map[vi_name](
+            self._main_window, model.is_classifier
+        )
+        for vi_name in active_vis
+        if vi_name in CONFIG_REGISTRY.output_systems_map
+    }
 
-4. **Step 4: Handling Close Events**
-    - Cleans up resources and handles the exit process gracefully.
+Each prediction is then sent to **all** active output systems:
 
-.. GENERATED FROM PYTHON SOURCE LINES 27-32
+.. code-block:: python
 
--------------------------------------------------
-Predefined Mapping for Classification Predictions
--------------------------------------------------
-This dictionary maps classification labels to their respective predefined
-output strings for the Virtual Hand Interface.
+    for output_system in self._output_systems.values():
+        output_system.send_prediction(prediction)
 
-.. GENERATED FROM PYTHON SOURCE LINES 32-45
+Accessing Your VI
+------------------
+From within an output system, access the target VI via the
+``active_visual_interfaces`` dict:
 
-.. code-block:: Python
+.. code-block:: python
+
+    vi = self._main_window.active_visual_interfaces.get("VHI")
+    self._outgoing_signal = vi.outgoing_message_signal
+
+Required Methods
+-----------------
+See :ref:`output_system_template` for the full base class API.  You must
+implement:
+
+- :meth:`~myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__classification`
+- :meth:`~myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__regression`
+- :meth:`~myogestic.gui.widgets.templates.OutputSystemTemplate.send_prediction`
+- :meth:`~myogestic.gui.widgets.templates.OutputSystemTemplate.close_event`
+
+Classification Prediction Map
+------------------------------
+For classifiers, you typically map integer labels to output strings.
+The VHI maps 10 gestures (labels 0-9, plus -1 for rejected samples)
+to 9-element float vectors representing finger joint positions:
+
+.. code-block:: python
 
     PREDICTION2INTERFACE_MAP = {
         -1: "Rejected Sample",
-        0: "[0, 0, 0, 0, 0, 0, 0, 0, 0]",
-        1: "[0, 0, 1, 0, 0, 0, 0, 0, 0]",
-        2: "[1, 0, 0, 0, 0, 0, 0, 0, 0]",
-        3: "[0, 0, 0, 1, 0, 0, 0, 0, 0]",
-        4: "[0, 0, 0, 0, 1, 0, 0, 0, 0]",
-        5: "[0, 0, 0, 0, 0, 1, 0, 0, 0]",
-        6: "[0.67, 1, 1, 1, 1, 1, 0, 0, 0]",
-        7: "[0.45, 1, 0.6, 0, 0, 0, 0, 0, 0]",
-        8: "[0.55, 1, 0.65, 0.65, 0, 0, 0, 0, 0]",
+         0: "[0, 0, 0, 0, 0, 0, 0, 0, 0]",       # rest
+         1: "[0, 0, 1, 0, 0, 0, 0, 0, 0]",         # index
+         2: "[1, 0, 0, 0, 0, 0, 0, 0, 0]",         # thumb
+         ...
+         9: "[0, 0, 1, 0, 0, 0, 0, 1, 0]",         # pointing
+    }
+
+.. GENERATED FROM PYTHON SOURCE LINES 75-78
+
+----------------------------------------
+Step 1: Define Your Output System
+----------------------------------------
+
+.. GENERATED FROM PYTHON SOURCE LINES 78-127
+
+.. code-block:: Python
+
+    from typing import Any
+    from myogestic.gui.widgets.templates.output_system import OutputSystemTemplate
+    from myogestic.gui.widgets.logger import LoggerLevel
+
+    # Prediction label to output string mapping (for classifiers)
+    PREDICTION_MAP = {
+        -1: "Rejected",
+        0: "[0, 0, 0]",  # rest
+        1: "[1, 0, 0]",  # action_a
+        2: "[0, 1, 0]",  # action_b
     }
 
 
-.. GENERATED FROM PYTHON SOURCE LINES 46-57
+    class MyInterface_OutputSystem(OutputSystemTemplate):
+        """Output system for a custom visual interface.
+
+        Validates that the target VI is active, then routes predictions
+        to it via the outgoing signal.
+        """
+
+        def __init__(self, main_window, prediction_is_classification: bool) -> None:
+            super().__init__(main_window, prediction_is_classification)
+
+            # Validate that our target VI is active
+            vi = self._main_window.active_visual_interfaces.get("MYI")
+            if vi is None:
+                raise ValueError("MYI (My Interface) is not active.")
+
+            # Grab the outgoing signal for sending predictions
+            self._outgoing_signal = vi.outgoing_message_signal
+
+        def _process_prediction__classification(self, prediction: Any) -> bytes:
+            """Map a classification label to an output string."""
+            return PREDICTION_MAP.get(prediction, "Unknown").encode("utf-8")
+
+        def _process_prediction__regression(self, prediction: Any) -> bytes:
+            """Convert regression values to a string representation."""
+            return str([float(x) for x in prediction]).encode("utf-8")
+
+        def send_prediction(self, prediction: Any) -> None:
+            """Send the processed prediction to the VI via UDP."""
+            processed = self.process_prediction(prediction)
+            self._outgoing_signal.emit(processed)
+
+        def close_event(self, event) -> None:
+            """Clean up resources."""
+            pass
+
+
+
+.. GENERATED FROM PYTHON SOURCE LINES 128-131
 
 -------------------------------------------------
-Step 1: Class Initialization
+Step 2: Register the Output System
 -------------------------------------------------
-This step ensures that the selected visual interface is the Virtual Hand Interface.
-It also establishes the connection for outgoing signals using the main window.
+
+.. GENERATED FROM PYTHON SOURCE LINES 131-138
+
+.. code-block:: Python
+
+    from myogestic.utils.config import CONFIG_REGISTRY
+
+    CONFIG_REGISTRY.register_output_system(
+        name="MYI", output_system=MyInterface_OutputSystem
+    )
+
+
+
+.. GENERATED FROM PYTHON SOURCE LINES 139-150
+
+-------------------------------------------
+Reference: VHI Output System
+-------------------------------------------
+The VHI output system validates that ``"VHI"`` is among the active
+visual interfaces, maps 10 classification labels to hand poses, and
+sends predictions via UDP.
 
 .. literalinclude:: /../../myogestic/gui/widgets/visual_interfaces/virtual_hand_interface/output_interface.py
-  :language: python
-  :lineno-match:
-  :lines: 1-55
-  :caption: Output System Initialization
-
-.. GENERATED FROM PYTHON SOURCE LINES 59-76
-
--------------------------------------------------
-Step 2: Processing Predictions
--------------------------------------------------
-This step defines how predictions (either classification or regression) are processed
-into the appropriate format that can be used by the Virtual Hand Interface.
-
-.. literalinclude:: /../../myogestic/gui/widgets/visual_interfaces/virtual_hand_interface/output_interface.py
-  :language: python
-  :lineno-match:
-  :pyobject: VirtualHandInterface_OutputSystem._process_prediction__classification
-  :caption: Processing Classification Predictions - Convert classification predictions into the required format to send them to the visual interface.
-
-.. literalinclude:: /../../myogestic/gui/widgets/visual_interfaces/virtual_hand_interface/output_interface.py
-  :language: python
-  :lineno-match:
-  :pyobject: VirtualHandInterface_OutputSystem._process_prediction__regression
-  :caption: Processing Regression Predictions - Convert regression predictions into the required format to send them to the visual interface.
-
-.. GENERATED FROM PYTHON SOURCE LINES 78-89
-
--------------------------------------------------
-Step 3: Sending Predictions
--------------------------------------------------
-This step sends the processed predictions (after formatting them into bytes)
-to the connected visual interface via the outgoing signal.
-
-.. literalinclude:: /../../myogestic/gui/widgets/visual_interfaces/virtual_hand_interface/output_interface.py
-  :language: python
-  :lineno-match:
-  :pyobject: VirtualHandInterface_OutputSystem.send_prediction
-  :caption: Sending Predictions - Send the processed prediction to the visual interface.
-
-.. GENERATED FROM PYTHON SOURCE LINES 91-102
-
--------------------------------------------------
-Step 4: Handling Close Events
--------------------------------------------------
-This step handles the cleanup process when the Output System is closed.
-It logs the closure and ensures that resources are properly released.
-
-.. literalinclude:: /../../myogestic/gui/widgets/visual_interfaces/virtual_hand_interface/output_interface.py
-  :language: python
-  :lineno-match:
-  :pyobject: VirtualHandInterface_OutputSystem.close_event
-  :caption: Handling Close Events - Clean up resources and handle the exit process gracefully. If needed, this method can be extended to include additional cleanup steps.
+   :language: python
+   :lineno-match:
+   :caption: VHI Output System -- full implementation
 
 
 .. _sphx_glr_download_auto_examples_02_add_visual_interface_3_output_system.py:

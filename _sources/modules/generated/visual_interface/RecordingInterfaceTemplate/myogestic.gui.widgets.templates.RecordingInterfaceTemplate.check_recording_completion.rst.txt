@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.RecordingInterfaceTemplate.check\_recording\_completion
+=======================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: RecordingInterfaceTemplate.check_recording_completion

@@ -1,0 +1,743 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.recording_interface &#8212; MyoGestic 0.9.0 Documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../../../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/sg_gallery.css?v=d2d258e8" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=e1466590" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../../../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../../../../../_static/documentation_options.js?v=39bb1c6d"></script>
+    <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/myogestic/gui/widgets/visual_interfaces/virtual_hand_interface/recording_interface';</script>
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.9.0" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../../../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../../../../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.9.0 Documentation - Home"/>
+    <img src="../../../../../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.9.0 Documentation - Home"/>
+  
+  
+</a></div>
+    
+      <div class="navbar-item">
+<div class="nav-item">
+  <div class="version-switcher__container dropdown">
+      <button id="version-switcher-button" type="button" class="version-switcher__button btn btn-sm navbar-btn" aria-haspopup="true" aria-expanded="false">
+          Version 0.9.0
+      </button>
+      
+      
+      
+  </div>
+</div> </div>
+    
+      <div class="navbar-item"><div class="nav-item">
+   <span>
+      made at the <a href="https://www.nsquared.tf.fau.de/" target="_blank">N² Lab</a>
+   </span>
+</div> </div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../../auto_examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../../api_documentation.html">
+    API Documentation
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NsquaredLab/MyoGestic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../../auto_examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../../api_documentation.html">
+    API Documentation
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NsquaredLab/MyoGestic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../../../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.recording_interface</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.recording_interface</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtCore</span><span class="w"> </span><span class="kn">import</span> <span class="n">SignalInstance</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtGui</span><span class="w"> </span><span class="kn">import</span> <span class="n">QCloseEvent</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">LoggerLevel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.templates.visual_interface</span><span class="w"> </span><span class="kn">import</span> <span class="n">RecordingInterfaceTemplate</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.ui</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Ui_RecordingVirtualHandInterface</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.utils.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">RECORDING_DIR_PATH</span>
+
+<span class="n">KINEMATICS_SAMPLING_FREQUENCY</span> <span class="o">=</span> <span class="mi">60</span>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">VirtualHandInterface_RecordingInterface</span><span class="p">(</span><span class="n">RecordingInterfaceTemplate</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Class for the recording interface of the Virtual Hand Interface.</span>
+
+<span class="sd">    This class is responsible for handling the recording of EMG and kinematics data.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    main_window : MainWindow</span>
+<span class="sd">        The main window of the application.</span>
+<span class="sd">    name : str</span>
+<span class="sd">        The name of the interface, by default &quot;VirtualHandInterface&quot;.</span>
+
+<span class="sd">        .. important:: This name is used to identify the interface in the main window. It should be unique.</span>
+<span class="sd">    incoming_message_signal : SignalInstance</span>
+<span class="sd">        The signal instance used to receive incoming messages from the device.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">ground_truth__task_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;rest&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;index&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s2">&quot;thumb&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="s2">&quot;middle&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+        <span class="s2">&quot;ring&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+        <span class="s2">&quot;pinky&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+        <span class="s2">&quot;power grasp&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+        <span class="s2">&quot;pinch&quot;</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span>
+        <span class="s2">&quot;tripod pinch&quot;</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+        <span class="s2">&quot;pointing&quot;</span><span class="p">:</span> <span class="mi">9</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="n">ground_truth__nr_of_recording_values</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">9</span>
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.__init__">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/VirtualHandInterface_RecordingInterface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.__init__.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">main_window</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;VirtualHandInterface&quot;</span><span class="p">,</span>
+        <span class="n">incoming_message_signal</span><span class="p">:</span> <span class="n">SignalInstance</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">main_window</span><span class="p">,</span>
+            <span class="n">name</span><span class="p">,</span>
+            <span class="n">ui</span><span class="o">=</span><span class="n">Ui_RecordingVirtualHandInterface</span><span class="p">(),</span>
+            <span class="n">incoming_message_signal</span><span class="o">=</span><span class="n">incoming_message_signal</span><span class="p">,</span>
+            <span class="n">ground_truth__nr_of_recording_values</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ground_truth__nr_of_recording_values</span><span class="p">,</span>
+            <span class="n">ground_truth__task_map</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ground_truth__task_map</span>
+        <span class="p">)</span>
+
+        <span class="n">RECORDING_DIR_PATH</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">protocols</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_start_time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize_ui_logic</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.initialize_ui_logic">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.initialize_ui_logic">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">initialize_ui_logic</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializes the logic for the UI elements.&quot;&quot;&quot;</span>
+        <span class="n">ui</span><span class="p">:</span> <span class="n">Ui_RecordingVirtualHandInterface</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ui</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordVerticalLayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordVerticalLayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span>
+            <span class="n">ui</span><span class="o">.</span><span class="n">recordReviewRecordingStackedWidget</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_group_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_task_combo_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordTaskComboBox</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordDurationSpinBox</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordRecordPushButton</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordReviewRecordingStackedWidget</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_task_label</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingTaskLabel</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_label_line_edit</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingLabelLineEdit</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_accept_push_button</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingAcceptPushButton</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_reject_push_button</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingRejectPushButton</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordUseKinematicsCheckBox</span>
+
+        <span class="c1"># Add tooltips for better usability</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_task_combo_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Select the gesture/movement to record&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Recording duration in seconds&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Start recording EMG data for the selected task&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Record hand position data from the Virtual Hand Interface&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_accept_push_button</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Save this recording to disk&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_reject_push_button</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Discard this recording and try again&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_label_line_edit</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Optional label to identify this recording&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">toggled</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">start_recording</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_accept_push_button</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">accept_recording</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_reject_push_button</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">reject_recording</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span><span class="o">.</span><span class="n">setCurrentIndex</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.start_recording">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.start_recording">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">start_recording</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">checked</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Starts the recording process.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">checked</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_recording_preparation</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+                <span class="k">return</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">start_recording_preparation</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
+            <span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+                <span class="k">return</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Recording...&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">record_group_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">record_task_combo_box</span><span class="o">.</span><span class="n">currentText</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">incoming_message_signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">update_ground_truth_buffer</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">()</span>
+            <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.start_recording_preparation">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.start_recording_preparation">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">start_recording_preparation</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Prepares the recording process by checking if the device is streaming.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">device__widget</span><span class="o">.</span><span class="n">_get_current_widget</span><span class="p">()</span><span class="o">.</span><span class="n">_device</span><span class="o">.</span><span class="n">_is_streaming</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                <span class="s2">&quot;Biosignal device not streaming!&quot;</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_recording_time</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">value</span><span class="p">()</span> <span class="o">*</span> <span class="n">KINEMATICS_SAMPLING_FREQUENCY</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.update_ground_truth_buffer">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.update_ground_truth_buffer">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">update_ground_truth_buffer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Updates the buffer with the incoming kinematics data.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+            <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span> <span class="n">data</span><span class="p">))</span>
+        <span class="n">current_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_set_progress_bar</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="p">,</span>
+            <span class="n">current_samples</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_recording_time</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">current_samples</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_recording_time</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Kinematics recording finished at: </span><span class="si">{</span><span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">_start_time</span><span class="p">)</span><span class="si">}</span><span class="s2"> seconds&quot;</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">incoming_message_signal</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">update_ground_truth_buffer</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">check_recording_completion</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.check_recording_completion">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.check_recording_completion">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">check_recording_completion</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Checks if the recording process is complete and finishes it if so.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">is_biosignal_recording_complete</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">finish_recording</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.finish_recording">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.finish_recording">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">finish_recording</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Finishes the recording process and switches to the review recording interface.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span><span class="o">.</span><span class="n">setCurrentIndex</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Finished Recording&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_task_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="o">.</span><span class="n">capitalize</span><span class="p">())</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.accept_recording">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.accept_recording">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">accept_recording</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Accepts the current recording and saves the data to a pickle file.</span>
+
+<span class="sd">        The saved data is a dictionary containing:</span>
+
+<span class="sd">        - emg: A 2D NumPy array of EMG signals with time samples as rows and channels as columns.</span>
+<span class="sd">        - kinematics: A 2D NumPy array of kinematics data (empty if not used).</span>
+<span class="sd">        - timings_emg: A 1D NumPy array of timestamps for EMG samples.</span>
+<span class="sd">        - timings_kinematics: A 1D NumPy array of timestamps for kinematics samples (empty if not used).</span>
+<span class="sd">        - label: The user-provided label for the recording.</span>
+<span class="sd">        - task: The task being recorded.</span>
+<span class="sd">        - device: The name of the device used for recording.</span>
+<span class="sd">        - bad_channels: A list of channels marked as &quot;bad.&quot;</span>
+<span class="sd">        - _sampling_frequency: The EMG sampling frequency.</span>
+<span class="sd">        - kinematics_sampling_frequency: The kinematics sampling frequency.</span>
+<span class="sd">        - recording_time: The recording duration in seconds.</span>
+<span class="sd">        - use_kinematics: Boolean indicating whether kinematics data was recorded.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_label_line_edit</span><span class="o">.</span><span class="n">text</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;default&quot;</span>
+        <span class="p">(</span>
+            <span class="n">biosignal_data</span><span class="p">,</span>
+            <span class="n">biosignal_timings</span><span class="p">,</span>
+        <span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">retrieve_recorded_data</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">save_recording</span><span class="p">(</span>
+            <span class="n">biosignal</span><span class="o">=</span><span class="n">biosignal_data</span><span class="p">,</span>
+            <span class="n">biosignal_timings</span><span class="o">=</span><span class="n">biosignal_timings</span><span class="p">,</span>
+            <span class="n">ground_truth</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">([</span><span class="n">data</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">])</span><span class="o">.</span><span class="n">T</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">()</span>
+                <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+            <span class="p">),</span>
+            <span class="n">ground_truth_timings</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">time_stamp</span> <span class="k">for</span> <span class="n">time_stamp</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">])</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">()</span>
+                <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+            <span class="p">),</span>
+            <span class="n">recording_label</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">task</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="p">,</span>
+            <span class="n">ground_truth_sampling_frequency</span><span class="o">=</span><span class="n">KINEMATICS_SAMPLING_FREQUENCY</span><span class="p">,</span>
+            <span class="n">use_as_classification</span><span class="o">=</span><span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">(),</span>
+            <span class="n">record_duration</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">value</span><span class="p">(),</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">reset_ui</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Recording of task </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2"> with label </span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2"> accepted!&quot;</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.reject_recording">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.reject_recording">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">reject_recording</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Rejects the current recording and resets the recording interface.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reset_ui</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;Recording rejected.&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.reset_ui">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.reset_ui">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">reset_ui</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resets the recording interface UI elements.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span><span class="o">.</span><span class="n">setCurrentIndex</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Start Recording&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_group_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">_reset_recording_ui</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.close_event">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.close_event">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">close_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_</span><span class="p">:</span> <span class="n">QCloseEvent</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Closes the recording interface.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reset_ui</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">close_event</span><span class="p">(</span><span class="n">_</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;Recording interface closed.&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.enable">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.enable">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">enable</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Enable the UI elements.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordReviewRecordingStackedWidget</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="VirtualHandInterface_RecordingInterface.disable">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_hand_interface.VirtualHandInterface_RecordingInterface.disable">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">disable</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Disable the UI elements.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordReviewRecordingStackedWidget</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span></div>
+</div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2023 - 2026, n-squared lab, FAU Erlangen-Nürnberg, Germany.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

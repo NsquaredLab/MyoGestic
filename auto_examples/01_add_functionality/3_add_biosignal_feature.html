@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Adding a Custom Biosignal Feature &#8212; MyoGestic 0.7.0 Documentation</title>
+    <title>Add a Biosignal Feature &#8212; MyoGestic 0.9.0 Documentation</title>
   
   
   
@@ -43,17 +43,17 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../_static/documentation_options.js?v=39bb1c6d"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'auto_examples/01_add_functionality/3_add_biosignal_feature';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Add a Custom Output System" href="4_add_output_system.html" />
-    <link rel="prev" title="Add a Custom Model" href="2_add_model.html" />
+    <link rel="next" title="Add an Output System" href="4_add_output_system.html" />
+    <link rel="prev" title="Add a Model" href="2_add_model.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.0" />
+  <meta name="docsearch:version" content="0.9.0" />
   </head>
   
   
@@ -119,8 +119,8 @@
       
     
     
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.7.0 Documentation - Home"/>
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.7.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.9.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.9.0 Documentation - Home"/>
   
   
 </a></div>
@@ -129,7 +129,7 @@
 <div class="nav-item">
   <div class="version-switcher__container dropdown">
       <button id="version-switcher-button" type="button" class="version-switcher__button btn btn-sm navbar-btn" aria-haspopup="true" aria-expanded="false">
-          Version 0.7.0
+          Version 0.9.0
       </button>
       
       
@@ -312,15 +312,15 @@
      aria-label="Section Navigation">
   <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
   <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Add Functionality</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Extend MyoGestic</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="1_add_post_prediction_filter.html">Add a Post-Prediction Filter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="2_add_model.html">Add a Custom Model</a></li>
-<li class="toctree-l2 current active"><a class="current reference internal" href="#">Adding a Custom Biosignal Feature</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_add_output_system.html">Add a Custom Output System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="2_add_model.html">Add a Model</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Add a Biosignal Feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_add_output_system.html">Add an Output System</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../02_add_visual_interface/index.html">Add a New Visual Interface</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../02_add_visual_interface/0_add_ui.html">Part 0: What is a Visual Interface?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../02_add_visual_interface/0_add_ui.html">Part 0: Overview and UI Setup</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../02_add_visual_interface/1_setup_interface.html">Part 1: Setup Interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../02_add_visual_interface/2_recording_interface.html">Part 2: Recording Interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../02_add_visual_interface/3_output_system.html">Part 3: Output System</a></li>
@@ -370,9 +370,9 @@
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Examples</a></li>
     
     
-    <li class="breadcrumb-item"><a href="index.html" class="nav-link">Add Functionality</a></li>
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">Extend MyoGestic</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Adding a Custom Biosignal Feature</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Add a Biosignal Feature</span></li>
   </ul>
 </nav>
 </div>
@@ -394,30 +394,43 @@
 <p><a class="reference internal" href="#sphx-glr-download-auto-examples-01-add-functionality-3-add-biosignal-feature-py"><span class="std std-ref">Go to the end</span></a>
 to download the full example code.</p>
 </div>
-<section class="sphx-glr-example-title" id="adding-a-custom-biosignal-feature">
-<span id="sphx-glr-auto-examples-01-add-functionality-3-add-biosignal-feature-py"></span><h1>Adding a Custom Biosignal Feature<a class="headerlink" href="#adding-a-custom-biosignal-feature" title="Link to this heading">#</a></h1>
-<p>Below is an example of how to create and register a new feature by inheriting from
-the base Transform class from <a class="reference external" href="https://nsquaredlab.github.io/MyoVerse/">MyoVerse</a>.</p>
-<p>This custom feature calculates the variance of the input signal.</p>
-<div class="admonition-we-recommend-implementing-any-additions-in-user-config-py admonition">
-<p class="admonition-title">We Recommend Implementing any Additions in <em>user_config.py</em></p>
-<p>The <em>user_config.py</em> module is specifically designed for end-users to register
-and configure their own custom components such as models, features,
-and filters. This keeps your modifications modular, reduces conflicts with
-core MyoGestic settings, and simplifies upgrades in the future.</p>
-<div class="admonition important">
-<p class="admonition-title">Important</p>
-<p>By registering your addition in <code class="docutils literal notranslate"><span class="pre">user_config.py</span></code>, you ensure that your custom
-configuration stays separate from core MyoGestic functionality and remains
-compatible with future updates.</p>
+<section class="sphx-glr-example-title" id="add-a-biosignal-feature">
+<span id="sphx-glr-auto-examples-01-add-functionality-3-add-biosignal-feature-py"></span><h1>Add a Biosignal Feature<a class="headerlink" href="#add-a-biosignal-feature" title="Link to this heading">#</a></h1>
+<p>This example shows how to create and register a new feature-extraction
+transform in MyoGestic.  Features are applied to raw EMG data during
+dataset creation and real-time prediction to produce the input that models
+consume.</p>
+<p>All features must inherit from the
+<a class="reference external" href="https://nsquaredlab.github.io/MyoVerse/">Transform</a> base class in
+MyoVerse.  The core logic goes in the <code class="docutils literal notranslate"><span class="pre">_apply</span></code> method, which operates on
+PyTorch tensors with named dimensions (e.g., <code class="docutils literal notranslate"><span class="pre">&quot;channels&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;time&quot;</span></code>).</p>
+<section id="temporal-vs-non-temporal-features">
+<h2>Temporal vs Non-Temporal Features<a class="headerlink" href="#temporal-vs-non-temporal-features" title="Link to this heading">#</a></h2>
+<p>MyoGestic distinguishes two categories of features:</p>
+<ul class="simple">
+<li><p><strong>Non-temporal</strong> (default, <code class="docutils literal notranslate"><span class="pre">requires_temporal_preservation=False</span></code>):
+Collapses the time axis into a single value per channel.  Examples:
+RMS, MAV, Variance.  Compatible with sklearn/CatBoost models.</p></li>
+<li><p><strong>Temporal</strong> (<code class="docutils literal notranslate"><span class="pre">requires_temporal_preservation=True</span></code>):
+Preserves the time dimension by computing a value for each time step
+(or sliding window).  Examples: Identity (raw signal), RMS Small Window.
+Required by CNN-based models like RaulNet.</p></li>
+</ul>
+<p>When you register a feature, set <code class="docutils literal notranslate"><span class="pre">requires_temporal_preservation=True</span></code>
+if it preserves the time axis.  The Training UI uses this flag to show
+only compatible features for the selected model.</p>
+<div class="admonition-add-your-feature-in-mod-myogestic-user-config admonition">
+<p class="admonition-title">Add your feature in <a class="reference internal" href="../../modules/config.html#module-myogestic.user_config" title="myogestic.user_config"><code class="xref py py-mod docutils literal notranslate"><span class="pre">user_config</span></code></a></p>
+<p>Keep custom feature registrations in <a class="reference internal" href="../../modules/config.html#module-myogestic.user_config" title="myogestic.user_config"><code class="xref py py-mod docutils literal notranslate"><span class="pre">user_config</span></code></a> to stay
+separate from core MyoGestic code.</p>
 </div>
-</div>
+</section>
 <section id="example-overview">
 <h2>Example Overview<a class="headerlink" href="#example-overview" title="Link to this heading">#</a></h2>
 <ol class="arabic simple">
-<li><p><strong>Define</strong> a new feature class inheriting from Transform (TensorTransform).</p></li>
-<li><p><strong>Implement</strong> the core logic in the <code class="docutils literal notranslate"><span class="pre">_apply</span></code> method.</p></li>
-<li><p><strong>Register</strong> the feature so it becomes available globally.</p></li>
+<li><p><strong>Define</strong> a new feature class inheriting from <code class="docutils literal notranslate"><span class="pre">Transform</span></code>.</p></li>
+<li><p><strong>Implement</strong> the <code class="docutils literal notranslate"><span class="pre">_apply</span></code> method.</p></li>
+<li><p><strong>Register</strong> the feature in <code class="docutils literal notranslate"><span class="pre">CONFIG_REGISTRY</span></code>.</p></li>
 </ol>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">myoverse.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">Transform</span>
@@ -426,20 +439,20 @@ compatible with future updates.</p>
 <span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.utils.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONFIG_REGISTRY</span>
 </pre></div>
 </div>
-<section id="step-1-inherit-and-define-logic">
-<h3>Step 1: Inherit and define logic<a class="headerlink" href="#step-1-inherit-and-define-logic" title="Link to this heading">#</a></h3>
+<section id="step-1-define-a-non-temporal-feature-variance">
+<h3>Step 1: Define a Non-Temporal Feature (Variance)<a class="headerlink" href="#step-1-define-a-non-temporal-feature-variance" title="Link to this heading">#</a></h3>
+<p>This feature computes the variance along the time axis, collapsing it
+to a single value per channel.  It is compatible with standard ML
+models (sklearn, CatBoost).</p>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">MyVarianceFeature</span><span class="p">(</span><span class="n">Transform</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    A feature that computes the variance of the input signal.</span>
-
-<span class="sd">    This transform operates on PyTorch tensors with named dimensions.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the variance of the input signal along a given dimension.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    dim : str, optional</span>
-<span class="sd">        The dimension along which to compute variance. Default is &#39;time&#39;.</span>
+<span class="sd">        The dimension along which to compute variance. Default is ``&quot;time&quot;``.</span>
 <span class="sd">    keepdim : bool, optional</span>
-<span class="sd">        Whether to keep the reduced dimension. Default is False.</span>
+<span class="sd">        Whether to keep the reduced dimension. Default is ``False``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="n">keepdim</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
@@ -447,25 +460,23 @@ compatible with future updates.</p>
         <span class="bp">self</span><span class="o">.</span><span class="n">keepdim</span> <span class="o">=</span> <span class="n">keepdim</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <a href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="torch.Tensor" class="sphx-glr-backref-module-torch sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span></a><span class="p">)</span> <span class="o">-&gt;</span> <a href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="torch.Tensor" class="sphx-glr-backref-module-torch sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span></a><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Compute the variance of the input signal.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compute variance along the specified dimension.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        x : torch.Tensor</span>
-<span class="sd">            The input tensor with named dimensions.</span>
+<span class="sd">            Input tensor with named dimensions (e.g., ``(&quot;channels&quot;, &quot;time&quot;)``).</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        torch.Tensor</span>
-<span class="sd">            The variance computed along the specified dimension.</span>
+<span class="sd">            Variance computed along the specified dimension.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">dim_idx</span> <span class="o">=</span> <span class="n">get_dim_index</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
         <span class="n">names</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">names</span>
 
         <span class="n">result</span> <span class="o">=</span> <a href="https://docs.pytorch.org/docs/stable/generated/torch.var.html#torch.var" title="torch.var" class="sphx-glr-backref-module-torch sphx-glr-backref-type-py-function"><span class="n">torch</span><span class="o">.</span><span class="n">var</span></a><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="n">dim_idx</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">keepdim</span><span class="p">)</span>
 
-        <span class="c1"># Restore dimension names if input had named dimensions</span>
         <span class="k">if</span> <span class="n">names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">result</span>
 
@@ -477,23 +488,81 @@ compatible with future updates.</p>
             <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="o">*</span><span class="n">new_names</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">result</span>
+
+
+<span class="c1"># Register as a non-temporal feature (default)</span>
+<span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">register_feature</span><span class="p">(</span><span class="s2">&quot;My Variance Feature&quot;</span><span class="p">,</span> <span class="n">MyVarianceFeature</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
-<section id="step-2-register-the-custom-feature">
-<h3>Step 2: Register the custom feature<a class="headerlink" href="#step-2-register-the-custom-feature" title="Link to this heading">#</a></h3>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">register_feature</span><span class="p">(</span><span class="s2">&quot;My Variance Feature&quot;</span><span class="p">,</span> <span class="n">MyVarianceFeature</span><span class="p">)</span>
+<section id="step-2-define-a-temporal-feature-sliding-window-rms">
+<h3>Step 2: Define a Temporal Feature (Sliding Window RMS)<a class="headerlink" href="#step-2-define-a-temporal-feature-sliding-window-rms" title="Link to this heading">#</a></h3>
+<p>This feature computes RMS over a sliding window, preserving the time
+dimension.  It is compatible with CNN-based models like RaulNet.</p>
+<p>For a buffer of 360 samples with <code class="docutils literal notranslate"><span class="pre">window_size=120</span></code> and <code class="docutils literal notranslate"><span class="pre">stride=1</span></code>,
+this produces 241 time steps.</p>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">MySlidingRMS</span><span class="p">(</span><span class="n">Transform</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;RMS computed over a sliding window, preserving temporal resolution.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    dim : str, optional</span>
+<span class="sd">        The dimension to slide over. Default is ``&quot;time&quot;``.</span>
+<span class="sd">    window_size : int, optional</span>
+<span class="sd">        Size of the sliding window. Default is ``120``.</span>
+<span class="sd">    stride : int, optional</span>
+<span class="sd">        Stride of the sliding window. Default is ``1``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="n">window_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">120</span><span class="p">,</span> <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="n">dim</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">window_size</span> <span class="o">=</span> <span class="n">window_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">=</span> <span class="n">stride</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <a href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="torch.Tensor" class="sphx-glr-backref-module-torch sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span></a><span class="p">)</span> <span class="o">-&gt;</span> <a href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="torch.Tensor" class="sphx-glr-backref-module-torch sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span></a><span class="p">:</span>
+        <span class="n">dim_idx</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="n">x_unnamed</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+
+        <span class="c1"># unfold creates sliding windows: (channels, n_windows, window_size)</span>
+        <span class="n">windows</span> <span class="o">=</span> <span class="n">x_unnamed</span><span class="o">.</span><span class="n">unfold</span><span class="p">(</span><span class="n">dim_idx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">window_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span><span class="p">)</span>
+        <span class="n">rms</span> <span class="o">=</span> <a href="https://docs.pytorch.org/docs/stable/generated/torch.sqrt.html#torch.sqrt" title="torch.sqrt" class="sphx-glr-backref-module-torch sphx-glr-backref-type-py-function"><span class="n">torch</span><span class="o">.</span><span class="n">sqrt</span></a><span class="p">(</span><a href="https://docs.pytorch.org/docs/stable/generated/torch.mean.html#torch.mean" title="torch.mean" class="sphx-glr-backref-module-torch sphx-glr-backref-type-py-function"><span class="n">torch</span><span class="o">.</span><span class="n">mean</span></a><span class="p">(</span><span class="n">windows</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">rms</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="o">*</span><span class="n">x</span><span class="o">.</span><span class="n">names</span><span class="p">)</span>
+
+
+<span class="c1"># Register as a temporal feature (preserves time dimension)</span>
+<span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">register_feature</span><span class="p">(</span>
+    <span class="s2">&quot;My Sliding RMS&quot;</span><span class="p">,</span> <span class="n">MySlidingRMS</span><span class="p">,</span> <span class="n">requires_temporal_preservation</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
 </pre></div>
 </div>
 </section>
-<section id="example-usage">
-<h3>Example Usage<a class="headerlink" href="#example-usage" title="Link to this heading">#</a></h3>
+<section id="reference-built-in-features">
+<h3>Reference: Built-in Features<a class="headerlink" href="#reference-built-in-features" title="Link to this heading">#</a></h3>
+<p>The following features are registered in <a class="reference internal" href="../../modules/config.html#module-myogestic.default_config" title="myogestic.default_config"><code class="xref py py-mod docutils literal notranslate"><span class="pre">default_config</span></code></a>:</p>
+<p><strong>Non-temporal</strong> (collapse time axis):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Root</span> <span class="pre">Mean</span> <span class="pre">Square</span></code> – <code class="xref py py-class docutils literal notranslate"><span class="pre">myoverse.transforms.RMS</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Mean</span> <span class="pre">Absolute</span> <span class="pre">Value</span></code> – <code class="xref py py-class docutils literal notranslate"><span class="pre">myoverse.transforms.MAV</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Variance</span></code> – <code class="xref py py-class docutils literal notranslate"><span class="pre">myoverse.transforms.VAR</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Waveform</span> <span class="pre">Length</span></code> – <code class="xref py py-class docutils literal notranslate"><span class="pre">myoverse.transforms.WaveformLength</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Zero</span> <span class="pre">Crossings</span></code> – <code class="xref py py-class docutils literal notranslate"><span class="pre">myoverse.transforms.ZeroCrossings</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Slope</span> <span class="pre">Sign</span> <span class="pre">Change</span></code> – <code class="xref py py-class docutils literal notranslate"><span class="pre">myoverse.transforms.SlopeSignChanges</span></code></p></li>
+</ul>
+<p><strong>Temporal</strong> (preserve time axis):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Identity</span></code> – <code class="xref py py-class docutils literal notranslate"><span class="pre">myoverse.transforms.Identity</span></code>
+(passes raw signal through unchanged)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">RMS</span> <span class="pre">Small</span> <span class="pre">Window</span></code> – custom sliding-window RMS defined in
+<a class="reference internal" href="../../modules/config.html#module-myogestic.user_config" title="myogestic.user_config"><code class="xref py py-mod docutils literal notranslate"><span class="pre">user_config</span></code></a> (window_size=120, stride=1)</p></li>
+</ul>
+</section>
+<section id="example-usage-standalone-test">
+<h3>Example Usage (standalone test)<a class="headerlink" href="#example-usage-standalone-test" title="Link to this heading">#</a></h3>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
-    <span class="c1"># Create a small signal for demonstration</span>
     <span class="n">sample_data</span> <span class="o">=</span> <a href="https://docs.pytorch.org/docs/stable/generated/torch.tensor.html#torch.tensor" title="torch.tensor" class="sphx-glr-backref-module-torch sphx-glr-backref-type-py-function"><span class="n">torch</span><span class="o">.</span><span class="n">tensor</span></a><span class="p">([</span><span class="mf">1.2</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">])</span>
     <span class="n">sample_data</span> <span class="o">=</span> <span class="n">sample_data</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="s2">&quot;time&quot;</span><span class="p">)</span>
 
-    <span class="c1"># Instantiate and apply the feature</span>
     <span class="n">feature_instance</span> <span class="o">=</span> <span class="n">MyVarianceFeature</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">)</span>
     <span class="n">variance_value</span> <span class="o">=</span> <span class="n">feature_instance</span><span class="p">(</span><span class="n">sample_data</span><span class="p">)</span>
 
@@ -539,10 +608,12 @@ compatible with future updates.</p>
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#temporal-vs-non-temporal-features">Temporal vs Non-Temporal Features</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-overview">Example Overview</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-inherit-and-define-logic">Step 1: Inherit and define logic</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-register-the-custom-feature">Step 2: Register the custom feature</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-usage">Example Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-define-a-non-temporal-feature-variance">Step 1: Define a Non-Temporal Feature (Variance)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-define-a-temporal-feature-sliding-window-rms">Step 2: Define a Temporal Feature (Sliding Window RMS)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reference-built-in-features">Reference: Built-in Features</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-usage-standalone-test">Example Usage (standalone test)</a></li>
 </ul>
 </li>
 </ul>

@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.RecordingInterfaceTemplate.initialize\_ui\_logic
+================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: RecordingInterfaceTemplate.initialize_ui_logic

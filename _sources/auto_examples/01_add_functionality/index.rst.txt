@@ -3,9 +3,12 @@
 .. _sphx_glr_auto_examples_01_add_functionality:
 
 
------------------
-Add Functionality
------------------
+-----------------------
+Extend MyoGestic
+-----------------------
+
+Tutorials for adding new components to MyoGestic through the
+:class:`~myogestic.utils.config.Registry`.
 
 
 
@@ -17,7 +20,7 @@ Add Functionality
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="This example demonstrates how to create and register a new real-time post-prediction filter in MyoGestic, allowing you to process or smooth model outputs in real time after predictions are made.">
+    <div class="sphx-glr-thumbcontainer" tooltip="This example demonstrates how to create and register a new real-time post-prediction filter in MyoGestic, allowing you to smooth or transform model outputs in real time after predictions are made.">
 
 .. only:: html
 
@@ -34,7 +37,7 @@ Add Functionality
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="This example demonstrates how to create and register a custom model to MyoGestic using the CONFIG_REGISTRY from user_config.py. This example also explains how to define changeable and unchangeable parameters in your configuration.">
+    <div class="sphx-glr-thumbcontainer" tooltip="This example shows how to register a new model (classifier or regressor) in MyoGestic.  Every model needs four functions -- train, predict, save, and load -- plus some metadata describing its parameters and capabilities.">
 
 .. only:: html
 
@@ -45,13 +48,13 @@ Add Functionality
 
 .. raw:: html
 
-      <div class="sphx-glr-thumbnail-title">Add a Custom Model</div>
+      <div class="sphx-glr-thumbnail-title">Add a Model</div>
     </div>
 
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="Below is an example of how to create and register a new feature by inheriting from the base Transform class from MyoVerse.">
+    <div class="sphx-glr-thumbcontainer" tooltip="This example shows how to create and register a new feature-extraction transform in MyoGestic.  Features are applied to raw EMG data during dataset creation and real-time prediction to produce the input that models consume.">
 
 .. only:: html
 
@@ -62,13 +65,13 @@ Add Functionality
 
 .. raw:: html
 
-      <div class="sphx-glr-thumbnail-title">Adding a Custom Biosignal Feature</div>
+      <div class="sphx-glr-thumbnail-title">Add a Biosignal Feature</div>
     </div>
 
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="This example demonstrates how to build and register a new output system in MyoGestic.">
+    <div class="sphx-glr-thumbcontainer" tooltip="This example demonstrates how to build and register a new output system in MyoGestic.  An output system receives model predictions and routes them to an external destination -- a visual interface, prosthetic hardware, game engine, or anything else that consumes EMG-decoded outputs.">
 
 .. only:: html
 
@@ -79,7 +82,7 @@ Add Functionality
 
 .. raw:: html
 
-      <div class="sphx-glr-thumbnail-title">Add a Custom Output System</div>
+      <div class="sphx-glr-thumbnail-title">Add an Output System</div>
     </div>
 
 

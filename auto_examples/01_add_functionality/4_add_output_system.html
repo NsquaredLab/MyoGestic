@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Add a Custom Output System &#8212; MyoGestic 0.7.0 Documentation</title>
+    <title>Add an Output System &#8212; MyoGestic 0.9.0 Documentation</title>
   
   
   
@@ -43,17 +43,17 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../_static/documentation_options.js?v=39bb1c6d"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'auto_examples/01_add_functionality/4_add_output_system';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Add a New Visual Interface" href="../02_add_visual_interface/index.html" />
-    <link rel="prev" title="Adding a Custom Biosignal Feature" href="3_add_biosignal_feature.html" />
+    <link rel="prev" title="Add a Biosignal Feature" href="3_add_biosignal_feature.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.0" />
+  <meta name="docsearch:version" content="0.9.0" />
   </head>
   
   
@@ -119,8 +119,8 @@
       
     
     
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.7.0 Documentation - Home"/>
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.7.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.9.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.9.0 Documentation - Home"/>
   
   
 </a></div>
@@ -129,7 +129,7 @@
 <div class="nav-item">
   <div class="version-switcher__container dropdown">
       <button id="version-switcher-button" type="button" class="version-switcher__button btn btn-sm navbar-btn" aria-haspopup="true" aria-expanded="false">
-          Version 0.7.0
+          Version 0.9.0
       </button>
       
       
@@ -312,15 +312,15 @@
      aria-label="Section Navigation">
   <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
   <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Add Functionality</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Extend MyoGestic</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="1_add_post_prediction_filter.html">Add a Post-Prediction Filter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="2_add_model.html">Add a Custom Model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="3_add_biosignal_feature.html">Adding a Custom Biosignal Feature</a></li>
-<li class="toctree-l2 current active"><a class="current reference internal" href="#">Add a Custom Output System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="2_add_model.html">Add a Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3_add_biosignal_feature.html">Add a Biosignal Feature</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Add an Output System</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../02_add_visual_interface/index.html">Add a New Visual Interface</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../02_add_visual_interface/0_add_ui.html">Part 0: What is a Visual Interface?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../02_add_visual_interface/0_add_ui.html">Part 0: Overview and UI Setup</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../02_add_visual_interface/1_setup_interface.html">Part 1: Setup Interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../02_add_visual_interface/2_recording_interface.html">Part 2: Recording Interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../02_add_visual_interface/3_output_system.html">Part 3: Output System</a></li>
@@ -370,9 +370,9 @@
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Examples</a></li>
     
     
-    <li class="breadcrumb-item"><a href="index.html" class="nav-link">Add Functionality</a></li>
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">Extend MyoGestic</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Add a Custom Output System</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Add an Output System</span></li>
   </ul>
 </nav>
 </div>
@@ -394,53 +394,52 @@
 <p><a class="reference internal" href="#sphx-glr-download-auto-examples-01-add-functionality-4-add-output-system-py"><span class="std std-ref">Go to the end</span></a>
 to download the full example code.</p>
 </div>
-<section class="sphx-glr-example-title" id="add-a-custom-output-system">
-<span id="sphx-glr-auto-examples-01-add-functionality-4-add-output-system-py"></span><h1>Add a Custom Output System<a class="headerlink" href="#add-a-custom-output-system" title="Link to this heading">#</a></h1>
-<p>This example demonstrates how to build and register a new output system in <strong>MyoGestic</strong>.</p>
-<p>By creating a subclass of the
-generic <a class="reference internal" href="../../modules/visual_interface.html#output-system-template"><span class="std std-ref">Output System Template</span></a>, you can channel model predictions into any
-destination you like—such as a virtual environment or hardware device.</p>
-<div class="admonition-we-recommend-implementing-any-additions-in-user-config-py admonition">
-<p class="admonition-title">We Recommend Implementing any Additions in <em>user_config.py</em></p>
-<p>The <em>user_config.py</em> module is specifically designed for end-users to register
-and configure their own custom components such as models, features,
-and filters. This keeps your modifications modular, reduces conflicts with
-core MyoGestic settings, and simplifies upgrades in the future.</p>
-<div class="admonition important">
-<p class="admonition-title">Important</p>
-<p>By registering your addition in <code class="docutils literal notranslate"><span class="pre">user_config.py</span></code>, you ensure that your custom
-configuration stays separate from core MyoGestic functionality and remains
-compatible with future updates.</p>
+<section class="sphx-glr-example-title" id="add-an-output-system">
+<span id="sphx-glr-auto-examples-01-add-functionality-4-add-output-system-py"></span><h1>Add an Output System<a class="headerlink" href="#add-an-output-system" title="Link to this heading">#</a></h1>
+<p>This example demonstrates how to build and register a new output system in
+MyoGestic.  An output system receives model predictions and routes them to
+an external destination – a visual interface, prosthetic hardware, game
+engine, or anything else that consumes EMG-decoded outputs.</p>
+<p>Output systems are created <strong>per active visual interface</strong> when a trained
+model is loaded in the Online tab.  Each output system is registered with
+a name that matches the short name of its target VI (e.g., <code class="docutils literal notranslate"><span class="pre">&quot;VHI&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">&quot;KHI&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;VCI&quot;</span></code>).</p>
+<section id="multi-vi-architecture">
+<h2>Multi-VI Architecture<a class="headerlink" href="#multi-vi-architecture" title="Link to this heading">#</a></h2>
+<p>MyoGestic supports multiple active visual interfaces simultaneously.
+When a model is loaded, the Online protocol creates output systems only
+for the VIs that are currently active:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Inside OnlineProtocol._load_model():</span>
+<span class="n">active_vis</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">active_visual_interfaces</span>  <span class="c1"># dict[str, VisualInterface]</span>
+<span class="k">for</span> <span class="n">vi_name</span><span class="p">,</span> <span class="n">vi</span> <span class="ow">in</span> <span class="n">active_vis</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">output_system</span> <span class="o">=</span> <span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">output_systems_map</span><span class="p">[</span><span class="n">vi_name</span><span class="p">](</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">is_classifier</span>
+    <span class="p">)</span>
+</pre></div>
 </div>
+<p>To access a specific VI from within your output system:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">vi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">active_visual_interfaces</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;VHI&quot;</span><span class="p">)</span>
+</pre></div>
 </div>
-<section id="example-overview">
-<h2>Example Overview<a class="headerlink" href="#example-overview" title="Link to this heading">#</a></h2>
-<ol class="arabic simple">
-<li><p><strong>Create</strong> a custom output system class by inheriting from <code class="docutils literal notranslate"><span class="pre">OutputSystemTemplate</span></code>.</p></li>
-<li><p><strong>Implement</strong> the required methods for processing and sending predictions.</p></li>
-<li><p><strong>Register</strong> the output system into <code class="docutils literal notranslate"><span class="pre">CONFIG_REGISTRY</span></code>.</p></li>
-<li><p>(Optional) <strong>Test</strong> your new output system by selecting it in your MyoGestic
-workflow.</p></li>
-</ol>
 </section>
-<section id="notes-on-implementation">
-<h2>Notes on Implementation<a class="headerlink" href="#notes-on-implementation" title="Link to this heading">#</a></h2>
-<p>The class design follows the interface defined by <a class="reference internal" href="../../modules/visual_interface.html#output-system-template"><span class="std std-ref">Output System Template</span></a>, requiring:</p>
+<section id="required-methods">
+<h2>Required Methods<a class="headerlink" href="#required-methods" title="Link to this heading">#</a></h2>
+<p>Your output system must inherit from <a class="reference internal" href="../../modules/visual_interface.html#output-system-template"><span class="std std-ref">Output System Template</span></a> and
+implement:</p>
 <ul class="simple">
-<li><p>A constructor that takes in the <code class="docutils literal notranslate"><span class="pre">main_window</span></code> (as all QObject do) and a boolean flag for classification vs. regression.</p></li>
-<li><p>Definitions for:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">_process_prediction__classification(prediction:</span> <span class="pre">Any)</span> <span class="pre">-&gt;</span> <span class="pre">Any</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">_process_prediction__regression(prediction:</span> <span class="pre">Any)</span> <span class="pre">-&gt;</span> <span class="pre">Any</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">send_prediction(prediction:</span> <span class="pre">Any)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">closeEvent(event)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code></p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/OutputSystemTemplate/myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__classification.html#myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__classification" title="myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__classification"><code class="xref py py-meth docutils literal notranslate"><span class="pre">_process_prediction__classification()</span></code></a></p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/OutputSystemTemplate/myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__regression.html#myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__regression" title="myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__regression"><code class="xref py py-meth docutils literal notranslate"><span class="pre">_process_prediction__regression()</span></code></a></p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.OutputSystemTemplate.html#myogestic.gui.widgets.templates.OutputSystemTemplate.send_prediction" title="myogestic.gui.widgets.templates.OutputSystemTemplate.send_prediction"><code class="xref py py-meth docutils literal notranslate"><span class="pre">send_prediction()</span></code></a></p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.OutputSystemTemplate.html#myogestic.gui.widgets.templates.OutputSystemTemplate.close_event" title="myogestic.gui.widgets.templates.OutputSystemTemplate.close_event"><code class="xref py py-meth docutils literal notranslate"><span class="pre">close_event()</span></code></a></p></li>
 </ul>
-</li>
-</ul>
-<p>Below, we provide a simplified demonstration that mirrors how you might adapt a
-neural rehabilitation device interface or a virtual hand interface. For further
-examples of fully featured implementations, see references in MyoGestic’s existing
-output systems.</p>
+<p>The base class automatically selects the right processing method based
+on <code class="docutils literal notranslate"><span class="pre">prediction_is_classification</span></code> and exposes it as
+<a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.OutputSystemTemplate.html#myogestic.gui.widgets.templates.OutputSystemTemplate.process_prediction" title="myogestic.gui.widgets.templates.OutputSystemTemplate.process_prediction"><code class="xref py py-attr docutils literal notranslate"><span class="pre">process_prediction</span></code></a>.</p>
+<div class="admonition-add-your-output-system-in-mod-myogestic-user-config admonition">
+<p class="admonition-title">Add your output system in <a class="reference internal" href="../../modules/config.html#module-myogestic.user_config" title="myogestic.user_config"><code class="xref py py-mod docutils literal notranslate"><span class="pre">user_config</span></code></a></p>
+<p>Keep custom output system registrations in <a class="reference internal" href="../../modules/config.html#module-myogestic.user_config" title="myogestic.user_config"><code class="xref py py-mod docutils literal notranslate"><span class="pre">user_config</span></code></a> to stay
+separate from core MyoGestic code.</p>
+</div>
 <section id="step-1-define-your-custom-output-system">
 <h3>Step 1: Define Your Custom Output System<a class="headerlink" href="#step-1-define-your-custom-output-system" title="Link to this heading">#</a></h3>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a>
@@ -448,65 +447,46 @@ output systems.</p>
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">MyCustomOutputSystem</span><span class="p">(</span><span class="n">OutputSystemTemplate</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    A simple example output system for demonstration purposes.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A simple example output system for demonstration.</span>
 
-<span class="sd">    This class shows how to inherit from OutputSystemTemplate and implement</span>
-<span class="sd">    the required abstract methods. It can send predictions to any desired</span>
-<span class="sd">    interface or hardware, provided you adapt the methods below.</span>
+<span class="sd">    This class shows how to inherit from :class:`~myogestic.gui.widgets.templates.OutputSystemTemplate` and</span>
+<span class="sd">    implement the required abstract methods.  It sends predictions to</span>
+<span class="sd">    the application logger for demonstration purposes.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">main_window</span><span class="p">,</span> <span class="n">prediction_is_classification</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Initialize the custom output system.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        main_window : Any</span>
-<span class="sd">            The main window object containing a logger or other references.</span>
-<span class="sd">        prediction_is_classification : bool</span>
-<span class="sd">            Set to True for classification tasks, False for regression.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">main_window</span><span class="p">,</span> <span class="n">prediction_is_classification</span><span class="p">)</span>
-        <span class="c1"># (Optional) Initialize sockets, signals, or other resources here</span>
+        <span class="c1"># Initialize sockets, hardware connections, timers, etc. here.</span>
+        <span class="c1">#</span>
+        <span class="c1"># To access the outgoing signal of a specific VI:</span>
+        <span class="c1">#   vi = self._main_window.active_visual_interfaces.get(&quot;VHI&quot;)</span>
+        <span class="c1">#   self._outgoing_signal = vi.outgoing_message_signal</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__classification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Convert a classification prediction into a format suitable</span>
-<span class="sd">        for your output system or interface.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="c1"># Replace with your own logic or mappings</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;Classification: </span><span class="si">{</span><span class="n">prediction</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__classification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a classification label to bytes for transmission.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;Class: </span><span class="si">{</span><span class="n">prediction</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__regression</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Convert a regression prediction into a format suitable</span>
-<span class="sd">        for your output system or interface.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="c1"># Replace with your own logic or mappings</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;Regression: </span><span class="si">{</span><span class="n">prediction</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__regression</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert regression values to bytes for transmission.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">([</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">prediction</span><span class="p">])</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">send_prediction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Send the processed prediction to your output destination.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Send the processed prediction to the output destination.&quot;&quot;&quot;</span>
         <span class="n">processed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_prediction</span><span class="p">(</span><span class="n">prediction</span><span class="p">)</span>
-        <span class="c1"># For demonstration, we simply print the processed data</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Sending: </span><span class="si">{</span><span class="n">processed</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="c1"># Replace with your actual send logic (UDP, serial, etc.)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sending: </span><span class="si">{</span><span class="n">processed</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">close_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Handle any cleanup needed when your system closes.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="c1"># Close sockets, timers, or other resources here</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Clean up resources (sockets, timers, etc.).&quot;&quot;&quot;</span>
         <span class="k">pass</span>
 </pre></div>
 </div>
 </section>
 <section id="step-2-register-the-output-system-in-config-registry">
 <h3>Step 2: Register the Output System in CONFIG_REGISTRY<a class="headerlink" href="#step-2-register-the-output-system-in-config-registry" title="Link to this heading">#</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">name</span></code> must match the short name of the target VI.  For a
+standalone output system (not tied to a specific VI), use any unique
+name – it will be instantiated when a model is loaded.</p>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.utils.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONFIG_REGISTRY</span>
 
 <span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">register_output_system</span><span class="p">(</span>
@@ -515,8 +495,17 @@ output systems.</p>
 </pre></div>
 </div>
 </section>
-<section id="example-virtual-hand-interface">
-<h3>Example: Virtual Hand Interface<a class="headerlink" href="#example-virtual-hand-interface" title="Link to this heading">#</a></h3>
+<section id="reference-virtual-hand-interface-output-system">
+<h3>Reference: Virtual Hand Interface Output System<a class="headerlink" href="#reference-virtual-hand-interface-output-system" title="Link to this heading">#</a></h3>
+<p>The VHI output system demonstrates a real-world implementation that:</p>
+<ul class="simple">
+<li><p>Validates that the VHI is among the active visual interfaces.</p></li>
+<li><p>Maps classification labels (0-8) to predefined hand poses.</p></li>
+<li><p>Converts regression predictions to a float list string.</p></li>
+<li><p>Sends the processed prediction via the VI’s outgoing UDP signal.</p></li>
+</ul>
+<div class="literal-block-wrapper docutils container" id="id1">
+<div class="code-block-caption"><span class="caption-text">VHI Output System – full implementation</span><a class="headerlink" href="#id1" title="Link to this code">#</a></div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a>
 <span class="linenos"> 2</span>
 <span class="linenos"> 3</span><span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">LoggerLevel</span>
@@ -589,6 +578,7 @@ output systems.</p>
 <span class="linenos">70</span>        <span class="k">pass</span>
 </pre></div>
 </div>
+</div>
 <div class="sphx-glr-footer sphx-glr-footer-example docutils container" id="sphx-glr-download-auto-examples-01-add-functionality-4-add-output-system-py">
 <div class="sphx-glr-download sphx-glr-download-jupyter docutils container">
 <p><a class="reference download internal" download="" href="../../_downloads/16ac5d0bf77771f25776e1eba491231a/4_add_output_system.ipynb"><code class="xref download docutils literal notranslate"><span class="pre">Download</span> <span class="pre">Jupyter</span> <span class="pre">notebook:</span> <span class="pre">4_add_output_system.ipynb</span></code></a></p>
@@ -628,11 +618,11 @@ output systems.</p>
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-overview">Example Overview</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#notes-on-implementation">Notes on Implementation</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#multi-vi-architecture">Multi-VI Architecture</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#required-methods">Required Methods</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-define-your-custom-output-system">Step 1: Define Your Custom Output System</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-register-the-output-system-in-config-registry">Step 2: Register the Output System in CONFIG_REGISTRY</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-virtual-hand-interface">Example: Virtual Hand Interface</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reference-virtual-hand-interface-output-system">Reference: Virtual Hand Interface Output System</a></li>
 </ul>
 </li>
 </ul>

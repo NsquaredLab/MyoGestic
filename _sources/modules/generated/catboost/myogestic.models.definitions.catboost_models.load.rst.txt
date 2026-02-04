@@ -1,0 +1,8 @@
+﻿myogestic.models.definitions.catboost_models.load
+=====================================================================
+
+.. currentmodule:: myogestic.models.definitions.catboost_models
+
+.. autofunction:: load
+
+.. include:: /modules/generated/backreferences/myogestic.models.definitions.catboost_models.load.examples

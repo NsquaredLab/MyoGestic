@@ -1,0 +1,37 @@
+﻿VirtualCursorInterface_SetupInterface
+======================================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface
+
+.. autoclass:: VirtualCursorInterface_SetupInterface
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: VirtualCursorInterface_SetupInterface
+       
+            ~VirtualCursorInterface_SetupInterface.__init__
+            ~VirtualCursorInterface_SetupInterface._get_cursor_py_executable
+            ~VirtualCursorInterface_SetupInterface._setup_timers
+            ~VirtualCursorInterface_SetupInterface._update_status
+            ~VirtualCursorInterface_SetupInterface.clear_custom_signal_buffers
+            ~VirtualCursorInterface_SetupInterface.close_event
+            ~VirtualCursorInterface_SetupInterface.connect_custom_signals
+            ~VirtualCursorInterface_SetupInterface.disconnect_custom_signals
+            ~VirtualCursorInterface_SetupInterface.get_custom_save_data
+            ~VirtualCursorInterface_SetupInterface.initialize_ui_logic
+            ~VirtualCursorInterface_SetupInterface.interface_was_killed
+            ~VirtualCursorInterface_SetupInterface.online_predicted_cursor_update
+            ~VirtualCursorInterface_SetupInterface.read_message
+            ~VirtualCursorInterface_SetupInterface.read_predicted_cursor
+            ~VirtualCursorInterface_SetupInterface.start_interface
+            ~VirtualCursorInterface_SetupInterface.stop_interface
+            ~VirtualCursorInterface_SetupInterface.toggle_streaming
+            ~VirtualCursorInterface_SetupInterface.toggle_virtual_cursor_interface
+            ~VirtualCursorInterface_SetupInterface.write_message
+            ~VirtualCursorInterface_SetupInterface.write_status_message
+        
+        

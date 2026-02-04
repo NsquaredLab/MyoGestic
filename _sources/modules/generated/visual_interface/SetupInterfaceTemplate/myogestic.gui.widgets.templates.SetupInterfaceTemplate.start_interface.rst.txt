@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.SetupInterfaceTemplate.start\_interface
+=======================================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: SetupInterfaceTemplate.start_interface

@@ -1,0 +1,22 @@
+﻿VisualInterface
+===============================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. autoclass:: VisualInterface
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: VisualInterface
+       
+            ~VisualInterface.__init__
+            ~VisualInterface._log_error
+            ~VisualInterface.close_event
+            ~VisualInterface.disable_ui
+            ~VisualInterface.enable_ui
+        
+        

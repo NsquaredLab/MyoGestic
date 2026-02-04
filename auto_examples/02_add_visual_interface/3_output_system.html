@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Part 3: Output System &#8212; MyoGestic 0.7.0 Documentation</title>
+    <title>Part 3: Output System &#8212; MyoGestic 0.9.0 Documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../_static/documentation_options.js?v=39bb1c6d"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'auto_examples/02_add_visual_interface/3_output_system';</script>
@@ -53,7 +53,7 @@
     <link rel="prev" title="Part 2: Recording Interface" href="2_recording_interface.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.0" />
+  <meta name="docsearch:version" content="0.9.0" />
   </head>
   
   
@@ -119,8 +119,8 @@
       
     
     
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.7.0 Documentation - Home"/>
-    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.7.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-light" alt="MyoGestic 0.9.0 Documentation - Home"/>
+    <img src="../../_static/myogestic_logo.png" class="logo__image only-dark pst-js-only" alt="MyoGestic 0.9.0 Documentation - Home"/>
   
   
 </a></div>
@@ -129,7 +129,7 @@
 <div class="nav-item">
   <div class="version-switcher__container dropdown">
       <button id="version-switcher-button" type="button" class="version-switcher__button btn btn-sm navbar-btn" aria-haspopup="true" aria-expanded="false">
-          Version 0.7.0
+          Version 0.9.0
       </button>
       
       
@@ -312,15 +312,15 @@
      aria-label="Section Navigation">
   <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
   <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../01_add_functionality/index.html">Add Functionality</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../01_add_functionality/index.html">Extend MyoGestic</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/1_add_post_prediction_filter.html">Add a Post-Prediction Filter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/2_add_model.html">Add a Custom Model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/3_add_biosignal_feature.html">Adding a Custom Biosignal Feature</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/4_add_output_system.html">Add a Custom Output System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/2_add_model.html">Add a Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/3_add_biosignal_feature.html">Add a Biosignal Feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../01_add_functionality/4_add_output_system.html">Add an Output System</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Add a New Visual Interface</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="0_add_ui.html">Part 0: What is a Visual Interface?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="0_add_ui.html">Part 0: Overview and UI Setup</a></li>
 <li class="toctree-l2"><a class="reference internal" href="1_setup_interface.html">Part 1: Setup Interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2_recording_interface.html">Part 2: Recording Interface</a></li>
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">Part 3: Output System</a></li>
@@ -396,66 +396,135 @@ to download the full example code.</p>
 </div>
 <section class="sphx-glr-example-title" id="part-3-output-system">
 <span id="sphx-glr-auto-examples-02-add-visual-interface-3-output-system-py"></span><h1>Part 3: Output System<a class="headerlink" href="#part-3-output-system" title="Link to this heading">#</a></h1>
-<p>This implementation demonstrates the creation of an <strong>Output System</strong> for the Virtual Hand Interface.
-It processes predictions (classification or regression) and communicates them to the visual interface.</p>
-<section id="steps">
-<h2>Steps:<a class="headerlink" href="#steps" title="Link to this heading">#</a></h2>
-<ol class="arabic simple">
-<li><dl class="simple">
-<dt><strong>Step 1: Class Initialization and Validation</strong></dt><dd><ul class="simple">
-<li><p>Ensures the correct visual interface is selected and initializes helper objects.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>Step 2: Processing Predictions</strong></dt><dd><ul class="simple">
-<li><p>Converts classification and regression predictions into an appropriate format.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>Step 3: Sending Predictions</strong></dt><dd><ul class="simple">
-<li><p>Sends processed predictions to the visual interface via output signals.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><strong>Step 4: Handling Close Events</strong></dt><dd><ul class="simple">
-<li><p>Cleans up resources and handles the exit process gracefully.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-</ol>
-<section id="predefined-mapping-for-classification-predictions">
-<h3>Predefined Mapping for Classification Predictions<a class="headerlink" href="#predefined-mapping-for-classification-predictions" title="Link to this heading">#</a></h3>
-<p>This dictionary maps classification labels to their respective predefined
-output strings for the Virtual Hand Interface.</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="n">PREDICTION2INTERFACE_MAP</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="o">-</span><span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;Rejected Sample&quot;</span><span class="p">,</span>
-    <span class="mi">0</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 0, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
-    <span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 1, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
-    <span class="mi">2</span><span class="p">:</span> <span class="s2">&quot;[1, 0, 0, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
-    <span class="mi">3</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 0, 1, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
-    <span class="mi">4</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 0, 0, 1, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
-    <span class="mi">5</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 0, 0, 0, 1, 0, 0, 0]&quot;</span><span class="p">,</span>
-    <span class="mi">6</span><span class="p">:</span> <span class="s2">&quot;[0.67, 1, 1, 1, 1, 1, 0, 0, 0]&quot;</span><span class="p">,</span>
-    <span class="mi">7</span><span class="p">:</span> <span class="s2">&quot;[0.45, 1, 0.6, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
-    <span class="mi">8</span><span class="p">:</span> <span class="s2">&quot;[0.55, 1, 0.65, 0.65, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>
+<p>The output system is the third component of a visual interface.  It
+processes model predictions (classification or regression) and sends them
+to the external VI application.</p>
+<section id="multi-vi-architecture">
+<h2>Multi-VI Architecture<a class="headerlink" href="#multi-vi-architecture" title="Link to this heading">#</a></h2>
+<p>MyoGestic supports multiple active visual interfaces simultaneously.
+When a model is loaded in the Online tab, the <code class="xref py py-class docutils literal notranslate"><span class="pre">OnlineProtocol</span></code> creates
+one output system per active VI:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">active_vis</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">active_visual_interfaces</span>  <span class="c1"># dict[str, VI]</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">_output_systems</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="n">vi_name</span><span class="p">:</span> <span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">output_systems_map</span><span class="p">[</span><span class="n">vi_name</span><span class="p">](</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">is_classifier</span>
+    <span class="p">)</span>
+    <span class="k">for</span> <span class="n">vi_name</span> <span class="ow">in</span> <span class="n">active_vis</span>
+    <span class="k">if</span> <span class="n">vi_name</span> <span class="ow">in</span> <span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">output_systems_map</span>
 <span class="p">}</span>
 </pre></div>
 </div>
+<p>Each prediction is then sent to <strong>all</strong> active output systems:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">output_system</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_systems</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+    <span class="n">output_system</span><span class="o">.</span><span class="n">send_prediction</span><span class="p">(</span><span class="n">prediction</span><span class="p">)</span>
+</pre></div>
+</div>
 </section>
-<section id="step-1-class-initialization">
-<h3>Step 1: Class Initialization<a class="headerlink" href="#step-1-class-initialization" title="Link to this heading">#</a></h3>
-<p>This step ensures that the selected visual interface is the Virtual Hand Interface.
-It also establishes the connection for outgoing signals using the main window.</p>
+<section id="accessing-your-vi">
+<h2>Accessing Your VI<a class="headerlink" href="#accessing-your-vi" title="Link to this heading">#</a></h2>
+<p>From within an output system, access the target VI via the
+<code class="docutils literal notranslate"><span class="pre">active_visual_interfaces</span></code> dict:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">vi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">active_visual_interfaces</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;VHI&quot;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">_outgoing_signal</span> <span class="o">=</span> <span class="n">vi</span><span class="o">.</span><span class="n">outgoing_message_signal</span>
+</pre></div>
+</div>
+</section>
+<section id="required-methods">
+<h2>Required Methods<a class="headerlink" href="#required-methods" title="Link to this heading">#</a></h2>
+<p>See <a class="reference internal" href="../../modules/visual_interface.html#output-system-template"><span class="std std-ref">Output System Template</span></a> for the full base class API.  You must
+implement:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/OutputSystemTemplate/myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__classification.html#myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__classification" title="myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__classification"><code class="xref py py-meth docutils literal notranslate"><span class="pre">_process_prediction__classification()</span></code></a></p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/OutputSystemTemplate/myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__regression.html#myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__regression" title="myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__regression"><code class="xref py py-meth docutils literal notranslate"><span class="pre">_process_prediction__regression()</span></code></a></p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.OutputSystemTemplate.html#myogestic.gui.widgets.templates.OutputSystemTemplate.send_prediction" title="myogestic.gui.widgets.templates.OutputSystemTemplate.send_prediction"><code class="xref py py-meth docutils literal notranslate"><span class="pre">send_prediction()</span></code></a></p></li>
+<li><p><a class="reference internal" href="../../modules/generated/visual_interface/myogestic.gui.widgets.templates.OutputSystemTemplate.html#myogestic.gui.widgets.templates.OutputSystemTemplate.close_event" title="myogestic.gui.widgets.templates.OutputSystemTemplate.close_event"><code class="xref py py-meth docutils literal notranslate"><span class="pre">close_event()</span></code></a></p></li>
+</ul>
+</section>
+<section id="classification-prediction-map">
+<h2>Classification Prediction Map<a class="headerlink" href="#classification-prediction-map" title="Link to this heading">#</a></h2>
+<p>For classifiers, you typically map integer labels to output strings.
+The VHI maps 10 gestures (labels 0-9, plus -1 for rejected samples)
+to 9-element float vectors representing finger joint positions:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">PREDICTION2INTERFACE_MAP</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="o">-</span><span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;Rejected Sample&quot;</span><span class="p">,</span>
+     <span class="mi">0</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 0, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>       <span class="c1"># rest</span>
+     <span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 1, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>         <span class="c1"># index</span>
+     <span class="mi">2</span><span class="p">:</span> <span class="s2">&quot;[1, 0, 0, 0, 0, 0, 0, 0, 0]&quot;</span><span class="p">,</span>         <span class="c1"># thumb</span>
+     <span class="o">...</span>
+     <span class="mi">9</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 1, 0, 0, 0, 0, 1, 0]&quot;</span><span class="p">,</span>         <span class="c1"># pointing</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<section id="step-1-define-your-output-system">
+<h3>Step 1: Define Your Output System<a class="headerlink" href="#step-1-define-your-output-system" title="Link to this heading">#</a></h3>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.templates.output_system</span><span class="w"> </span><span class="kn">import</span> <span class="n">OutputSystemTemplate</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">LoggerLevel</span>
+
+<span class="c1"># Prediction label to output string mapping (for classifiers)</span>
+<span class="n">PREDICTION_MAP</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="o">-</span><span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;Rejected&quot;</span><span class="p">,</span>
+    <span class="mi">0</span><span class="p">:</span> <span class="s2">&quot;[0, 0, 0]&quot;</span><span class="p">,</span>  <span class="c1"># rest</span>
+    <span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;[1, 0, 0]&quot;</span><span class="p">,</span>  <span class="c1"># action_a</span>
+    <span class="mi">2</span><span class="p">:</span> <span class="s2">&quot;[0, 1, 0]&quot;</span><span class="p">,</span>  <span class="c1"># action_b</span>
+<span class="p">}</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyInterface_OutputSystem</span><span class="p">(</span><span class="n">OutputSystemTemplate</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Output system for a custom visual interface.</span>
+
+<span class="sd">    Validates that the target VI is active, then routes predictions</span>
+<span class="sd">    to it via the outgoing signal.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">main_window</span><span class="p">,</span> <span class="n">prediction_is_classification</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">main_window</span><span class="p">,</span> <span class="n">prediction_is_classification</span><span class="p">)</span>
+
+        <span class="c1"># Validate that our target VI is active</span>
+        <span class="n">vi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">active_visual_interfaces</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;MYI&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">vi</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;MYI (My Interface) is not active.&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Grab the outgoing signal for sending predictions</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_outgoing_signal</span> <span class="o">=</span> <span class="n">vi</span><span class="o">.</span><span class="n">outgoing_message_signal</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__classification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Map a classification label to an output string.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">PREDICTION_MAP</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">prediction</span><span class="p">,</span> <span class="s2">&quot;Unknown&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__regression</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert regression values to a string representation.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">([</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">prediction</span><span class="p">])</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">send_prediction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Send the processed prediction to the VI via UDP.&quot;&quot;&quot;</span>
+        <span class="n">processed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_prediction</span><span class="p">(</span><span class="n">prediction</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_outgoing_signal</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">processed</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">close_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Clean up resources.&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+</pre></div>
+</div>
+</section>
+<section id="step-2-register-the-output-system">
+<h3>Step 2: Register the Output System<a class="headerlink" href="#step-2-register-the-output-system" title="Link to this heading">#</a></h3>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.utils.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONFIG_REGISTRY</span>
+
+<span class="n">CONFIG_REGISTRY</span><span class="o">.</span><span class="n">register_output_system</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;MYI&quot;</span><span class="p">,</span> <span class="n">output_system</span><span class="o">=</span><span class="n">MyInterface_OutputSystem</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="reference-vhi-output-system">
+<h3>Reference: VHI Output System<a class="headerlink" href="#reference-vhi-output-system" title="Link to this heading">#</a></h3>
+<p>The VHI output system validates that <code class="docutils literal notranslate"><span class="pre">&quot;VHI&quot;</span></code> is among the active
+visual interfaces, maps 10 classification labels to hand poses, and
+sends predictions via UDP.</p>
 <div class="literal-block-wrapper docutils container" id="id1">
-<div class="code-block-caption"><span class="caption-text">Output System Initialization</span><a class="headerlink" href="#id1" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+<div class="code-block-caption"><span class="caption-text">VHI Output System – full implementation</span><a class="headerlink" href="#id1" title="Link to this code">#</a></div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a>
 <span class="linenos"> 2</span>
 <span class="linenos"> 3</span><span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">LoggerLevel</span>
 <span class="linenos"> 4</span><span class="kn">from</span><span class="w"> </span><span class="nn">myogestic.gui.widgets.templates.output_system</span><span class="w"> </span><span class="kn">import</span> <span class="n">OutputSystemTemplate</span>
@@ -510,51 +579,19 @@ It also establishes the connection for outgoing signals using the main window.</
 <span class="linenos">53</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">selected_visual_interface</span><span class="o">.</span><span class="n">outgoing_message_signal</span>
 <span class="linenos">54</span>        <span class="p">)</span>
 <span class="linenos">55</span>
-</pre></div>
-</div>
-</div>
-</section>
-<section id="step-2-processing-predictions">
-<h3>Step 2: Processing Predictions<a class="headerlink" href="#step-2-processing-predictions" title="Link to this heading">#</a></h3>
-<p>This step defines how predictions (either classification or regression) are processed
-into the appropriate format that can be used by the Virtual Hand Interface.</p>
-<div class="literal-block-wrapper docutils container" id="id2">
-<div class="code-block-caption"><span class="caption-text">Processing Classification Predictions - Convert classification predictions into the required format to send them to the visual interface.</span><a class="headerlink" href="#id2" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">56</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__classification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="linenos">56</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__classification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
 <span class="linenos">57</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Process the prediction for classification.&quot;&quot;&quot;</span>
 <span class="linenos">58</span>        <span class="k">return</span> <span class="n">PREDICTION2INTERFACE_MAP</span><span class="p">[</span><span class="n">prediction</span><span class="p">]</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
-</pre></div>
-</div>
-</div>
-<div class="literal-block-wrapper docutils container" id="id3">
-<div class="code-block-caption"><span class="caption-text">Processing Regression Predictions - Convert regression predictions into the required format to send them to the visual interface.</span><a class="headerlink" href="#id3" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">60</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__regression</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="linenos">59</span>
+<span class="linenos">60</span>    <span class="k">def</span><span class="w"> </span><span class="nf">_process_prediction__regression</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
 <span class="linenos">61</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Process the prediction for regression.&quot;&quot;&quot;</span>
 <span class="linenos">62</span>        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">prediction</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
-</pre></div>
-</div>
-</div>
-</section>
-<section id="step-3-sending-predictions">
-<h3>Step 3: Sending Predictions<a class="headerlink" href="#step-3-sending-predictions" title="Link to this heading">#</a></h3>
-<p>This step sends the processed predictions (after formatting them into bytes)
-to the connected visual interface via the outgoing signal.</p>
-<div class="literal-block-wrapper docutils container" id="id4">
-<div class="code-block-caption"><span class="caption-text">Sending Predictions - Send the processed prediction to the visual interface.</span><a class="headerlink" href="#id4" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">64</span>    <span class="k">def</span><span class="w"> </span><span class="nf">send_prediction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">63</span>
+<span class="linenos">64</span>    <span class="k">def</span><span class="w"> </span><span class="nf">send_prediction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prediction</span><span class="p">:</span> <a href="https://docs.python.org/3/library/typing.html#typing.Any" title="typing.Any" class="sphx-glr-backref-module-typing sphx-glr-backref-type-py-data"><span class="n">Any</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="linenos">65</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Send the prediction to the visual interface.&quot;&quot;&quot;</span>
 <span class="linenos">66</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_outgoing_message_signal</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_prediction</span><span class="p">(</span><span class="n">prediction</span><span class="p">))</span>
-</pre></div>
-</div>
-</div>
-</section>
-<section id="step-4-handling-close-events">
-<h3>Step 4: Handling Close Events<a class="headerlink" href="#step-4-handling-close-events" title="Link to this heading">#</a></h3>
-<p>This step handles the cleanup process when the Output System is closed.
-It logs the closure and ensures that resources are properly released.</p>
-<div class="literal-block-wrapper docutils container" id="id5">
-<div class="code-block-caption"><span class="caption-text">Handling Close Events - Clean up resources and handle the exit process gracefully. If needed, this method can be extended to include additional cleanup steps.</span><a class="headerlink" href="#id5" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">68</span>    <span class="k">def</span><span class="w"> </span><span class="nf">close_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+<span class="linenos">67</span>
+<span class="linenos">68</span>    <span class="k">def</span><span class="w"> </span><span class="nf">close_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
 <span class="linenos">69</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Close the output system.&quot;&quot;&quot;</span>
 <span class="linenos">70</span>        <span class="k">pass</span>
 </pre></div>
@@ -599,12 +636,13 @@ It logs the closure and ensures that resources are properly released.</p>
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#steps">Steps:</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#predefined-mapping-for-classification-predictions">Predefined Mapping for Classification Predictions</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-class-initialization">Step 1: Class Initialization</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-processing-predictions">Step 2: Processing Predictions</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3-sending-predictions">Step 3: Sending Predictions</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-4-handling-close-events">Step 4: Handling Close Events</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#multi-vi-architecture">Multi-VI Architecture</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#accessing-your-vi">Accessing Your VI</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#required-methods">Required Methods</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classification-prediction-map">Classification Prediction Map</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-define-your-output-system">Step 1: Define Your Output System</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-register-the-output-system">Step 2: Register the Output System</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reference-vhi-output-system">Reference: VHI Output System</a></li>
 </ul>
 </li>
 </ul>

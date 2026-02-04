@@ -1,0 +1,6 @@
+myogestic.gui.widgets.visual\_interfaces.virtual\_cursor\_interface.VirtualCursorInterface\_SetupInterface.\_get\_cursor\_py\_executable
+========================================================================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface
+
+.. automethod:: VirtualCursorInterface_SetupInterface._get_cursor_py_executable

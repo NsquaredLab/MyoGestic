@@ -4,36 +4,39 @@ Add a Post-Prediction Filter
 ===========================================================
 
 This example demonstrates how to create and register a new **real-time**
-post-prediction filter in MyoGestic, allowing you to process or smooth
+post-prediction filter in MyoGestic, allowing you to smooth or transform
 model outputs in real time after predictions are made.
 
+Post-prediction filters are applied during the **Online** protocol.  Each
+time a new prediction arrives, the filter receives the entire history
+buffer (up to 5 seconds of past predictions) and must return a filtered
+array of the same shape.  The most recent entry (position ``-1``) in the
+returned array is used as the current prediction.
+
 .. important::
-   The post-prediction filters will only affect regression outputs.
+   Post-prediction filters only affect **regression** outputs.
+   Classification predictions are discrete labels and are not filtered.
 
 .. note::
-   Reference examples can be found in ``default_config.py``.
+   Built-in filters (Identity, Gaussian, Savgol) are defined in
+   :mod:`~myogestic.default_config`.
 
 Why Register a New Real-Time Filter?
-------------------------------------
-By registering a filter through the provided registry, you can seamlessly
+-------------------------------------
+By registering a filter through ``CONFIG_REGISTRY``, you can seamlessly
 incorporate custom signal-processing steps without modifying core code.
+Your filter will appear in the **Online** tab's filter dropdown.
 
-.. admonition:: We Recommend Implementing any Additions in *user_config.py*
+.. admonition:: Add your filter in :mod:`~myogestic.user_config`
 
-   The *user_config.py* module is specifically designed for end-users to register
-   and configure their own custom components such as models, features,
-   and filters. This keeps your modifications modular, reduces conflicts with
-   core MyoGestic settings, and simplifies upgrades in the future.
-
-   .. important::
-      By registering your addition in ``user_config.py``, you ensure that your custom
-      configuration stays separate from core MyoGestic functionality and remains
-      compatible with future updates.
+   The :mod:`~myogestic.user_config` module is specifically designed for users to
+   register their own components.  This keeps your additions separate
+   from core MyoGestic code and simplifies future upgrades.
 
 Example Overview
----------------
-1. **Create** a filtering function.
-2. **Register** it in the "Config Registry" so that it is recognized by MyoGestic.
+-----------------
+1. **Define** a filtering function.
+2. **Register** it in ``CONFIG_REGISTRY`` so that MyoGestic recognises it.
 
 """
 
@@ -41,27 +44,68 @@ Example Overview
 # -----------------------------------
 # Step 1: Define a Filtering Function
 # -----------------------------------
-# The input of a filter function is a list of lists containing float values outputted by a regression model.
+# A filter function receives a **list of lists** of float values -- the
+# buffered regression outputs from recent predictions.  The buffer grows
+# over time (up to ~5 seconds of data), with the most recent prediction
+# at position ``-1``.
 #
-# This list represents 5 seconds of temporal data, with the last entry (position -1) corresponding to the most recent prediction.
-#
-# The user can define how to process this data.
-#
-# The function should return a filtered list or array of the same size, ensuring that the most recent prediction (position -1) remains the filtered current prediction.
+# The function must return a filtered array **of the same shape**.  The
+# entry at position ``-1`` in the returned array becomes the current
+# (filtered) prediction sent to the output system.
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
+
+
 def my_awesome_gaussian_filter(data):
-    return gaussian_filter(np.array(data), 15, 0, axes=(0,))
+    """Apply a 1-D Gaussian filter along the time axis (axis 0).
+
+    Parameters
+    ----------
+    data : list[list[float]]
+        Buffered regression predictions.  Shape is ``(n_timesteps, n_dof)``.
+
+    Returns
+    -------
+    np.ndarray
+        Smoothed predictions with the same shape as the input.
+    """
+    return gaussian_filter(np.array(data), sigma=15, order=0, axes=(0,))
+
 
 # %%
-# ---------------------------------------------
-# Step 2: Register the Filter in user_config.py
-# ---------------------------------------------
+# ---------------------------------------------------
+# Step 2: Register the Filter in CONFIG_REGISTRY
+# ---------------------------------------------------
+# Place this code in :mod:`~myogestic.user_config`.  The filter name must be unique
+# and will appear in the Online tab's filter dropdown.
 
-from myogestic.utils.config import CONFIG_REGISTRY  # Ensure CONFIG_REGISTRY is accessible
+from myogestic.utils.config import CONFIG_REGISTRY
 
 CONFIG_REGISTRY.register_real_time_filter(
-    name="MyAwesomeMovingAverage",
+    name="MyAwesomeGaussian",
     function=my_awesome_gaussian_filter,
 )
+
+# %%
+# ----------------------------
+# Reference: Built-in Filters
+# ----------------------------
+# The following filters are registered in :mod:`~myogestic.default_config`:
+#
+# .. code-block:: python
+#
+#    # Identity -- pass through unchanged
+#    CONFIG_REGISTRY.register_real_time_filter("Identity", lambda x: x)
+#
+#    # Gaussian -- smooth with sigma=15
+#    CONFIG_REGISTRY.register_real_time_filter(
+#        "Gaussian",
+#        lambda x: gaussian_filter(np.array(x), 15, 0, axes=(0,)),
+#    )
+#
+#    # Savgol -- Savitzky-Golay filter
+#    CONFIG_REGISTRY.register_real_time_filter(
+#        "Savgol",
+#        lambda x: savgol_filter(np.array(x), 111, 3, axis=0),
+#    )

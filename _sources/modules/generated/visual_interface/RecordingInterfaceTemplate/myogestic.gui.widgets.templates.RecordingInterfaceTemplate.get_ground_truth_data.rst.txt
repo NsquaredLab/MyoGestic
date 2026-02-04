@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.RecordingInterfaceTemplate.get\_ground\_truth\_data
+===================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: RecordingInterfaceTemplate.get_ground_truth_data

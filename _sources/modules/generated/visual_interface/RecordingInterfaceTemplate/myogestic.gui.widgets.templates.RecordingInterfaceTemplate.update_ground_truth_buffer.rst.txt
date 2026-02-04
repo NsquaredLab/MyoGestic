@@ -1,0 +1,6 @@
+myogestic.gui.widgets.templates.RecordingInterfaceTemplate.update\_ground\_truth\_buffer
+========================================================================================
+
+.. currentmodule:: myogestic.gui.widgets.templates
+
+.. automethod:: RecordingInterfaceTemplate.update_ground_truth_buffer

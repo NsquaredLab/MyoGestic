@@ -19,34 +19,48 @@
 
 
 ====================================
-Adding a Custom Biosignal Feature
+Add a Biosignal Feature
 ====================================
 
-Below is an example of how to create and register a new feature by inheriting from
-the base Transform class from `MyoVerse <https://nsquaredlab.github.io/MyoVerse/>`_.
+This example shows how to create and register a new feature-extraction
+transform in MyoGestic.  Features are applied to raw EMG data during
+dataset creation and real-time prediction to produce the input that models
+consume.
 
-This custom feature calculates the variance of the input signal.
+All features must inherit from the
+`Transform <https://nsquaredlab.github.io/MyoVerse/>`_ base class in
+MyoVerse.  The core logic goes in the ``_apply`` method, which operates on
+PyTorch tensors with named dimensions (e.g., ``"channels"``, ``"time"``).
 
-.. admonition:: We Recommend Implementing any Additions in *user_config.py*
+Temporal vs Non-Temporal Features
+---------------------------------
+MyoGestic distinguishes two categories of features:
 
-   The *user_config.py* module is specifically designed for end-users to register
-   and configure their own custom components such as models, features,
-   and filters. This keeps your modifications modular, reduces conflicts with
-   core MyoGestic settings, and simplifies upgrades in the future.
+- **Non-temporal** (default, ``requires_temporal_preservation=False``):
+  Collapses the time axis into a single value per channel.  Examples:
+  RMS, MAV, Variance.  Compatible with sklearn/CatBoost models.
 
-   .. important::
-      By registering your addition in ``user_config.py``, you ensure that your custom
-      configuration stays separate from core MyoGestic functionality and remains
-      compatible with future updates.
+- **Temporal** (``requires_temporal_preservation=True``):
+  Preserves the time dimension by computing a value for each time step
+  (or sliding window).  Examples: Identity (raw signal), RMS Small Window.
+  Required by CNN-based models like RaulNet.
 
+When you register a feature, set ``requires_temporal_preservation=True``
+if it preserves the time axis.  The Training UI uses this flag to show
+only compatible features for the selected model.
+
+.. admonition:: Add your feature in :mod:`~myogestic.user_config`
+
+   Keep custom feature registrations in :mod:`~myogestic.user_config` to stay
+   separate from core MyoGestic code.
 
 Example Overview
-----------------
-1. **Define** a new feature class inheriting from Transform (TensorTransform).
-2. **Implement** the core logic in the ``_apply`` method.
-3. **Register** the feature so it becomes available globally.
+-----------------
+1. **Define** a new feature class inheriting from ``Transform``.
+2. **Implement** the ``_apply`` method.
+3. **Register** the feature in ``CONFIG_REGISTRY``.
 
-.. GENERATED FROM PYTHON SOURCE LINES 31-39
+.. GENERATED FROM PYTHON SOURCE LINES 45-53
 
 .. code-block:: Python
 
@@ -59,28 +73,29 @@ Example Overview
 
 
 
-.. GENERATED FROM PYTHON SOURCE LINES 40-43
+.. GENERATED FROM PYTHON SOURCE LINES 54-60
 
---------------------------------
-Step 1: Inherit and define logic
---------------------------------
+------------------------------------------------
+Step 1: Define a Non-Temporal Feature (Variance)
+------------------------------------------------
+This feature computes the variance along the time axis, collapsing it
+to a single value per channel.  It is compatible with standard ML
+models (sklearn, CatBoost).
 
-.. GENERATED FROM PYTHON SOURCE LINES 43-94
+.. GENERATED FROM PYTHON SOURCE LINES 60-110
 
 .. code-block:: Python
 
-    class MyVarianceFeature(Transform):
-        """
-        A feature that computes the variance of the input signal.
 
-        This transform operates on PyTorch tensors with named dimensions.
+    class MyVarianceFeature(Transform):
+        """Compute the variance of the input signal along a given dimension.
 
         Parameters
         ----------
         dim : str, optional
-            The dimension along which to compute variance. Default is 'time'.
+            The dimension along which to compute variance. Default is ``"time"``.
         keepdim : bool, optional
-            Whether to keep the reduced dimension. Default is False.
+            Whether to keep the reduced dimension. Default is ``False``.
         """
 
         def __init__(self, dim: str = "time", keepdim: bool = False, **kwargs):
@@ -88,25 +103,23 @@ Step 1: Inherit and define logic
             self.keepdim = keepdim
 
         def _apply(self, x: torch.Tensor) -> torch.Tensor:
-            """
-            Compute the variance of the input signal.
+            """Compute variance along the specified dimension.
 
             Parameters
             ----------
             x : torch.Tensor
-                The input tensor with named dimensions.
+                Input tensor with named dimensions (e.g., ``("channels", "time")``).
 
             Returns
             -------
             torch.Tensor
-                The variance computed along the specified dimension.
+                Variance computed along the specified dimension.
             """
             dim_idx = get_dim_index(x, self.dim)
             names = x.names
 
             result = torch.var(x.rename(None), dim=dim_idx, keepdim=self.keepdim)
 
-            # Restore dimension names if input had named dimensions
             if names[0] is None:
                 return result
 
@@ -120,37 +133,100 @@ Step 1: Inherit and define logic
             return result
 
 
-
-.. GENERATED FROM PYTHON SOURCE LINES 95-98
-
------------------------------------------------
-Step 2: Register the custom feature
------------------------------------------------
-
-.. GENERATED FROM PYTHON SOURCE LINES 98-101
-
-.. code-block:: Python
-
+    # Register as a non-temporal feature (default)
     CONFIG_REGISTRY.register_feature("My Variance Feature", MyVarianceFeature)
 
 
+.. GENERATED FROM PYTHON SOURCE LINES 111-119
 
-.. GENERATED FROM PYTHON SOURCE LINES 102-105
+--------------------------------------------------------
+Step 2: Define a Temporal Feature (Sliding Window RMS)
+--------------------------------------------------------
+This feature computes RMS over a sliding window, preserving the time
+dimension.  It is compatible with CNN-based models like RaulNet.
+
+For a buffer of 360 samples with ``window_size=120`` and ``stride=1``,
+this produces 241 time steps.
+
+.. GENERATED FROM PYTHON SOURCE LINES 119-156
+
+.. code-block:: Python
+
+
+
+    class MySlidingRMS(Transform):
+        """RMS computed over a sliding window, preserving temporal resolution.
+
+        Parameters
+        ----------
+        dim : str, optional
+            The dimension to slide over. Default is ``"time"``.
+        window_size : int, optional
+            Size of the sliding window. Default is ``120``.
+        stride : int, optional
+            Stride of the sliding window. Default is ``1``.
+        """
+
+        def __init__(self, dim: str = "time", window_size: int = 120, stride: int = 1, **kwargs):
+            super().__init__(dim=dim, **kwargs)
+            self.window_size = window_size
+            self.stride = stride
+
+        def _apply(self, x: torch.Tensor) -> torch.Tensor:
+            dim_idx = x.names.index(self.dim) if x.names[0] is not None else -1
+            x_unnamed = x.rename(None)
+
+            # unfold creates sliding windows: (channels, n_windows, window_size)
+            windows = x_unnamed.unfold(dim_idx, self.window_size, self.stride)
+            rms = torch.sqrt(torch.mean(windows ** 2, dim=-1))
+
+            return rms.rename(*x.names)
+
+
+    # Register as a temporal feature (preserves time dimension)
+    CONFIG_REGISTRY.register_feature(
+        "My Sliding RMS", MySlidingRMS, requires_temporal_preservation=True
+    )
+
+
+
+.. GENERATED FROM PYTHON SOURCE LINES 157-177
 
 -----------------------------------------------
-Example Usage
+Reference: Built-in Features
+-----------------------------------------------
+The following features are registered in :mod:`~myogestic.default_config`:
+
+**Non-temporal** (collapse time axis):
+
+- ``Root Mean Square`` -- :class:`myoverse.transforms.RMS`
+- ``Mean Absolute Value`` -- :class:`myoverse.transforms.MAV`
+- ``Variance`` -- :class:`myoverse.transforms.VAR`
+- ``Waveform Length`` -- :class:`myoverse.transforms.WaveformLength`
+- ``Zero Crossings`` -- :class:`myoverse.transforms.ZeroCrossings`
+- ``Slope Sign Change`` -- :class:`myoverse.transforms.SlopeSignChanges`
+
+**Temporal** (preserve time axis):
+
+- ``Identity`` -- :class:`myoverse.transforms.Identity`
+  (passes raw signal through unchanged)
+- ``RMS Small Window`` -- custom sliding-window RMS defined in
+  :mod:`~myogestic.user_config` (window_size=120, stride=1)
+
+.. GENERATED FROM PYTHON SOURCE LINES 179-182
+
+-----------------------------------------------
+Example Usage (standalone test)
 -----------------------------------------------
 
-.. GENERATED FROM PYTHON SOURCE LINES 105-115
+.. GENERATED FROM PYTHON SOURCE LINES 182-190
 
 .. code-block:: Python
 
     if __name__ == "__main__":
-        # Create a small signal for demonstration
         sample_data = torch.tensor([1.2, 2.5, 2.7, 2.8, 3.1])
         sample_data = sample_data.rename("time")
 
-        # Instantiate and apply the feature
         feature_instance = MyVarianceFeature(dim="time")
         variance_value = feature_instance(sample_data)
 

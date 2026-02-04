@@ -1,0 +1,6 @@
+myogestic.utils.config.Registry.\_\_init\_\_
+============================================
+
+.. currentmodule:: myogestic.utils.config
+
+.. automethod:: Registry.__init__
