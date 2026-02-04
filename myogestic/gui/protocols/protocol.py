@@ -65,6 +65,13 @@ class Protocol(QObject):
             protocol._selected_visual_interface = (
                 self.main_window.selected_visual_interface
             )
+            protocol._active_visual_interfaces = (
+                self.main_window.active_visual_interfaces
+            )
+
+        # Rebuild the shared task selector in the RecordProtocol
+        record_protocol = self.available_protocols[0]
+        record_protocol._rebuild_shared_task_selector()
 
     def _setup_protocol_ui(self):
         self._protocol_mode__stacked_widget = (
