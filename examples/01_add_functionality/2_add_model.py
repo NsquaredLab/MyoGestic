@@ -1,245 +1,245 @@
 """
-==============================
-Add a Custom Model
-==============================
+===========================================================
+Add a Model
+===========================================================
 
-This example demonstrates how to create and register a custom model to **MyoGestic**
-using the ``CONFIG_REGISTRY`` from *user_config.py*. This example also explains
-how to define **changeable** and **unchangeable** parameters in your configuration.
+This example shows how to register a new model (classifier or regressor)
+in MyoGestic.  Every model needs four functions -- ``train``, ``predict``,
+``save``, and ``load`` -- plus some metadata describing its parameters and
+capabilities.
 
-.. admonition:: We Recommend Implementing any Additions in *user_config.py*
+Models are registered through ``CONFIG_REGISTRY.register_model()``.  Once
+registered, the model appears in the **Training** tab's model dropdown and
+can be trained, saved, loaded, and used for real-time prediction.
 
-   The *user_config.py* module is specifically designed for end-users to register
-   and configure their own custom components such as models, features,
-   and filters. This keeps your modifications modular, reduces conflicts with
-   core MyoGestic settings, and simplifies upgrades in the future.
+Classifier vs Regressor
+------------------------
+MyoGestic distinguishes between **classifiers** and **regressors**:
 
-   .. important::
-      By registering your addition in ``user_config.py``, you ensure that your custom
-      configuration stays separate from core MyoGestic functionality and remains
-      compatible with future updates.
+- **Classifier** (``is_classifier=True``): Outputs a single integer label
+  (e.g., ``0`` for rest, ``1`` for index finger).  Used with
+  classification-based output systems.
+- **Regressor** (``is_classifier=False``): Outputs a list of continuous
+  values (e.g., joint angles).  Used with regression-based output systems
+  and can be post-filtered.
+
+Temporal Preservation
+---------------------
+Some models (e.g., RaulNet with CNN layers) require their input to
+preserve the time dimension.  Standard features like RMS collapse the
+time axis into a single value per channel, which is fine for
+sklearn/CatBoost models but incompatible with CNNs.
+
+When registering such a model, set:
+
+- ``requires_temporal_preservation=True`` -- The Training UI will only
+  show features that preserve the time dimension (e.g., Identity,
+  RMS Small Window).
+- ``feature_window_size=120`` -- Specifies the sliding window size for
+  feature extraction, producing multiple time steps from a single buffer.
+
+Parameters
+----------
+Models can define two kinds of parameters:
+
+- **Changeable parameters** -- Exposed as spinboxes in the Training UI.
+  Defined as dicts with ``start_value``, ``end_value``, ``step``, and
+  ``default_value``.  See :ref:`changeable_parameter`.
+- **Unchangeable parameters** -- Fixed values passed directly to the
+  model constructor (e.g., ``kernel="rbf"``).  See
+  :ref:`unchangeable_parameter`.
+
+.. admonition:: Add your model in :mod:`~myogestic.user_config`
+
+   Keep custom model registrations in :mod:`~myogestic.user_config` to stay separate
+   from core MyoGestic code.
 
 Example Overview
-----------------
-1. **Create** a custom model class.
-2. **Define** ``save``, ``load``, ``train``, and ``predict`` functions.
-3. **Specify** parameters (changeable and unchangeable) for the model.
-4. **Register** the model into ``CONFIG_REGISTRY`` using *user_config.py*.
+-----------------
+1. **Define** the four required functions (save, load, train, predict).
+2. **Register** the model with ``CONFIG_REGISTRY``.
 
 """
+
+# %%
+# ----------------------------------------
+# Step 1: Define Save and Load Functions
+# ----------------------------------------
+# The ``save`` function receives a file path and the trained model object.
+# It must persist the model to disk and return the path where it was saved.
+#
+# The ``load`` function receives a file path and a *fresh instance* of the
+# model class.  It must return the loaded model object.
+
+import joblib
+import numpy as np
+
+
+def save(model_path: str, model: object) -> str:
+    """Save a sklearn-compatible model using joblib."""
+    output_path = str(model_path).split(".")[0] + "_model.pkl"
+    joblib.dump(model, output_path)
+    return output_path
+
+
+def load(model_path: str, model: object) -> object:
+    """Load a sklearn-compatible model using joblib.
+
+    The ``model`` argument is a fresh instance (unused here but required
+    by the registry interface).
+    """
+    with open(model_path, "rb") as f:
+        return joblib.load(f)
+
+
+# %%
+# --------------------------------------------
+# Step 2: Define Train and Predict Functions
+# --------------------------------------------
+# ``train`` receives the model instance, a dataset dict (from the Zarr
+# store), the ``is_classifier`` flag, and a logger.  It must return the
+# trained model.
+#
+# ``predict`` receives the model, a single input sample, and the
+# ``is_classifier`` flag.  It must return:
+#
+# - For classifiers: a single integer label.
+# - For regressors: a list of floats (one per DOF).
+
+from myogestic.gui.widgets.logger import CustomLogger
+
+
+def train(model: object, dataset: dict, is_classifier: bool, logger: CustomLogger) -> object:
+    """Train a sklearn-compatible model.
+
+    Parameters
+    ----------
+    model : object
+        Fresh model instance (constructed from ``model_class`` with the
+        registered parameters).
+    dataset : dict
+        Zarr-backed dataset with keys ``"emg"`` (shape
+        ``(n_samples, n_features*channels, time)``), ``"classes"`` (labels),
+        and ``"kinematics"`` (regression targets).
+    is_classifier : bool
+        Whether the model should be trained for classification.
+    logger : CustomLogger
+        Logger for status messages.
+    """
+    x_train = dataset["emg"][()]
+    # Flatten 3D to 2D if needed (sklearn expects 2D input)
+    if x_train.ndim == 3:
+        x_train = x_train.reshape(x_train.shape[0], -1)
+
+    if is_classifier:
+        y_train = dataset["classes"][()]
+    else:
+        y_train = dataset["kinematics"][()]
+
+    model.fit(x_train, y_train)
+    return model
+
+
+def predict(model: object, input_data: np.ndarray, is_classifier: bool):
+    """Run a single prediction.
+
+    Parameters
+    ----------
+    input_data : np.ndarray
+        Shape ``(1, n_features, n_time)`` or ``(1, n_features)``.
+
+    Returns
+    -------
+    int or list[float]
+        A single class label (classifier) or list of DOF values (regressor).
+    """
+    if input_data.ndim == 3:
+        input_data = input_data.reshape(input_data.shape[0], -1)
+
+    prediction = model.predict(input_data)
+
+    if is_classifier:
+        return prediction[0] if prediction.ndim == 1 else prediction[0, 0]
+    return list(prediction[0])
+
+
+# %%
+# --------------------------------------------------
+# Step 3: Register a Classifier in CONFIG_REGISTRY
+# --------------------------------------------------
+# A classifier example using sklearn's SVM.  Changeable parameters appear
+# as spinboxes in the Training UI.  Unchangeable parameters are passed
+# directly to the model constructor.
+
+from sklearn.svm import SVC
 from myogestic.utils.config import CONFIG_REGISTRY
 
-
-# %%
-# --------------------------------
-# Step 1: Define your custom model
-# --------------------------------
-class MyExampleModel:
-    """
-    A simple example model for demonstration purposes.
-
-    This model is intentionally minimal—focus on the registration
-    process rather than advanced machine learning logic.
-    """
-
-    def __init__(self, param1: float, param2: int):
-        """
-        Initialize the model with parameters.
-
-        Parameters
-        ----------
-        param1 : float
-            A parameter that can be changed (e.g., a hyperparameter).
-        param2 : int
-            A parameter that stays the same (e.g., a fixed architectural detail).
-        """
-        self.param1 = param1
-        self.param2 = param2
-        self.training_data = None
-
-    def save(self, path: str):
-        """
-        Save the model to the specified path.
-
-        Parameters
-        ----------
-        path : str
-            The filepath to save this model instance.
-        """
-        with open(path, "w") as f:
-            f.write(f"Model(param1={self.param1}, param2={self.param2})")
-
-    def load(self, path: str):
-        """
-        Load the model from the specified path.
-
-        Parameters
-        ----------
-        path : str
-            The filepath to load model information from.
-        """
-        with open(path, "r") as f:
-            data = f.read()
-            print(f"Loaded model: {data}")
-
-    def train(self, x, y):
-        """
-        Train the model on the specified data.
-
-        Parameters
-        ----------
-        x : array-like
-            Input features for training.
-        y : array-like
-            Target values for training.
-        """
-        self.training_data = {"x": x, "y": y}
-        print(f"Model trained on {len(x)} samples with param1={self.param1}")
-
-    def predict(self, x):
-        """
-        Predict on input data.
-
-        Parameters
-        ----------
-        x : array-like
-            Input features for prediction.
-
-        Returns
-        -------
-        list
-            A list of predictions computed by multiplying each input by param1.
-
-        Raises
-        ------
-        RuntimeError
-            If the model is not yet trained.
-        """
-        if self.training_data is None:
-            raise RuntimeError("The model must be trained before making predictions.")
-        return [x_i * self.param1 for x_i in x]
-
-
-# %%
-# ---------------------------------------------------------
-# Step 2: Define required functions for the model lifecycle
-# ---------------------------------------------------------
-def save_function(model_path: str, model: MyExampleModel):
-    """
-    Save the model to the given path.
-
-    Parameters
-    ----------
-    model_path : str
-        Filepath to save the model.
-    model : MyExampleModel
-        An instance of MyExampleModel to be saved.
-    """
-    model.save(model_path)
-
-
-def load_function(model_path: str):
-    """
-    Load the model from the given path and return a new instance.
-
-    Parameters
-    ----------
-    model_path : str
-        Filepath from which to load the model.
-
-    Returns
-    -------
-    MyExampleModel
-        A fresh instance of MyExampleModel with default initialization,
-        then loaded.
-    """
-    model = MyExampleModel(param1=1.0, param2=10)  # Default initialization
-    model.load(model_path)
-    return model
-
-
-def train_function(model: MyExampleModel, dataset, is_classifier: bool, logger):
-    """
-    Train the model on the given dataset.
-
-    Parameters
-    ----------
-    model : MyExampleModel
-        The model instance to train.
-    dataset : dict
-        A dictionary or object containing "x" and "y" for training.
-    is_classifier : bool
-        Indicates whether the model is used for classification tasks.
-    logger : Any
-        An optional logger for status messages or debug output.
-
-    Returns
-    -------
-    MyExampleModel
-        The trained model instance.
-    """
-    x_train = dataset["x"]  # e.g., Extract x training data
-    y_train = dataset["y"]  # e.g., Extract y training targets
-    model.train(x_train, y_train)
-    return model
-
-
-def predict_function(model: MyExampleModel, input_data, is_classifier: bool):
-    """
-    Perform prediction with the model on input data.
-
-    Parameters
-    ----------
-    model : MyExampleModel
-        The model instance to use for prediction.
-    input_data : array-like
-        The data on which you want predictions.
-    is_classifier : bool
-        Indicates classification usage; if True, handle accordingly.
-
-    Returns
-    -------
-    list
-        The predictions from the model.
-    """
-    predictions = model.predict(input_data)
-    return predictions
-
-
-# %%
-# -----------------------------------------------------
-# Step 3: Define changeable and unchangeable parameters
-# -----------------------------------------------------
-# For information on configuring parameters, refer to the :ref:`config_parameters`.
-# This structure is used to define the model's hyperparameters and fixed settings,
-# ensuring seamless integration with MyoGestic's UI so that they may be changed at runtime.
-from myogestic.utils.config import ChangeableParameter, UnchangeableParameter  # noqa
-
-changeable_params: dict[str, ChangeableParameter] = {
-    "param1": {
-        "default_value": 1.0,
-        "start_value": 0.1,
-        "end_value": 5.0,
-        "step": 0.1,
-    }
-}
-
-unchangeable_params: dict[str, UnchangeableParameter] = {
-    "param2": 10
-}  # Fixed value that cannot be changed dynamically
-
-# %%
-# -----------------------------------------------
-# Step 4: Register the model into CONFIG_REGISTRY
-# -----------------------------------------------
 CONFIG_REGISTRY.register_model(
-    name="MyExampleModel",
-    model_class=MyExampleModel,
-    is_classifier=False,  # Update if your model is for classification
-    save_function=save_function,
-    load_function=load_function,
-    train_function=train_function,
-    predict_function=predict_function,
-    changeable_parameters=changeable_params,
-    unchangeable_parameters=unchangeable_params,
+    name="My SVM Classifier",
+    model_class=SVC,
+    is_classifier=True,
+    save_function=save,
+    load_function=load,
+    train_function=train,
+    predict_function=predict,
+    changeable_parameters={
+        "C": {
+            "start_value": 1e-4,
+            "end_value": 1.0,
+            "step": 1e-4,
+            "default_value": 0.01,
+        },
+    },
+    unchangeable_parameters={
+        "kernel": "rbf",
+    },
 )
+
+# %%
+# -----------------------------------------------
+# Step 4: Register a Regressor in CONFIG_REGISTRY
+# -----------------------------------------------
+# A regressor example using sklearn's Linear Regression.
+
+from sklearn.linear_model import LinearRegression
+
+CONFIG_REGISTRY.register_model(
+    name="My Linear Regressor",
+    model_class=LinearRegression,
+    is_classifier=False,
+    save_function=save,
+    load_function=load,
+    train_function=train,
+    predict_function=predict,
+    unchangeable_parameters={"fit_intercept": True},
+)
+
+# %%
+# --------------------------------------------------------
+# Step 5 (Advanced): Temporal-Preserving Model (e.g., CNN)
+# --------------------------------------------------------
+# If your model's architecture requires multiple time steps (e.g., a CNN),
+# set ``requires_temporal_preservation=True`` and specify
+# ``feature_window_size``.  This ensures that only compatible features
+# (Identity, RMS Small Window) are shown in the Training UI.
+#
+# .. code-block:: python
+#
+#    CONFIG_REGISTRY.register_model(
+#        name="MyCNN",
+#        model_class=MyCNNModel,
+#        is_classifier=False,
+#        save_function=cnn_save,
+#        load_function=cnn_load,
+#        train_function=cnn_train,
+#        predict_function=cnn_predict,
+#        requires_temporal_preservation=True,
+#        feature_window_size=120,  # Sliding window for feature extraction
+#    )
+#
+# Reference: RaulNet registration in :mod:`~myogestic.default_config`:
+#
+# .. literalinclude:: /../../myogestic/default_config.py
+#    :language: python
+#    :lines: 45-67
+#    :caption: RaulNet registration with temporal preservation
