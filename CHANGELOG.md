@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0]
+Documentation overhaul and Sphinx compatibility.
+
+### Added
+- Sphinx-Gallery tutorial suite covering models, features, filters, output systems, and visual interface integration.
+- Full API reference pages with autosummary for Config, Models, and Visual Interface modules.
+- Default method stubs in `RecordingInterfaceTemplate` for easier VI development.
+
+### Changed
+- Re-enabled `autosummary_generate` by fixing PySide6 mock metaclass compatibility.
+- Wrapped `catboost.get_gpu_device_count` to handle mocked imports during docs build.
+- Rewrote all example files with Sphinx `:class:`, `:meth:`, and `:attr:` cross-references.
+
 ## [0.8.0]
 Improved stability, UI enhancements, and new recording capabilities.
 
@@ -77,7 +90,8 @@ Enhanced user interface and improved cross-platform compatibility.
 ### Removed
 - Redundant parameters and dead code in dataset module.
 
-[Unreleased]: https://github.com/NsquaredLab/MyoGestic/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/NsquaredLab/MyoGestic/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/NsquaredLab/MyoGestic/compare/v0.5.1...v0.6.0
