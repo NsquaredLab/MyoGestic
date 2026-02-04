@@ -30,20 +30,26 @@ class VirtualCursorInterface_OutputSystem(OutputSystemTemplate):
     def __init__(self, main_window, prediction_is_classification: bool) -> None:
         super().__init__(main_window, prediction_is_classification)
 
-        if self._main_window.selected_visual_interface is None:
-            self._main_window.logger.print("No visual interface selected.", level=LoggerLevel.ERROR)
-            raise ValueError("No visual interface selected.")
+        # Check if VCI is among the active VIs
+        active_vis = self._main_window.active_visual_interfaces
+        vi = active_vis.get("VCI")
+        
+        if vi is None:
+            self._main_window.logger.print(
+                "VCI (Virtual Cursor Interface) is not active.", level=LoggerLevel.ERROR
+            )
+            raise ValueError("VCI (Virtual Cursor Interface) is not active.")
 
         if not isinstance(
-            self._main_window.selected_visual_interface.setup_interface_ui,
+            vi.setup_interface_ui,
             VirtualCursorInterface_SetupInterface,
         ):
             raise ValueError(
                 "The virtual interface must be the Virtual Cursor Interface."
-                f"Got {type(self._main_window.selected_visual_interface)}."
+                f"Got {type(vi)}."
             )
 
-        self._outgoing_message_signal = self._main_window.selected_visual_interface.outgoing_message_signal
+        self._outgoing_message_signal = vi.outgoing_message_signal
 
     def _process_prediction__classification(self, prediction: Any) -> bytes:
         """Process the prediction for classification."""

@@ -140,7 +140,8 @@ class MyoGestic(ScalableMainWindow):
         )
         self.ui.visualInterfacesVerticalLayout.setContentsMargins(*([15] * 4))
 
-        self.selected_visual_interface: Optional[VisualInterface] = None
+        # Active visual interfaces (multiple can be open simultaneously)
+        self._active_visual_interfaces: dict[str, VisualInterface] = {}
         self._visual_interfaces__dict: dict[str, VisualInterface] = {
             name: VisualInterface(
                 self,
@@ -157,10 +158,13 @@ class MyoGestic(ScalableMainWindow):
         # Default Recording Interface (shown when no VI is open)
         self._default_recording_interface = DefaultRecordingInterface(self)
         self._default_recording_interface.initialize()
-        # Hide VI-specific recording interfaces initially
+        # Hide VI-specific recording GroupBoxes initially (review is always hidden per-VI)
         for vi in self._visual_interfaces__dict.values():
             vi.recording_interface_ui.ui.recordRecordingGroupBox.hide()
-            vi.recording_interface_ui.ui.recordReviewRecordingStackedWidget.hide()
+
+        # Finalize recording layout: add the unified review widget at the bottom
+        # (after all per-VI GroupBoxes have been added to the layout)
+        self.protocols[0].finalize_layout()
 
         # Preferences
         self._toggle_vispy_plot__check_box: QCheckBox = self.ui.toggleVispyPlotCheckBox
@@ -228,45 +232,71 @@ class MyoGestic(ScalableMainWindow):
 
     def toggle_selected_visual_interface(self, name: str) -> None:
         """
-        Toggles the selected visual interface.
+        Toggles a visual interface on/off.
 
-        This methods sets all other visual interfaces to disabled and enables the selected visual interface.
-        It also manages the visibility of recording interfaces:
-        - When a VI is opened: hide default recording UI, show VI-specific recording UI
-        - When a VI is closed: show default recording UI, hide VI-specific recording UI
+        This method adds or removes a visual interface from the active set.
+        Multiple interfaces can be active simultaneously.
+        It manages the visibility of per-VI recording GroupBoxes and the
+        default recording GroupBox.
 
         Parameters
         ----------
         name : str
             Name of the visual interface to toggle.
+        """
+        vi = self._visual_interfaces__dict[name]
+
+        if name in self._active_visual_interfaces:
+            # VI is being closed
+            del self._active_visual_interfaces[name]
+            vi.recording_interface_ui.ui.recordRecordingGroupBox.hide()
+            vi.enable_ui()
+
+            # If no active VIs remain, show default recording interface
+            if not self._active_visual_interfaces:
+                self._default_recording_interface.show()
+        else:
+            # VI is being opened
+            self._active_visual_interfaces[name] = vi
+
+            # Hide default recording interface when any VI is active
+            self._default_recording_interface.hide()
+
+            # Show the per-VI recording GroupBox (task selector, etc.)
+            vi.recording_interface_ui.ui.recordRecordingGroupBox.show()
+
+        self._protocol__helper_class._pass_on_selected_visual_interface()
+
+
+    @property
+    def active_visual_interfaces(self) -> dict[str, "VisualInterface"]:
+        """
+        Get the dictionary of active visual interfaces.
 
         Returns
         -------
-        None
+        dict[str, VisualInterface]
+            Dictionary mapping VI names to their instances.
         """
-        if self.selected_visual_interface:
-            # VI is being closed - hide its recording interface, show default
-            self.selected_visual_interface.recording_interface_ui.ui.recordRecordingGroupBox.hide()
-            self.selected_visual_interface.recording_interface_ui.ui.recordReviewRecordingStackedWidget.hide()
-            self._default_recording_interface.show()
+        return self._active_visual_interfaces
 
-            for visual_interface in self._visual_interfaces__dict.values():
-                visual_interface.enable_ui()
-            self.selected_visual_interface = None
-        else:
-            # VI is being opened - hide default recording interface, show VI-specific
-            self._default_recording_interface.hide()
+    @property
+    def selected_visual_interface(self) -> Optional["VisualInterface"]:
+        """
+        Backward-compatible property returning the first active visual interface.
 
-            for visual_interface in self._visual_interfaces__dict.values():
-                if visual_interface.name != name:
-                    visual_interface.disable_ui()
-            self.selected_visual_interface = self._visual_interfaces__dict[name]
+        For recording purposes, returns the first (primary) active VI.
+        Returns None if no VIs are active.
 
-            # Show the recording interface for the selected VI
-            self.selected_visual_interface.recording_interface_ui.ui.recordRecordingGroupBox.show()
-            self.selected_visual_interface.recording_interface_ui.ui.recordReviewRecordingStackedWidget.show()
-
-        self._protocol__helper_class._pass_on_selected_visual_interface()
+        Returns
+        -------
+        Optional[VisualInterface]
+            The first active visual interface, or None if none are active.
+        """
+        if not self._active_visual_interfaces:
+            return None
+        # Return the first active VI (for recording purposes)
+        return next(iter(self._active_visual_interfaces.values()))
 
     def _update_bad_channels(self, bad_channels: np.ndarray) -> None:
         """
@@ -326,8 +356,6 @@ class MyoGestic(ScalableMainWindow):
         else:
             self.logger.print("Device disconnected.")
             self.ui.statusbar.showMessage("Device disconnected", 5000)
-            # Show placeholder when device disconnects
-            self._plot__widget.show_placeholder()
 
     def _on_device_stream_toggled(self, is_streaming: bool) -> None:
         """Handle device streaming status changes."""

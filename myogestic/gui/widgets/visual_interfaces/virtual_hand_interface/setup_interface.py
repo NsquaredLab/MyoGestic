@@ -313,9 +313,11 @@ class VirtualHandInterface_SetupInterface(SetupInterfaceTemplate):
 
     def write_message(self, message: QByteArray) -> None:
         """Write a message to the Virtual Hand Interface."""
-        if self._is_connected and (
-            time.time() - self._last_message_time >= TIME_BETWEEN_MESSAGES
-        ):
+        if not self._is_connected:
+            # Only log occasionally to avoid spam
+            return
+            
+        if time.time() - self._last_message_time >= TIME_BETWEEN_MESSAGES:
             self._last_message_time = time.time()
             output_bytes = self._streaming__udp_socket.writeDatagram(
                 message, QHostAddress(SOCKET_IP), VHI__UDP_PORT

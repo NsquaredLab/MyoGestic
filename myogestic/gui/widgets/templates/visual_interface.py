@@ -413,6 +413,7 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         """
         pass
 
+
     @staticmethod
     def _set_progress_bar(progress_bar, value: int, total: int) -> None:
         """Set the value of a progress bar."""
