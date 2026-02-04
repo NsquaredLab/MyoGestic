@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pickle
 from datetime import datetime
 from abc import abstractmethod
@@ -30,6 +32,12 @@ class SetupInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         The outgoing message signal of the visual interface.
     incoming_message_signal : PySide6.SignalInstance
         The incoming message signal of the visual interface.
+    _record_protocol : RecordProtocol
+        Reference to the record protocol.
+    _training_protocol : TrainingProtocol
+        Reference to the training protocol.
+    _online_protocol : OnlineProtocol
+        Reference to the online protocol.
     """
 
     outgoing_message_signal = Signal(QByteArray)
@@ -161,6 +169,8 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
         The number of recording values the visual interface sends to MyoGestic.
     ground_truth__task_map : dict[str, int]
         The task map. The keys are the task names and the values are the task indices.
+    _current_task : str
+        The current task name, set by the RecordProtocol before each recording.
     """
 
     def __init__(
@@ -359,6 +369,48 @@ class RecordingInterfaceTemplate(QObject, metaclass=MetaQObjectABC):
     @abstractmethod
     def close_event(self, event: QCloseEvent) -> None:
         """Close the interface and stop necessary processes."""
+        pass
+
+    def get_ground_truth_data(self) -> dict:
+        """Get ground truth data collected during recording.
+
+        Returns a dict with ground truth arrays and metadata.
+        Base implementation returns empty data (classification-only).
+        Override in subclasses that collect kinematics.
+        """
+        return {
+            "ground_truth": np.array([]),
+            "ground_truth_timings": np.array([]),
+            "ground_truth_sampling_frequency": 0,
+            "task": getattr(self, "_current_task", ""),
+            "use_as_classification": True,
+        }
+
+    def start_recording_preparation(self) -> bool:
+        """Validate state and prepare for recording.
+
+        Called by the RecordProtocol before each recording starts.
+        Override to clear buffers, calculate expected samples, and
+        validate that the VI is ready to record.
+
+        Returns ``True`` if the VI is ready, ``False`` otherwise.
+        """
+        return True
+
+    def update_ground_truth_buffer(self, data: np.ndarray) -> None:
+        """Append incoming ground truth data and update the progress bar.
+
+        Called for each incoming data sample during recording.
+        Override to buffer kinematics data and track progress.
+        """
+        pass
+
+    def check_recording_completion(self) -> None:
+        """Check if this VI's recording is complete and notify the protocol.
+
+        Called after each buffer update to determine whether enough
+        samples have been collected.
+        """
         pass
 
     @staticmethod
