@@ -140,15 +140,29 @@ class MyoGesticDataset(QObject):
         dataset: dict[str, dict],
         selected_features: list[str],
         file_name: str,
-        recording_interface_from_recordings: str,
+        ground_truth_source_vi: str,
     ) -> dict:
+        """Create a training dataset from recordings.
+
+        Parameters
+        ----------
+        dataset : dict[str, dict]
+            Recordings grouped by task name.
+        selected_features : list[str]
+            Feature names to extract.
+        file_name : str
+            Base name for output files.
+        ground_truth_source_vi : str
+            Which visual interface's ground truth to use (e.g. "VirtualHandInterface").
+        """
         # Accumulate bad channels. Maybe more channels get added between recordings
         bad_channels: list[int] = []
 
+        # Look up task map and recording values from the ground truth source VI
         selected_interface = self._main_window.selected_visual_interface
-        if selected_interface is None:
+        if selected_interface is None or selected_interface.name != ground_truth_source_vi:
             interface_tuple = CONFIG_REGISTRY.visual_interfaces_map[
-                recording_interface_from_recordings
+                ground_truth_source_vi
             ]
             ground_truth__task_map = interface_tuple[1].ground_truth__task_map
             ground_truth__nr_of_recording_values = interface_tuple[1].ground_truth__nr_of_recording_values
@@ -157,13 +171,6 @@ class MyoGesticDataset(QObject):
             ground_truth__nr_of_recording_values = (
                 selected_interface.recording_interface_ui.ground_truth__nr_of_recording_values
             )
-
-            if selected_interface.name != recording_interface_from_recordings:
-                self.logger.print(
-                    f"Warning: The selected visual interface is not the same as the one used for recording. "
-                    f"Using {recording_interface_from_recordings} instead of {selected_interface.name}.",
-                    LoggerLevel.WARNING,
-                )
 
         biosignal_data = {}
         ground_truth_data = {}
@@ -184,8 +191,18 @@ class MyoGesticDataset(QObject):
             if recording_bad_channels:
                 biosignal = np.delete(biosignal, recording_bad_channels, axis=0)
 
-            if not recording["use_as_classification"]:
-                ground_truth = recording["ground_truth"]
+            # Extract ground truth from the selected source VI
+            if "ground_truths" in recording and ground_truth_source_vi in recording["ground_truths"]:
+                gt_entry = recording["ground_truths"][ground_truth_source_vi]
+                use_as_classification = gt_entry.get("use_as_classification", True)
+                gt_data = gt_entry.get("ground_truth", np.array([]))
+            else:
+                # Backward compatibility: old single-VI recordings
+                use_as_classification = recording["use_as_classification"]
+                gt_data = recording["ground_truth"]
+
+            if not use_as_classification:
+                ground_truth = gt_data
                 ground_truth = np.array(
                     [
                         np.interp(
@@ -213,7 +230,7 @@ class MyoGesticDataset(QObject):
             ground_truth_indices_to_keep = list(range(ground_truth__nr_of_recording_values))
         else:
             ground_truth_indices_to_keep = list(
-                GROUND_TRUTH_INDICES_TO_KEEP[recording_interface_from_recordings]
+                GROUND_TRUTH_INDICES_TO_KEEP[ground_truth_source_vi]
             )
 
         # Filter ground truth to only keep selected indices
@@ -356,7 +373,7 @@ class MyoGesticDataset(QObject):
             "bad_channels": list(set(bad_channels)),
             "selected_features": selected_features,
             "device_information": self.device_information,
-            "visual_interface": recording_interface_from_recordings,
+            "visual_interface": ground_truth_source_vi,
             "zarr_file_path": file_name + ".zip",
             "buffer_size__samples": self.buffer_size__samples,
             "feature_window_size": self.feature_window_size or self.buffer_size__samples,

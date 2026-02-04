@@ -278,6 +278,7 @@ class TrainingProtocol(QObject):
         self._selected_dataset__filepath: str | None = None
 
         self._selected_visual_interface: Optional[VisualInterface] = None
+        self._active_visual_interfaces: dict[str, VisualInterface] = {}
 
         # Model interface
         self._model_interface: MyoGesticModelInterface | None = None
@@ -506,6 +507,20 @@ class TrainingProtocol(QObject):
                 row_position, 2, QTableWidgetItem(item["recording_label"])
             )
 
+        # Populate ground truth source combo from recordings' visual interfaces
+        all_vi_names: set[str] = set()
+        for recording in self._selected_recordings__dict.values():
+            vi_field = recording.get("visual_interface", "Default")
+            if isinstance(vi_field, list):
+                all_vi_names.update(vi_field)
+            elif isinstance(vi_field, str):
+                # Handle old format "VHI, KHI" or single "VHI"
+                all_vi_names.update(v.strip() for v in vi_field.split(","))
+
+        self._ground_truth_source_combo.clear()
+        for vi_name in sorted(all_vi_names):
+            self._ground_truth_source_combo.addItem(vi_name)
+
         self.training_create_dataset_push_button.setEnabled(True)
 
     def _create_dataset(self) -> None:
@@ -545,22 +560,15 @@ class TrainingProtocol(QObject):
         if not label:
             label = "default"
 
-        # check if all recordings come from the same visual interface
-        set_of_visual_interfaces = set(
-            [
-                recording["visual_interface"]
-                for recording in self._selected_recordings__dict.values()
-            ]
-        )
-        if len(set_of_visual_interfaces) > 1:
-            # Can't open dialog from background thread - just log and return
+        # Use the selected ground truth source VI
+        ground_truth_source = self._ground_truth_source_combo.currentText()
+        if not ground_truth_source:
             self._main_window.logger.print(
-                "Recordings are not from the same visual interface!", LoggerLevel.ERROR
+                "No ground truth source selected!", LoggerLevel.ERROR
             )
             return
-        self._selected_visual_interface = list(set_of_visual_interfaces)[0]
 
-        file_name = f"{self._selected_visual_interface}_Dataset_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{label.lower()}"
+        file_name = f"{ground_truth_source}_Dataset_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{label.lower()}"
 
         # Determine feature window size based on selected model
         # Models like RaulNet need smaller window sizes to preserve temporal dimension
@@ -573,7 +581,7 @@ class TrainingProtocol(QObject):
             self._selected_recordings__dict,
             self._selected_features__list,
             file_name,
-            self._selected_visual_interface,
+            ground_truth_source,
             feature_window_size=feature_window_size,
         )
 
@@ -689,14 +697,18 @@ class TrainingProtocol(QObject):
             )
             return
 
+        # dataset["visual_interface"] is now a single VI name (the ground truth source)
+        dataset_vi = dataset["visual_interface"]
         if self._selected_visual_interface is None:
-            self._selected_visual_interface = dataset["visual_interface"]
+            self._selected_visual_interface = dataset_vi
         else:
-            # Get name whether _selected_visual_interface is a string or VisualInterface object
             current_vi = getattr(self._selected_visual_interface, 'name', self._selected_visual_interface)
-            if current_vi != dataset["visual_interface"]:
+            # Normalize: old format may be comma-separated; new format is single string
+            if isinstance(current_vi, list):
+                current_vi = current_vi[0] if current_vi else ""
+            if current_vi != dataset_vi:
                 self._main_window.logger.print(
-                    f"Visual interface {current_vi} is open, but the dataset is from {dataset['visual_interface']}!",
+                    f"Visual interface {current_vi} is open, but the dataset is from {dataset_vi}!",
                     LoggerLevel.ERROR
                 )
                 return
@@ -891,6 +903,23 @@ class TrainingProtocol(QObject):
         self.training_create_dataset_select_features_push_button.clicked.connect(
             self._open_feature_selection_popup
         )
+
+        # Ground Truth Source selector (for multi-VI recordings)
+        self._ground_truth_source_label = QLabel("Ground Truth Source:")
+        self._ground_truth_source_combo = QComboBox()
+        self._ground_truth_source_combo.setToolTip(
+            "Select which visual interface's ground truth to use for dataset creation"
+        )
+        # Insert into the dataset group box grid layout at a new row
+        dataset_grid = self._main_window.ui.gridLayout_13
+        # Shift existing rows down: label_6 (row 3), label line edit (row 3),
+        # features button (row 4), create button (row 4) → move to rows 4, 5
+        dataset_grid.addWidget(self._ground_truth_source_label, 3, 0, 1, 1)
+        dataset_grid.addWidget(self._ground_truth_source_combo, 3, 1, 1, 1)
+        dataset_grid.addWidget(self._main_window.ui.label_6, 4, 0, 1, 1)
+        dataset_grid.addWidget(self._main_window.ui.trainingCreateDatasetLabelLineEdit, 4, 1, 1, 1)
+        dataset_grid.addWidget(self._main_window.ui.trainingCreateDatasetSelectFeaturesPushButton, 5, 0, 1, 1)
+        dataset_grid.addWidget(self._main_window.ui.trainingCreateDatasetPushButton, 5, 1, 1, 1)
 
         self.training_create_dataset_label_line_edit = (
             self._main_window.ui.trainingCreateDatasetLabelLineEdit
