@@ -39,13 +39,13 @@ class MyoGesticModelInterface(QObject):
         dataset: Dict,
         selected_features: list[str],
         file_name: str,
-        recording_interface_from_recordings: str,
+        ground_truth_source_vi: str,
         feature_window_size: int | None = None,
     ) -> Dict[str, Dict[str, Any]]:
         # Set feature window size before creating dataset
         self.dataset.set_feature_window_size(feature_window_size)
         self.input_dataset = self.dataset.create_dataset(
-            dataset, selected_features, file_name, recording_interface_from_recordings
+            dataset, selected_features, file_name, ground_truth_source_vi
         )
         return self.input_dataset
 
