@@ -138,6 +138,7 @@ autodoc_mock_imports = [
     "torch",
     "torchvision",
     "torchaudio",
+    "lightning",
     "PySide6",
     "vispy",
     "catboost",
