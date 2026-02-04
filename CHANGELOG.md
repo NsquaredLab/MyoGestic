@@ -8,14 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ## [0.9.0]
-Documentation overhaul and Sphinx compatibility.
+Documentation overhaul, Sphinx compatibility, and multi-VI support.
 
 ### Added
+- **Multiple active Visual Interfaces** — Run several VIs simultaneously with shared task selector and unified recording controls.
+- Ground truth source selector for multi-VI dataset creation.
 - Sphinx-Gallery tutorial suite covering models, features, filters, output systems, and visual interface integration.
 - Full API reference pages with autosummary for Config, Models, and Visual Interface modules.
 - Default method stubs in `RecordingInterfaceTemplate` for easier VI development.
 
 ### Changed
+- Refactored visual interface system architecture to support multiple active VIs.
 - Re-enabled `autosummary_generate` by fixing PySide6 mock metaclass compatibility.
 - Wrapped `catboost.get_gpu_device_count` to handle mocked imports during docs build.
 - Rewrote all example files with Sphinx `:class:`, `:meth:`, and `:attr:` cross-references.
