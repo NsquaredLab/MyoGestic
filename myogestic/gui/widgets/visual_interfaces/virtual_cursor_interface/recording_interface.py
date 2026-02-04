@@ -13,21 +13,11 @@ from myogestic.utils.constants import RECORDING_DIR_PATH
 
 
 class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
-    """
-    Class for the recording interface of the Virtual Cursor Interface.
+    """Recording interface for the Virtual Cursor Interface.
 
-    This class is responsible for handling the recording of EMG and kinematics data.
-
-    Parameters
-    ----------
-    main_window : MainWindow
-        The main window of the application.
-    name : str
-        The name of the interface, by default "VirtualCursorInterface".
-
-        .. important:: This name is used to identify the interface in the main window. It should be unique.
-    incoming_message_signal : SignalInstance
-        The signal instance used to receive incoming messages from the device.
+    Handles per-VI settings (task, movement, kinematics checkbox) while
+    the shared RecordProtocol manages Record button, Duration, and
+    unified review.
     """
 
     ground_truth__task_map: dict[str, int] = {
@@ -94,54 +84,45 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
         self.kinematics_samp_freq = int(self.kinematics_samp_freq_spin_box.value())
         self.kinematics_samp_freq_spin_box.valueChanged.connect(self.update_kinematics_samp_freq)
 
-        # Add tooltips for better usability
-        self.record_task_combo_box.setToolTip("Select the task/direction to record")
-        self.record_movement_combo_box.setToolTip("Select the specific movement pattern")
-        self.record_duration_spin_box.setToolTip("Recording duration in seconds")
-        self.record_toggle_push_button.setToolTip("Start recording EMG data for the selected task")
-        self.use_kinematics_check_box.setToolTip("Record cursor position data from the Virtual Cursor Interface")
-        self.kinematics_samp_freq_spin_box.setToolTip("Sampling frequency for cursor position data (Hz)")
-        self.review_recording_accept_push_button.setToolTip("Save this recording to disk")
-        self.review_recording_reject_push_button.setToolTip("Discard this recording and try again")
-        self.review_recording_label_line_edit.setToolTip("Optional label to identify this recording")
+        # Set GroupBox title to VI name
+        self.record_group_box.setTitle(self.name)
 
-        self.record_toggle_push_button.toggled.connect(self.start_recording)
-        self.review_recording_accept_push_button.clicked.connect(self.accept_recording)
-        self.review_recording_reject_push_button.clicked.connect(self.reject_recording)
+        # Hide per-VI controls now managed by shared RecordProtocol
+        self.record_toggle_push_button.hide()
+        self.record_duration_spin_box.hide()
+        ui.label_7.hide()  # Duration label
+        self.review_recording_stacked_widget.hide()
+
+        # Shorten checkbox text (GroupBox title already identifies the VI)
+        self.use_kinematics_check_box.setText("Use Kinematics")
+
+        # Hide per-VI task selector (now managed by shared RecordProtocol)
+        self.record_task_combo_box.hide()
+        ui.label.hide()  # Task cursor direction label
+
+        # Add tooltips for remaining visible controls
+        self.record_movement_combo_box.setToolTip("Select the specific movement pattern")
+        self.use_kinematics_check_box.setToolTip(
+            "Record cursor position data from the Virtual Cursor Interface"
+        )
+        self.kinematics_samp_freq_spin_box.setToolTip(
+            "Sampling frequency for cursor position data (Hz)"
+        )
 
         self.record_ground_truth_progress_bar.setValue(0)
-        self.review_recording_stacked_widget.setCurrentIndex(0)
-
-    def start_recording(self, checked: bool) -> None:
-        """Starts the recording process."""
-        if checked:
-            if not self.start_recording_preparation():
-                self.record_toggle_push_button.setChecked(False)
-                return
-
-            if not self._recording_protocol.start_recording_preparation(self.record_duration_spin_box.value()):
-                self.record_toggle_push_button.setChecked(False)
-                return
-
-            self._start_time = time.time()
-
-            self.record_toggle_push_button.setText("Recording...")
-            self.record_group_box.setEnabled(False)
-            self._current_task = self.record_task_combo_box.currentText()
-            self._current_movement = self.record_movement_combo_box.currentText()
-
-            if self.use_kinematics_check_box.isChecked():
-                self.incoming_message_signal.connect(self.update_ground_truth_buffer)
-
-            self._has_finished_kinematics = not self.use_kinematics_check_box.isChecked()
 
     def start_recording_preparation(self) -> bool:
         """Prepares the recording process by checking if the device is streaming."""
         if not self._main_window.device__widget._get_current_widget()._device._is_streaming:
-            self._main_window.logger.print("Biosignal device not streaming!", level=LoggerLevel.ERROR)
+            self._main_window.logger.print(
+                "Biosignal device not streaming!", level=LoggerLevel.ERROR
+            )
             return False
 
-        self.kinematics_recording_time = int(self.record_duration_spin_box.value() * self.kinematics_samp_freq)
+        self.kinematics_recording_time = int(
+            self._recording_protocol._shared_duration_spin.value()
+            * self.kinematics_samp_freq
+        )
         self._kinematics__buffer = []
         return True
 
@@ -169,100 +150,54 @@ class VirtualCursorInterface_RecordingInterface(RecordingInterfaceTemplate):
     def update_kinematics_samp_freq(self) -> None:
         """Updates the kinematics sampling frequency of the cursor."""
         self.kinematics_samp_freq = int(self.kinematics_samp_freq_spin_box.value())
-        self._main_window.logger.print("Check that kinematics samp freq matches one set in"
-                                       " cursor interface.", level=LoggerLevel.WARNING)
-
-    def check_recording_completion(self) -> None:
-        """Checks if the recording process is complete and finishes it if so."""
-        if self._recording_protocol.is_biosignal_recording_complete and self._has_finished_kinematics:
-            self.finish_recording()
-
-    def finish_recording(self) -> None:
-        """Finishes the recording process and switches to the review recording interface."""
-        self.review_recording_stacked_widget.setCurrentIndex(1)
-        self.record_toggle_push_button.setText("Finished Recording")
-        self.review_recording_task_label.setText(self._current_task.capitalize())
-
-    def accept_recording(self) -> None:
-        """
-        Accepts the current recording and saves the data to a pickle file.
-
-        The saved data is a dictionary containing:
-
-        - emg: A 2D NumPy array of EMG signals with time samples as rows and channels as columns.
-        - kinematics: A 2D NumPy array of kinematics data (empty if not used).
-        - timings_emg: A 1D NumPy array of timestamps for EMG samples.
-        - timings_kinematics: A 1D NumPy array of timestamps for kinematics samples (empty if not used).
-        - label: The user-provided label for the recording.
-        - task: The task being recorded.
-        - device: The name of the device used for recording.
-        - bad_channels: A list of channels marked as "bad."
-        - _sampling_frequency: The EMG sampling frequency.
-        - kinematics_sampling_frequency: The kinematics sampling frequency.
-        - recording_time: The recording duration in seconds.
-        - use_kinematics: Boolean indicating whether kinematics data was recorded.
-        """
-        label = self.review_recording_label_line_edit.text() or "default"
-        (
-            biosignal_data,
-            biosignal_timings,
-        ) = self._recording_protocol.retrieve_recorded_data()
-
-        self.save_recording_cursor(
-            biosignal=biosignal_data,
-            biosignal_timings=biosignal_timings,
-            ground_truth_timings=(
-                np.array([time_stamp for time_stamp, _ in self._kinematics__buffer])
-                if self.use_kinematics_check_box.isChecked()
-                else np.array([])
-            ),
-            ground_truth=(
-                np.vstack([data[:, :2] for _, data in self._kinematics__buffer]).T
-                if self.use_kinematics_check_box.isChecked()
-                else np.array([])
-            ),
-            recording_label=label,
-            task=self._current_task,
-            movement=self._current_movement,
-            task_label_map=self.ground_truth__task_map,
-            ground_truth_sampling_frequency=self.kinematics_samp_freq,
-            use_as_classification=not self.use_kinematics_check_box.isChecked(),
-            record_duration=self.record_duration_spin_box.value(),
+        self._main_window.logger.print(
+            "Check that kinematics samp freq matches one set in cursor interface.",
+            level=LoggerLevel.WARNING,
         )
 
-        self.reset_ui()
-        self._main_window.logger.print(f"Recording of task {self._current_task.lower()} and movement {self._current_movement.lower()} with label {label} accepted!")
+    def check_recording_completion(self) -> None:
+        """Checks if this VI's recording is complete and notifies the protocol."""
+        if (
+            self._recording_protocol.is_biosignal_recording_complete
+            and self._has_finished_kinematics
+        ):
+            self._recording_protocol.vi_recording_completed(self.name)
 
-    def reject_recording(self) -> None:
-        """Rejects the current recording and resets the recording interface."""
-        self.reset_ui()
-        self._main_window.logger.print("Recording rejected.")
-
-    def reset_ui(self) -> None:
-        """Resets the recording interface UI elements."""
-        self.review_recording_stacked_widget.setCurrentIndex(0)
-        self.record_toggle_push_button.setText("Start Recording")
-        self.record_toggle_push_button.setChecked(False)
-        self.record_group_box.setEnabled(True)
-
-        self._recording_protocol._reset_recording_ui()
-
-        self.record_ground_truth_progress_bar.setValue(0)
-        self._kinematics__buffer.clear()
+    def get_ground_truth_data(self) -> dict:
+        """Return cursor kinematics data if checkbox checked, else empty."""
+        if self.use_kinematics_check_box.isChecked() and self._kinematics__buffer:
+            return {
+                "ground_truth": np.vstack(
+                    [data[:, :2] for _, data in self._kinematics__buffer]
+                ).T,
+                "ground_truth_timings": np.array(
+                    [t for t, _ in self._kinematics__buffer]
+                ),
+                "ground_truth_sampling_frequency": self.kinematics_samp_freq,
+                "task": self._current_task,
+                "movement": self._current_movement,
+                "task_label_map": self.ground_truth__task_map,
+                "use_as_classification": False,
+            }
+        return {
+            "ground_truth": np.array([]),
+            "ground_truth_timings": np.array([]),
+            "ground_truth_sampling_frequency": self.kinematics_samp_freq,
+            "task": self._current_task,
+            "movement": getattr(self, "_current_movement", ""),
+            "task_label_map": self.ground_truth__task_map,
+            "use_as_classification": True,
+        }
 
     def close_event(self, _: QCloseEvent) -> None:
         """Closes the recording interface."""
-        self.record_toggle_push_button.setChecked(False)
-        self.reset_ui()
-        self._recording_protocol.close_event(_)
-        self._main_window.logger.print("Recording interface closed.")
+        self._kinematics__buffer.clear()
+        self.record_ground_truth_progress_bar.setValue(0)
 
     def enable(self):
         """Enable the UI elements."""
         self.ui.recordRecordingGroupBox.setEnabled(True)
-        self.ui.recordReviewRecordingStackedWidget.setEnabled(True)
 
     def disable(self):
         """Disable the UI elements."""
         self.ui.recordRecordingGroupBox.setEnabled(False)
-        self.ui.recordReviewRecordingStackedWidget.setEnabled(False)
