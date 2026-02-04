@@ -1,123 +1,111 @@
 """
 ==============================
-Add a Custom Output System
+Add an Output System
 ==============================
 
-This example demonstrates how to build and register a new output system in **MyoGestic**.
+This example demonstrates how to build and register a new output system in
+MyoGestic.  An output system receives model predictions and routes them to
+an external destination -- a visual interface, prosthetic hardware, game
+engine, or anything else that consumes EMG-decoded outputs.
 
-By creating a subclass of the
-generic :ref:`output_system_template`, you can channel model predictions into any
-destination you like—such as a virtual environment or hardware device.
+Output systems are created **per active visual interface** when a trained
+model is loaded in the Online tab.  Each output system is registered with
+a name that matches the short name of its target VI (e.g., ``"VHI"``,
+``"KHI"``, ``"VCI"``).
 
-.. admonition:: We Recommend Implementing any Additions in *user_config.py*
+Multi-VI Architecture
+---------------------
+MyoGestic supports multiple active visual interfaces simultaneously.
+When a model is loaded, the Online protocol creates output systems only
+for the VIs that are currently active:
 
-   The *user_config.py* module is specifically designed for end-users to register
-   and configure their own custom components such as models, features,
-   and filters. This keeps your modifications modular, reduces conflicts with
-   core MyoGestic settings, and simplifies upgrades in the future.
+.. code-block:: python
 
-   .. important::
-      By registering your addition in ``user_config.py``, you ensure that your custom
-      configuration stays separate from core MyoGestic functionality and remains
-      compatible with future updates.
+    # Inside OnlineProtocol._load_model():
+    active_vis = self._main_window.active_visual_interfaces  # dict[str, VisualInterface]
+    for vi_name, vi in active_vis.items():
+        output_system = CONFIG_REGISTRY.output_systems_map[vi_name](
+            self._main_window, model.is_classifier
+        )
 
+To access a specific VI from within your output system:
 
-Example Overview
-----------------
-1. **Create** a custom output system class by inheriting from ``OutputSystemTemplate``.
-2. **Implement** the required methods for processing and sending predictions.
-3. **Register** the output system into ``CONFIG_REGISTRY``.
-4. (Optional) **Test** your new output system by selecting it in your MyoGestic
-   workflow.
+.. code-block:: python
 
-Notes on Implementation
------------------------
-The class design follows the interface defined by :ref:`output_system_template`, requiring:
+    vi = self._main_window.active_visual_interfaces.get("VHI")
 
-- A constructor that takes in the ``main_window`` (as all QObject do) and a boolean flag for classification vs. regression.
-- Definitions for:
+Required Methods
+-----------------
+Your output system must inherit from :ref:`output_system_template` and
+implement:
 
-  - ``_process_prediction__classification(prediction: Any) -> Any``
-  - ``_process_prediction__regression(prediction: Any) -> Any``
-  - ``send_prediction(prediction: Any) -> None``
-  - ``closeEvent(event) -> None``
+- :meth:`~myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__classification`
+- :meth:`~myogestic.gui.widgets.templates.OutputSystemTemplate._process_prediction__regression`
+- :meth:`~myogestic.gui.widgets.templates.OutputSystemTemplate.send_prediction`
+- :meth:`~myogestic.gui.widgets.templates.OutputSystemTemplate.close_event`
 
-Below, we provide a simplified demonstration that mirrors how you might adapt a
-neural rehabilitation device interface or a virtual hand interface. For further
-examples of fully featured implementations, see references in MyoGestic's existing
-output systems.
+The base class automatically selects the right processing method based
+on ``prediction_is_classification`` and exposes it as
+:attr:`~myogestic.gui.widgets.templates.OutputSystemTemplate.process_prediction`.
+
+.. admonition:: Add your output system in :mod:`~myogestic.user_config`
+
+   Keep custom output system registrations in :mod:`~myogestic.user_config` to stay
+   separate from core MyoGestic code.
 
 """
 
 # %%
-# --------------------------------------
+# ----------------------------------------
 # Step 1: Define Your Custom Output System
-# --------------------------------------
+# ----------------------------------------
 from typing import Any
 from myogestic.gui.widgets.templates.output_system import OutputSystemTemplate
 
 
 class MyCustomOutputSystem(OutputSystemTemplate):
-    """
-    A simple example output system for demonstration purposes.
+    """A simple example output system for demonstration.
 
-    This class shows how to inherit from OutputSystemTemplate and implement
-    the required abstract methods. It can send predictions to any desired
-    interface or hardware, provided you adapt the methods below.
+    This class shows how to inherit from :class:`~myogestic.gui.widgets.templates.OutputSystemTemplate` and
+    implement the required abstract methods.  It sends predictions to
+    the application logger for demonstration purposes.
     """
 
     def __init__(self, main_window, prediction_is_classification: bool) -> None:
-        """
-        Initialize the custom output system.
-
-        Parameters
-        ----------
-        main_window : Any
-            The main window object containing a logger or other references.
-        prediction_is_classification : bool
-            Set to True for classification tasks, False for regression.
-        """
         super().__init__(main_window, prediction_is_classification)
-        # (Optional) Initialize sockets, signals, or other resources here
+        # Initialize sockets, hardware connections, timers, etc. here.
+        #
+        # To access the outgoing signal of a specific VI:
+        #   vi = self._main_window.active_visual_interfaces.get("VHI")
+        #   self._outgoing_signal = vi.outgoing_message_signal
 
-    def _process_prediction__classification(self, prediction: Any) -> Any:
-        """
-        Convert a classification prediction into a format suitable
-        for your output system or interface.
-        """
-        # Replace with your own logic or mappings
-        return f"Classification: {prediction}".encode("utf-8")
+    def _process_prediction__classification(self, prediction: Any) -> bytes:
+        """Convert a classification label to bytes for transmission."""
+        return f"Class: {prediction}".encode("utf-8")
 
-    def _process_prediction__regression(self, prediction: Any) -> Any:
-        """
-        Convert a regression prediction into a format suitable
-        for your output system or interface.
-        """
-        # Replace with your own logic or mappings
-        return f"Regression: {prediction}".encode("utf-8")
+    def _process_prediction__regression(self, prediction: Any) -> bytes:
+        """Convert regression values to bytes for transmission."""
+        return str([float(x) for x in prediction]).encode("utf-8")
 
     def send_prediction(self, prediction: Any) -> None:
-        """
-        Send the processed prediction to your output destination.
-        """
+        """Send the processed prediction to the output destination."""
         processed = self.process_prediction(prediction)
-        # For demonstration, we simply print the processed data
-        self._main_window.logger.print(
-            f"Sending: {processed}",
-        )
+        # Replace with your actual send logic (UDP, serial, etc.)
+        self._main_window.logger.print(f"Sending: {processed}")
 
     def close_event(self, event) -> None:
-        """
-        Handle any cleanup needed when your system closes.
-        """
-        # Close sockets, timers, or other resources here
+        """Clean up resources (sockets, timers, etc.)."""
         pass
 
 
 # %%
-# -------------------------------------------------
+# ------------------------------------------------------
 # Step 2: Register the Output System in CONFIG_REGISTRY
-# -------------------------------------------------
+# ------------------------------------------------------
+# The ``name`` must match the short name of the target VI.  For a
+# standalone output system (not tied to a specific VI), use any unique
+# name -- it will be instantiated when a model is loaded.
+
 from myogestic.utils.config import CONFIG_REGISTRY
 
 CONFIG_REGISTRY.register_output_system(
@@ -125,10 +113,17 @@ CONFIG_REGISTRY.register_output_system(
 )
 
 # %%
-# -------------------------------
-# Example: Virtual Hand Interface
-# -------------------------------
+# ---------------------------------------------------
+# Reference: Virtual Hand Interface Output System
+# ---------------------------------------------------
+# The VHI output system demonstrates a real-world implementation that:
+#
+# - Validates that the VHI is among the active visual interfaces.
+# - Maps classification labels (0-8) to predefined hand poses.
+# - Converts regression predictions to a float list string.
+# - Sends the processed prediction via the VI's outgoing UDP signal.
+#
 # .. literalinclude:: /../../myogestic/gui/widgets/visual_interfaces/virtual_hand_interface/output_interface.py
-#   :language: python
-#   :lineno-match:
-
+#    :language: python
+#    :lineno-match:
+#    :caption: VHI Output System -- full implementation
