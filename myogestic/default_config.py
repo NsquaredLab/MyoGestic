@@ -1,6 +1,15 @@
 import numpy as np
 from catboost import CatBoostClassifier
-from catboost.utils import get_gpu_device_count
+from catboost.utils import get_gpu_device_count as _get_gpu_device_count
+
+
+def get_gpu_device_count() -> int:
+    """Wrap catboost's GPU count to handle mocked imports (e.g. Sphinx)."""
+    try:
+        result = _get_gpu_device_count()
+        return int(result)
+    except (TypeError, ValueError):
+        return 0
 from myoverse.models.raul_net.v17 import RaulNetV17
 from myoverse.transforms import (
     Identity,
