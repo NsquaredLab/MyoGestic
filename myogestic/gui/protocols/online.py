@@ -73,6 +73,7 @@ class OnlineProtocol(QObject):
         self._main_window = main_window
 
         self._selected_visual_interface: VisualInterface | None = None
+        self._active_visual_interfaces: dict[str, VisualInterface] = {}
 
         # Initialize Protocol UI
         self._setup_protocol_ui()
@@ -162,6 +163,8 @@ class OnlineProtocol(QObject):
             else prediction_after_filter
         )
 
+        self._main_window.logger.print(f"Prediction: {prediction}")
+
         for output_system in self._output_systems__dict.values():
             output_system.send_prediction(prediction)
 
@@ -216,14 +219,14 @@ class OnlineProtocol(QObject):
         if self.online_record_toggle_push_button.isChecked():
             self.online_prediction_toggle_push_button.setEnabled(False)
 
-            self._main_window.selected_visual_interface.incoming_message_signal.connect(self.online_ground_truth_update)
-
-            self._selected_visual_interface.setup_interface_ui.connect_custom_signals()
+            # Connect to the primary VI for ground truth recording
+            if self._selected_visual_interface is not None:
+                self._selected_visual_interface.incoming_message_signal.connect(self.online_ground_truth_update)
+                self._selected_visual_interface.setup_interface_ui.connect_custom_signals()
+                self._selected_visual_interface.setup_interface_ui.clear_custom_signal_buffers()
 
             self._biosignal_recording__buffer = []
             self._ground_truth_recording__buffer = []
-
-            self._selected_visual_interface.setup_interface_ui.clear_custom_signal_buffers()
 
             self._prediction_before_filter_recording__buffer = []
             self._predictions_after_filter_recording__buffer = []
@@ -233,11 +236,13 @@ class OnlineProtocol(QObject):
             self.online_record_toggle_push_button.setText("Stop Recording")
         else:
             self.online_prediction_toggle_push_button.setEnabled(True)
-            self._main_window.selected_visual_interface.incoming_message_signal.disconnect(
-                self.online_ground_truth_update
-            )
-
-            self._selected_visual_interface.setup_interface_ui.disconnect_custom_signals()
+            
+            # Disconnect from the primary VI
+            if self._selected_visual_interface is not None:
+                self._selected_visual_interface.incoming_message_signal.disconnect(
+                    self.online_ground_truth_update
+                )
+                self._selected_visual_interface.setup_interface_ui.disconnect_custom_signals()
 
             self.online_record_toggle_push_button.setText("Start Recording")
 
@@ -328,22 +333,27 @@ class OnlineProtocol(QObject):
         if len(self.active_monitoring_widgets) != 0:
             self._send_model_information()
 
-        # Remove visual interface output systems that don't match the currently active one
-        current_output_map = CONFIG_REGISTRY.output_systems_map.copy()
-        active_vi = self._main_window.selected_visual_interface
-        active_vi_name = active_vi.name if active_vi is not None else None
+        # Get active VIs directly from main window to ensure we have current state
+        active_vi_names = set(self._main_window.active_visual_interfaces.keys())
         trained_vi_name = self._model_information__dict.get("visual_interface")
 
-        if trained_vi_name and active_vi_name and trained_vi_name != active_vi_name:
+        if trained_vi_name and active_vi_names and trained_vi_name not in active_vi_names:
             self._main_window.logger.print(
                 f"Warning: Model was trained with visual interface '{trained_vi_name}' "
-                f"but the currently active interface is '{active_vi_name}'.",
+                f"but it is not among the active interfaces: {active_vi_names}.",
                 LoggerLevel.WARNING,
             )
 
-        for vi_name in CONFIG_REGISTRY.visual_interfaces_map:
-            if vi_name != active_vi_name and vi_name in current_output_map:
-                del current_output_map[vi_name]
+        # Only instantiate output systems for VIs that are currently active
+        current_output_map = {
+            k: v for k, v in CONFIG_REGISTRY.output_systems_map.items()
+            if k in active_vi_names
+        }
+
+        self._main_window.logger.print(
+            f"Creating output systems for: {list(current_output_map.keys())}",
+            LoggerLevel.INFO,
+        )
 
         self._output_systems__dict = {
             k: v(self._main_window, self._model_interface.model.is_classifier) for k, v in current_output_map.items()
