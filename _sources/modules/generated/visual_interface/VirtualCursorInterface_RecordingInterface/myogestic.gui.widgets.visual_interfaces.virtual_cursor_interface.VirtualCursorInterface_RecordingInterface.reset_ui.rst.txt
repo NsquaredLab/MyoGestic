@@ -1,6 +1,0 @@
-myogestic.gui.widgets.visual\_interfaces.virtual\_cursor\_interface.VirtualCursorInterface\_RecordingInterface.reset\_ui
-========================================================================================================================
-
-.. currentmodule:: myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface
-
-.. automethod:: VirtualCursorInterface_RecordingInterface.reset_ui

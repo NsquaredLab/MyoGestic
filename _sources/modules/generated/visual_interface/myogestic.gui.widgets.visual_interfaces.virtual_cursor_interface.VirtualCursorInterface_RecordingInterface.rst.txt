@@ -14,16 +14,12 @@
       :toctree: VirtualCursorInterface_RecordingInterface
        
             ~VirtualCursorInterface_RecordingInterface.__init__
-            ~VirtualCursorInterface_RecordingInterface.accept_recording
             ~VirtualCursorInterface_RecordingInterface.check_recording_completion
             ~VirtualCursorInterface_RecordingInterface.close_event
             ~VirtualCursorInterface_RecordingInterface.disable
             ~VirtualCursorInterface_RecordingInterface.enable
-            ~VirtualCursorInterface_RecordingInterface.finish_recording
+            ~VirtualCursorInterface_RecordingInterface.get_ground_truth_data
             ~VirtualCursorInterface_RecordingInterface.initialize_ui_logic
-            ~VirtualCursorInterface_RecordingInterface.reject_recording
-            ~VirtualCursorInterface_RecordingInterface.reset_ui
-            ~VirtualCursorInterface_RecordingInterface.start_recording
             ~VirtualCursorInterface_RecordingInterface.start_recording_preparation
             ~VirtualCursorInterface_RecordingInterface.update_ground_truth_buffer
             ~VirtualCursorInterface_RecordingInterface.update_kinematics_samp_freq

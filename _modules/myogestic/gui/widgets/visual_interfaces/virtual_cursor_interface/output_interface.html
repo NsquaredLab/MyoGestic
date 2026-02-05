@@ -393,20 +393,26 @@
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">main_window</span><span class="p">,</span> <span class="n">prediction_is_classification</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">main_window</span><span class="p">,</span> <span class="n">prediction_is_classification</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">selected_visual_interface</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;No visual interface selected.&quot;</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;No visual interface selected.&quot;</span><span class="p">)</span>
+        <span class="c1"># Check if VCI is among the active VIs</span>
+        <span class="n">active_vis</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">active_visual_interfaces</span>
+        <span class="n">vi</span> <span class="o">=</span> <span class="n">active_vis</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;VCI&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">vi</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                <span class="s2">&quot;VCI (Virtual Cursor Interface) is not active.&quot;</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span>
+            <span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;VCI (Virtual Cursor Interface) is not active.&quot;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">selected_visual_interface</span><span class="o">.</span><span class="n">setup_interface_ui</span><span class="p">,</span>
+            <span class="n">vi</span><span class="o">.</span><span class="n">setup_interface_ui</span><span class="p">,</span>
             <span class="n">VirtualCursorInterface_SetupInterface</span><span class="p">,</span>
         <span class="p">):</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="s2">&quot;The virtual interface must be the Virtual Cursor Interface.&quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;Got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">selected_visual_interface</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">vi</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
             <span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">_outgoing_message_signal</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">selected_visual_interface</span><span class="o">.</span><span class="n">outgoing_message_signal</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_outgoing_message_signal</span> <span class="o">=</span> <span class="n">vi</span><span class="o">.</span><span class="n">outgoing_message_signal</span></div>
 
 
 <div class="viewcode-block" id="VirtualCursorInterface_OutputSystem._process_prediction__classification">

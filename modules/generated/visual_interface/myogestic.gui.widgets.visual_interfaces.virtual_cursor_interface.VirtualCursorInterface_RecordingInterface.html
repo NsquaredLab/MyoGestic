@@ -465,57 +465,33 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface">
 <em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.</span></span><span class="sig-name descname"><span class="pre">VirtualCursorInterface_RecordingInterface</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/visual_interfaces/virtual_cursor_interface/recording_interface.html#VirtualCursorInterface_RecordingInterface"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface" title="Link to this definition">#</a></dt>
-<dd><p>Class for the recording interface of the Virtual Cursor Interface.</p>
-<p>This class is responsible for handling the recording of EMG and kinematics data.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>main_window</strong> (<em>MainWindow</em>) – The main window of the application.</p></li>
-<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – <p>The name of the interface, by default “VirtualCursorInterface”.</p>
-<div class="admonition important">
-<p class="admonition-title">Important</p>
-<p>This name is used to identify the interface in the main window. It should be unique.</p>
-</div>
-</p></li>
-<li><p><strong>incoming_message_signal</strong> (<em>SignalInstance</em>) – The signal instance used to receive incoming messages from the device.</p></li>
-</ul>
-</dd>
-</dl>
+<dd><p>Recording interface for the Virtual Cursor Interface.</p>
+<p>Handles per-VI settings (task, movement, kinematics checkbox) while
+the shared RecordProtocol manages Record button, Duration, and
+unified review.</p>
 <p class="rubric">Methods</p>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="VirtualCursorInterface_RecordingInterface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.__init__.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.__init__" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(main_window[, name, ...])</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.accept_recording" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.accept_recording"><code class="xref py py-obj docutils literal notranslate"><span class="pre">accept_recording</span></code></a>()</p></td>
-<td><p>Accepts the current recording and saves the data to a pickle file.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.check_recording_completion" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.check_recording_completion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">check_recording_completion</span></code></a>()</p></td>
+<td><p>Checks if this VI's recording is complete and notifies the protocol.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.check_recording_completion" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.check_recording_completion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">check_recording_completion</span></code></a>()</p></td>
-<td><p>Checks if the recording process is complete and finishes it if so.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.close_event" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.close_event"><code class="xref py py-obj docutils literal notranslate"><span class="pre">close_event</span></code></a>(_)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.close_event" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.close_event"><code class="xref py py-obj docutils literal notranslate"><span class="pre">close_event</span></code></a>(_)</p></td>
 <td><p>Closes the recording interface.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.disable" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.disable"><code class="xref py py-obj docutils literal notranslate"><span class="pre">disable</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.disable" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.disable"><code class="xref py py-obj docutils literal notranslate"><span class="pre">disable</span></code></a>()</p></td>
 <td><p>Disable the UI elements.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.enable" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.enable"><code class="xref py py-obj docutils literal notranslate"><span class="pre">enable</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.enable" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.enable"><code class="xref py py-obj docutils literal notranslate"><span class="pre">enable</span></code></a>()</p></td>
 <td><p>Enable the UI elements.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.finish_recording" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.finish_recording"><code class="xref py py-obj docutils literal notranslate"><span class="pre">finish_recording</span></code></a>()</p></td>
-<td><p>Finishes the recording process and switches to the review recording interface.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.get_ground_truth_data" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.get_ground_truth_data"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_ground_truth_data</span></code></a>()</p></td>
+<td><p>Return cursor kinematics data if checkbox checked, else empty.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.initialize_ui_logic" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.initialize_ui_logic"><code class="xref py py-obj docutils literal notranslate"><span class="pre">initialize_ui_logic</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.initialize_ui_logic" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.initialize_ui_logic"><code class="xref py py-obj docutils literal notranslate"><span class="pre">initialize_ui_logic</span></code></a>()</p></td>
 <td><p>Initializes the logic for the UI elements.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reject_recording" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reject_recording"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reject_recording</span></code></a>()</p></td>
-<td><p>Rejects the current recording and resets the recording interface.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reset_ui" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reset_ui"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset_ui</span></code></a>()</p></td>
-<td><p>Resets the recording interface UI elements.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.start_recording" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.start_recording"><code class="xref py py-obj docutils literal notranslate"><span class="pre">start_recording</span></code></a>(checked)</p></td>
-<td><p>Starts the recording process.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.start_recording_preparation" title="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.start_recording_preparation"><code class="xref py py-obj docutils literal notranslate"><span class="pre">start_recording_preparation</span></code></a>()</p></td>
 <td><p>Prepares the recording process by checking if the device is streaming.</p></td>
@@ -529,36 +505,18 @@
 </tbody>
 </table>
 </div>
-<dl class="py method">
-<dt class="sig sig-object py" id="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.accept_recording">
-<span class="sig-name descname"><span class="pre">accept_recording</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/visual_interfaces/virtual_cursor_interface/recording_interface.html#VirtualCursorInterface_RecordingInterface.accept_recording"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.accept_recording" title="Link to this definition">#</a></dt>
-<dd><p>Accepts the current recording and saves the data to a pickle file.</p>
-<p>The saved data is a dictionary containing:</p>
-<ul class="simple">
-<li><p>emg: A 2D NumPy array of EMG signals with time samples as rows and channels as columns.</p></li>
-<li><p>kinematics: A 2D NumPy array of kinematics data (empty if not used).</p></li>
-<li><p>timings_emg: A 1D NumPy array of timestamps for EMG samples.</p></li>
-<li><p>timings_kinematics: A 1D NumPy array of timestamps for kinematics samples (empty if not used).</p></li>
-<li><p>label: The user-provided label for the recording.</p></li>
-<li><p>task: The task being recorded.</p></li>
-<li><p>device: The name of the device used for recording.</p></li>
-<li><p>bad_channels: A list of channels marked as “bad.”</p></li>
-<li><p>_sampling_frequency: The EMG sampling frequency.</p></li>
-<li><p>kinematics_sampling_frequency: The kinematics sampling frequency.</p></li>
-<li><p>recording_time: The recording duration in seconds.</p></li>
-<li><p>use_kinematics: Boolean indicating whether kinematics data was recorded.</p></li>
-</ul>
 <dl class="field-list simple">
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>incoming_message_signal</strong> (<em>PySide6.QtCore.SignalInstance</em>)</p></li>
+</ul>
 </dd>
 </dl>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.check_recording_completion">
 <span class="sig-name descname"><span class="pre">check_recording_completion</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/visual_interfaces/virtual_cursor_interface/recording_interface.html#VirtualCursorInterface_RecordingInterface.check_recording_completion"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.check_recording_completion" title="Link to this definition">#</a></dt>
-<dd><p>Checks if the recording process is complete and finishes it if so.</p>
+<dd><p>Checks if this VI’s recording is complete and notifies the protocol.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>None</p>
@@ -593,12 +551,12 @@
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.finish_recording">
-<span class="sig-name descname"><span class="pre">finish_recording</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/visual_interfaces/virtual_cursor_interface/recording_interface.html#VirtualCursorInterface_RecordingInterface.finish_recording"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.finish_recording" title="Link to this definition">#</a></dt>
-<dd><p>Finishes the recording process and switches to the review recording interface.</p>
+<dt class="sig sig-object py" id="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.get_ground_truth_data">
+<span class="sig-name descname"><span class="pre">get_ground_truth_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/visual_interfaces/virtual_cursor_interface/recording_interface.html#VirtualCursorInterface_RecordingInterface.get_ground_truth_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.get_ground_truth_data" title="Link to this definition">#</a></dt>
+<dd><p>Return cursor kinematics data if checkbox checked, else empty.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -610,42 +568,6 @@
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>None</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reject_recording">
-<span class="sig-name descname"><span class="pre">reject_recording</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/visual_interfaces/virtual_cursor_interface/recording_interface.html#VirtualCursorInterface_RecordingInterface.reject_recording"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reject_recording" title="Link to this definition">#</a></dt>
-<dd><p>Rejects the current recording and resets the recording interface.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reset_ui">
-<span class="sig-name descname"><span class="pre">reset_ui</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/visual_interfaces/virtual_cursor_interface/recording_interface.html#VirtualCursorInterface_RecordingInterface.reset_ui"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reset_ui" title="Link to this definition">#</a></dt>
-<dd><p>Resets the recording interface UI elements.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.start_recording">
-<span class="sig-name descname"><span class="pre">start_recording</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checked</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/visual_interfaces/virtual_cursor_interface/recording_interface.html#VirtualCursorInterface_RecordingInterface.start_recording"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.start_recording" title="Link to this definition">#</a></dt>
-<dd><p>Starts the recording process.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>checked</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>None</p>
 </dd>
 </dl>
 </dd></dl>
@@ -714,16 +636,12 @@
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.accept_recording"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.accept_recording()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.check_recording_completion"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.check_recording_completion()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.close_event"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.close_event()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.disable"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.disable()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.enable"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.enable()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.finish_recording"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.finish_recording()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.get_ground_truth_data"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.get_ground_truth_data()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.initialize_ui_logic"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.initialize_ui_logic()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reject_recording"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.reject_recording()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reset_ui"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.reset_ui()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.start_recording"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.start_recording()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.start_recording_preparation"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.start_recording_preparation()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.update_ground_truth_buffer"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.update_ground_truth_buffer()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.update_kinematics_samp_freq"><code class="docutils literal notranslate"><span class="pre">VirtualCursorInterface_RecordingInterface.update_kinematics_samp_freq()</span></code></a></li>

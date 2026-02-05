@@ -675,30 +675,30 @@ communication on multiple ports, and streams kinematics at 32 Hz.</p>
 </div>
 <div class="literal-block-wrapper docutils container" id="id6">
 <div class="code-block-caption"><span class="caption-text">read_message – Read UDP messages from the VI</span><a class="headerlink" href="#id6" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">330</span>    <span class="k">def</span><span class="w"> </span><span class="nf">read_message</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">331</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read a message from the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">332</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">333</span>            <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">hasPendingDatagrams</span><span class="p">():</span>
-<span class="linenos">334</span>                <span class="n">datagram</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">readDatagram</span><span class="p">(</span>
-<span class="linenos">335</span>                    <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">pendingDatagramSize</span><span class="p">()</span>
-<span class="linenos">336</span>                <span class="p">)</span>
-<span class="linenos">337</span>
-<span class="linenos">338</span>                <span class="n">data</span> <span class="o">=</span> <span class="n">datagram</span><span class="o">.</span><span class="n">data</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
-<span class="linenos">339</span>                <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
-<span class="linenos">340</span>                    <span class="k">return</span>
-<span class="linenos">341</span>
-<span class="linenos">342</span>                <span class="k">try</span><span class="p">:</span>
-<span class="linenos">343</span>                    <span class="k">if</span> <span class="n">data</span> <span class="o">==</span> <span class="n">STATUS_RESPONSE</span><span class="p">:</span>
-<span class="linenos">344</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">True</span>
-<span class="linenos">345</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
-<span class="linenos">346</span>                            <span class="n">CONNECTED_STYLESHEET</span>
-<span class="linenos">347</span>                        <span class="p">)</span>
-<span class="linenos">348</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
-<span class="linenos">349</span>                        <span class="k">return</span>
-<span class="linenos">350</span>
-<span class="linenos">351</span>                    <span class="bp">self</span><span class="o">.</span><span class="n">incoming_message_signal</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span><span class="n">data</span><span class="p">)))</span>
-<span class="linenos">352</span>                <span class="k">except</span> <span class="p">(</span><span class="ne">UnicodeDecodeError</span><span class="p">,</span> <span class="ne">SyntaxError</span><span class="p">):</span>
-<span class="linenos">353</span>                    <span class="k">pass</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">332</span>    <span class="k">def</span><span class="w"> </span><span class="nf">read_message</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">333</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Read a message from the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">334</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_virtual_hand_interface__push_button</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+<span class="linenos">335</span>            <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">hasPendingDatagrams</span><span class="p">():</span>
+<span class="linenos">336</span>                <span class="n">datagram</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">readDatagram</span><span class="p">(</span>
+<span class="linenos">337</span>                    <span class="bp">self</span><span class="o">.</span><span class="n">_streaming__udp_socket</span><span class="o">.</span><span class="n">pendingDatagramSize</span><span class="p">()</span>
+<span class="linenos">338</span>                <span class="p">)</span>
+<span class="linenos">339</span>
+<span class="linenos">340</span>                <span class="n">data</span> <span class="o">=</span> <span class="n">datagram</span><span class="o">.</span><span class="n">data</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+<span class="linenos">341</span>                <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
+<span class="linenos">342</span>                    <span class="k">return</span>
+<span class="linenos">343</span>
+<span class="linenos">344</span>                <span class="k">try</span><span class="p">:</span>
+<span class="linenos">345</span>                    <span class="k">if</span> <span class="n">data</span> <span class="o">==</span> <span class="n">STATUS_RESPONSE</span><span class="p">:</span>
+<span class="linenos">346</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="linenos">347</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_virtual_hand_interface__status_widget</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span>
+<span class="linenos">348</span>                            <span class="n">CONNECTED_STYLESHEET</span>
+<span class="linenos">349</span>                        <span class="p">)</span>
+<span class="linenos">350</span>                        <span class="bp">self</span><span class="o">.</span><span class="n">_status_request_timeout__timer</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+<span class="linenos">351</span>                        <span class="k">return</span>
+<span class="linenos">352</span>
+<span class="linenos">353</span>                    <span class="bp">self</span><span class="o">.</span><span class="n">incoming_message_signal</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">literal_eval</span><span class="p">(</span><span class="n">data</span><span class="p">)))</span>
+<span class="linenos">354</span>                <span class="k">except</span> <span class="p">(</span><span class="ne">UnicodeDecodeError</span><span class="p">,</span> <span class="ne">SyntaxError</span><span class="p">):</span>
+<span class="linenos">355</span>                    <span class="k">pass</span>
 </pre></div>
 </div>
 </div>
@@ -707,24 +707,24 @@ communication on multiple ports, and streams kinematics at 32 Hz.</p>
 <h3>Step 3.5: VHI Reference – Custom Signals and Data<a class="headerlink" href="#step-3-5-vhi-reference-custom-signals-and-data" title="Link to this heading">#</a></h3>
 <div class="literal-block-wrapper docutils container" id="id7">
 <div class="code-block-caption"><span class="caption-text">connect_custom_signals</span><a class="headerlink" href="#id7" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">373</span>    <span class="k">def</span><span class="w"> </span><span class="nf">connect_custom_signals</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">374</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Connect custom signals for the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">375</span>        <span class="bp">self</span><span class="o">.</span><span class="n">predicted_hand__signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">online_predicted_hand_update</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">375</span>    <span class="k">def</span><span class="w"> </span><span class="nf">connect_custom_signals</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">376</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Connect custom signals for the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">377</span>        <span class="bp">self</span><span class="o">.</span><span class="n">predicted_hand__signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">online_predicted_hand_update</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id8">
 <div class="code-block-caption"><span class="caption-text">get_custom_save_data – Extra recording data (predicted hand positions)</span><a class="headerlink" href="#id8" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">381</span>    <span class="k">def</span><span class="w"> </span><span class="nf">get_custom_save_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-<span class="linenos">382</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Get custom save data for the Virtual Hand Interface.&quot;&quot;&quot;</span>
-<span class="linenos">383</span>        <span class="k">return</span> <span class="p">{</span>
-<span class="linenos">384</span>            <span class="s2">&quot;predicted_hand&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">(</span>
-<span class="linenos">385</span>                <span class="p">[</span><span class="n">data</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="p">],</span>
-<span class="linenos">386</span>            <span class="p">)</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
-<span class="linenos">387</span>            <span class="s2">&quot;predicted_hand_timings&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
-<span class="linenos">388</span>                <span class="p">[</span><span class="n">time</span> <span class="k">for</span> <span class="n">time</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="p">],</span>
-<span class="linenos">389</span>            <span class="p">),</span>
-<span class="linenos">390</span>        <span class="p">}</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">383</span>    <span class="k">def</span><span class="w"> </span><span class="nf">get_custom_save_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="linenos">384</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Get custom save data for the Virtual Hand Interface.&quot;&quot;&quot;</span>
+<span class="linenos">385</span>        <span class="k">return</span> <span class="p">{</span>
+<span class="linenos">386</span>            <span class="s2">&quot;predicted_hand&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">(</span>
+<span class="linenos">387</span>                <span class="p">[</span><span class="n">data</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="p">],</span>
+<span class="linenos">388</span>            <span class="p">)</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+<span class="linenos">389</span>            <span class="s2">&quot;predicted_hand_timings&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+<span class="linenos">390</span>                <span class="p">[</span><span class="n">time</span> <span class="k">for</span> <span class="n">time</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predicted_hand_recording__buffer</span><span class="p">],</span>
+<span class="linenos">391</span>            <span class="p">),</span>
+<span class="linenos">392</span>        <span class="p">}</span>
 </pre></div>
 </div>
 </div>

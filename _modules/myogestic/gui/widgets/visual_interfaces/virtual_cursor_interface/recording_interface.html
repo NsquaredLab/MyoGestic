@@ -374,21 +374,11 @@
 <div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface">
 <a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">VirtualCursorInterface_RecordingInterface</span><span class="p">(</span><span class="n">RecordingInterfaceTemplate</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Class for the recording interface of the Virtual Cursor Interface.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Recording interface for the Virtual Cursor Interface.</span>
 
-<span class="sd">    This class is responsible for handling the recording of EMG and kinematics data.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    main_window : MainWindow</span>
-<span class="sd">        The main window of the application.</span>
-<span class="sd">    name : str</span>
-<span class="sd">        The name of the interface, by default &quot;VirtualCursorInterface&quot;.</span>
-
-<span class="sd">        .. important:: This name is used to identify the interface in the main window. It should be unique.</span>
-<span class="sd">    incoming_message_signal : SignalInstance</span>
-<span class="sd">        The signal instance used to receive incoming messages from the device.</span>
+<span class="sd">    Handles per-VI settings (task, movement, kinematics checkbox) while</span>
+<span class="sd">    the shared RecordProtocol manages Record button, Duration, and</span>
+<span class="sd">    unified review.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">ground_truth__task_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
@@ -460,49 +450,32 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq_spin_box</span><span class="o">.</span><span class="n">value</span><span class="p">())</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq_spin_box</span><span class="o">.</span><span class="n">valueChanged</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">update_kinematics_samp_freq</span><span class="p">)</span>
 
-        <span class="c1"># Add tooltips for better usability</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_task_combo_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Select the task/direction to record&quot;</span><span class="p">)</span>
+        <span class="c1"># Set GroupBox title to VI name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_group_box</span><span class="o">.</span><span class="n">setTitle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+        <span class="c1"># Hide per-VI controls now managed by shared RecordProtocol</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>
+        <span class="n">ui</span><span class="o">.</span><span class="n">label_7</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>  <span class="c1"># Duration label</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>
+
+        <span class="c1"># Shorten checkbox text (GroupBox title already identifies the VI)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Use Kinematics&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Hide per-VI task selector (now managed by shared RecordProtocol)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_task_combo_box</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>
+        <span class="n">ui</span><span class="o">.</span><span class="n">label</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>  <span class="c1"># Task cursor direction label</span>
+
+        <span class="c1"># Add tooltips for remaining visible controls</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">record_movement_combo_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Select the specific movement pattern&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Recording duration in seconds&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Start recording EMG data for the selected task&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Record cursor position data from the Virtual Cursor Interface&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq_spin_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Sampling frequency for cursor position data (Hz)&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_accept_push_button</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Save this recording to disk&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_reject_push_button</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Discard this recording and try again&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_label_line_edit</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Optional label to identify this recording&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span>
+            <span class="s2">&quot;Record cursor position data from the Virtual Cursor Interface&quot;</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq_spin_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span>
+            <span class="s2">&quot;Sampling frequency for cursor position data (Hz)&quot;</span>
+        <span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">toggled</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">start_recording</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_accept_push_button</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">accept_recording</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_reject_push_button</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">reject_recording</span><span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span><span class="o">.</span><span class="n">setCurrentIndex</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.start_recording">
-<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.start_recording">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">start_recording</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">checked</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Starts the recording process.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">checked</span><span class="p">:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_recording_preparation</span><span class="p">():</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-                <span class="k">return</span>
-
-            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">start_recording_preparation</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">value</span><span class="p">()):</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-                <span class="k">return</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">_start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Recording...&quot;</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">record_group_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">record_task_combo_box</span><span class="o">.</span><span class="n">currentText</span><span class="p">()</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_current_movement</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">record_movement_combo_box</span><span class="o">.</span><span class="n">currentText</span><span class="p">()</span>
-
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">incoming_message_signal</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">update_ground_truth_buffer</span><span class="p">)</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span> <span class="o">=</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">()</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.start_recording_preparation">
@@ -510,10 +483,15 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">start_recording_preparation</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Prepares the recording process by checking if the device is streaming.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">device__widget</span><span class="o">.</span><span class="n">_get_current_widget</span><span class="p">()</span><span class="o">.</span><span class="n">_device</span><span class="o">.</span><span class="n">_is_streaming</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;Biosignal device not streaming!&quot;</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                <span class="s2">&quot;Biosignal device not streaming!&quot;</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">ERROR</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_recording_time</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">value</span><span class="p">()</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_recording_time</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">_shared_duration_spin</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
+            <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq</span>
+        <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">return</span> <span class="kc">True</span></div>
 
@@ -547,127 +525,72 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">update_kinematics_samp_freq</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Updates the kinematics sampling frequency of the cursor.&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq_spin_box</span><span class="o">.</span><span class="n">value</span><span class="p">())</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;Check that kinematics samp freq matches one set in&quot;</span>
-                                       <span class="s2">&quot; cursor interface.&quot;</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">WARNING</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+            <span class="s2">&quot;Check that kinematics samp freq matches one set in cursor interface.&quot;</span><span class="p">,</span>
+            <span class="n">level</span><span class="o">=</span><span class="n">LoggerLevel</span><span class="o">.</span><span class="n">WARNING</span><span class="p">,</span>
+        <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.check_recording_completion">
 <a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.check_recording_completion">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">check_recording_completion</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Checks if the recording process is complete and finishes it if so.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">is_biosignal_recording_complete</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">finish_recording</span><span class="p">()</span></div>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Checks if this VI&#39;s recording is complete and notifies the protocol.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">is_biosignal_recording_complete</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">vi_recording_completed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.finish_recording">
-<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.finish_recording">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">finish_recording</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Finishes the recording process and switches to the review recording interface.&quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span><span class="o">.</span><span class="n">setCurrentIndex</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Finished Recording&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_task_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="o">.</span><span class="n">capitalize</span><span class="p">())</span></div>
-
-
-<div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.accept_recording">
-<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.accept_recording">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">accept_recording</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Accepts the current recording and saves the data to a pickle file.</span>
-
-<span class="sd">        The saved data is a dictionary containing:</span>
-
-<span class="sd">        - emg: A 2D NumPy array of EMG signals with time samples as rows and channels as columns.</span>
-<span class="sd">        - kinematics: A 2D NumPy array of kinematics data (empty if not used).</span>
-<span class="sd">        - timings_emg: A 1D NumPy array of timestamps for EMG samples.</span>
-<span class="sd">        - timings_kinematics: A 1D NumPy array of timestamps for kinematics samples (empty if not used).</span>
-<span class="sd">        - label: The user-provided label for the recording.</span>
-<span class="sd">        - task: The task being recorded.</span>
-<span class="sd">        - device: The name of the device used for recording.</span>
-<span class="sd">        - bad_channels: A list of channels marked as &quot;bad.&quot;</span>
-<span class="sd">        - _sampling_frequency: The EMG sampling frequency.</span>
-<span class="sd">        - kinematics_sampling_frequency: The kinematics sampling frequency.</span>
-<span class="sd">        - recording_time: The recording duration in seconds.</span>
-<span class="sd">        - use_kinematics: Boolean indicating whether kinematics data was recorded.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_label_line_edit</span><span class="o">.</span><span class="n">text</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;default&quot;</span>
-        <span class="p">(</span>
-            <span class="n">biosignal_data</span><span class="p">,</span>
-            <span class="n">biosignal_timings</span><span class="p">,</span>
-        <span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">retrieve_recorded_data</span><span class="p">()</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">save_recording_cursor</span><span class="p">(</span>
-            <span class="n">biosignal</span><span class="o">=</span><span class="n">biosignal_data</span><span class="p">,</span>
-            <span class="n">biosignal_timings</span><span class="o">=</span><span class="n">biosignal_timings</span><span class="p">,</span>
-            <span class="n">ground_truth_timings</span><span class="o">=</span><span class="p">(</span>
-                <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">time_stamp</span> <span class="k">for</span> <span class="n">time_stamp</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">])</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">()</span>
-                <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
-            <span class="p">),</span>
-            <span class="n">ground_truth</span><span class="o">=</span><span class="p">(</span>
-                <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">([</span><span class="n">data</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">])</span><span class="o">.</span><span class="n">T</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">()</span>
-                <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
-            <span class="p">),</span>
-            <span class="n">recording_label</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
-            <span class="n">task</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="p">,</span>
-            <span class="n">movement</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_movement</span><span class="p">,</span>
-            <span class="n">task_label_map</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ground_truth__task_map</span><span class="p">,</span>
-            <span class="n">ground_truth_sampling_frequency</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq</span><span class="p">,</span>
-            <span class="n">use_as_classification</span><span class="o">=</span><span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">(),</span>
-            <span class="n">record_duration</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">value</span><span class="p">(),</span>
-        <span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">reset_ui</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Recording of task </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2"> and movement </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_movement</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2"> with label </span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2"> accepted!&quot;</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.reject_recording">
-<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reject_recording">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">reject_recording</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Rejects the current recording and resets the recording interface.&quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">reset_ui</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;Recording rejected.&quot;</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.reset_ui">
-<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.reset_ui">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">reset_ui</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resets the recording interface UI elements.&quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span><span class="o">.</span><span class="n">setCurrentIndex</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Start Recording&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_group_box</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">_reset_recording_ui</span><span class="p">()</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+<div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.get_ground_truth_data">
+<a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.get_ground_truth_data">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_ground_truth_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return cursor kinematics data if checkbox checked, else empty.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">()</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;ground_truth&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">(</span>
+                    <span class="p">[</span><span class="n">data</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">]</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                <span class="s2">&quot;ground_truth_timings&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                    <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">]</span>
+                <span class="p">),</span>
+                <span class="s2">&quot;ground_truth_sampling_frequency&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq</span><span class="p">,</span>
+                <span class="s2">&quot;task&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="p">,</span>
+                <span class="s2">&quot;movement&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_movement</span><span class="p">,</span>
+                <span class="s2">&quot;task_label_map&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ground_truth__task_map</span><span class="p">,</span>
+                <span class="s2">&quot;use_as_classification&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;ground_truth&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+            <span class="s2">&quot;ground_truth_timings&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+            <span class="s2">&quot;ground_truth_sampling_frequency&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_samp_freq</span><span class="p">,</span>
+            <span class="s2">&quot;task&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="p">,</span>
+            <span class="s2">&quot;movement&quot;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_current_movement&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="s2">&quot;task_label_map&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ground_truth__task_map</span><span class="p">,</span>
+            <span class="s2">&quot;use_as_classification&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="p">}</span></div>
 
 
 <div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.close_event">
 <a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.close_event">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">close_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_</span><span class="p">:</span> <span class="n">QCloseEvent</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Closes the recording interface.&quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setChecked</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">reset_ui</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">close_event</span><span class="p">(</span><span class="n">_</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;Recording interface closed.&quot;</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.enable">
 <a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.enable">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">enable</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Enable the UI elements.&quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordReviewRecordingStackedWidget</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="VirtualCursorInterface_RecordingInterface.disable">
 <a class="viewcode-back" href="../../../../../../modules/generated/visual_interface/myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.html#myogestic.gui.widgets.visual_interfaces.virtual_cursor_interface.VirtualCursorInterface_RecordingInterface.disable">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">disable</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Disable the UI elements.&quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordReviewRecordingStackedWidget</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span></div>
 </div>
 
 </pre></div>

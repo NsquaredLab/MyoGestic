@@ -588,53 +588,53 @@ and maps 10 gestures.</p>
 <span class="linenos">15</span>
 <span class="linenos">16</span>
 <span class="linenos">17</span><span class="k">class</span><span class="w"> </span><span class="nc">VirtualHandInterface_RecordingInterface</span><span class="p">(</span><span class="n">RecordingInterfaceTemplate</span><span class="p">):</span>
-<span class="linenos">18</span><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="linenos">19</span><span class="sd">    Class for the recording interface of the Virtual Hand Interface.</span>
-<span class="linenos">20</span>
-<span class="linenos">21</span><span class="sd">    This class is responsible for handling the recording of EMG and kinematics data.</span>
-<span class="linenos">22</span>
-<span class="linenos">23</span><span class="sd">    Parameters</span>
-<span class="linenos">24</span><span class="sd">    ----------</span>
-<span class="linenos">25</span><span class="sd">    main_window : MainWindow</span>
-<span class="linenos">26</span><span class="sd">        The main window of the application.</span>
-<span class="linenos">27</span><span class="sd">    name : str</span>
-<span class="linenos">28</span><span class="sd">        The name of the interface, by default &quot;VirtualHandInterface&quot;.</span>
-<span class="linenos">29</span>
-<span class="linenos">30</span><span class="sd">        .. important:: This name is used to identify the interface in the main window. It should be unique.</span>
-<span class="linenos">31</span><span class="sd">    incoming_message_signal : SignalInstance</span>
-<span class="linenos">32</span><span class="sd">        The signal instance used to receive incoming messages from the device.</span>
-<span class="linenos">33</span><span class="sd">    &quot;&quot;&quot;</span>
-<span class="linenos">34</span>
-<span class="linenos">35</span>    <span class="n">ground_truth__task_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-<span class="linenos">36</span>        <span class="s2">&quot;rest&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
-<span class="linenos">37</span>        <span class="s2">&quot;index&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-<span class="linenos">38</span>        <span class="s2">&quot;thumb&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
-<span class="linenos">39</span>        <span class="s2">&quot;middle&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
-<span class="linenos">40</span>        <span class="s2">&quot;ring&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
-<span class="linenos">41</span>        <span class="s2">&quot;pinky&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
-<span class="linenos">42</span>        <span class="s2">&quot;power grasp&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
-<span class="linenos">43</span>        <span class="s2">&quot;pinch&quot;</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span>
-<span class="linenos">44</span>        <span class="s2">&quot;tripod pinch&quot;</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
-<span class="linenos">45</span>        <span class="s2">&quot;pointing&quot;</span><span class="p">:</span> <span class="mi">9</span><span class="p">,</span>
-<span class="linenos">46</span>    <span class="p">}</span>
-<span class="linenos">47</span>    <span class="n">ground_truth__nr_of_recording_values</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">9</span>
-<span class="linenos">48</span>
-<span class="linenos">49</span>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-<span class="linenos">50</span>        <span class="bp">self</span><span class="p">,</span>
-<span class="linenos">51</span>        <span class="n">main_window</span><span class="p">,</span>
-<span class="linenos">52</span>        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;VirtualHandInterface&quot;</span><span class="p">,</span>
-<span class="linenos">53</span>        <span class="n">incoming_message_signal</span><span class="p">:</span> <span class="n">SignalInstance</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<span class="linenos">54</span>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">55</span>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-<span class="linenos">56</span>            <span class="n">main_window</span><span class="p">,</span>
-<span class="linenos">57</span>            <span class="n">name</span><span class="p">,</span>
-<span class="linenos">58</span>            <span class="n">ui</span><span class="o">=</span><span class="n">Ui_RecordingVirtualHandInterface</span><span class="p">(),</span>
-<span class="linenos">59</span>            <span class="n">incoming_message_signal</span><span class="o">=</span><span class="n">incoming_message_signal</span><span class="p">,</span>
-<span class="linenos">60</span>            <span class="n">ground_truth__nr_of_recording_values</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ground_truth__nr_of_recording_values</span><span class="p">,</span>
-<span class="linenos">61</span>            <span class="n">ground_truth__task_map</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ground_truth__task_map</span>
-<span class="linenos">62</span>        <span class="p">)</span>
+<span class="linenos">18</span><span class="w">    </span><span class="sd">&quot;&quot;&quot;Recording interface for the Virtual Hand Interface.</span>
+<span class="linenos">19</span>
+<span class="linenos">20</span><span class="sd">    Handles per-VI settings (task selector, kinematics checkbox) while the</span>
+<span class="linenos">21</span><span class="sd">    shared RecordProtocol controls manage the Record button, Duration spinner,</span>
+<span class="linenos">22</span><span class="sd">    and unified review dialog.</span>
+<span class="linenos">23</span><span class="sd">    &quot;&quot;&quot;</span>
+<span class="linenos">24</span>
+<span class="linenos">25</span>    <span class="n">ground_truth__task_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="linenos">26</span>        <span class="s2">&quot;rest&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+<span class="linenos">27</span>        <span class="s2">&quot;index&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+<span class="linenos">28</span>        <span class="s2">&quot;thumb&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+<span class="linenos">29</span>        <span class="s2">&quot;middle&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+<span class="linenos">30</span>        <span class="s2">&quot;ring&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+<span class="linenos">31</span>        <span class="s2">&quot;pinky&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+<span class="linenos">32</span>        <span class="s2">&quot;power grasp&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+<span class="linenos">33</span>        <span class="s2">&quot;pinch&quot;</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span>
+<span class="linenos">34</span>        <span class="s2">&quot;tripod pinch&quot;</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+<span class="linenos">35</span>        <span class="s2">&quot;pointing&quot;</span><span class="p">:</span> <span class="mi">9</span><span class="p">,</span>
+<span class="linenos">36</span>    <span class="p">}</span>
+<span class="linenos">37</span>    <span class="n">ground_truth__nr_of_recording_values</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">9</span>
+<span class="linenos">38</span>
+<span class="linenos">39</span>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="linenos">40</span>        <span class="bp">self</span><span class="p">,</span>
+<span class="linenos">41</span>        <span class="n">main_window</span><span class="p">,</span>
+<span class="linenos">42</span>        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;VirtualHandInterface&quot;</span><span class="p">,</span>
+<span class="linenos">43</span>        <span class="n">incoming_message_signal</span><span class="p">:</span> <span class="n">SignalInstance</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="linenos">44</span>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">45</span>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+<span class="linenos">46</span>            <span class="n">main_window</span><span class="p">,</span>
+<span class="linenos">47</span>            <span class="n">name</span><span class="p">,</span>
+<span class="linenos">48</span>            <span class="n">ui</span><span class="o">=</span><span class="n">Ui_RecordingVirtualHandInterface</span><span class="p">(),</span>
+<span class="linenos">49</span>            <span class="n">incoming_message_signal</span><span class="o">=</span><span class="n">incoming_message_signal</span><span class="p">,</span>
+<span class="linenos">50</span>            <span class="n">ground_truth__nr_of_recording_values</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ground_truth__nr_of_recording_values</span><span class="p">,</span>
+<span class="linenos">51</span>            <span class="n">ground_truth__task_map</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ground_truth__task_map</span><span class="p">,</span>
+<span class="linenos">52</span>        <span class="p">)</span>
+<span class="linenos">53</span>
+<span class="linenos">54</span>        <span class="n">RECORDING_DIR_PATH</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="linenos">55</span>
+<span class="linenos">56</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+<span class="linenos">57</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="linenos">58</span>
+<span class="linenos">59</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">protocols</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="linenos">60</span>
+<span class="linenos">61</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="linenos">62</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_start_time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">0</span>
 <span class="linenos">63</span>
-<span class="linenos">64</span>        <span class="n">RECORDING_DIR_PATH</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="linenos">64</span>        <span class="bp">self</span><span class="o">.</span><span class="n">initialize_ui_logic</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
@@ -644,44 +644,51 @@ and maps 10 gestures.</p>
 <p>Note how per-VI controls are hidden to defer to the shared selector:</p>
 <div class="literal-block-wrapper docutils container" id="id2">
 <div class="code-block-caption"><span class="caption-text">initialize_ui_logic – Hide per-VI task combo, wire up widgets</span><a class="headerlink" href="#id2" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 76</span>    <span class="k">def</span><span class="w"> </span><span class="nf">initialize_ui_logic</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos"> 77</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializes the logic for the UI elements.&quot;&quot;&quot;</span>
-<span class="linenos"> 78</span>        <span class="n">ui</span><span class="p">:</span> <span class="n">Ui_RecordingVirtualHandInterface</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ui</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 66</span>    <span class="k">def</span><span class="w"> </span><span class="nf">initialize_ui_logic</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos"> 67</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializes the logic for the UI elements.&quot;&quot;&quot;</span>
+<span class="linenos"> 68</span>        <span class="n">ui</span><span class="p">:</span> <span class="n">Ui_RecordingVirtualHandInterface</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ui</span>
+<span class="linenos"> 69</span>
+<span class="linenos"> 70</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordVerticalLayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span><span class="p">)</span>
+<span class="linenos"> 71</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordVerticalLayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span>
+<span class="linenos"> 72</span>            <span class="n">ui</span><span class="o">.</span><span class="n">recordReviewRecordingStackedWidget</span>
+<span class="linenos"> 73</span>        <span class="p">)</span>
+<span class="linenos"> 74</span>
+<span class="linenos"> 75</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_group_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span>
+<span class="linenos"> 76</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_task_combo_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordTaskComboBox</span>
+<span class="linenos"> 77</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordDurationSpinBox</span>
+<span class="linenos"> 78</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordRecordPushButton</span>
 <span class="linenos"> 79</span>
-<span class="linenos"> 80</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordVerticalLayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span><span class="p">)</span>
-<span class="linenos"> 81</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">ui</span><span class="o">.</span><span class="n">recordVerticalLayout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span>
-<span class="linenos"> 82</span>            <span class="n">ui</span><span class="o">.</span><span class="n">recordReviewRecordingStackedWidget</span>
-<span class="linenos"> 83</span>        <span class="p">)</span>
-<span class="linenos"> 84</span>
-<span class="linenos"> 85</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_group_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordRecordingGroupBox</span>
-<span class="linenos"> 86</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_task_combo_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordTaskComboBox</span>
-<span class="linenos"> 87</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordDurationSpinBox</span>
-<span class="linenos"> 88</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordRecordPushButton</span>
-<span class="linenos"> 89</span>
-<span class="linenos"> 90</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordReviewRecordingStackedWidget</span>
-<span class="linenos"> 91</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_task_label</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingTaskLabel</span>
-<span class="linenos"> 92</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_label_line_edit</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingLabelLineEdit</span>
-<span class="linenos"> 93</span>
-<span class="linenos"> 94</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_accept_push_button</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingAcceptPushButton</span>
-<span class="linenos"> 95</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_reject_push_button</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingRejectPushButton</span>
-<span class="linenos"> 96</span>
-<span class="linenos"> 97</span>        <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordUseKinematicsCheckBox</span>
-<span class="linenos"> 98</span>
-<span class="linenos"> 99</span>        <span class="c1"># Add tooltips for better usability</span>
-<span class="linenos">100</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_task_combo_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Select the gesture/movement to record&quot;</span><span class="p">)</span>
-<span class="linenos">101</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Recording duration in seconds&quot;</span><span class="p">)</span>
-<span class="linenos">102</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Start recording EMG data for the selected task&quot;</span><span class="p">)</span>
-<span class="linenos">103</span>        <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Record hand position data from the Virtual Hand Interface&quot;</span><span class="p">)</span>
-<span class="linenos">104</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_accept_push_button</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Save this recording to disk&quot;</span><span class="p">)</span>
-<span class="linenos">105</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_reject_push_button</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Discard this recording and try again&quot;</span><span class="p">)</span>
-<span class="linenos">106</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_label_line_edit</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span><span class="s2">&quot;Optional label to identify this recording&quot;</span><span class="p">)</span>
-<span class="linenos">107</span>
-<span class="linenos">108</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">toggled</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">start_recording</span><span class="p">)</span>
-<span class="linenos">109</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_accept_push_button</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">accept_recording</span><span class="p">)</span>
-<span class="linenos">110</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_reject_push_button</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">reject_recording</span><span class="p">)</span>
-<span class="linenos">111</span>
-<span class="linenos">112</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-<span class="linenos">113</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span><span class="o">.</span><span class="n">setCurrentIndex</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="linenos"> 80</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordReviewRecordingStackedWidget</span>
+<span class="linenos"> 81</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_task_label</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingTaskLabel</span>
+<span class="linenos"> 82</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_label_line_edit</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingLabelLineEdit</span>
+<span class="linenos"> 83</span>
+<span class="linenos"> 84</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_accept_push_button</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingAcceptPushButton</span>
+<span class="linenos"> 85</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_reject_push_button</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">reviewRecordingRejectPushButton</span>
+<span class="linenos"> 86</span>
+<span class="linenos"> 87</span>        <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span> <span class="o">=</span> <span class="n">ui</span><span class="o">.</span><span class="n">recordUseKinematicsCheckBox</span>
+<span class="linenos"> 88</span>
+<span class="linenos"> 89</span>        <span class="c1"># Set GroupBox title to VI name</span>
+<span class="linenos"> 90</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_group_box</span><span class="o">.</span><span class="n">setTitle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+<span class="linenos"> 91</span>
+<span class="linenos"> 92</span>        <span class="c1"># Hide per-VI controls now managed by shared RecordProtocol</span>
+<span class="linenos"> 93</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_toggle_push_button</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>
+<span class="linenos"> 94</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_duration_spin_box</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>
+<span class="linenos"> 95</span>        <span class="n">ui</span><span class="o">.</span><span class="n">label_7</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>  <span class="c1"># Duration label</span>
+<span class="linenos"> 96</span>        <span class="bp">self</span><span class="o">.</span><span class="n">review_recording_stacked_widget</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>
+<span class="linenos"> 97</span>
+<span class="linenos"> 98</span>        <span class="c1"># Shorten checkbox text (GroupBox title already identifies the VI)</span>
+<span class="linenos"> 99</span>        <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Use Kinematics&quot;</span><span class="p">)</span>
+<span class="linenos">100</span>
+<span class="linenos">101</span>        <span class="c1"># Hide per-VI task selector (now managed by shared RecordProtocol)</span>
+<span class="linenos">102</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_task_combo_box</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>
+<span class="linenos">103</span>        <span class="n">ui</span><span class="o">.</span><span class="n">label</span><span class="o">.</span><span class="n">hide</span><span class="p">()</span>  <span class="c1"># Task label</span>
+<span class="linenos">104</span>
+<span class="linenos">105</span>        <span class="c1"># Add tooltips for remaining visible controls</span>
+<span class="linenos">106</span>        <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">setToolTip</span><span class="p">(</span>
+<span class="linenos">107</span>            <span class="s2">&quot;Record hand position data from the Virtual Hand Interface&quot;</span>
+<span class="linenos">108</span>        <span class="p">)</span>
+<span class="linenos">109</span>
+<span class="linenos">110</span>        <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="o">.</span><span class="n">setValue</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -690,38 +697,64 @@ and maps 10 gestures.</p>
 <h3>Step 3.4: VHI Reference – Recording and Ground Truth<a class="headerlink" href="#step-3-4-vhi-reference-recording-and-ground-truth" title="Link to this heading">#</a></h3>
 <div class="literal-block-wrapper docutils container" id="id3">
 <div class="code-block-caption"><span class="caption-text">update_ground_truth_buffer – Append kinematics samples</span><a class="headerlink" href="#id3" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">157</span>    <span class="k">def</span><span class="w"> </span><span class="nf">update_ground_truth_buffer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <a href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="numpy.ndarray" class="sphx-glr-backref-module-numpy sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">158</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Updates the buffer with the incoming kinematics data.&quot;&quot;&quot;</span>
-<span class="linenos">159</span>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
-<span class="linenos">160</span>            <span class="k">return</span>
-<span class="linenos">161</span>
-<span class="linenos">162</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span> <span class="n">data</span><span class="p">))</span>
-<span class="linenos">163</span>        <span class="n">current_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">)</span>
-<span class="linenos">164</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_set_progress_bar</span><span class="p">(</span>
-<span class="linenos">165</span>            <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="p">,</span>
-<span class="linenos">166</span>            <span class="n">current_samples</span><span class="p">,</span>
-<span class="linenos">167</span>            <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_recording_time</span><span class="p">,</span>
-<span class="linenos">168</span>        <span class="p">)</span>
-<span class="linenos">169</span>
-<span class="linenos">170</span>        <span class="k">if</span> <span class="n">current_samples</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_recording_time</span><span class="p">:</span>
-<span class="linenos">171</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
-<span class="linenos">172</span>                <span class="sa">f</span><span class="s2">&quot;Kinematics recording finished at: </span><span class="si">{</span><span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">_start_time</span><span class="p">)</span><span class="si">}</span><span class="s2"> seconds&quot;</span>
-<span class="linenos">173</span>            <span class="p">)</span>
-<span class="linenos">174</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span> <span class="o">=</span> <span class="kc">True</span>
-<span class="linenos">175</span>            <span class="bp">self</span><span class="o">.</span><span class="n">incoming_message_signal</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">update_ground_truth_buffer</span><span class="p">)</span>
-<span class="linenos">176</span>            <span class="bp">self</span><span class="o">.</span><span class="n">check_recording_completion</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">129</span>    <span class="k">def</span><span class="w"> </span><span class="nf">update_ground_truth_buffer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <a href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="numpy.ndarray" class="sphx-glr-backref-module-numpy sphx-glr-backref-type-py-class sphx-glr-backref-instance"><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">130</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Updates the buffer with the incoming kinematics data.&quot;&quot;&quot;</span>
+<span class="linenos">131</span>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">():</span>
+<span class="linenos">132</span>            <span class="k">return</span>
+<span class="linenos">133</span>
+<span class="linenos">134</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span> <span class="n">data</span><span class="p">))</span>
+<span class="linenos">135</span>        <span class="n">current_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">)</span>
+<span class="linenos">136</span>        <span class="bp">self</span><span class="o">.</span><span class="n">_set_progress_bar</span><span class="p">(</span>
+<span class="linenos">137</span>            <span class="bp">self</span><span class="o">.</span><span class="n">record_ground_truth_progress_bar</span><span class="p">,</span>
+<span class="linenos">138</span>            <span class="n">current_samples</span><span class="p">,</span>
+<span class="linenos">139</span>            <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_recording_time</span><span class="p">,</span>
+<span class="linenos">140</span>        <span class="p">)</span>
+<span class="linenos">141</span>
+<span class="linenos">142</span>        <span class="k">if</span> <span class="n">current_samples</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kinematics_recording_time</span><span class="p">:</span>
+<span class="linenos">143</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_main_window</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+<span class="linenos">144</span>                <span class="sa">f</span><span class="s2">&quot;Kinematics recording finished at: </span><span class="si">{</span><span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">_start_time</span><span class="p">)</span><span class="si">}</span><span class="s2"> seconds&quot;</span>
+<span class="linenos">145</span>            <span class="p">)</span>
+<span class="linenos">146</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="linenos">147</span>            <span class="bp">self</span><span class="o">.</span><span class="n">incoming_message_signal</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">update_ground_truth_buffer</span><span class="p">)</span>
+<span class="linenos">148</span>            <span class="bp">self</span><span class="o">.</span><span class="n">check_recording_completion</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
 <div class="literal-block-wrapper docutils container" id="id4">
 <div class="code-block-caption"><span class="caption-text">check_recording_completion – Notify RecordProtocol when done</span><a class="headerlink" href="#id4" title="Link to this code">#</a></div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">178</span>    <span class="k">def</span><span class="w"> </span><span class="nf">check_recording_completion</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="linenos">179</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Checks if the recording process is complete and finishes it if so.&quot;&quot;&quot;</span>
-<span class="linenos">180</span>        <span class="k">if</span> <span class="p">(</span>
-<span class="linenos">181</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">is_biosignal_recording_complete</span>
-<span class="linenos">182</span>            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span>
-<span class="linenos">183</span>        <span class="p">):</span>
-<span class="linenos">184</span>            <span class="bp">self</span><span class="o">.</span><span class="n">finish_recording</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">150</span>    <span class="k">def</span><span class="w"> </span><span class="nf">check_recording_completion</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">151</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Checks if this VI&#39;s recording is complete and notifies the protocol.&quot;&quot;&quot;</span>
+<span class="linenos">152</span>        <span class="k">if</span> <span class="p">(</span>
+<span class="linenos">153</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">is_biosignal_recording_complete</span>
+<span class="linenos">154</span>            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_has_finished_kinematics</span>
+<span class="linenos">155</span>        <span class="p">):</span>
+<span class="linenos">156</span>            <span class="bp">self</span><span class="o">.</span><span class="n">_recording_protocol</span><span class="o">.</span><span class="n">vi_recording_completed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="literal-block-wrapper docutils container" id="id5">
+<div class="code-block-caption"><span class="caption-text">get_ground_truth_data – Return kinematics or empty (classification)</span><a class="headerlink" href="#id5" title="Link to this code">#</a></div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">158</span>    <span class="k">def</span><span class="w"> </span><span class="nf">get_ground_truth_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="linenos">159</span><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return kinematics data if checkbox checked, else empty.&quot;&quot;&quot;</span>
+<span class="linenos">160</span>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_kinematics_check_box</span><span class="o">.</span><span class="n">isChecked</span><span class="p">()</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">:</span>
+<span class="linenos">161</span>            <span class="k">return</span> <span class="p">{</span>
+<span class="linenos">162</span>                <span class="s2">&quot;ground_truth&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">(</span>
+<span class="linenos">163</span>                    <span class="p">[</span><span class="n">data</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">]</span>
+<span class="linenos">164</span>                <span class="p">)</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+<span class="linenos">165</span>                <span class="s2">&quot;ground_truth_timings&quot;</span><span class="p">:</span> <a href="https://numpy.org/doc/stable/reference/generated/numpy.array.html#numpy.array" title="numpy.array" class="sphx-glr-backref-module-numpy sphx-glr-backref-type-py-function"><span class="n">np</span><span class="o">.</span><span class="n">array</span></a><span class="p">(</span>
+<span class="linenos">166</span>                    <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_kinematics__buffer</span><span class="p">]</span>
+<span class="linenos">167</span>                <span class="p">),</span>
+<span class="linenos">168</span>                <span class="s2">&quot;ground_truth_sampling_frequency&quot;</span><span class="p">:</span> <span class="n">KINEMATICS_SAMPLING_FREQUENCY</span><span class="p">,</span>
+<span class="linenos">169</span>                <span class="s2">&quot;task&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="p">,</span>
+<span class="linenos">170</span>                <span class="s2">&quot;use_as_classification&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+<span class="linenos">171</span>            <span class="p">}</span>
+<span class="linenos">172</span>        <span class="k">return</span> <span class="p">{</span>
+<span class="linenos">173</span>            <span class="s2">&quot;ground_truth&quot;</span><span class="p">:</span> <a href="https://numpy.org/doc/stable/reference/generated/numpy.array.html#numpy.array" title="numpy.array" class="sphx-glr-backref-module-numpy sphx-glr-backref-type-py-function"><span class="n">np</span><span class="o">.</span><span class="n">array</span></a><span class="p">([]),</span>
+<span class="linenos">174</span>            <span class="s2">&quot;ground_truth_timings&quot;</span><span class="p">:</span> <a href="https://numpy.org/doc/stable/reference/generated/numpy.array.html#numpy.array" title="numpy.array" class="sphx-glr-backref-module-numpy sphx-glr-backref-type-py-function"><span class="n">np</span><span class="o">.</span><span class="n">array</span></a><span class="p">([]),</span>
+<span class="linenos">175</span>            <span class="s2">&quot;ground_truth_sampling_frequency&quot;</span><span class="p">:</span> <span class="n">KINEMATICS_SAMPLING_FREQUENCY</span><span class="p">,</span>
+<span class="linenos">176</span>            <span class="s2">&quot;task&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_task</span><span class="p">,</span>
+<span class="linenos">177</span>            <span class="s2">&quot;use_as_classification&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+<span class="linenos">178</span>        <span class="p">}</span>
 </pre></div>
 </div>
 </div>
