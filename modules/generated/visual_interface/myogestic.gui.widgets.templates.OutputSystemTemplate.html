@@ -44,8 +44,8 @@
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
     <script src="../../../_static/documentation_options.js?v=39bb1c6d"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'modules/generated/visual_interface/myogestic.gui.widgets.templates.OutputSystemTemplate';</script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
@@ -464,7 +464,7 @@
 <h1>OutputSystemTemplate<a class="headerlink" href="#outputsystemtemplate" title="Link to this heading">#</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="myogestic.gui.widgets.templates.OutputSystemTemplate">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">myogestic.gui.widgets.templates.</span></span><span class="sig-name descname"><span class="pre">OutputSystemTemplate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/templates/output_system.html#OutputSystemTemplate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.templates.OutputSystemTemplate" title="Link to this definition">#</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">myogestic.gui.widgets.templates.</span></span><span class="sig-name descname"><span class="pre">OutputSystemTemplate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/templates/output_system.html#OutputSystemTemplate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.templates.OutputSystemTemplate" title="Link to this definition">#</a></dt>
 <dd><p>Represents a base class handling initialization of main window and prediction type
 for classification or regression tasks. Determines the appropriate method for
 processing predictions based on the given prediction type.</p>
@@ -534,7 +534,7 @@ defined based on <cite>_prediction_is_classification</cite>.</p>
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="myogestic.gui.widgets.templates.OutputSystemTemplate.close_event">
-<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">close_event</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">event</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/templates/output_system.html#OutputSystemTemplate.close_event"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.templates.OutputSystemTemplate.close_event" title="Link to this definition">#</a></dt>
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">close_event</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">event</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/templates/output_system.html#OutputSystemTemplate.close_event"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.templates.OutputSystemTemplate.close_event" title="Link to this definition">#</a></dt>
 <dd><p>Close event handler for the widget or window.</p>
 <p>This method is meant to be implemented in custom subclasses to handle the
 close event, which occurs when the widget or window is about to be closed.
@@ -551,7 +551,7 @@ and provides options for accepting or ignoring the event.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="myogestic.gui.widgets.templates.OutputSystemTemplate.send_prediction">
-<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">send_prediction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prediction</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/templates/output_system.html#OutputSystemTemplate.send_prediction"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.templates.OutputSystemTemplate.send_prediction" title="Link to this definition">#</a></dt>
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">send_prediction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prediction</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/myogestic/gui/widgets/templates/output_system.html#OutputSystemTemplate.send_prediction"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#myogestic.gui.widgets.templates.OutputSystemTemplate.send_prediction" title="Link to this definition">#</a></dt>
 <dd><p>An abstract method meant to be implemented by subclasses for the purpose
 of sending prediction values to a specific destination. The method is
 designed to handle any type of prediction and does not return a value.</p>
@@ -648,7 +648,7 @@ for various use cases.</p>
         <div class="footer-item">
 
   <p class="sphinx-version">
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
     <br/>
   </p>
 </div>
