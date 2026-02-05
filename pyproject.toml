@@ -21,25 +21,25 @@ dependencies = [
     "torch==2.6.0",
     "torchvision==0.21.0",
     "torchaudio==2.6.0",
+    "vispy>=0.16.0",
 ]
 
+[project.scripts]
+myogestic = "myogestic.main:main"
+
+[tool.setuptools.packages.find]
+include = ["myogestic*"]
+
 [tool.uv]
-package = false
+package = true
 config-settings = { editable_mode = "compat" }
 environments = [
     "sys_platform == 'darwin'",
     "sys_platform == 'win32'",
     "sys_platform == 'linux'",
 ]
-override-dependencies = [
-    "torch==2.6.0; sys_platform == 'darwin'",
-    "torchvision==0.21.0; sys_platform == 'darwin'",
-    "torchaudio==2.6.0; sys_platform == 'darwin'",
-    "vispy>=0.15.2; sys_platform == 'darwin'",
-]
 
 [tool.uv.sources]
-biosignal-device-interface = { git = "https://github.com/NsquaredLab/Biosignal-Device-Interface.git", branch = "sessantaquattro-implementation" }
 sphinxcontrib-pdfembed = { git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git" }
 myoverse = { git = "https://github.com/NsquaredLab/MyoVerse.git" }
 torch = [
