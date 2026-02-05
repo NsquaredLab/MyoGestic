@@ -16,6 +16,7 @@ The module provides the following:
 - Real-time performance monitoring
 """
 
+import os
 import numpy as np
 from vispy import scene
 from vispy.scene import visuals
@@ -27,6 +28,9 @@ from PySide6.QtCore import Signal, QObject
 import time
 
 from utils.constants import TASKS, DIRECTIONS
+
+# Get the directory containing this file for asset paths
+_ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
 
 
 class SignalHandler(QObject):
@@ -121,20 +125,14 @@ class VispyWidget(scene.SceneCanvas):
         self.view.camera.set_range(x=(-0.1, 0.1), y=(-1.3, 1.4))  # Set initial zoom/pan
 
         # Add lab image to canvas
-        try:  # try this path if accessed from main script of MyoGestic
-            lab_logo = np.flipud(read_png('gui/cursor_interface/assets/n-squared lab Logo.png'))
-        except FileNotFoundError:  # try this path if accessed from main_cursor script
-            lab_logo = np.flipud(read_png('assets/n-squared lab Logo.png'))
+        lab_logo = np.flipud(read_png(os.path.join(_ASSETS_DIR, 'n-squared lab Logo.png')))
 
         self.lab_logo = visuals.Image(lab_logo, parent=self.view.scene)
         self.lab_logo.transform = STTransform(scale=(1 / 3000, 1 / 3000), translate=(-0.1, 1.2))  # scale and shift logo
         self.lab_logo.set_gl_state(depth_test=False)
 
         # Add Uni logo to canvas
-        try:
-            uni_logo = np.flipud(read_png('gui/cursor_interface/assets/FAU_logo.png'))
-        except FileNotFoundError:
-            uni_logo = np.flipud(read_png('assets/FAU_logo.png'))
+        uni_logo = np.flipud(read_png(os.path.join(_ASSETS_DIR, 'FAU_logo.png')))
 
         self.uni_logo = visuals.Image(uni_logo, parent=self.view.scene)
         self.uni_logo.transform = STTransform(
