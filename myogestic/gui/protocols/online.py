@@ -10,6 +10,7 @@ import numpy as np
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QFileDialog
 
+from myogestic.gui.widgets.highlighter import WidgetHighlighter
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.gui.widgets.templates.output_system import OutputSystemTemplate
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface
@@ -71,6 +72,7 @@ class OnlineProtocol(QObject):
         super().__init__(main_window)
 
         self._main_window = main_window
+        self._highlighter = WidgetHighlighter(self)
 
         self._selected_visual_interface: VisualInterface | None = None
         self._active_visual_interfaces: dict[str, VisualInterface] = {}
@@ -111,6 +113,9 @@ class OnlineProtocol(QObject):
 
         self._output_systems__dict: dict[str, OutputSystemTemplate] = {}
 
+        # Pending model path for auto-loading after training
+        self._pending_model_path: str | None = None
+
     def _update_real_time_filter(self) -> None:
         self._model_interface.set_real_time_filter(self.real_time_filter_combo_box.currentText())
 
@@ -131,6 +136,9 @@ class OnlineProtocol(QObject):
         )
 
         self.online_load_model_push_button.setEnabled(True)
+
+        # Guide user to load a model
+        self._highlighter.highlight(self.online_load_model_push_button)
 
     def online_emg_update(self, data: np.ndarray) -> None:
         try:
@@ -234,9 +242,11 @@ class OnlineProtocol(QObject):
 
             self.recording_start_time = time.time()
             self.online_record_toggle_push_button.setText("Stop Recording")
+            # Green when recording
+            self.online_record_toggle_push_button.setStyleSheet("background-color: #5cb85c; color: white;")
         else:
             self.online_prediction_toggle_push_button.setEnabled(True)
-            
+
             # Disconnect from the primary VI
             if self._selected_visual_interface is not None:
                 self._selected_visual_interface.incoming_message_signal.disconnect(
@@ -245,6 +255,8 @@ class OnlineProtocol(QObject):
                 self._selected_visual_interface.setup_interface_ui.disconnect_custom_signals()
 
             self.online_record_toggle_push_button.setText("Start Recording")
+            # Red when not recording
+            self.online_record_toggle_push_button.setStyleSheet("background-color: #d9534f; color: white;")
 
             self._save_data()
 
@@ -330,6 +342,9 @@ class OnlineProtocol(QObject):
             LoggerLevel.INFO,
         )
 
+        # Highlight the Start Prediction button to guide user
+        self._highlighter.highlight(self.online_prediction_toggle_push_button)
+
         if len(self.active_monitoring_widgets) != 0:
             self._send_model_information()
 
@@ -357,6 +372,82 @@ class OnlineProtocol(QObject):
 
         self._output_systems__dict = {
             k: v(self._main_window, self._model_interface.model.is_classifier) for k, v in current_output_map.items()
+        }
+
+    def _auto_load_model(self, model_path: str) -> None:
+        """Load a model programmatically without file dialog.
+
+        This is used after training completes to automatically load the newly
+        trained model into the Online protocol.
+
+        Args:
+            model_path: Full path to the model .pkl file
+        """
+        if not model_path:
+            return
+
+        # Stop any flashing on Load Model button since we're auto-loading
+        self._highlighter._stop_widget_flash(self.online_load_model_push_button)
+
+        # Ensure model interface exists (device must be configured)
+        if self._model_interface is None:
+            self._main_window.logger.print(
+                "Cannot auto-load model: device not configured",
+                LoggerLevel.WARNING,
+            )
+            return
+
+        try:
+            self._model_information__dict = self._model_interface.load_model(model_path)
+        except Exception as e:
+            self._main_window.logger.print(
+                f"Error in auto-loading model: {e}", LoggerLevel.ERROR
+            )
+            return
+
+        label = model_path.split("/")[-1].split("_")[-1].split(".")[0]
+
+        self.online_model_label.setText(f"{label} loaded!")
+
+        self.online_commands_group_box.setEnabled(True)
+        self.online_record_toggle_push_button.setEnabled(False)
+
+        self._main_window.logger.print(
+            f"Model auto-loaded. Label: {label}",
+            LoggerLevel.INFO,
+        )
+
+        # Highlight the Start Prediction button to guide user
+        self._highlighter.highlight(self.online_prediction_toggle_push_button)
+
+        if len(self.active_monitoring_widgets) != 0:
+            self._send_model_information()
+
+        # Get active VIs directly from main window to ensure we have current state
+        active_vi_names = set(self._main_window.active_visual_interfaces.keys())
+        trained_vi_name = self._model_information__dict.get("visual_interface")
+
+        if trained_vi_name and active_vi_names and trained_vi_name not in active_vi_names:
+            self._main_window.logger.print(
+                f"Warning: Model was trained with visual interface '{trained_vi_name}' "
+                f"but it is not among the active interfaces: {active_vi_names}.",
+                LoggerLevel.WARNING,
+            )
+
+        # Only instantiate output systems for VIs that are currently active
+        current_output_map = {
+            k: v for k, v in CONFIG_REGISTRY.output_systems_map.items()
+            if k in active_vi_names
+        }
+
+        self._main_window.logger.print(
+            f"Creating output systems for: {list(current_output_map.keys())}",
+            LoggerLevel.INFO,
+        )
+
+        self._output_systems__dict = {
+            k: v(self._main_window, self._model_interface.model.is_classifier)
+            for k, v in current_output_map.items()
         }
 
     def close_event(self, event) -> None:
@@ -402,6 +493,8 @@ class OnlineProtocol(QObject):
             "Record predictions and ground truth for analysis"
         )
         self.online_record_toggle_push_button.clicked.connect(self._toggle_recording)
+        # Red by default (not recording)
+        self.online_record_toggle_push_button.setStyleSheet("background-color: #d9534f; color: white;")
 
         self.online_prediction_toggle_push_button = self._main_window.ui.onlinePredictionTogglePushButton
         self.online_prediction_toggle_push_button.setToolTip(

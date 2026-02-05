@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from myogestic.gui.widgets.highlighter import WidgetHighlighter
 from myogestic.gui.widgets.logger import LoggerLevel
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface
 from myogestic.utils.constants import RECORDING_DIR_PATH
@@ -82,6 +83,10 @@ class RecordProtocol(QObject):
     def __init__(self, main_window: MyoGestic) -> None:
         super().__init__(main_window)
         self._main_window = main_window
+        self._highlighter = WidgetHighlighter(self)
+
+        # Track recordings made this session for preloading in Training
+        self._session_recording_paths: list[str] = []
 
         self._sampling_frequency: Optional[int] = None
         self._selected_visual_interface: Optional[VisualInterface] = None
@@ -371,13 +376,22 @@ class RecordProtocol(QObject):
         label = self._review_label_edit.text() or "default"
         biosignal_data, biosignal_timings = self.retrieve_recorded_data()
 
+        saved_path = None
         if self._active_visual_interfaces:
-            self._save_combined_recording(biosignal_data, biosignal_timings, label)
+            saved_path = self._save_combined_recording(biosignal_data, biosignal_timings, label)
         elif self._default_recording_interface is not None:
-            self._save_default_recording(biosignal_data, biosignal_timings, label)
+            saved_path = self._save_default_recording(biosignal_data, biosignal_timings, label)
+
+        # Track recording path for preloading in Training
+        if saved_path:
+            self._session_recording_paths.append(saved_path)
 
         self._reset_all_recording_ui()
         self._main_window.logger.print(f"Recording with label '{label}' accepted!")
+
+        # Guide user to Training protocol after at least 2 recordings
+        if len(self._session_recording_paths) >= 2:
+            self._highlighter.highlight(self._main_window.ui.protocolTrainingRadioButton)
 
     def _reject_recording(self) -> None:
         """Discard recording and reset everything."""
@@ -452,10 +466,12 @@ class RecordProtocol(QObject):
         )
 
         RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
-        with (RECORDING_DIR_PATH / file_name).open("wb") as f:
+        full_path = RECORDING_DIR_PATH / file_name
+        with full_path.open("wb") as f:
             pickle.dump(save_dict, f)
 
         self._main_window.logger.print(f"Recording saved as: {file_name}")
+        return str(full_path)
 
     def _save_default_recording(
         self,
@@ -494,10 +510,12 @@ class RecordProtocol(QObject):
         )
 
         RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
-        with (RECORDING_DIR_PATH / file_name).open("wb") as f:
+        full_path = RECORDING_DIR_PATH / file_name
+        with full_path.open("wb") as f:
             pickle.dump(save_dict, f)
 
         self._main_window.logger.print(f"Recording saved as: {file_name}")
+        return str(full_path)
 
     def _reset_all_recording_ui(self) -> None:
         """Reset shared controls and all per-VI UIs."""

@@ -60,6 +60,28 @@ class Protocol(QObject):
             self._protocol_mode__stacked_widget.setCurrentIndex(index)
             self._current_protocol = self.available_protocols[index]
 
+            # Auto-load pending model when switching to Online protocol
+            if index == 2:  # Online protocol
+                online_protocol = self.available_protocols[2]
+                if (
+                    hasattr(online_protocol, "_pending_model_path")
+                    and online_protocol._pending_model_path
+                ):
+                    online_protocol._auto_load_model(online_protocol._pending_model_path)
+                    online_protocol._pending_model_path = None
+
+            # Highlight Select Recordings button when switching to Training with session recordings
+            if index == 1:  # Training protocol
+                record_protocol = self.available_protocols[0]
+                training_protocol = self.available_protocols[1]
+                if (
+                    hasattr(record_protocol, "_session_recording_paths")
+                    and record_protocol._session_recording_paths
+                ):
+                    training_protocol._highlighter.highlight(
+                        training_protocol.training_create_datasets_select_recordings_push_button
+                    )
+
     def _pass_on_selected_visual_interface(self) -> None:
         for protocol in self.available_protocols:
             protocol._selected_visual_interface = (

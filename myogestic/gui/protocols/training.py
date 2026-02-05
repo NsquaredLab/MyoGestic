@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget, )
 
+from myogestic.gui.widgets.highlighter import WidgetHighlighter
 from myogestic.gui.widgets.logger import LoggerLevel, CustomLogger
 from myogestic.gui.widgets.templates.visual_interface import VisualInterface
 from myogestic.models.interface import MyoGesticModelInterface
@@ -270,9 +271,6 @@ class TrainingProtocol(QObject):
 
         self._main_window = main_window
 
-        # Initialize Protocol UI
-        self._setup_protocol_ui()
-
         # Initialize Protocol
         self._selected_recordings__dict: dict[str, dict] | None = None
         self._selected_dataset__filepath: str | None = None
@@ -284,8 +282,15 @@ class TrainingProtocol(QObject):
         self._model_interface: MyoGesticModelInterface | None = None
         self._current_device_information: dict[str, Any] | None = None
 
-        self._selected_model_name: str = list(CONFIG_REGISTRY.models_map.keys())[0]
+        # Default to CatBoost if available, otherwise first model
+        available_models = list(CONFIG_REGISTRY.models_map.keys())
+        self._selected_model_name: str = (
+            "CatBoost" if "CatBoost" in available_models else available_models[0]
+        )
         self._model_changeable_parameters__dict = {}
+
+        # Initialize Protocol UI (after model name is set)
+        self._setup_protocol_ui()
 
         # Select a default feature compatible with the initial model
         model_requires_temporal = CONFIG_REGISTRY.models_metadata_map.get(
@@ -321,6 +326,10 @@ class TrainingProtocol(QObject):
         RECORDING_DIR_PATH.mkdir(parents=True, exist_ok=True)
         MODELS_DIR_PATH.mkdir(parents=True, exist_ok=True)
         DATASETS_DIR_PATH.mkdir(parents=True, exist_ok=True)
+
+        # Visual workflow hints
+        self._highlighter = WidgetHighlighter(self._main_window)
+        self._last_trained_model_path: str | None = None
 
     def _check_if_recordings_selected(self) -> None:
         has_selection = bool(
@@ -373,13 +382,6 @@ class TrainingProtocol(QObject):
                         LoggerLevel.ERROR,
                     )
                     continue
-
-                # if recording["device"] != self._main_window._device_name:
-                #     self._main_window.logger.print(
-                #         f" {f} is not recorded with the current device! \n Please select {recording['device']}.",
-                #         LoggerLevel.ERROR,
-                #     )
-                #     continue
 
                 selected_recordings_key = recording["task"].capitalize()
 
@@ -523,6 +525,10 @@ class TrainingProtocol(QObject):
 
         self.training_create_dataset_push_button.setEnabled(True)
 
+        # Highlight Select Features and Create Dataset buttons to guide user
+        self._highlighter.highlight(self.training_create_dataset_select_features_push_button)
+        self._highlighter.highlight(self.training_create_dataset_push_button)
+
     def _create_dataset(self) -> None:
         if not self._selected_recordings__dict:
             self._open_warning_dialog("No recordings selected!")
@@ -543,6 +549,11 @@ class TrainingProtocol(QObject):
         self.training_create_datasets_select_recordings_push_button.setEnabled(True)
         self._selected_recordings__dict = None
 
+        # Clear session recordings from Record protocol since they've been used
+        record_protocol = self._main_window.protocols[0]
+        if hasattr(record_protocol, "_session_recording_paths"):
+            record_protocol._session_recording_paths.clear()
+
         # Auto-select the newly created dataset
         if hasattr(self, "_last_created_dataset_filepath"):
             self._selected_dataset__filepath = self._last_created_dataset_filepath
@@ -552,6 +563,9 @@ class TrainingProtocol(QObject):
             self.train_model_push_button.setEnabled(True)
             del self._last_created_dataset_filepath
             del self._last_created_dataset_label
+
+            # Highlight the Train button to guide user to next step
+            self._highlighter.highlight(self.train_model_push_button)
 
         self._main_window.logger.print("Dataset created!", LoggerLevel.INFO)
 
@@ -656,6 +670,12 @@ class TrainingProtocol(QObject):
         )
         self._train_model__thread.start()
 
+        # Highlight the Log tab to draw attention (without switching)
+        self._highlighter.highlight_tab(
+            self._main_window._tab__widget,
+            self._main_window._tab__widget.indexOf(self._main_window.ui.loggingTab),
+        )
+
     def _train_model_thread(self) -> None:
         label = self.training_model_label_line_edit.text()
         if not label:
@@ -727,12 +747,36 @@ class TrainingProtocol(QObject):
         with model_filepath.open("wb") as file:
             pickle.dump(model_save_dict, file)
 
+        # Store path for auto-loading after training completes
+        self._last_trained_model_path = str(model_filepath)
+
     def _train_model_finished(self) -> None:
         self.training_selected_dataset_label.setText(NO_DATASET_SELECTED_INFO)
         self.training_select_dataset_push_button.setEnabled(True)
         self._selected_dataset__filepath = None
         self.training_model_label_line_edit.setText("")
         self._main_window.logger.print("Model trained", LoggerLevel.INFO)
+
+        # Guide user to Online protocol with the trained model
+        if self._last_trained_model_path:
+            # Highlight the Protocol tab to guide user back
+            protocol_tab_index = self._main_window._tab__widget.indexOf(
+                self._main_window.ui.procotolWidget
+            )
+            self._highlighter.highlight_tab(
+                self._main_window._tab__widget, protocol_tab_index
+            )
+
+            # Highlight the Online radio button
+            self._highlighter.highlight(
+                self._main_window.ui.protocolOnlineRadioButton
+            )
+
+            # Store the path so Online protocol can auto-load when user switches
+            online_protocol = self._main_window.protocols[2]
+            online_protocol._pending_model_path = self._last_trained_model_path
+
+            self._last_trained_model_path = None
 
     def _update_model_selection(self) -> None:
         self._selected_model_name = self.training_model_selection_combo_box.currentText()
@@ -830,17 +874,26 @@ class TrainingProtocol(QObject):
 
         self.training_model_selection_combo_box.setModel(model)
 
-        self.training_model_selection_combo_box.currentIndexChanged.connect(
-            self._update_model_selection
-        )
-        self.training_model_selection_combo_box.setCurrentIndex(1)  # First actual model (skip header)
-
+        # Initialize button before connecting signal (signal triggers _update_model_selection)
         self.training_model_parameters_push_button = (
             self._main_window.ui.trainingModelParametersPushButton
         )
         self.training_model_parameters_push_button.clicked.connect(
             self._open_model_parameters_popup
         )
+
+        self.training_model_selection_combo_box.currentIndexChanged.connect(
+            self._update_model_selection
+        )
+
+        # Set default model to CatBoost if available, otherwise first model
+        default_index = 1  # First actual model (skip header)
+        for i in range(model.rowCount()):
+            item = model.item(i)
+            if item and item.text() == self._selected_model_name:
+                default_index = i
+                break
+        self.training_model_selection_combo_box.setCurrentIndex(default_index)
 
         # 2. Create Datasets
         self.training_create_dataset_group_box = (
