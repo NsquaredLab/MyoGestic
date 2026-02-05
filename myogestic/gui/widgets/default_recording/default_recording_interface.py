@@ -107,7 +107,13 @@ class DefaultRecordingInterface(QObject):
         self.record_task_combo_box.hide()
         ui.label.hide()  # Task label
 
-        self.record_ground_truth_progress_bar.setValue(0)
+        # Hide ground truth progress bar - not needed when no VI is selected
+        # (EMG progress bar at top is sufficient for classification-only recording)
+        self.record_ground_truth_progress_bar.hide()
+
+        # Hide the entire GroupBox since all its contents are hidden
+        # (shared RecordProtocol controls handle everything)
+        self.record_group_box.hide()
 
     def _start_recording_preparation(self) -> bool:
         """Prepare for recording by checking if device is streaming."""
