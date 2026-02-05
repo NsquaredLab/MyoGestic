@@ -247,11 +247,11 @@ CONFIG_REGISTRY.register_visual_interface(
     setup_interface_ui=VirtualHandInterface_SetupInterface,
     recording_interface_ui=VirtualHandInterface_RecordingInterface,
 )
-CONFIG_REGISTRY.register_visual_interface(
-    "VCI",
-    setup_interface_ui=VirtualCursorInterface_SetupInterface,
-    recording_interface_ui=VirtualCursorInterface_RecordingInterface,
-)
+# CONFIG_REGISTRY.register_visual_interface(
+#     "VCI",
+#     setup_interface_ui=VirtualCursorInterface_SetupInterface,
+#     recording_interface_ui=VirtualCursorInterface_RecordingInterface,
+# )
 
 CONFIG_REGISTRY.register_output_system("VHI", VirtualHandInterface_OutputSystem)
-CONFIG_REGISTRY.register_output_system("VCI", VirtualCursorInterface_OutputSystem)
+# CONFIG_REGISTRY.register_output_system("VCI", VirtualCursorInterface_OutputSystem)
