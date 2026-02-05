@@ -71,3 +71,9 @@ docs/source/sg_execution_times.rst
 docs/source/README.md
 recordings/
 target/
+scratch/
+.playwright-mcp/
+.serena/
+Kappa Hand Simulation/
+**/CLAUDE.md
+**/*egg-info/
