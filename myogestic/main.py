@@ -87,7 +87,8 @@ def sigint_handler(*args):
     QApplication.quit()
 
 
-if __name__ == "__main__":
+def main():
+    """Entry point for the MyoGestic application."""
     # Set up signal handler before creating QApplication
     signal.signal(signal.SIGINT, sigint_handler)
 
@@ -112,3 +113,7 @@ if __name__ == "__main__":
     main_window.show()
 
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
