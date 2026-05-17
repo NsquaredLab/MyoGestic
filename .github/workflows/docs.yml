@@ -46,16 +46,19 @@ jobs:
       # the deployed playground always carries the latest framework
       # code. The wheel is gitignored at this path.
       #
-      # We rename the build output to a version-stable filename
-      # (myogestic-latest-py3-none-any.whl) so the playground HTML
-      # never has to track the pyproject.toml version. The original
-      # versioned wheel is kept too in case anyone wants to download a
-      # pinned copy.
-      - name: Build MyoGestic wheel for the browser playground
+      # micropip parses the wheel filename and validates the version
+      # segment against PEP 440 - we can't use a stable "latest" name.
+      # Instead, write a tiny manifest.json that records the real
+      # filename CI just produced; the playground HTML fetches the
+      # manifest first, then asks micropip for the actual versioned
+      # wheel. Keeps pyproject.toml the only source of truth.
+      - name: Build MyoGestic wheel + write playground manifest
         run: |
           uv build --wheel --out-dir docs/playground/wheels
           built=$(ls docs/playground/wheels/myogestic-*-py3-none-any.whl | head -1)
-          cp "$built" docs/playground/wheels/myogestic-latest-py3-none-any.whl
+          basename=$(basename "$built")
+          echo "{\"wheel\": \"${basename}\"}" \
+            > docs/playground/wheels/manifest.json
           ls -lh docs/playground/wheels/
 
       - name: Build docs site

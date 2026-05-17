@@ -93,12 +93,13 @@
     "imgui_bundle-1.92.705-cp313-cp313-pyemscripten_2025_0_wasm32.whl";
 
   // Locally built MyoGestic wheel (pure Python, no native ext).
-  // CI builds it fresh each deploy and renames the output to
-  // myogestic-latest-py3-none-any.whl so this filename never has to
-  // track the pyproject.toml version. The cache-bust query bypasses
-  // both browser HTTP cache and micropip's "already installed" skip.
-  const MYOGESTIC_WHL =
-    "./wheels/myogestic-latest-py3-none-any.whl?ts=" + Date.now();
+  // CI builds it fresh each deploy and writes the actual filename
+  // into wheels/manifest.json — we can't hardcode a stable name
+  // because micropip parses wheel filenames as PEP 440 versions and
+  // rejects anything that isn't a real version segment. The loader
+  // resolves the manifest first and then asks micropip for the
+  // versioned wheel pyproject just produced.
+  const MYOGESTIC_MANIFEST = "./wheels/manifest.json";
 
   // Pure-Python deps MyoGestic needs at runtime, plus scikit-learn for
   // the LDA classifier the playground app uses. micropip pulls these
@@ -169,12 +170,20 @@
     await installShims(pyodide);
 
     setStatus("Installing MyoGestic (no deps)...");
+    // Resolve the actual wheel filename from the CI-written manifest;
+    // pyproject.toml's version drives the filename so we can't
+    // hardcode it. Cache-bust the manifest fetch so version bumps
+    // pick up on the next reload.
+    const manifest = await (await fetch(
+      MYOGESTIC_MANIFEST + "?ts=" + Date.now()
+    )).json();
+    const wheelUrl = "./wheels/" + manifest.wheel + "?ts=" + Date.now();
     // .callKwargs lets us pass `deps=False` as a real Python kwarg.
     // Plain `micropip.install(url, { deps: false })` silently ignores
     // the object - JS object literals are not auto-spread into kwargs.
     // deps=False is needed because the wheel's METADATA still pins
     // mne-lsl / tsdownsample (we shim those) and a macOS-marker dep.
-    await micropip.install.callKwargs(MYOGESTIC_WHL, { deps: false });
+    await micropip.install.callKwargs(wheelUrl, { deps: false });
 
     setStatus("Loading playground app...");
     // Cache-bust app.py too so iteration is reload-and-go. The wheel
