@@ -1,0 +1,48 @@
+/* Home-page-only polish.
+   Used by docs/index.md - won't affect any other page.
+
+   Note: Material wraps inline markdown images in a <p>, so the logo lives
+   inside <p><img class="home-logo">. We target the <img> directly, and use
+   descendant (not child) selectors throughout. */
+
+.md-typeset img.home-logo {
+  width: min(280px, 72vw);
+  height: auto;
+  display: block;
+  margin: 1.5rem auto 0.5rem;
+}
+
+/* Center the paragraph the logo gets wrapped in so margins behave. */
+.md-typeset p:has(> img.home-logo) {
+  text-align: center;
+  margin: 0;
+}
+
+.md-typeset .home-tagline {
+  max-width: 760px;
+  margin: 0.4rem auto 1.6rem;
+  text-align: center;
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.md-typeset .home-proof {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 1.25rem;
+  align-items: center;
+  margin: 1.5rem auto 2.5rem;
+}
+
+.md-typeset img.home-screenshot {
+  border-radius: 8px;
+  box-shadow: 0 10px 32px rgb(0 0 0 / 14%);
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 900px) {
+  .md-typeset .home-proof {
+    grid-template-columns: 1fr;
+  }
+}

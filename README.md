@@ -1,152 +1,153 @@
-<img src="./docs/source/_static/myogestic_logo.png" height="250">
+<img src="docs/images/myogestic_logo.png" height="200">
 
-<a href="https://www.python.org/downloads/release/python-3100/"><img alt="Code style: black" src="https://img.shields.io/badge/python-%3E=3.10,%20%3C=3.13-blue"></a>
+# MyoGestic v2
 
-> [!TIP]
-> Dive deeper into our features and usage with the official [documentation](https://nsquaredlab.github.io/MyoGestic/).
+[![Python](https://img.shields.io/badge/python-%3E=3.12-blue)](https://www.python.org/downloads/)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Docs](https://img.shields.io/badge/docs-nsquaredlab.github.io%2FMyoGestic-blue)](https://nsquaredlab.github.io/MyoGestic/)
 
-# MyoGestic - Why start myocontrol research from zero?
+Real-time biosignal experiment GUI builder. A compact Python framework that
+turns a short script into a live experiment - signal viewers, recording,
+training, prediction - without classes, registries, or config files.
 
-## What is MyoGestic?
+Built at the [n-squared lab](https://www.nsquared.tf.fau.de/) at
+Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU) for the myocontrol
+research community. v2 is a ground-up rewrite of [MyoGestic v1](https://github.com/NsquaredLab/MyoGestic/tree/v1) focused on small,
+composable API surfaces and live extensibility.
 
-MyoGestic is a software framework designed to help the myocontrol community develop and test new myocontrol algorithms. For researchers and clinicians working with individuals with neural lesions, MyoGestic streamlines the process of creating, implementing, and evaluating myoelectric control systems.
+**Provides**: live LSL ingest, on-disk recording (Zarr → `.session.zip`),
+ML pipeline lifecycle (train/predict on their own threads), Dear ImGui
+widgets, output filters, gRPC + LSL dual-plane integration with the
+[Virtual Hand Interface](https://github.com/NsquaredLab/Virtual-Hand-Interface).
 
-The framework is designed with two primary goals:
+**Does not provide**: DSP, ML models, feature extraction. You bring scipy,
+MyoVerse, CatBoost, PyTorch - whatever fits.
 
-1. **Easy extensibility**: Add your own algorithms without extensive knowledge of the codebase
-2. **Minimal setup time**: Especially important when working with clinical populations where time is limited
+## Try it in your browser
 
-Key features include:
+A live MyoGestic app runs entirely in your browser via Pyodide at
+**[`/playground/`](docs/playground/)** on the deployed docs site. Synthetic
+EMG, in-memory recording, sklearn LDA training, live prediction. No install.
 
-- **User-friendly interface**: Simple setup for clinical testing
-- **Real-time processing**: Low-latency signal processing and control
-- **Multiple device support**: Works with various EMG acquisition hardware
-- **Customizable algorithms**: Implement your own control strategies
-- **Data logging**: Capture and analyze performance metrics
-- **Visualization tools**: Monitor signals and control outputs in real-time
+## Install
 
-> [!NOTE]  
-> MyoGestic is actively developed at the [n-squared lab](https://www.nsquared.tf.fau.de/) at Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU) by our dedicated team of PhD candidates, along with the Bachelor and Master students they supervise.
->
-> As development is closely tied to ongoing research and academic timelines, major updates often align with the completion of student theses.
-> While we strive to incorporate improvements regularly, much of the cutting-edge development remains internal until research milestones are reached.
->
-> We appreciate your understanding and interest in the project!
+```bash
+uv sync                      # core dependencies only
+uv sync --extra examples     # + catboost, myoverse, torch, scikit-learn (to run the demos)
+uv sync --extra dev          # + pytest, ruff, the examples extras above
+```
 
-## Requirements
+Optional extras: `[brainflow]` `[bdi]` `[serial]` `[grpc]` `[zarrs]` `[docs]`.
+`[grpc]` pulls in `grpcio` + `grpcio-tools` + `protobuf` for the VHI control
+plane.
 
-- Windows 10 or later (for installer)
-- Any OS supported by Python for manual installation (for maximum performance consider using Ubuntu 24.10)
-- Python 3.12 or higher
-- Compatible EMG acquisition hardware
+## Quick start
 
-## Installation
+```python
+from myogestic import App, Stream
+from myogestic.sources import LSLSource
+from myogestic.widgets import recording_controls, signal_viewer
 
-### Using `uv` - the preferred way
+app = App("Hello EMG")
+app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
 
-1. **Clone the Repository:**
+@app.ui
+def ui(ctx):
+    signal_viewer(ctx, "emg")
+    recording_controls(ctx, ["Rest", "Fist"],
+                       on_record=app.start_recording,
+                       on_stop=app.stop_recording)
 
-    ```bash
-    git clone https://github.com/NsquaredLab/MyoGestic.git
-    cd MyoGestic
-    ```
+app.run()
+```
 
-2. **Install uv:** If you don't have it yet, install `uv`. Follow the instructions on the [uv GitHub page](https://github.com/astral-sh/uv).
+That's the whole loop. Add a `Pipeline`, decorate `extract` / `train` /
+`predict`, and you have a closed-loop experiment.
 
-3. **Set up Virtual Environment & Install Dependencies:** Use `uv` to create and sync your virtual environment with the project's dependencies.
+Six runnable end-to-end demos live in
+[`examples/synthetic/`](examples/synthetic/):
 
-    ```bash
-    # Install base dependencies
-    uv sync
+- `emg_classification.py` - the canonical first read (CatBoost binary)
+- `emg_classification_grpc.py` - adds the VHI gRPC control plane
+- `emg_regression.py` - continuous 5-DoF regression
+- `emg_regression_raulnet.py` - same flow with a PyTorch Lightning CNN
+- `emg_32ch_multi_model.py` - selectable classifier + Save/Load
+- `emg_popout_layout.py` - the same flow in a dockable tear-off layout
 
-    # To contribute or run documentation/examples, install optional groups:
-    uv sync --group dev --group docs
-    ```
+## Documentation
 
-### Using the Installer
+The full docs live as a [ProperDocs](https://properdocs.org/) site under
+[`docs/`](docs/) - tutorials, how-to guides, concept explanations, an
+auto-generated API reference, and the in-browser playground.
 
-> [!WARNING]  
-> The installer is for a very old version of MyoGestic.
-> Until we find a better and/or reliable way of creating an executable we highly recommend using `uv`.
-> 📝 **Note**: The installer is only available for Windows. If you are using another operating system, please follow the developer installation instructions below.´
-> 📝 **Note**: Using the installer does not allow you to add your own myocontrol algorithms. This is only for using the existing ones.
+Build and serve locally:
 
-## How to Use / Tutorial
+```bash
+uv sync --extra docs --extra grpc --extra serial
+uv run properdocs serve
+```
 
-### Quick Start Guide
+Then open `http://127.0.0.1:8000/myogestic-v2/`.
 
-1. Install MyoGestic using one of the methods described above
-2. Connect your EMG acquisition hardware
-3. Launch the application: `python -m myogestic.main` (or use the installed executable if using the installer)
-4. Select the desired algorithm and parameters
-5. Begin recording and testing
+Quick links into the source:
 
-### Video tutorial
+- **[Getting Started](docs/getting-started.md)** - install + run the synthetic-EMG demo.
+- **[Tutorials](docs/tutorials/)** - `emg-classification`, `emg-regression-with-vhi`.
+- **[How-to guides](docs/how-to/)** - recipes (custom source, custom widget, custom model, integrate the Virtual Hand, install VHI, the contrib feature set, ...).
+- **[Concepts](docs/concepts/)** - architecture, streams, pipeline, threading, recording, the `Px`/`Fr` grid, the `EdgeTrigger` pattern.
+- **[API reference](docs/api/)** - auto-generated from docstrings.
+- **[API cheatsheet](docs/reference/api-cheatsheet.md)** - every public symbol on one page.
+- **[Playground](docs/playground/)** - the in-browser demo.
 
-[![MyoGestic Tutorial](https://img.youtube.com/vi/Re3VfgKhjCM/maxresdefault.jpg)](https://youtu.be/Re3VfgKhjCM)
-
-If you prefer a PDF version, you can download it [here](
-https://github.com/NsquaredLab/MyoGestic/tree/main/docs/source/_static/MyoGestic_Tutorial.pdf).
+The docs are deployed to GitHub Pages via [`.github/workflows/docs.yml`](.github/workflows/docs.yml) on every push to `main`.
 
 ## Development
 
-### What is what?
-
 ```bash
-MyoGestic/
-├── myogestic/           # Main package source code
-│   ├── data/            # Default data/configurations used by the package
-│   ├── gui/             # Graphical User Interface components
-│   ├── models/          # Myocontrol algorithm models and interfaces
-│   │   ├── core/        # Core model implementations (assuming this still exists)
-│   │   └── definitions/ # Model definitions and specifications (assuming this still exists)
-│   ├── utils/           # Helper functions and utilities
-│   ├── main.py          # Main application entry point
-│   ├── default_config.py # Default configuration settings
-│   └── user_config.py   # User-specific configuration
-├── docs/                # Documentation source files
-├── examples/            # Example usage scripts and notebooks
-├── tests/               # Automated tests
-├── pyproject.toml       # Project metadata, dependencies, and build configuration
-└── uv.lock              # Pinned versions of dependencies managed by uv
+uv sync --extra dev
+uv run pytest -q
+uv run ruff check .
 ```
 
-# How to Cite
+Some integration tests need a live LSL outlet (port-bind sensitive in
+sandboxed CI). A handful of test files lag recent refactors and are
+scheduled for cleanup.
 
-If you use MyoGestic in your research, please cite the following [paper](https://www.science.org/doi/abs/10.1126/sciadv.ads9150):
+## Status
+
+Pre-release. Breaking changes are still possible.
+
+Optional docking layout (`App(docking=True)`) exposes pop-out panels via
+`app.popout(...)` - experimental, macOS Metal/Retina caveats; see
+`examples/synthetic/emg_popout_layout.py`.
+
+## How to cite
+
+If you use MyoGestic in your research, please cite our
+[Science Advances paper](https://www.science.org/doi/abs/10.1126/sciadv.ads9150):
 
 ```bibtex
- @article{
-     Sîmpetru2025,
-     author = {Raul C. Sîmpetru  and Dominik I. Braun  and Arndt U. Simon  and Michael März  and Vlad Cnejevici  and Daniela Souza de Oliveira  and Nico Weber  and Jonas Walter  and Jörg Franke  and Daniel Höglinger  and Cosima Prahm  and Matthias Ponfick  and Alessandro Del Vecchio },
-     title = {MyoGestic: EMG interfacing framework for decoding multiple spared motor dimensions in individuals with neural lesions},
-     journal = {Science Advances},
-     volume = {11},
-     number = {15},
-     pages = {eads9150},
-     year = {2025},
-     doi = {10.1126/sciadv.ads9150},
-     URL = {https://www.science.org/doi/abs/10.1126/sciadv.ads9150},
-     eprint = {https://www.science.org/doi/pdf/10.1126/sciadv.ads9150},
- }
+@article{Simpetru2025,
+    author  = {Raul C. S{\^i}mpetru and Dominik I. Braun and Arndt U. Simon
+               and Michael M{\"a}rz and Vlad Cnejevici
+               and Daniela Souza de Oliveira and Nico Weber and Jonas Walter
+               and J{\"o}rg Franke and Daniel H{\"o}glinger and Cosima Prahm
+               and Matthias Ponfick and Alessandro Del Vecchio},
+    title   = {MyoGestic: EMG interfacing framework for decoding multiple
+               spared motor dimensions in individuals with neural lesions},
+    journal = {Science Advances},
+    volume  = {11},
+    number  = {15},
+    pages   = {eads9150},
+    year    = {2025},
+    doi     = {10.1126/sciadv.ads9150},
+    url     = {https://www.science.org/doi/abs/10.1126/sciadv.ads9150},
+}
 ```
 
-# License
+## License
 
-MyoGestic is licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0).
-
-This means you are free to:
-
-- Use the software for any purpose
-- Change the software to suit your needs
-- Share the software with others
-- Share the changes you make
-
-Under the following conditions:
-
-- You must disclose your source code when you share the software
-- You must license any derivative work under the same or a compatible license
-- You must state changes made to the software
-- You must include the license and copyright notice with the software
-
-This is a simplified explanation. For the full license text, see the [LICENSE](LICENSE) file or visit [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.html).
+MyoGestic is licensed under the
+[GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
+(GPL-3.0), matching the v1 release. Derivative work must remain open under
+the same license.

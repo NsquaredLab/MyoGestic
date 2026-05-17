@@ -1,0 +1,75 @@
+/* Wider content column on large displays.
+   Material's default .md-grid max-width is ~61rem (976 px) which leaves
+   large empty bands on >1500 px monitors. 1440 px keeps line lengths
+   reasonable for tables and code blocks while filling the viewport. */
+.md-grid {
+  max-width: 1440px;
+}
+
+/* Stronger heading hierarchy. Material's default H1/H2/H3 are visually
+   flat against body text — same color and not much weight differentiation.
+   Boost each level so the page reads as a clear hierarchy:
+   H1 (page title)   → bold + accent-colored underline
+   H2 (sections)     → top divider + extra top margin
+   H3 (subsections)  → bold + accent color */
+.md-typeset h1 {
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--md-accent-fg-color);
+}
+
+.md-typeset h2 {
+  margin-top: 2.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+  font-weight: 800;
+  font-size: 1.75em;
+}
+
+.md-typeset h3 {
+  margin-top: 1.6rem;
+  font-weight: 700;
+  color: var(--md-accent-fg-color);
+}
+
+/* Right-sidebar TOC: mirror the page heading hierarchy.
+   Top-level TOC entries (the page's H2 sections) get bold weight so
+   categories scan distinctly from their sub-items. Nested entries
+   (H3 symptoms / sub-sections) stay normal weight. The currently
+   scrolled-to entry takes the accent color so the reader sees their
+   place at a glance. */
+.md-nav--secondary .md-nav__list > .md-nav__item > .md-nav__link {
+  font-weight: 700;
+}
+
+.md-nav--secondary .md-nav__list .md-nav__list .md-nav__link {
+  font-weight: 400;
+}
+
+.md-nav--secondary .md-nav__link--active,
+.md-nav--secondary .md-nav__link--active code {
+  color: var(--md-accent-fg-color);
+}
+
+/* Pilcrow heading anchors: only show on heading hover.
+   Material's default keeps them faintly visible inline which adds
+   visual clutter, especially on pages with many short H3s. */
+.md-typeset .headerlink {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.md-typeset h1:hover > .headerlink,
+.md-typeset h2:hover > .headerlink,
+.md-typeset h3:hover > .headerlink,
+.md-typeset h4:hover > .headerlink,
+.md-typeset h5:hover > .headerlink,
+.md-typeset h6:hover > .headerlink,
+.md-typeset .headerlink:focus {
+  opacity: 0.6;
+}
+
+.md-typeset .headerlink:hover {
+  opacity: 1;
+}

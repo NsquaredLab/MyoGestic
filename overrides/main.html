@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{# Inject the Context7 chat widget on every page. The widget renders a
+   floating chat button via https://context7.com/widget.js - see
+   context7.json at the repo root for the library binding.
+
+   `defer` is required: the script lives in <head> (via extrahead) but its
+   IIFE ends with `document.body.appendChild(...)`, which throws
+   TypeError(null) if it runs before <body> is parsed. `defer` delays
+   execution until after the DOM is ready. #}
+{% block extrahead %}
+  {{ super() }}
+  <script src="https://context7.com/widget.js" data-library="/nsquaredlab/myogestic" defer></script>
+
+  {# Material binds global hotkeys (s = search, f = filter, n / p = nav)
+     on document and bails out when document.activeElement is an input.
+     The Context7 widget puts its <input> inside a CLOSED shadow root, so
+     activeElement re-targets to the host <div> and Material's check
+     fails: typing in the chat opens search. Fix: stop key events at the
+     widget host so they never reach Material. The widget's own listeners
+     are inside the shadow (innermost in the propagation path) and fire
+     first, so chat input still works. #}
+  <script>
+    (function () {
+      function attach() {
+        var host = document.getElementById('context7-widget');
+        if (!host) { requestAnimationFrame(attach); return; }
+        ['keydown', 'keyup', 'keypress'].forEach(function (t) {
+          host.addEventListener(t, function (e) { e.stopPropagation(); });
+        });
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attach);
+      } else {
+        attach();
+      }
+    })();
+  </script>
+{% endblock %}

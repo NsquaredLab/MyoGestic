@@ -1,98 +1,128 @@
 [project]
-name = "MyoGestic"
-version = "0.10.0"
-description = "Software framework made to help the myocontrol community to develop and test new myocontrol algorithms."
-authors = [
-    { name = "Raul C. Sîmpetru", email = "raul.simpetru@fau.de" },
-    { name = "Dominik I. Braun", email = "dome.braun@fau.de" },
-    { name = "Vlad Cnejevici", email = "vlad.cnejevici@fau.de" },
-]
+name = "myogestic"
+version = "0.2.0"
+description = "Real-time biosignal experiment GUI builder"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.12"
+keywords = ["emg", "biosignal", "myocontrol", "real-time", "imgui", "gui"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
 dependencies = [
-    "biosignal-device-interface",
-    "catboost>=1.2.7",
-    "myoverse>=1.1.3",
-    "numcodecs!=0.16",
-    "pyside6>=6.8.2.1",
-    "qdarkstyle>=3.2.3",
-    "scikit-learn>=1.6.1",
-    "toml>=0.10.2",
-    "torch>=2.8.0",
-    "torchvision>=0.23.0",
-    "torchaudio>=2.8.0",
-    "vispy>=0.16.0",
+    "dvg-ringbuffer>=1.1.0",
+    "imgui-bundle>=1.5.0",
+    "zarr>=3.0.0",
+    "mne-lsl>=1.7.0",
+    "numpy>=1.26.0",
+    "joblib>=1.3.0",
+    "tsdownsample>=0.1.4.1",
+    # platformdirs is used by myogestic.tools.install_vhi and
+    # myogestic.interfaces to pick a per-user data dir on systems where
+    # `<repo>/tools/...` would land in site-packages.
+    "platformdirs>=4.0",
+    # macOS-only: needed by core._try_set_macos_dock_icon() to swap the Dock
+    # icon at runtime (NSApplication.setApplicationIconImage_). GLFW's
+    # `glfwSetWindowIcon` is a no-op on Cocoa, so this is the only path
+    # without shipping a .app bundle. The PEP 508 marker keeps Linux /
+    # Windows installs from pulling it in.
+    "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
 ]
 
 [project.scripts]
-myogestic = "myogestic.main:main"
+# Console script for installing the Virtual Hand Interface release binary.
+# Equivalent to `python -m myogestic.tools.install_vhi`; the entry point
+# makes it discoverable to anyone who only `pip install`d the package.
+myogestic-install-vhi = "myogestic.tools.install_vhi:main"
+
+[project.optional-dependencies]
+brainflow = ["brainflow>=5.12.0"]
+bdi = ["biosignal-device-interface>=0.1.0"]
+serial = ["pyserial>=3.5"]
+zarrs = ["zarrs>=0.2.0"]
+# gRPC control plane to the Virtual Hand Interface (VHI). grpcio-tools is only
+# needed to regenerate stubs via tools/gen_proto.py; generated _pb2 files are
+# committed so a plain install needs only grpcio + protobuf at runtime.
+grpc = ["grpcio>=1.60", "grpcio-tools>=1.60", "protobuf>=4.21"]
+# Domain-specific: these belong to user code, not the framework.
+# `examples` keeps the smoke tests runnable without forcing them on every install.
+examples = ["catboost>=1.2.10", "myoverse>=2.0.0", "torch>=2.0", "scikit-learn>=1.4"]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.6.0",
+    "catboost>=1.2.10",
+    "myoverse>=2.0.0",
+    "torch>=2.0",
+    "scikit-learn>=1.4",
+    # tools/widget_screenshot.py uses Quartz to find its own GUI window
+    # for screencapture. Only needed on macOS, only for the screenshot
+    # tool - keep it out of runtime by gating on dev + sys_platform.
+    "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
+]
+docs = [
+    "properdocs",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
+    "pymdown-extensions>=10.0",
+    "mkdocs-section-index>=0.3",
+]
 
 [tool.setuptools.packages.find]
 include = ["myogestic*"]
 
-[tool.uv]
-package = true
-config-settings = { editable_mode = "compat" }
-environments = [
-    "sys_platform == 'darwin'",
-    "sys_platform == 'win32'",
-    "sys_platform == 'linux'",
+[tool.setuptools.package-data]
+# Ship the branding assets (icon + wordmark) and the gRPC proto inside the
+# wheel; without this, `pip install myogestic` would land them in the
+# wrong place (or skip them) and image_from_asset / gen_proto would fail.
+myogestic = ["assets/**/*", "_proto/*.proto"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["tools", "examples", ".venv", "*.egg-info", "sessions", "*.zarr"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = ["tools", "sessions", ".venv", "*.egg-info", "*.zarr", ".imgui_state"]
+
+[tool.ruff.lint]
+# Conservative defaults — catch real issues, don't fight style.
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (unused, undefined)
+    "W",    # pycodestyle warnings
+    "B",    # flake8-bugbear (likely-buggy patterns)
+    "UP",   # pyupgrade (modernize syntax)
+    "I",    # isort (import ordering)
+    "SIM",  # flake8-simplify
 ]
-# Override MyoVerse's torch constraints to use cu126-compatible versions
-override-dependencies = [
-    "torch>=2.8.0",
-    "torchvision>=0.23.0",
-    "torchaudio>=2.8.0",
+ignore = [
+    "E501",   # line too long — line-length handles this
+    "B008",   # function calls in argument defaults (common in dataclasses)
+    "SIM108", # ternary vs if/else — readability call, leave to author
+    "SIM105", # contextlib.suppress vs try/except/pass — try/except is clearer
+    "SIM113", # use enumerate — doesn't apply when loop filter/counter diverge
 ]
 
-[tool.uv.sources]
-sphinxcontrib-pdfembed = { git = "https://github.com/SuperKogito/sphinxcontrib-pdfembed.git" }
-myoverse = { git = "https://github.com/NsquaredLab/MyoVerse.git" }
-torch = [
-  { index = "torch-gpu", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
-  { index = "torch-cpu", marker = "sys_platform == 'darwin'" },
-]
-torchvision = [
-  { index = "torch-gpu", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
-  { index = "torch-cpu", marker = "sys_platform == 'darwin'" },
-]
-torchaudio = [
-  { index = "torch-gpu", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
-  { index = "torch-cpu", marker = "sys_platform == 'darwin'" },
-]
-
-[[tool.uv.index]]
-name = "torch-gpu"
-url = "https://download.pytorch.org/whl/cu126"
-explicit = true
-
-[[tool.uv.index]]
-name = "torch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-
-[dependency-groups]
-dev = [
-    "docutils-stubs>=0.0.22",
-    "matplotlib>=3.10.0",
-    "prospector>=1.14.1",
-    "pytest>=9.0.2",
-]
-
-docs = [
-    "enum-tools[sphinx]>=0.12.0",
-    "linkify-it-py>=2.0.3",
-    "memory-profiler>=0.61.0",
-    "pydata-sphinx-theme>=0.16.1",
-    "rinohtype>=0.5.5",
-    "sphinx>=8.1.3",
-    "sphinx-gallery>=0.19.0",
-    "sphinxcontrib-pdfembed",
-    "sphinxcontrib-youtube>=1.4.1",
-]
-
-compile = [
-    "distributed>=2025.2.0",
-    "pyinstaller>=6.12.0",
-]
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]  # allow `assert` in tests
+"examples/**/*" = ["E402"]  # imports after module-level code (app = App(...) pattern)
+# Optional-dep imports at module bottom are intentional (conditional availability)
+"myogestic/outputs/__init__.py" = ["E402"]
+"myogestic/sources/__init__.py" = ["E402"]
+# Intentional side-effect import that registers a zarr codec pipeline
+"myogestic/session.py" = ["F401"]

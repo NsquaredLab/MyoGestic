@@ -1,79 +1,45 @@
-.python-version
-.venv
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-*.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# folders 
-# results/
-temp/
-results/
+# Python
 __pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
 
-bin/
+# Sessions and data
+sessions/
+*.zarr/
+models/
+data/
+lightning_logs/
 
+# IDE / agent
+.idea/
 .vscode/
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+.claude/
+*.swp
 
-[Dd]ata/
+# OS
+.DS_Store
 
-catboost_info/
-/docs/build/
+# hello_imgui window/layout state (auto-generated per App name)
+.imgui_state/
+*.ini
 
-/.idea/
-/docs/source/auto_examples/
-/docs/source/modules/generated/
-docs/source/sg_execution_times.rst
-docs/source/README.md
-recordings/
-target/
-scratch/
-.playwright-mcp/
-.serena/
-Kappa Hand Simulation/
-**/CLAUDE.md
-**/*egg-info/
+# pytest
+.pytest_cache/
+
+# docs site build output (properdocs/mkdocs)
+site/
+
+# logs scratch
+/tmp/myogestic-logs/
+
+# Local VHI install — populated by `python -m myogestic.tools.install_vhi`
+# (release binary) or symlinked to a VHI source checkout (Godot project).
+# virtual_hand() defaults to this path; override with $VHI_PATH.
+tools/MyoGestic-VHI
+
+# Browser playground - locally built MyoGestic wheel. The deploy
+# workflow builds it fresh; committing it would just bitrot.
+docs/playground/wheels/*.whl

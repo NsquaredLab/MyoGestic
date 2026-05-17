@@ -1,0 +1,197 @@
+<!doctype html>
+<!--
+  MyoGestic Playground - MyoGestic + ImGui rendering in your browser.
+
+  Ships as static content inside the docs site: the deployed URL is
+  https://<docs-host>/playground/. Locally, run the docs dev server
+  (`uv run --extra docs --extra grpc --extra serial properdocs serve`)
+  and open http://127.0.0.1:8000/myogestic-v2/playground/.
+
+  What this loads (in order):
+    1. Pyodide 0.29.4                        (Python compiled to WebAssembly)
+    2. micropip                              (Pyodide's pip-equivalent)
+    3. imgui-bundle pyemscripten wheel       (the only big download, ~5 MB)
+    4. Pure-Python deps via micropip         (dvg-ringbuffer, platformdirs,
+                                              zarr, joblib, scikit-learn)
+    5. mne_lsl + tsdownsample SHIMS          (written into pyodide FS so
+                                              MyoGestic's lazy imports find
+                                              the no-op browser replacements)
+    6. MyoGestic wheel (deps=False)          (built by CI from this repo)
+    7. The Python app (app.py)               (instantiate App + render UI)
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MyoGestic playground</title>
+  <link rel="icon" type="image/png" href="../images/myogestic_logo.png" />
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.29.4/full/pyodide.js"></script>
+</head>
+<body>
+
+<!-- The playground app lives in app.py - fetched at boot and run by
+     pyodide.runPython. Keeping it in a real .py file means any editor
+     can lint/format it; the loader stays tiny. -->
+
+
+<style>
+  html, body { width: 100%; height: 100%; margin: 0; background: #0d1117; font-family: sans-serif; }
+  #canvas { display: block; width: 100%; height: 100%; }
+  #loader {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px;
+    background: #0d1117; color: #c9d1d9; font-size: 14px;
+  }
+  #loader::before {
+    content: ""; width: 48px; height: 48px;
+    border: 5px solid #21262d; border-top-color: #58a6ff;
+    border-radius: 50%; animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* "Back to docs" pill - small, top-left, above the canvas. ImGui
+     still gets pointer events for everything else; this just carves
+     out a ~140x32 px region for navigation. */
+  #back-to-docs {
+    position: fixed; top: 12px; left: 12px;
+    padding: 6px 12px;
+    background: rgba(13, 17, 23, 0.85);
+    color: #c9d1d9;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    font-size: 13px;
+    text-decoration: none;
+    z-index: 20;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: background 120ms, color 120ms;
+  }
+  #back-to-docs:hover {
+    background: rgba(33, 38, 45, 0.95);
+    color: #ffffff;
+  }
+</style>
+
+<a id="back-to-docs" href="../">&larr;&nbsp;Docs</a>
+<div id="loader">Loading Pyodide...</div>
+<canvas id="canvas" tabindex="0"></canvas>
+
+<script>
+  const loaderEl = document.getElementById("loader");
+  const setStatus = m => loaderEl.textContent = m;
+  const hideLoader = () => loaderEl.remove();
+  const showError = e => {
+    loaderEl.style.background = "#5a1f1f";
+    setStatus("Error: " + (e?.message || e));
+    console.error(e);
+  };
+
+  // imgui-bundle's canonical Pyodide wheel. CORS-permissive; pinned to
+  // a known-good build so the playground always knows what it loaded.
+  const IMGUI_BUNDLE_WHL =
+    "https://imgui-bundle.pages.dev/local_wheels/" +
+    "imgui_bundle-1.92.705-cp313-cp313-pyemscripten_2025_0_wasm32.whl";
+
+  // Locally built MyoGestic wheel (pure Python, no native ext).
+  // Rebuild with: uv build --wheel --out-dir playground/wheels
+  // The cache-bust query bypasses both browser HTTP cache and
+  // micropip's "already installed" skip during iteration; remove the
+  // query once the wheel is stable.
+  const MYOGESTIC_WHL =
+    "./wheels/myogestic-0.1.0-py3-none-any.whl?ts=" + Date.now();
+
+  // Pure-Python deps MyoGestic needs at runtime, plus scikit-learn for
+  // the LDA classifier the playground app uses. micropip pulls these
+  // from PyPI (or, for the ones Pyodide pre-builds, its package index).
+  // MyoGestic itself is installed with deps=False afterwards because
+  // its METADATA also lists mne-lsl / tsdownsample (native; shimmed
+  // below) and pyobjc-framework-Cocoa (macOS-marker; harmless on
+  // emscripten but micropip is conservative about markers).
+  const PURE_PY_DEPS = [
+    "dvg-ringbuffer",
+    "platformdirs",
+    "zarr",
+    "joblib",
+    "numpy",          // already bundled in Pyodide but ensures resolution
+    "scikit-learn",   // for the playground app's LDA classifier
+  ];
+
+  // Shim modules written into Pyodide's FS so MyoGestic's lazy
+  // `from mne_lsl.lsl import local_clock` and
+  // `from tsdownsample import M4Downsampler` find browser-safe stubs.
+  const SHIM_FILES = [
+    "shims/mne_lsl/__init__.py",
+    "shims/mne_lsl/lsl.py",
+    "shims/tsdownsample/__init__.py",
+  ];
+
+  async function fetchText(url) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`fetch ${url} -> ${r.status}`);
+    return await r.text();
+  }
+
+  async function installShims(pyodide) {
+    // site-packages root depends on the Pyodide Python version.
+    // 0.29.x ships Python 3.13. Hardcoding rather than introspecting
+    // keeps the loader trivial; bump if Pyodide moves.
+    const SP = "/lib/python3.13/site-packages";
+    for (const rel of SHIM_FILES) {
+      const text = await fetchText(rel);
+      // mne_lsl/lsl.py -> /lib/python3.13/site-packages/mne_lsl/lsl.py
+      const dest = SP + "/" + rel.replace(/^shims\//, "");
+      const dir = dest.substring(0, dest.lastIndexOf("/"));
+      pyodide.FS.mkdirTree(dir);
+      pyodide.FS.writeFile(dest, text);
+    }
+  }
+
+  async function main() {
+    const canvas = document.getElementById("canvas");
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    setStatus("Loading Pyodide...");
+    const pyodide = await loadPyodide();
+    pyodide.canvas.setCanvas2D(canvas);
+    pyodide._api._skip_unwind_fatal_error = true;
+
+    setStatus("Loading micropip...");
+    await pyodide.loadPackage("micropip");
+    const micropip = pyodide.pyimport("micropip");
+
+    setStatus("Installing imgui-bundle (~5 MB)...");
+    await micropip.install(IMGUI_BUNDLE_WHL);
+
+    setStatus("Installing pure-Python deps...");
+    await micropip.install(PURE_PY_DEPS);
+
+    setStatus("Writing browser shims (mne_lsl, tsdownsample)...");
+    await installShims(pyodide);
+
+    setStatus("Installing MyoGestic (no deps)...");
+    // .callKwargs lets us pass `deps=False` as a real Python kwarg.
+    // Plain `micropip.install(url, { deps: false })` silently ignores
+    // the object - JS object literals are not auto-spread into kwargs.
+    // deps=False is needed because the wheel's METADATA still pins
+    // mne-lsl / tsdownsample (we shim those) and a macOS-marker dep.
+    await micropip.install.callKwargs(MYOGESTIC_WHL, { deps: false });
+
+    setStatus("Loading playground app...");
+    // Cache-bust app.py too so iteration is reload-and-go. The wheel
+    // already has a ts= query; this keeps the Python script aligned.
+    const appCode = await fetchText("./app.py?ts=" + Date.now());
+
+    setStatus("Starting app...");
+    try {
+      pyodide.runPython(appCode);
+    } catch (e) {
+      showError(e);
+      return;
+    }
+    hideLoader();
+  }
+
+  main().catch(showError);
+</script>
+</body>
+</html>
