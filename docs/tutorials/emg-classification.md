@@ -1,6 +1,6 @@
 # EMG classification (CatBoost)
 
-End-to-end walkthrough of [`examples/synthetic/emg_classification.py`](https://github.com/raulsimpetru/MyoGestic-v2/blob/main/examples/synthetic/emg_classification.py): synthetic 8-channel EMG → MyoVerse RMS+MAV features → CatBoost binary classifier → smoothed hand pose → VHI.
+End-to-end walkthrough of [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py): synthetic 8-channel EMG → MyoVerse RMS+MAV features → CatBoost binary classifier → smoothed hand pose → VHI.
 
 228 lines, end to end, zero classes besides the framework's `App` and `Pipeline`.
 

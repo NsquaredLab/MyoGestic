@@ -38,7 +38,7 @@ That's the entire surface. Three decorators, no inheritance.
 
 ## Case 1: scikit-learn / CatBoost / XGBoost
 
-The straightforward case. Train returns a fitted estimator, predict calls it. See [`examples/synthetic/emg_classification.py`](https://github.com/raulsimpetru/MyoGestic-v2/blob/main/examples/synthetic/emg_classification.py) for the canonical pattern. Key beats:
+The straightforward case. Train returns a fitted estimator, predict calls it. See [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py) for the canonical pattern. Key beats:
 
 ```python
 @pipeline.train
@@ -137,7 +137,7 @@ def train(data):
     return MultiOutputRegressor().fit(np.array(X), np.array(Y))
 ```
 
-See [`examples/synthetic/emg_regression.py`](https://github.com/raulsimpetru/MyoGestic-v2/blob/main/examples/synthetic/emg_regression.py) for the full thing - it includes a fallback to `iter_labeled_windows` when no aligned target stream was recorded.
+See [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py) for the full thing - it includes a fallback to `iter_labeled_windows` when no aligned target stream was recorded.
 
 ## Pushing predictions to outputs
 

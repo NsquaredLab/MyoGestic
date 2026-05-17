@@ -1,12 +1,12 @@
 ---
-title: MyoGestic v2
+title: MyoGestic
 hide:
   - navigation
   - toc
   - title
 ---
 
-![MyoGestic v2](images/myogestic_logo.png){ .home-logo .skip-lightbox }
+![MyoGestic](images/myogestic_logo.png){ .home-logo .skip-lightbox }
 
 <p class="home-tagline" markdown>
 **Real-time biosignal experiment GUI builder.** A compact Python framework that turns a short script into a live experiment - signal viewers, recording, training, prediction - without classes, registries, or config files.
@@ -52,7 +52,7 @@ That's the whole loop. Add a `Pipeline`, decorate `extract` / `train` / `predict
 
 ## Top-level data flow
 
-![MyoGestic v2 architecture: sources, pipeline, outputs](images/architecture.svg){ .skip-lightbox loading=lazy }
+![MyoGestic architecture: sources, pipeline, outputs](images/architecture.svg){ .skip-lightbox loading=lazy }
 
 Sources push samples into a `Stream` ring buffer. The pipeline's `@extract`, `@train`, `@predict` decorators read from that buffer and emit predictions to outputs - LSL, UDP, Serial, or the [Virtual Hand Interface](how-to/integrate-vhi.md) over LSL+gRPC. The render thread runs `@app.ui` at 60 fps independently of the predict thread; see [Concepts → Threading](concepts/threading.md).
 

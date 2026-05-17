@@ -1,6 +1,6 @@
 # Examples directory
 
-Every runnable example under [`examples/synthetic/`](https://github.com/raulsimpetru/MyoGestic-v2/tree/main/examples/synthetic),
+Every runnable example under [`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic),
 what it teaches, and what's tweakable. All six are hardware-free - the
 `process_launcher` panel spawns `myogestic.tools.emg_generator` for you,
 so one terminal is enough.

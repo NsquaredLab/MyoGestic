@@ -1,6 +1,6 @@
 # Architecture
 
-MyoGestic v2 is built around three orthogonal concerns: **acquisition** (sources feeding ring buffers), **decision** (the predict thread), and **rendering** (the main thread drawing widgets). Outputs are a fourth, owned by user code.
+MyoGestic is built around three orthogonal concerns: **acquisition** (sources feeding ring buffers), **decision** (the predict thread), and **rendering** (the main thread drawing widgets). Outputs are a fourth, owned by user code.
 
 ```mermaid
 flowchart TB
