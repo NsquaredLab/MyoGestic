@@ -131,10 +131,12 @@ nav:
           - Add a custom output: how-to/add-an-output.md
           - Add a custom widget: how-to/add-a-widget.md
           - Add a custom model: how-to/add-a-model.md
+          - Enable on-disk recording: how-to/enable-recording.md
           - Record and replay: how-to/record-and-replay.md
           - Record good training data: how-to/record-good-training-data.md
           - Feature extraction cookbook: how-to/feature-extraction-cookbook.md
           - Use the contrib feature set: how-to/use-contrib-features.md
+          - Keep state between pipeline stages: how-to/inter-stage-state.md
           - Post-process predictions: how-to/post-process-output.md
           - Integrate the Virtual Hand: how-to/integrate-vhi.md
           - Install the Virtual Hand: how-to/install-vhi.md
