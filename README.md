@@ -113,14 +113,6 @@ Some integration tests need a live LSL outlet (port-bind sensitive in
 sandboxed CI). A handful of test files lag recent refactors and are
 scheduled for cleanup.
 
-## Status
-
-Pre-release. Breaking changes are still possible.
-
-Optional docking layout (`App(docking=True)`) exposes pop-out panels via
-`app.popout(...)` - experimental, macOS Metal/Retina caveats; see
-`examples/synthetic/emg_popout_layout.py`.
-
 ## How to cite
 
 If you use MyoGestic in your research, please cite our
