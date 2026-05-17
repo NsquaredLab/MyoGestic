@@ -26,8 +26,8 @@ MyoVerse, CatBoost, PyTorch - whatever fits.
 ## Try it in your browser
 
 A live MyoGestic app runs entirely in your browser via Pyodide at
-**[`/playground/`](docs/playground/)** on the deployed docs site. Synthetic
-EMG, in-memory recording, sklearn LDA training, live prediction. No install.
+**<https://nsquaredlab.github.io/MyoGestic/playground/>**. Synthetic EMG,
+in-memory recording, sklearn LDA training, live prediction. No install.
 
 ## Install
 
@@ -97,7 +97,7 @@ Quick links into the source:
 - **[Concepts](docs/concepts/)** - architecture, streams, pipeline, threading, recording, the `Px`/`Fr` grid, the `EdgeTrigger` pattern.
 - **[API reference](docs/api/)** - auto-generated from docstrings.
 - **[API cheatsheet](docs/reference/api-cheatsheet.md)** - every public symbol on one page.
-- **[Playground](docs/playground/)** - the in-browser demo.
+- **[Playground](https://nsquaredlab.github.io/MyoGestic/playground/)** - the in-browser demo (no install).
 
 The docs are deployed to GitHub Pages via [`.github/workflows/docs.yml`](.github/workflows/docs.yml) on every push to `main`.
 
