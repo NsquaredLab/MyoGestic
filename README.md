@@ -1,4 +1,4 @@
-<img src="docs/images/myogestic_logo.png" height="200">
+<img src="https://raw.githubusercontent.com/NsquaredLab/MyoGestic/main/docs/images/myogestic_logo.png" height="200">
 
 # MyoGestic
 
@@ -65,7 +65,7 @@ That's the whole loop. Add a `Pipeline`, decorate `extract` / `train` /
 `predict`, and you have a closed-loop experiment.
 
 Six runnable end-to-end demos live in
-[`examples/synthetic/`](examples/synthetic/):
+[`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic):
 
 - `emg_classification.py` - the canonical first read (CatBoost binary)
 - `emg_classification_grpc.py` - adds the VHI gRPC control plane
@@ -77,7 +77,7 @@ Six runnable end-to-end demos live in
 ## Documentation
 
 The full docs live as a [ProperDocs](https://properdocs.org/) site under
-[`docs/`](docs/) - tutorials, how-to guides, concept explanations, an
+[`docs/`](https://github.com/NsquaredLab/MyoGestic/tree/main/docs) - tutorials, how-to guides, concept explanations, an
 auto-generated API reference, and the in-browser playground.
 
 Build and serve locally:
@@ -91,15 +91,15 @@ Then open `http://127.0.0.1:8000/MyoGestic/`.
 
 Quick links into the source:
 
-- **[Getting Started](docs/getting-started.md)** - install + run the synthetic-EMG demo.
-- **[Tutorials](docs/tutorials/)** - `emg-classification`, `emg-regression-with-vhi`.
-- **[How-to guides](docs/how-to/)** - recipes (custom source, custom widget, custom model, integrate the Virtual Hand, install VHI, the contrib feature set, ...).
-- **[Concepts](docs/concepts/)** - architecture, streams, pipeline, threading, recording, the `Px`/`Fr` grid, the `EdgeTrigger` pattern.
-- **[API reference](docs/api/)** - auto-generated from docstrings.
-- **[API cheatsheet](docs/reference/api-cheatsheet.md)** - every public symbol on one page.
+- **[Getting Started](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/getting-started.md)** - install + run the synthetic-EMG demo.
+- **[Tutorials](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/tutorials)** - `emg-classification`, `emg-regression-with-vhi`.
+- **[How-to guides](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/how-to)** - recipes (custom source, custom widget, custom model, integrate the Virtual Hand, install VHI, the contrib feature set, ...).
+- **[Concepts](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/concepts)** - architecture, streams, pipeline, threading, recording, the `Px`/`Fr` grid, the `EdgeTrigger` pattern.
+- **[API reference](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/api)** - auto-generated from docstrings.
+- **[API cheatsheet](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/reference/api-cheatsheet.md)** - every public symbol on one page.
 - **[Playground](https://nsquaredlab.github.io/MyoGestic/playground/)** - the in-browser demo (no install).
 
-The docs are deployed to GitHub Pages via [`.github/workflows/docs.yml`](.github/workflows/docs.yml) on every push to `main`.
+The docs are deployed to GitHub Pages via [`.github/workflows/docs.yml`](https://github.com/NsquaredLab/MyoGestic/blob/main/.github/workflows/docs.yml) on every push to `main`.
 
 ## Development
 
