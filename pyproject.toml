@@ -1,6 +1,6 @@
 [project]
 name = "myogestic"
-version = "0.2.0"
+version = "2.0.0"
 description = "Real-time biosignal experiment GUI builder"
 readme = "README.md"
 license = { file = "LICENSE" }
