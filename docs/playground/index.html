@@ -93,12 +93,12 @@
     "imgui_bundle-1.92.705-cp313-cp313-pyemscripten_2025_0_wasm32.whl";
 
   // Locally built MyoGestic wheel (pure Python, no native ext).
-  // CI builds it fresh each deploy from pyproject.toml's `version`,
-  // so this filename has to track the version too. Bump in lockstep
-  // with pyproject.toml. The cache-bust query bypasses both browser
-  // HTTP cache and micropip's "already installed" skip.
+  // CI builds it fresh each deploy and renames the output to
+  // myogestic-latest-py3-none-any.whl so this filename never has to
+  // track the pyproject.toml version. The cache-bust query bypasses
+  // both browser HTTP cache and micropip's "already installed" skip.
   const MYOGESTIC_WHL =
-    "./wheels/myogestic-0.2.0-py3-none-any.whl?ts=" + Date.now();
+    "./wheels/myogestic-latest-py3-none-any.whl?ts=" + Date.now();
 
   // Pure-Python deps MyoGestic needs at runtime, plus scikit-learn for
   // the LDA classifier the playground app uses. micropip pulls these
