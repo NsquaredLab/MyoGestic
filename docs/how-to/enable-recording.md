@@ -1,77 +1,116 @@
 # Enable on-disk recording
 
-You want to capture incoming biosignal data to a `.session.zip` file. Two ways: through the GUI (one widget + two callbacks) or headless (direct API calls). Both produce the same artifact.
+Capture every registered `Stream`'s incoming biosignal data to a Zarr-backed `.session.zip` archive. Two flows (GUI button or headless API), one artifact, full programmatic control. This page covers configuration, the full lifecycle, the Zarr layout, the `Session` API, and read-back.
 
-## The artifact
-
-When you call `app.start_recording("sessions")` and later `app.stop_recording()`, the framework writes a session folder and then packs it into a portable archive:
-
-```
-sessions/
-└── 2026-05-17_14-23-05/
-    ├── emg.zarr/                    # shape (n_samples, n_channels), dtype matches your stream
-    ├── emg_timestamps.zarr/         # shape (n_samples,) float64 LSL clock
-    ├── vhi_control.zarr/            # one pair of arrays per registered Stream
-    ├── vhi_control_timestamps.zarr/
-    ├── meta.json                    # streams_info, app_name, class_names
-    └── labels.json                  # the LabelEvent track
-```
-
-After `stop_recording()` a daemon thread packs the folder into `2026-05-17_14-23-05.session.zip` (the folder is kept until the pack succeeds, then deleted). The zip is self-contained - you can read it back with `myogestic.session.open_session_store` regardless of whether the source folder still exists.
-
-## GUI flow (recommended)
-
-Drop the `recording_controls` widget into `@app.ui`. The Record / Stop buttons start and stop the session:
+## Quick-start: the four lines that enable recording
 
 ```python
 from myogestic import App, Stream
 from myogestic.sources import LSLSource
-from myogestic.widgets import recording_controls, signal_viewer
+from myogestic.widgets import recording_controls
 
-CLASSES = ["Rest", "Fist", "Open"]
-
-app = App("My recording")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
-
+app = App("My recording")                                              # 1. construct App
+app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))  # 2. register stream(s)
 
 @app.ui
 def ui(ctx):
-    signal_viewer(ctx, "emg")
-    recording_controls(
-        ctx, CLASSES,
-        on_record=app.start_recording,  # called when Record is clicked
-        on_stop=app.stop_recording,     # called when Stop is clicked
-    )
-
+    recording_controls(ctx, ["Rest", "Fist"],
+                       on_record=app.start_recording,                    # 3. wire Record button
+                       on_stop=app.stop_recording)                       # 4. wire Stop button
 
 app.run()
 ```
 
-That's the minimum. The class buttons next to Record (one per `CLASSES` entry) write `LabelEvent`s onto the active session's label track on click. The framework appends every Stream's data to its Zarr arrays while `ctx.state == "recording"`.
+Click **Record** → data flows into `sessions/<timestamp>/`. Click **Stop** → that folder packs into `sessions/<timestamp>.session.zip`. No further setup required.
 
-To override the base path or per-recording callbacks:
+## Lifecycle in detail
 
-```python
-def _start():
-    app.start_recording(base_path="experiments/run3/sessions")
-
-def _stop():
-    app.stop_recording()
-    print(f"Wrote {app.ctx.session.path}")
-
-recording_controls(
-    ctx, CLASSES,
-    on_record=_start,
-    on_stop=_stop,
-    on_gesture=lambda i: my_synthetic_generator.set_class(i),
-)
 ```
+       ┌──────────────────────────────────────────────────────┐
+       │                                                      │
+       │   App.run()                                          │
+       │     ├─ stream.start()    ── acquisition threads spin │
+       │     └─ enter GUI loop                                │
+       │                                                      │
+       │   ┌─ user clicks Record ────────────────────────┐   │
+       │   │ app.start_recording(base_path="sessions")   │   │
+       │   │   ├─ ctx.state = "recording"                │   │
+       │   │   ├─ ctx.session = Session(base_path)       │   │
+       │   │   ├─ Session.init_stream(name, info)        │   │
+       │   │   │    creates <stream>.zarr and            │   │
+       │   │   │    <stream>_timestamps.zarr             │   │
+       │   │   └─ acquisition threads now append to Zarr │   │
+       │   │                                              │   │
+       │   │ user clicks gesture buttons                  │   │
+       │   │   recording_controls adds                    │   │
+       │   │   ctx.session.add_label(class_idx,           │   │
+       │   │                          t=local_clock())    │   │
+       │   │                                              │   │
+       │   │ user clicks Stop                             │   │
+       │   │ app.stop_recording()                         │   │
+       │   │   ├─ Session.save_meta(class_names=...)      │   │
+       │   │   ├─ writes meta.json + labels.json          │   │
+       │   │   ├─ Session.pack_to_zip()  (daemon thread)  │   │
+       │   │   │    -> <timestamp>.session.zip            │   │
+       │   │   │    folder removed once pack succeeds     │   │
+       │   │   └─ ctx.state = "idle"                      │   │
+       │   └────────────────────────────────────────────────┘ │
+       │                                                      │
+       └──────────────────────────────────────────────────────┘
+```
+
+## The artifact
+
+```
+sessions/
+└── 2026-05-17_14-23-05.session.zip       # final packaged artifact
+                                          # (after Stop completes)
+```
+
+Inside the zip:
+
+```
+2026-05-17_14-23-05/
+├── emg.zarr/                       # shape (n_samples, n_channels), dtype = stream dtype
+│   └── chunks: (fs, n_channels)    # 1 second per chunk
+├── emg_timestamps.zarr/            # shape (n_samples,) float64 LSL clock seconds
+│   └── chunks: (fs,)
+├── vhi_control.zarr/               # one pair of arrays per registered Stream
+├── vhi_control_timestamps.zarr/
+├── meta.json                       # app_name, created, streams (n_channels, fs, dtype), class_names
+└── labels.json                     # list of {timestamp, class_index}
+```
+
+While recording is in progress and before `stop_recording()` completes, the same content lives as an unpacked folder `sessions/2026-05-17_14-23-05/`. The folder is deleted only after the zip is verified.
+
+## Zarr configuration (what defaults you get)
+
+Recording uses [Zarr v3](https://zarr.readthedocs.io/) with these defaults, applied per registered Stream:
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| Sample array shape | `(n_samples, n_channels)` | sample-major, append-only |
+| Sample array chunk | `(int(fs), n_channels)` | one second of data per chunk |
+| Sample array dtype | the Stream's `StreamInfo.dtype` (typically `float32`) | matches what the source produced |
+| Timestamp array shape | `(n_samples,)` | parallel to sample array |
+| Timestamp array chunk | `(int(fs),)` | one second per chunk |
+| Timestamp array dtype | `float64` | LSL clock seconds |
+| Outer zip compression | `ZIP_STORED` (none) | Zarr chunks already compress internally |
+
+You don't configure these per recording; they're computed automatically from each `Stream`'s `StreamInfo`. Override the storage **location** via `base_path`; override the **codec** by installing the `[zarrs]` extra (Rust-accelerated):
+
+```bash
+uv sync --extra zarrs    # transparent speedup; no code change needed
+```
+
+With `zarrs` installed, MyoGestic registers `zarrs.ZarrsCodecPipeline` at import time; large sessions write and read meaningfully faster. Without it, plain Python Zarr is used.
 
 ## Headless flow (no GUI)
 
-For unattended captures, drive the same API from a plain script. Set `mode="headless"` so `app.run()` doesn't try to open a window:
+For unattended capture, drive the same API from a plain script. Use `mode="headless"` so `app.run()` doesn't try to open a window:
 
 ```python
+import threading
 import time
 from myogestic import App, Stream
 from myogestic.sources import LSLSource
@@ -79,59 +118,123 @@ from myogestic.sources import LSLSource
 app = App("Headless capture")
 app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
 
-# Schedule a fixed-duration recording via a before_run hook so the
-# Stream's acquisition thread is already running by the time we start.
-import threading
 
 def _capture(app):
+    # Run on a background thread so app.run()'s main loop can spin
+    # the acquisition threads while we sleep here.
     def _run():
         time.sleep(2)                              # let buffers warm up
         app.start_recording("sessions")
         app.ctx.session.add_label(0)               # initial class index
-        time.sleep(30)                             # record 30 s
+        for class_idx in (1, 0, 1, 0):             # cycle Fist <-> Rest
+            time.sleep(5)
+            app.ctx.session.add_label(class_idx)
+        time.sleep(5)
         app.stop_recording()
-        app.ctx.app_shall_exit = True              # break out of headless loop
+        # Wait for the pack thread to finish before exiting.
+        time.sleep(2)
+        import os; os._exit(0)
     threading.Thread(target=_run, daemon=True).start()
+
 
 app.before_run_hooks.append(_capture)
 app.run(mode="headless")
 ```
 
-Same artifact lands in `sessions/<timestamp>.session.zip`.
+The artifact lands at `sessions/<timestamp>.session.zip` just as in the GUI flow.
 
-## Adding labels mid-session
+## Custom GUI integration
 
-`recording_controls` adds labels for you when the user clicks a class button. To label from code (custom UI, headless, programmatic experiment driver):
+For non-default UX (custom Record button placement, conditional triggers, multi-step protocols), call the API directly instead of using `recording_controls`:
 
 ```python
+from imgui_bundle import imgui
 from mne_lsl.lsl import local_clock
 
-app.ctx.session.add_label(class_index=1, timestamp=local_clock())
+@app.ui
+def ui(ctx):
+    if ctx.state == "idle":
+        if imgui.button("Start trial"):
+            app.start_recording(base_path="experiments/trial5")
+            # Optional: stamp an initial label so first samples are
+            # labeled before any user input.
+            app.ctx.session.add_label(class_index=0, timestamp=local_clock())
+    elif ctx.state == "recording":
+        imgui.text(f"Recording: {app.ctx.session.path}")
+        if imgui.button("Stop trial"):
+            app.stop_recording()
 ```
 
-`timestamp` defaults to `local_clock()` if omitted. Negative `class_index` is the unlabeled sentinel.
+## The `Session` API surface
 
-## Loading sessions back
+When `ctx.state == "recording"`, `app.ctx.session` is a live [`Session`](../api/session.md) instance you can poke at directly:
+
+| Method                                                | Purpose                                                                  |
+|-------------------------------------------------------|--------------------------------------------------------------------------|
+| `Session(base_path="sessions")`                       | Constructor (called by `start_recording`; you rarely need it directly).  |
+| `session.path`                                        | `Path` to the session folder being written.                              |
+| `session.stores[name]`                                | The live `zarr.Array` for stream `name` (sample data, append-only).      |
+| `session.ts_stores[name]`                             | Parallel timestamp `zarr.Array` for stream `name`.                       |
+| `session.label_track`                                 | `list[LabelEvent]` of all labels added so far.                           |
+| `session.add_label(class_index, timestamp=None)`      | Append one label. `timestamp` defaults to `local_clock()`.               |
+| `session.init_stream(name, info)`                    | Pre-allocate Zarr arrays for one stream (auto-called by `start_recording`). |
+| `session.append(name, data, timestamps)`              | Append a chunk (auto-called by the acquisition thread).                  |
+| `session.save_meta(app_name, class_names=None)`       | Write `meta.json` and `labels.json` (auto-called by `stop_recording`).   |
+| `session.pack_to_zip()`                               | Pack folder into `.session.zip` (auto-called on a daemon thread after stop). |
+
+You typically only call `add_label` directly; everything else is wired by `start_recording` / `stop_recording`. The class is documented at [`myogestic.session.Session`](../api/session.md).
+
+## Reading sessions back
 
 ```python
 from myogestic.session import open_session_store
 
+# Works for both packed zips AND unpacked folders.
 sess = open_session_store("sessions/2026-05-17_14-23-05.session.zip")
-emg = sess.stores["emg"]                  # zarr.Array, shape (n_samples, n_channels)
-ts  = sess.ts_stores["emg"]               # zarr.Array, shape (n_samples,)
-labels = sess.label_track                 # list[LabelEvent]
+
+emg     = sess.stores["emg"]            # zarr.Array, shape (n_samples, n_channels)
+emg_ts  = sess.ts_stores["emg"]         # zarr.Array, shape (n_samples,) float64
+labels  = sess.label_track              # list[LabelEvent]
+info    = sess.stream_info("emg")       # StreamInfo(fs, n_channels, dtype)
 ```
 
-For windowed training iteration, prefer the helpers in `myogestic.session` (`iter_labeled_windows`, `iter_aligned_windows`) - they handle the window/hop math and skip windows that straddle a label boundary. See [Record and replay](record-and-replay.md) and the [Recording concept page](../concepts/recording.md).
+For windowed training iteration, use the helpers in `myogestic.session`:
+
+```python
+from myogestic.session import iter_labeled_windows, iter_aligned_windows
+
+# Classification: one (window, ts, class_index) per hop step.
+for window, ts, cls in iter_labeled_windows(
+    [sess.path], stream_name="emg",
+    win_seconds=0.2, hop_seconds=0.1,
+    classes={0, 1},
+):
+    ...
+
+# Regression: align a primary stream with one or more aligned streams.
+for window, aligned, ts in iter_aligned_windows(
+    [sess.path], primary_stream="emg",
+    aligned_streams=["vhi_control"],
+    win_seconds=0.2, hop_seconds=0.05,
+):
+    target = aligned["vhi_control"]
+    ...
+```
+
+These skip windows that straddle a label boundary and handle the window/hop math for you. See [Record and replay](record-and-replay.md) and the [Recording concept page](../concepts/recording.md).
 
 ## Common pitfalls
 
-- **Calling `start_recording` before streams connect.** A Stream whose `info is None` is silently skipped (no Zarr schema yet). Either wait for `app.ctx.streams["emg"].info is not None` or do recording from a `before_run` hook plus a short sleep, as in the headless example.
+- **Calling `start_recording` before streams connect.** A `Stream` whose `info is None` is silently skipped (no Zarr schema yet). Either wait for `app.ctx.streams["emg"].info is not None` or trigger recording from a `before_run_hook` plus a short sleep, as in the headless example.
 - **Recording with the synthetic generator paused.** The generator only produces data while it's running. Click Launch in the `process_launcher` panel before Record, or in headless flow start the generator subprocess before `app.run()`.
-- **Forgetting `app.stop_recording()`.** The `.session.zip` is only packed at stop. Killing the process mid-recording leaves the raw `sessions/<timestamp>/` folder; you can pack it later with `myogestic._session_core.pack_to_zip(folder_path)` or load the folder directly with `open_session_store(folder_path)`.
+- **Killing the process mid-recording.** The `.session.zip` is packed only at `stop_recording()`. Crashes leave the raw `sessions/<timestamp>/` folder; you can pack it later with `Session(base_path=...).pack_to_zip()` after re-attaching to it, or just load the folder directly with `open_session_store("sessions/<timestamp>/")` - both work.
+- **Forgetting `class_names` in `save_meta`**. `recording_controls` passes them through automatically. If you call `add_label` directly from custom code, also call `app.ctx.session.save_meta(app_name="...", class_names=[...])` before `stop_recording` or your labels will only be integers in `labels.json` with no name lookup.
 
 ## See also
 
 - [Recording concept page](../concepts/recording.md) - the runtime model + label-track design.
-- [Record and replay](record-and-replay.md) - feeding a recorded session back into a `ReplaySource` for offline debugging.
-- [`myogestic.App.start_recording` / `stop_recording`](../api/core.md) - full API reference.
+- [Record and replay](how-to/record-and-replay.md) - feeding a recorded session back into a `ReplaySource` for offline debugging.
+- [`myogestic.App.start_recording` / `stop_recording`](../api/core.md) - full API reference for the lifecycle methods.
+- [`myogestic.session.Session`](../api/session.md) - full `Session` class reference.
+- [`myogestic.session.open_session_store`](../api/session.md) - load packed or unpacked sessions.
+- [`myogestic.session.iter_labeled_windows`, `iter_aligned_windows`](../api/session.md) - training-window iterators.
