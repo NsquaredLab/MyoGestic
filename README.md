@@ -18,7 +18,7 @@ composable API surfaces and live extensibility.
 **Provides**: live LSL ingest, on-disk recording (Zarr → `.session.zip`),
 ML pipeline lifecycle (train/predict on their own threads), Dear ImGui
 widgets, output filters, gRPC + LSL dual-plane integration with the
-[Virtual Hand Interface](https://github.com/NsquaredLab/Virtual-Hand-Interface).
+[Virtual Hand Interface](https://github.com/NsquaredLab/MyoGestic-VHI).
 
 **Does not provide**: DSP, ML models, feature extraction. You bring scipy,
 MyoVerse, CatBoost, PyTorch - whatever fits.
