@@ -56,10 +56,21 @@ That's the whole loop. Add a `Pipeline`, decorate `extract` / `train` / `predict
 
 Sources push samples into a `Stream` ring buffer. The pipeline's `@extract`, `@train`, `@predict` decorators read from that buffer and emit predictions to outputs - LSL, UDP, Serial, or the [Virtual Hand Interface](how-to/integrate-vhi.md) over LSL+gRPC. The render thread runs `@app.ui` at 60 fps independently of the predict thread; see [Concepts → Threading](concepts/threading.md).
 
-## Try it in your browser
+<div class="playground-hero" markdown>
 
-[**Open the Playground →**](playground/){ .md-button .md-button--primary }
-A live MyoGestic app running entirely in your browser via Pyodide. Synthetic EMG, in-memory recording, sklearn LDA training, live prediction. No install.
+<div class="playground-hero__copy" markdown>
+
+## :material-flask-outline: Try it in your browser
+
+A live MyoGestic app running **entirely in your browser** via Pyodide. Pick a gesture, record a few seconds, train an LDA, watch the prediction flip on every click. No install, no Python on your machine, just a tab.
+
+Pyodide + imgui-bundle WASM + scikit-learn, ~30 s first-load, cached after.
+
+[Open the Playground :material-arrow-right:](playground/){ .md-button .md-button--primary .playground-hero__cta }
+
+</div>
+
+</div>
 
 ## Where to go next
 
@@ -71,7 +82,6 @@ A live MyoGestic app running entirely in your browser via Pyodide. Synthetic EMG
 - [:material-graph-outline: **Concepts**](concepts/index.md) - streams, pipeline, threading, recording, design principles
 - [:material-help-circle-outline: **Troubleshooting**](troubleshooting.md) - symptom-first reference for the things that go wrong
 - [:material-book-open-variant: **Reference**](reference/index.md) - auto-generated API + cheatsheet + glossary
-- [:material-flask-outline: **Playground**](playground/) - the browser demo (no install)
 
 </div>
 
