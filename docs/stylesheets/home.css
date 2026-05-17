@@ -32,16 +32,29 @@
   gap: 1.25rem;
   align-items: center;
   margin: 1.5rem auto 2.5rem;
+  /* Defensive: an inner image at its natural width would otherwise
+     push the grid past the viewport on phones. */
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .md-typeset img.home-screenshot {
   border-radius: 8px;
   box-shadow: 0 10px 32px rgb(0 0 0 / 14%);
+  /* width + max-width together: width:100% so the image fills its
+     column, max-width:100% so it never exceeds the column's actual
+     pixel width. height:auto preserves aspect ratio. */
   width: 100%;
+  max-width: 100%;
   height: auto;
+  display: block;
 }
 
-@media (max-width: 900px) {
+/* Collapse to a single column well before phone widths. 1100 covers
+   tablet portrait (768) + landscape (1024) + most laptop split-screens;
+   anything narrower than that doesn't have room for a code block + a
+   screenshot side by side without one of them wrapping awkwardly. */
+@media (max-width: 1100px) {
   .md-typeset .home-proof {
     grid-template-columns: 1fr;
   }

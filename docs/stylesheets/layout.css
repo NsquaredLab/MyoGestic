@@ -6,6 +6,40 @@
   max-width: 1440px;
 }
 
+/* Horizontal-overflow guard.
+
+   Any single element wider than the content column (a long unwrapped
+   code line, an SVG with intrinsic width, a hero block whose padding
+   pushes it past its parent) causes the whole page to scroll
+   horizontally, dragging every block downstream off-screen. Belt-
+   and-braces - apply at all viewport sizes, not just narrow ones,
+   because tablets (700 - 1100 px) hit the same problem.
+
+   !important on the caps because Material's own image / pre styles
+   and pymdown-extensions's code-block wrappers sometimes win the
+   specificity battle; without !important the page-level overflow
+   came back on tablet viewports despite these rules being declared.
+
+   - Body clipped so no child can force horizontal scroll on the page.
+   - Every typeset image / svg / video capped at 100 % of its column.
+   - Pre blocks (and the .highlight wrapper they sit inside) scroll
+     inside themselves rather than expanding the parent. */
+.md-typeset img,
+.md-typeset svg,
+.md-typeset video {
+  max-width: 100% !important;
+  height: auto;
+}
+.md-typeset pre,
+.md-typeset .highlight,
+.md-typeset .codehilite {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+html, body {
+  overflow-x: hidden;
+}
+
 /* Stronger heading hierarchy. Material's default H1/H2/H3 are visually
    flat against body text — same color and not much weight differentiation.
    Boost each level so the page reads as a clear hierarchy:
