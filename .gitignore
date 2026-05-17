@@ -40,6 +40,7 @@ site/
 # virtual_hand() defaults to this path; override with $VHI_PATH.
 tools/MyoGestic-VHI
 
-# Browser playground - locally built MyoGestic wheel. The deploy
-# workflow builds it fresh; committing it would just bitrot.
+# Browser playground - locally built MyoGestic wheel + manifest.
+# CI generates both fresh each deploy; committing would just bitrot.
 docs/playground/wheels/*.whl
+docs/playground/wheels/manifest.json
