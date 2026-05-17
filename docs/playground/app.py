@@ -104,7 +104,19 @@ class BrowserSource:
 # App + Stream + Pipeline
 # ----------------------------------------------------------------------
 
-app = App("MyoGestic Playground", ui_scale=0.9)
+# Viewport-width detection, done once at module load. Picks which Grid
+# shape to build below. Re-evaluating per frame is unnecessary; users
+# who rotate can reload. < 720 catches every phone in portrait and
+# leaves tablets (iPad mini portrait = 768 px) on the desktop layout.
+import js
+_VW = int(js.window.innerWidth)
+_VH = int(js.window.innerHeight)
+_IS_PHONE = _VW < 720
+
+app = App(
+    "MyoGestic Playground",
+    ui_scale=1.0 if _IS_PHONE else 0.9,
+)
 app.streams(Stream("emg", source=BrowserSource(), window_seconds=1.0, buffer_seconds=10))
 
 pipeline = Pipeline(app)
@@ -303,15 +315,108 @@ from myogestic._browser import register as _browser_register
 _browser_register(_recording_sampler)
 
 
-grid = Grid(
-    5, 2,
-    row_height=[Px(120), Fr(2), Fr(1), Fr(1), Px(110)],
-    col_width=[Px(360), Fr(1)],
-)
+if _IS_PHONE:
+    # Single-column stack so the desktop 360 px left column never has to
+    # coexist with the signal viewer on a 375 px viewport. Row heights
+    # are tuned for portrait phones: the signal_viewer row is large
+    # because its controls (Pause / dropdown / Auto / Rescale / two
+    # sliders / 8 channel toggles) wrap aggressively on narrow widths
+    # and consume ~180 px on their own. Anything less than ~480 px
+    # leaves the plot itself a clipped sliver. The page scrolls
+    # vertically, so making the stack tall is the right call.
+    grid = Grid(
+        8, 1,
+        row_height=[Px(90), Px(200), Px(500), Px(160),
+                    Px(140), Px(220), Px(180), Px(140)],
+        col_width=[Fr(1)],
+    )
+else:
+    grid = Grid(
+        5, 2,
+        row_height=[Px(120), Fr(2), Fr(1), Fr(1), Px(110)],
+        col_width=[Px(360), Fr(1)],
+    )
+
+
+# Apply a touch-friendly style bump once on the first frame. ImGui's
+# default scrollbar is ~14 px wide, which is impossible to grab with a
+# finger; 36 px makes it a clear thumb target. Larger frame padding +
+# item spacing keep buttons clear of each other under fat fingers.
+_styled = False
+def _apply_touch_style():
+    global _styled
+    if _styled or not _IS_PHONE:
+        return
+    s = imgui.get_style()
+    s.scrollbar_size = 36
+    s.frame_padding = imgui.ImVec2(10, 12)
+    s.item_spacing = imgui.ImVec2(10, 10)
+    _styled = True
+
+
+def _mobile_panel(label: str, height: float, render):
+    """Render `render()` inside a fixed-height bordered child window.
+
+    Using natural ImGui cursor advancement (one child after another)
+    instead of the absolute-positioned Grid means ImGui correctly
+    accumulates content size, so the outer scrollable child window
+    actually has overflow to scroll through. The Grid uses
+    set_cursor_pos which doesn't extend the parent's content rect
+    cleanly inside a scroll container.
+    """
+    imgui.begin_child(
+        f"##mob_{label}",
+        imgui.ImVec2(0, height),
+        child_flags=imgui.ChildFlags_.borders,
+    )
+    try:
+        render()
+    finally:
+        imgui.end_child()
 
 
 @app.ui
 def ui(ctx):
+    _apply_touch_style()
+    if _IS_PHONE:
+        # Outer scrollable child fills the viewport. Inner panels are
+        # natural-flow children with fixed heights; ImGui's cursor
+        # accumulates their sizes into the parent's content rect, so
+        # when the total exceeds the viewport the fat scrollbar
+        # (36 px from _apply_touch_style) actually scrolls.
+        imgui.begin_child(
+            "##mobile_scroll",
+            imgui.ImVec2(0, 0),
+            window_flags=imgui.WindowFlags_.always_vertical_scrollbar,
+        )
+        try:
+            _mobile_panel("logo", 90, lambda: app_logo())
+            _mobile_panel("rec", 200, lambda: recording_controls(
+                ctx, CLASSES,
+                on_record=_on_record,
+                on_stop=_on_stop,
+                on_gesture=_on_gesture,
+            ))
+            _mobile_panel("signal", 500, lambda: signal_viewer(ctx, "emg"))
+            _mobile_panel("pipe", 160, lambda: pipeline_panel(pipeline))
+            _mobile_panel("pred", 140, lambda: prediction_label(
+                pipeline, CLASSES, show_probability=True
+            ))
+            _mobile_panel("sessions", 220, _sessions_panel)
+            _mobile_panel("filter", 180, lambda: proba_filter.ui())
+
+            def _blurb():
+                panel_header("Browser playground")
+                imgui.text_wrapped(
+                    "Tap Record, cycle through gestures, then Stop. "
+                    "Train uses every ticked session; Predict drives "
+                    "the prediction panel from live features."
+                )
+            _mobile_panel("blurb", 140, _blurb)
+        finally:
+            imgui.end_child()
+        return
+
     with grid[0, 0:2]:
         app_logo()
 
@@ -349,4 +454,15 @@ def ui(ctx):
         )
 
 
-app.run(window_size=(1280, 800))
+# On phones the canvas is viewport-sized (no fighting HelloImGui).
+# ImGui's own scrollbar - bumped to 36 px in _apply_touch_style above
+# so it is finger-grabbable - handles scrolling through the 1700 px
+# of stacked panel content.
+#
+# On desktop we keep the original (1280, 800) preset rather than the
+# raw viewport: at 4K (2560 x 1440) the Fr-based Grid stretches every
+# panel to fill the screen and the layout looks too spread out.
+if _IS_PHONE:
+    app.run(window_size=(_VW, _VH))
+else:
+    app.run(window_size=(1280, 800))

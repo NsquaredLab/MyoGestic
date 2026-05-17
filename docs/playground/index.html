@@ -36,7 +36,17 @@
 
 <style>
   html, body { width: 100%; height: 100%; margin: 0; background: #0d1117; font-family: sans-serif; }
-  #canvas { display: block; width: 100%; height: 100%; }
+  /* The canvas always fills the viewport. On touch devices ImGui's
+     own scrollbar (made finger-friendly via scrollbar_size in app.py)
+     handles vertical scrolling within the canvas. We don't try to make
+     the page itself scrollable because HelloImGui's emscripten runner
+     fights every CSS attempt at making the canvas larger than the
+     viewport. */
+  #canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
   #loader {
     position: fixed; inset: 0; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 16px;
@@ -146,6 +156,12 @@
       pyodide.FS.writeFile(dest, text);
     }
   }
+
+  /* No special touch handling: keep the canvas viewport-sized
+     (matching every other imgui-bundle Pyodide app), and let ImGui
+     handle scrolling via its own scrollbar. The Python side bumps
+     scrollbar_size on touch devices so the bar is wide enough to
+     grab with a fingertip. */
 
   async function main() {
     const canvas = document.getElementById("canvas");
