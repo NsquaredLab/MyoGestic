@@ -1,0 +1,169 @@
+site_name: MyoGestic v2
+site_description: Real-time biosignal experiment GUI builder.
+site_url: https://example.invalid/myogestic-v2/
+repo_url: https://github.com/raulsimpetru/MyoGestic-v2
+repo_name: MyoGestic-v2
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 Raul C. S&icirc;mpetru
+
+extra_css:
+  - stylesheets/code-light.css
+  - stylesheets/code-dark.css
+  - stylesheets/layout.css
+  - stylesheets/home.css
+  - stylesheets/widget-gallery.css
+
+theme:
+  name: material
+  custom_dir: overrides
+  logo: images/myogestic_logo.png
+  favicon: images/myogestic_logo.png
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - section-index
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          inventories:
+            - https://docs.python.org/3/objects.inv
+            - https://numpy.org/doc/stable/objects.inv
+            - https://docs.scipy.org/doc/scipy/objects.inv
+            - https://pytorch.org/docs/stable/objects.inv
+            - https://scikit-learn.org/stable/objects.inv
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: false
+            show_symbol_type_toc: false
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            signature_crossrefs: true
+            merge_init_into_class: true
+            heading_level: 2
+            allow_inspection: true
+            unwrap_annotated: true
+            filters:
+              - "!^_"
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+      use_pygments: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink
+  - pymdownx.smartsymbols
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Anatomy of an app: anatomy.md
+  - Guides:
+      - Tutorials:
+          - tutorials/index.md
+          - EMG classification: tutorials/emg-classification.md
+          - EMG regression with VHI: tutorials/emg-regression-with-vhi.md
+          - Examples directory: tutorials/examples-index.md
+      - How-to:
+          - how-to/index.md
+          - Add a custom source: how-to/add-a-source.md
+          - Add a custom output: how-to/add-an-output.md
+          - Add a custom widget: how-to/add-a-widget.md
+          - Add a custom model: how-to/add-a-model.md
+          - Record and replay: how-to/record-and-replay.md
+          - Record good training data: how-to/record-good-training-data.md
+          - Feature extraction cookbook: how-to/feature-extraction-cookbook.md
+          - Use the contrib feature set: how-to/use-contrib-features.md
+          - Post-process predictions: how-to/post-process-output.md
+          - Integrate the Virtual Hand: how-to/integrate-vhi.md
+          - Install the Virtual Hand: how-to/install-vhi.md
+          - Run headless (no GUI): how-to/headless-mode.md
+  - Concepts:
+      - concepts/index.md
+      - Architecture: concepts/architecture.md
+      - Streams: concepts/streams.md
+      - Pipeline: concepts/pipeline.md
+      - Recording: concepts/recording.md
+      - Widgets: concepts/widgets.md
+      - Grid layout: concepts/grid-layout.md
+      - Edge trigger: concepts/edge-trigger.md
+      - Threading: concepts/threading.md
+      - Design principles: concepts/design-principles.md
+  - Widget gallery: widget-gallery.md
+  - Troubleshooting: troubleshooting.md
+  - Reference:
+      - reference/index.md
+      - API reference:
+          - api/index.md
+          - Core: api/core.md
+          - Sources: api/sources.md
+          - Outputs: api/outputs.md
+          - Bridges: api/bridges.md
+          - ML pipeline: api/ml.md
+          - Widgets: api/widgets.md
+          - Models: api/models.md
+          - Session: api/session.md
+          - Filters: api/filters.md
+      - API cheatsheet: reference/api-cheatsheet.md
+      - Glossary: reference/glossary.md

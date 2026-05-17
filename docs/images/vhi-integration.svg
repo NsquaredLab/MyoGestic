@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 880 340" role="img" aria-labelledby="mg-vhi-title mg-vhi-desc"
+     xmlns="http://www.w3.org/2000/svg"
+     preserveAspectRatio="xMidYMid meet">
+  <title id="mg-vhi-title">MyoGestic ↔ VHI dual-plane integration</title>
+  <desc id="mg-vhi-desc">
+    Two lanes. MyoGestic (Python) on the left contains the Pipeline,
+    an LSL outlet, and the gRPC VhiControlClient. Virtual Hand Interface
+    on the right contains the Predicted hand and the Control hand. The
+    Pipeline pushes a 9-channel pose to the MyoGestic_Output LSL outlet,
+    which the Predicted hand subscribes to. The Pipeline also calls
+    SetMovement on the VhiControlClient, which the Control hand consumes.
+    Optionally a MyoGestic_ControlPose LSL outlet streams a continuous
+    pose to the Control hand when VHI is in STREAM mode. VHI publishes
+    state and current movement back to MyoGestic via get_state RPC and
+    VHI_Control / VHI_Predict LSL outlets.
+  </desc>
+  <defs>
+    <style>
+      .text-strong { fill: #475569; font-weight: 600; }
+      .text-body   { fill: #64748b; font-weight: 500; }
+      .text-faint  { fill: #94a3b8; font-weight: 400; }
+      @media (prefers-color-scheme: dark) {
+        .text-strong { fill: #e2e8f0; }
+        .text-body   { fill: #cbd5e1; }
+        .text-faint  { fill: #94a3b8; }
+      }
+      .lane      { fill: rgba(113,151,175,0.08); stroke: #7197AF; stroke-width: 1.5; }
+      .node      { fill: rgba(113,151,175,0.18); stroke: #7197AF; stroke-width: 1.5; }
+      .accent    { fill: rgba(113,151,175,0.30); stroke: #7197AF; stroke-width: 1.5; }
+      .edge        { stroke: #7197AF; stroke-width: 2.5; fill: none; }
+      .edge-thin   { stroke: #7197AF; stroke-width: 2; fill: none; opacity: 0.85; }
+      .edge-dash   { stroke: #7197AF; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; opacity: 0.75; }
+      text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    </style>
+    <marker id="mgv-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7197AF"/>
+    </marker>
+    <marker id="mgv-arrow-faint" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7197AF" opacity="0.75"/>
+    </marker>
+  </defs>
+
+  <!-- MyoGestic lane -->
+  <rect class="lane" x="10" y="30" width="300" height="280" rx="12"/>
+  <text class="text-faint" x="30" y="56" font-size="13" letter-spacing="0.02em">MyoGestic (Python)</text>
+  <rect class="accent" x="30" y="80" width="260" height="48" rx="8"/>
+  <text class="text-strong" x="160" y="110" font-size="15" text-anchor="middle">Pipeline · @predict</text>
+  <rect class="node" x="30" y="148" width="260" height="48" rx="8"/>
+  <text class="text-strong" x="160" y="170" font-size="14" text-anchor="middle">vhi.outlet()</text>
+  <text class="text-faint"  x="160" y="186" font-size="11" text-anchor="middle">9-ch LSL @ 32 Hz</text>
+  <rect class="node" x="30" y="216" width="260" height="48" rx="8"/>
+  <text class="text-strong" x="160" y="238" font-size="14" text-anchor="middle">VhiControlClient</text>
+  <text class="text-faint"  x="160" y="254" font-size="11" text-anchor="middle">gRPC · fire-and-forget</text>
+
+  <!-- VHI lane -->
+  <rect class="lane" x="570" y="30" width="300" height="280" rx="12"/>
+  <text class="text-faint" x="590" y="56" font-size="13" letter-spacing="0.02em">Virtual Hand Interface (Godot)</text>
+  <rect class="node" x="590" y="148" width="260" height="48" rx="8"/>
+  <text class="text-strong" x="720" y="170" font-size="14" text-anchor="middle">Predicted hand</text>
+  <text class="text-faint"  x="720" y="186" font-size="11" text-anchor="middle">renders the pose vector</text>
+  <rect class="node" x="590" y="216" width="260" height="48" rx="8"/>
+  <text class="text-strong" x="720" y="238" font-size="14" text-anchor="middle">Control hand</text>
+  <text class="text-faint"  x="720" y="254" font-size="11" text-anchor="middle">plays canonical movements</text>
+
+  <!-- Data plane: outlet → Predicted hand -->
+  <path class="edge" d="M290 172 L590 172" marker-end="url(#mgv-arrow)"/>
+  <text class="text-body"  x="440" y="160" font-size="13" text-anchor="middle">MyoGestic_Output</text>
+  <text class="text-faint" x="440" y="189" font-size="11" text-anchor="middle">continuous pose · LSL</text>
+
+  <!-- Control plane: gRPC client → Control hand -->
+  <path class="edge" d="M290 240 L590 240" marker-end="url(#mgv-arrow)"/>
+  <text class="text-body"  x="440" y="228" font-size="13" text-anchor="middle">SetMovement · SetSessionActive</text>
+  <text class="text-faint" x="440" y="257" font-size="11" text-anchor="middle">discrete · gRPC</text>
+
+  <!-- Optional STREAM mode: control_outlet -> Control hand (dashed) -->
+  <path class="edge-dash" d="M290 270 C 400 296, 480 296, 590 256" marker-end="url(#mgv-arrow-faint)"/>
+  <text class="text-faint" x="440" y="296" font-size="11" text-anchor="middle">opt. MyoGestic_ControlPose (STREAM mode)</text>
+
+  <!-- Return: VHI → MyoGestic state (dashed) -->
+  <path class="edge-dash" d="M590 124 L290 124" marker-end="url(#mgv-arrow-faint)"/>
+  <text class="text-body"  x="440" y="115" font-size="13" text-anchor="middle">GetState · VHI_Control · VHI_Predict</text>
+  <text class="text-faint" x="440" y="139" font-size="11" text-anchor="middle">state query + return LSL outlets</text>
+
+  <!-- Footer pointer text -->
+  <text class="text-faint" x="440" y="328" font-size="11" text-anchor="middle">
+    Both planes can run together - discrete RPCs gate animation, continuous LSL drives the rendered pose.
+  </text>
+</svg>

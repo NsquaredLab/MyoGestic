@@ -1,0 +1,193 @@
+# EMG classification (CatBoost)
+
+End-to-end walkthrough of [`examples/synthetic/emg_classification.py`](https://github.com/raulsimpetru/MyoGestic-v2/blob/main/examples/synthetic/emg_classification.py): synthetic 8-channel EMG → MyoVerse RMS+MAV features → CatBoost binary classifier → smoothed hand pose → VHI.
+
+228 lines, end to end, zero classes besides the framework's `App` and `Pipeline`.
+
+## Run it first
+
+One terminal, then click two **Launch** buttons in the GUI itself - the demo's [`process_launcher`][myogestic.widgets.process_launcher] panel spawns the synthetic generator and the Virtual Hand for you.
+
+```bash
+uv run python examples/synthetic/emg_classification.py
+```
+
+VHI install is optional - without it the launcher button is still visible, it just errors at click time. Install once with `python -m myogestic.tools.install_vhi` (see [Install the Virtual Hand](../how-to/install-vhi.md)).
+
+## What you should see
+
+![EMG classification demo running](../images/gui-overview.png){ loading=lazy }
+
+A 3-column window:
+
+- **Right two columns**: live EMG signal viewer.
+- **Left column, top to bottom**: process launchers (EMG generator, VHI), recording controls, pipeline panel, filter panel, session manager.
+
+Click **Launch** on **EMG Generator** → synthetic 8-channel signal flows. Click **Launch** on **VHI Hand** → 3D hand window opens (if VHI is installed).
+
+## The walkthrough
+
+The whole script is structured top-to-bottom: imports → outputs → constants → app setup → callbacks → layout → `app.run()`. Read it in that order.
+
+### 1. Outputs and side-channels
+
+```python
+from myogestic.tools.emg_generator import control_outlet
+
+ctrl_outlet = control_outlet()
+```
+
+`control_outlet()` is the one-liner over the boilerplate `StreamOutlet(StreamInfo(name="EMG_Control", stype="Control", n_channels=1, ...))` - see [`myogestic.tools.emg_generator.control_outlet`](../api/core.md). The synthetic generator listens on `EMG_Control` for which class pattern to emit. Click "Fist" in the button strip → `ctrl_outlet.push_sample([1.0])` → generator switches to pattern 1.
+
+```python
+vhi = virtual_hand()
+vhi_outlet = vhi.outlet()
+HAND_REST = np.zeros(9, dtype=np.float32)
+HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
+```
+
+VHI consumes a 9-vec pose; we hand-define the two target poses (rest and full fist). The model just chooses between them.
+
+### 2. The output filter
+
+```python
+output_filter = FilterControl(hz=32, default="one_euro")
+```
+
+[`FilterControl`][myogestic.widgets.FilterControl] is the post-processing widget - exposes a UI panel and is callable. We'll wire the call inside `predict()` and the panel inside `@app.ui`.
+
+See [Post-process predictions](../how-to/post-process-output.md) for tuning.
+
+### 3. Feature extractors (live and training)
+
+```python
+rms_transform = RMS(window_size=32)
+mav_transform = MAV(window_size=32)
+```
+
+Two MyoVerse windowed transforms. Both run on torch tensors.
+
+### 4. App, stream, pipeline
+
+```python
+WIN_SECONDS = 0.2
+HOP_SECONDS = 0.1  # 50% overlap
+
+app = App("EMG Classification")
+app.streams(
+    Stream("emg", source=LSLSource("TestEMG1"), window_seconds=WIN_SECONDS, buffer_seconds=60)
+)
+pipeline = Pipeline(app)
+```
+
+The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s of EMG, channels-first as `(n_channels, n_samples)`. The buffer is 60 s so [`signal_viewer`][myogestic.widgets.signal_viewer] shows a longer history than the prediction window.
+
+### 5. `extract` - same code for training and live predict
+
+```python
+@pipeline.extract
+def extract(windows):
+    emg = windows["emg"]  # (n_channels, n_samples)
+    tensor = torch.from_numpy(emg).float()
+    rms = rms_transform(tensor).numpy().flatten()
+    mav = mav_transform(tensor).numpy().flatten()
+    return np.concatenate([rms, mav])
+```
+
+Returns a flat feature vector. The same function is invoked from inside `train()` (over recorded windows) and on the predict thread (over live windows).
+
+### 6. `train` - slice sessions, featurize, fit
+
+```python
+@pipeline.train
+def train(data):
+    if data.is_empty:
+        raise ValueError("No sessions selected. ...")
+    if len(data.classes) < 2:
+        raise ValueError("Classification needs ≥2 active classes ...")
+
+    all_X, all_y = [], []
+    for window, _ts, class_idx in iter_labeled_windows(
+        data.paths, "emg", WIN_SECONDS, HOP_SECONDS, classes=data.classes
+    ):
+        all_X.append(extract({"emg": window}))
+        all_y.append(class_idx)
+
+    X = np.stack(all_X)
+    y = np.array(all_y)
+    clf = catboost_classifier(iterations=100)
+    clf.fit(X, y)
+    return clf
+```
+
+[`iter_labeled_windows`][myogestic.session.iter_labeled_windows] does all the session-loading, label-track walking, and overlapping-window slicing - see [Record and replay](../how-to/record-and-replay.md). We just call `extract()` on each window.
+
+The validation up front (`is_empty`, `len(data.classes) < 2`) gives the user actionable error messages - the framework's design principle "errors tell you what to write." If you forget to tick a session in [`session_manager`][myogestic.widgets.session_manager], you'll see "No sessions selected. Load some and tick the checkboxes." in the status panel.
+
+### 7. `predict` - classify, look up pose, smooth, push
+
+```python
+@pipeline.predict
+def predict(model, features):
+    proba = model.predict_proba(features.reshape(1, -1))[0]
+    class_idx = int(np.argmax(proba))
+    hand = HAND_FIST.copy() if class_idx == 1 else HAND_REST.copy()
+    hand = output_filter(hand).astype(np.float32)
+    vhi_outlet.push(hand)
+    return {"class": class_idx, "proba": proba, "hand": hand}
+```
+
+The pose lookup is a hardcoded `if/else` - small enough not to need a class table. Smoothing happens *after* pose lookup so the user sees smooth blends between rest and fist as the classifier flips. The dict return goes to `pipeline.predictions` for any widgets that want to display class probabilities.
+
+!!! tip "Why filter the pose, not the class index?"
+    OneEuro expects a continuous vector. Class indices are integers, smoothing them is meaningless. Smoothing the pose vector lets the hand fade between `HAND_REST` and `HAND_FIST` cleanly even if the classifier flips on the boundary.
+
+### 8. Layout
+
+```python
+grid = Grid(6, 3)
+
+
+@app.ui
+def demo_ui(ctx):
+    with grid[0:6, 1:3]:
+        signal_viewer(ctx, "emg")
+    with grid[0, 0]:
+        process_launcher(PROCESSES)
+    with grid[1, 0]:
+        process_launcher(VHI_PROCESS)
+    with grid[2, 0]:
+        recording_controls(ctx, CLASSES, on_record=..., on_stop=..., on_gesture=_on_gesture)
+    with grid[3, 0]:
+        pipeline_panel(pipeline)
+    with grid[4, 0]:
+        output_filter.ui()
+    with grid[5, 0]:
+        pipeline.training_data = session_manager("sessions", class_names=CLASSES)
+```
+
+Six rows on the left for controls, all of them widget function calls. The signal viewer fills the right two columns. `session_manager` returns a `TrainingData` instance - assigning it to `pipeline.training_data` is the only line that connects "what's ticked in the UI" to "what `train()` will see."
+
+### 9. The actual experiment loop
+
+In the GUI:
+
+1. Click `Start` on **EMG Generator** → live signal appears.
+2. Click `Start` on **VHI** → 3D hand window opens.
+3. Click the **Rest** button → generator emits the rest pattern.
+4. Click **Record** → start saving to `sessions/<timestamp>/`.
+5. Hold rest for ~3 s, click **Fist**, hold fist ~3 s, click **Rest**, hold rest ~3 s, click **Fist**… (cycle-style - see [Record and replay](../how-to/record-and-replay.md)).
+6. Click **Stop**.
+7. Repeat for a few cycles.
+8. Tick all sessions in **session_manager**.
+9. Click **Train** → console prints `[train] N windows from M sessions ... done - accuracy on train: ~99%`.
+10. Click **Predict** → VHI hand follows your button clicks live.
+
+Tune the **One Euro** sliders in the filter panel while predicting to feel the lag/responsiveness trade-off in real time.
+
+## Variations
+
+- **More classes**: bump `CLASSES`, `CTRL_VALUES`, `--classes`, and add new `HAND_*` poses. The `predict` `if/else` becomes a dict lookup.
+- **Different feature set**: swap RMS/MAV for whatever your domain needs. Keep `extract()`'s return shape consistent across training and live.
+- **Different model**: replace `catboost_classifier` with sklearn / XGBoost / PyTorch. See [Add a custom model](../how-to/add-a-model.md) for the patterns.
+- **Real hardware**: replace `LSLSource("TestEMG1")` with a real source - see [Add a custom source](../how-to/add-a-source.md).

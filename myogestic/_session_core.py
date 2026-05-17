@@ -1,0 +1,243 @@
+from __future__ import annotations
+
+import json
+import shutil
+import time
+import zipfile
+from dataclasses import dataclass
+from importlib.util import find_spec
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
+import zarr
+
+if TYPE_CHECKING:
+    from myogestic.stream import StreamInfo
+
+if find_spec("zarrs") is not None:
+    zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
+
+
+@dataclass
+class LabelEvent:
+    """One entry in a session's label track: "at LSL time T, the user picked class N".
+
+    Recorded whenever the user clicks a class button in
+    :func:`~myogestic.widgets.recording_controls`. The label track is
+    a chronological list of these events; the recording-window
+    iterators (:func:`~myogestic.session.iter_labeled_windows`,
+    :func:`~myogestic.session.iter_aligned_windows`) walk the track to
+    decide which sample range gets which class index.
+
+    Attributes:
+        timestamp: LSL clock time (seconds) when the label was emitted.
+            Use ``mne_lsl.lsl.local_clock()`` if you ever need to mint
+            one by hand.
+        class_index: Index into the session's ``class_names`` list.
+            ``-1`` is the unlabeled sentinel (the iterators skip it).
+    """
+
+    timestamp: float
+    class_index: int  # -1 = unlabeled
+
+
+@dataclass
+class Recording:
+    """A single labeled trial, extracted from a Session."""
+
+    class_index: int
+    class_name: str
+    data: np.ndarray  # (n_samples, n_channels)
+    timestamps: np.ndarray  # (n_samples,)
+
+
+class Session:
+    """One recording session on disk: per-stream Zarr arrays + a label track.
+
+    Created when the user clicks **Record**, finalised when they click
+    **Stop**. While active, every acquisition thread that has its
+    stream registered appends to the session's Zarr stores; UI label
+    clicks emit :class:`LabelEvent` entries onto the label track.
+    Closing the session writes ``meta.json`` and ``labels.json``
+    alongside the Zarr folders, and optionally packs the whole tree
+    into a portable ``.session.zip``.
+
+    Layout on disk (one folder per recording, named with the start
+    timestamp)::
+
+        sessions/2026-05-17_14-23-05/
+            emg.zarr/                  # shape (n_samples, n_channels)
+            emg_timestamps.zarr/       # shape (n_samples,) float64
+            vhi_control.zarr/          # any additional stream
+            vhi_control_timestamps.zarr/
+            meta.json                  # streams_info, app_name, class_names
+            labels.json                # the LabelEvent list
+
+    Read sessions back with :func:`~myogestic.session.open_session_store`,
+    which transparently handles both folders and ``.session.zip``
+    archives.
+
+    Args:
+        base_path: Parent directory; the session creates a
+            timestamp-named subdirectory inside. Default ``"sessions"``
+            (created if missing).
+    """
+
+    def __init__(self, base_path: str = "sessions"):
+        ts = time.strftime("%Y-%m-%d_%H-%M-%S")
+        self.path = Path(base_path) / ts
+        self.path.mkdir(parents=True, exist_ok=True)
+        self.stores: dict[str, zarr.Array] = {}
+        self.ts_stores: dict[str, zarr.Array] = {}
+        self.label_track: list[LabelEvent] = []
+        self.class_names: list[str] = []  # populated by save_meta / open_session_store
+        self._streams_info: dict[str, StreamInfo] = {}
+
+    def init_stream(self, name: str, info: StreamInfo) -> None:
+        """Called once per stream when recording starts."""
+        self._streams_info[name] = info
+        self.stores[name] = zarr.open_array(
+            str(self.path / f"{name}.zarr"),
+            mode="w",
+            shape=(0, info.n_channels),
+            chunks=(int(info.fs), info.n_channels),
+            dtype=info.dtype,
+        )
+        self.ts_stores[name] = zarr.open_array(
+            str(self.path / f"{name}_timestamps.zarr"),
+            mode="w",
+            shape=(0,),
+            chunks=(int(info.fs),),
+            dtype=np.float64,
+        )
+
+    def append(self, name: str, data: np.ndarray, timestamps: np.ndarray) -> None:
+        """Called from acquire loop when recording. data: (n_samples, n_channels)."""
+        self.stores[name].append(data)
+        self.ts_stores[name].append(timestamps)
+
+    def add_label(self, class_index: int, timestamp: float | None = None) -> None:
+        from mne_lsl.lsl import local_clock
+
+        t = timestamp if timestamp is not None else local_clock()
+        self.label_track.append(LabelEvent(timestamp=t, class_index=class_index))
+
+    def save_meta(self, app_name: str, class_names: list[str] | None = None) -> None:
+        """Write meta.json + labels.json to the session folder.
+
+        Args:
+            app_name: Identifier for the producing app.
+            class_names: Optional human-readable names for label class indices.
+                Persisting them makes old sessions self-describing: readers can
+                render labels without an external lookup.
+        """
+        meta: dict[str, object] = {
+            "app_name": app_name,
+            "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "streams": {
+                name: {
+                    "n_channels": info.n_channels,
+                    "fs": info.fs,
+                    "dtype": str(info.dtype),
+                }
+                for name, info in self._streams_info.items()
+            },
+        }
+        if class_names is not None:
+            meta["class_names"] = list(class_names)
+        (self.path / "meta.json").write_text(json.dumps(meta, indent=2))
+        labels = [
+            {"timestamp": e.timestamp, "class_index": e.class_index}
+            for e in self.label_track
+        ]
+        (self.path / "labels.json").write_text(json.dumps(labels, indent=2))
+
+    def pack_to_zip(self) -> Path:
+        """Pack the session folder into a single `<name>.session.zip` file.
+
+        Uses ZIP_STORED (no compression). Zarr chunks are already compressed
+        internally; an outer compression layer would add CPU for little gain.
+        """
+        # zarr v3 arrays do not expose explicit close, but DirectoryStore
+        # flushes on append. Dropping refs before zip verification is enough.
+        self.stores.clear()
+        self.ts_stores.clear()
+
+        zip_path = self.path.with_name(self.path.name + ".session.zip")
+        tmp_path = zip_path.with_suffix(zip_path.suffix + ".tmp")
+        if tmp_path.exists():
+            tmp_path.unlink()
+
+        with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_STORED) as zf:
+            for f in self.path.rglob("*"):
+                if f.is_file():
+                    zf.write(f, arcname=str(f.relative_to(self.path)))
+
+        try:
+            with zipfile.ZipFile(tmp_path) as zf:
+                names = zf.namelist()
+                if "meta.json" not in names:
+                    raise RuntimeError("meta.json missing in packed zip")
+            store = zarr.storage.ZipStore(tmp_path, mode="r")
+            try:
+                for name in self._streams_info:
+                    zarr.open_array(store=store, path=f"{name}.zarr", mode="r")
+            finally:
+                store.close()
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+        tmp_path.rename(zip_path)
+        shutil.rmtree(self.path)
+        self.path = zip_path
+        return zip_path
+
+    def get_trials(
+        self,
+        stream_name: str,
+        pre: float = 0.0,
+        post: float = 0.0,
+        class_names: list[str] | None = None,
+    ) -> list[Recording]:
+        """Extract discrete labeled windows for classification training."""
+        data = np.array(self.stores[stream_name])
+        ts = np.array(self.ts_stores[stream_name])
+        if len(ts) == 0 or len(self.label_track) == 0:
+            return []
+
+        trials = []
+        for i, event in enumerate(self.label_track):
+            if event.class_index == -1:
+                continue
+
+            idx_start = int(np.argmin(np.abs(ts - (event.timestamp - pre))))
+            if i + 1 < len(self.label_track):
+                idx_end = int(np.argmin(np.abs(ts - self.label_track[i + 1].timestamp)))
+            elif post > 0:
+                idx_end = int(np.argmin(np.abs(ts - (event.timestamp + post))))
+            else:
+                idx_end = len(ts)
+
+            if idx_end <= idx_start:
+                continue
+
+            name = class_names[event.class_index] if class_names else str(event.class_index)
+            trials.append(
+                Recording(
+                    class_index=event.class_index,
+                    class_name=name,
+                    data=data[idx_start:idx_end],
+                    timestamps=ts[idx_start:idx_end],
+                )
+            )
+        return trials
+
+    def get_continuous(self, stream_name: str) -> tuple[np.ndarray, np.ndarray]:
+        """Return full stream data + timestamps for regression training."""
+        return np.array(self.stores[stream_name]), np.array(self.ts_stores[stream_name])
+
+    def stream_info(self, stream_name: str) -> StreamInfo:
+        """Public accessor for a stream's StreamInfo."""
+        return self._streams_info[stream_name]

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 980 360" role="img" aria-labelledby="mg-arch-title mg-arch-desc"
+     xmlns="http://www.w3.org/2000/svg"
+     preserveAspectRatio="xMidYMid meet">
+  <title id="mg-arch-title">MyoGestic v2 - top-level data flow</title>
+  <desc id="mg-arch-desc">
+    Three lanes left-to-right. Sources lane (LSL, Serial, Replay) feeds the
+    central Stream ring buffer. Pipeline lane wraps the Stream with the
+    extract, train, and predict decorators. Outputs lane (LSL, UDP, Serial,
+    gRPC to VHI) consumes predictions. The render thread runs the @app.ui
+    function at 60 fps alongside; a background predict thread runs the
+    pipeline at its own rate.
+  </desc>
+  <defs>
+    <style>
+      .text-strong { fill: #475569; font-weight: 600; }
+      .text-body   { fill: #64748b; font-weight: 500; }
+      .text-faint  { fill: #94a3b8; font-weight: 400; }
+      @media (prefers-color-scheme: dark) {
+        .text-strong { fill: #e2e8f0; }
+        .text-body   { fill: #cbd5e1; }
+        .text-faint  { fill: #94a3b8; }
+      }
+      .lane      { fill: rgba(113,151,175,0.08); stroke: #7197AF; stroke-width: 1.5; }
+      .node      { fill: rgba(113,151,175,0.18); stroke: #7197AF; stroke-width: 1.5; }
+      .accent    { fill: rgba(113,151,175,0.30); stroke: #7197AF; stroke-width: 1.5; }
+      .edge      { stroke: #7197AF; stroke-width: 2.5; fill: none; }
+      .edge-dash { stroke: #7197AF; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; opacity: 0.75; }
+      text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    </style>
+    <marker id="mg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7197AF"/>
+    </marker>
+    <marker id="mg-arrow-faint" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7197AF" opacity="0.75"/>
+    </marker>
+  </defs>
+
+  <!-- Sources lane -->
+  <rect class="lane" x="10" y="30" width="220" height="240" rx="12"/>
+  <text class="text-faint" x="30" y="56" font-size="13" letter-spacing="0.02em">Sources</text>
+  <rect class="node" x="30" y="80"  width="180" height="40" rx="8"/>
+  <text class="text-strong" x="120" y="105" font-size="14" text-anchor="middle">LSL inlet</text>
+  <rect class="node" x="30" y="135" width="180" height="40" rx="8"/>
+  <text class="text-strong" x="120" y="160" font-size="14" text-anchor="middle">Serial</text>
+  <rect class="node" x="30" y="190" width="180" height="40" rx="8"/>
+  <text class="text-strong" x="120" y="215" font-size="14" text-anchor="middle">Replay (.npz)</text>
+
+  <!-- Pipeline lane (center, prominent) -->
+  <rect class="lane" x="320" y="30" width="320" height="300" rx="12"/>
+  <text class="text-faint" x="340" y="56" font-size="13" letter-spacing="0.02em">Pipeline</text>
+  <rect class="accent" x="350" y="80" width="260" height="56" rx="8"/>
+  <text class="text-strong" x="480" y="103" font-size="15" text-anchor="middle">Stream</text>
+  <text class="text-faint"  x="480" y="124" font-size="11" text-anchor="middle">ring buffer · window · hz</text>
+
+  <rect class="node" x="350" y="160" width="260" height="40" rx="8"/>
+  <text class="text-strong" x="480" y="185" font-size="14" text-anchor="middle">@extract - features</text>
+  <rect class="node" x="350" y="215" width="260" height="40" rx="8"/>
+  <text class="text-strong" x="480" y="240" font-size="14" text-anchor="middle">@train - model fit</text>
+  <rect class="node" x="350" y="270" width="260" height="40" rx="8"/>
+  <text class="text-strong" x="480" y="295" font-size="14" text-anchor="middle">@predict - inference</text>
+
+  <!-- Outputs lane -->
+  <rect class="lane" x="730" y="30" width="240" height="300" rx="12"/>
+  <text class="text-faint" x="750" y="56" font-size="13" letter-spacing="0.02em">Outputs</text>
+  <rect class="node" x="750" y="80"  width="200" height="40" rx="8"/>
+  <text class="text-strong" x="850" y="105" font-size="14" text-anchor="middle">LSL outlet</text>
+  <rect class="node" x="750" y="135" width="200" height="40" rx="8"/>
+  <text class="text-strong" x="850" y="160" font-size="14" text-anchor="middle">UDP</text>
+  <rect class="node" x="750" y="190" width="200" height="40" rx="8"/>
+  <text class="text-strong" x="850" y="215" font-size="14" text-anchor="middle">Serial</text>
+  <rect class="accent" x="750" y="245" width="200" height="56" rx="8"/>
+  <text class="text-strong" x="850" y="268" font-size="14" text-anchor="middle">VHI</text>
+  <text class="text-faint"  x="850" y="289" font-size="11" text-anchor="middle">LSL · gRPC</text>
+
+  <!-- Sources → Stream -->
+  <path class="edge" d="M210 100 C 270 100, 290 108, 350 108"  marker-end="url(#mg-arrow)"/>
+  <path class="edge" d="M210 155 C 270 155, 290 108, 350 108"  marker-end="url(#mg-arrow)"/>
+  <path class="edge" d="M210 210 C 270 210, 290 108, 350 108"  marker-end="url(#mg-arrow)"/>
+
+  <!-- Stream → extract → train → predict (vertical chain inside lane, implicit by adjacency) -->
+
+  <!-- Predict → Outputs -->
+  <path class="edge" d="M610 290 C 680 290, 700 100, 750 100"  marker-end="url(#mg-arrow)"/>
+  <path class="edge" d="M610 290 C 680 290, 700 155, 750 155"  marker-end="url(#mg-arrow)"/>
+  <path class="edge" d="M610 290 C 680 290, 700 210, 750 210"  marker-end="url(#mg-arrow)"/>
+  <path class="edge" d="M610 290 C 680 290, 700 273, 750 273"  marker-end="url(#mg-arrow)"/>
+
+  <!-- Threading footnote -->
+  <text class="text-faint" x="490" y="350" font-size="11" text-anchor="middle">
+    Render thread runs @app.ui at 60 fps · Background predict thread runs the pipeline at Stream.hz
+  </text>
+</svg>

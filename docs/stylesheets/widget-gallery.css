@@ -1,0 +1,54 @@
+/* Widget gallery: cards + thumbnail frames.
+   Replaces the earlier blanket width:50% rule. The grid container is
+   provided by Material; we just style the screenshots inside it and
+   tighten the "Other widgets" tail into two columns. */
+
+/* Uniform thumbnail frame for widget screenshots inside cards.
+   No border / background / shadow on the image itself — the card
+   provides those. We just lock aspect ratio so cards align even when
+   underlying screenshots have different native dimensions. */
+.md-typeset .widget-thumb {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  margin: 0.25rem auto 0.5rem;
+  display: block;
+}
+
+/* Cap each card so a section with a single card doesn't stretch to the
+   full content-column width (Material's auto-fill grid makes one card
+   fill its entire row - that's the "huge screenshot" case). 32rem ~
+   512px gives the 420px-capped image room plus the title and caption. */
+.md-typeset .grid.cards > ul > li {
+  max-width: 32rem;
+  padding: 1rem;
+}
+
+.md-typeset .grid.cards > ul > li > p:first-child {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+/* Two-column compact list for the "Other widgets" tail. */
+.md-typeset .other-widgets > ul {
+  column-count: 2;
+  column-gap: 2rem;
+}
+
+.md-typeset .other-widgets > ul > li {
+  break-inside: avoid;
+  margin-bottom: 0.6rem;
+}
+
+@media (max-width: 720px) {
+  .md-typeset .other-widgets > ul {
+    column-count: 1;
+  }
+}
+
+.md-typeset img[src*="/images/widgets/"]:not(.widget-thumb) {
+  max-width: 420px;
+  display: block;
+  margin: 0.5rem 0;
+}

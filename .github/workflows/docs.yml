@@ -1,0 +1,74 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Only the deploy steps need elevated permissions; the build job below runs
+# with these scopes so the upload-pages-artifact step in the same job works.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two Pages deployments concurrently - the second would race the
+# first and fail. PR / dispatch runs build but skip deploy, so they don't
+# need to queue.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up uv
+        # astral-sh/setup-uv doesn't publish a moving major-version tag - must
+        # pin to the exact release. Bump as new minors land.
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      # `properdocs` + mkdocstrings need `myogestic` itself plus every
+      # optional extra whose modules are referenced from the API pages -
+      # mkdocstrings walks each `:::` symbol at build time, and an
+      # ImportError on (say) `pyserial` aborts the whole build. Keep this
+      # list in sync with the autodoc references in docs/api/*.md.
+      - name: Sync project + docs extras
+        run: uv sync --locked --extra docs --extra grpc --extra serial
+
+      # Browser playground (docs/playground/) installs the MyoGestic
+      # wheel via micropip at runtime. Build a fresh one each CI run so
+      # the deployed playground always carries the latest framework
+      # code. The wheel is gitignored at this path.
+      - name: Build MyoGestic wheel for the browser playground
+        run: uv build --wheel --out-dir docs/playground/wheels
+
+      - name: Build docs site
+        run: uv run --locked --extra docs --extra grpc --extra serial properdocs build
+
+      - name: Upload Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    # Only deploy on push to main. PRs and workflow_dispatch builds skip this.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v5
