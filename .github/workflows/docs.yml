@@ -45,8 +45,18 @@ jobs:
       # wheel via micropip at runtime. Build a fresh one each CI run so
       # the deployed playground always carries the latest framework
       # code. The wheel is gitignored at this path.
+      #
+      # We rename the build output to a version-stable filename
+      # (myogestic-latest-py3-none-any.whl) so the playground HTML
+      # never has to track the pyproject.toml version. The original
+      # versioned wheel is kept too in case anyone wants to download a
+      # pinned copy.
       - name: Build MyoGestic wheel for the browser playground
-        run: uv build --wheel --out-dir docs/playground/wheels
+        run: |
+          uv build --wheel --out-dir docs/playground/wheels
+          built=$(ls docs/playground/wheels/myogestic-*-py3-none-any.whl | head -1)
+          cp "$built" docs/playground/wheels/myogestic-latest-py3-none-any.whl
+          ls -lh docs/playground/wheels/
 
       - name: Build docs site
         run: uv run --locked --extra docs --extra grpc --extra serial properdocs build
