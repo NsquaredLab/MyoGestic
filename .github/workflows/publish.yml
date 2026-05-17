@@ -1,0 +1,78 @@
+name: Publish to PyPI
+
+# Fires when a `v*` tag is pushed (the same tags we publish GitHub
+# Releases from). Also exposes a manual workflow_dispatch so the
+# first-ever publish can be triggered without forcing a tag rewrite.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# PyPI Trusted Publishing uses OpenID Connect; the workflow needs an
+# OIDC id-token to mint a short-lived PyPI credential. No long-lived
+# tokens or secrets stored in the repo. Configure the trust
+# relationship once at:
+#   https://pypi.org/manage/account/publishing/
+# (For the very first publish of a brand-new project, register a
+# "pending publisher" pointing at NsquaredLab/MyoGestic + this
+# workflow + the `pypi` environment.)
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history so `uv build` can read the version from
+          # pyproject.toml without any tag-version mismatches.
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      # `uv build` reads pyproject.toml, produces both an sdist
+      # (.tar.gz, for source-based installers) and a wheel
+      # (.whl, the fast install path). Both are uploaded to PyPI.
+      - name: Build distributions
+        run: uv build --sdist --wheel --out-dir dist
+
+      - name: Show what we built
+        run: ls -lh dist/
+
+      - name: Upload dist artefacts for the publish job
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # The `pypi` environment ties the OIDC trust to a single deployment
+    # target. Configure the same environment name on PyPI's trusted-
+    # publisher settings page. The URL field populates with the live
+    # release link after the upload.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/myogestic
+    steps:
+      - name: Download dist artefacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        # The official pypa action; verifies sigstore + OIDC + uploads.
+        # No password / token input - the action mints one via OIDC.
+        uses: pypa/gh-action-pypi-publish@release/v1
