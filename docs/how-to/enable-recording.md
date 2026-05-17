@@ -233,7 +233,7 @@ These skip windows that straddle a label boundary and handle the window/hop math
 ## See also
 
 - [Recording concept page](../concepts/recording.md) - the runtime model + label-track design.
-- [Record and replay](how-to/record-and-replay.md) - feeding a recorded session back into a `ReplaySource` for offline debugging.
+- [Record and replay](record-and-replay.md) - feeding a recorded session back into a `ReplaySource` for offline debugging.
 - [`myogestic.App.start_recording` / `stop_recording`](../api/core.md) - full API reference for the lifecycle methods.
 - [`myogestic.session.Session`](../api/session.md) - full `Session` class reference.
 - [`myogestic.session.open_session_store`](../api/session.md) - load packed or unpacked sessions.
