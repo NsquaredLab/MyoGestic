@@ -9,7 +9,7 @@ Visual contact-sheet of every public widget. Each card shows the widget rendered
 
 Widgets are composable parts; a typical app combines four or five of them. See [Anatomy of an app](anatomy.md) and [Getting started](getting-started.md) for end-to-end examples that wire several widgets together.
 
-Captured by [`tools/widget_screenshot.py`](https://github.com/raulsimpetru/MyoGestic-v2/blob/main/tools/widget_screenshot.py) (re-run when widget styling changes):
+Captured by [`tools/widget_screenshot.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/tools/widget_screenshot.py) (re-run when widget styling changes):
 
 ```bash
 uv run python tools/widget_screenshot.py --all

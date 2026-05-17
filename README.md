@@ -1,6 +1,6 @@
 <img src="docs/images/myogestic_logo.png" height="200">
 
-# MyoGestic v2
+# MyoGestic
 
 [![Python](https://img.shields.io/badge/python-%3E=3.12-blue)](https://www.python.org/downloads/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -87,7 +87,7 @@ uv sync --extra docs --extra grpc --extra serial
 uv run properdocs serve
 ```
 
-Then open `http://127.0.0.1:8000/myogestic-v2/`.
+Then open `http://127.0.0.1:8000/MyoGestic/`.
 
 Quick links into the source:
 

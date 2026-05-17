@@ -2,11 +2,11 @@
 
 ## Install
 
-MyoGestic v2 uses [uv](https://docs.astral.sh/uv/) for environment management. From a fresh clone:
+MyoGestic uses [uv](https://docs.astral.sh/uv/) for environment management. From a fresh clone:
 
 ```bash
-git clone https://github.com/raulsimpetru/MyoGestic-v2.git
-cd MyoGestic-v2
+git clone https://github.com/NsquaredLab/MyoGestic.git
+cd MyoGestic
 uv sync
 ```
 

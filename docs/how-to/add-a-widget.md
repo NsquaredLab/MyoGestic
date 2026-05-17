@@ -100,7 +100,7 @@ The keying matters: two `my_widget(ctx, key="emg")` calls share state; `my_widge
 
 ## Splitting a widget across files
 
-If a widget grows past ~200 LOC, split it. Use the [`signal_viewer` layout](https://github.com/raulsimpetru/MyoGestic-v2/tree/main/myogestic/widgets) as a template:
+If a widget grows past ~200 LOC, split it. Use the [`signal_viewer` layout](https://github.com/NsquaredLab/MyoGestic/tree/main/myogestic/widgets) as a template:
 
 ```text
 myogestic/widgets/signal.py                   # public entry - calls into the privates

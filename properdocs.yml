@@ -1,8 +1,8 @@
-site_name: MyoGestic v2
+site_name: MyoGestic
 site_description: Real-time biosignal experiment GUI builder.
-site_url: https://example.invalid/myogestic-v2/
-repo_url: https://github.com/raulsimpetru/MyoGestic-v2
-repo_name: MyoGestic-v2
+site_url: https://nsquaredlab.github.io/MyoGestic/
+repo_url: https://github.com/NsquaredLab/MyoGestic
+repo_name: MyoGestic
 edit_uri: edit/main/docs/
 copyright: Copyright &copy; 2026 Raul C. S&icirc;mpetru
 

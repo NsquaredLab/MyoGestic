@@ -1,7 +1,7 @@
 # EMG regression with the Virtual Hand
 
 End-to-end walkthrough of
-[`examples/synthetic/emg_regression.py`](https://github.com/raulsimpetru/MyoGestic-v2/blob/main/examples/synthetic/emg_regression.py):
+[`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py):
 8-channel synthetic EMG → MyoVerse RMS+MAV+WL features →
 **multi-output CatBoost regressor** → 5-DOF kinematics → expanded
 9-vec → smoothed pose pushed to the Virtual Hand.
@@ -176,7 +176,7 @@ panels share the bottom two rows.
 
 ## Where to go next
 
-* [`examples/synthetic/emg_regression_raulnet.py`](https://github.com/raulsimpetru/MyoGestic-v2/blob/main/examples/synthetic/emg_regression_raulnet.py) -
+* [`examples/synthetic/emg_regression_raulnet.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression_raulnet.py) -
   swap CatBoost for **RaulNetV17** (PyTorch Lightning CNN). Same I/O
   contract, deeper model. Use `Trainer(precision="32-true")` - the
   TorchScript backward has hard-coded fp32 checks that fail under
