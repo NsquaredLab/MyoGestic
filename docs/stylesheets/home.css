@@ -46,3 +46,73 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* "Try it in your browser" hero block.
+
+   A bordered, accent-trimmed slab between the architecture diagram and
+   the "Where to go next" cards. The playground is the most
+   demo-friendly thing this project has - this gives it visual weight
+   without burying the rest of the page. */
+.md-typeset .playground-hero {
+  position: relative;
+  margin: 2rem 0 2.5rem;
+  padding: 2rem 2.25rem;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--md-accent-fg-color) 10%, transparent),
+      color-mix(in srgb, var(--md-accent-fg-color) 3%, transparent) 60%,
+      transparent 100%),
+    var(--md-code-bg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-left: 4px solid var(--md-accent-fg-color);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Title inside the hero keeps the page heading hierarchy (h2) but
+   loses the default underline + tightens spacing. */
+.md-typeset .playground-hero h2 {
+  margin: 0 0 0.6rem;
+  border-bottom: none;
+  font-size: 1.45rem;
+  line-height: 1.25;
+}
+
+.md-typeset .playground-hero h2 .twemoji,
+.md-typeset .playground-hero h2 svg {
+  color: var(--md-accent-fg-color);
+  margin-right: 0.35rem;
+}
+
+.md-typeset .playground-hero p {
+  margin: 0.4rem 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.md-typeset .playground-hero p:last-of-type {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.88rem;
+  margin-bottom: 1.1rem;
+}
+
+.md-typeset .playground-hero .playground-hero__cta {
+  font-size: 1rem;
+  padding: 0.65rem 1.4rem;
+  margin: 0;
+}
+
+.md-typeset .playground-hero .playground-hero__cta .twemoji,
+.md-typeset .playground-hero .playground-hero__cta svg {
+  margin-left: 0.35rem;
+}
+
+@media (max-width: 720px) {
+  .md-typeset .playground-hero {
+    padding: 1.4rem 1.4rem;
+  }
+  .md-typeset .playground-hero h2 {
+    font-size: 1.25rem;
+  }
+}
