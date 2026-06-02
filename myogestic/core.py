@@ -218,7 +218,7 @@ class App:
             if stream.info is None:
                 continue
             self.ctx.session.init_stream(name, stream.info)
-            stream._session = self.ctx.session
+            stream.attach_session(self.ctx.session)
             n_ready += 1
         if n_ready == 0:
             self.ctx.status_message = "No connected streams to record"
@@ -242,8 +242,12 @@ class App:
             )
             return
         self.ctx.state = AppState.IDLE
+        # Detach every stream *before* finalising/packing the session.
+        # detach_session() waits for any in-flight append on the acquire
+        # thread, so the daemon pack thread below can clear the Zarr stores
+        # without racing the acquire loop (was: KeyError mid-append).
         for stream in self.ctx.streams.values():
-            stream._session = None
+            stream.detach_session()
         if self.ctx.session is not None:
             session = self.ctx.session
             session.save_meta(self.name, class_names=self.ctx.class_names or None)
