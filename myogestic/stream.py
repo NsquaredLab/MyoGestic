@@ -161,6 +161,15 @@ class Stream:
         self._buffer_seconds = buffer_seconds
         self._running = False
         self._session: Session | None = None
+        # Guards `_session` against the acquire loop. `stop_recording()` tears
+        # the session down (and a daemon thread clears its Zarr stores) while
+        # this stream's acquire thread may still be inside `session.append()`.
+        # Holding this lock around both the append and attach/detach makes the
+        # teardown wait for any in-flight append, so the stores are never
+        # cleared mid-append. Deliberately separate from `_lock` (which guards
+        # the display buffers and is read by the GUI thread) so we never block
+        # rendering on Zarr disk I/O — only the rare Stop path ever waits here.
+        self._session_lock = threading.Lock()
         self.status = "disconnected"
         self.last_error = ""
         self.info: StreamInfo | None = None
@@ -285,6 +294,23 @@ class Stream:
         except Exception:
             pass
 
+    def attach_session(self, session: Session) -> None:
+        """Begin recording this stream into ``session`` (called by
+        :meth:`App.start_recording`). Set under ``_session_lock`` so the
+        acquire loop sees a fully-attached session atomically."""
+        with self._session_lock:
+            self._session = session
+
+    def detach_session(self) -> None:
+        """Stop recording this stream (called by :meth:`App.stop_recording`).
+
+        Holding ``_session_lock`` makes this *wait for* any append currently
+        in flight on the acquire thread and guarantees no further append can
+        start. Once this returns, the caller may safely finalise/clear the
+        session's Zarr stores without racing the acquire loop."""
+        with self._session_lock:
+            self._session = None
+
     def _acquire_step(self) -> float:
         """Run one iteration of the acquire loop body.
 
@@ -332,9 +358,14 @@ class Stream:
             self._samples_since_snap = 0
             self._update_m4_snapshot()
 
-        # Append to zarr session if recording
-        if self._session is not None:
-            self._session.append(self.name, data, ts)
+        # Append to zarr session if recording. Hold `_session_lock` across the
+        # check-and-append so `detach_session()` (called from stop_recording)
+        # cannot null the session and clear its stores in the middle of an
+        # append — that race surfaced as `KeyError: '<stream>'` killing this
+        # acquire thread. The lock is uncontended except during teardown.
+        with self._session_lock:
+            if self._session is not None:
+                self._session.append(self.name, data, ts)
 
         # More data may already be queued at the source - don't sleep.
         return 0.0
