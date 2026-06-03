@@ -39,3 +39,36 @@ def test_decode_be_int24_twos_complement():
     out = decode_be_int24(raw, n_channels=3)
     assert out.shape == (1, 3)
     np.testing.assert_array_equal(out[0], [-1, 8388607, -8388608])
+
+
+# Task 3: constants tests
+from myogestic.sources.otb import _constants as C
+
+
+def test_muovi_control_byte_matches_matlab():
+    # Read_muovi.m: Command = EMG*8 + Mode*2 + 1
+    assert C.muovi_control_byte(emg=True, mode=0, go=True) == 0x09
+    assert C.muovi_control_byte(emg=True, mode=1, go=True) == 0x0B
+    assert C.muovi_control_byte(emg=False, mode=0, go=True) == 0x01
+    # stop = clear GO bit
+    assert C.muovi_control_byte(emg=True, mode=0, go=False) == 0x08
+
+
+def test_muovi_geometry_mode0():
+    geo = C.muovi_geometry(plus=False, emg=True, mode=0)
+    assert geo.n_total == 38        # 32 bio + 6 aux
+    assert geo.n_bio == 32
+    assert geo.fs == 2000.0
+    assert geo.bytes_per_sample == 2
+
+
+def test_muovi_geometry_plus_eeg():
+    geo = C.muovi_geometry(plus=True, emg=False, mode=0)
+    assert geo.n_total == 70        # 64 bio + 6 aux
+    assert geo.n_bio == 64
+    assert geo.fs == 500.0
+    assert geo.bytes_per_sample == 3
+
+
+def test_muovi_conversion_factor_gain8_mv():
+    assert C.MUOVI_CONV_FACTOR_MV == 0.000286
