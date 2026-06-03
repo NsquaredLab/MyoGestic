@@ -97,21 +97,42 @@ need no `pyserial`/Qt/bdi, so they can ship in `sources/__init__.py` directly
   `t_end = mne_lsl.lsl.local_clock()` and back-date: `ts[i] = t_end - (N-1-i)/fs`,
   giving monotonic, `1/fs`-spaced timestamps in LSL clock units.
 
-## 5. Wire protocol (extracted from bdi `main`)
+## 5. Wire protocol
+
+Muovi/Muovi+ (§5.1) is verified against the **OTB Muovi probe TCP Protocol v2.4**,
+**SyncStation TCP Protocol v2.8**, and **MuoviPro User Manual v5.1** (manufacturer
+PDFs); the control-byte layout and conversion factors here are authoritative and
+supersede bdi where they differ. Quattrocento (§5.2) is still **bdi-sourced only**
+(no manufacturer PDF yet) — provisional, verify before phase 2.
 
 ### 5.1 Muovi / Muovi+
-- **Socket role:** host is **TCP server**; device dials in. Port **54321**.
-  Host NIC must share the device's subnet.
+- **Socket role:** host (PC) is the **TCP server** on port **54321**; the Muovi
+  dials in as client. *Confirmed by OTB Muovi TCP Protocol v2.4 + MuoviPro manual
+  §8.1.5.* Two direct sub-cases: (a) **AP mode** — hold the probe button ~5 s; the
+  probe becomes a WiFi access point and DHCP-assigns the PC an IP, then connects
+  to the PC's server socket; (b) **infrastructure mode** — probe joins an existing
+  network (set via its web page at `192.168.14.X`), PC still server on 54321.
+  Data arrives in **~1400-byte TCP chunks** (not aligned to logical frames →
+  partial-recv buffering is mandatory).
 - **Handshake:** none; `accept()` then send config. Device streams only after a
   config byte with the acquisition LSB set.
-- **Config:** single big-endian byte `cfg = (working_mode << 2) + detection_mode`.
-  Start = resend `cfg + 1`; stop = resend `cfg - 1`.
-  - `MuoviWorkingMode`: NONE=0, EEG=1, EMG=2
-  - `MuoviDetectionMode`: NONE=0, MONOPOLAR_GAIN_8=1, MONOPOLAR_GAIN_4=2,
-    IMPEDANCE_CHECK=3, TEST=4
-  - Rule: EEG + GAIN_4 is coerced to GAIN_8.
-  - Examples (idle): EMG+gain8 = `0x09` (stream `0x0A`); EMG+gain4 = `0x0A`
-    (stream `0x0B`); EEG+gain8 = `0x05` (stream `0x06`).
+- **Config — OFFICIAL single CONTROL BYTE** (Muovi TCP Protocol v2.4; this
+  *supersedes* bdi's formula, which encodes the byte differently):
+  ```
+  bit7..4 = 0   bit3 = EMG/EEG   bits2-1 = MODE   bit0 = GO/STOP
+  control = (emg_eeg << 3) | (mode << 1) | go
+  ```
+  - `EMG/EEG`: **1 = EMG** (2000 Hz, firmware HPF ~10 Hz, **16-bit**),
+    **0 = EEG** (500 Hz, DC-coupled, **24-bit**).
+  - `MODE` (bits 2-1): `00` = monopolar gain 8; `01` = monopolar gain 4
+    (EMG only, fw ≥ 3.2.0; else treated as `00`); `10` = impedance check;
+    `11` = test (ramps on all channels — ideal for validating decode/endianness).
+  - `GO` (bit0): `1` = start streaming; `0` = stop **and the device closes the
+    socket**.
+  - Worked bytes: EMG+gain8 stream = `0x09`, stop `0x08`; EMG+gain4 = `0x0B`;
+    EEG+gain8 = `0x01`.
+  - Note: ⚠️ bdi's `(working_mode<<2)+detection_mode (+1)` produces *different*
+    bytes (e.g. `0x0A` for EMG+gain8). **We follow the PDF, not bdi.**
 - **Geometry:** Muovi = 32 biosignal + 6 aux = 38 total; Muovi+ = 64 + 6 = 70.
 
   | Device | Mode | total | bio | aux | Fs | bytes/sample | samples/frame | frame bytes |
@@ -124,18 +145,22 @@ need no `pyserial`/Qt/bdi, so they can ship in `sources/__init__.py` directly
 - **Sample format:** **big-endian, signed**; int16 (EMG) / int24 (EEG,
   manual sign-extend). Frame is Fortran-order `(n_channels, samples_per_frame)`:
   contiguous values are `[ch0_t0, ch1_t0, …, chN_t0, ch0_t1, …]`.
-- **Conversion factor** (× raw → mV; same for bio & aux), **physically-correct
-  mapping** (higher gain ⇒ finer resolution ⇒ smaller volts/LSB):
-  **GAIN_8 = `286.1e-6`**, **GAIN_4 = `572.2e-6`**.
-  ⚠️ This is the mapping in bdi's *docstrings*; bdi's *dict* has these two values
-  **swapped** (a latent bug). We use the correct mapping, so our µV output will
-  differ by 2× from the old bdi-based MyoGestic for a given gain — by being
-  correct. The two values are exactly 2× apart (286.1 × 2 ≈ 572.2), consistent
-  with the 8:4 gain ratio. OTB's communication-protocol PDF is not public
-  (provided on request), but the gain↔resolution relationship is unambiguous, so
-  no PDF is needed to settle this. A code comment will record the bdi swap.
+- **Conversion factor — MANUFACTURER-CONFIRMED** (Muovi TCP Protocol v2.4, ×
+  raw → mV; same for bio & aux): gain 8 → **286.1 nV/LSB** (`286.1e-6` mV), range
+  **±9.375 mV**; gain 4 → **572.2 nV/LSB** (`572.2e-6` mV), range **±18.75 mV**.
+  Higher gain = finer resolution, as expected.
+  ⚠️ bdi's *dict* has these two values **swapped** (a latent bug; bdi's docstrings
+  are correct). We use the manufacturer values, so our µV output differs by 2×
+  from the old bdi-based MyoGestic for a given gain — by being correct. A code
+  comment will record the bdi swap. Pre-HPF analog input range ±300 mV (gain 8) /
+  ±600 mV (gain 4). EMG mode applies a firmware high-pass (EMA subtraction,
+  α=1/25 → cutoff Fsamp/190 ≈ 10.5 Hz at 2000 Hz) — EMG is not raw DC; document it.
 - **Aux:** 6 channels appended after biosignal (rows 32..37 / 64..69), same int
-  width and timing, same conversion factor in bdi.
+  width and timing. **Direct-mode meaning** (Muovi TCP Protocol v2.4): aux 1–4 =
+  IMU quaternion W/X/Y/Z, aux 5 = accessory buffer usage, aux 6 = sample counter.
+  Use these as `channel_names`. (Via the SyncStation the two accessory channels
+  are bit-packed differently — TRIG / 7-bit trigger code / buffer / counter — but
+  that's the SyncStation path, see §11.)
 - **Stop/disconnect:** resend `cfg - 1`, drain, close.
 
 ### 5.2 Quattrocento
@@ -275,11 +300,41 @@ the programmatic path (the GUI edits the same underlying fields).
 
 - Muovi server-role vs the scan-oriented GUI model — handled via the `discover()`
   semantics above, but UX may want iteration after hardware testing.
-- Conversion-factor gain swap in bdi — **resolved**: we use the physically-correct
-  mapping (gain-8 = 286.1 nV finer, gain-4 = 572.2 nV), which differs 2× from the
-  old bdi-dict output. OTB's protocol PDF is not public, but physics settles it.
+- Conversion-factor gain swap — **resolved & manufacturer-confirmed** (Muovi TCP
+  Protocol v2.4): gain-8 = 286.1 nV (finer), gain-4 = 572.2 nV. Differs 2× from
+  the old bdi-dict output, which was buggy.
+- **Muovi control byte — corrected to the official v2.4 layout** (§5.1);
+  supersedes bdi's encoding. Validate on first hardware run using TEST mode
+  (`MODE=11`, ramps) — monotonic decoded ramps confirm byte layout + endianness
+  in one shot.
+- **Byte order** for the Muovi stream (big-endian, 2's-complement) is OTB
+  convention (matches bdi + OTB MATLAB examples) but not stated in the PDFs;
+  TEST-mode ramps confirm it cheaply on first connect.
+- **Quattrocento details are bdi-sourced only** — the user-provided PDFs cover
+  Muovi/SyncStation, not Quattrocento. Treat §5.2 as provisional and verify
+  against the OTB Quattrocento communication-protocol PDF before/while
+  implementing phase 2.
 - Manual-connect acquire-loop change (§7) is the one cross-cutting change to
   existing code; keep it minimal and behind a per-stream flag so LSL/Replay
   behaviour is unchanged.
 - Quattrocento link-local networking (169.254.x.x) is an environment/setup
   concern, not a code one; document NIC setup in the examples/docs.
+
+## 11. Future: SyncStation multi-probe path (out of scope v1)
+
+Verified against SyncStation TCP Protocol v2.8 + MuoviPro manual. The SyncStation
+is a **separate connection path** from direct single-probe connect:
+
+- PC is a **TCP client** to the SyncStation at fixed IP **192.168.76.1**, port
+  **54320** (direct single Muovi is PC-server on 54321 — different role & port).
+- Commands are **framed message strings**: `START BYTE` (StartStop vs OptSettings
+  via MSB) + N `CONTROL BYTE`s (one per device slot; `SIZE<4:0>` field counts
+  them) + a terminating **CRC-8**. Each CONTROL BYTE adds a 4-bit `DEV` probe
+  selector above the same EMG/EEG·MODE·EN bits.
+- The SyncStation multiplexes all active probes + 4 SyncStation aux + 2 accessory
+  channels into one stream; missing-probe samples are zero-filled.
+
+This aggregates up to 4 Muovi + 2 Muovi+/Sessantaquattro + 8 due+ + 2 Quattro+.
+A `SyncStationSource` is a natural future addition on the same `_OTBSource` base
+(client role + CRC-framed command builder), but not needed for the direct-connect
+goal. Captured here so the base design leaves room for it.
