@@ -108,8 +108,8 @@ canonical decode reference — the user provided `Read_muovi.m` v3.0 (direct pro
 `Read_muoviAP.m` v2.0 (SyncStation), and `CRC8.m`. **Vendor these into
 `docs/reference/otb/` during implementation** so the decode has a ground-truth
 reference next to the code (manufacturer example scripts, reference-only — not
-imported/shipped). Quattrocento (§5.2) is still **bdi-sourced only** (no
-manufacturer PDF yet) — provisional, verify before phase 2.
+imported/shipped). Quattrocento (§5.2) is **also manufacturer-verified** now
+(Configuration Protocol v1.7 + `Read_Quattrocento.m` v5.0).
 
 ### 5.1 Muovi / Muovi+
 - **Socket role:** host (PC) is the **TCP server** on port **54321**; the Muovi
@@ -201,26 +201,40 @@ manufacturer PDF yet) — provisional, verify before phase 2.
   trigger code / buffer — see §11.)
 - **Stop/disconnect:** resend `cfg - 1`, drain, close.
 
-### 5.2 Quattrocento
+### 5.2 Quattrocento — MANUFACTURER-VERIFIED
+Verified against **Quattrocento Configuration Protocol v1.7** + OTB MATLAB
+`Read_Quattrocento.m` v5.0 + `CRC8.m`. (bdi was substantially correct here — these
+confirm it.)
 - **Socket role:** host is **TCP client**; dials the device. Default
   **169.254.1.10:23456** (link-local — host NIC needs a 169.254.x.x address).
-- **Handshake:** none; after connect, send the 40-byte config; start toggles the
-  acquisition bit.
-- **Config:** 40-byte packet.
-  - Byte 0 = `ACQ_SETT`:
+- **Handshake:** none; after `connect`, send the 40-byte config; `ACQ_ON` (bit0 of
+  byte 0) toggles streaming.
+- **Config — 40-byte packet** (`ConfString`):
+  - **Byte 0 = `ACQ_SETT`** (confirmed):
     ```
-    acq  = 1 << 7
-    acq |= decim_active        << 6
-    acq |= recording_active    << 5
-    acq |= fs_mode(0..3)       << 3
-    acq |= n_channels_mode(0..3) << 1
-    acq |= acquisition_active        # bit0 (start/stop)
+    acq  = 1 << 7                    # bit7 fixed = 1
+    acq |= decim          << 6       # bit6 DECIM (sample @10240 then decimate)
+    acq |= rec_on         << 5       # bit5 REC_ON (Trigger-OUT sync; optional)
+    acq |= fsamp(0..3)    << 3       # bits4-3: 00=512 01=2048 10=5120 11=10240 Hz
+    acq |= nch(0..3)      << 1       # bits2-1: channel-set selector (see Modes)
+    acq |= acq_on                    # bit0: 1=stream, 0=stop
     ```
-  - Byte 1,2 = 0 (analog-out selectors, unused).
-  - Bytes 3–14 = IN1–IN4 (4×3-byte per-input config); 15–26 = IN5–IN8;
-    27–38 = MULTIPLE IN 1–4 (4×3 bytes). Each 3-byte input config:
-    `byte3 = (side<<6)|(hp<<4)|(lp<<2)|detection`, bytes 1–2 = 0.
-  - Byte 39 = **CRC-8** over bytes 0..38 (poly `0x8C`, init 0, LSB-first):
+  - **Byte 1 = `AN_OUT_IN_SEL`** = `(anout_gain<<4) | insel`; **Byte 2 =
+    `AN_OUT_CH_SEL`**. Both default to `0` (analog-out from IN1 ch0, gain 1) — we
+    don't use the analog out.
+  - **Bytes 3–26 = IN1…IN8**, **bytes 27–38 = MULTIPLE IN1…IN4** — 12 inputs ×
+    3 bytes each:
+    - `CONF0` = `muscle` index (0–64; cosmetic) → `0`.
+    - `CONF1` = `(sensor<<3) | adapter` (electrode/adapter type; cosmetic) → `0`.
+    - `CONF2` = `(side<<6) | (hpf<<4) | (lpf<<2) | mode`.
+      - `mode`: **00=Monopolar, 01=Differential, 10=Bipolar**.
+      - `hpf`: 00=0.7, 01=10, 10=100, 11=200 Hz.
+      - `lpf`: 00=130, 01=500, 10=900, 11=4400 Hz.
+      - `side`: 00=not-def, 01=Left, 10=Right, 11=None.
+      - Default in `Read_Quattrocento.m` = `0x14` (monopolar, HPF 10 Hz, LPF
+        500 Hz) — sensible default for all inputs.
+  - **Byte 39 = `CRC-8`** over bytes 0..38 (poly `0x8C`, init 0, LSB-first —
+    identical to `CRC8.m`):
     ```python
     def crc8(data, length):
         crc = 0
@@ -233,21 +247,26 @@ manufacturer PDF yet) — provisional, verify before phase 2.
                 b >>= 1
         return crc
     ```
-    Start = `cfg[0] += 1`, recompute CRC, resend; stop = `cfg[0] -= 1`,
-    recompute CRC, resend.
-- **Modes:** fs LOW=512 / MEDIUM=2048 / HIGH=5120 / ULTRA=10240 Hz;
-  streamed-channel count LOW=120 / MEDIUM=216 / HIGH=312 / ULTRA=408 (independent
-  of fs). Per-sample always int16 / 2 bytes; samples/frame = 64.
-  - Channel accounting: `streamed` = 120/216/312/408 (used for reshape);
-    `bio = len(grids)*64`; aux = 16; supplementary = 8.
-- **Sample format:** **little-endian, signed int16** (`<i2`). Frame Fortran-order
-  `(streamed, 64)`. Within streamed block: grid biosignal channels first
-  (`[i*64+j for i in grids for j in range(64)]`), then 16 aux
-  (`streamed-24 .. streamed-9`), then the last 8 supplementary.
-  Frame bytes = `streamed * 2 * 64` (e.g. MEDIUM 216ch → 27648).
-- **Conversion factors:** bio = `5/2**16/150*1000` ≈ `5.086e-4` (mV);
-  aux = `5/2**16/0.5` ≈ `1.526e-4` (V); supplementary = raw (no scaling).
-- **Stop/disconnect:** send stop packet (recompute CRC), close.
+  - **Start:** set `ACQ_ON`, recompute CRC, send. **Stop:** byte0 = `0x80`
+    (acq off), recompute CRC, send.
+- **Modes** (from `Read_Quattrocento.m`): `fsamp` 512/2048/5120/10240 Hz;
+  `nch` selector → **streamed-channel count 120 / 216 / 312 / 408** (NCH
+  00/01/10/11), independent of fs. Per-sample **int16 / 2 bytes**.
+- **Sample format:** **little-endian, signed int16** (`<i2`). On-wire is
+  channels-contiguous per time sample → Fortran reshape `(streamed, n_samples)`,
+  then transpose to sample-major. `streamed` = 120/216/312/408.
+  - **Channel layout within the streamed block:** biosignal grid channels first,
+    then the **16 AUX IN** (back-panel analog inputs), then the **last 8 accessory
+    channels**. Verified accessory positions (`Read_Quattrocento.m`):
+    **sample counter @ `streamed-7`**, **trigger @ `streamed-6`**, **buffer usage
+    @ `streamed-4`** (others reserved). Accessory channels are 16-bit;
+    trigger = 0 / ~32767.
+- **Conversion factors** (confirmed): biosignal = `5/2**16/150*1000` ≈
+  **`5.086e-4` mV**; AUX IN = `5/2**16/0.5` ≈ **`1.526e-4` V**; accessory (last 8)
+  = **raw** (counter/trigger/buffer — no scaling).
+- **Stop/disconnect:** send stop packet (byte0=`0x80` + recomputed CRC), close.
+  ⚠️ Always send stop before reconnecting or the device's sync state is lost
+  (per `Read_Quattrocento.m` warning).
 
 ### 5.3 Reimplementation gotchas
 - Endianness flips: Muovi **big-endian**, Quattrocento **little-endian**.
@@ -348,10 +367,11 @@ the programmatic path (the GUI edits the same underlying fields).
 - **Byte order** — **resolved & explicitly confirmed**: big-endian, 2's-complement
   (MuoviLite manual §8.1.2). TEST-mode ramps remain a cheap first-connect sanity
   check, but this is no longer an open question.
-- **Quattrocento details are bdi-sourced only** — the user-provided PDFs cover
-  Muovi/SyncStation, not Quattrocento. Treat §5.2 as provisional and verify
-  against the OTB Quattrocento communication-protocol PDF before/while
-  implementing phase 2.
+- **Quattrocento — now manufacturer-verified** (Configuration Protocol v1.7 +
+  `Read_Quattrocento.m` v5.0): TCP client `169.254.1.10:23456`, little-endian
+  int16, 40-byte CRC8 config, channel counts 120/216/312/408, conversion factors
+  confirmed. No longer provisional. (DECIM/REC_ON bits and per-input filter config
+  are exposed but default to sensible values; analog-out bytes unused.)
 - Manual-connect acquire-loop change (§7) is the one cross-cutting change to
   existing code; keep it minimal and behind a per-stream flag so LSL/Replay
   behaviour is unchanged.
