@@ -26,3 +26,9 @@ def decode_be_int24(raw: bytes, n_channels: int) -> np.ndarray:
     neg = vals >= 0x800000
     vals[neg] -= 0x1000000
     return vals.astype(np.float32).reshape(n_channels, -1, order="F").T
+
+
+def decode_le_int16(raw: bytes, n_channels: int) -> np.ndarray:
+    """Little-endian signed int16, channels-contiguous -> (n_samples, n_channels) f32."""
+    flat = np.frombuffer(raw, dtype="<i2").astype(np.float32)
+    return flat.reshape(n_channels, -1, order="F").T
