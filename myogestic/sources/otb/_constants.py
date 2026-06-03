@@ -53,3 +53,61 @@ def muovi_channel_names(geo: MuoviGeometry) -> list[str]:
     names = [f"bio{i}" for i in range(geo.n_bio)]
     names += ["imu_w", "imu_x", "imu_y", "imu_z", "buffer_trigger", "counter"]
     return names
+
+
+# Quattrocento -------------------------------------------------------------
+from myogestic.sources.otb._crc import crc8  # re-exported for callers/tests  # noqa: E402
+
+QUATTRO_IP = "169.254.1.10"
+QUATTRO_PORT = 23456
+QUATTRO_FS_BY_MODE = {0: 512.0, 1: 2048.0, 2: 5120.0, 3: 10240.0}
+QUATTRO_NCH_BY_MODE = {0: 120, 1: 216, 2: 312, 3: 408}
+# Read_Quattrocento.m: GainFactor = 5/2^16/150*1000 (mV); AuxGain = 5/2^16/0.5 (V)
+QUATTRO_CONV_FACTOR_MV = 5 / 2 ** 16 / 150 * 1000
+QUATTRO_AUX_FACTOR_V = 5 / 2 ** 16 / 0.5
+# Default per-input CONF2 (Read_Quattrocento.m = 0x14): monopolar, HPF 10Hz, LPF 500Hz
+_QUATTRO_DEFAULT_CONF2 = 0x14
+
+
+def quattro_config(
+    *,
+    fs_mode: int,
+    nch_mode: int,
+    acq_on: bool,
+    decim: bool = False,
+    rec_on: bool = False,
+    conf2: int = _QUATTRO_DEFAULT_CONF2,
+) -> bytes:
+    """Build the 40-byte Quattrocento config string (with CRC-8 trailer)."""
+    if acq_on:
+        acq_sett = (
+            0x80
+            | (int(decim) << 6)
+            | (int(rec_on) << 5)
+            | ((fs_mode & 0x3) << 3)
+            | ((nch_mode & 0x3) << 1)
+            | 1
+        )
+    else:
+        acq_sett = 0x80
+    cfg = bytearray(40)
+    cfg[0] = acq_sett
+    cfg[1] = 0  # AN_OUT_IN_SEL (analog out unused)
+    cfg[2] = 0  # AN_OUT_CH_SEL
+    for i in range(12):  # 8 IN + 4 MULTIPLE IN, 3 bytes each: CONF0/1/2
+        base = 3 + i * 3
+        cfg[base + 0] = 0          # CONF0 muscle
+        cfg[base + 1] = 0          # CONF1 sensor+adapter
+        cfg[base + 2] = conf2 & 0xFF
+    cfg[39] = crc8(bytes(cfg[:39]))
+    return bytes(cfg)
+
+
+def quattro_channel_names(nch_total: int, n_bio: int) -> list[str]:
+    names = [f"bio{i}" for i in range(n_bio)]
+    names += [f"ch{i}" for i in range(n_bio, nch_total)]
+    # last 8 accessory: counter @ -7, trigger @ -6, buffer @ -4
+    names[-7] = "counter"
+    names[-6] = "trigger"
+    names[-4] = "buffer"
+    return names
