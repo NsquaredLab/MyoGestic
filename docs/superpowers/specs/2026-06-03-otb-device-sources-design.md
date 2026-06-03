@@ -103,10 +103,13 @@ Muovi/Muovi+ (§5.1) is verified against the **OTB Muovi probe TCP Protocol v2.4
 **SyncStation TCP Protocol v2.8**, **MuoviPro User Manual v5.1**, and **MuoviLite
 User Manual v1.1** (manufacturer PDFs); the control-byte layout, conversion
 factors, big-endian byte order, and channel map here are authoritative and
-supersede bdi where they differ. OTB also ships **MATLAB demo code** (linked from
-the manuals) as the canonical decode reference. Quattrocento (§5.2) is still
-**bdi-sourced only** (no manufacturer PDF yet) — provisional, verify before
-phase 2.
+supersede bdi where they differ. OTB also ships **MATLAB demo code** as the
+canonical decode reference — the user provided `Read_muovi.m` v3.0 (direct probe),
+`Read_muoviAP.m` v2.0 (SyncStation), and `CRC8.m`. **Vendor these into
+`docs/reference/otb/` during implementation** so the decode has a ground-truth
+reference next to the code (manufacturer example scripts, reference-only — not
+imported/shipped). Quattrocento (§5.2) is still **bdi-sourced only** (no
+manufacturer PDF yet) — provisional, verify before phase 2.
 
 ### 5.1 Muovi / Muovi+
 - **Socket role:** host (PC) is the **TCP server** on port **54321**; the Muovi
@@ -127,15 +130,29 @@ phase 2.
   ```
   - `EMG/EEG`: **1 = EMG** (2000 Hz, firmware HPF ~10 Hz, **16-bit**),
     **0 = EEG** (500 Hz, DC-coupled, **24-bit**).
-  - `MODE` (bits 2-1): `00` = monopolar gain 8; `01` = monopolar gain 4
-    (EMG only, fw ≥ 3.2.0; else treated as `00`); `10` = impedance check;
-    `11` = test (ramps on all channels — ideal for validating decode/endianness).
+  - `MODE` (bits 2-1) — **the channel count and meaning depend on mode** (and on
+    firmware/version). Per OTB's own MATLAB `Read_muovi.m` v3.0
+    (`NumChanVsMode = [38 22 38 38]`):
+    - `00` = monopolar **32-ch** (gain 8) → **38 ch** (32 bio + 6 aux). *Default.*
+    - `01` = monopolar **16-ch** → **22 ch** (16 bio + 6 aux). ⚠️ Ambiguous: the
+      v2.4 PDF labels `01` as "gain 4, 32 ch", while MATLAB v3.0 labels it
+      "16-ch monop". Treat as firmware-dependent; **avoid in v1** unless we confirm
+      on the specific probe firmware. (Muovi+ analogue: `0`=64-ch→68, `1`=32-ch→36.)
+    - `10` = impedance check → 38 ch.
+    - `11` = test (ramps on all channels) → 38 ch. Ideal for validating
+      decode/endianness on first connect.
   - `GO` (bit0): `1` = start streaming; `0` = stop **and the device closes the
     socket**.
-  - Worked bytes: EMG+gain8 stream = `0x09`, stop `0x08`; EMG+gain4 = `0x0B`;
-    EEG+gain8 = `0x01`.
+  - **Confirmed by OTB MATLAB** `Read_muovi.m`: `Command = EMG*8 + Mode*2 + 1`
+    (= our formula), `ConvFact = 0.000286`, `tcpserver(...,"ByteOrder","big-endian")`,
+    stop = `Command - 1`.
+  - Worked bytes: EMG+mode0 stream = `0x09`, stop `0x08`; EMG+mode1 = `0x0B`;
+    EEG+mode0 = `0x01`.
   - Note: ⚠️ bdi's `(working_mode<<2)+detection_mode (+1)` produces *different*
-    bytes (e.g. `0x0A` for EMG+gain8). **We follow the PDF, not bdi.**
+    bytes (e.g. `0x0A` for EMG+mode0). **We follow the PDF + OTB MATLAB, not bdi.**
+  - **Implication for the source:** `StreamInfo.n_channels` must be derived from
+    `(device, mode)`, not hardcoded — mode 1 changes the count. The decoder reads
+    `NumChan` channels per sample-instant where `NumChan` = the table above.
 - **Geometry:** Muovi = 32 biosignal + 6 aux = 38 total; Muovi+ = 64 + 6 = 70.
 
   | Device | Mode | total | bio | aux | Fs | bytes/sample | samples/frame | frame bytes |
@@ -169,11 +186,16 @@ phase 2.
   - ch 33–36 = **IMU quaternion W / X / Y / Z** (Bosch BNO055, Fusion NDOF;
     native 14-bit sign-extended to 16/24; updated at **100 Hz**, so values repeat
     ~20× per quaternion at 2000 Hz — the IMU is held, not interpolated).
-  - ch 37 = **buffer usage + trigger state** (bit-packed); ch 38 = **sample
-    counter** (incrementing; gaps reveal dropped samples).
+  - ch 37 = **buffer usage + trigger state** (bit-packed). Unpacking confirmed by
+    OTB `Read_muovi.m`: in 16-bit mode, **bit 15 = trigger** (value < 0 ⇒ trigger
+    high), **lower 15 bits = buffer usage** (`buffer = value + 32768` when the sign
+    bit is set). In 24-bit mode the same fields sit in the top/low bits of the
+    24-bit word.
+  - ch 38 = **sample counter / ramp** (incrementing; successive deltas reveal
+    dropped samples).
 
-  Use these as `channel_names`. The IMU/counter are integer/status channels — the
-  bio conversion factor is not physically meaningful for them; when
+  Use these as `channel_names`. The IMU/counter/trigger are integer/status
+  channels — the bio conversion factor is not physically meaningful for them; when
   `include_aux=True`, emit them **unscaled** (raw int) and label clearly. (Via the
   SyncStation the accessory channels are bit-packed differently — TRIG / 7-bit
   trigger code / buffer — see §11.)
@@ -338,17 +360,25 @@ the programmatic path (the GUI edits the same underlying fields).
 
 ## 11. Future: SyncStation multi-probe path (out of scope v1)
 
-Verified against SyncStation TCP Protocol v2.8 + MuoviPro manual. The SyncStation
-is a **separate connection path** from direct single-probe connect:
+Verified against SyncStation TCP Protocol v2.8 + MuoviPro manual + OTB MATLAB
+`Read_muoviAP.m` v2.0. The SyncStation is a **separate connection path** from
+direct single-probe connect:
 
 - PC is a **TCP client** to the SyncStation at fixed IP **192.168.76.1**, port
   **54320** (direct single Muovi is PC-server on 54321 — different role & port).
-- Commands are **framed message strings**: `START BYTE` (StartStop vs OptSettings
-  via MSB) + N `CONTROL BYTE`s (one per device slot; `SIZE<4:0>` field counts
-  them) + a terminating **CRC-8**. Each CONTROL BYTE adds a 4-bit `DEV` probe
-  selector above the same EMG/EEG·MODE·EN bits.
-- The SyncStation multiplexes all active probes + 4 SyncStation aux + 2 accessory
-  channels into one stream; missing-probe samples are zero-filled.
+- Commands are **framed message strings** (confirmed by `Read_muoviAP.m`):
+  - `START BYTE A = (SIZE << 1) | GO` where `SIZE` = number of CONTROL BYTEs
+    (1–16) and bit6 = `REC_ON`; MSB=0 ⇒ StartStop, MSB=1 ⇒ OptSettings.
+  - One `CONTROL BYTE` per enabled device = `(DEV << 4) | (EMG << 3) | (Mode << 1)
+    | EN`, with device offsets `DEV<<4` = 0/16/32/48 (Muovi 1–4), 64/80
+    (Muovi+/Sessantaquattro 1–2).
+  - Trailing **CRC-8** over all preceding bytes (poly `0x8C`, see `CRC8.m`).
+  - Stop = `[0x00, CRC8([0x00])]`.
+- Channel accounting (from `Read_muoviAP.m`): stream starts with **6 SyncStation
+  aux/accessory** channels, then per device `NumChanVsMode` — Muovi `[38 22 38 38]`,
+  Muovi+/Sessantaquattro `[68 36 68 68]` (note: differs from direct Muovi+ 70 — the
+  SyncStation path needs its own channel-map verification). int16, big-endian,
+  Fortran `reshape(NumChan, fs)`. Missing-probe samples are zero-filled.
 
 This aggregates up to 4 Muovi + 2 Muovi+/Sessantaquattro + 8 due+ + 2 Quattro+.
 A `SyncStationSource` is a natural future addition on the same `_OTBSource` base
