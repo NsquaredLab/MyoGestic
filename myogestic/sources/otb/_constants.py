@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from myogestic.sources.otb._crc import crc8  # re-exported for callers/tests
+
 # Muovi --------------------------------------------------------------------
 
 MUOVI_PORT = 54321
@@ -56,7 +58,6 @@ def muovi_channel_names(geo: MuoviGeometry) -> list[str]:
 
 
 # Quattrocento -------------------------------------------------------------
-from myogestic.sources.otb._crc import crc8  # re-exported for callers/tests  # noqa: E402
 
 QUATTRO_IP = "169.254.1.10"
 QUATTRO_PORT = 23456
