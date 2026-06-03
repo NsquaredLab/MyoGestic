@@ -62,3 +62,9 @@ def test_quattrocento_loopback_validates_config_and_streams():
     assert got is not None and got.shape[1] == 64
     # channel 10 raw=10 -> 10 * bio factor (mV)
     np.testing.assert_allclose(got[0, 10], 10 * C.QUATTRO_CONV_FACTOR_MV, rtol=1e-5)
+
+
+# Task 10: export
+def test_quattrocento_importable_from_package():
+    from myogestic.sources.otb import QuattrocentoSource as Q
+    assert Q is QuattrocentoSource
