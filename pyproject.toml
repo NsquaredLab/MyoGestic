@@ -45,6 +45,13 @@ dependencies = [
 # makes it discoverable to anyone who only `pip install`d the package.
 myogestic-install-vhi = "myogestic.tools.install_vhi:main"
 
+[project.urls]
+Homepage = "https://nsquaredlab.github.io/MyoGestic/"
+Documentation = "https://nsquaredlab.github.io/MyoGestic/"
+Repository = "https://github.com/NsquaredLab/MyoGestic"
+Issues = "https://github.com/NsquaredLab/MyoGestic/issues"
+Changelog = "https://github.com/NsquaredLab/MyoGestic/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 brainflow = ["brainflow>=5.12.0"]
 bdi = ["biosignal-device-interface>=0.1.0"]
