@@ -120,3 +120,23 @@ def test_base_read_returns_none_when_empty():
     src = _FakeOTB()
     src.connect()
     assert src.read() == (None, None)
+
+
+# Task 7: decode_le_int16
+from myogestic.sources.otb._decode import decode_le_int16
+
+
+def _le_int16_bytes(values):
+    out = bytearray()
+    for v in values:
+        out += int(v & 0xFFFF).to_bytes(2, "little", signed=False)
+    return bytes(out)
+
+
+def test_decode_le_int16_shape_order_and_sign():
+    raw = _le_int16_bytes([1, 2, 3, -1, -2, -3])  # 3 ch, 2 samples
+    out = decode_le_int16(raw, n_channels=3)
+    assert out.shape == (2, 3)
+    assert out.dtype == np.float32
+    np.testing.assert_array_equal(out[0], [1, 2, 3])
+    np.testing.assert_array_equal(out[1], [-1, -2, -3])
