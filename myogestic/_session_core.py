@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import time
+import uuid
 import zipfile
 from dataclasses import dataclass
 from importlib.util import find_spec
@@ -14,6 +16,8 @@ import zarr
 
 if TYPE_CHECKING:
     from myogestic.stream import StreamInfo
+
+log = logging.getLogger(__name__)
 
 if find_spec("zarrs") is not None:
     zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
@@ -86,7 +90,12 @@ class Session:
 
     def __init__(self, base_path: str = "sessions"):
         ts = time.strftime("%Y-%m-%d_%H-%M-%S")
-        self.path = Path(base_path) / ts
+        # Append a short random suffix so two sessions started within the same
+        # wall-clock second (e.g. Stop then immediately Record) never share a
+        # folder. pack_to_zip() runs on a daemon thread and shutil.rmtree()s its
+        # own folder; a shared name would let the old session's pack thread wipe
+        # the new recording's data (and collide on the <name>.session.zip path).
+        self.path = Path(base_path) / f"{ts}_{uuid.uuid4().hex[:8]}"
         self.path.mkdir(parents=True, exist_ok=True)
         self.stores: dict[str, zarr.Array] = {}
         self.ts_stores: dict[str, zarr.Array] = {}
@@ -114,8 +123,21 @@ class Session:
 
     def append(self, name: str, data: np.ndarray, timestamps: np.ndarray) -> None:
         """Called from acquire loop when recording. data: (n_samples, n_channels)."""
-        self.stores[name].append(data)
-        self.ts_stores[name].append(timestamps)
+        # Defense-in-depth: Stream.detach_session() (under its lock) is what
+        # actually prevents an append from racing pack_to_zip()'s clear(); this
+        # guard keeps a stray/late append from raising KeyError if the stores
+        # were already finalised, rather than crashing the caller's thread.
+        store = self.stores.get(name)
+        ts_store = self.ts_stores.get(name)
+        if store is None or ts_store is None:
+            # Should not happen now that Stream.detach_session() drains
+            # in-flight appends before pack_to_zip() clears the stores; log
+            # it so a future regression that drops samples is observable
+            # rather than silent.
+            log.debug("dropping late append for finalised stream %r", name)
+            return
+        store.append(data)
+        ts_store.append(timestamps)
 
     def add_label(self, class_index: int, timestamp: float | None = None) -> None:
         from mne_lsl.lsl import local_clock
