@@ -45,10 +45,12 @@ protocol constants from bdi. No Qt, no new runtime dependency.
 - Structure so Sessantaquattro (Muovi-family protocol) drops in later on the same base.
 
 **Non-goals (v1)**
-- A full in-GUI device-configuration panel (working mode, grid selection). Config
-  lives in constructor kwargs for v1.
 - Sessantaquattro implementation now (no test hardware available yet).
 - Reusing bdi at runtime / reintroducing PySide6.
+
+In-scope (added after review): an in-GUI device-configuration panel (working
+mode, gain/detection, grids, fs) — see §7. Constructor kwargs remain the
+underlying config; the GUI edits the same fields.
 
 ## 3. Architecture & file layout
 
@@ -122,11 +124,16 @@ need no `pyserial`/Qt/bdi, so they can ship in `sources/__init__.py` directly
 - **Sample format:** **big-endian, signed**; int16 (EMG) / int24 (EEG,
   manual sign-extend). Frame is Fortran-order `(n_channels, samples_per_frame)`:
   contiguous values are `[ch0_t0, ch1_t0, …, chN_t0, ch0_t1, …]`.
-- **Conversion factor** (× raw → mV; same for bio & aux):
-  GAIN_8 = `572.2e-6`, GAIN_4 = `286.1e-6`.
-  ⚠️ bdi's dict and its docstrings disagree on which gain is finer; we replicate
-  the **dict** values to match bdi's numeric output and add a comment noting the
-  discrepancy.
+- **Conversion factor** (× raw → mV; same for bio & aux), **physically-correct
+  mapping** (higher gain ⇒ finer resolution ⇒ smaller volts/LSB):
+  **GAIN_8 = `286.1e-6`**, **GAIN_4 = `572.2e-6`**.
+  ⚠️ This is the mapping in bdi's *docstrings*; bdi's *dict* has these two values
+  **swapped** (a latent bug). We use the correct mapping, so our µV output will
+  differ by 2× from the old bdi-based MyoGestic for a given gain — by being
+  correct. The two values are exactly 2× apart (286.1 × 2 ≈ 572.2), consistent
+  with the 8:4 gain ratio. OTB's communication-protocol PDF is not public
+  (provided on request), but the gain↔resolution relationship is unambiguous, so
+  no PDF is needed to settle this. A code comment will record the bdi swap.
 - **Aux:** 6 channels appended after biosignal (rows 32..37 / 64..69), same int
   width and timing, same conversion factor in bdi.
 - **Stop/disconnect:** resend `cfg - 1`, drain, close.
@@ -207,13 +214,38 @@ gain-8; Quattrocento MEDIUM/MEDIUM, grid 0.
 
 ## 7. GUI integration
 
-Existing `myogestic/widgets/stream_panel.py` + `_signal_scan.py` render status +
-Scan/Reconnect for any source implementing `discover()`/`reconnect()` — free for
-us. Wrinkle: Muovi inverts the scan model (device dials us), so Muovi
-`discover()` lists local NIC IPs to bind and the panel shows "waiting for device
-on :54321"; Quattrocento `discover()` does a reachability check on the device IP.
-`reconnect(target)` sets the bind IP (Muovi) / device IP (Quattrocento). A full
-device-config GUI panel is out of scope for v1.
+**Status + scan/reconnect (free):** existing `myogestic/widgets/stream_panel.py`
++ `_signal_scan.py` render status + Scan/Reconnect for any source implementing
+`discover()`/`reconnect()`. Wrinkle: Muovi inverts the scan model (device dials
+us), so Muovi `discover()` lists local NIC IPs to bind and the panel shows
+"waiting for device on :54321"; Quattrocento `discover()` does a reachability
+check on the device IP. `reconnect(target)` sets the bind IP (Muovi) / device IP
+(Quattrocento).
+
+**Device-config panel (in scope):** add a generic, source-agnostic config
+mechanism so device settings are editable in the ImGui app — not just via
+constructor kwargs.
+
+- **Optional Protocol extension** (mirrors the `discover()`/`reconnect()`
+  opt-in style): a source may expose
+  - `config_spec() -> list[ConfigField]` — each field has `key`, `label`,
+    `kind` (`enum` | `bool` | `int` | `str`), `options` (for enum), and current
+    `value`.
+  - `set_config(**kwargs) -> None` — validates and stores; takes effect on the
+    next `connect()`/`reconnect()`. Raises if called while connected.
+- **`device_config` widget** (`myogestic/widgets/device_config.py`): renders the
+  spec generically — combos for enums, checkboxes for bools, input fields for
+  int/str — with an **Apply & Connect** button that calls `set_config(...)` then
+  `reconnect()`. Sources without `config_spec()` simply don't show the panel
+  (LSL/Replay unaffected).
+- **Lifecycle:** OTB sources start **unconnected**; the acquire loop must not
+  auto-connect until the user applies config and connects (a per-stream
+  "manual connect" flag, or the source's `connect()` blocking on a
+  user-triggered event). This is the one acquire-loop change required; detailed
+  in the implementation plan.
+
+This keeps config source-agnostic and reusable, while constructor kwargs remain
+the programmatic path (the GUI edits the same underlying fields).
 
 ## 8. Testing strategy
 
@@ -233,15 +265,21 @@ device-config GUI panel is out of scope for v1.
 1. `_base` + `_decode` + `_constants` + **MuoviSource** (Muovi & Muovi+),
    unit + loopback tests → hardware-validate.
 2. **QuattrocentoSource** (client + CRC), unit + loopback tests → hardware-validate.
-3. **SessantaquattroSource** later on the same base (Muovi-family protocol),
+3. **GUI device-config** (`config_spec`/`set_config` + `device_config` widget +
+   manual-connect acquire-loop change), wired for both devices.
+4. **SessantaquattroSource** later on the same base (Muovi-family protocol),
    validated when hardware available.
-4. `examples/otb/` script + a short docs page.
+5. `examples/otb/` script + a short docs page.
 
 ## 10. Open questions / risks
 
 - Muovi server-role vs the scan-oriented GUI model — handled via the `discover()`
   semantics above, but UX may want iteration after hardware testing.
-- Conversion-factor gain swap in bdi — we mirror bdi's numbers; revisit if
-  physical-unit correctness matters for downstream analysis.
+- Conversion-factor gain swap in bdi — **resolved**: we use the physically-correct
+  mapping (gain-8 = 286.1 nV finer, gain-4 = 572.2 nV), which differs 2× from the
+  old bdi-dict output. OTB's protocol PDF is not public, but physics settles it.
+- Manual-connect acquire-loop change (§7) is the one cross-cutting change to
+  existing code; keep it minimal and behind a per-stream flag so LSL/Replay
+  behaviour is unchanged.
 - Quattrocento link-local networking (169.254.x.x) is an environment/setup
   concern, not a code one; document NIC setup in the examples/docs.
