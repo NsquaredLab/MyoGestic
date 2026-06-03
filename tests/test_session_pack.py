@@ -312,3 +312,44 @@ def test_save_meta_omits_class_names_when_none():
         loaded = open_session_store(session.path)
         assert loaded.class_names == []
         shutil.rmtree(session.path, ignore_errors=True)
+
+
+def test_sessions_in_same_second_get_distinct_folders(monkeypatch):
+    """Two sessions created within the same wall-clock second must not share a
+    folder — otherwise the first session's pack_to_zip() (which rmtree's its
+    own folder on a daemon thread) can wipe the second recording's data."""
+    import myogestic._session_core as sc
+
+    monkeypatch.setattr(sc.time, "strftime", lambda *a, **k: "2026-06-03_14-30-05")
+    with tempfile.TemporaryDirectory() as tmp:
+        s1 = Session(base_path=tmp)
+        s2 = Session(base_path=tmp)
+        assert s1.path != s2.path
+        assert s1.path.exists() and s2.path.exists()
+
+
+def test_pack_does_not_delete_a_concurrent_same_second_session(monkeypatch):
+    """Reproduce the Stop-then-immediately-Record data-loss scenario: with a
+    shared (second-resolution) folder name, s1.pack_to_zip() deleted s2's data.
+    Distinct folders keep s2 intact."""
+    import myogestic._session_core as sc
+
+    monkeypatch.setattr(sc.time, "strftime", lambda *a, **k: "2026-06-03_14-30-05")
+    with tempfile.TemporaryDirectory() as tmp:
+        info = StreamInfo(n_channels=2, fs=64.0, dtype=np.dtype("float32"))
+
+        s1 = Session(base_path=tmp)
+        s1.init_stream("emg", info)
+        s1.append("emg", np.ones((8, 2), np.float32), np.arange(8, dtype=np.float64))
+        s1.save_meta("FirstSession")
+
+        s2 = Session(base_path=tmp)
+        s2.init_stream("emg", info)
+        s2.append("emg", np.full((8, 2), 2.0, np.float32), np.arange(8, dtype=np.float64))
+
+        # s1 finalises (rmtree's s1.path). s2 must be untouched.
+        s1.pack_to_zip()
+
+        assert s2.path.exists()
+        assert np.array(s2.stores["emg"]).shape == (8, 2)
+        assert np.allclose(np.array(s2.stores["emg"]), 2.0)
