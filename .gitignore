@@ -40,6 +40,10 @@ site/
 # virtual_hand() defaults to this path; override with $VHI_PATH.
 tools/MyoGestic-VHI
 
+# Stray LSL recording-toolbox binaries (separate Rust repo; not a MyoGestic
+# dep — MyoGestic's EMG simulator is the Python myogestic.tools.emg_generator).
+tools/lsl-dummy-stream
+
 # Browser playground - locally built MyoGestic wheel + manifest.
 # CI generates both fresh each deploy; committing would just bitrot.
 docs/playground/wheels/*.whl
