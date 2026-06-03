@@ -207,3 +207,44 @@ def test_base_connect_cleans_up_socket_when_start_fails():
         src.connect()
     assert src._sock is None
     src._b.close()
+
+
+def test_quattro_default_bio_partition_and_aux_scaling():
+    """Default bio excludes the 16 AUX IN + 8 accessory; AUX scaled to V,
+    accessory raw (Codex-flagged: AUX was previously scaled as bio)."""
+    from myogestic.sources.otb.quattrocento import QuattrocentoSource
+
+    src = QuattrocentoSource(nch_mode=0, include_aux=True)  # 120 total
+    assert src._n_bio == 96  # 120 - 16 AUX - 8 accessory
+    out = src._decode(_le_int16_bytes(list(range(120))))
+    assert out.shape == (1, 120)
+    np.testing.assert_allclose(out[0, 10], 10 * C.QUATTRO_CONV_FACTOR_MV, rtol=1e-5)
+    np.testing.assert_allclose(out[0, 96], 96 * C.QUATTRO_AUX_FACTOR_V, rtol=1e-5)
+    np.testing.assert_allclose(out[0, 119], 119.0, rtol=1e-6)  # accessory raw
+
+
+def test_quattro_default_bio_excludes_aux_when_biosignal_only():
+    from myogestic.sources.otb.quattrocento import QuattrocentoSource
+
+    src = QuattrocentoSource(nch_mode=1)  # 216 total, biosignal-only
+    assert src._n_bio == 192
+    out = src._decode(_le_int16_bytes(list(range(216))))
+    assert out.shape == (1, 192)
+
+
+def test_base_read_drops_socket_on_oserror():
+    """A recv() OSError (device reset) drops the socket instead of polling
+    a dead connection forever (Codex-flagged)."""
+
+    class _BoomRecv:
+        def recv(self, _n):
+            raise OSError("connection reset")
+
+        def close(self):
+            pass
+
+    src = _FakeOTB()
+    src.connect()
+    src._sock = _BoomRecv()
+    assert src.read() == (None, None)
+    assert src._sock is None

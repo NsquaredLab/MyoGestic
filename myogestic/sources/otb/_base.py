@@ -69,7 +69,13 @@ class _OTBSource:
             except BlockingIOError:
                 pass
             except OSError:
-                return None, None
+                # Device reset / unplugged. Drop the socket (so we stop polling a
+                # dead connection) but still flush any whole frames already
+                # buffered via _drain() below.
+                try:
+                    self._sock.close()
+                finally:
+                    self._sock = None
         return self._drain()
 
     def disconnect(self) -> None:
