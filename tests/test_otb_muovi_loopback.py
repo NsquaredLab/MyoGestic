@@ -31,14 +31,14 @@ def test_muovi_loopback_emg_mode0():
         # daemon thread exits cleanly without printing a spurious traceback.
         try:
             c = socket.create_connection(("127.0.0.1", port), timeout=2.0)
-            # one sample-instant: channels 0..37 valued 0..37
-            frame = _be_int16_frame(list(range(geo.n_total)))
             c.settimeout(2.0)
-            for _ in range(20):
+            # The source sends the control byte right after accepting, before any
+            # data flows — read it first so a mid-stream disconnect can't race it.
+            received_cmd.append(c.recv(1))
+            frame = _be_int16_frame(list(range(geo.n_total)))  # one sample-instant
+            for _ in range(40):
                 c.sendall(frame)
                 time.sleep(0.005)
-            received_cmd.append(c.recv(1))
-            time.sleep(0.2)
             c.close()
         except OSError:
             pass
@@ -65,6 +65,10 @@ def test_muovi_loopback_emg_mode0():
     assert data.shape[1] == 32
     # channel 0 raw was 0 -> 0 mV; channel 5 raw was 5 -> 5*0.000286 mV
     np.testing.assert_allclose(data[0, 5], 5 * 0.000286, rtol=1e-5)
+
+    # the probe should have received the EMG+mode0+GO control byte (0x09)
+    t.join(timeout=2.0)
+    assert received_cmd and received_cmd[0] == bytes([0x09])
 
 
 def test_muovi_source_importable_from_package():

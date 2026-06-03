@@ -63,6 +63,11 @@ QUATTRO_IP = "169.254.1.10"
 QUATTRO_PORT = 23456
 QUATTRO_FS_BY_MODE = {0: 512.0, 1: 2048.0, 2: 5120.0, 3: 10240.0}
 QUATTRO_NCH_BY_MODE = {0: 120, 1: 216, 2: 312, 3: 408}
+# Biosignal grid channels per mode = streamed total minus 16 AUX IN minus 8
+# accessory (Read_Quattrocento.m: NCHsel = IN.. + MULTIPLE IN.. + AUX IN).
+QUATTRO_BIO_BY_MODE = {0: 96, 1: 192, 2: 288, 3: 384}
+QUATTRO_N_AUX_IN = 16       # back-panel analog AUX IN (scaled to V)
+QUATTRO_N_ACCESSORY = 8     # last 8: counter / trigger / buffer / reserved (raw)
 # Read_Quattrocento.m: GainFactor = 5/2^16/150*1000 (mV); AuxGain = 5/2^16/0.5 (V)
 QUATTRO_CONV_FACTOR_MV = 5 / 2 ** 16 / 150 * 1000
 QUATTRO_AUX_FACTOR_V = 5 / 2 ** 16 / 0.5
@@ -105,13 +110,18 @@ def quattro_config(
 
 
 def quattro_channel_names(nch_total: int, n_bio: int) -> list[str]:
+    # Layout: [n_bio biosignal][16 AUX IN][8 accessory]. The middle AUX block is
+    # whatever is left between bio and the final 8 accessory channels.
+    n_aux = max(0, nch_total - n_bio - QUATTRO_N_ACCESSORY)
     names = [f"bio{i}" for i in range(n_bio)]
-    names += [f"ch{i}" for i in range(n_bio, nch_total)]
+    names += [f"aux{i}" for i in range(n_aux)]
+    names += [f"acc{i}" for i in range(nch_total - n_bio - n_aux)]
     # The 8 accessory channels are the last 8 (0-indexed names[-8:]).
     # Read_Quattrocento.m: counter (RampChan) = nch-7 (1-indexed) -> names[-8];
     # buffer (BuffChan) = nch-4 (1-indexed) -> names[-5]; trigger is the
     # accessory channel between them (config protocol v1.7) -> names[-7].
-    names[-8] = "counter"
-    names[-7] = "trigger"
-    names[-5] = "buffer"
+    if nch_total >= QUATTRO_N_ACCESSORY:
+        names[-8] = "counter"
+        names[-7] = "trigger"
+        names[-5] = "buffer"
     return names
