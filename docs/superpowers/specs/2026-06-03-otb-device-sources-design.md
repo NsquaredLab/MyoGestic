@@ -100,10 +100,13 @@ need no `pyserial`/Qt/bdi, so they can ship in `sources/__init__.py` directly
 ## 5. Wire protocol
 
 Muovi/Muovi+ (§5.1) is verified against the **OTB Muovi probe TCP Protocol v2.4**,
-**SyncStation TCP Protocol v2.8**, and **MuoviPro User Manual v5.1** (manufacturer
-PDFs); the control-byte layout and conversion factors here are authoritative and
-supersede bdi where they differ. Quattrocento (§5.2) is still **bdi-sourced only**
-(no manufacturer PDF yet) — provisional, verify before phase 2.
+**SyncStation TCP Protocol v2.8**, **MuoviPro User Manual v5.1**, and **MuoviLite
+User Manual v1.1** (manufacturer PDFs); the control-byte layout, conversion
+factors, big-endian byte order, and channel map here are authoritative and
+supersede bdi where they differ. OTB also ships **MATLAB demo code** (linked from
+the manuals) as the canonical decode reference. Quattrocento (§5.2) is still
+**bdi-sourced only** (no manufacturer PDF yet) — provisional, verify before
+phase 2.
 
 ### 5.1 Muovi / Muovi+
 - **Socket role:** host (PC) is the **TCP server** on port **54321**; the Muovi
@@ -142,9 +145,14 @@ supersede bdi where they differ. Quattrocento (§5.2) is still **bdi-sourced onl
   | Muovi+ | EMG | 70 | 64 | 6 | 2000 | 2 (int16) | 10 | 1400 |
   | Muovi+ | EEG | 70 | 64 | 6 |  500 | 3 (int24) |  6 | 1260 |
 
-- **Sample format:** **big-endian, signed**; int16 (EMG) / int24 (EEG,
-  manual sign-extend). Frame is Fortran-order `(n_channels, samples_per_frame)`:
-  contiguous values are `[ch0_t0, ch1_t0, …, chN_t0, ch0_t1, …]`.
+- **Sample format:** **big-endian, signed** — *explicitly confirmed* (MuoviLite
+  manual §8.1.2: "the data format in both cases, 24 bit and 16 bit, is big
+  endian"). EMG = int16 (high 16 bits, LSB still 286.1 nV → ±9.375 mV range);
+  EEG = int24 (manual sign-extend). **All 38 channels — biosignal AND the 6 aux —
+  share the active resolution**: 16-bit in EMG, 24-bit in EEG. So the decoder
+  reads one uniform width per frame. Frame is Fortran-order
+  `(n_channels, samples_per_frame)`: contiguous values are
+  `[ch0_t0, ch1_t0, …, chN_t0, ch0_t1, …]`.
 - **Conversion factor — MANUFACTURER-CONFIRMED** (Muovi TCP Protocol v2.4, ×
   raw → mV; same for bio & aux): gain 8 → **286.1 nV/LSB** (`286.1e-6` mV), range
   **±9.375 mV**; gain 4 → **572.2 nV/LSB** (`572.2e-6` mV), range **±18.75 mV**.
@@ -155,12 +163,20 @@ supersede bdi where they differ. Quattrocento (§5.2) is still **bdi-sourced onl
   comment will record the bdi swap. Pre-HPF analog input range ±300 mV (gain 8) /
   ±600 mV (gain 4). EMG mode applies a firmware high-pass (EMA subtraction,
   α=1/25 → cutoff Fsamp/190 ≈ 10.5 Hz at 2000 Hz) — EMG is not raw DC; document it.
-- **Aux:** 6 channels appended after biosignal (rows 32..37 / 64..69), same int
-  width and timing. **Direct-mode meaning** (Muovi TCP Protocol v2.4): aux 1–4 =
-  IMU quaternion W/X/Y/Z, aux 5 = accessory buffer usage, aux 6 = sample counter.
-  Use these as `channel_names`. (Via the SyncStation the two accessory channels
-  are bit-packed differently — TRIG / 7-bit trigger code / buffer / counter — but
-  that's the SyncStation path, see §11.)
+- **Aux:** 6 channels appended after biosignal (Muovi rows 32..37 / Muovi+
+  64..69). **Direct-mode channel map** (Muovi TCP Protocol v2.4 + MuoviLite
+  §8.1.2):
+  - ch 33–36 = **IMU quaternion W / X / Y / Z** (Bosch BNO055, Fusion NDOF;
+    native 14-bit sign-extended to 16/24; updated at **100 Hz**, so values repeat
+    ~20× per quaternion at 2000 Hz — the IMU is held, not interpolated).
+  - ch 37 = **buffer usage + trigger state** (bit-packed); ch 38 = **sample
+    counter** (incrementing; gaps reveal dropped samples).
+
+  Use these as `channel_names`. The IMU/counter are integer/status channels — the
+  bio conversion factor is not physically meaningful for them; when
+  `include_aux=True`, emit them **unscaled** (raw int) and label clearly. (Via the
+  SyncStation the accessory channels are bit-packed differently — TRIG / 7-bit
+  trigger code / buffer — see §11.)
 - **Stop/disconnect:** resend `cfg - 1`, drain, close.
 
 ### 5.2 Quattrocento
@@ -307,9 +323,9 @@ the programmatic path (the GUI edits the same underlying fields).
   supersedes bdi's encoding. Validate on first hardware run using TEST mode
   (`MODE=11`, ramps) — monotonic decoded ramps confirm byte layout + endianness
   in one shot.
-- **Byte order** for the Muovi stream (big-endian, 2's-complement) is OTB
-  convention (matches bdi + OTB MATLAB examples) but not stated in the PDFs;
-  TEST-mode ramps confirm it cheaply on first connect.
+- **Byte order** — **resolved & explicitly confirmed**: big-endian, 2's-complement
+  (MuoviLite manual §8.1.2). TEST-mode ramps remain a cheap first-connect sanity
+  check, but this is no longer an open question.
 - **Quattrocento details are bdi-sourced only** — the user-provided PDFs cover
   Muovi/SyncStation, not Quattrocento. Treat §5.2 as provisional and verify
   against the OTB Quattrocento communication-protocol PDF before/while
