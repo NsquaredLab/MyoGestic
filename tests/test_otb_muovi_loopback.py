@@ -26,20 +26,22 @@ def test_muovi_loopback_emg_mode0():
     received_cmd = []
 
     def fake_probe():
-        c = socket.create_connection(("127.0.0.1", port), timeout=2.0)
-        # one sample-instant: channels 0..37 valued 0..37
-        frame = _be_int16_frame(list(range(geo.n_total)))
-        # read the control byte the source sends on start
-        c.settimeout(2.0)
-        for _ in range(20):
-            c.sendall(frame)
-            time.sleep(0.005)
+        # The probe streams until the source disconnects mid-loop; once the
+        # source closes the socket, sendall/recv raise — swallow those so the
+        # daemon thread exits cleanly without printing a spurious traceback.
         try:
+            c = socket.create_connection(("127.0.0.1", port), timeout=2.0)
+            # one sample-instant: channels 0..37 valued 0..37
+            frame = _be_int16_frame(list(range(geo.n_total)))
+            c.settimeout(2.0)
+            for _ in range(20):
+                c.sendall(frame)
+                time.sleep(0.005)
             received_cmd.append(c.recv(1))
-        except Exception:
+            time.sleep(0.2)
+            c.close()
+        except OSError:
             pass
-        time.sleep(0.2)
-        c.close()
 
     t = threading.Thread(target=fake_probe, daemon=True)
     t.start()
