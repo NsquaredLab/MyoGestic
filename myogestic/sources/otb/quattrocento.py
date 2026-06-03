@@ -51,7 +51,9 @@ class QuattrocentoSource(_OTBSource):
         self._connect_timeout = connect_timeout
         self._nch_total = C.QUATTRO_NCH_BY_MODE[nch_mode]
         # default: everything except the 8 accessory channels is "bio"
-        self._n_bio = n_bio if n_bio is not None else self._nch_total - 8
+        self._n_bio = (
+            n_bio if n_bio is not None else C.QUATTRO_BIO_BY_MODE[nch_mode]
+        )
 
     # --- base hooks ---------------------------------------------------------
     def _open(self) -> StreamInfo:
@@ -90,5 +92,9 @@ class QuattrocentoSource(_OTBSource):
         bio = full[:, : self._n_bio] * np.float32(C.QUATTRO_CONV_FACTOR_MV)
         if not self._include_aux:
             return bio
-        rest = full[:, self._n_bio :]  # AUX IN + accessory, unscaled
-        return np.concatenate([bio, rest], axis=1).astype(np.float32)
+        # Layout after bio: 16 AUX IN (analog, scale to V), then 8 accessory
+        # (counter/trigger/buffer/reserved — raw integers, no scaling).
+        acc_start = self._nch_total - C.QUATTRO_N_ACCESSORY
+        aux_in = full[:, self._n_bio : acc_start] * np.float32(C.QUATTRO_AUX_FACTOR_V)
+        accessory = full[:, acc_start:]
+        return np.concatenate([bio, aux_in, accessory], axis=1).astype(np.float32)

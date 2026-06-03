@@ -34,6 +34,9 @@ stream.start()
 ```
 
 `nch_mode` 0..3 → 120/216/312/408 streamed channels; `fs_mode` 0..3 →
-512/2048/5120/10240 Hz. Always stop the stream before reconnecting.
+512/2048/5120/10240 Hz. Biosignal-only by default exposes the grid channels
+(96/192/288/384 for nch_mode 0..3) scaled to mV; `include_aux=True` also appends
+the 16 AUX IN (analog, scaled to V) and the 8 accessory channels (counter /
+trigger / buffer, raw). Always stop the stream before reconnecting.
 
 > Protocol references: `docs/reference/otb/`.
