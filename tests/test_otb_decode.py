@@ -72,3 +72,51 @@ def test_muovi_geometry_plus_eeg():
 
 def test_muovi_conversion_factor_gain8_mv():
     assert C.MUOVI_CONV_FACTOR_MV == 0.000286
+
+
+# Task 4: _OTBSource base tests
+from myogestic.sources.otb._base import _OTBSource
+from myogestic.stream import StreamInfo
+
+
+class _FakeOTB(_OTBSource):
+    """Drives the base buffering/decoding without a real socket."""
+    def __init__(self):
+        super().__init__()
+        self._info = StreamInfo(n_channels=2, fs=4.0)
+        self._frame_nbytes = 2 * 2  # 2 channels x 1 sample x int16
+
+    def _open(self):
+        return self._info
+
+    def _send_start(self):  # no-op for the fake
+        pass
+
+    def _send_stop(self):
+        pass
+
+    def _decode(self, frame: bytes):
+        return decode_be_int16(frame, n_channels=2)
+
+    # test helper: push bytes into the accumulator as if recv'd
+    def feed(self, raw: bytes):
+        self._buf.extend(raw)
+
+
+def test_base_drain_returns_complete_frames_only():
+    src = _FakeOTB()
+    src.connect()
+    # one and a half frames -> only the complete frame comes out
+    src.feed(_be_int16_bytes([5, 6]) + _be_int16_bytes([7])[:2])
+    data, ts = src._drain()
+    assert data.shape == (1, 2)
+    np.testing.assert_array_equal(data[0], [5, 6])
+    assert ts.shape == (1,)
+    # leftover (partial frame) stays buffered
+    assert len(src._buf) == 2
+
+
+def test_base_read_returns_none_when_empty():
+    src = _FakeOTB()
+    src.connect()
+    assert src.read() == (None, None)
