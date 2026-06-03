@@ -1,4 +1,8 @@
+import socket
+import time
+
 import numpy as np
+import pytest
 
 from myogestic.sources.otb._decode import decode_be_int16, decode_be_int24
 
@@ -161,3 +165,45 @@ def test_quattro_config_is_40_bytes_with_valid_crc():
 def test_quattro_stop_config_byte0():
     cfg = C.quattro_config(fs_mode=1, nch_mode=3, acq_on=False)
     assert cfg[0] == 0x80
+
+
+def test_base_read_handles_peer_close_without_spinning():
+    """Empty recv (peer closed) must flush buffered frames, then drop the
+    socket so the acquire loop stops polling a dead connection."""
+    a, b = socket.socketpair()
+    src = _FakeOTB()
+    src.connect()          # sets _info + frame_nbytes; _sock starts None
+    a.setblocking(False)
+    src._sock = a
+    b.sendall(_be_int16_bytes([5, 6]))  # one complete frame (2ch x 1 sample)
+    b.close()
+    time.sleep(0.05)
+
+    data, ts = src.read()               # drains the buffered frame
+    assert data is not None and data.shape == (1, 2)
+    np.testing.assert_array_equal(data[0], [5, 6])
+
+    data2, ts2 = src.read()             # peer gone -> drop socket, no spin
+    assert (data2, ts2) == (None, None)
+    assert src._sock is None
+    a.close()
+
+
+def test_base_connect_cleans_up_socket_when_start_fails():
+    """If _send_start raises, connect() must not leak the opened socket."""
+
+    class _FailStart(_FakeOTB):
+        def _open(self):
+            self._a, self._b = socket.socketpair()
+            self._sock = self._a
+            self._frame_nbytes = 4
+            return self._info
+
+        def _send_start(self):
+            raise OSError("boom")
+
+    src = _FailStart()
+    with pytest.raises(OSError):
+        src.connect()
+    assert src._sock is None
+    src._b.close()

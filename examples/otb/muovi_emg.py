@@ -4,6 +4,8 @@ Setup: hold the Muovi power button ~5 s to start it as a WiFi access point,
 join its "MVxxx-ID" network from this PC, then run this script. The PC acts as
 the TCP server the probe dials into.
 """
+import time
+
 from myogestic import Stream
 from myogestic.sources.otb import MuoviSource
 
@@ -16,7 +18,6 @@ def main() -> None:
     )
     stream.start()
     print("Connected. Reading 5 windows...")
-    import time
 
     for _ in range(5):
         time.sleep(1.0)

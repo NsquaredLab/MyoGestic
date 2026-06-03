@@ -56,6 +56,11 @@ class QuattrocentoSource(_OTBSource):
     # --- base hooks ---------------------------------------------------------
     def _open(self) -> StreamInfo:
         self._buf.clear()
+        if self._sock is not None:  # don't leak a prior socket on reconnect
+            try:
+                self._sock.close()
+            finally:
+                self._sock = None
         sock = socket.create_connection(
             (self._device_ip, self._port), timeout=self._connect_timeout
         )
