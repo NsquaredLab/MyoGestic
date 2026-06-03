@@ -63,3 +63,8 @@ def test_muovi_loopback_emg_mode0():
     assert data.shape[1] == 32
     # channel 0 raw was 0 -> 0 mV; channel 5 raw was 5 -> 5*0.000286 mV
     np.testing.assert_allclose(data[0, 5], 5 * 0.000286, rtol=1e-5)
+
+
+def test_muovi_source_importable_from_package():
+    from myogestic.sources.otb import MuoviSource as M
+    assert M is MuoviSource
