@@ -140,3 +140,24 @@ def test_decode_le_int16_shape_order_and_sign():
     assert out.dtype == np.float32
     np.testing.assert_array_equal(out[0], [1, 2, 3])
     np.testing.assert_array_equal(out[1], [-1, -2, -3])
+
+
+# Task 8: Quattrocento config builder
+def test_quattro_channel_counts_and_factors():
+    assert C.QUATTRO_NCH_BY_MODE == {0: 120, 1: 216, 2: 312, 3: 408}
+    assert C.QUATTRO_FS_BY_MODE == {0: 512.0, 1: 2048.0, 2: 5120.0, 3: 10240.0}
+    assert abs(C.QUATTRO_CONV_FACTOR_MV - (5 / 2 ** 16 / 150 * 1000)) < 1e-12
+
+
+def test_quattro_config_is_40_bytes_with_valid_crc():
+    cfg = C.quattro_config(fs_mode=1, nch_mode=3, acq_on=True)
+    assert len(cfg) == 40
+    # byte0 = 0x80 | fsamp(01<<3=8) | nch(11<<1=6) | acq_on(1) = 0x80|8|6|1
+    assert cfg[0] == (0x80 | 8 | 6 | 1)
+    # CRC trailer is valid over the first 39 bytes
+    assert cfg[39] == C.crc8(cfg[:39])
+
+
+def test_quattro_stop_config_byte0():
+    cfg = C.quattro_config(fs_mode=1, nch_mode=3, acq_on=False)
+    assert cfg[0] == 0x80
