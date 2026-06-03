@@ -62,6 +62,11 @@ class MuoviSource(_OTBSource):
     # --- split entry points (also used by tests) ----------------------------
     def connect_listen(self) -> None:
         """Bind and listen; returns immediately (does not block on accept)."""
+        if self._server is not None:  # don't leak a prior server on re-listen
+            try:
+                self._server.close()
+            finally:
+                self._server = None
         self._server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server.bind((self._host_ip, self._port))
@@ -79,7 +84,11 @@ class MuoviSource(_OTBSource):
         self._sock = conn
         info = self._open()
         self._info = info
-        self._send_start()
+        try:
+            self._send_start()
+        except Exception:
+            self.disconnect()  # don't leak the accepted socket on a failed start
+            raise
         return info
 
     # --- base hooks ---------------------------------------------------------
