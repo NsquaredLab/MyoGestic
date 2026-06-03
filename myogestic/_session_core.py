@@ -4,6 +4,7 @@ import json
 import logging
 import shutil
 import time
+import uuid
 import zipfile
 from dataclasses import dataclass
 from importlib.util import find_spec
@@ -89,7 +90,12 @@ class Session:
 
     def __init__(self, base_path: str = "sessions"):
         ts = time.strftime("%Y-%m-%d_%H-%M-%S")
-        self.path = Path(base_path) / ts
+        # Append a short random suffix so two sessions started within the same
+        # wall-clock second (e.g. Stop then immediately Record) never share a
+        # folder. pack_to_zip() runs on a daemon thread and shutil.rmtree()s its
+        # own folder; a shared name would let the old session's pack thread wipe
+        # the new recording's data (and collide on the <name>.session.zip path).
+        self.path = Path(base_path) / f"{ts}_{uuid.uuid4().hex[:8]}"
         self.path.mkdir(parents=True, exist_ok=True)
         self.stores: dict[str, zarr.Array] = {}
         self.ts_stores: dict[str, zarr.Array] = {}
