@@ -107,8 +107,11 @@ def quattro_config(
 def quattro_channel_names(nch_total: int, n_bio: int) -> list[str]:
     names = [f"bio{i}" for i in range(n_bio)]
     names += [f"ch{i}" for i in range(n_bio, nch_total)]
-    # last 8 accessory: counter @ -7, trigger @ -6, buffer @ -4
-    names[-7] = "counter"
-    names[-6] = "trigger"
-    names[-4] = "buffer"
+    # The 8 accessory channels are the last 8 (0-indexed names[-8:]).
+    # Read_Quattrocento.m: counter (RampChan) = nch-7 (1-indexed) -> names[-8];
+    # buffer (BuffChan) = nch-4 (1-indexed) -> names[-5]; trigger is the
+    # accessory channel between them (config protocol v1.7) -> names[-7].
+    names[-8] = "counter"
+    names[-7] = "trigger"
+    names[-5] = "buffer"
     return names

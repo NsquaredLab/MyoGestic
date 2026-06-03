@@ -20,7 +20,7 @@ def test_muovi_loopback_emg_mode0():
 
     # MuoviSource is the server; the fake probe is the client that dials in.
     src = MuoviSource(host_ip="127.0.0.1", port=0, mode=0, emg=True)
-    info = src.connect_listen()  # bind+listen, return the bound port (test hook)
+    src.connect_listen()  # bind + listen (does not block on accept)
     port = src._server.getsockname()[1]
 
     received_cmd = []
