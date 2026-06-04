@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import platform
+import subprocess
 
 from imgui_bundle import hello_imgui, imgui
 
@@ -16,7 +17,18 @@ def _rgba(r: int, g: int, b: int, a: int = 255) -> imgui.ImVec4:
 def _is_mac_dark() -> bool:
     if not _IS_MAC:
         return True
-    return os.popen("defaults read -g AppleInterfaceStyle 2>/dev/null").read().strip() == "Dark"
+    # `defaults read` exits non-zero (empty stdout) in Light mode, where the
+    # AppleInterfaceStyle key is absent — so absence ⇒ not dark.
+    try:
+        result = subprocess.run(
+            ["defaults", "read", "-g", "AppleInterfaceStyle"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return result.stdout.strip() == "Dark"
 
 
 # Programmatic UI-scale override, set by App(ui_scale=...). The
