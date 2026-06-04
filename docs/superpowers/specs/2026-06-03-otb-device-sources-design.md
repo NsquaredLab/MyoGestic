@@ -137,7 +137,9 @@ imported/shipped). Quattrocento (§5.2) is **also manufacturer-verified** now
     - `01` = monopolar **16-ch** → **22 ch** (16 bio + 6 aux). ⚠️ Ambiguous: the
       v2.4 PDF labels `01` as "gain 4, 32 ch", while MATLAB v3.0 labels it
       "16-ch monop". Treat as firmware-dependent; **avoid in v1** unless we confirm
-      on the specific probe firmware. (Muovi+ analogue: `0`=64-ch→68, `1`=32-ch→36.)
+      on the specific probe firmware. (Muovi+ analogue, direct mode: `0`=64-ch→70,
+      `1`=32-ch→38 — i.e. 64/32 bio + the same 6 aux. The 68/36 figures appear only
+      via the SyncStation path, §11, which packs channels differently.)
     - `10` = impedance check → 38 ch.
     - `11` = test (ramps on all channels) → 38 ch. Ideal for validating
       decode/endianness on first connect.
@@ -153,7 +155,9 @@ imported/shipped). Quattrocento (§5.2) is **also manufacturer-verified** now
   - **Implication for the source:** `StreamInfo.n_channels` must be derived from
     `(device, mode)`, not hardcoded — mode 1 changes the count. The decoder reads
     `NumChan` channels per sample-instant where `NumChan` = the table above.
-- **Geometry:** Muovi = 32 biosignal + 6 aux = 38 total; Muovi+ = 64 + 6 = 70.
+- **Geometry:** Muovi = 32 biosignal + 6 aux = 38 total; Muovi+ = 64 + 6 = 70
+  (confirmed: Muovi+ is identical to Muovi but with 64 biosignal channels — same
+  6 aux, same control byte, same big-endian format).
 
   | Device | Mode | total | bio | aux | Fs | bytes/sample | samples/frame | frame bytes |
   |---|---|---|---|---|---|---|---|---|
