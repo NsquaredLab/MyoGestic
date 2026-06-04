@@ -51,23 +51,26 @@ class Output:
     ``.push(data)`` from inside ``@pipeline.predict``. Do not register
     them with ``App``; the framework does not track them.
 
-    Args:
-        hz: Send rate of the daemon thread in Hz. Default 50. Tune to
-            match your destination's appetite - LSL subscribers handle
-            high rates well, a serial UART or a gRPC server may not.
+    Parameters
+    ----------
+    hz
+        Send rate of the daemon thread in Hz. Default 50. Tune to
+        match your destination's appetite - LSL subscribers handle
+        high rates well, a serial UART or a gRPC server may not.
 
-    Example:
-        >>> from myogestic.outputs import Output
-        >>> import socket, numpy as np
-        >>>
-        >>> class MyOutput(Output):
-        ...     def __init__(self, addr, hz=50):
-        ...         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        ...         self._addr = addr
-        ...         super().__init__(hz=hz)
-        ...     def _send(self, data):
-        ...         self._sock.sendto(data.astype(np.float32).tobytes(),
-        ...                           self._addr)
+    Examples
+    --------
+    >>> from myogestic.outputs import Output
+    >>> import socket, numpy as np
+    >>>
+    >>> class MyOutput(Output):
+    ...     def __init__(self, addr, hz=50):
+    ...         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    ...         self._addr = addr
+    ...         super().__init__(hz=hz)
+    ...     def _send(self, data):
+    ...         self._sock.sendto(data.astype(np.float32).tobytes(),
+    ...                           self._addr)
     """
 
     def __init__(self, hz: float = 50):

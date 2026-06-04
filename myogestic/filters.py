@@ -103,14 +103,19 @@ class OneEuroFilter:
 
     Reference: https://gery.casiez.net/1euro/
 
-    Args:
-        freq: Expected sample rate (Hz). Used as a fallback dt when no
-            timestamp is passed to ``__call__``. Filter accuracy depends
-            on this matching the *actual* call rate; pass ``t`` from your
-            predict loop if the rate is jittery.
-        min_cutoff: Cutoff (Hz) at zero velocity — controls baseline smoothing.
-        beta: Velocity-to-cutoff gain. Larger → more responsive on fast moves.
-        d_cutoff: Cutoff (Hz) for the velocity smoother.
+    Parameters
+    ----------
+    freq
+        Expected sample rate (Hz). Used as a fallback dt when no
+        timestamp is passed to ``__call__``. Filter accuracy depends
+        on this matching the *actual* call rate; pass ``t`` from your
+        predict loop if the rate is jittery.
+    min_cutoff
+        Cutoff (Hz) at zero velocity — controls baseline smoothing.
+    beta
+        Velocity-to-cutoff gain. Larger → more responsive on fast moves.
+    d_cutoff
+        Cutoff (Hz) for the velocity smoother.
     """
 
     def __init__(
@@ -174,17 +179,24 @@ def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
     changing one string; pass extra kwargs to tune without instantiating
     the class directly.
 
-    Args:
-        name: ``"identity"`` | ``"gaussian"`` | ``"one_euro"``.
-        hz: Expected sample rate. Forwarded as ``freq`` to ``one_euro``;
-            ignored by the others.
-        **kwargs: Forwarded to the filter constructor — e.g.
-            ``make_filter("gaussian", window=10, sigma=2.0)``,
-            ``make_filter("one_euro", hz=32, beta=0.05)``.
+    Parameters
+    ----------
+    name
+        ``"identity"`` | ``"gaussian"`` | ``"one_euro"``.
+    hz
+        Expected sample rate. Forwarded as ``freq`` to ``one_euro``;
+        ignored by the others.
+    **kwargs
+        Forwarded to the filter constructor — e.g.
+        ``make_filter("gaussian", window=10, sigma=2.0)``,
+        ``make_filter("one_euro", hz=32, beta=0.05)``.
 
-    Raises:
-        ValueError: if the name isn't recognized.
-        TypeError: if a kwarg is unknown for the chosen filter.
+    Raises
+    ------
+    ValueError
+        if the name isn't recognized.
+    TypeError
+        if a kwarg is unknown for the chosen filter.
     """
     n = name.lower()
     if n == "identity":

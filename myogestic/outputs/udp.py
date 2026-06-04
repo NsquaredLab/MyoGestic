@@ -17,19 +17,24 @@ class UDPOutput(Output):
     own decoder and you just want the freshest vector with minimal
     latency.
 
-    Args:
-        host: Destination hostname or IP. ``"127.0.0.1"`` for
-            same-machine consumers; a LAN address for the next box over.
-        port: Destination UDP port.
-        hz: Send rate of the daemon thread (Hz). Default 50.
+    Parameters
+    ----------
+    host
+        Destination hostname or IP. ``"127.0.0.1"`` for
+        same-machine consumers; a LAN address for the next box over.
+    port
+        Destination UDP port.
+    hz
+        Send rate of the daemon thread (Hz). Default 50.
 
-    Example:
-        >>> outlet = UDPOutput("127.0.0.1", 9000, hz=60)
-        >>> @pipeline.predict
-        ... def predict(model, features):
-        ...     vec = model.predict(features.reshape(1, -1))[0]
-        ...     outlet.push(vec)
-        ...     return {"vec": vec}
+    Examples
+    --------
+    >>> outlet = UDPOutput("127.0.0.1", 9000, hz=60)
+    >>> @pipeline.predict
+    ... def predict(model, features):
+    ...     vec = model.predict(features.reshape(1, -1))[0]
+    ...     outlet.push(vec)
+    ...     return {"vec": vec}
     """
 
     def __init__(self, host: str, port: int, hz: float = 50):

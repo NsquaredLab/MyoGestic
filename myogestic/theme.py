@@ -95,15 +95,15 @@ def apply_theme() -> None:
 
     dark = _is_mac_dark()
     if dark:
-        accent = _rgba(10, 132, 255)           # systemBlue (dark)
+        accent = _rgba(10, 132, 255)  # systemBlue (dark)
         accent_hi = _rgba(64, 156, 255)
         text = _rgba(255, 255, 255)
-        text_dim = _rgba(235, 235, 245, 153)   # secondaryLabel
-        window_bg = _rgba(30, 30, 30)          # NSVisualEffectView.dark
-        child_bg = _rgba(30, 30, 30)           # match window_bg — borders delineate cells
-        control_bg = _rgba(58, 58, 60, 230)    # systemGray5 dark
+        text_dim = _rgba(235, 235, 245, 153)  # secondaryLabel
+        window_bg = _rgba(30, 30, 30)  # NSVisualEffectView.dark
+        child_bg = _rgba(30, 30, 30)  # match window_bg — borders delineate cells
+        control_bg = _rgba(58, 58, 60, 230)  # systemGray5 dark
         control_hi = _rgba(72, 72, 74)
-        border = _rgba(84, 84, 88, 100)        # separator
+        border = _rgba(84, 84, 88, 100)  # separator
         header = _rgba(99, 99, 102, 90)
     else:
         accent = _rgba(0, 122, 255)

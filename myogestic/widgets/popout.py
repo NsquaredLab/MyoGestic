@@ -57,19 +57,27 @@ def popout_panel(
 ) -> None:
     """Render `gui_fn` inside a dockable, tearable ImGui window.
 
-    Args:
-        title: Window title — also used as the ImGui id and as the dedup
-            key for repeated calls.
-        gui_fn: Zero-arg callable invoked by ImGui every frame. Treat it
-            like the body of a `with imgui.begin(...):` — call ``imgui``/
-            ``implot`` from inside.
-        default_open: Initial visibility of the window on first launch.
-            Subsequent launches restore from ``.imgui_state``.
-        can_be_closed: Whether the user can close the window with the X
-            button. Closed windows reappear via the "View" menu.
-        remember_is_visible: Whether visibility is persisted in the imgui
-            ini file. Defaults to True for existing behavior.
+    Parameters
+    ----------
+    title
+        Window title — also used as the ImGui id and as the dedup
+        key for repeated calls.
+    gui_fn
+        Zero-arg callable invoked by ImGui every frame. Treat it
+        like the body of a `with imgui.begin(...):` — call ``imgui``/
+        ``implot`` from inside.
+    default_open
+        Initial visibility of the window on first launch.
+        Subsequent launches restore from ``.imgui_state``.
+    can_be_closed
+        Whether the user can close the window with the X
+        button. Closed windows reappear via the "View" menu.
+    remember_is_visible
+        Whether visibility is persisted in the imgui
+        ini file. Defaults to True for existing behavior.
 
+    Notes
+    -----
     When `App(docking=True)` is not active, this just runs `gui_fn()`
     inline so the call site stays the same.
     """

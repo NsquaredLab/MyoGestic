@@ -43,27 +43,41 @@ if TYPE_CHECKING:
 class InterfaceSpec:
     """Description of an external visual-feedback interface (e.g. VHI).
 
-    Args:
-        name: Human label, used as the process_launcher row title.
-        process: argv to spawn the interface (passed to ``subprocess.Popen``).
-            An empty list means "VHI not installed" — ``launcher()`` surfaces
-            a friendly error pointing at ``install_vhi`` rather than letting
-            Popen fail mysteriously.
-        output_stream: LSL outlet name the interface listens on.
-        output_channels: Number of channels in the output vector.
-        output_hz: Outlet send rate.
-        control_stream: LSL inlet name the interface publishes when the user
-            drives it manually (used for regression targets). May be None.
-        control_channels: Channel count of the control stream, if known.
-        control_pose_stream: LSL *outlet* name for streaming a continuous pose
-            TO the interface's control hand (opt-in; consumed only when VHI is
-            in STREAM control mode). Opposite direction to ``control_stream``.
-        control_pose_channels: Channel count of the control-pose outlet.
-        control_pose_hz: Send rate of the control-pose outlet.
-        grpc_host: VHI gRPC control-server host.
-        grpc_port: VHI gRPC control-server port.
-        install_root: The directory we resolved ``process`` from. Carried so the
-            "not installed" error can quote it.
+    Attributes
+    ----------
+    name
+        Human label, used as the process_launcher row title.
+    process
+        argv to spawn the interface (passed to ``subprocess.Popen``).
+        An empty list means "VHI not installed" — ``launcher()`` surfaces
+        a friendly error pointing at ``install_vhi`` rather than letting
+        Popen fail mysteriously.
+    output_stream
+        LSL outlet name the interface listens on.
+    output_channels
+        Number of channels in the output vector.
+    output_hz
+        Outlet send rate.
+    control_stream
+        LSL inlet name the interface publishes when the user
+        drives it manually (used for regression targets). May be None.
+    control_channels
+        Channel count of the control stream, if known.
+    control_pose_stream
+        LSL *outlet* name for streaming a continuous pose
+        TO the interface's control hand (opt-in; consumed only when VHI is
+        in STREAM control mode). Opposite direction to ``control_stream``.
+    control_pose_channels
+        Channel count of the control-pose outlet.
+    control_pose_hz
+        Send rate of the control-pose outlet.
+    grpc_host
+        VHI gRPC control-server host.
+    grpc_port
+        VHI gRPC control-server port.
+    install_root
+        The directory we resolved ``process`` from. Carried so the
+        "not installed" error can quote it.
     """
     name: str
     process: list[str]
@@ -224,18 +238,24 @@ def _resolve_vhi_launch(
 ) -> list[str]:
     """Pick (binary or Godot source) launch argv for VHI in ``install_root``.
 
-    Args:
-        install_root: Directory containing either a packaged binary
-            (``VHI.app`` / ``VHI.exe`` / ``VHI.x86_64``) or a Godot source
-            project (``project.godot``).
-        godot_bin: Explicit override for the Godot binary path. ``None`` means
-            "auto-detect via $GODOT_BIN, PATH, then platform default".
-        mode: ``"binary"``, ``"godot"``, or ``"auto"``. In auto, an explicit
-            ``godot_bin`` argument or ``$GODOT_BIN`` env var signals "use
-            Godot source"; otherwise prefer the packaged binary, falling
-            back to source if no binary is installed but a project is.
+    Parameters
+    ----------
+    install_root
+        Directory containing either a packaged binary
+        (``VHI.app`` / ``VHI.exe`` / ``VHI.x86_64``) or a Godot source
+        project (``project.godot``).
+    godot_bin
+        Explicit override for the Godot binary path. ``None`` means
+        "auto-detect via $GODOT_BIN, PATH, then platform default".
+    mode
+        ``"binary"``, ``"godot"``, or ``"auto"``. In auto, an explicit
+        ``godot_bin`` argument or ``$GODOT_BIN`` env var signals "use
+        Godot source"; otherwise prefer the packaged binary, falling
+        back to source if no binary is installed but a project is.
 
-    Returns: argv ready for ``Popen``; empty list when VHI isn't installed.
+    Returns
+    -------
+    argv ready for ``Popen``; empty list when VHI isn't installed.
     """
     binary = _installed_binary(install_root)
     has_project = (install_root / "project.godot").exists()
@@ -271,22 +291,30 @@ def virtual_hand(
 ) -> InterfaceSpec:
     """The MyoGestic Virtual Hand Interface (VHI).
 
-    Args:
-        godot_bin: Path to the Godot binary, for source-mode launch. Falls
-            back to ``$GODOT_BIN``, then ``which("godot4")`` /
-            ``which("godot")``, then platform GUI defaults.
-        vhi_path: Directory containing VHI (binary install OR Godot project).
-            Falls back to ``$VHI_PATH``, then the default install root —
-            ``<repo>/tools/MyoGestic-VHI`` in a git checkout, otherwise
-            ``<user_data>/myogestic/vhi``.
-        grpc_host: VHI gRPC host. Falls back to ``$VHI_GRPC_HOST`` then
-            ``127.0.0.1``.
-        grpc_port: VHI gRPC port. Falls back to ``$VHI_GRPC_PORT`` then
-            ``50051``.
-        mode: Launch mode — ``"binary"``, ``"godot"``, or ``"auto"`` (default).
-            Also reads ``$VHI_LAUNCH_MODE``. Explicit ``mode`` always wins.
+    Parameters
+    ----------
+    godot_bin
+        Path to the Godot binary, for source-mode launch. Falls
+        back to ``$GODOT_BIN``, then ``which("godot4")`` /
+        ``which("godot")``, then platform GUI defaults.
+    vhi_path
+        Directory containing VHI (binary install OR Godot project).
+        Falls back to ``$VHI_PATH``, then the default install root —
+        ``<repo>/tools/MyoGestic-VHI`` in a git checkout, otherwise
+        ``<user_data>/myogestic/vhi``.
+    grpc_host
+        VHI gRPC host. Falls back to ``$VHI_GRPC_HOST`` then
+        ``127.0.0.1``.
+    grpc_port
+        VHI gRPC port. Falls back to ``$VHI_GRPC_PORT`` then
+        ``50051``.
+    mode
+        Launch mode — ``"binary"``, ``"godot"``, or ``"auto"`` (default).
+        Also reads ``$VHI_LAUNCH_MODE``. Explicit ``mode`` always wins.
 
-    Returns: An ``InterfaceSpec`` with the resolved argv, ready to wire into
+    Returns
+    -------
+    An ``InterfaceSpec`` with the resolved argv, ready to wire into
     ``process_launcher()``. If VHI isn't installed yet, ``launcher()`` raises
     a ``FileNotFoundError`` pointing at ``install_vhi``.
     """

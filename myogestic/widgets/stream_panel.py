@@ -40,11 +40,15 @@ def stream_panel(
 ) -> None:
     """Render one row per stream with status + metadata + reconnect.
 
-    Args:
-        ctx: App context.
-        selectable: When True and the stream's source supports `discover()`,
-            auto-populate available targets as inline connect buttons.
-        show_header: Render a uniform `panel_header` above the rows.
+    Parameters
+    ----------
+    ctx
+        App context.
+    selectable
+        When True and the stream's source supports `discover()`,
+        auto-populate available targets as inline connect buttons.
+    show_header
+        Render a uniform `panel_header` above the rows.
     """
     if show_header:
         panel_header("Streams", fa.ICON_FA_PLUG)

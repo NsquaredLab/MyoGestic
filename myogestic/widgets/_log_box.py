@@ -34,16 +34,21 @@ def render_log(
     means the autoscroll button toggles the *default* behavior; the user
     can always opt out for a frame by scrolling up.
 
-    Args:
-        widget_id: Unique per-panel ID for the child window's ImGui label.
-        lines: Any sequence — list, tuple, deque, anything iterable. Caller
-            is responsible for thread-safe access; we snapshot under the
-            GIL via ``list(lines)`` to dodge concurrent-mutation issues
-            with deques/lists appended to from a worker thread.
-        height: Pixel height of the log box. ``-1`` (default) fills the
-            remaining vertical space of the parent.
-        autoscroll: Stick-to-bottom toggle (typically wired to a button
-            elsewhere on the parent panel).
+    Parameters
+    ----------
+    widget_id
+        Unique per-panel ID for the child window's ImGui label.
+    lines
+        Any sequence — list, tuple, deque, anything iterable. Caller
+        is responsible for thread-safe access; we snapshot under the
+        GIL via ``list(lines)`` to dodge concurrent-mutation issues
+        with deques/lists appended to from a worker thread.
+    height
+        Pixel height of the log box. ``-1`` (default) fills the
+        remaining vertical space of the parent.
+    autoscroll
+        Stick-to-bottom toggle (typically wired to a button
+        elsewhere on the parent panel).
     """
     imgui.begin_child(
         f"##{widget_id}_log_child",

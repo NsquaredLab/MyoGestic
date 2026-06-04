@@ -12,16 +12,19 @@ class LSLSource:
     and the framework's acquisition thread handles the rest. Uses
     `mne_lsl` under the hood.
 
-    Args:
-        stream_name: LSL outlet name to subscribe to (e.g. ``"TestEMG1"``,
-            ``"VHI_Control"``). Resolved by name only - channel layout and
-            sample rate come from the outlet's own metadata.
+    Parameters
+    ----------
+    stream_name
+        LSL outlet name to subscribe to (e.g. ``"TestEMG1"``,
+        ``"VHI_Control"``). Resolved by name only - channel layout and
+        sample rate come from the outlet's own metadata.
 
-    Example:
-        >>> from myogestic import Stream
-        >>> from myogestic.sources import LSLSource
-        >>> stream = Stream("emg", source=LSLSource("TestEMG1"),
-        ...                 window_seconds=1.0)
+    Examples
+    --------
+    >>> from myogestic import Stream
+    >>> from myogestic.sources import LSLSource
+    >>> stream = Stream("emg", source=LSLSource("TestEMG1"),
+    ...                 window_seconds=1.0)
 
     The source is non-blocking: :meth:`read` pulls whatever is
     immediately available from the inlet and returns ``(None, None)``
@@ -41,11 +44,13 @@ class LSLSource:
         and dtype come from the outlet's metadata. Blocks up to 10 s
         waiting for the outlet to appear on the network.
 
-        Raises:
-            RuntimeError: if no outlet with ``stream_name`` is found.
-                The error message lists every outlet that *is* currently
-                advertised, to make typos and stream-name mismatches
-                obvious.
+        Raises
+        ------
+        RuntimeError
+            if no outlet with ``stream_name`` is found.
+            The error message lists every outlet that *is* currently
+            advertised, to make typos and stream-name mismatches
+            obvious.
         """
         streams = resolve_streams(timeout=10.0, name=self._name)
         if not streams:

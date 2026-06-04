@@ -31,14 +31,19 @@ class StreamInfo:
     the ring buffer, lay out the signal viewer, and decide how to
     serialise the stream when recording.
 
-    Attributes:
-        n_channels: Channel count. Fixed for the life of the source.
-        fs: Sample rate in Hz. Used to convert ``window_seconds`` /
-            ``buffer_seconds`` into sample counts.
-        dtype: NumPy dtype of each sample. Defaults to ``float32``;
-            most signal-processing widgets assume this.
-        channel_names: Optional per-channel labels for the signal viewer
-            legend. ``None`` (default) renders as ``ch0``, ``ch1``, ...
+    Attributes
+    ----------
+    n_channels
+        Channel count. Fixed for the life of the source.
+    fs
+        Sample rate in Hz. Used to convert ``window_seconds`` /
+        ``buffer_seconds`` into sample counts.
+    dtype
+        NumPy dtype of each sample. Defaults to ``float32``;
+        most signal-processing widgets assume this.
+    channel_names
+        Optional per-channel labels for the signal viewer
+        legend. ``None`` (default) renders as ``ch0``, ``ch1``, ...
     """
 
     n_channels: int
@@ -127,14 +132,15 @@ class Stream:
       transient consumers (slow extract, momentary GUI hitches) don't
       lose data.
 
-    Example:
-        >>> from myogestic import App, Stream
-        >>> from myogestic.sources import LSLSource
-        >>> app = App("hello")
-        >>> app.streams(
-        ...     Stream("emg", source=LSLSource("TestEMG1"),
-        ...            window_seconds=1.0, buffer_seconds=10),
-        ... )
+    Examples
+    --------
+    >>> from myogestic import App, Stream
+    >>> from myogestic.sources import LSLSource
+    >>> app = App("hello")
+    >>> app.streams(
+    ...     Stream("emg", source=LSLSource("TestEMG1"),
+    ...            window_seconds=1.0, buffer_seconds=10),
+    ... )
 
     See [Streams concept](../concepts/streams.md) for the buffer +
     decimation model in depth, and [Add a custom source](../how-to/add-a-source.md)
@@ -150,12 +156,17 @@ class Stream:
     ):
         """Live ring-buffered stream with display decimation.
 
-        Args:
-            name: Stream label (also used as the recorded zarr stream key).
-            source: Anything implementing the :class:`Source` protocol.
-            window_seconds: Duration in **seconds** of the window returned
-                by :meth:`get_window`.
-            buffer_seconds: Ring-buffer depth in seconds. Defaults to 10.
+        Parameters
+        ----------
+        name
+            Stream label (also used as the recorded zarr stream key).
+        source
+            Anything implementing the :class:`Source` protocol.
+        window_seconds
+            Duration in **seconds** of the window returned
+            by :meth:`get_window`.
+        buffer_seconds
+            Ring-buffer depth in seconds. Defaults to 10.
         """
         self.name = name
         self._source = source

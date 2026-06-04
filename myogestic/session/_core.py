@@ -34,12 +34,15 @@ class LabelEvent:
     :func:`~myogestic.session.iter_aligned_windows`) walk the track to
     decide which sample range gets which class index.
 
-    Attributes:
-        timestamp: LSL clock time (seconds) when the label was emitted.
-            Use ``mne_lsl.lsl.local_clock()`` if you ever need to mint
-            one by hand.
-        class_index: Index into the session's ``class_names`` list.
-            ``-1`` is the unlabeled sentinel (the iterators skip it).
+    Attributes
+    ----------
+    timestamp
+        LSL clock time (seconds) when the label was emitted.
+        Use ``mne_lsl.lsl.local_clock()`` if you ever need to mint
+        one by hand.
+    class_index
+        Index into the session's ``class_names`` list.
+        ``-1`` is the unlabeled sentinel (the iterators skip it).
     """
 
     timestamp: float
@@ -82,10 +85,12 @@ class Session:
     which transparently handles both folders and ``.session.zip``
     archives.
 
-    Args:
-        base_path: Parent directory; the session creates a
-            timestamp-named subdirectory inside. Default ``"sessions"``
-            (created if missing).
+    Parameters
+    ----------
+    base_path
+        Parent directory; the session creates a
+        timestamp-named subdirectory inside. Default ``"sessions"``
+        (created if missing).
     """
 
     def __init__(self, base_path: str = "sessions"):
@@ -148,11 +153,14 @@ class Session:
     def save_meta(self, app_name: str, class_names: list[str] | None = None) -> None:
         """Write meta.json + labels.json to the session folder.
 
-        Args:
-            app_name: Identifier for the producing app.
-            class_names: Optional human-readable names for label class indices.
-                Persisting them makes old sessions self-describing: readers can
-                render labels without an external lookup.
+        Parameters
+        ----------
+        app_name
+            Identifier for the producing app.
+        class_names
+            Optional human-readable names for label class indices.
+            Persisting them makes old sessions self-describing: readers can
+            render labels without an external lookup.
         """
         meta: dict[str, object] = {
             "app_name": app_name,

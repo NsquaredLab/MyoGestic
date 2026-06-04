@@ -27,17 +27,23 @@ from dataclasses import dataclass
 class TemplateInspectorRow:
     """One row in the inspector table.
 
-    Args:
-        key: Stable identity (e.g. ``"<session>#<trial_idx>"``). The
-            widget uses this for selection and for ImGui id disambiguation.
-        label: Short class/category badge (e.g. ``"OPEN"`` / ``"CLOSED"``).
-        accepted: Mutable. True = include in training. Toggled in place
-            by the checkbox.
-        info_text: Optional secondary text shown in the table (e.g.
-            session name, source path). May be ``None``.
-        energy: Optional scalar shown as a normalised progress bar in
-            the energy column. Caller's choice of metric — RMS energy,
-            peak amplitude, anything monotonic. ``None`` hides the bar.
+    Parameters
+    ----------
+    key
+        Stable identity (e.g. ``"<session>#<trial_idx>"``). The
+        widget uses this for selection and for ImGui id disambiguation.
+    label
+        Short class/category badge (e.g. ``"OPEN"`` / ``"CLOSED"``).
+    accepted
+        Mutable. True = include in training. Toggled in place
+        by the checkbox.
+    info_text
+        Optional secondary text shown in the table (e.g.
+        session name, source path). May be ``None``.
+    energy
+        Optional scalar shown as a normalised progress bar in
+        the energy column. Caller's choice of metric — RMS energy,
+        peak amplitude, anything monotonic. ``None`` hides the bar.
     """
     key: str
     label: str
@@ -61,20 +67,27 @@ def template_inspector(
 ) -> str | None:
     """Render the table. Returns the selected row's key (or ``None``).
 
-    Args:
-        uid: Stable identity string. Two calls with the same uid share
-            selection state across frames; different uids are independent.
-        rows: List of ``TemplateInspectorRow`` to render. Mutated in place
-            (only ``accepted`` is touched by the widget).
-        title: Header text shown above the table.
-        height: Table height in pixels.
-        label_colors: Optional ``{label_text: (r, g, b, a)}`` for the
-            colored badge in the label column. Unmapped labels render in
-            the default text color.
+    Parameters
+    ----------
+    uid
+        Stable identity string. Two calls with the same uid share
+        selection state across frames; different uids are independent.
+    rows
+        List of ``TemplateInspectorRow`` to render. Mutated in place
+        (only ``accepted`` is touched by the widget).
+    title
+        Header text shown above the table.
+    height
+        Table height in pixels.
+    label_colors
+        Optional ``{label_text: (r, g, b, a)}`` for the
+        colored badge in the label column. Unmapped labels render in
+        the default text color.
 
-    Returns:
-        The ``key`` of the currently-selected row (or ``None`` if no row
-        is selected, or the previously-selected row was removed).
+    Returns
+    -------
+    The ``key`` of the currently-selected row (or ``None`` if no row
+    is selected, or the previously-selected row was removed).
     """
     from imgui_bundle import imgui
 

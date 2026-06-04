@@ -40,15 +40,20 @@ class VhiMovementPanel:
             with grid[8, 0]:
                 panel.ui()
 
-    Args:
-        client: The :class:`VhiControlClient` used to fetch state and dispatch
-            ``SetMovement`` commands.
-        on_movement: Click handler for a movement button. Defaults to
-            ``client.set_movement``; pass a wrapper to layer side-effects
-            (e.g. snap a session label, fire an edge-trigger).
-        refresh_min_interval_s: Minimum seconds between background state
-            refreshes. Default 1 s.
-        label: Panel header text rendered above the button grid.
+    Parameters
+    ----------
+    client
+        The :class:`VhiControlClient` used to fetch state and dispatch
+        ``SetMovement`` commands.
+    on_movement
+        Click handler for a movement button. Defaults to
+        ``client.set_movement``; pass a wrapper to layer side-effects
+        (e.g. snap a session label, fire an edge-trigger).
+    refresh_min_interval_s
+        Minimum seconds between background state
+        refreshes. Default 1 s.
+    label
+        Panel header text rendered above the button grid.
     """
 
     __slots__ = ("_cache", "_client", "_label", "_on_movement", "_refresh_interval")

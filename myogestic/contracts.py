@@ -25,15 +25,16 @@ class TrainingData:
         def ui(ctx):
             pipeline.training_data = session_manager(...)
 
-    Attributes:
-        paths:
-            Session locations (folders or ``.session.zip`` archives).
-        class_names:
-            Human-readable labels — same list passed to
-            ``recording_controls`` / ``session_manager``.
-        classes:
-            Active class indices to include. Pass as the ``classes=`` arg
-            to ``iter_labeled_windows`` / ``iter_aligned_windows``.
+    Attributes
+    ----------
+    paths
+        Session locations (folders or ``.session.zip`` archives).
+    class_names
+        Human-readable labels — same list passed to
+        ``recording_controls`` / ``session_manager``.
+    classes
+        Active class indices to include. Pass as the ``classes=`` arg
+        to ``iter_labeled_windows`` / ``iter_aligned_windows``.
     """
 
     paths: list[str] = field(default_factory=list)

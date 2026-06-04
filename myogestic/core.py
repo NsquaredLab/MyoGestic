@@ -89,20 +89,25 @@ class App:
     `app.before_run_hooks` / `app.cleanup_hooks` - user code rarely
     needs to touch those lists directly.
 
-    Args:
-        name: Window title. Also used for the persisted ImGui state
-            file (``.imgui_state/<name>.ini``) when ``docking=True``.
-        theme: Apply MyoGestic's built-in ImGui theme. Set ``False`` to
-            keep the Dear ImGui defaults.
-        docking: Experimental - enable ImGui docking + multi-viewport
-            so panels registered via ``app.popout(...)`` become tearable
-            DockableWindows. macOS Retina viewport sizing of detached
-            windows can be wrong on initial draw; treat as experimental.
-        ui_scale: Global UI zoom factor - scales the font and imgui's style
-            metrics (padding, spacing, rounding). ``None`` uses
-            ``$MYOGESTIC_UI_SCALE`` then ``1.0``. The env var, if set,
-            overrides this - a per-machine display fix beats the example's
-            value. Clamped to ``[0.5, 2.0]``. Has no effect when ``theme=False``.
+    Parameters
+    ----------
+    name
+        Window title. Also used for the persisted ImGui state
+        file (``.imgui_state/<name>.ini``) when ``docking=True``.
+    theme
+        Apply MyoGestic's built-in ImGui theme. Set ``False`` to
+        keep the Dear ImGui defaults.
+    docking
+        Experimental - enable ImGui docking + multi-viewport
+        so panels registered via ``app.popout(...)`` become tearable
+        DockableWindows. macOS Retina viewport sizing of detached
+        windows can be wrong on initial draw; treat as experimental.
+    ui_scale
+        Global UI zoom factor - scales the font and imgui's style
+        metrics (padding, spacing, rounding). ``None`` uses
+        ``$MYOGESTIC_UI_SCALE`` then ``1.0``. The env var, if set,
+        overrides this - a per-machine display fix beats the example's
+        value. Clamped to ``[0.5, 2.0]``. Has no effect when ``theme=False``.
     """
 
     def __init__(self, name: str, theme: bool = True, docking: bool = False,
@@ -133,8 +138,10 @@ class App:
         registration time. Calling this with the same name overwrites
         the previous registration - typically you call it once at setup.
 
-        Args:
-            *streams: One or more :class:`Stream` instances.
+        Parameters
+        ----------
+        *streams
+            One or more :class:`Stream` instances.
         """
         for s in streams:
             self.ctx.streams[s.name] = s
@@ -149,10 +156,12 @@ class App:
         bridge is keyed by its ``.name`` into ``ctx.bridges``; calling
         with the same name overwrites the previous registration.
 
-        Args:
-            *bridges: One or more bridge instances - each must expose a
-                ``.name`` attribute and a Bridge-like interface
-                (``.start()``, ``.stop()``).
+        Parameters
+        ----------
+        *bridges
+            One or more bridge instances - each must expose a
+            ``.name`` attribute and a Bridge-like interface
+            (``.start()``, ``.stop()``).
         """
         for b in bridges:
             self.ctx.bridges[b.name] = b
@@ -199,9 +208,11 @@ class App:
         the recording. Refuses to start if ``ctx.state`` isn't
         ``"idle"``; updates ``ctx.status_message`` with the result.
 
-        Args:
-            base_path: Directory where the per-session subfolder is
-                created. Defaults to ``"sessions"``.
+        Parameters
+        ----------
+        base_path
+            Directory where the per-session subfolder is
+            created. Defaults to ``"sessions"``.
         """
         if not can_transition(self.ctx.state, AppState.RECORDING):
             self.ctx.status_message = (

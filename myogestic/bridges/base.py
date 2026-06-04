@@ -22,10 +22,13 @@ class Bridge:
     Registered via ``app.bridges(...)``; the app starts them after
     streams and tears them down on cleanup.
 
-    Args:
-        name: Human label, used in the bridge panel and logs.
-        command: argv passed to ``subprocess.Popen``. Stdout and stderr
-            are captured to PIPE; nothing reads them by default.
+    Parameters
+    ----------
+    name
+        Human label, used in the bridge panel and logs.
+    command
+        argv passed to ``subprocess.Popen``. Stdout and stderr
+        are captured to PIPE; nothing reads them by default.
     """
 
     def __init__(self, name: str, command: list[str]):
@@ -67,14 +70,18 @@ class WebCamBridge(Bridge):
     per-frame LSL clock so the rest of the app can align webcam time
     with EMG time.
 
-    Args:
-        name: Bridge label. The published LSL clock outlet is named
-            ``"{name}_clock"`` (e.g. ``WebCamBridge("cam")`` publishes
-            ``"cam_clock"``).
-        device: OpenCV device index. ``0`` is the system default
-            camera; secondary cameras get ``1``, ``2``, ... in the
-            order the OS enumerates them.
-        zarr_path: Where to write the frame array. Created if missing.
+    Parameters
+    ----------
+    name
+        Bridge label. The published LSL clock outlet is named
+        ``"{name}_clock"`` (e.g. ``WebCamBridge("cam")`` publishes
+        ``"cam_clock"``).
+    device
+        OpenCV device index. ``0`` is the system default
+        camera; secondary cameras get ``1``, ``2``, ... in the
+        order the OS enumerates them.
+    zarr_path
+        Where to write the frame array. Created if missing.
     """
 
     def __init__(self, name: str, device: int = 0, zarr_path: str = "session/cam.zarr"):
@@ -104,10 +111,13 @@ class CustomBridge(Bridge):
     (``sys.executable``); the rest is up to you (publish LSL, write
     Zarr, talk to a custom message bus, ...).
 
-    Args:
-        name: Bridge label.
-        script: Path to the Python script to spawn (e.g.
-            ``"capture/ultrasound.py"``).
+    Parameters
+    ----------
+    name
+        Bridge label.
+    script
+        Path to the Python script to spawn (e.g.
+        ``"capture/ultrasound.py"``).
     """
 
     def __init__(self, name: str, script: str):

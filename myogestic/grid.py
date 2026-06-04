@@ -11,11 +11,13 @@ deliberately rejected so a reader can never confuse "300 pixels" with
 "300 shares of leftover space". Default (no track list) is all-``Fr(1)``,
 i.e. equal distribution.
 
-Example::
+Examples
+--------
+::
 
     from myogestic.grid import Grid, Px, Fr
 
-    grid = Grid(3, 4)                             # 3 equal rows × 4 equal cols
+    grid = Grid(3, 4) # 3 equal rows x 4 equal cols
     grid = Grid(
         8, 3,
         row_height=[Px(200), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1)],
@@ -127,18 +129,26 @@ class Grid:
     Both axes accept the same Px/Fr track specs. See module docstring for
     examples.
 
-    Args:
-        rows: Number of rows.
-        cols: Number of columns.
-        row_height: Per-row track specs (length must equal ``rows``).
-            Default ``None`` → all rows share equally (``[Fr(1)] * rows``).
-        col_width: Per-column track specs (length must equal ``cols``).
-            Default ``None`` → all columns share equally (``[Fr(1)] * cols``).
+    Parameters
+    ----------
+    rows
+        Number of rows.
+    cols
+        Number of columns.
+    row_height
+        Per-row track specs (length must equal ``rows``).
+        Default ``None`` → all rows share equally (``[Fr(1)] * rows``).
+    col_width
+        Per-column track specs (length must equal ``cols``).
+        Default ``None`` → all columns share equally (``[Fr(1)] * cols``).
 
-    Raises:
-        ValueError: if a list length doesn't match ``rows`` / ``cols``, or
-            if any track value is non-finite or negative.
-        TypeError: if a track entry isn't Px, Fr, or a number.
+    Raises
+    ------
+    ValueError
+        if a list length doesn't match ``rows`` / ``cols``, or
+        if any track value is non-finite or negative.
+    TypeError
+        if a track entry isn't Px, Fr, or a number.
     """
 
     def __init__(
