@@ -10,6 +10,9 @@ Constructors raise a clear ImportError naming the extra to install.
 
 Persistence helpers (`save_model` / `load_model`) use ``joblib`` (already a
 core dependency) so any picklable estimator round-trips.
+
+See also: `myogestic.ml` for the training/predict pipeline lifecycle that
+consumes these models (`ml.save_pickle` / `ml.load_pickle` delegate here).
 """
 
 from __future__ import annotations

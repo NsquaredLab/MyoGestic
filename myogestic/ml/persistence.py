@@ -1,10 +1,10 @@
-"""Generic pickle helpers for ``pipeline.save_model`` / ``pipeline.load_model``.
+"""Model-persistence hooks for ``pipeline.save_model`` / ``pipeline.load_model``.
 
-Any model the user assigns to ``pipeline.model`` (the value returned from
-``@pipeline.train``) can be persisted with these helpers as long as the model
-is pickleable. Numba-JIT'd ``@njit`` functions referenced by the model are not
-pickled because they live at module scope, so a model that only holds NumPy
-arrays + primitives + dataclasses round-trips cleanly.
+The serialization itself lives in :mod:`myogestic.models` (joblib-based, which
+handles picklable estimators including NumPy-heavy ones). These thin wrappers
+add parent-directory creation and keep the ``save_pickle`` / ``load_pickle``
+names used by the pipeline hook API, so there is a single serialization
+implementation across the library.
 
 Wire up like:
 
@@ -18,21 +18,19 @@ work without the example needing custom save/load code.
 
 from __future__ import annotations
 
-import pickle
 from pathlib import Path
 from typing import Any
 
+from myogestic.models import load_model, save_model
+
 
 def save_pickle(model: Any, path: str | Path) -> str:
-    """Pickle ``model`` to ``path``. Creates parent directories if needed."""
+    """Persist ``model`` to ``path`` (joblib), creating parent dirs as needed."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("wb") as f:
-        pickle.dump(model, f)
-    return str(p)
+    return save_model(model, str(p))
 
 
 def load_pickle(path: str | Path) -> Any:
-    """Inverse of ``save_pickle``."""
-    with Path(path).open("rb") as f:
-        return pickle.load(f)
+    """Inverse of :func:`save_pickle`."""
+    return load_model(str(path))
