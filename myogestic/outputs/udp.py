@@ -4,7 +4,7 @@ import socket
 
 import numpy as np
 
-from myogestic.outputs import Output
+from myogestic.outputs.base import Output
 
 
 class UDPOutput(Output):
