@@ -32,10 +32,8 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.vhi.interfaces import virtual_hand
-from myogestic.ml import Pipeline
+from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import predict_button, train_button, training_log
-from myogestic.ml import load_pickle, save_pickle
 from myogestic.recipes.estimators import (
     catboost_classifier,
     constant_classifier,
@@ -46,6 +44,7 @@ from myogestic.recipes.estimators import (
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
+from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
     app_logo,
     log_panel,

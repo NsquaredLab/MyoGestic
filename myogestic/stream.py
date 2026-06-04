@@ -7,18 +7,18 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
+import numpy as np
+from dvg_ringbuffer import RingBuffer
+
+if TYPE_CHECKING:
+    from myogestic.session import Session
+
 # Pyodide reports sys.platform == "emscripten" and forbids OS threads
 # (Thread.start raises RuntimeError). When detected, the framework
 # schedules its acquire / send / predict loops as asyncio tasks on the
 # browser's event loop instead. Same loop bodies; only the pacing
 # primitive (time.sleep vs await asyncio.sleep) differs.
 _IS_BROWSER = sys.platform == "emscripten"
-
-import numpy as np
-
-if TYPE_CHECKING:
-    from myogestic.session import Session
-from dvg_ringbuffer import RingBuffer
 
 
 @dataclass
