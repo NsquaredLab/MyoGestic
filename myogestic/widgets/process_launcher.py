@@ -124,15 +124,19 @@ def process_launcher(
     Multiple process_launcher() calls can coexist in the same UI —
     each gets unique ImGui IDs via the label parameter.
 
-    Args:
-        processes: List of (name, command) tuples.
-        label: Unique ID for this launcher instance. Auto-generated if empty.
-        log_height: Height of the inline log panel in pixels. Pass ``<= 0``
-            (default) to fill the remaining vertical space of the parent
-            cell — matches the ImGui convention where ``-1`` means "fill
-            available". When the log is popped out (see ``↗`` button), the
-            inline log is replaced by a placeholder and the full log is
-            rendered in a separate floating ImGui window.
+    Parameters
+    ----------
+    processes
+        List of (name, command) tuples.
+    label
+        Unique ID for this launcher instance. Auto-generated if empty.
+    log_height
+        Height of the inline log panel in pixels. Pass ``<= 0``
+        (default) to fill the remaining vertical space of the parent
+        cell — matches the ImGui convention where ``-1`` means "fill
+        available". When the log is popped out (see ``↗`` button), the
+        inline log is replaced by a placeholder and the full log is
+        rendered in a separate floating ImGui window.
     """
     if not processes:
         return

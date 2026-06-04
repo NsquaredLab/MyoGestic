@@ -28,13 +28,18 @@ def log_panel(
 ) -> None:
     """Render the app log as a scrollable, read-only panel.
 
-    Args:
-        ctx: App context; reads from ``ctx.logs``.
-        height: Panel height in pixels. Pass a value ``<= 0`` (default) to
-            fill the remaining vertical space of the parent cell — matches
-            the ImGui convention where ``-1`` means "fill available".
-        title: Header label (only shown when ``show_header=True``).
-        show_header: Render the button-style ``panel_header`` above the log.
+    Parameters
+    ----------
+    ctx
+        App context; reads from ``ctx.logs``.
+    height
+        Panel height in pixels. Pass a value ``<= 0`` (default) to
+        fill the remaining vertical space of the parent cell — matches
+        the ImGui convention where ``-1`` means "fill available".
+    title
+        Header label (only shown when ``show_header=True``).
+    show_header
+        Render the button-style ``panel_header`` above the log.
     """
     if show_header:
         panel_header(title, fa.ICON_FA_TERMINAL)

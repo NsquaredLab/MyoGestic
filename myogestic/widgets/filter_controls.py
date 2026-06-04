@@ -52,9 +52,12 @@ class FilterControl:
     place where possible (no rebuild) to preserve smoothing history during
     live tuning.
 
-    Args:
-        hz: Sample rate forwarded to ``one_euro`` (ignored by others).
-        default: Initial filter name — ``"identity"`` | ``"gaussian"`` | ``"one_euro"``.
+    Parameters
+    ----------
+    hz
+        Sample rate forwarded to ``one_euro`` (ignored by others).
+    default
+        Initial filter name — ``"identity"`` | ``"gaussian"`` | ``"one_euro"``.
     """
 
     def __init__(self, hz: float = 50.0, default: str = "one_euro"):

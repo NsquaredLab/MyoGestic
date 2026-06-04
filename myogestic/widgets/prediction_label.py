@@ -55,20 +55,28 @@ def prediction_label(
     always the same colour (matches the recording / session-manager
     chips).
 
-    Args:
-        pipeline: The Pipeline whose predictions to read. Untrained or
-            first-frame state (``predictions == {}``) renders as a muted "—".
-        class_names: Class names indexed the same way as the model —
-            ``class_names[i]`` is the name for class index ``i``.
-        key: Dict key in ``predictions`` holding the class index. Default
-            ``"class"`` matches the convention in the bundled examples.
-        proba_key: Dict key holding the per-class probability vector,
-            consumed only when ``show_probability`` is on.
-        label: Panel header text.
-        show_probability: When True, render a coloured progress bar of the
-            predicted class's probability below the name.
-        font_scale: Multiplier applied to the class name's text size.
-            Defaults to 2× the panel font.
+    Parameters
+    ----------
+    pipeline
+        The Pipeline whose predictions to read. Untrained or
+        first-frame state (``predictions == {}``) renders as a muted "—".
+    class_names
+        Class names indexed the same way as the model —
+        ``class_names[i]`` is the name for class index ``i``.
+    key
+        Dict key in ``predictions`` holding the class index. Default
+        ``"class"`` matches the convention in the bundled examples.
+    proba_key
+        Dict key holding the per-class probability vector,
+        consumed only when ``show_probability`` is on.
+    label
+        Panel header text.
+    show_probability
+        When True, render a coloured progress bar of the
+        predicted class's probability below the name.
+    font_scale
+        Multiplier applied to the class name's text size.
+        Defaults to 2× the panel font.
     """
     panel_header(label, fa.ICON_FA_BRAIN)
     imgui.spacing()

@@ -43,20 +43,25 @@ FeatureFn = Callable[[np.ndarray], np.ndarray]
 class FeatureSelector:
     """Tickable list of named feature functions.
 
-    Args:
-        features: Ordered map of feature name → callable. Each callable
-            takes an EMG window ``(n_channels, n_samples)`` and returns
-            an array - typically ``(n_channels, n_features_out)`` for
-            time-preserving features like sliding RMS, but any
-            consistent shape works as long as every active feature
-            returns the *same* shape (they're concatenated along axis
-            0 by :meth:`__call__`).
-        default: Optional iterable of feature names to start ticked.
-            ``None`` (default) ticks every feature; an empty list ticks
-            none.
+    Parameters
+    ----------
+    features
+        Ordered map of feature name → callable. Each callable
+        takes an EMG window ``(n_channels, n_samples)`` and returns
+        an array - typically ``(n_channels, n_features_out)`` for
+        time-preserving features like sliding RMS, but any
+        consistent shape works as long as every active feature
+        returns the *same* shape (they're concatenated along axis
+        0 by :meth:`__call__`).
+    default
+        Optional iterable of feature names to start ticked.
+        ``None`` (default) ticks every feature; an empty list ticks
+        none.
 
-    Raises:
-        ValueError: if a name in ``default`` isn't in ``features``.
+    Raises
+    ------
+    ValueError
+        if a name in ``default`` isn't in ``features``.
     """
 
     def __init__(
@@ -111,13 +116,16 @@ class FeatureSelector:
     def __call__(self, emg: np.ndarray) -> np.ndarray:
         """Apply every ticked feature to ``emg``, stack along axis 0.
 
-        Raises:
-            RuntimeError: if zero features are ticked. Predict /
-                training callers should validate :pyattr:`n_active`
-                before invoking; this raise is a defensive backstop so
-                downstream code never sees a misleading shape.
-            ValueError: if active features return shapes that can't be
-                concatenated along axis 0 (numpy raises this).
+        Raises
+        ------
+        RuntimeError
+            if zero features are ticked. Predict /
+            training callers should validate :pyattr:`n_active`
+            before invoking; this raise is a defensive backstop so
+            downstream code never sees a misleading shape.
+        ValueError
+            if active features return shapes that can't be
+            concatenated along axis 0 (numpy raises this).
         """
         names = self.active_names
         if not names:

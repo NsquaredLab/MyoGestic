@@ -48,35 +48,49 @@ def trial_preview(
 ) -> None:
     """Render stacked multi-channel waveform with optional band overlay.
 
-    Args:
-        uid: Stable identity string for ImPlot (combined into plot ids so
-            two ``trial_preview`` calls in the same frame don't collide).
-        data: Multi-channel signal. Shape ``(n_channels, n_samples)`` if
-            ``data_layout == "channels_first"`` (default) or
-            ``(n_samples, n_channels)`` if ``"samples_first"``.
-        fs: Sampling rate in Hz, used for the x-axis labels in seconds.
-        title: Optional header line shown above the plot.
-        size: ImPlot size as ``(width, height)``. ``-1`` width fills the
-            available content region.
-        channel_names: Optional per-channel labels. When omitted, channels
-            are shown as ``ch0..chN-1``.
-        band: Optional ``(t_start_s, t_end_s)`` shaded band drawn behind
-            the traces — useful for marking an extracted template,
-            highlighting a labeled segment, etc.
-        band_color: RGBA in ``[0,1]``. Defaults to a soft cyan.
-        gain: Multiplier applied to each channel before plotting. Match
-            this to your live viewer's gain knob if you want the preview
-            to look like what was on screen.
-        display_filter: Visual-only transform applied to a copy of
-            ``data`` before plotting. Same vocabulary as
-            ``signal_viewer``'s display dropdown.
-        scale_mode: ``"auto"`` (default) computes the per-lane height
-            from the signal's global min/max with 20% padding;
-            ``"manual"`` uses ``y_range`` directly.
-        y_range: ``(y_min, y_max)`` used in manual scale mode.
-        window: When ``True``, the widget wraps itself in a free-floating
-            ImGui window with title ``title``. When ``False`` (default),
-            it draws inline at the current cursor position.
+    Parameters
+    ----------
+    uid
+        Stable identity string for ImPlot (combined into plot ids so
+        two ``trial_preview`` calls in the same frame don't collide).
+    data
+        Multi-channel signal. Shape ``(n_channels, n_samples)`` if
+        ``data_layout == "channels_first"`` (default) or
+        ``(n_samples, n_channels)`` if ``"samples_first"``.
+    fs
+        Sampling rate in Hz, used for the x-axis labels in seconds.
+    title
+        Optional header line shown above the plot.
+    size
+        ImPlot size as ``(width, height)``. ``-1`` width fills the
+        available content region.
+    channel_names
+        Optional per-channel labels. When omitted, channels
+        are shown as ``ch0..chN-1``.
+    band
+        Optional ``(t_start_s, t_end_s)`` shaded band drawn behind
+        the traces — useful for marking an extracted template,
+        highlighting a labeled segment, etc.
+    band_color
+        RGBA in ``[0,1]``. Defaults to a soft cyan.
+    gain
+        Multiplier applied to each channel before plotting. Match
+        this to your live viewer's gain knob if you want the preview
+        to look like what was on screen.
+    display_filter
+        Visual-only transform applied to a copy of
+        ``data`` before plotting. Same vocabulary as
+        ``signal_viewer``'s display dropdown.
+    scale_mode
+        ``"auto"`` (default) computes the per-lane height
+        from the signal's global min/max with 20% padding;
+        ``"manual"`` uses ``y_range`` directly.
+    y_range
+        ``(y_min, y_max)`` used in manual scale mode.
+    window
+        When ``True``, the widget wraps itself in a free-floating
+        ImGui window with title ``title``. When ``False`` (default),
+        it draws inline at the current cursor position.
     """
     from imgui_bundle import imgui, implot
 

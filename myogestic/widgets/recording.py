@@ -100,16 +100,22 @@ def recording_controls(
     (the active class is shown in the "Recording into: …" header). Outside of
     recording it just sets the *next* class to be used when Record is clicked.
 
-    Args:
-        ctx: myogestic Context. Mutated: `current_label` is clamped to a
-            valid index for `class_names`, and `class_names` itself is
-            mirrored into `ctx.class_names` so `App.stop_recording` can
-            persist them in the session metadata.
-        class_names: Per-class label-button names.
-        on_record: Called when Record is clicked (idle → recording).
-        on_stop:   Called when Stop is clicked (recording → idle).
-        on_gesture: Optional `(class_index) -> None` for side effects on
-                    label-button click (e.g. switching a fake-signal generator).
+    Parameters
+    ----------
+    ctx
+        myogestic Context. Mutated: `current_label` is clamped to a
+        valid index for `class_names`, and `class_names` itself is
+        mirrored into `ctx.class_names` so `App.stop_recording` can
+        persist them in the session metadata.
+    class_names
+        Per-class label-button names.
+    on_record
+        Called when Record is clicked (idle → recording).
+    on_stop
+        Called when Stop is clicked (recording → idle).
+    on_gesture
+        Optional `(class_index) -> None` for side effects on
+        label-button click (e.g. switching a fake-signal generator).
     """
     n_classes = len(class_names) if class_names else 0
     # Defensive: clamp stale current_label to a safe range. Users can swap

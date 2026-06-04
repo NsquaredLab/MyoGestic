@@ -43,15 +43,20 @@ def app_logo(max_size: float | None = None, padding: float = 12.0) -> None:
     different aspect, the image fills the tighter dimension and leaves
     extra balanced padding along the other.
 
-    Args:
-        max_size: Optional cap on the wordmark's *width* in pixels. ``None``
-            (default) lets the image grow to fill the cell — appropriate for
-            "logo in a dedicated branding cell" use. Pass a value when the
-            cell can be much larger than the wordmark should ever appear
-            (e.g. a logo embedded in a full-screen splash).
-        padding: Margin in pixels reserved on every side. Default 12 px
-            gives the wordmark breathing room against the panel border.
+    Parameters
+    ----------
+    max_size
+        Optional cap on the wordmark's *width* in pixels. ``None``
+        (default) lets the image grow to fill the cell — appropriate for
+        "logo in a dedicated branding cell" use. Pass a value when the
+        cell can be much larger than the wordmark should ever appear
+        (e.g. a logo embedded in a full-screen splash).
+    padding
+        Margin in pixels reserved on every side. Default 12 px
+        gives the wordmark breathing room against the panel border.
 
+    Notes
+    -----
     Uses ``image_and_size_from_asset`` + raw ``imgui.image`` rather than the
     higher-level ``image_from_asset(..., size=...)`` helper, which in this
     version of hello_imgui ignored the explicit size and rendered at the

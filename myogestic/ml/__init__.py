@@ -70,12 +70,15 @@ class PipelineState(StrEnum):
     The enum is a ``StrEnum`` so it compares cleanly against the raw
     string written to ``app.ctx.state`` by the transition methods.
 
-    Members:
-        TRAINING: ``train()`` is running on a background thread.
-            Predict ticks short-circuit so they don't fight for GPU.
-        PREDICTING: The predict thread is calling ``extract`` +
-            ``predict`` each tick at ``predict_hz`` and writing the
-            result to ``pipeline.predictions``.
+    Attributes
+    ----------
+    TRAINING
+        ``train()`` is running on a background thread.
+        Predict ticks short-circuit so they don't fight for GPU.
+    PREDICTING
+        The predict thread is calling ``extract`` +
+        ``predict`` each tick at ``predict_hz`` and writing the
+        result to ``pipeline.predictions``.
     """
 
     TRAINING = "training"
@@ -92,10 +95,13 @@ class Pipeline:
 
     def __init__(self, app: App, predict_hz: float = 50.0):
         """
-        Args:
-            app: The myogestic App.
-            predict_hz: Maximum predict-loop tick rate. Set to 0 or
-                negative to remove the cap (run at full speed).
+        Parameters
+        ----------
+        app
+            The myogestic App.
+        predict_hz
+            Maximum predict-loop tick rate. Set to 0 or
+            negative to remove the cap (run at full speed).
         """
         self.app = app
         self.predict_hz = predict_hz
