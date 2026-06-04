@@ -22,7 +22,7 @@ import time
 
 import numpy as np
 
-from myogestic._session_core import Session
+from myogestic.session import Session
 from myogestic.stream import Stream, StreamInfo
 
 
