@@ -34,11 +34,10 @@ from myogestic import App, Stream, TrainingData
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import predict_button, train_button, training_log
-from myogestic.models import (
+from myogestic.ml import load_pickle, save_pickle
+from myogestic.recipes.estimators import (
     catboost_classifier,
     constant_classifier,
-    load_model,
-    save_model,
     sklearn_classifier,
     sklearn_extra_trees_classifier,
     sklearn_logistic_classifier,
@@ -123,8 +122,8 @@ app.streams(
     Stream("emg", source=LSLSource("TestEMG32"), window_seconds=WIN_SECONDS, buffer_seconds=60)
 )
 pipeline = Pipeline(app)
-pipeline.save_model = save_model
-pipeline.load_model = load_model
+pipeline.save_model = save_pickle
+pipeline.load_model = load_pickle
 
 MODELS_DIR = Path("models")
 
@@ -282,7 +281,7 @@ def _model_block() -> None:
         slug = _slug(MODEL_NAMES[selected_model_idx])
         ts = _time.strftime("%Y%m%d_%H%M%S")
         path = MODELS_DIR / f"{slug}_{ts}.joblib"
-        save_model(pipeline.model, str(path))
+        save_pickle(pipeline.model, str(path))
         app.ctx.log(f"Model saved → {path}")
     if not can_save:
         imgui.end_disabled()
@@ -298,7 +297,7 @@ def _model_block() -> None:
         _load_dialog = None
         if result:
             try:
-                pipeline.model = load_model(result[0])
+                pipeline.model = load_pickle(result[0])
                 app.ctx.log(f"Model loaded ← {result[0]}")
             except Exception as e:
                 app.ctx.log(f"Load failed: {e}")

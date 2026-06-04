@@ -15,11 +15,11 @@ import sys
 import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.contrib.features import mav, rms, var, wl, zc
+from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import pipeline_panel
-from myogestic.models import catboost_classifier
+from myogestic.recipes.estimators import catboost_classifier
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
@@ -45,7 +45,7 @@ HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
 # to VHI. Live-tunable via the FilterControl widget rendered in the UI.
 output_filter = FilterControl(hz=32, default="one_euro")
 
-# Reference RMS / MAV / WL / VAR / ZC live in myogestic.contrib.features; mix
+# Reference RMS / MAV / WL / VAR / ZC live in myogestic.recipes.features; mix
 # with your own callables here — feature engineering is user code, this is
 # the seam where you'd add custom ones.
 features = FeatureSelector(

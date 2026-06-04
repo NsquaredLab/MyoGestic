@@ -35,11 +35,10 @@ from myogestic import App, Fr, Grid, Px, Stream, TrainingData
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import predict_button, train_button, training_log
-from myogestic.models import (
+from myogestic.ml import load_pickle, save_pickle
+from myogestic.recipes.estimators import (
     catboost_classifier,
     constant_classifier,
-    load_model,
-    save_model,
     sklearn_classifier,
     sklearn_extra_trees_classifier,
     sklearn_logistic_classifier,
@@ -128,8 +127,8 @@ app.streams(
 pipeline = Pipeline(app)
 # Wire generic save/load so save_model_button / load_model_button work, and
 # so the example's custom picker can call them through the pipeline too.
-pipeline.save_model = save_model
-pipeline.load_model = load_model
+pipeline.save_model = save_pickle
+pipeline.load_model = load_pickle
 
 MODELS_DIR = Path("models")
 
@@ -187,7 +186,7 @@ def _save_current() -> Path | None:
     slug = _slug(MODEL_NAMES[selected_model_idx])
     ts = _time.strftime("%Y%m%d_%H%M%S")
     path = MODELS_DIR / f"{slug}_{ts}.joblib"
-    save_model(pipeline.model, str(path))
+    save_pickle(pipeline.model, str(path))
     return path
 
 
@@ -272,7 +271,7 @@ def model_panel() -> None:
         if result:
             path = Path(result[0])
             try:
-                pipeline.model = load_model(str(path))
+                pipeline.model = load_pickle(str(path))
                 app.ctx.status_message = f"Loaded ← {path.name}"
                 app.ctx.log(f"Model loaded ← {path}")
             except Exception as e:

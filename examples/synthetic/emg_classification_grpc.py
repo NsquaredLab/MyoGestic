@@ -25,11 +25,11 @@ import sys
 import numpy as np
 
 from myogestic import App, EdgeTrigger, Fr, Grid, Px, Stream, TrainingData
-from myogestic.contrib.features import mav, rms, var, wl
+from myogestic.recipes.features import mav, rms, var, wl
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import pipeline_panel
-from myogestic.models import catboost_classifier
+from myogestic.recipes.estimators import catboost_classifier
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
@@ -66,7 +66,7 @@ CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
 
 
-# Reference RMS / MAV / WL / VAR live in myogestic.contrib.features; mix
+# Reference RMS / MAV / WL / VAR live in myogestic.recipes.features; mix
 # with your own callables here — feature engineering is user code, this is
 # the seam where you'd add custom ones.
 features = FeatureSelector(

@@ -1,12 +1,11 @@
-"""Model-persistence hooks for ``pipeline.save_model`` / ``pipeline.load_model``.
+"""Model persistence for ``pipeline.save_model`` / ``pipeline.load_model``.
 
-The serialization itself lives in :mod:`myogestic.models` (joblib-based, which
-handles picklable estimators including NumPy-heavy ones). These thin wrappers
-add parent-directory creation and keep the ``save_pickle`` / ``load_pickle``
-names used by the pipeline hook API, so there is a single serialization
-implementation across the library.
-
-Wire up like:
+The single serialization implementation for the library lives here: joblib
+``dump`` / ``load`` (joblib is already a core dependency and handles picklable
+estimators, including NumPy-heavy ones). ``save_pickle`` also creates parent
+directories. The ``save_pickle`` / ``load_pickle`` names are distinct from the
+``pipeline.save_model`` / ``pipeline.load_model`` hook *attributes* you assign
+them to:
 
     from myogestic.ml import save_pickle, load_pickle
     pipeline.save_model = save_pickle
@@ -21,16 +20,20 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from myogestic.models import load_model, save_model
+import joblib
 
 
 def save_pickle(model: Any, path: str | Path) -> str:
-    """Persist ``model`` to ``path`` (joblib), creating parent dirs as needed."""
+    """Persist ``model`` to ``path`` via joblib, creating parent dirs as needed.
+
+    Returns the path as a string.
+    """
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    return save_model(model, str(p))
+    joblib.dump(model, str(p))
+    return str(p)
 
 
 def load_pickle(path: str | Path) -> Any:
-    """Inverse of :func:`save_pickle`."""
-    return load_model(str(path))
+    """Inverse of :func:`save_pickle` — load a joblib-saved model."""
+    return joblib.load(str(path))

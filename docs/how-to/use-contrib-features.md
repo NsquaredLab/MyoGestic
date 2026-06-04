@@ -1,6 +1,6 @@
 # Use the contrib feature set
 
-`myogestic.contrib.features` ships five classic time-domain EMG features
+`myogestic.recipes.features` ships five classic time-domain EMG features
 that every starter example used to copy-paste:
 
 | Name  | Function                | What it captures                                       |
@@ -23,7 +23,7 @@ shape `(n_channels,)` with dtype `float32`.
 
 ```python
 import numpy as np
-from myogestic.contrib.features import rms
+from myogestic.recipes.features import rms
 
 emg = np.random.randn(8, 256).astype(np.float32)   # 8 channels, 256 samples
 rms(emg).shape                                     # (8,)
@@ -40,7 +40,7 @@ pipeline) without surprises.
 each feature:
 
 ```python
-from myogestic.contrib.features import rms, mav, wl, var, zc
+from myogestic.recipes.features import rms, mav, wl, var, zc
 from myogestic.widgets import FeatureSelector
 
 feats = FeatureSelector(
@@ -83,7 +83,7 @@ shape contract. Drop yours in next to the contrib ones:
 
 ```python
 import numpy as np
-from myogestic.contrib.features import rms, mav
+from myogestic.recipes.features import rms, mav
 
 def slope_sign_changes(emg: np.ndarray) -> np.ndarray:
     """Count slope-sign changes per channel - classic Hudgins SSC feature."""
@@ -122,6 +122,6 @@ Replace it for:
 
 * [Feature extraction cookbook](feature-extraction-cookbook.md) - recipes
   for windowing, normalisation, and spectral features.
-* [`myogestic.contrib.features`](../api/core.md) - full module reference.
+* [`myogestic.recipes.features`](../api/core.md) - full module reference.
 * [`myogestic.widgets.FeatureSelector`](../api/widgets.md) - the
   GUI-toggleable feature dispatcher.

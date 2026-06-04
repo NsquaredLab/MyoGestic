@@ -1,4 +1,4 @@
-"""Tests for myogestic.models — recipes, optional-dep errors, persistence."""
+"""Tests for myogestic.recipes.estimators — recipes, optional-dep errors, persistence."""
 
 from __future__ import annotations
 
@@ -8,13 +8,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from myogestic import models
+from myogestic.ml import load_pickle, save_pickle
+from myogestic.recipes import estimators
 
 # --- Dummy estimators (no optional deps) ------------------------------------
 
 
 def test_constant_classifier_predicts_fixed_class():
-    clf = models.constant_classifier(class_idx=2)
+    clf = estimators.constant_classifier(class_idx=2)
     X = np.zeros((5, 3))
     y = np.array([0, 1, 2, 1, 2])
     clf.fit(X, y)
@@ -26,7 +27,7 @@ def test_constant_classifier_predicts_fixed_class():
 
 
 def test_mean_regressor_returns_mean_per_dim():
-    reg = models.mean_regressor()
+    reg = estimators.mean_regressor()
     X = np.random.default_rng(0).standard_normal((10, 4))
     y = np.array([[1.0, 2.0], [3.0, 6.0], [5.0, 4.0]])
     reg.fit(np.zeros((3, 4)), y)
@@ -36,12 +37,12 @@ def test_mean_regressor_returns_mean_per_dim():
 
 
 def test_save_and_load_dummy_round_trip(tmp_path: Path):
-    reg = models.mean_regressor()
+    reg = estimators.mean_regressor()
     reg.fit(np.zeros((3, 2)), np.array([1.0, 2.0, 3.0]))
     p = tmp_path / "m.joblib"
-    out = models.save_model(reg, str(p))
+    out = save_pickle(reg, str(p))
     assert Path(out).exists()
-    loaded = models.load_model(str(p))
+    loaded = load_pickle(str(p))
     assert isinstance(loaded, type(reg))
     assert np.allclose(loaded.predict(np.zeros((1, 2)))[0], 2.0)
 
@@ -53,8 +54,8 @@ def test_catboost_constructors_when_installed():
     """If CatBoost is installed (dev/examples extras), the constructor returns
     a real estimator with quiet defaults applied."""
     cb = pytest.importorskip("catboost")
-    clf = models.catboost_classifier(iterations=1)
-    reg = models.catboost_regressor(iterations=1)
+    clf = estimators.catboost_classifier(iterations=1)
+    reg = estimators.catboost_regressor(iterations=1)
     assert isinstance(clf, cb.CatBoostClassifier)
     assert isinstance(reg, cb.CatBoostRegressor)
     # Defaults applied:
@@ -64,16 +65,16 @@ def test_catboost_constructors_when_installed():
 
 def test_sklearn_constructors_when_installed():
     skl = pytest.importorskip("sklearn.ensemble")
-    clf = models.sklearn_classifier(n_estimators=2, random_state=0)
-    reg = models.sklearn_regressor(n_estimators=2, random_state=0)
+    clf = estimators.sklearn_classifier(n_estimators=2, random_state=0)
+    reg = estimators.sklearn_regressor(n_estimators=2, random_state=0)
     assert isinstance(clf, skl.RandomForestClassifier)
     assert isinstance(reg, skl.RandomForestRegressor)
 
 
 def test_extra_trees_constructors_when_installed():
     skl = pytest.importorskip("sklearn.ensemble")
-    clf = models.sklearn_extra_trees_classifier(n_estimators=2)
-    reg = models.sklearn_extra_trees_regressor(n_estimators=2)
+    clf = estimators.sklearn_extra_trees_classifier(n_estimators=2)
+    reg = estimators.sklearn_extra_trees_regressor(n_estimators=2)
     assert isinstance(clf, skl.ExtraTreesClassifier)
     assert isinstance(reg, skl.ExtraTreesRegressor)
     # Defaults applied (the override sets n_estimators; the rest stays).
@@ -83,7 +84,7 @@ def test_extra_trees_constructors_when_installed():
 
 def test_logistic_constructor_when_installed():
     lm = pytest.importorskip("sklearn.linear_model")
-    clf = models.sklearn_logistic_classifier()
+    clf = estimators.sklearn_logistic_classifier()
     assert isinstance(clf, lm.LogisticRegression)
     assert clf.get_params()["max_iter"] == 1000
 
@@ -99,13 +100,13 @@ def test_missing_sklearn_extra_trees_error_names_scikit_learn(monkeypatch):
         return real_import(name, *a, **kw)
 
     monkeypatch.setattr("builtins.__import__", _block)
-    importlib.reload(models)
+    importlib.reload(estimators)
     try:
         with pytest.raises(ImportError, match="scikit-learn"):
-            models.sklearn_extra_trees_classifier()
+            estimators.sklearn_extra_trees_classifier()
     finally:
         monkeypatch.setattr("builtins.__import__", real_import)
-        importlib.reload(models)
+        importlib.reload(estimators)
 
 
 def test_missing_optional_dep_raises_import_error(monkeypatch):
@@ -122,13 +123,13 @@ def test_missing_optional_dep_raises_import_error(monkeypatch):
     # Force a clean reload of `models` against a patched __import__ so the
     # internal `_require("catboost", …)` triggers the friendly error path.
     monkeypatch.setattr("builtins.__import__", _block)
-    importlib.reload(models)
+    importlib.reload(estimators)
     try:
         with pytest.raises(ImportError, match="catboost"):
-            models.catboost_classifier()
+            estimators.catboost_classifier()
         with pytest.raises(ImportError, match="catboost"):
-            models.catboost_regressor()
+            estimators.catboost_regressor()
     finally:
         # Restore real import + reload so other tests see the real module.
         monkeypatch.setattr("builtins.__import__", real_import)
-        importlib.reload(models)
+        importlib.reload(estimators)

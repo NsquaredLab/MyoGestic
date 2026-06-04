@@ -30,7 +30,7 @@
 
 ## Built-in features
 
-::: myogestic.contrib.features
+::: myogestic.recipes.features
 
 ## External interfaces
 

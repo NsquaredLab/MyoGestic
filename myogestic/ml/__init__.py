@@ -27,8 +27,8 @@ training/predicting lifecycle + a predict daemon thread:
 
 ML widgets (`myogestic.ml.widgets`) take `pipeline`, not `app`.
 
-See also: `myogestic.models` for estimator constructor recipes (CatBoost/sklearn)
-and the canonical model-persistence helpers.
+See also: `myogestic.recipes` for estimator constructor recipes (CatBoost/sklearn)
+and feature recipes. Model persistence lives here: `save_pickle` / `load_pickle`.
 """
 
 from __future__ import annotations
@@ -106,7 +106,7 @@ class Pipeline:
         self.on_train: Callable | None = None
         self.on_predict: Callable | None = None
         # Set if you want save/load buttons to do anything; the
-        # `myogestic.models.{save,load}_model` joblib helpers are the
+        # `myogestic.ml.save_pickle` / `load_pickle` joblib helpers are the
         # obvious default but the library doesn't force them.
         self.save_model: Callable | None = None
         self.load_model: Callable | None = None

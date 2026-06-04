@@ -1,33 +1,29 @@
-# Models
+# Estimator recipes
 
-`myogestic.models` ships **constructor recipes** for third-party estimators - thin wrappers that return a fitted-or-fittable object (`.fit(X, y)` + `.predict(X)`) with sane defaults. The library never owns the model lifecycle; that stays in your `@pipeline.train`. Optional dependencies are imported lazily, and each constructor raises a clear `ImportError` naming the extra to install.
+`myogestic.recipes.estimators` ships **constructor recipes** for third-party estimators - thin wrappers that return a fitted-or-fittable object (`.fit(X, y)` + `.predict(X)`) with sane defaults. The library never owns the model lifecycle; that stays in your `@pipeline.train`. Optional dependencies are imported lazily, and each constructor raises a clear `ImportError` naming the extra to install.
+
+To persist a trained model, use `myogestic.ml.save_pickle` / `load_pickle` (see the [ML API](ml.md)).
 
 ## CatBoost
 
-::: myogestic.models.catboost_classifier
+::: myogestic.recipes.estimators.catboost_classifier
 
-::: myogestic.models.catboost_regressor
+::: myogestic.recipes.estimators.catboost_regressor
 
 ## scikit-learn
 
-::: myogestic.models.sklearn_classifier
+::: myogestic.recipes.estimators.sklearn_classifier
 
-::: myogestic.models.sklearn_regressor
+::: myogestic.recipes.estimators.sklearn_regressor
 
-::: myogestic.models.sklearn_extra_trees_classifier
+::: myogestic.recipes.estimators.sklearn_extra_trees_classifier
 
-::: myogestic.models.sklearn_extra_trees_regressor
+::: myogestic.recipes.estimators.sklearn_extra_trees_regressor
 
-::: myogestic.models.sklearn_logistic_classifier
+::: myogestic.recipes.estimators.sklearn_logistic_classifier
 
 ## Dummy estimators (zero deps)
 
-::: myogestic.models.constant_classifier
+::: myogestic.recipes.estimators.constant_classifier
 
-::: myogestic.models.mean_regressor
-
-## Persistence
-
-::: myogestic.models.save_model
-
-::: myogestic.models.load_model
+::: myogestic.recipes.estimators.mean_regressor

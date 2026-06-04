@@ -55,7 +55,7 @@ Every box runs on its own daemon thread. The shared `Context` is the only synchr
 | [`myogestic.outputs`](../api/outputs.md) | `Output` base + `LSLOutlet`, `UDPOutput`, `SerialOutput` |
 | [`myogestic.session`](../api/session.md) | Recording, label tracks, `.session.zip`, window iterators |
 | [`myogestic.ml`](../api/ml.md) | `Pipeline`, train/predict lifecycle, ML widgets |
-| [`myogestic.models`](../api/models.md) | CatBoost / scikit-learn constructor recipes + persistence helpers |
+| [`myogestic.recipes`](../api/models.md) | CatBoost / scikit-learn constructor recipes + persistence helpers |
 | [`myogestic.widgets`](../api/widgets.md) | Stateless ImGui function widgets |
 | [`myogestic.filters`](../api/filters.md) | OneEuro / Gaussian / Identity output smoothers |
 | `myogestic.bridges` | Subprocess pattern for heavy-data sources (webcam, ultrasound) |

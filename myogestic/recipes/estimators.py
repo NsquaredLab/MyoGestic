@@ -1,4 +1,4 @@
-"""Model recipes for myogestic examples.
+"""Estimator constructor *recipes* — first-party, swappable starting points.
 
 **Constructor recipes** for third-party estimators (CatBoost, scikit-learn).
 Each returns a fitted-or-fittable object (``.fit(X, y)`` + ``.predict(X)``)
@@ -8,27 +8,21 @@ lifecycle — that stays in the user's ``@pipeline.train``.
 Optional dependencies (``catboost``, ``scikit-learn``) are imported lazily.
 Constructors raise a clear ImportError naming the extra to install.
 
-Persistence helpers (`save_model` / `load_model`) use ``joblib`` (already a
-core dependency) so any picklable estimator round-trips.
-
-See also: `myogestic.ml` for the training/predict pipeline lifecycle that
-consumes these models (`ml.save_pickle` / `ml.load_pickle` delegate here).
+See also: `myogestic.ml.save_pickle` / `load_pickle` for persisting a trained
+model, and `myogestic.recipes.features` for feature recipes.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import joblib
 import numpy as np
 
 __all__ = [
     "catboost_classifier",
     "catboost_regressor",
     "constant_classifier",
-    "load_model",
     "mean_regressor",
-    "save_model",
     "sklearn_classifier",
     "sklearn_extra_trees_classifier",
     "sklearn_extra_trees_regressor",
@@ -157,17 +151,3 @@ def constant_classifier(class_idx: int = 0) -> _ConstantClassifier:
 def mean_regressor() -> _MeanRegressor:
     """Estimator that predicts the mean of training targets. No deps."""
     return _MeanRegressor()
-
-
-# --- Persistence ------------------------------------------------------------
-
-
-def save_model(model: Any, path: str) -> str:
-    """Pickle `model` to `path` via joblib. Returns the path."""
-    joblib.dump(model, path)
-    return path
-
-
-def load_model(path: str) -> Any:
-    """Load a joblib-saved model from `path`."""
-    return joblib.load(path)
