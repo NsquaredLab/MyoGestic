@@ -26,6 +26,9 @@ training/predicting lifecycle + a predict daemon thread:
     app.run()
 
 ML widgets (`myogestic.ml.widgets`) take `pipeline`, not `app`.
+
+See also: `myogestic.models` for estimator constructor recipes (CatBoost/sklearn)
+and the canonical model-persistence helpers.
 """
 
 from __future__ import annotations
