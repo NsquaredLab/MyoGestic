@@ -149,7 +149,7 @@ def test_ml_widgets_import_registers_state_colors():
     """Importing myogestic.ml.widgets must populate STATE_COLORS with 'training'
     and 'predicting' entries (inverts coupling: core doesn't know ml states)."""
     import myogestic.ml.widgets  # noqa: F401, I001 -- triggers registration
-    from myogestic.widgets.recording import STATE_COLORS
+    from myogestic.widgets.panels.recording import STATE_COLORS
 
     assert PipelineState.TRAINING in STATE_COLORS
     assert PipelineState.PREDICTING in STATE_COLORS

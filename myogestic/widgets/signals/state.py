@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from myogestic.widgets.signals.transforms import apply_display_filter
+
 if TYPE_CHECKING:
     from myogestic.core import Context
     from myogestic.stream import Stream
@@ -58,26 +60,6 @@ _viewers: dict[str, ViewerState] = {}
 
 def normalize_scale_mode(scale_mode: str) -> str:
     return "manual" if scale_mode == "manual" else "auto"
-
-
-def apply_display_filter(data: np.ndarray, mode: str, fs: float) -> np.ndarray:
-    """Apply visual-only transforms. Recording/model input is unaffected."""
-    if mode == "rectify":
-        return np.abs(data)
-    if mode == "dc_removal":
-        return data - data.mean(axis=0, keepdims=True)
-    if mode != "rms_env" or len(data) < 4:
-        return data
-
-    k = max(4, int(0.01 * fs))
-    if k >= len(data):
-        return data
-    sq = (data.astype(np.float32)) ** 2
-    csum = np.cumsum(sq, axis=0)
-    denom = np.arange(1, k + 1, dtype=np.float32)[:, None]
-    rms_warm = np.sqrt(np.maximum(csum[:k] / denom, 0.0))
-    rms_tail = np.sqrt(np.maximum((csum[k:] - csum[:-k]) / k, 0.0))
-    return np.concatenate([rms_warm, rms_tail])
 
 
 def _m4_decimate_visible_window(

@@ -7,8 +7,8 @@ from imgui_bundle import imgui
 from imgui_bundle import portable_file_dialogs as pfd
 
 from myogestic.contracts import TrainingData
-from myogestic.widgets._common import PALETTE, panel_header
-from myogestic.widgets._session_manager_state import (
+from myogestic.widgets.common import PALETTE, panel_header
+from myogestic.widgets.training.session_state import (
     SessionWidgetState,
     add_recorded_session,
     class_pool_and_active,

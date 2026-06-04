@@ -55,9 +55,9 @@ from myogestic.widgets import (
     signal_viewer,
     stream_panel,
 )
-from myogestic.widgets._common import panel_header
-from myogestic.widgets._log_box import render_log_buttons, render_log_popout
-from myogestic.widgets.filter_controls import FilterControl
+from myogestic.widgets.common import panel_header
+from myogestic.widgets.panels.filter_controls import FilterControl
+from myogestic.widgets.panels.log_box import render_log_buttons, render_log_popout
 
 N_CHANNELS = 32
 CLASSES = ["Rest", "Fist", "Pinch", "Open"]

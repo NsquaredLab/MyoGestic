@@ -1,6 +1,6 @@
 """Heatmap widget for @app.ui (confusion matrix, correlation matrix, etc.).
 
-    from myogestic.widgets.heatmap import heatmap
+    from myogestic.widgets.plots.heatmap import heatmap
 """
 
 from __future__ import annotations

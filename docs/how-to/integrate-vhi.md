@@ -177,7 +177,7 @@ movement buttons, dispatch clicks through gRPC" into one widget. Drop it
 in a grid cell and forget about it:
 
 ```python
-from myogestic.widgets.vhi_movement_panel import VhiMovementPanel
+from myogestic.widgets.vhi.panel import VhiMovementPanel
 
 panel = VhiMovementPanel(vhi_client)
 
@@ -261,5 +261,5 @@ symptom-organised debugging.
 * [Examples directory](../tutorials/examples-index.md) - every shipped
   example wires VHI either via LSL, gRPC, or both.
 * [`myogestic.vhi.interfaces.virtual_hand`](../api/core.md) - full signature.
-* [`myogestic.widgets.vhi_movement_panel.VhiMovementPanel`](../api/widgets.md) -
+* [`myogestic.widgets.vhi.panel.VhiMovementPanel`](../api/widgets.md) -
   movement palette API.

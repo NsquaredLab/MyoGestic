@@ -1,6 +1,6 @@
 """2D and 3D scatter plots for @app.ui (UMAP, t-SNE, PCA, etc.).
 
-    from myogestic.widgets.scatter import scatter2d, scatter3d
+    from myogestic.widgets.plots.scatter import scatter2d, scatter3d
 """
 
 from __future__ import annotations
@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 from imgui_bundle import imgui, implot, implot3d
 
-from myogestic.widgets._common import PALETTE
+from myogestic.widgets.common import PALETTE
 
 
 def scatter2d(

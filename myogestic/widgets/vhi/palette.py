@@ -49,7 +49,7 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets._common import panel_header
+from myogestic.widgets.common import panel_header
 
 if TYPE_CHECKING:
     from myogestic.vhi._client import VhiControlClient

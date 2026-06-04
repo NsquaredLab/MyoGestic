@@ -21,8 +21,12 @@ from collections import deque
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets._common import panel_header
-from myogestic.widgets._log_box import render_log, render_log_buttons, render_log_popout
+from myogestic.widgets.common import panel_header
+from myogestic.widgets.panels.log_box import (
+    render_log,
+    render_log_buttons,
+    render_log_popout,
+)
 
 # --- Per-process state ---
 

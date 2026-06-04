@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from myogestic.filters import GaussianFilter, IdentityFilter, OneEuroFilter
-from myogestic.widgets.filter_controls import FilterControl
+from myogestic.widgets.panels.filter_controls import FilterControl
 
 
 def test_default_constructs_one_euro():

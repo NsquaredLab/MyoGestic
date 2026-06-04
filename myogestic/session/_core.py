@@ -28,7 +28,7 @@ class LabelEvent:
     """One entry in a session's label track: "at LSL time T, the user picked class N".
 
     Recorded whenever the user clicks a class button in
-    :func:`~myogestic.widgets.recording_controls`. The label track is
+    :func:`~myogestic.widgets.panels.recording.recording_controls`. The label track is
     a chronological list of these events; the recording-window
     iterators (:func:`~myogestic.session.iter_labeled_windows`,
     :func:`~myogestic.session.iter_aligned_windows`) walk the track to

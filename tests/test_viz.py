@@ -2,16 +2,16 @@
 
 import numpy as np
 
-from myogestic.widgets._common import PALETTE
-from myogestic.widgets.heatmap import heatmap
-from myogestic.widgets.line_plot import line_plot
-from myogestic.widgets.log_panel import log_panel
-from myogestic.widgets.popout import popout_panel
-from myogestic.widgets.process_launcher import process_launcher
-from myogestic.widgets.raw_signal import raw_signal_viewer
-from myogestic.widgets.scatter import scatter2d, scatter3d
-from myogestic.widgets.signal import signal_viewer
-from myogestic.widgets.stream_panel import stream_panel
+from myogestic.widgets.common import PALETTE
+from myogestic.widgets.panels.log_panel import log_panel
+from myogestic.widgets.panels.popout import popout_panel
+from myogestic.widgets.panels.process_launcher import process_launcher
+from myogestic.widgets.plots.heatmap import heatmap
+from myogestic.widgets.plots.line_plot import line_plot
+from myogestic.widgets.plots.scatter import scatter2d, scatter3d
+from myogestic.widgets.signals.raw import raw_signal_viewer
+from myogestic.widgets.signals.stream_panel import stream_panel
+from myogestic.widgets.signals.viewer import signal_viewer
 
 
 def test_palette_shape():
