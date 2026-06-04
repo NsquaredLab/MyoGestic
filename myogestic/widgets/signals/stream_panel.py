@@ -18,7 +18,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.widgets.common import panel_header
-from myogestic.widgets.signals.scan import _scans, _ScanState
+from myogestic.widgets.signals._scan import _scans, _ScanState
 
 if TYPE_CHECKING:
     from myogestic.core import Context

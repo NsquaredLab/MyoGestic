@@ -15,7 +15,7 @@ import numpy as np
 from imgui_bundle import imgui, implot
 
 from myogestic.widgets.common import PALETTE
-from myogestic.widgets.signals.scan import _disconnected_ui
+from myogestic.widgets.signals._scan import _disconnected_ui
 
 if TYPE_CHECKING:
     from myogestic.core import Context
