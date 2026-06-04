@@ -318,7 +318,7 @@ def test_sessions_in_same_second_get_distinct_folders(monkeypatch):
     """Two sessions created within the same wall-clock second must not share a
     folder — otherwise the first session's pack_to_zip() (which rmtree's its
     own folder on a daemon thread) can wipe the second recording's data."""
-    import myogestic._session_core as sc
+    import myogestic.session._core as sc
 
     monkeypatch.setattr(sc.time, "strftime", lambda *a, **k: "2026-06-03_14-30-05")
     with tempfile.TemporaryDirectory() as tmp:
@@ -332,7 +332,7 @@ def test_pack_does_not_delete_a_concurrent_same_second_session(monkeypatch):
     """Reproduce the Stop-then-immediately-Record data-loss scenario: with a
     shared (second-resolution) folder name, s1.pack_to_zip() deleted s2's data.
     Distinct folders keep s2 intact."""
-    import myogestic._session_core as sc
+    import myogestic.session._core as sc
 
     monkeypatch.setattr(sc.time, "strftime", lambda *a, **k: "2026-06-03_14-30-05")
     with tempfile.TemporaryDirectory() as tmp:

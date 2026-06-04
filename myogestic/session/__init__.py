@@ -4,9 +4,9 @@ The implementation is split across small private modules so this file stays
 easy to scan while preserving the original import path.
 """
 
-from myogestic._session_core import LabelEvent, Recording, Session
-from myogestic._session_io import open_session_store
-from myogestic._session_windows import iter_aligned_windows, iter_labeled_windows
+from myogestic.session._core import LabelEvent, Recording, Session
+from myogestic.session._io import open_session_store
+from myogestic.session._windows import iter_aligned_windows, iter_labeled_windows
 
 __all__ = [
     "LabelEvent",

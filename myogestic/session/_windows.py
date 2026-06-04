@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from myogestic._session_io import open_session_store
+from myogestic.session._io import open_session_store
 
 log = logging.getLogger("myogestic.session")
 
