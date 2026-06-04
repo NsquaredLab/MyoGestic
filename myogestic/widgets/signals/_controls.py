@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING
 from imgui_bundle import imgui
 
 from myogestic.widgets.common import PALETTE
-from myogestic.widgets.signals.scan import _scan_panel
+from myogestic.widgets.signals._scan import _scan_panel
 
 if TYPE_CHECKING:
     from myogestic.core import Context
     from myogestic.stream import Stream
-    from myogestic.widgets.signals.state import ViewerState
+    from myogestic.widgets.signals._state import ViewerState
 
 
 def render_controls(

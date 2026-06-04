@@ -20,17 +20,17 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.widgets.common import panel_header
-from myogestic.widgets.signals.controls import (
+from myogestic.widgets.signals._controls import (
     render_channel_controls,
     render_controls,
 )
-from myogestic.widgets.signals.plot import (
+from myogestic.widgets.signals._plot import (
     apply_display_filter,
     render_footer,
     render_plot,
 )
-from myogestic.widgets.signals.scan import _disconnected_ui
-from myogestic.widgets.signals.state import (
+from myogestic.widgets.signals._scan import _disconnected_ui
+from myogestic.widgets.signals._state import (
     build_signal_frame,
     get_viewer_state,
 )

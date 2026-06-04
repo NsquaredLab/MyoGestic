@@ -11,7 +11,7 @@ from myogestic.widgets.common import PALETTE
 if TYPE_CHECKING:
     from myogestic.core import Context
     from myogestic.stream import Stream
-    from myogestic.widgets.signals.state import SignalFrame, ViewerState
+    from myogestic.widgets.signals._state import SignalFrame, ViewerState
 
 
 def apply_display_filter(data: np.ndarray, mode: str, fs: float) -> np.ndarray:
