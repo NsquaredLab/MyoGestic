@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from mne_lsl.lsl import StreamInfo, StreamOutlet
 
-from myogestic.outputs import Output
+from myogestic.outputs.base import Output
 
 
 class LSLOutlet(Output):
