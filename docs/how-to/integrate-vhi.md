@@ -233,7 +233,7 @@ def predict(model, features):
 Or attach `pylsl`'s `lslviewer.py` to the `MyoGestic_Output` stream. For
 the gRPC plane, the standard `grpcurl` works against the local server
 when VHI is running - the proto is at
-`myogestic/_proto/myogestic_vhi.proto`.
+`myogestic/vhi/_proto/myogestic_vhi.proto`.
 
 ## Common mistakes
 

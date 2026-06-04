@@ -26,7 +26,7 @@ import numpy as np
 
 from myogestic import App, EdgeTrigger, Fr, Grid, Px, Stream, TrainingData
 from myogestic.contrib.features import mav, rms, var, wl
-from myogestic.interfaces import virtual_hand
+from myogestic.vhi.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import pipeline_panel
 from myogestic.models import catboost_classifier

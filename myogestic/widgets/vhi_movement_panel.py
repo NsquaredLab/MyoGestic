@@ -25,7 +25,7 @@ from myogestic.widgets.vhi_movement_palette import (
 )
 
 if TYPE_CHECKING:
-    from myogestic._vhi_client import VhiControlClient
+    from myogestic.vhi._client import VhiControlClient
 
 
 class VhiMovementPanel:

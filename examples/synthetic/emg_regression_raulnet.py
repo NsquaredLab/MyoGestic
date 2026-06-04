@@ -36,7 +36,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint, StochasticWeightAveragi
 from myoverse.models.raul_net.v17 import RaulNetV17
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.interfaces import virtual_hand
+from myogestic.vhi.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import pipeline_panel
 from myogestic.session import iter_aligned_windows, iter_labeled_windows, open_session_store

@@ -66,8 +66,8 @@ EXEC_PATHS = {
 
 
 def _default_dest() -> Path:
-    """Mirror ``myogestic.interfaces._default_install_root()`` so both agree."""
-    from myogestic.interfaces import _default_install_root
+    """Mirror ``myogestic.vhi.interfaces._default_install_root()`` so both agree."""
+    from myogestic.vhi.interfaces import _default_install_root
 
     return _default_install_root()
 
