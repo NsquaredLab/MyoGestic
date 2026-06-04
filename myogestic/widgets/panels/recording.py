@@ -1,6 +1,6 @@
 """Recording controls widget.
 
-    from myogestic.widgets.recording import recording_controls
+    from myogestic.widgets.panels.recording import recording_controls
 
     @app.ui
     def my_ui(ctx):
@@ -25,7 +25,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.core import AppState
-from myogestic.widgets._common import panel_header
+from myogestic.widgets.common import panel_header
 
 if TYPE_CHECKING:
     from myogestic.core import Context
@@ -67,7 +67,7 @@ STATE_COLORS: dict[str, imgui.ImVec4] = {
     AppState.IDLE: imgui.ImVec4(0.55, 0.60, 0.68, 1.0),
     AppState.RECORDING: imgui.ImVec4(1.0, 0.28, 0.28, 1.0),
     # Extensions register their own states by appending to this dict, e.g.:
-    #     from myogestic.widgets.recording import STATE_COLORS
+    #     from myogestic.widgets.panels.recording import STATE_COLORS
     #     STATE_COLORS["training"] = imgui.ImVec4(...)
     # (Populated by myogestic.ml.widgets on import.)
 }

@@ -1,10 +1,10 @@
 """Real-time signal viewer.
 
 The public widget is intentionally short; plotting/control internals live in
-`myogestic.widgets._signal_viewer_helpers` so opening this file gives the reader
+`myogestic.widgets.signals` helper modules so opening this file gives the reader
 the widget flow first.
 
-    from myogestic.widgets.signal import signal_viewer
+    from myogestic.widgets.signals.viewer import signal_viewer
 
     @app.ui
     def my_ui(ctx):
@@ -19,18 +19,18 @@ import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets._common import panel_header
-from myogestic.widgets._signal_scan import _disconnected_ui
-from myogestic.widgets._signal_viewer_controls import (
+from myogestic.widgets.common import panel_header
+from myogestic.widgets.signals.controls import (
     render_channel_controls,
     render_controls,
 )
-from myogestic.widgets._signal_viewer_plot import (
+from myogestic.widgets.signals.plot import (
     apply_display_filter,
     render_footer,
     render_plot,
 )
-from myogestic.widgets._signal_viewer_state import (
+from myogestic.widgets.signals.scan import _disconnected_ui
+from myogestic.widgets.signals.state import (
     build_signal_frame,
     get_viewer_state,
 )

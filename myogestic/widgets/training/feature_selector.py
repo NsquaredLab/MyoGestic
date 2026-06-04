@@ -35,7 +35,7 @@ import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets._common import panel_header
+from myogestic.widgets.common import panel_header
 
 FeatureFn = Callable[[np.ndarray], np.ndarray]
 

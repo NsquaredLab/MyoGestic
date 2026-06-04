@@ -310,7 +310,7 @@ def render_app_logo(out: Path) -> None:
 def render_prediction_label(out: Path) -> None:
     import numpy as np
     from myogestic import App
-    from myogestic.widgets.prediction_label import prediction_label
+    from myogestic.widgets.training.prediction_label import prediction_label
 
     # prediction_label only reads `.predictions`, so a tiny duck-typed stub is
     # enough - no need to spin up a full Pipeline + extract/train/predict chain.
@@ -339,7 +339,7 @@ def render_vhi_movement_panel(out: Path) -> None:
     # `vhi_movement_palette` directly with a pre-populated movement list, which
     # is what `VhiMovementPanel.ui()` ultimately does under the hood.
     from myogestic import App
-    from myogestic.widgets.vhi_movement_palette import vhi_movement_palette
+    from myogestic.widgets.vhi.palette import vhi_movement_palette
 
     MOVEMENTS = (
         "Rest", "Fist", "Open", "Pinch", "ThumbsUp", "PointIndex",

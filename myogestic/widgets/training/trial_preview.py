@@ -26,7 +26,7 @@ from typing import Literal
 
 import numpy as np
 
-from myogestic.widgets._signal_viewer_state import apply_display_filter
+from myogestic.widgets.signals.transforms import apply_display_filter
 
 
 def trial_preview(

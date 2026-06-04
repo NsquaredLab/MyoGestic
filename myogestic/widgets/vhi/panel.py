@@ -2,10 +2,10 @@
 
 Wraps the three-piece pattern most examples use verbatim:
 
-  1. Own a :class:`~myogestic.widgets.vhi_movement_palette.VhiStateCache`.
-  2. Call :func:`~myogestic.widgets.vhi_movement_palette.request_vhi_state_refresh`
+  1. Own a :class:`~myogestic.widgets.vhi.palette.VhiStateCache`.
+  2. Call :func:`~myogestic.widgets.vhi.palette.request_vhi_state_refresh`
      each frame (throttled, single-flight, off the render thread).
-  3. Render :func:`~myogestic.widgets.vhi_movement_palette.vhi_movement_palette`
+  3. Render :func:`~myogestic.widgets.vhi.palette.vhi_movement_palette`
      with the cached snapshot, dispatching clicks to the gRPC client.
 
 For custom workflows (e.g. snapping session labels on palette clicks, or
@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from myogestic.widgets.vhi_movement_palette import (
+from myogestic.widgets.vhi.palette import (
     VhiStateCache,
     request_vhi_state_refresh,
     vhi_movement_palette,

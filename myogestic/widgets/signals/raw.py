@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from imgui_bundle import imgui, implot
 
-from myogestic.widgets._common import PALETTE
-from myogestic.widgets._signal_scan import _disconnected_ui
+from myogestic.widgets.common import PALETTE
+from myogestic.widgets.signals.scan import _disconnected_ui
 
 if TYPE_CHECKING:
     from myogestic.core import Context

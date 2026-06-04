@@ -18,9 +18,13 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.ml import PipelineState
-from myogestic.widgets._common import panel_header
-from myogestic.widgets._log_box import render_log, render_log_buttons, render_log_popout
-from myogestic.widgets.recording import STATE_COLORS
+from myogestic.widgets.common import panel_header
+from myogestic.widgets.panels.log_box import (
+    render_log,
+    render_log_buttons,
+    render_log_popout,
+)
+from myogestic.widgets.panels.recording import STATE_COLORS
 
 # Per-panel persistent log UX state, keyed by widget_id (defaults to "ml").
 # Lets each pipeline_panel instance remember its own autoscroll + popout

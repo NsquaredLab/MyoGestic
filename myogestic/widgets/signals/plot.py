@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 from imgui_bundle import imgui, implot
 
-from myogestic.widgets._common import PALETTE
+from myogestic.widgets.common import PALETTE
 
 if TYPE_CHECKING:
     from myogestic.core import Context
     from myogestic.stream import Stream
-    from myogestic.widgets._signal_viewer_state import SignalFrame, ViewerState
+    from myogestic.widgets.signals.state import SignalFrame, ViewerState
 
 
 def apply_display_filter(data: np.ndarray, mode: str, fs: float) -> np.ndarray:

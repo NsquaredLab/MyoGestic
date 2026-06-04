@@ -9,7 +9,11 @@ from __future__ import annotations
 import pytest
 
 from myogestic import core
-from myogestic.widgets.popout import _make_dockable_window, _reset_registry, popout_panel
+from myogestic.widgets.panels.popout import (
+    _make_dockable_window,
+    _reset_registry,
+    popout_panel,
+)
 
 
 @pytest.fixture(autouse=True)

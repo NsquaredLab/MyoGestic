@@ -33,7 +33,7 @@ TRANSITIONS: dict[str, set[str]] = {
 
 # --- Docking integration (experimental) -----------------------------------
 #
-# `popout_panel(...)` (myogestic.widgets.popout) appends `DockableWindow`
+# `popout_panel(...)` (myogestic.widgets.panels.popout) appends `DockableWindow`
 # objects here. `App._gui_loop` drains the list into the active
 # `RunnerParams.docking_params.dockable_windows` before launching the
 # render loop. List + flag live at module scope so the widget can resolve
@@ -275,7 +275,9 @@ class App:
                     zip_path = session.pack_to_zip()
                     self.ctx.status_message = f"Saved {n} labels"
                     self.ctx.log(f"Session saved → {zip_path}")
-                    from myogestic.widgets.session_manager import add_recorded_session
+                    from myogestic.widgets.training.session_manager import (
+                        add_recorded_session,
+                    )
                     add_recorded_session(str(zip_path))
                     log.info("packed session to %s", zip_path)
                 except Exception as e:
@@ -284,7 +286,7 @@ class App:
                     self.ctx.log(f"Pack failed: {e} - folder kept at {session.path}")
                     # Fall back: register the folder so user doesn't lose it
                     try:
-                        from myogestic.widgets.session_manager import (
+                        from myogestic.widgets.training.session_manager import (
                             add_recorded_session,
                         )
                         add_recorded_session(str(session.path))
@@ -351,7 +353,7 @@ class App:
                 except Exception as e:
                     log.exception("bridge stop failed: %s", e)
             try:
-                from myogestic.widgets.process_launcher import _cleanup_all
+                from myogestic.widgets.panels.process_launcher import _cleanup_all
                 _cleanup_all()
             except Exception as e:
                 log.exception("process cleanup failed: %s", e)
@@ -470,7 +472,7 @@ class App:
             # Drain anything popout_panel() registered before run() (the
             # widget can also be called from inside @app.ui - that path
             # registers on the first frame, see widgets/popout.py).
-            from myogestic.widgets.popout import _make_dockable_window
+            from myogestic.widgets.panels.popout import _make_dockable_window
 
             dp = hello_imgui.DockingParams()
             dockable_windows = [
@@ -526,7 +528,7 @@ class App:
             # the same process (with overlapping panel titles) re-registers
             # cleanly. Without this, the second App's popout_panel calls
             # would short-circuit and never queue their DockableWindows.
-            from myogestic.widgets.popout import _reset_registry
+            from myogestic.widgets.panels.popout import _reset_registry
             _reset_registry()
 
     def _headless_loop(self) -> None:

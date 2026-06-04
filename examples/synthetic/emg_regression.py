@@ -34,8 +34,8 @@ from myogestic.widgets import (
     signal_viewer,
     stream_panel,
 )
-from myogestic.widgets.filter_controls import FilterControl
-from myogestic.widgets.recording import recording_controls
+from myogestic.widgets.panels.filter_controls import FilterControl
+from myogestic.widgets.panels.recording import recording_controls
 
 ctrl_outlet = control_outlet()
 CLASSES = ["Rest", "Fist"]

@@ -5,7 +5,7 @@ the train/predict pipeline controls. Construct once, call ``.ui()`` each
 frame inside ``@app.ui``, and use the holder as a callable in your
 ``@pipeline.predict`` body::
 
-    from myogestic.widgets.filter_controls import FilterControl
+    from myogestic.widgets.panels.filter_controls import FilterControl
 
     output_filter = FilterControl(hz=32, default="one_euro")
 
@@ -29,7 +29,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.filters import OneEuroFilter, VectorFilter, make_filter
-from myogestic.widgets._common import panel_header
+from myogestic.widgets.common import panel_header
 
 _NAMES = ["identity", "gaussian", "one_euro"]
 _DISPLAY = {
