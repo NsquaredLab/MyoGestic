@@ -21,7 +21,7 @@ a continuous 9-vec.
 ## The one-liner that wires it up
 
 ```python
-from myogestic.interfaces import virtual_hand
+from myogestic.vhi.interfaces import virtual_hand
 
 vhi = virtual_hand()                  # resolves install path + gRPC endpoint
 vhi_outlet = vhi.outlet()             # 9-ch LSL outlet @ 32 Hz
@@ -260,6 +260,6 @@ symptom-organised debugging.
 * [Edge trigger](../concepts/edge-trigger.md) - fire-on-change pattern.
 * [Examples directory](../tutorials/examples-index.md) - every shipped
   example wires VHI either via LSL, gRPC, or both.
-* [`myogestic.interfaces.virtual_hand`](../api/core.md) - full signature.
+* [`myogestic.vhi.interfaces.virtual_hand`](../api/core.md) - full signature.
 * [`myogestic.widgets.vhi_movement_panel.VhiMovementPanel`](../api/widgets.md) -
   movement palette API.

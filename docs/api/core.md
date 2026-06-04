@@ -34,9 +34,9 @@
 
 ## External interfaces
 
-::: myogestic.interfaces.virtual_hand
+::: myogestic.vhi.interfaces.virtual_hand
 
-::: myogestic.interfaces.InterfaceSpec
+::: myogestic.vhi.interfaces.InterfaceSpec
 
 ## Tools
 
