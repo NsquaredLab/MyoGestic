@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Union
 
 from imgui_bundle import imgui
 
@@ -92,7 +91,7 @@ class Fr:
         return f"Fr({self.value:g})"
 
 
-Track = Union[Px, Fr]
+Track = Px | Fr
 
 
 def _coerce(spec: object, axis: str, index: int) -> Track:

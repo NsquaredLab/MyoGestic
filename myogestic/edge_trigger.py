@@ -26,12 +26,9 @@ animations.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Generic, TypeVar
-
-T = TypeVar("T")
 
 
-class EdgeTrigger(Generic[T]):
+class EdgeTrigger[T]:
     """Calls ``callback(value)`` only when ``value`` differs from the last fire.
 
     Thread-safety: the typical pattern is "one writer (predict thread) +

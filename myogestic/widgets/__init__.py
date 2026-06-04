@@ -19,13 +19,13 @@ from myogestic.widgets.template_inspector import (
     template_inspector,
 )
 from myogestic.widgets.trial_preview import trial_preview
-from myogestic.widgets.vhi_movement_panel import VhiMovementPanel
 from myogestic.widgets.vhi_movement_palette import (
     VhiStateCache,
     VhiStateSnapshot,
     request_vhi_state_refresh,
     vhi_movement_palette,
 )
+from myogestic.widgets.vhi_movement_panel import VhiMovementPanel
 
 __all__ = [
     "FeatureSelector",
