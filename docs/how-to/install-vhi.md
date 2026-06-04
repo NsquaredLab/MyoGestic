@@ -128,10 +128,10 @@ is a single directory. Delete it:
 
 ```bash
 # Find where VHI was installed:
-python -c "from myogestic.interfaces import _default_install_root; print(_default_install_root())"
+python -c "from myogestic.vhi.interfaces import _default_install_root; print(_default_install_root())"
 
 # Then remove it:
-rm -rf "$(python -c 'from myogestic.interfaces import _default_install_root; print(_default_install_root())')"
+rm -rf "$(python -c 'from myogestic.vhi.interfaces import _default_install_root; print(_default_install_root())')"
 ```
 
 `virtual_hand()` will then raise its standard "not installed" error on
