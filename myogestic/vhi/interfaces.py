@@ -5,7 +5,7 @@ outlet name + channel count + sample rate, control stream name). The
 ``InterfaceSpec`` dataclass and ``virtual_hand()`` constructor pull that
 boilerplate behind a single call:
 
-    from myogestic.interfaces import virtual_hand
+    from myogestic.vhi.interfaces import virtual_hand
 
     vhi = virtual_hand()
     vhi_outlet = vhi.outlet()           # 9-ch LSLOutlet @ 32 Hz
@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING
 from myogestic.outputs import LSLOutlet
 
 if TYPE_CHECKING:
-    from myogestic._vhi_client import VhiControlClient
+    from myogestic.vhi._client import VhiControlClient
 
 
 @dataclass
@@ -93,7 +93,7 @@ class InterfaceSpec:
         Imported lazily so a plain install (no ``[grpc]`` extra) can still use
         ``outlet()`` / ``launcher()`` without grpcio present.
         """
-        from myogestic._vhi_client import VhiControlClient
+        from myogestic.vhi._client import VhiControlClient
 
         return VhiControlClient(host=self.grpc_host, port=self.grpc_port)
 
@@ -168,7 +168,8 @@ def _default_install_root() -> Path:
     2. ``<user_data>/myogestic/vhi`` otherwise — survives venv churn for
        pip-installed users.
     """
-    repo_root = Path(__file__).resolve().parent.parent
+    # this file lives at <repo>/myogestic/vhi/interfaces.py → three parents up
+    repo_root = Path(__file__).resolve().parent.parent.parent
     if (repo_root / ".git").exists() and os.access(repo_root, os.W_OK):
         return repo_root / "tools" / "MyoGestic-VHI"
     return _user_data_root() / "vhi"

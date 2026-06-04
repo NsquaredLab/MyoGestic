@@ -52,7 +52,7 @@ from imgui_bundle import imgui
 from myogestic.widgets._common import panel_header
 
 if TYPE_CHECKING:
-    from myogestic._vhi_client import VhiControlClient
+    from myogestic.vhi._client import VhiControlClient
 
 # Movement button size. Columns are computed from the panel width, so the grid
 # reflows as the panel is resized. Width fits VHI's longest name ("ThreeFingerPinch").

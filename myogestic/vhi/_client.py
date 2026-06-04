@@ -20,8 +20,8 @@ from dataclasses import dataclass
 import grpc
 from google.protobuf.message import Message
 
-from myogestic._proto import myogestic_vhi_pb2 as pb2
-from myogestic._proto.myogestic_vhi_pb2_grpc import VhiControlStub
+from myogestic.vhi._proto import myogestic_vhi_pb2 as pb2
+from myogestic.vhi._proto.myogestic_vhi_pb2_grpc import VhiControlStub
 
 log = logging.getLogger("myogestic.vhi_client")
 
