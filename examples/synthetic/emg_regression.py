@@ -22,7 +22,7 @@ from myogestic import App, Fr, Grid, Px, Stream, TrainingData
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import pipeline_panel
-from myogestic.models import catboost_regressor
+from myogestic.recipes.estimators import catboost_regressor
 from myogestic.session import iter_aligned_windows, iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet

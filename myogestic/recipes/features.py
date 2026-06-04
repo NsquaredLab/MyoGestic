@@ -2,7 +2,7 @@
 
 Use as-is, mix with your own, or replace entirely::
 
-    from myogestic.contrib.features import rms, mav, wl
+    from myogestic.recipes.features import rms, mav, wl
     from myogestic.widgets import FeatureSelector
 
     feats = FeatureSelector(
