@@ -4,7 +4,7 @@ we exercise only the pure state/parameter logic here."""
 import numpy as np
 import pytest
 
-from myogestic.filters import GaussianFilter, IdentityFilter, OneEuroFilter
+from myogestic.outputs.filters import GaussianFilter, IdentityFilter, OneEuroFilter
 from myogestic.widgets.panels.filter_controls import FilterControl
 
 

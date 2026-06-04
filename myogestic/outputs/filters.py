@@ -12,7 +12,7 @@ output.
 
 Pattern:
 
-    from myogestic.filters import make_filter
+    from myogestic.outputs.filters import make_filter
     output_filter = make_filter("one_euro", hz=32)
 
     @pipeline.predict
