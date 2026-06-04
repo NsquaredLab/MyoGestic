@@ -5,12 +5,11 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
 from typing import Any
 
+from myogestic._platform import _register_assets_folder, _try_set_macos_dock_icon
 from myogestic.session import Session
 from myogestic.stream import Stream
-from myogestic._platform import _assets_folder, _register_assets_folder, _try_set_macos_dock_icon
 
 log = logging.getLogger("myogestic")
 
