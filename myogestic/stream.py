@@ -257,7 +257,9 @@ class Stream:
 
             try:
                 if hasattr(self._source, "reconnect"):
-                    self.info = self._source.reconnect(target)
+                    # `reconnect` is an optional Source extension (not in the
+                    # Protocol); the hasattr guard makes the call safe.
+                    self.info = self._source.reconnect(target)  # type: ignore[attr-defined]
                 else:
                     self._source.disconnect()
                     self.info = self._source.connect()
@@ -467,37 +469,45 @@ class Stream:
 
         n, n_ch = d.shape
 
-        if self._m4_work_col is None or self._m4_work_col.shape[0] < n:
-            self._m4_work_col = np.empty(n, dtype=d.dtype)
+        # Bind each scratch buffer to a local right after its lazy-alloc guard:
+        # the type checker can't narrow an Optional *instance attribute* across
+        # the loop + downsampler calls below, but it narrows a local; locals also
+        # save repeated attribute lookups in this per-frame hot path.
+        work_col = self._m4_work_col
+        if work_col is None or work_col.shape[0] < n:
+            work_col = self._m4_work_col = np.empty(n, dtype=d.dtype)
 
         max_idx = n_out * n_ch
-        if self._m4_work_idx is None or self._m4_work_idx.shape[0] < max_idx:
-            self._m4_work_idx = np.empty(max_idx, dtype=np.intp)
+        work_idx = self._m4_work_idx
+        if work_idx is None or work_idx.shape[0] < max_idx:
+            work_idx = self._m4_work_idx = np.empty(max_idx, dtype=np.intp)
 
         pos = 0
         for ch in range(n_ch):
-            np.copyto(self._m4_work_col[:n], d[:, ch])
-            idx = self._m4_downsampler.downsample(self._m4_work_col[:n], n_out=n_out)  # type: ignore[attr-defined]
+            np.copyto(work_col[:n], d[:, ch])
+            idx = self._m4_downsampler.downsample(work_col[:n], n_out=n_out)  # type: ignore[attr-defined]
             idx_len = len(idx)
-            self._m4_work_idx[pos : pos + idx_len] = idx
+            work_idx[pos : pos + idx_len] = idx
             pos += idx_len
 
-        all_idx = np.unique(self._m4_work_idx[:pos])
+        all_idx = np.unique(work_idx[:pos])
         n_sel = len(all_idx)
 
+        work_d = self._m4_work_d
         if (
-            self._m4_work_d is None
-            or self._m4_work_d.shape[0] < n_sel
-            or self._m4_work_d.shape[1] != n_ch
+            work_d is None
+            or work_d.shape[0] < n_sel
+            or work_d.shape[1] != n_ch
         ):
-            self._m4_work_d = np.empty((n_out * n_ch, n_ch), dtype=d.dtype)
-        if self._m4_work_t is None or self._m4_work_t.shape[0] < n_sel:
-            self._m4_work_t = np.empty(n_out * n_ch, dtype=np.float64)
+            work_d = self._m4_work_d = np.empty((n_out * n_ch, n_ch), dtype=d.dtype)
+        work_t = self._m4_work_t
+        if work_t is None or work_t.shape[0] < n_sel:
+            work_t = self._m4_work_t = np.empty(n_out * n_ch, dtype=np.float64)
 
-        self._m4_work_t[:n_sel] = t[all_idx]
-        self._m4_work_d[:n_sel] = d[all_idx]
+        work_t[:n_sel] = t[all_idx]
+        work_d[:n_sel] = d[all_idx]
 
-        return self._m4_work_t[:n_sel], self._m4_work_d[:n_sel]
+        return work_t[:n_sel], work_d[:n_sel]
 
     def get_window(self) -> tuple[np.ndarray, np.ndarray]:
         """Return the most recent ``window_seconds`` as ``(data, ts)``.
