@@ -28,7 +28,7 @@ import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.filters import OneEuroFilter, VectorFilter, make_filter
+from myogestic.outputs.filters import OneEuroFilter, VectorFilter, make_filter
 from myogestic.widgets.common import panel_header
 
 _NAMES = ["identity", "gaussian", "one_euro"]

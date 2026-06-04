@@ -1,9 +1,9 @@
-"""Tests for myogestic.filters output-smoothing layer."""
+"""Tests for myogestic.outputs.filters output-smoothing layer."""
 
 import numpy as np
 import pytest
 
-from myogestic.filters import (
+from myogestic.outputs.filters import (
     GaussianFilter,
     IdentityFilter,
     OneEuroFilter,

@@ -454,7 +454,7 @@ class App:
         runner_params.ini_filename = f".imgui_state/{self.name.replace(' ', '_')}.ini"
 
         if self._theme_enabled:
-            from myogestic.theme import apply_theme, load_fonts, set_ui_scale
+            from myogestic._theme import apply_theme, load_fonts, set_ui_scale
             set_ui_scale(self._ui_scale)  # consumed by load_fonts / apply_theme below
             runner_params.callbacks.default_icon_font = hello_imgui.DefaultIconFont.font_awesome6
             runner_params.callbacks.load_additional_fonts = load_fonts
