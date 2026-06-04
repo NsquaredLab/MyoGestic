@@ -11,6 +11,8 @@ import numpy as np
 from dvg_ringbuffer import RingBuffer
 
 if TYPE_CHECKING:
+    from tsdownsample import M4Downsampler
+
     from myogestic.session import Session
 
 # Pyodide reports sys.platform == "emscripten" and forbids OS threads
@@ -190,7 +192,7 @@ class Stream:
         self._m4_d = np.empty(0)
         self._m4_n: int = 0
         # Per-stream M4 scratch (was module globals — not thread-safe across streams)
-        self._m4_downsampler: object | None = None
+        self._m4_downsampler: M4Downsampler | None = None
         self._m4_work_col: np.ndarray | None = None
         self._m4_work_idx: np.ndarray | None = None
         self._m4_work_d: np.ndarray | None = None
@@ -462,10 +464,11 @@ class Stream:
         Previously module-global — moved here because multiple streams running
         the acquire loop concurrently would stomp on shared scratch buffers.
         """
-        if self._m4_downsampler is None:
+        downsampler = self._m4_downsampler
+        if downsampler is None:
             from tsdownsample import M4Downsampler
 
-            self._m4_downsampler = M4Downsampler()
+            downsampler = self._m4_downsampler = M4Downsampler()
 
         n, n_ch = d.shape
 
@@ -485,7 +488,7 @@ class Stream:
         pos = 0
         for ch in range(n_ch):
             np.copyto(work_col[:n], d[:, ch])
-            idx = self._m4_downsampler.downsample(work_col[:n], n_out=n_out)  # type: ignore[attr-defined]
+            idx = downsampler.downsample(work_col[:n], n_out=n_out)
             idx_len = len(idx)
             work_idx[pos : pos + idx_len] = idx
             pos += idx_len
