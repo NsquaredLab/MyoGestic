@@ -218,11 +218,10 @@ class Stream:
             dtype=(self.info.dtype, self.info.n_channels),  # type: ignore[arg-type]
         )
         self._timestamps = RingBuffer(
-            capacity=self._cap, dtype=np.float64  # type: ignore[arg-type]
+            capacity=self._cap,
+            dtype=np.float64,  # type: ignore[arg-type]
         )
-        self._display_d = np.empty(
-            (self._cap, self.info.n_channels), dtype=self.info.dtype
-        )
+        self._display_d = np.empty((self._cap, self.info.n_channels), dtype=self.info.dtype)
         self._display_t = np.empty(self._cap, dtype=np.float64)
         self._display_n = 0
         self._snap_interval = max(1, int(self.info.fs * 0.016))
@@ -235,9 +234,7 @@ class Stream:
         self._m4_work_idx = None
         self._m4_work_d = None
         self._m4_work_t = None
-        self._win_d = np.empty(
-            (self._cap, self.info.n_channels), dtype=self.info.dtype
-        )
+        self._win_d = np.empty((self._cap, self.info.n_channels), dtype=self.info.dtype)
         self._win_t = np.empty(self._cap, dtype=np.float64)
         self._connected = True
 
@@ -282,6 +279,7 @@ class Stream:
             # per-frame scheduler instead - the App's GUI callback
             # ticks it every frame.
             from myogestic._browser import register
+
             register(lambda: self._acquire_step() if self._running else 1.0)
         else:
             self._thread = threading.Thread(target=self._acquire_loop, daemon=True)
@@ -343,6 +341,10 @@ class Stream:
             self.last_error = bad
             return 0.1
 
+        if self._data is None or self._timestamps is None:
+            # Shouldn't happen once connected (_connect initialises both), but
+            # narrows the Optional for the type checker and is harmless defence.
+            return 1.0
         with self._lock:
             self._data.extend(data)
             self._timestamps.extend(ts)
@@ -445,9 +447,7 @@ class Stream:
             self._m4_d = self._display_d[:n]
             self._m4_n = n
         else:
-            t_dec, d_dec = self._m4_decimate(
-                self._display_t[:n], self._display_d[:n], n_out
-            )
+            t_dec, d_dec = self._m4_decimate(self._display_t[:n], self._display_d[:n], n_out)
             self._m4_t = t_dec
             self._m4_d = d_dec
             self._m4_n = len(t_dec)
@@ -462,6 +462,7 @@ class Stream:
         """
         if self._m4_downsampler is None:
             from tsdownsample import M4Downsampler
+
             self._m4_downsampler = M4Downsampler()
 
         n, n_ch = d.shape
@@ -521,9 +522,7 @@ class Stream:
             return self._win_d[:nd].T, self._win_t[:nd]
         return self._win_d[nd - n : nd].T, self._win_t[nd - n : nd]
 
-    def get_display(
-        self, n_pixels: int = 800
-    ) -> tuple[np.ndarray, np.ndarray] | None:
+    def get_display(self, n_pixels: int = 800) -> tuple[np.ndarray, np.ndarray] | None:
         """Read pre-computed M4 result. Zero work on render thread.
 
         The acquire thread computes M4 in _update_display_snapshot.
@@ -556,5 +555,3 @@ class Stream:
                 return None
             ts = float(self._display_t[n - 1])
         return ts if ts > 0.0 else None
-
-
