@@ -100,9 +100,7 @@ def prediction_label(
     try:
         avail = imgui.get_content_region_avail().x
         text_w = imgui.calc_text_size(name).x
-        imgui.set_cursor_pos_x(
-            imgui.get_cursor_pos_x() + max(0.0, (avail - text_w) * 0.5)
-        )
+        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0.0, (avail - text_w) * 0.5))
         imgui.text_colored(rgba, name)
     finally:
         imgui.pop_font()

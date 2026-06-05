@@ -43,7 +43,9 @@ def session_manager(
     poll_file_dialog(state)
 
     classes_in_pool, active_classes = class_pool_and_active(state)
-    render_class_buttons(uid, state.deactivated_classes, classes_in_pool, active_classes, class_names)
+    render_class_buttons(
+        uid, state.deactivated_classes, classes_in_pool, active_classes, class_names
+    )
     render_session_rows(uid, state.sessions, class_names)
 
     return TrainingData(
@@ -88,9 +90,9 @@ def render_summary_and_buttons(uid: str, base_path: str, state: SessionWidgetSta
 
 def poll_file_dialog(state: SessionWidgetState) -> None:
     dialog = state.folder_dialog
-    if dialog is None or not dialog.ready():  # type: ignore[union-attr]
+    if dialog is None or not dialog.ready():  # type: ignore
         return
-    result = dialog.result()  # type: ignore[union-attr]
+    result = dialog.result()  # type: ignore
     state.folder_dialog = None
     load_session_files(state, result or [])
 
@@ -109,7 +111,9 @@ def render_class_buttons(
     imgui.text("Classes:")
     imgui.same_line()
     for ci in sorted(classes_in_pool):
-        name = class_names[ci] if class_names is not None and 0 <= ci < len(class_names) else f"c{ci}"
+        name = (
+            class_names[ci] if class_names is not None and 0 <= ci < len(class_names) else f"c{ci}"
+        )
         is_active = ci in active_classes
         if is_active:
             imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.31, 0.61, 0.98, 0.9))
@@ -152,7 +156,9 @@ def render_label_counts(row: dict, class_names: list[str] | None) -> None:
             c = PALETTE[ci % len(PALETTE)]
             imgui.text_colored(imgui.ImVec4(c[0], c[1], c[2], 1.0), "●")
             imgui.same_line()
-            name = sess_names[ci] if sess_names is not None and 0 <= ci < len(sess_names) else f"c{ci}"
+            name = (
+                sess_names[ci] if sess_names is not None and 0 <= ci < len(sess_names) else f"c{ci}"
+            )
             imgui.text(f"{name}:{n}")
 
     unlabeled = counts.get("-1", 0)

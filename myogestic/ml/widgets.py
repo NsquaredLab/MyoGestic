@@ -1,13 +1,13 @@
 """ML-pipeline widgets. Take a `Pipeline` argument, not `App`.
 
-    from myogestic.ml import Pipeline
-    from myogestic.ml.widgets import train_button, predict_button, training_log
+from myogestic.ml import Pipeline
+from myogestic.ml.widgets import train_button, predict_button, training_log
 
-    @app.ui
-    def my_ui(ctx):
-        train_button(pipeline)
-        predict_button(pipeline)
-        training_log(pipeline)
+@app.ui
+def my_ui(ctx):
+    train_button(pipeline)
+    predict_button(pipeline)
+    training_log(pipeline)
 """
 
 from __future__ import annotations
@@ -69,9 +69,7 @@ def predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> N
         imgui.end_disabled()
 
 
-def training_log(
-    pipeline: Pipeline, height: float = 100.0, *, widget_id: str = "ml"
-) -> None:
+def training_log(pipeline: Pipeline, height: float = 100.0, *, widget_id: str = "ml") -> None:
     """Read-only view of ``pipeline.train_log`` with smart autoscroll.
 
     Uses the same scrollable-child + tail-follow renderer as
@@ -154,16 +152,12 @@ def pipeline_panel(
     imgui.same_line()
     autoscroll = _autoscroll.setdefault(widget_id, True)
     popped = _popout_open.get(widget_id, False)
-    autoscroll, popped = render_log_buttons(
-        widget_id, autoscroll=autoscroll, popped_out=popped
-    )
+    autoscroll, popped = render_log_buttons(widget_id, autoscroll=autoscroll, popped_out=popped)
     _autoscroll[widget_id] = autoscroll
     _popout_open[widget_id] = popped
 
     if popped:
-        imgui.text_disabled(
-            "(log popped out — see 'Model training log' window)"
-        )
+        imgui.text_disabled("(log popped out — see 'Model training log' window)")
     elif pipeline.train_log:
         render_log(
             widget_id,

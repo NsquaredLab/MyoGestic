@@ -121,9 +121,7 @@ def test_output_logs_first_error_per_kind(caplog):
 
     assert out.call_count >= 2, "send loop did not retry after first failure"
     matching = [r for r in caplog.records if "device unplugged" in r.getMessage()]
-    assert len(matching) == 1, (
-        f"expected exactly one WARNING per error kind, got {len(matching)}"
-    )
+    assert len(matching) == 1, f"expected exactly one WARNING per error kind, got {len(matching)}"
 
 
 def test_lsl_outlet_rejects_wrong_shape(caplog):
@@ -137,10 +135,7 @@ def test_lsl_outlet_rejects_wrong_shape(caplog):
         time.sleep(0.2)
     out.stop()
 
-    matching = [
-        r for r in caplog.records
-        if "expected 1-D vector of length 3" in r.getMessage()
-    ]
+    matching = [r for r in caplog.records if "expected 1-D vector of length 3" in r.getMessage()]
     assert matching, "wrong-shape push did not produce the expected warning"
 
 

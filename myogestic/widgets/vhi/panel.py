@@ -74,9 +74,7 @@ class VhiMovementPanel:
 
     def ui(self) -> None:
         """Render the panel — call once per frame inside ``@app.ui``."""
-        request_vhi_state_refresh(
-            self._client, self._cache, min_interval_s=self._refresh_interval
-        )
+        request_vhi_state_refresh(self._client, self._cache, min_interval_s=self._refresh_interval)
         snap = self._cache.snapshot()
         vhi_movement_palette(
             snap.movements,
@@ -84,9 +82,7 @@ class VhiMovementPanel:
             current_movement=snap.current_movement,
             status=snap.message,
             on_movement=self._on_movement,
-            on_refresh=lambda: request_vhi_state_refresh(
-                self._client, self._cache, force=True
-            ),
+            on_refresh=lambda: request_vhi_state_refresh(self._client, self._cache, force=True),
             label=self._label,
         )
 

@@ -52,9 +52,7 @@ def render_controls(
         if imgui.button(f"↻##{stream_name}_retarget"):
             v.show_retarget = not v.show_retarget
         if imgui.is_item_hovered():
-            imgui.set_tooltip(
-                "Change source: scan + reconnect to a different LSL stream."
-            )
+            imgui.set_tooltip("Change source: scan + reconnect to a different LSL stream.")
         imgui.same_line()
 
     render_filter_and_scale(stream_name, v)
@@ -74,9 +72,7 @@ def render_filter_and_scale(stream_name: str, v: ViewerState) -> None:
     if df_changed:
         v.display_filter = df_modes[df_new]
     if imgui.is_item_hovered():
-        imgui.set_tooltip(
-            "Visual-only transform - never affects recording or model input."
-        )
+        imgui.set_tooltip("Visual-only transform - never affects recording or model input.")
     imgui.same_line()
 
     label_for = {"auto": "Auto", "manual": "Manual"}
@@ -118,15 +114,11 @@ def render_filter_and_scale(stream_name: str, v: ViewerState) -> None:
 
     imgui.same_line()
     imgui.push_item_width(70)
-    chmin, ymin = imgui.input_float(
-        f"min##{stream_name}_ymin", v.y_min, 0.0, 0.0, "%.2f"
-    )
+    chmin, ymin = imgui.input_float(f"min##{stream_name}_ymin", v.y_min, 0.0, 0.0, "%.2f")
     if chmin:
         v.y_min = ymin
     imgui.same_line()
-    chmax, ymax = imgui.input_float(
-        f"max##{stream_name}_ymax", v.y_max, 0.0, 0.0, "%.2f"
-    )
+    chmax, ymax = imgui.input_float(f"max##{stream_name}_ymax", v.y_max, 0.0, 0.0, "%.2f")
     if chmax:
         v.y_max = ymax
     imgui.pop_item_width()
@@ -139,9 +131,7 @@ def render_resolution_controls(
 ) -> None:
     third = imgui.get_content_region_avail().x * 0.33
     imgui.push_item_width(third)
-    changed_r, new_r = imgui.slider_int(
-        f"Resolution##{stream_name}", v.n_pixels, 100, 10000
-    )
+    changed_r, new_r = imgui.slider_int(f"Resolution##{stream_name}", v.n_pixels, 100, 10000)
     if changed_r:
         v.n_pixels = new_r
     imgui.pop_item_width()
@@ -192,9 +182,7 @@ def render_channel_controls(
             imgui.same_line()
             if imgui.get_content_region_avail().x < 80:
                 imgui.new_line()
-        hovered_ch = render_channel_toggle(
-            stream_name, enabled, ch_names, hovered_ch, ch
-        )
+        hovered_ch = render_channel_toggle(stream_name, enabled, ch_names, hovered_ch, ch)
 
     return enabled, ch_names, hovered_ch
 
@@ -237,9 +225,7 @@ def render_channel_toggle(
     is_on = ch in enabled
     color = PALETTE[ch % len(PALETTE)]
     if is_on:
-        imgui.push_style_color(
-            imgui.Col_.button, imgui.ImVec4(color[0], color[1], color[2], 0.7)
-        )
+        imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(color[0], color[1], color[2], 0.7))
     else:
         imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.3, 0.3, 0.3, 0.5))
     label = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"

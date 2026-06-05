@@ -30,9 +30,7 @@ class _FixedSource:
     """Source protocol stub: hands back one small, well-formed chunk per read."""
 
     def __init__(self, n_channels: int = 2, fs: float = 1000.0) -> None:
-        self._info = StreamInfo(
-            n_channels=n_channels, fs=fs, dtype=np.dtype("float32")
-        )
+        self._info = StreamInfo(n_channels=n_channels, fs=fs, dtype=np.dtype("float32"))
 
     def connect(self) -> StreamInfo:
         return self._info
@@ -120,9 +118,7 @@ def test_clear_after_detach_does_not_crash_acquire_loop():
     threading.excepthook = lambda args: errors.append(args.exc_value)
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            stream = Stream(
-                "emg", source=_FixedSource(), window_seconds=0.1, buffer_seconds=2
-            )
+            stream = Stream("emg", source=_FixedSource(), window_seconds=0.1, buffer_seconds=2)
             stream.start()
             time.sleep(0.05)  # let it connect + stream
             assert stream.info is not None

@@ -64,9 +64,7 @@ def test_replay_source_connect():
 def test_replay_source_reads_all_data():
     """Calling read() in a loop eventually returns all session data."""
     session_path = Path("/tmp/myogestic_replay_test_all")
-    original_data, original_ts = create_synthetic_session(
-        session_path, "emg", n_channels=4, fs=128
-    )
+    original_data, original_ts = create_synthetic_session(session_path, "emg", n_channels=4, fs=128)
 
     src = ReplaySource(str(session_path), "emg", speed=100.0)  # fast replay
     src.connect()
@@ -103,9 +101,7 @@ def test_replay_source_loops():
     """After reaching the end, ReplaySource resets to pos=0 and keeps going."""
     session_path = Path("/tmp/myogestic_replay_test_loop")
     # Short session: 0.5s at 64 Hz = 32 samples
-    original_data, _ = create_synthetic_session(
-        session_path, "sig", n_channels=2, fs=64
-    )
+    original_data, _ = create_synthetic_session(session_path, "sig", n_channels=2, fs=64)
     n_total = len(original_data)
 
     src = ReplaySource(str(session_path), "sig", speed=100.0)
@@ -146,7 +142,7 @@ def test_replay_into_stream():
     time.sleep(1.5)  # let replay feed the buffer
 
     data, ts = stream.get_window()
-    assert data.shape[0] == 8           # channels-first
+    assert data.shape[0] == 8  # channels-first
     assert data.shape[1] > 0
     assert len(ts) == data.shape[1]
 

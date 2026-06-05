@@ -67,6 +67,7 @@ def test_imports_from_widgets_init():
         signal_viewer,
         stream_panel,
     )
+
     assert callable(signal_viewer)
     assert callable(process_launcher)
     assert callable(stream_panel)

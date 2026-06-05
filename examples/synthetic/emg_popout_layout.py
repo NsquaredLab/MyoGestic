@@ -83,11 +83,13 @@ wl_transform = WaveformLength(window_size=32)
 
 def extract_features(emg: np.ndarray) -> np.ndarray:
     tensor = torch.from_numpy(emg).float()
-    return np.concatenate([
-        rms_transform(tensor).numpy().flatten(),
-        mav_transform(tensor).numpy().flatten(),
-        wl_transform(tensor).numpy().flatten(),
-    ])
+    return np.concatenate(
+        [
+            rms_transform(tensor).numpy().flatten(),
+            mav_transform(tensor).numpy().flatten(),
+            wl_transform(tensor).numpy().flatten(),
+        ]
+    )
 
 
 PROCESSES = [
@@ -137,7 +139,9 @@ def extract(windows) -> np.ndarray:
 MODEL_RECIPES: dict[str, Callable[[], Any]] = {
     "CatBoost": lambda: catboost_classifier(iterations=150),
     "Random Forest": lambda: sklearn_classifier(n_estimators=200, random_state=0, n_jobs=-1),
-    "Extra Trees": lambda: sklearn_extra_trees_classifier(n_estimators=300, random_state=0, n_jobs=-1),
+    "Extra Trees": lambda: sklearn_extra_trees_classifier(
+        n_estimators=300, random_state=0, n_jobs=-1
+    ),
     "Logistic Regression": lambda: sklearn_logistic_classifier(max_iter=1000),
     "Dummy Constant": lambda: constant_classifier(0),
 }
@@ -204,7 +208,7 @@ def predict(model, features):
 
 
 def _on_gesture(i: int) -> None:
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
 # --- Per-block render functions (each becomes its own dockable window) -----
@@ -291,8 +295,8 @@ def _model_block() -> None:
     imgui.same_line()
     imgui.text_disabled(f"({len(_list_saved())} saved)")
 
-    if _load_dialog is not None and _load_dialog.ready():  # type: ignore[union-attr]
-        result = _load_dialog.result()  # type: ignore[union-attr]
+    if _load_dialog is not None and _load_dialog.ready():  # type: ignore
+        result = _load_dialog.result()  # type: ignore
         _load_dialog = None
         if result:
             try:

@@ -130,12 +130,8 @@ class FilterControl:
                 imgui.same_line()
             is_active = self._name == name
             if is_active:
-                imgui.push_style_color(
-                    imgui.Col_.button, imgui.ImVec4(0.31, 0.61, 0.98, 0.95)
-                )
-                imgui.push_style_color(
-                    imgui.Col_.text, imgui.ImVec4(1.0, 1.0, 1.0, 1.0)
-                )
+                imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.31, 0.61, 0.98, 0.95))
+                imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(1.0, 1.0, 1.0, 1.0))
             if imgui.button(f"{_DISPLAY[name]}##{label}_button_{name}") and not is_active:
                 self._name = name
                 self._filter = self._build()
@@ -152,15 +148,11 @@ class FilterControl:
         if self._name == "gaussian":
             rebuild = False
             imgui.push_item_width(-100)  # leave room for the value text
-            ch, v = imgui.slider_int(
-                f"window (samples)##{label}_g_w", params["window"], 1, 30
-            )
+            ch, v = imgui.slider_int(f"window (samples)##{label}_g_w", params["window"], 1, 30)
             if ch:
                 params["window"] = v
                 rebuild = True
-            ch, v = imgui.slider_float(
-                f"sigma##{label}_g_s", params["sigma"], 0.1, 10.0, "%.2f"
-            )
+            ch, v = imgui.slider_float(f"sigma##{label}_g_s", params["sigma"], 0.1, 10.0, "%.2f")
             if ch:
                 params["sigma"] = v
                 rebuild = True
@@ -218,7 +210,5 @@ class FilterControl:
                 imgui.get_style().color_(imgui.Col_.text_disabled),
             )
             tau_ms = 1000.0 / (2.0 * np.pi * params["min_cutoff"])
-            imgui.text(
-                f"  τ at rest ≈ {tau_ms:.0f} ms (actual lag varies with motion)"
-            )
+            imgui.text(f"  τ at rest ≈ {tau_ms:.0f} ms (actual lag varies with motion)")
             imgui.pop_style_color()

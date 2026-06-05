@@ -54,4 +54,4 @@ class LSLOutlet(Output):
                 f"LSLOutlet expected 1-D vector of length {self._n_channels}, "
                 f"got shape={data.shape}."
             )
-        self._outlet.push_sample(data.astype(np.float32))  # type: ignore[arg-type]
+        self._outlet.push_sample(data.astype(np.float32))  # type: ignore

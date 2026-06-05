@@ -1,6 +1,6 @@
 """Multi-channel line plot for @app.ui.
 
-    from myogestic.widgets.plots.line_plot import line_plot
+from myogestic.widgets.plots.line_plot import line_plot
 """
 
 from __future__ import annotations

@@ -80,9 +80,7 @@ class GaussianFilter:
     def __call__(self, x: np.ndarray, t: float | None = None) -> np.ndarray:
         x_arr = np.asarray(x, dtype=np.float64)
         if x_arr.ndim != 1:
-            raise ValueError(
-                f"GaussianFilter expects a 1-D vector, got ndim={x_arr.ndim}"
-            )
+            raise ValueError(f"GaussianFilter expects a 1-D vector, got ndim={x_arr.ndim}")
         self._buf.append(x_arr)
         if len(self._buf) > self.window:
             self._buf.pop(0)
@@ -215,6 +213,4 @@ def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
                 **kwargs,
             }
         )
-    raise ValueError(
-        f"Unknown filter {name!r}. Choose: 'identity', 'gaussian', 'one_euro'."
-    )
+    raise ValueError(f"Unknown filter {name!r}. Choose: 'identity', 'gaussian', 'one_euro'.")

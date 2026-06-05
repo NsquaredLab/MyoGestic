@@ -27,7 +27,10 @@ def main() -> None:
     try:
         import cv2
     except ImportError:
-        print("opencv-python is required for webcam bridge: pip install opencv-python", file=sys.stderr)
+        print(
+            "opencv-python is required for webcam bridge: pip install opencv-python",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     import zarr

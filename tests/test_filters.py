@@ -95,8 +95,8 @@ def test_make_filter_rejects_unknown():
 def test_one_euro_with_explicit_timestamps():
     """Passing real timestamps gives different smoothing than the freq fallback
     when calls aren't perfectly periodic."""
-    f1 = OneEuroFilter(freq=50)   # uses 0.02s default dt
-    f2 = OneEuroFilter(freq=50)   # will use real dt via t arg
+    f1 = OneEuroFilter(freq=50)  # uses 0.02s default dt
+    f2 = OneEuroFilter(freq=50)  # will use real dt via t arg
 
     # Feed identical first samples
     f1(np.array([0.0]))

@@ -190,7 +190,7 @@ grid = Grid(
 
 def _on_gesture(i: int) -> None:
     """Manual class button: drive the fake generator and the VHI control hand."""
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
     vhi_client.set_movement(CLASSES[i])
     # Rebase so the next predict tick (which will see the same class) doesn't
     # re-fire SetMovement on top of the manual click.

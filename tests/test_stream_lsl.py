@@ -105,7 +105,11 @@ def test_stream_reconnect_clears_m4_scratch():
 
     # Trigger M4 path
     stream._update_m4_snapshot()
-    assert stream._m4_work_col is not None or stream._display_n < 2 or stream._m4_n == stream._display_n
+    assert (
+        stream._m4_work_col is not None
+        or stream._display_n < 2
+        or stream._m4_n == stream._display_n
+    )
 
     # Reconnect — M4 scratch must be invalidated
     stream.reconnect()

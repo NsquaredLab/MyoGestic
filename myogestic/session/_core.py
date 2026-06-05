@@ -178,8 +178,7 @@ class Session:
             meta["class_names"] = list(class_names)
         (self.path / "meta.json").write_text(json.dumps(meta, indent=2))
         labels = [
-            {"timestamp": e.timestamp, "class_index": e.class_index}
-            for e in self.label_track
+            {"timestamp": e.timestamp, "class_index": e.class_index} for e in self.label_track
         ]
         (self.path / "labels.json").write_text(json.dumps(labels, indent=2))
 

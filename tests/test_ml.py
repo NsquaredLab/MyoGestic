@@ -196,10 +196,11 @@ def test_pipeline_predict_hz_caps_loop_rate():
     # Add a fake stream so the loop has windows to read
     from myogestic.sources.lsl import LSLSource
     from myogestic.stream import Stream
+
     # Use a stream that won't actually connect, but make get_window return data
     stream = Stream("emg", source=LSLSource("DoesNotExist"), window_seconds=0.01)
     # Skip stream setup — just inject get_window-compatible data via monkeypatch
-    fake_data = np.ones((1, 1), dtype=np.float32)   # channels-first (1 ch, 1 sample)
+    fake_data = np.ones((1, 1), dtype=np.float32)  # channels-first (1 ch, 1 sample)
     fake_ts = np.array([0.0])
     stream.get_window = lambda: (fake_data, fake_ts)  # type: ignore[method-assign]
     app.streams(stream)
@@ -266,5 +267,3 @@ def test_start_training_refuses_without_data():
     assert app.ctx.state == "idle"
     assert pipeline.model is None
     assert "No training data" in app.ctx.status_message
-
-

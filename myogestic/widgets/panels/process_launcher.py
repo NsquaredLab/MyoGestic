@@ -182,9 +182,7 @@ def process_launcher(
         imgui.calc_text_size(fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER).x
         + 2 * style.frame_padding.x
     )
-    auto_w = (
-        imgui.calc_text_size(fa.ICON_FA_ANGLES_DOWN).x + 2 * style.frame_padding.x
-    )
+    auto_w = imgui.calc_text_size(fa.ICON_FA_ANGLES_DOWN).x + 2 * style.frame_padding.x
     # 3 spacings: combo→launch, launch→pop, pop→autoscroll.
     reserved = launch_w + pop_w + auto_w + 3 * style.item_spacing.x
     imgui.push_item_width(-reserved)
@@ -243,9 +241,7 @@ def process_launcher(
     # itself is rendered at the top of the function (see _render_open_popouts).
     h = log_height if log_height > 0 else -1.0
     if _popout_open.get(pop_key, False):
-        imgui.text_disabled(
-            f"(log popped out — see '{selected_name} log' window)"
-        )
+        imgui.text_disabled(f"(log popped out — see '{selected_name} log' window)")
     else:
         render_log(
             f"{uid}_{selected_name}",

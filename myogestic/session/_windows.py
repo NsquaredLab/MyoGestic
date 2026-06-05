@@ -96,9 +96,7 @@ def iter_aligned_windows(
     if hop_seconds <= 0:
         raise ValueError(f"hop_seconds must be > 0 (got {hop_seconds})")
     if align_window_samples < 1:
-        raise ValueError(
-            f"align_window_samples must be >= 1 (got {align_window_samples})"
-        )
+        raise ValueError(f"align_window_samples must be >= 1 (got {align_window_samples})")
 
     n_left = align_window_samples // 2
     n_right = align_window_samples - n_left

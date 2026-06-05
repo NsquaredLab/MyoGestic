@@ -1,6 +1,6 @@
 """2D and 3D scatter plots for @app.ui (UMAP, t-SNE, PCA, etc.).
 
-    from myogestic.widgets.plots.scatter import scatter2d, scatter3d
+from myogestic.widgets.plots.scatter import scatter2d, scatter3d
 """
 
 from __future__ import annotations
@@ -35,7 +35,11 @@ def scatter2d(
         else:
             for cls in np.unique(labels):
                 mask = labels == cls
-                name = class_names[int(cls)] if class_names and int(cls) < len(class_names) else str(cls)
+                name = (
+                    class_names[int(cls)]
+                    if class_names and int(cls) < len(class_names)
+                    else str(cls)
+                )
                 color = PALETTE[int(cls) % len(PALETTE)]
                 spec = implot.Spec()
                 spec.marker_size = marker_size
@@ -68,7 +72,11 @@ def scatter3d(
         else:
             for cls in np.unique(labels):
                 mask = labels == cls
-                name = class_names[int(cls)] if class_names and int(cls) < len(class_names) else str(cls)
+                name = (
+                    class_names[int(cls)]
+                    if class_names and int(cls) < len(class_names)
+                    else str(cls)
+                )
                 color = PALETTE[int(cls) % len(PALETTE)]
                 spec = implot3d.Spec()
                 spec.marker_fill_color = imgui.ImVec4(color[0], color[1], color[2], 1.0)
