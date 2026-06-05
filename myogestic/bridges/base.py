@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 
 
 class Bridge:
@@ -60,68 +59,3 @@ class Bridge:
     def alive(self) -> bool:
         """``True`` while the subprocess is running."""
         return self.process is not None and self.process.poll() is None
-
-
-class WebCamBridge(Bridge):
-    """Bridge that runs the built-in webcam decoder subprocess.
-
-    Wraps ``python -m myogestic.bridges.webcam``: captures frames from an
-    OpenCV device, writes them to a Zarr array, and publishes the
-    per-frame LSL clock so the rest of the app can align webcam time
-    with EMG time.
-
-    Parameters
-    ----------
-    name
-        Bridge label. The published LSL clock outlet is named
-        ``"{name}_clock"`` (e.g. ``WebCamBridge("cam")`` publishes
-        ``"cam_clock"``).
-    device
-        OpenCV device index. ``0`` is the system default
-        camera; secondary cameras get ``1``, ``2``, ... in the
-        order the OS enumerates them.
-    zarr_path
-        Where to write the frame array. Created if missing.
-    """
-
-    def __init__(self, name: str, device: int = 0, zarr_path: str = "session/cam.zarr"):
-        super().__init__(
-            name=name,
-            command=[
-                sys.executable,
-                "-m",
-                "myogestic.bridges.webcam",
-                "--device",
-                str(device),
-                "--zarr",
-                zarr_path,
-                "--lsl-name",
-                f"{name}_clock",
-            ],
-        )
-
-
-class CustomBridge(Bridge):
-    """Bridge that runs an arbitrary user Python script as a subprocess.
-
-    The unstructured escape hatch: when the heavy-data source you want
-    doesn't fit :class:`WebCamBridge` and you'd rather write the
-    decoder yourself than subclass :class:`Bridge`. The script runs
-    with the same Python interpreter as the app
-    (``sys.executable``); the rest is up to you (publish LSL, write
-    Zarr, talk to a custom message bus, ...).
-
-    Parameters
-    ----------
-    name
-        Bridge label.
-    script
-        Path to the Python script to spawn (e.g.
-        ``"capture/ultrasound.py"``).
-    """
-
-    def __init__(self, name: str, script: str):
-        super().__init__(
-            name=name,
-            command=[sys.executable, script],
-        )
