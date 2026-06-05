@@ -130,7 +130,7 @@ tick" - it's "tell VHI to play movement X *when the class changes*". The
 gRPC client is the discrete-event sibling of the LSL outlet:
 
 ```python
-from myogestic.edge_trigger import EdgeTrigger
+from myogestic.outputs import EdgeTrigger
 
 CLASSES = ["Rest", "Fist", "Pinch", "Point"]
 

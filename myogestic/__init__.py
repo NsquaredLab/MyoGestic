@@ -8,9 +8,9 @@ and the iterators handle the transpose.
 
 from myogestic.contracts import TrainingData
 from myogestic.core import App, AppState, Context
-from myogestic.edge_trigger import EdgeTrigger
 from myogestic.grid import Fr, Grid, Px
 from myogestic.ml import Pipeline
+from myogestic.outputs.edge_trigger import EdgeTrigger
 from myogestic.stream import Source, Stream, StreamInfo
 
 __all__ = [
