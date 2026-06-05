@@ -7,6 +7,8 @@ and feeds data back the same way every source does — by publishing an LSL outl
 (or writing a Zarr file the app reads). Register with ``app.bridges(...)``.
 """
 
-from myogestic.bridges.base import Bridge, CustomBridge, WebCamBridge
+from myogestic.bridges.base import Bridge
+from myogestic.bridges.custom import CustomBridge
+from myogestic.bridges.webcam import WebCamBridge
 
 __all__ = ["Bridge", "CustomBridge", "WebCamBridge"]

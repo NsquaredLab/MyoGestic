@@ -1,9 +1,11 @@
-"""Standalone webcam bridge subprocess.
+"""The webcam bridge — both halves in one place.
 
-Captures frames from a webcam, writes them to zarr, and publishes
-an LSL clock stream so the main process can align timestamps.
+:class:`WebCamBridge` is the parent-side launcher you register with
+``app.bridges(...)``; :func:`main` is the child-side subprocess it spawns,
+which captures frames from a webcam, writes them to zarr, and publishes an LSL
+clock stream so the main process can align timestamps.
 
-Usage:
+Usage (subprocess, normally launched by ``WebCamBridge``):
     python -m myogestic.bridges.webcam --device 0 --zarr session/cam.zarr --lsl-name cam_clock
 """
 
@@ -15,6 +17,47 @@ from typing import Annotated
 
 import numpy as np
 import typer
+
+from myogestic.bridges.base import Bridge
+
+
+class WebCamBridge(Bridge):
+    """Bridge that runs the built-in webcam decoder subprocess.
+
+    Wraps ``python -m myogestic.bridges.webcam`` (the :func:`main` below):
+    captures frames from an OpenCV device, writes them to a Zarr array, and
+    publishes the per-frame LSL clock so the rest of the app can align webcam
+    time with EMG time.
+
+    Parameters
+    ----------
+    name
+        Bridge label. The published LSL clock outlet is named
+        ``"{name}_clock"`` (e.g. ``WebCamBridge("cam")`` publishes
+        ``"cam_clock"``).
+    device
+        OpenCV device index. ``0`` is the system default
+        camera; secondary cameras get ``1``, ``2``, ... in the
+        order the OS enumerates them.
+    zarr_path
+        Where to write the frame array. Created if missing.
+    """
+
+    def __init__(self, name: str, device: int = 0, zarr_path: str = "session/cam.zarr"):
+        super().__init__(
+            name=name,
+            command=[
+                sys.executable,
+                "-m",
+                "myogestic.bridges.webcam",
+                "--device",
+                str(device),
+                "--zarr",
+                zarr_path,
+                "--lsl-name",
+                f"{name}_clock",
+            ],
+        )
 
 
 def main(
