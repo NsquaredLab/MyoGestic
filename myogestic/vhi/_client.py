@@ -114,13 +114,16 @@ class VhiControlClient:
         drives it instead (SetMovement / Freeze / SetSpeed are then rejected).
         IDLE: the hand holds its rest pose. Raises ValueError on an unknown mode.
         """
+        normalized = mode.upper()
         try:
-            value = pb2.ControlMode.Value(mode.upper())
+            pb2.ControlMode.Value(normalized)  # validate the name; raises on unknown
         except ValueError:
             raise ValueError(
                 f"unknown control mode {mode!r} — expected MOVEMENT, STREAM or IDLE"
             ) from None
-        self._enqueue("SetControlMode", pb2.SetControlModeRequest(mode=value))
+        # Pass the enum *name*: protobuf resolves it (identical wire bytes) and
+        # the generated stub types the field as ``ControlMode | str``.
+        self._enqueue("SetControlMode", pb2.SetControlModeRequest(mode=normalized))
 
     # --- synchronous query ---------------------------------------------------
 

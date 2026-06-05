@@ -226,11 +226,7 @@ def _resolve_godot_bin(godot_bin: str | None) -> str | None:
     return None
 
 
-def _resolve_vhi_launch(
-    install_root: Path,
-    godot_bin: str | None,
-    mode: str,
-) -> list[str]:
+def _resolve_vhi_launch(install_root: Path, godot_bin: str | None, mode: str) -> list[str]:
     """Pick (binary or Godot source) launch argv for VHI in ``install_root``.
 
     Parameters
