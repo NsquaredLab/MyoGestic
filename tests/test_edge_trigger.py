@@ -1,4 +1,4 @@
-from myogestic.edge_trigger import EdgeTrigger
+from myogestic.outputs import EdgeTrigger
 
 
 def test_fires_on_first_call():

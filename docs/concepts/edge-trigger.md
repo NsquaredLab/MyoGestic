@@ -12,7 +12,7 @@ tick where the value differs from the previous one.
 ## The pattern
 
 ```python
-from myogestic.edge_trigger import EdgeTrigger
+from myogestic.outputs import EdgeTrigger
 
 trigger = EdgeTrigger(callback=vhi_client.set_movement)
 
@@ -84,4 +84,4 @@ not here.
 
 * [[integrate-vhi]] - the canonical use case, gating gRPC `SetMovement`
   on the predicted class.
-* [`myogestic.edge_trigger.EdgeTrigger`](../api/core.md) - full API reference.
+* [`myogestic.outputs.edge_trigger.EdgeTrigger`](../api/core.md) - full API reference.

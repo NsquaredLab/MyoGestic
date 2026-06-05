@@ -8,7 +8,7 @@ animations.
 
 ::
 
-    from myogestic.edge_trigger import EdgeTrigger
+    from myogestic.outputs import EdgeTrigger
 
     trigger = EdgeTrigger(callback=vhi_client.set_movement)
 

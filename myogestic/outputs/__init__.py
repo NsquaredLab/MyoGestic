@@ -9,9 +9,14 @@ Output-side smoothing filters (applied to the prediction-output vector *before*
 it leaves the app) live in :mod:`myogestic.outputs.filters` and are re-exported
 here: :class:`OneEuroFilter`, :class:`GaussianFilter`, :class:`IdentityFilter`,
 the :class:`VectorFilter` protocol, and the :func:`make_filter` factory.
+
+For *discrete* event outputs (fire a side effect only when a prediction
+changes), :class:`EdgeTrigger` lives in :mod:`myogestic.outputs.edge_trigger`
+and is re-exported here too.
 """
 
 from myogestic.outputs.base import Output
+from myogestic.outputs.edge_trigger import EdgeTrigger
 from myogestic.outputs.filters import (
     GaussianFilter,
     IdentityFilter,
@@ -31,6 +36,7 @@ __all__ = [
     "GaussianFilter",
     "OneEuroFilter",
     "make_filter",
+    "EdgeTrigger",
 ]
 
 # `SerialOutput` is opt-in. Import it directly when you have pyserial:
