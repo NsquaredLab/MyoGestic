@@ -14,11 +14,12 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import sys
 import time
+from typing import Annotated
 
 import numpy as np
+import typer
 from mne_lsl.lsl import StreamInfo, StreamInlet, StreamOutlet, resolve_streams
 
 # liblsl prints multicast-bind WARN/INFO lines to stderr whenever a second
@@ -112,37 +113,34 @@ def control_outlet(name: str = DEFAULT_CONTROL_STREAM) -> StreamOutlet:
     )
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Controllable EMG generator")
-    parser.add_argument("--name", default="TestEMG1", help="Output stream name")
-    parser.add_argument("--channels", type=int, default=8)
-    parser.add_argument("--fs", type=float, default=256)
-    parser.add_argument("--chunk", type=int, default=32)
-    parser.add_argument(
-        "--classes",
-        type=int,
-        default=2,
-        help="Number of distinct classes (default 2 = rest/fist).",
-    )
-    parser.add_argument(
-        "--control",
-        default="EMG_Control",
-        help="Control stream name (1ch float; sample value = class index).",
-    )
-    parser.add_argument(
-        "--multi-dof",
-        action="store_true",
-        help=(
-            "Interpret control-stream value as a *bitmask* over DoFs: bit i "
-            "set ⇒ DoF i active. Each active DoF contributes its class-1+i "
-            "Gaussian pattern additively, so control=5 (0b101) activates "
-            "DoFs 0 and 2 simultaneously. Number of DoFs = `--classes - 1` "
-            "(class 0 is rest)."
+def main(
+    name: Annotated[str, typer.Option(help="Output stream name")] = "TestEMG1",
+    channels: Annotated[int, typer.Option(help="Number of EMG channels")] = 8,
+    fs: Annotated[float, typer.Option(help="Sample rate (Hz)")] = 256,
+    chunk: Annotated[int, typer.Option(help="Samples pushed per tick")] = 32,
+    classes: Annotated[
+        int, typer.Option(help="Number of distinct classes (default 2 = rest/fist).")
+    ] = 2,
+    control: Annotated[
+        str,
+        typer.Option(help="Control stream name (1ch float; sample value = class index)."),
+    ] = "EMG_Control",
+    multi_dof: Annotated[
+        bool,
+        typer.Option(
+            "--multi-dof",
+            help=(
+                "Interpret control-stream value as a *bitmask* over DoFs: bit i "
+                "set => DoF i active. Each active DoF contributes its class-1+i "
+                "Gaussian pattern additively, so control=5 (0b101) activates "
+                "DoFs 0 and 2 simultaneously. Number of DoFs = `classes - 1` "
+                "(class 0 is rest)."
+            ),
         ),
-    )
-    args = parser.parse_args()
-
-    n_classes = max(2, int(args.classes))
+    ] = False,
+) -> None:
+    """Controllable synthetic EMG generator published as an LSL outlet."""
+    n_classes = max(2, int(classes))
 
     # Refuse to double-publish: if a stream with the same name is already
     # alive on the network, exit before constructing a second outlet.
@@ -151,21 +149,21 @@ def main() -> None:
     # process's data silently goes nowhere. Cheap probe (200 ms) that
     # avoids surprising the user when they click "EMG Generator" twice
     # or forget to stop a previous run.
-    existing = resolve_streams(timeout=0.2, name=args.name)
+    existing = resolve_streams(timeout=0.2, name=name)
     if existing:
         print(
-            f"[emg_generator] stream '{args.name}' is already published; "
+            f"[emg_generator] stream '{name}' is already published; "
             f"exiting. Stop the other instance (or pass --name OTHER) to start "
             f"a second generator.",
             file=sys.stderr,
         )
         return
 
-    out_info = StreamInfo(args.name, "EMG", args.channels, args.fs, "float32", "emg_gen")
+    out_info = StreamInfo(name, "EMG", channels, fs, "float32", "emg_gen")
     outlet = StreamOutlet(out_info)
 
     patterns = np.stack(
-        [_class_pattern(i, n_classes, args.channels) for i in range(n_classes)],
+        [_class_pattern(i, n_classes, channels) for i in range(n_classes)],
         axis=0,
     )
 
@@ -174,13 +172,10 @@ def main() -> None:
     mask = 0  # multi-DoF mode (bitmask over `n_classes - 1` DoFs)
     n_dofs = max(1, n_classes - 1)  # only used when --multi-dof is set
 
-    interval = args.chunk / args.fs
-    mode_label = "multi-DoF bitmask" if args.multi_dof else "class index"
-    print(
-        f"EMG generator: {args.name} · {args.channels} ch · {args.fs} Hz · "
-        f"{n_classes} classes ({mode_label})"
-    )
-    print(f"Listening for control on '{args.control}' (sample value = {mode_label})")
+    interval = chunk / fs
+    mode_label = "multi-DoF bitmask" if multi_dof else "class index"
+    print(f"EMG generator: {name} · {channels} ch · {fs} Hz · {n_classes} classes ({mode_label})")
+    print(f"Listening for control on '{control}' (sample value = {mode_label})")
     print("Generating rest signal...")
 
     rng = np.random.default_rng()
@@ -189,48 +184,44 @@ def main() -> None:
             t0 = time.perf_counter()
 
             if inlet is None:
-                streams = resolve_streams(timeout=0.1, name=args.control)
+                streams = resolve_streams(timeout=0.1, name=control)
                 if streams:
                     inlet = StreamInlet(streams[0])
-                    print(f"Connected to control stream '{args.control}'")
+                    print(f"Connected to control stream '{control}'")
             else:
                 try:
-                    if args.multi_dof:
+                    if multi_dof:
                         mask = _read_bitmask(inlet, n_dofs, mask)
                     else:
                         mode_idx = _read_mode(inlet, n_classes, mode_idx)
                 except Exception:
                     inlet = None
 
-            noise = rng.standard_normal((args.chunk, args.channels)).astype(np.float32)
-            if args.multi_dof:
+            noise = rng.standard_normal((chunk, channels)).astype(np.float32)
+            if multi_dof:
                 # Sum patterns of all set bits. Each active DoF i contributes
                 # the class-(i+1) Gaussian (class 0 reserved for rest).
                 if mask == 0:
-                    chunk = noise * np.float32(0.02)
+                    samples = noise * np.float32(0.02)
                 else:
-                    summed_pattern = np.zeros(args.channels, dtype=np.float32)
+                    summed_pattern = np.zeros(channels, dtype=np.float32)
                     for i in range(n_dofs):
                         if mask & (1 << i):
                             summed_pattern += patterns[i + 1]
                     base = noise * np.float32(0.15)
                     burst = (
-                        rng.standard_normal((args.chunk, args.channels)).astype(np.float32)
-                        * summed_pattern
+                        rng.standard_normal((chunk, channels)).astype(np.float32) * summed_pattern
                     )
-                    chunk = base + burst + np.float32(0.15) * summed_pattern
+                    samples = base + burst + np.float32(0.15) * summed_pattern
             elif mode_idx == 0:
-                chunk = noise * np.float32(0.02)
+                samples = noise * np.float32(0.02)
             else:
                 pattern = patterns[mode_idx]
                 base = noise * np.float32(0.15)
-                burst = (
-                    rng.standard_normal((args.chunk, args.channels)).astype(np.float32)
-                    * pattern
-                )
-                chunk = base + burst + np.float32(0.15) * pattern
+                burst = rng.standard_normal((chunk, channels)).astype(np.float32) * pattern
+                samples = base + burst + np.float32(0.15) * pattern
 
-            for sample in chunk:
+            for sample in samples:
                 outlet.push_sample(sample)
 
             elapsed = time.perf_counter() - t0
@@ -242,4 +233,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

@@ -37,6 +37,7 @@ dependencies = [
     # without shipping a .app bundle. The PEP 508 marker keeps Linux /
     # Windows installs from pulling it in.
     "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
+    "typer>=0.12",
 ]
 
 [project.scripts]
