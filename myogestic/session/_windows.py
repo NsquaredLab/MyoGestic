@@ -51,7 +51,7 @@ def iter_labeled_windows(
         if win_samples < 1:
             continue
 
-        data = np.array(sess.stores[stream_name])
+        data = np.array(sess.stores[stream_name]).astype(np.float32, copy=False)
         ts = np.array(sess.ts_stores[stream_name])
         events = sess.label_track
         if len(data) == 0 or not events:
@@ -125,9 +125,12 @@ def iter_aligned_windows(
         if win_samples < 1:
             continue
 
-        primary_data = np.array(sess.stores[primary_stream])
+        primary_data = np.array(sess.stores[primary_stream]).astype(np.float32, copy=False)
         primary_ts = np.array(sess.ts_stores[primary_stream])
-        aligned_data = {name: np.array(sess.stores[name]) for name in aligned_streams}
+        aligned_data = {
+            name: np.array(sess.stores[name]).astype(np.float32, copy=False)
+            for name in aligned_streams
+        }
         aligned_ts = {name: np.array(sess.ts_stores[name]) for name in aligned_streams}
 
         if (
