@@ -7,9 +7,9 @@ vendored copy. After updating the vendored copy, run:
 
     uv run --extra grpc python tools/gen_proto.py
 
-This writes ``myogestic/vhi/_proto/myogestic_vhi_pb2.py`` and ``..._pb2_grpc.py``,
-which are committed so a plain install needs only grpcio at runtime (not
-grpcio-tools).
+This writes ``myogestic/vhi/_proto/myogestic_vhi_pb2.py``, ``..._pb2.pyi`` (type
+stubs so checkers see the generated message classes), and ``..._pb2_grpc.py`` —
+all committed so a plain install needs only grpcio at runtime (not grpcio-tools).
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ def main() -> int:
         "grpc_tools.protoc",
         f"--proto_path={PROTO_DIR}",
         f"--python_out={PROTO_DIR}",
+        f"--pyi_out={PROTO_DIR}",
         f"--grpc_python_out={PROTO_DIR}",
         str(PROTO_FILE),
     ]
