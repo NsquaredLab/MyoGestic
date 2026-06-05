@@ -155,19 +155,23 @@ class OneEuroFilter:
             dt = 1.0 / self.freq
         self._t_prev = t
 
-        if self._x_prev is None:
+        # Bind to locals so the checker can narrow both Optionals together —
+        # _x_prev and _dx_prev are always set (and cleared) as a pair.
+        x_prev = self._x_prev
+        dx_prev = self._dx_prev
+        if x_prev is None or dx_prev is None:
             self._x_prev = x_arr.copy()
             self._dx_prev = np.zeros_like(x_arr)
             return x_arr.astype(x.dtype, copy=False)
 
-        dx = (x_arr - self._x_prev) / dt
+        dx = (x_arr - x_prev) / dt
         a_d = self._alpha(self.d_cutoff, dt)
-        dx_smooth = a_d * dx + (1 - a_d) * self._dx_prev
+        dx_smooth = a_d * dx + (1 - a_d) * dx_prev
         self._dx_prev = dx_smooth
 
         cutoff = self.min_cutoff + self.beta * np.abs(dx_smooth)
         a = self._alpha(cutoff, dt)
-        x_smooth = a * x_arr + (1 - a) * self._x_prev
+        x_smooth = a * x_arr + (1 - a) * x_prev
         self._x_prev = x_smooth
         return x_smooth.astype(x.dtype, copy=False)
 
@@ -202,7 +206,9 @@ def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
             raise TypeError(f"identity takes no kwargs (got {list(kwargs)})")
         return IdentityFilter()
     if n == "gaussian":
-        return GaussianFilter(**{"window": 5, "sigma": 1.0, **kwargs})
+        # GaussianFilter's own defaults are window=5, sigma=1.0 — no need to
+        # restate them; kwargs overrides as needed.
+        return GaussianFilter(**kwargs)
     if n == "one_euro":
         return OneEuroFilter(
             **{
