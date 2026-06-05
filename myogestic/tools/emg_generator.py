@@ -58,7 +58,7 @@ def _read_mode(inlet: StreamInlet | None, n_classes: int, mode_idx: int) -> int:
         return mode_idx
     if ts is None or len(ts) == 0:
         return mode_idx
-    raw = float(data[-1, 0])
+    raw = float(np.asarray(data)[-1, 0])
     idx = int(round(raw))
     return max(0, min(n_classes - 1, idx))
 
@@ -78,7 +78,7 @@ def _read_bitmask(inlet: StreamInlet | None, n_dofs: int, mask: int) -> int:
         return mask
     if ts is None or len(ts) == 0:
         return mask
-    raw = float(data[-1, 0])
+    raw = float(np.asarray(data)[-1, 0])
     return max(0, int(round(raw))) & ((1 << n_dofs) - 1)
 
 

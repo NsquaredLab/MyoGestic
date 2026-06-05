@@ -82,11 +82,7 @@ class LSLSource:
         # mne_lsl exposes the outlet's native wire dtype as info.dtype.
         native = np.dtype(info.dtype)
         self._dtype = self._requested_dtype if self._requested_dtype is not None else native
-        return StreamInfo(
-            n_channels=info.n_channels,
-            fs=info.sfreq,
-            dtype=self._dtype,
-        )
+        return StreamInfo(n_channels=info.n_channels, fs=info.sfreq, dtype=self._dtype)
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
         """Pull whatever samples are immediately available.
@@ -102,9 +98,7 @@ class LSLSource:
         data, timestamps = self._inlet.pull_chunk(timeout=0.0)
         if timestamps is None or len(timestamps) == 0:
             return None, None
-        return (
-            np.asarray(data, dtype=self._dtype),
-            np.asarray(timestamps, dtype=np.float64),
+        return (np.asarray(data, dtype=self._dtype), np.asarray(timestamps, dtype=np.float64)
         )
 
     def disconnect(self) -> None:
