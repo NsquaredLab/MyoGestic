@@ -4,31 +4,31 @@ Usage:
     python -m myogestic.tools.lsl_dummy --name FakeEMG --channels 8 --fs 256
 """
 
-import argparse
 import time
+from typing import Annotated
 
 import numpy as np
+import typer
 from mne_lsl.lsl import StreamInfo, StreamOutlet
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="LSL dummy streamer")
-    parser.add_argument("--name", type=str, default="DummyEMG", help="Stream name")
-    parser.add_argument("--channels", type=int, default=8, help="Number of channels")
-    parser.add_argument("--fs", type=float, default=256, help="Sample rate (Hz)")
-    parser.add_argument("--chunk", type=int, default=32, help="Samples per push")
-    args = parser.parse_args()
-
-    info = StreamInfo(args.name, "EMG", args.channels, args.fs, "float32", "")
+def main(
+    name: Annotated[str, typer.Option(help="Stream name")] = "DummyEMG",
+    channels: Annotated[int, typer.Option(help="Number of channels")] = 8,
+    fs: Annotated[float, typer.Option(help="Sample rate (Hz)")] = 256,
+    chunk: Annotated[int, typer.Option(help="Samples per push")] = 32,
+) -> None:
+    """Publish random float32 data on an LSL outlet for quick testing."""
+    info = StreamInfo(name, "EMG", channels, fs, "float32", "")
     outlet = StreamOutlet(info)
-    interval = args.chunk / args.fs
+    interval = chunk / fs
 
-    print(f"LSL dummy: name={args.name}, {args.channels}ch, {args.fs}Hz, chunk={args.chunk}")
+    print(f"LSL dummy: name={name}, {channels}ch, {fs}Hz, chunk={chunk}")
 
     try:
         while True:
-            chunk = (np.random.randn(args.chunk, args.channels) * 100).astype(np.float32)
-            for sample in chunk:
+            samples = (np.random.randn(chunk, channels) * 100).astype(np.float32)
+            for sample in samples:
                 outlet.push_sample(sample)
             time.sleep(interval)
     except KeyboardInterrupt:
@@ -36,4 +36,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)
