@@ -23,6 +23,24 @@ if TYPE_CHECKING:
 _IS_BROWSER = sys.platform == "emscripten"
 
 
+#: Dtypes a :class:`Stream` / :class:`Source` may use. Covers every LSL wire
+#: format (``int8`` / ``int16`` / ``int32`` / ``int64`` / ``float32`` /
+#: ``float64``) plus ``float16`` as a storage-only cast. Unsigned ints are
+#: excluded: never an LSL wire format and unused for biosignals.
+SUPPORTED_DTYPES: tuple[np.dtype, ...] = tuple(
+    np.dtype(t)
+    for t in (
+        np.float16,
+        np.float32,
+        np.float64,
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+    )
+)
+
+
 @dataclass
 class StreamInfo:
     """Describes the shape and dtype of a :class:`Source`'s data.
@@ -39,8 +57,13 @@ class StreamInfo:
         Sample rate in Hz. Used to convert ``window_seconds`` /
         ``buffer_seconds`` into sample counts.
     dtype
-        NumPy dtype of each sample. Defaults to ``float32``;
-        most signal-processing widgets assume this.
+        NumPy dtype of each sample, one of :data:`SUPPORTED_DTYPES`.
+        Defaults to ``float32``. Accepts anything :func:`numpy.dtype`
+        understands (``"int16"``, ``np.int16``, ``np.dtype("int16")``)
+        and normalises it. Picking a compact dtype (e.g. ``int16``)
+        keeps the ring buffer and Zarr recording small; the window
+        handed to ``@pipeline.extract`` is **always upcast to float32**
+        regardless, so feature/ML code never has to branch on dtype.
     channel_names
         Optional per-channel labels for the signal viewer
         legend. ``None`` (default) renders as ``ch0``, ``ch1``, ...
@@ -50,6 +73,15 @@ class StreamInfo:
     fs: float
     dtype: np.dtype = np.dtype(np.float32)
     channel_names: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        # Normalise str / type / np.dtype to a canonical np.dtype, then validate.
+        self.dtype = np.dtype(self.dtype)
+        if self.dtype not in SUPPORTED_DTYPES:
+            supported = ", ".join(d.name for d in SUPPORTED_DTYPES)
+            raise ValueError(
+                f"Unsupported dtype {self.dtype.name!r}. Supported dtypes: {supported}."
+            )
 
 
 class Source(Protocol):
@@ -272,7 +304,7 @@ class Stream:
                 if hasattr(self._source, "reconnect"):
                     # `reconnect` is an optional Source extension (not in the
                     # Protocol); the hasattr guard makes the call safe.
-                    self.info = self._source.reconnect(target)  # type: ignore[attr-defined]
+                    self.info = self._source.reconnect(target)  # type: ignore
                 else:
                     self._source.disconnect()
                     self.info = self._source.connect()
@@ -523,9 +555,12 @@ class Stream:
         """Return the most recent ``window_seconds`` as ``(data, ts)``.
 
         ``data`` is **channels-first** ``(n_channels, n_samples)`` — the
-        same convention used everywhere user code touches signal data.
-        Both arrays are views into a reusable per-stream buffer; copy
-        explicitly if you need to retain them past the next call.
+        same convention used everywhere user code touches signal data —
+        and **always float32**, whatever dtype the stream buffers in, so
+        ``@pipeline.extract`` never has to branch on dtype. ``ts`` is a
+        view into a reusable per-stream buffer; for a float32 stream
+        ``data`` is a view too, otherwise a fresh float32 copy. Copy
+        explicitly if you need to retain either past the next call.
         """
         if self._data is None or self._timestamps is None or self.info is None:
             return (
@@ -536,11 +571,14 @@ class Stream:
             nd = _unwrap_ring_into(self._data, self._win_d, self._cap)
             _unwrap_ring_into(self._timestamps, self._win_t, self._cap)
         if nd == 0:
-            return self._win_d[:0].T, self._win_t[:0]
+            return self._win_d[:0].T.astype(np.float32, copy=False), self._win_t[:0]
         n = int(self._window * self.info.fs)
         if nd < n:
-            return self._win_d[:nd].T, self._win_t[:nd]
-        return self._win_d[nd - n : nd].T, self._win_t[nd - n : nd]
+            return self._win_d[:nd].T.astype(np.float32, copy=False), self._win_t[:nd]
+        return (
+            self._win_d[nd - n : nd].T.astype(np.float32, copy=False),
+            self._win_t[nd - n : nd],
+        )
 
     def get_display(self, n_pixels: int = 800) -> tuple[np.ndarray, np.ndarray] | None:
         """Read pre-computed M4 result. Zero work on render thread.
