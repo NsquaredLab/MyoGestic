@@ -28,6 +28,11 @@ from mne_lsl.lsl import StreamInfo, StreamInlet, StreamOutlet, resolve_streams
 # bundled liblsl doesn't honour LSL_LOG_LEVEL so there's no clean way to
 # suppress them from Python. Ignore them in the terminal.
 
+# Synthetic-signal amplitudes (arbitrary units, hand-tuned to look EMG-like).
+REST_NOISE = np.float32(0.02)  # idle noise floor: rest, or no DoF active
+ACTIVE_NOISE = np.float32(0.15)  # background noise while a gesture is active
+ENVELOPE_GAIN = np.float32(0.15)  # strength of the per-DoF activation envelope
+
 
 def _class_pattern(class_idx: int, n_classes: int, channels: int) -> np.ndarray:
     """Deterministic per-class channel-activation envelope of shape ``(channels,)``.
@@ -202,24 +207,24 @@ def main(
                 # Sum patterns of all set bits. Each active DoF i contributes
                 # the class-(i+1) Gaussian (class 0 reserved for rest).
                 if mask == 0:
-                    samples = noise * np.float32(0.02)
+                    samples = noise * REST_NOISE
                 else:
                     summed_pattern = np.zeros(channels, dtype=np.float32)
                     for i in range(n_dofs):
                         if mask & (1 << i):
                             summed_pattern += patterns[i + 1]
-                    base = noise * np.float32(0.15)
+                    base = noise * ACTIVE_NOISE
                     burst = (
                         rng.standard_normal((chunk, channels)).astype(np.float32) * summed_pattern
                     )
-                    samples = base + burst + np.float32(0.15) * summed_pattern
+                    samples = base + burst + ENVELOPE_GAIN * summed_pattern
             elif mode_idx == 0:
-                samples = noise * np.float32(0.02)
+                samples = noise * REST_NOISE
             else:
                 pattern = patterns[mode_idx]
-                base = noise * np.float32(0.15)
+                base = noise * ACTIVE_NOISE
                 burst = rng.standard_normal((chunk, channels)).astype(np.float32) * pattern
-                samples = base + burst + np.float32(0.15) * pattern
+                samples = base + burst + ENVELOPE_GAIN * pattern
 
             for sample in samples:
                 outlet.push_sample(sample)
