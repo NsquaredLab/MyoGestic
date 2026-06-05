@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 @dataclass
 class _RawViewerState:
     """Per-stream raw-viewer state — buffers + channel toggles + FPS history."""
+
     window: float = 1.0
     channels: set[int] = field(default_factory=set)
     bufs: dict = field(default_factory=dict)
@@ -58,7 +59,11 @@ def raw_signal_viewer(
     t_start = _time.perf_counter()
 
     changed, new_win = imgui.slider_float(
-        f"Window (s)##{stream_name}_raw_win", r.window, 0.1, 60.0, "%.1f s",
+        f"Window (s)##{stream_name}_raw_win",
+        r.window,
+        0.1,
+        60.0,
+        "%.1f s",
     )
     if changed:
         r.window = new_win

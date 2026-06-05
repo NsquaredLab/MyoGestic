@@ -83,9 +83,7 @@ class FeatureSelector:
                     f"Available: {list(self._features)}"
                 )
         # Insertion order = registration order; preserved for reproducibility.
-        self._active: dict[str, bool] = {
-            name: (name in default_set) for name in self._features
-        }
+        self._active: dict[str, bool] = {name: (name in default_set) for name in self._features}
 
     # ------------------------------------------------------------- API
 
@@ -157,14 +155,10 @@ class FeatureSelector:
         spacing = style.item_spacing.x
         inner = style.item_inner_spacing.x
         frame_h = imgui.get_frame_height()
-        max_label_w = max(
-            imgui.calc_text_size(name).x for name in self._features
-        )
+        max_label_w = max(imgui.calc_text_size(name).x for name in self._features)
         item_w = frame_h + inner + max_label_w
         avail_w = imgui.get_content_region_avail().x
-        n_cols = max(
-            1, int((avail_w + spacing) / (item_w + spacing)) if item_w > 0 else 1
-        )
+        n_cols = max(1, int((avail_w + spacing) / (item_w + spacing)) if item_w > 0 else 1)
 
         for i, name in enumerate(self._features):
             if i > 0 and i % n_cols != 0:

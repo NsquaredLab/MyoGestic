@@ -21,6 +21,7 @@ class AppState(StrEnum):
     without subclassing. Each module validates transitions within its own
     namespace only.
     """
+
     IDLE = "idle"
     RECORDING = "recording"
 
@@ -56,6 +57,7 @@ def can_transition(current: str, target: str) -> bool:
 class Context:
     """Shared state all threads read/write. Extensions may add own fields
     dynamically on the owning `App`, but `Context` itself is core-only."""
+
     streams: dict[str, Stream] = field(default_factory=dict)
     bridges: dict[str, Any] = field(default_factory=dict)
     state: str = AppState.IDLE
@@ -73,6 +75,7 @@ class Context:
         chatter. Safe to call from any thread (list.append/pop are GIL-atomic).
         """
         from time import strftime
+
         line = f"[{strftime('%H:%M:%S')}] {message}"
         self.logs.append(line)
         if len(self.logs) > max_lines:
@@ -110,8 +113,9 @@ class App:
         value. Clamped to ``[0.5, 2.0]``. Has no effect when ``theme=False``.
     """
 
-    def __init__(self, name: str, theme: bool = True, docking: bool = False,
-                 ui_scale: float | None = None):
+    def __init__(
+        self, name: str, theme: bool = True, docking: bool = False, ui_scale: float | None = None
+    ):
         self.name = name
         self.ctx = Context()
         self._ui_fn: Callable[[Context], None] | None = None
@@ -192,9 +196,7 @@ class App:
         instead of discovering windows on the first render frame.
         """
         self._popout_specs = [spec for spec in self._popout_specs if spec[0] != title]
-        self._popout_specs.append(
-            (title, gui_fn, default_open, can_be_closed, remember_is_visible)
-        )
+        self._popout_specs.append((title, gui_fn, default_open, can_be_closed, remember_is_visible))
 
     # --- Recording (universal; ML is in myogestic.ml) ---
 
@@ -278,6 +280,7 @@ class App:
                     from myogestic.widgets.training.session_manager import (
                         add_recorded_session,
                     )
+
                     add_recorded_session(str(zip_path))
                     log.info("packed session to %s", zip_path)
                 except Exception as e:
@@ -289,6 +292,7 @@ class App:
                         from myogestic.widgets.training.session_manager import (
                             add_recorded_session,
                         )
+
                         add_recorded_session(str(session.path))
                     except Exception:
                         pass
@@ -326,8 +330,7 @@ class App:
             raise RuntimeError("App.run() is not re-entrant")
         if mode not in ("gui", "headless"):
             raise ValueError(
-                f"App.run(mode={mode!r}) - unknown mode. "
-                "Supported: 'gui', 'headless'."
+                f"App.run(mode={mode!r}) - unknown mode. Supported: 'gui', 'headless'."
             )
         self._running = True
 
@@ -354,6 +357,7 @@ class App:
                     log.exception("bridge stop failed: %s", e)
             try:
                 from myogestic.widgets.panels.process_launcher import _cleanup_all
+
                 _cleanup_all()
             except Exception as e:
                 log.exception("process cleanup failed: %s", e)
@@ -416,11 +420,14 @@ class App:
         # predict) - no threads, no asyncio. The desktop path uses real
         # daemon threads and the tick is a no-op.
         from myogestic._browser import IS_BROWSER, tick_all
+
         if IS_BROWSER:
+
             def gui_callback() -> None:
                 tick_all()
                 ui_fn(self.ctx)
         else:
+
             def gui_callback() -> None:
                 ui_fn(self.ctx)
 
@@ -449,12 +456,14 @@ class App:
             runner_params.callbacks.post_init = _try_set_macos_dock_icon
 
         import os
+
         os.makedirs(".imgui_state", exist_ok=True)
         runner_params.ini_filename_use_app_window_title = False
         runner_params.ini_filename = f".imgui_state/{self.name.replace(' ', '_')}.ini"
 
         if self._theme_enabled:
             from myogestic._theme import apply_theme, load_fonts, set_ui_scale
+
             set_ui_scale(self._ui_scale)  # consumed by load_fonts / apply_theme below
             runner_params.callbacks.default_icon_font = hello_imgui.DefaultIconFont.font_awesome6
             runner_params.callbacks.load_additional_fonts = load_fonts
@@ -529,6 +538,7 @@ class App:
             # cleanly. Without this, the second App's popout_panel calls
             # would short-circuit and never queue their DockableWindows.
             from myogestic.widgets.panels.popout import _reset_registry
+
             _reset_registry()
 
     def _headless_loop(self) -> None:

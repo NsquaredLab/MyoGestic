@@ -21,7 +21,7 @@ import numpy as np
 
 def rms(emg: np.ndarray) -> np.ndarray:
     """Root mean square per channel."""
-    return np.sqrt(np.mean(emg ** 2, axis=1)).astype(np.float32)
+    return np.sqrt(np.mean(emg**2, axis=1)).astype(np.float32)
 
 
 def mav(emg: np.ndarray) -> np.ndarray:

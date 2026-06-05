@@ -4,6 +4,7 @@ Branding/asset plumbing extracted from ``core.py`` so ``App``/``Context`` stay
 focused: locating the shipped assets dir, registering it with HelloImGui, and
 setting the macOS Dock icon. Used only by ``myogestic.core``.
 """
+
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from pathlib import Path
 def _assets_folder() -> str:
     """Absolute path to the shipped assets dir inside the installed package."""
     import myogestic  # local import - `core` is imported during package init
+
     return str(Path(myogestic.__file__).resolve().parent / "assets")
 
 
@@ -25,8 +27,7 @@ def _register_assets_folder(hello_imgui_mod) -> None:
     try:
         hello_imgui_mod.add_assets_search_path(_assets_folder())
     except Exception as e:
-        print(f"[myogestic] could not register assets folder: {e}",
-              file=sys.stderr)
+        print(f"[myogestic] could not register assets folder: {e}", file=sys.stderr)
 
 
 def _try_set_macos_dock_icon() -> None:
@@ -62,18 +63,15 @@ def _try_set_macos_dock_icon() -> None:
             NSImage,
         )
     except ImportError:
-        print("[myogestic] dock icon: pyobjc-framework-Cocoa not installed",
-              file=sys.stderr)
+        print("[myogestic] dock icon: pyobjc-framework-Cocoa not installed", file=sys.stderr)
         return
     icon_path = Path(_assets_folder()) / "app_settings" / "icon.png"
     if not icon_path.exists():
-        print(f"[myogestic] dock icon: file missing at {icon_path}",
-              file=sys.stderr)
+        print(f"[myogestic] dock icon: file missing at {icon_path}", file=sys.stderr)
         return
     image = NSImage.alloc().initWithContentsOfFile_(str(icon_path))
     if image is None:
-        print(f"[myogestic] dock icon: NSImage failed to load {icon_path}",
-              file=sys.stderr)
+        print(f"[myogestic] dock icon: NSImage failed to load {icon_path}", file=sys.stderr)
         return
     app = NSApplication.sharedApplication()
     # A python-launched process defaults to "Prohibited" activation policy;

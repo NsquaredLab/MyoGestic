@@ -232,7 +232,7 @@ def _on_gesture(i: int) -> None:
     # Fist, all-zero for Rest), which the regressor learns to map back from
     # the corresponding EMG amplitude. CLASSES names are sent verbatim to
     # VHI; unknown names are rejected harmlessly (client logs the ack).
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
     vhi_client.set_movement(CLASSES[i], cycle=False)
 
 

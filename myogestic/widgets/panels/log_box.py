@@ -94,9 +94,7 @@ def render_log_buttons(
     if imgui.button(f"{icon}##{widget_id}_popout"):
         popped_out = not popped_out
     imgui.set_item_tooltip(
-        "Dock the log back inline"
-        if popped_out
-        else "Pop the log out into a floating window"
+        "Dock the log back inline" if popped_out else "Pop the log out into a floating window"
     )
     return autoscroll, popped_out
 
@@ -111,17 +109,11 @@ def render_log_popout(
     """Render the floating popout window. Returns ``False`` once the user
     clicks the window's ``[x]`` (so the caller can re-dock the log inline).
     """
-    imgui.set_next_window_size(
-        imgui.ImVec2(640, 320), imgui.Cond_.first_use_ever
-    )
-    visible, still_open = imgui.begin(
-        f"{title}##{widget_id}_popout_window", True
-    )
+    imgui.set_next_window_size(imgui.ImVec2(640, 320), imgui.Cond_.first_use_ever)
+    visible, still_open = imgui.begin(f"{title}##{widget_id}_popout_window", True)
     try:
         if visible:
-            render_log(
-                f"{widget_id}_pop", lines, height=-1.0, autoscroll=autoscroll
-            )
+            render_log(f"{widget_id}_pop", lines, height=-1.0, autoscroll=autoscroll)
     finally:
         imgui.end()
     return still_open

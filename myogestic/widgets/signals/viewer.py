@@ -128,9 +128,7 @@ def signal_viewer(
 
     channel_ranges = None
     if v.per_channel_scale:
-        full_data = apply_display_filter(
-            frame.data_full, v.display_filter, stream.info.fs
-        )
+        full_data = apply_display_filter(frame.data_full, v.display_filter, stream.info.fs)
         channel_ranges = _channel_ranges(full_data, enabled)
 
     # Honour a "Rescale" button click from the controls bar: snap y_min /

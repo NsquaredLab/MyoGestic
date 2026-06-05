@@ -172,10 +172,7 @@ def trial_preview(
 
         for ch in range(n_ch):
             ys = np.ascontiguousarray(arr[ch] * gain - ch * lane, dtype=np.float64)
-            label = (
-                channel_names[ch] if channel_names and ch < len(channel_names)
-                else f"ch{ch}"
-            )
+            label = channel_names[ch] if channel_names and ch < len(channel_names) else f"ch{ch}"
             implot.plot_line(f"{label}##{uid}", xs, ys)
         implot.end_plot()
 

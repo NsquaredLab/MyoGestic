@@ -508,11 +508,7 @@ class Stream:
         n_sel = len(all_idx)
 
         work_d = self._m4_work_d
-        if (
-            work_d is None
-            or work_d.shape[0] < n_sel
-            or work_d.shape[1] != n_ch
-        ):
+        if work_d is None or work_d.shape[0] < n_sel or work_d.shape[1] != n_ch:
             work_d = self._m4_work_d = np.empty((n_out * n_ch, n_ch), dtype=d.dtype)
         work_t = self._m4_work_t
         if work_t is None or work_t.shape[0] < n_sel:

@@ -36,9 +36,7 @@ def render_plot(
     channel_height: float,
 ) -> None:
     xs = build_x_axis(frame.ts)
-    channel_height = resolve_channel_height(
-        frame.data_win, enabled, channel_height, v
-    )
+    channel_height = resolve_channel_height(frame.data_win, enabled, channel_height, v)
     if v.per_channel_scale:
         channel_ranges = resolve_channel_ranges(frame.data_win, enabled)
     ensure_specs(v, frame.n_channels)
@@ -197,9 +195,7 @@ def plot_channel(
             ch_max = float(ch_data.max())
         ch_range = ch_max - ch_min
         if ch_range > 1e-12:
-            ys = (ch_data - 0.5 * (ch_min + ch_max)) / ch_range * (
-                channel_height * 0.8
-            ) + offset
+            ys = (ch_data - 0.5 * (ch_min + ch_max)) / ch_range * (channel_height * 0.8) + offset
         else:
             ys = np.full_like(ch_data, offset)
         ys = np.ascontiguousarray(ys, dtype=np.float64)
@@ -270,11 +266,7 @@ def render_footer(
     capacity = stream._data.maxlen if stream._data is not None else 0
     fill_pct = 100.0 * n_buf / capacity if capacity > 0 else 0.0
     paused_tag = "  ⏸ PAUSED" if v.paused else ""
-    display_tag = (
-        "raw"
-        if not frame.is_decimated
-        else f"M4 {len(frame.data_win)}->{frame.n_points}"
-    )
+    display_tag = "raw" if not frame.is_decimated else f"M4 {len(frame.data_win)}->{frame.n_points}"
 
     imgui.text_colored(
         imgui.ImVec4(0.5, 0.5, 0.5, 1.0),
@@ -282,27 +274,19 @@ def render_footer(
         f"fs={stream.info.fs:.0f} Hz | "
         f"{frame.n_channels} ch | "
         f"buf {fill_pct:.0f}% | "
-        f"{frame.n_points} pts/ch"
-        + f" ({display_tag})"
-        + paused_tag,
+        f"{frame.n_points} pts/ch" + f" ({display_tag})" + paused_tag,
     )
 
     imgui.same_line()
-    changed, per_channel = imgui.checkbox(
-        f"Per-Ch##{stream_name}_per_channel", v.per_channel_scale
-    )
+    changed, per_channel = imgui.checkbox(f"Per-Ch##{stream_name}_per_channel", v.per_channel_scale)
     if changed:
         v.per_channel_scale = per_channel
     if imgui.is_item_hovered():
         imgui.set_tooltip("Normalize each enabled channel into its own lane.")
 
-    diag_on = (
-        v.show_diagnostics if v.show_diagnostics is not None else show_diagnostics
-    )
+    diag_on = v.show_diagnostics if v.show_diagnostics is not None else show_diagnostics
     imgui.same_line()
-    if imgui.small_button(
-        f"{'Hide' if diag_on else 'Show'} stats##{stream_name}_diag"
-    ):
+    if imgui.small_button(f"{'Hide' if diag_on else 'Show'} stats##{stream_name}_diag"):
         v.show_diagnostics = not diag_on
         diag_on = v.show_diagnostics
     if not diag_on or len(enabled) == 0:

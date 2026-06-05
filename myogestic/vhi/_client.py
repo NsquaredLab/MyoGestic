@@ -69,9 +69,7 @@ class VhiControlClient:
         ``cycle=True``: VHI plays the open/close movement cycle — for recording
         regression data, so the control-hand kinematics sweep a continuous range.
         """
-        self._enqueue(
-            "SetMovement", pb2.SetMovementRequest(movement_name=name, cycle=cycle)
-        )
+        self._enqueue("SetMovement", pb2.SetMovementRequest(movement_name=name, cycle=cycle))
 
     def freeze(self, frozen: bool) -> None:
         """Queue a freeze/unfreeze command."""

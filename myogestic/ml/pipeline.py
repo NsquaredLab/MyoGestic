@@ -167,9 +167,7 @@ class Pipeline:
     def start_training(self) -> None:
         ctx = self.app.ctx
         if ctx.state != "idle":
-            ctx.status_message = (
-                f"Cannot start training: state is {ctx.state!r}, expected 'idle'."
-            )
+            ctx.status_message = f"Cannot start training: state is {ctx.state!r}, expected 'idle'."
             return
         if self.on_train is None:
             ctx.status_message = "No train callback set (use @pipeline.train)"
@@ -276,9 +274,8 @@ class Pipeline:
             # while immapp.run blocks Python. Register one step with
             # the per-frame scheduler the App's GUI callback ticks.
             from myogestic._browser import register
-            register(
-                lambda: self._predict_step(app) if not self._stop.is_set() else 1.0
-            )
+
+            register(lambda: self._predict_step(app) if not self._stop.is_set() else 1.0)
             log.info("predict step registered with browser scheduler")
             return
 
@@ -288,9 +285,7 @@ class Pipeline:
                 if delay > 0:
                     time.sleep(delay)
 
-        self._thread = threading.Thread(
-            target=_loop, daemon=True, name="myogestic.ml.predict"
-        )
+        self._thread = threading.Thread(target=_loop, daemon=True, name="myogestic.ml.predict")
         self._thread.start()
         log.info("predict thread started")
 

@@ -6,18 +6,21 @@ import numpy as np
 from imgui_bundle import imgui
 
 # 10 distinct colors for class labels (Category10-like)
-PALETTE = np.array([
-    [0.12, 0.47, 0.71],  # blue
-    [1.00, 0.50, 0.05],  # orange
-    [0.17, 0.63, 0.17],  # green
-    [0.84, 0.15, 0.16],  # red
-    [0.58, 0.40, 0.74],  # purple
-    [0.55, 0.34, 0.29],  # brown
-    [0.89, 0.47, 0.76],  # pink
-    [0.50, 0.50, 0.50],  # gray
-    [0.74, 0.74, 0.13],  # olive
-    [0.09, 0.75, 0.81],  # cyan
-], dtype=np.float32)
+PALETTE = np.array(
+    [
+        [0.12, 0.47, 0.71],  # blue
+        [1.00, 0.50, 0.05],  # orange
+        [0.17, 0.63, 0.17],  # green
+        [0.84, 0.15, 0.16],  # red
+        [0.58, 0.40, 0.74],  # purple
+        [0.55, 0.34, 0.29],  # brown
+        [0.89, 0.47, 0.76],  # pink
+        [0.50, 0.50, 0.50],  # gray
+        [0.74, 0.74, 0.13],  # olive
+        [0.09, 0.75, 0.81],  # cyan
+    ],
+    dtype=np.float32,
+)
 
 
 def panel_header(title: str, icon: str | None = None) -> None:

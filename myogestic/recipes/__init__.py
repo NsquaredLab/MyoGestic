@@ -12,6 +12,7 @@ usually swap or extend:
 For persisting a trained model, see ``myogestic.ml.save_pickle`` /
 ``load_pickle``.
 """
+
 from myogestic.recipes.estimators import (
     catboost_classifier,
     catboost_regressor,
@@ -27,10 +28,19 @@ from myogestic.recipes.features import mav, rms, var, wl, zc
 
 __all__ = [
     # features
-    "mav", "rms", "var", "wl", "zc",
+    "mav",
+    "rms",
+    "var",
+    "wl",
+    "zc",
     # estimators
-    "catboost_classifier", "catboost_regressor", "constant_classifier",
-    "mean_regressor", "sklearn_classifier", "sklearn_extra_trees_classifier",
-    "sklearn_extra_trees_regressor", "sklearn_logistic_classifier",
+    "catboost_classifier",
+    "catboost_regressor",
+    "constant_classifier",
+    "mean_regressor",
+    "sklearn_classifier",
+    "sklearn_extra_trees_classifier",
+    "sklearn_extra_trees_regressor",
+    "sklearn_logistic_classifier",
     "sklearn_regressor",
 ]

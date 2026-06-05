@@ -74,10 +74,10 @@ output_filter = FilterControl(hz=32, default="one_euro")
 # Per-class 9-DOF hand poses. Library only ships the rest pose conceptually;
 # anything richer is experiment-specific and lives here.
 HAND_POSES: dict[int, np.ndarray] = {
-    0: np.zeros(9, dtype=np.float32),                                       # Rest
-    1: np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32),        # Fist
-    2: np.array([-0.7, 0, -0.8, -0.6, 0, 0, 0, 0, 0], dtype=np.float32),    # Pinch
-    3: np.array([0.5, 0, 0.5, 0.5, 0.5, 0.5, 0, 0, 0], dtype=np.float32),   # Open
+    0: np.zeros(9, dtype=np.float32),  # Rest
+    1: np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32),  # Fist
+    2: np.array([-0.7, 0, -0.8, -0.6, 0, 0, 0, 0, 0], dtype=np.float32),  # Pinch
+    3: np.array([0.5, 0, 0.5, 0.5, 0.5, 0.5, 0, 0, 0], dtype=np.float32),  # Open
 }
 
 rms_transform = RMS(window_size=32)
@@ -88,11 +88,13 @@ wl_transform = WaveformLength(window_size=32)
 def extract_features(emg: np.ndarray) -> np.ndarray:
     """RMS + MAV + WL on a (n_channels, n_samples) window."""
     tensor = torch.from_numpy(emg).float()
-    return np.concatenate([
-        rms_transform(tensor).numpy().flatten(),
-        mav_transform(tensor).numpy().flatten(),
-        wl_transform(tensor).numpy().flatten(),
-    ])
+    return np.concatenate(
+        [
+            rms_transform(tensor).numpy().flatten(),
+            mav_transform(tensor).numpy().flatten(),
+            wl_transform(tensor).numpy().flatten(),
+        ]
+    )
 
 
 PROCESSES = [
@@ -141,9 +143,7 @@ def extract(windows) -> np.ndarray:
 
 MODEL_RECIPES: dict[str, Callable[[], Any]] = {
     "CatBoost": lambda: catboost_classifier(iterations=150),
-    "Random Forest": lambda: sklearn_classifier(
-        n_estimators=200, random_state=0, n_jobs=-1
-    ),
+    "Random Forest": lambda: sklearn_classifier(n_estimators=200, random_state=0, n_jobs=-1),
     "Extra Trees": lambda: sklearn_extra_trees_classifier(
         n_estimators=300, random_state=0, n_jobs=-1
     ),
@@ -217,9 +217,7 @@ def model_panel() -> None:
     panel_header("MODEL", fa.ICON_FA_BRAIN)
 
     imgui.push_item_width(-1)
-    _, selected_model_idx = imgui.combo(
-        "##model_selector", selected_model_idx, MODEL_NAMES
-    )
+    _, selected_model_idx = imgui.combo("##model_selector", selected_model_idx, MODEL_NAMES)
     imgui.pop_item_width()
 
     train_button(pipeline)
@@ -231,9 +229,7 @@ def model_panel() -> None:
     )
 
     if _popout_open:
-        imgui.text_disabled(
-            "(log popped out — see 'Model training log' window)"
-        )
+        imgui.text_disabled("(log popped out — see 'Model training log' window)")
     else:
         training_log(pipeline, height=80.0, widget_id=_MODEL_WIDGET_ID)
 
@@ -264,8 +260,8 @@ def model_panel() -> None:
 
     # Poll the in-flight dialog (if any). pfd's open_file returns list[str];
     # cancel produces an empty list.
-    if _load_dialog is not None and _load_dialog.ready():  # type: ignore[union-attr]
-        result = _load_dialog.result()  # type: ignore[union-attr]
+    if _load_dialog is not None and _load_dialog.ready():  # type: ignore
+        result = _load_dialog.result()  # type: ignore
         _load_dialog = None
         if result:
             path = Path(result[0])
@@ -281,7 +277,6 @@ def model_panel() -> None:
 # --- Train / predict --------------------------------------------------------
 
 
-
 @pipeline.train
 def train(data: TrainingData):
     """Train the currently-selected model on labeled windows from the
@@ -295,8 +290,7 @@ def train(data: TrainingData):
         active = sorted(data.classes)
         names = [CLASSES[i] if 0 <= i < len(CLASSES) else f"c{i}" for i in active]
         raise ValueError(
-            f"Need ≥2 active classes — got {len(active)} ({names}). "
-            f"Toggle more class chips on."
+            f"Need ≥2 active classes — got {len(active)} ({names}). Toggle more class chips on."
         )
 
     all_X: list[np.ndarray] = []
@@ -372,7 +366,7 @@ grid = Grid(
 
 
 def _on_gesture(i: int) -> None:
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
 @app.ui

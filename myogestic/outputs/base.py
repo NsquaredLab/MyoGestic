@@ -3,6 +3,7 @@
 Concrete outputs (``LSLOutlet``, ``UDPOutput``, ``SerialOutput``) subclass this;
 they live in their own modules and are re-exported from :mod:`myogestic.outputs`.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -91,6 +92,7 @@ class Output:
             # immapp.run blocks Python. Register one step with the
             # per-frame scheduler that the App's GUI callback ticks.
             from myogestic._browser import register
+
             register(lambda: self._send_step() if self._running else 1.0)
         else:
             self._thread = threading.Thread(target=self._send_loop, daemon=True)
@@ -125,7 +127,9 @@ class Output:
                     self._seen_send_errors.add(key)
                     log.warning(
                         "%s.send failed: %s: %s",
-                        type(self).__name__, type(e).__name__, e,
+                        type(self).__name__,
+                        type(e).__name__,
+                        e,
                     )
         elapsed = time.perf_counter() - t_start
         return max(0.0, (1.0 / self._hz) - elapsed)

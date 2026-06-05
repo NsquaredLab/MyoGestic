@@ -79,6 +79,7 @@ class InterfaceSpec:
         The directory we resolved ``process`` from. Carried so the
         "not installed" error can quote it.
     """
+
     name: str
     process: list[str]
     output_stream: str
@@ -164,13 +165,9 @@ def _user_data_root() -> Path:
         if sysname == "Darwin":
             base = Path.home() / "Library" / "Application Support"
         elif sysname == "Windows":
-            base = Path(
-                os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")
-            )
+            base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
         else:
-            base = Path(
-                os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
-            )
+            base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
         return base / "myogestic"
 
 
@@ -196,9 +193,7 @@ def _installed_binary(install_root: Path) -> Path | None:
     """
     sysname = platform.system()
     if sysname == "Darwin":
-        binary = (
-            install_root / "VHI.app" / "Contents" / "MacOS" / "Virtual Hand Interface"
-        )
+        binary = install_root / "VHI.app" / "Contents" / "MacOS" / "Virtual Hand Interface"
     elif sysname == "Linux":
         binary = install_root / "VHI.x86_64"
     elif sysname == "Windows":
@@ -318,14 +313,10 @@ def virtual_hand(
     ``process_launcher()``. If VHI isn't installed yet, ``launcher()`` raises
     a ``FileNotFoundError`` pointing at ``install_vhi``.
     """
-    install_root = Path(
-        vhi_path or os.environ.get("VHI_PATH") or _default_install_root()
-    )
+    install_root = Path(vhi_path or os.environ.get("VHI_PATH") or _default_install_root())
     mode = mode or os.environ.get("VHI_LAUNCH_MODE", "auto")
     if mode not in ("auto", "binary", "godot"):
-        raise ValueError(
-            f"mode must be 'auto', 'binary', or 'godot'; got {mode!r}"
-        )
+        raise ValueError(f"mode must be 'auto', 'binary', or 'godot'; got {mode!r}")
     grpc_host = grpc_host or os.environ.get("VHI_GRPC_HOST", "127.0.0.1")
     if grpc_port is None:
         grpc_port = int(os.environ.get("VHI_GRPC_PORT", "50051"))

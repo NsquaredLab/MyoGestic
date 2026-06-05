@@ -14,6 +14,7 @@ from imgui_bundle import imgui
 @dataclass
 class _ScanState:
     """Per-stream scan results + selection + busy flag."""
+
     results: list[dict[str, str]] = field(default_factory=list)
     selected: int = 0
     busy: bool = False
@@ -95,14 +96,17 @@ def _disconnected_ui(stream_name: str, stream: object) -> None:
 
     if imgui.button(f"Reconnect##{stream_name}"):
         import sys as _sys
+
         if _sys.platform == "emscripten":
             # No threads in Pyodide. reconnect() is fast for the
             # browser's synthetic source; doing it inline blocks one
             # frame, which is preferable to a RuntimeError.
             stream.reconnect()
         else:
+
             def _reconnect() -> None:
                 stream.reconnect()
+
             _threading.Thread(target=_reconnect, daemon=True).start()
 
     discover_fn = getattr(stream._source, "discover", None)

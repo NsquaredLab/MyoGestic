@@ -56,8 +56,7 @@ class LSLSource:
         if not streams:
             available = [s.name for s in resolve_streams(timeout=2.0)]
             raise RuntimeError(
-                f"LSL stream '{self._name}' not found. "
-                f"Available streams: {available}"
+                f"LSL stream '{self._name}' not found. Available streams: {available}"
             )
         info = streams[0]
         self._inlet = StreamInlet(info, max_buffered=10)
@@ -95,8 +94,7 @@ class LSLSource:
         """Scan for available LSL streams on the network."""
         found = resolve_streams(timeout=2.0)
         return [
-            {"name": s.name, "info": f"{s.n_channels}ch {s.sfreq:.0f}Hz {s.stype}"}
-            for s in found
+            {"name": s.name, "info": f"{s.n_channels}ch {s.sfreq:.0f}Hz {s.stype}"} for s in found
         ]
 
     def reconnect(self, target: str | None = None) -> StreamInfo:

@@ -45,6 +45,7 @@ class TemplateInspectorRow:
         the energy column. Caller's choice of metric — RMS energy,
         peak amplitude, anything monotonic. ``None`` hides the bar.
     """
+
     key: str
     label: str
     accepted: bool = True
@@ -110,9 +111,7 @@ def template_inspector(
     if imgui.begin_table(
         f"##{uid}_tinsp",
         5,
-        imgui.TableFlags_.borders_inner_h
-        | imgui.TableFlags_.row_bg
-        | imgui.TableFlags_.scroll_y,
+        imgui.TableFlags_.borders_inner_h | imgui.TableFlags_.row_bg | imgui.TableFlags_.scroll_y,
         imgui.ImVec2(-1, height),
     ):
         imgui.table_setup_column("Use", imgui.TableColumnFlags_.width_fixed, 30)
@@ -145,9 +144,7 @@ def template_inspector(
                 _SELECTED[uid] = selected
             imgui.table_next_column()
             if row.energy is not None:
-                imgui.progress_bar(
-                    min(row.energy / e_max, 1.0), imgui.ImVec2(70, 0), ""
-                )
+                imgui.progress_bar(min(row.energy / e_max, 1.0), imgui.ImVec2(70, 0), "")
             else:
                 imgui.text_disabled("—")
             imgui.table_next_column()

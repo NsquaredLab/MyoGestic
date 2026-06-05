@@ -116,8 +116,7 @@ def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
         age_text = f"last {last_ts_age * 1000:.0f} ms" if last_ts_age is not None else "—"
         imgui.text_colored(
             _MUTED,
-            f"{info.fs:.0f} Hz · {info.n_channels} ch · "
-            f"window {stream._window:.2f}s · {age_text}",
+            f"{info.fs:.0f} Hz · {info.n_channels} ch · window {stream._window:.2f}s · {age_text}",
         )
     else:
         if stream.last_error:
@@ -188,7 +187,9 @@ def _connect_buttons(name: str, stream: object, scan: _ScanState) -> None:
             imgui.new_line()
         if imgui.small_button(label):
             _threading.Thread(
-                target=stream.reconnect, args=(target,), daemon=True  # type: ignore[attr-defined]
+                target=stream.reconnect,
+                args=(target,),
+                daemon=True,  # type: ignore[attr-defined]
             ).start()
         imgui.same_line()
     imgui.new_line()
@@ -221,6 +222,7 @@ def _last_ts_age(stream: object) -> float | None:
     # Streams stamp with pylsl.local_clock() on arrival.
     try:
         from mne_lsl.lsl import local_clock
+
         now = float(local_clock())
     except Exception:
         now = _time.time()

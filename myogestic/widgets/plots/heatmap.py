@@ -1,6 +1,6 @@
 """Heatmap widget for @app.ui (confusion matrix, correlation matrix, etc.).
 
-    from myogestic.widgets.plots.heatmap import heatmap
+from myogestic.widgets.plots.heatmap import heatmap
 """
 
 from __future__ import annotations
@@ -24,7 +24,8 @@ def heatmap(
 
     if implot.begin_plot(label, imgui.ImVec2(*size)):
         implot.plot_heatmap(
-            "##heatmap", values,
+            "##heatmap",
+            values,
             scale_min=float(values.min()),
             scale_max=float(values.max()),
             label_fmt=label_fmt,

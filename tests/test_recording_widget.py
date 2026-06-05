@@ -24,7 +24,7 @@ def test_safe_label_index_out_of_range_clamps_to_negative_one():
     a class index that doesn't exist."""
     assert _safe_label_index(3, 2) == -1
     assert _safe_label_index(99, 5) == -1
-    assert _safe_label_index(-2, 3) == -1   # weird negatives also rejected
+    assert _safe_label_index(-2, 3) == -1  # weird negatives also rejected
 
 
 def test_safe_label_index_zero_classes():

@@ -189,6 +189,5 @@ def test_registry_cleared_between_apps():
     core._active_app = app_b
     popout_panel("Signal", lambda: None)
     assert len(core._pending_popouts) == 1, (
-        "second App should re-register the same title — got skipped due "
-        "to leaked _registered state"
+        "second App should re-register the same title — got skipped due to leaked _registered state"
     )

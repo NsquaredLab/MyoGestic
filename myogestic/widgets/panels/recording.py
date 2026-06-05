@@ -48,7 +48,9 @@ def _status_pill(label: str, color: imgui.ImVec4) -> None:
     imgui.dummy(size)
     p0, p1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
     draw = imgui.get_window_draw_list()
-    draw.add_rect_filled(p0, p1, imgui.get_color_u32(imgui.ImVec4(0.14, 0.17, 0.21, 1.0)), size.y * 0.5)
+    draw.add_rect_filled(
+        p0, p1, imgui.get_color_u32(imgui.ImVec4(0.14, 0.17, 0.21, 1.0)), size.y * 0.5
+    )
     y = (p0.y + p1.y) * 0.5
     draw.add_rect_filled(
         imgui.ImVec2(p0.x + pad_x - 1, y - 3),
@@ -148,7 +150,9 @@ def recording_controls(
                 if selected:
                     imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.31, 0.61, 0.98, 0.9))
                 try:
-                    if imgui.button(f"{name}##rec_gesture{i}", imgui.ImVec2(_LABEL_BTN_W, _LABEL_BTN_H)):
+                    if imgui.button(
+                        f"{name}##rec_gesture{i}", imgui.ImVec2(_LABEL_BTN_W, _LABEL_BTN_H)
+                    ):
                         ctx.current_label = i
                         if on_gesture is not None:
                             on_gesture(i)
@@ -165,15 +169,13 @@ def recording_controls(
 
         # Record / Stop
         if ctx.state == AppState.IDLE:
-            if imgui.button(f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)):
+            if imgui.button(
+                f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
+            ):
                 on_record()
                 # Auto-add the current label at the start of the recording, but
                 # only if it's a valid index for the current class_names.
-                if (
-                    ctx.session is not None
-                    and class_names
-                    and 0 <= ctx.current_label < n_classes
-                ):
+                if ctx.session is not None and class_names and 0 <= ctx.current_label < n_classes:
                     ctx.session.add_label(ctx.current_label)
         elif ctx.state == AppState.RECORDING and imgui.button(
             f"{fa.ICON_FA_STOP}  Stop##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
