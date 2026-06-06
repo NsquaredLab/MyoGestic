@@ -109,23 +109,38 @@ def request_vhi_state_refresh(
     *,
     force: bool = False,
     min_interval_s: float = 1.0,
+    disconnected_interval_s: float = 5.0,
+    probe_timeout_s: float = 0.5,
 ) -> None:
     """Start at most one throttled background ``GetState`` refresh.
 
     Safe to call every frame from ``@app.ui``: it returns immediately unless a
-    refresh is due (``min_interval_s`` elapsed, or ``force``) and none is
-    already in flight. The blocking ``get_state()`` runs on a daemon thread;
-    the result lands in ``cache`` under its lock.
+    refresh is due and none is already in flight. The blocking ``get_state()``
+    runs on a daemon thread; the result lands in ``cache`` under its lock.
+
+    While VHI is **unreachable** the poll backs off to ``disconnected_interval_s``
+    and uses a short ``probe_timeout_s`` deadline — so a down server is probed
+    only occasionally with a fast-failing call, never a 2 s blocking RPC that is
+    ~always in flight. (A continuously in-flight failing ``GetState`` keeps the
+    gRPC channel in connect/reconnect churn, which stutters the 60 fps render
+    loop.) Once connected it polls every ``min_interval_s`` again. An explicit
+    ``force`` refresh ignores the interval and uses the client's full deadline
+    (a cold connect can be slower than ``probe_timeout_s``).
     """
     now = time.monotonic()
     with cache.lock:
-        if cache.refreshing or (not force and now - cache.last_attempt_s < min_interval_s):
+        interval = min_interval_s if cache.connected else max(min_interval_s, disconnected_interval_s)
+        if cache.refreshing or (not force and now - cache.last_attempt_s < interval):
             return
         cache.refreshing = True
         cache.last_attempt_s = now
 
+    # Auto-poll: short deadline so a down server fails fast. Explicit refresh:
+    # full deadline (None -> client default) since a cold connect may need it.
+    timeout = None if force else probe_timeout_s
+
     def _worker() -> None:
-        reply = client.get_state()
+        reply = client.get_state(timeout=timeout)
         with cache.lock:
             cache.refreshing = False
             if reply is None:
