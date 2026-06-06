@@ -53,21 +53,26 @@ from myogestic.widgets import (
 
 # ── Stream / window math ──────────────────────────────────────────────
 # Same 8-channel 2048 Hz synthetic EMG the other examples use, with a
-# 0.2 s analysis window. RaulNet's sliding-RMS feature uses an RMS_WINDOW_MS
-# window (stride 1), shortening it to (8, INPUT_LENGTH) fed to the CNN.
+# 200 ms analysis window. RaulNet's sliding-RMS feature runs an RMS_WINDOW_MS
+# window at an RMS_STRIDE_MS step, shortening it to (8, INPUT_LENGTH) for the CNN.
 
 STREAM_NAME = "TestEMG1"
 N_CHANNELS = 8
 FS = 2048
-WIN_SECONDS = 0.2
-HOP_SECONDS = 0.1  # 50% overlap
+WINDOW_MS = 200  # analysis window the model sees each prediction
+HOP_MS = 100  # training-window step (50% overlap)
 
-N_WINDOW_SAMPLES = int(WIN_SECONDS * FS)
-RMS_WINDOW_MS = 60  # sliding-RMS window, in ms
+N_WINDOW_SAMPLES = int(WINDOW_MS / 1000 * FS)
+RMS_WINDOW_MS = 60  # sliding-RMS window, in ms (must be < WINDOW_MS)
 RMS_WINDOW_SAMPLES = round(RMS_WINDOW_MS / 1000 * FS)
-RMS_STRIDE_MS = 0.5  # ~1 sample at 2048 Hz — i.e. max RMS time resolution
+RMS_STRIDE_MS = 5  # sliding-RMS step, in ms
 RMS_STRIDE_SAMPLES = max(1, round(RMS_STRIDE_MS / 1000 * FS))
 INPUT_LENGTH = (N_WINDOW_SAMPLES - RMS_WINDOW_SAMPLES) // RMS_STRIDE_SAMPLES + 1
+if RMS_WINDOW_SAMPLES >= N_WINDOW_SAMPLES:
+    raise ValueError(
+        f"RMS_WINDOW_MS={RMS_WINDOW_MS} must be < WINDOW_MS={WINDOW_MS}: "
+        "the RMS kernel slides inside the analysis window."
+    )
 
 # 5 VHI DOFs (mosaic-2.0 registry): wrist rotation + index/middle/ring/pinky.
 VHI_DOF_INDICES = [0, 2, 3, 4, 5]
@@ -146,7 +151,7 @@ PROCESSES = [
 
 app = App("EMG Regression — RaulNet", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource(STREAM_NAME), window_seconds=WIN_SECONDS, buffer_seconds=60),
+    Stream("emg", source=LSLSource(STREAM_NAME), window_seconds=WINDOW_MS / 1000, buffer_seconds=60),
     Stream(
         "vhi_control",
         source=LSLSource(vhi.control_stream or "VHI_Control"),
@@ -219,8 +224,8 @@ def train(data: TrainingData) -> L.LightningModule:
         kin_paths,
         "emg",
         ["vhi_control"],
-        WIN_SECONDS,
-        HOP_SECONDS,
+        WINDOW_MS / 1000,
+        HOP_MS / 1000,
         align_window_samples=10,
     ):
         X_list.append(sliding_rms(emg_window))
@@ -232,8 +237,8 @@ def train(data: TrainingData) -> L.LightningModule:
     for emg_window, _ts, ci in iter_labeled_windows(
         label_paths,
         "emg",
-        WIN_SECONDS,
-        HOP_SECONDS,
+        WINDOW_MS / 1000,
+        HOP_MS / 1000,
         classes=data.classes if data.classes else None,
     ):
         target = np.ones(N_DOF, dtype=np.float32) if ci == 1 else np.zeros(N_DOF, dtype=np.float32)
