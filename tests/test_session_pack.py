@@ -225,7 +225,7 @@ def test_iter_aligned_windows_basic():
                 ["kin"],
                 200,
                 200,
-                align_window_samples=1,
+                n_alignment_samples=1,
             )
         )
         shutil.rmtree(path, ignore_errors=True)
@@ -272,12 +272,12 @@ def test_iter_aligned_windows_rejects_bad_args():
         list(iter_aligned_windows([], "a", ["b"], 0, 100))
     with pytest.raises(ValueError, match="hop_ms"):
         list(iter_aligned_windows([], "a", ["b"], 200, 0))
-    with pytest.raises(ValueError, match="align_window_samples"):
-        list(iter_aligned_windows([], "a", ["b"], 200, 100, align_window_samples=0))
+    with pytest.raises(ValueError, match="n_alignment_samples"):
+        list(iter_aligned_windows([], "a", ["b"], 200, 100, n_alignment_samples=0))
 
 
 def test_iter_aligned_windows_averages_exactly_N_samples():
-    """`align_window_samples=N` averages exactly N samples (not N+1).
+    """`n_alignment_samples=N` averages exactly N samples (not N+1).
 
     Verified by giving kin a unit ramp and checking the mean equals the
     arithmetic mean of N consecutive integers around the midpoint.
@@ -303,7 +303,7 @@ def test_iter_aligned_windows_averages_exactly_N_samples():
                 ["kin"],
                 200,
                 200,
-                align_window_samples=10,
+                n_alignment_samples=10,
             )
         )
         # N=11 → samples [5..16) → mean = 10.0
@@ -314,7 +314,7 @@ def test_iter_aligned_windows_averages_exactly_N_samples():
                 ["kin"],
                 200,
                 200,
-                align_window_samples=11,
+                n_alignment_samples=11,
             )
         )
         shutil.rmtree(path, ignore_errors=True)

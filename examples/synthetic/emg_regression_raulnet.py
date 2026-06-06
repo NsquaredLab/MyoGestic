@@ -226,7 +226,7 @@ def train(data: TrainingData) -> L.LightningModule:
         ["vhi_control"],
         WINDOW_MS,
         HOP_MS,
-        align_window_samples=10,
+        n_alignment_samples=10,
     ):
         X_list.append(sliding_rms(emg_window))
         y_list.append(np.abs(aligned["vhi_control"][VHI_DOF_INDICES]))

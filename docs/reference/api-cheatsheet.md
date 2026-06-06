@@ -59,8 +59,8 @@ open_session_store(path) -> Session                # folder OR .session.zip
 iter_labeled_windows(paths, stream_name, window_ms, hop_ms,
                      classes=None)
   -> Iterator[(window, ts, class_index)]            # window: (n_ch, n_samp)
-iter_aligned_windows(paths, primary_stream, aligned_streams,
-                     window_ms, hop_ms, align_window_samples=1)
+iter_aligned_windows(paths, primary_stream_name, aligned_stream_names,
+                     window_ms, hop_ms, n_alignment_samples=1)
   -> Iterator[(primary_window, {name: vec}, ts)]
 
 # --- Filters (myogestic.outputs.filters) -------------------------------

@@ -213,8 +213,8 @@ for window, ts, cls in iter_labeled_windows(
 
 # Regression: align a primary stream with one or more aligned streams.
 for window, aligned, ts in iter_aligned_windows(
-    [sess.path], primary_stream="emg",
-    aligned_streams=["vhi_control"],
+    [sess.path], primary_stream_name="emg",
+    aligned_stream_names=["vhi_control"],
     window_ms=200, hop_ms=50,
 ):
     target = aligned["vhi_control"]

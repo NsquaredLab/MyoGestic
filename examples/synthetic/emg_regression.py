@@ -156,7 +156,7 @@ def train(data: TrainingData):
         ["vhi_control"],
         WINDOW_MS,
         HOP_MS,
-        align_window_samples=10,
+        n_alignment_samples=10,
     ):
         kin = np.abs(aligned["vhi_control"][VHI_DOF_INDICES])
         all_X.append(extract_features(emg_window))
