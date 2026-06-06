@@ -110,8 +110,8 @@ def extract(windows) -> np.ndarray:
     return extract_features(windows["emg"])
 
 
-WIN_SECONDS = 0.2
-HOP_SECONDS = 0.1
+WINDOW_MS = 200
+HOP_MS = 100
 
 
 @pipeline.train
@@ -154,8 +154,8 @@ def train(data: TrainingData):
         kin_paths,
         "emg",
         ["vhi_control"],
-        WIN_SECONDS,
-        HOP_SECONDS,
+        WINDOW_MS,
+        HOP_MS,
         align_window_samples=10,
     ):
         kin = np.abs(aligned["vhi_control"][VHI_DOF_INDICES])
@@ -171,8 +171,8 @@ def train(data: TrainingData):
     for emg_window, _ts, ci in iter_labeled_windows(
         label_paths,
         "emg",
-        WIN_SECONDS,
-        HOP_SECONDS,
+        WINDOW_MS,
+        HOP_MS,
         classes=data.classes if data.classes else None,
     ):
         kin = np.ones(5, dtype=np.float64) if ci == 1 else np.zeros(5, dtype=np.float64)

@@ -224,8 +224,8 @@ def train(data: TrainingData) -> L.LightningModule:
         kin_paths,
         "emg",
         ["vhi_control"],
-        WINDOW_MS / 1000,
-        HOP_MS / 1000,
+        WINDOW_MS,
+        HOP_MS,
         align_window_samples=10,
     ):
         X_list.append(sliding_rms(emg_window))
@@ -237,8 +237,8 @@ def train(data: TrainingData) -> L.LightningModule:
     for emg_window, _ts, ci in iter_labeled_windows(
         label_paths,
         "emg",
-        WINDOW_MS / 1000,
-        HOP_MS / 1000,
+        WINDOW_MS,
+        HOP_MS,
         classes=data.classes if data.classes else None,
     ):
         target = np.ones(N_DOF, dtype=np.float32) if ci == 1 else np.zeros(N_DOF, dtype=np.float32)

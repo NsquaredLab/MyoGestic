@@ -106,8 +106,8 @@ from myogestic.session import iter_labeled_windows
 for window, ts, class_idx in iter_labeled_windows(
     data.paths,
     stream_name="emg",
-    win_seconds=0.2,
-    hop_seconds=0.1,
+    window_ms=200,
+    hop_ms=100,
     classes={0, 1},
 ):
     feat = rms(window)  # window is (n_channels, n_samples)
@@ -115,7 +115,7 @@ for window, ts, class_idx in iter_labeled_windows(
     y.append(class_idx)
 ```
 
-Yields one window per `hop_seconds` step, dropping windows that straddle a label boundary so each window has exactly one class. The three-tuple is `(window, ts, class_index)` - `ts` is the matching 1-D timestamp array, in case you need per-sample times for downstream alignment.
+Yields one window per `hop_ms` step, dropping windows that straddle a label boundary so each window has exactly one class. The three-tuple is `(window, ts, class_index)` - `ts` is the matching 1-D timestamp array, in case you need per-sample times for downstream alignment.
 
 ### Regression - [`iter_aligned_windows`][myogestic.session.iter_aligned_windows]
 
@@ -126,8 +126,8 @@ for window, aligned, ts in iter_aligned_windows(
     data.paths,
     primary_stream="emg",
     aligned_streams=["vhi_control"],
-    win_seconds=0.2,
-    hop_seconds=0.05,
+    window_ms=200,
+    hop_ms=50,
     align_window_samples=1,
 ):
     feat = extract(window)

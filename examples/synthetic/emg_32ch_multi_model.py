@@ -62,8 +62,8 @@ from myogestic.widgets.panels.log_box import render_log_buttons, render_log_popo
 N_CHANNELS = 32
 CLASSES = ["Rest", "Fist", "Pinch", "Open"]
 CTRL_VALUES = [0.0, 1.0, 2.0, 3.0]
-WIN_SECONDS = 0.25
-HOP_SECONDS = 0.1
+WINDOW_MS = 250
+HOP_MS = 100
 
 ctrl_outlet = control_outlet()
 
@@ -123,7 +123,7 @@ PROCESSES = [
 
 app = App("EMG 32ch Multi-Model", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG32"), window_ms=WIN_SECONDS * 1000, buffer_ms=60000)
+    Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, buffer_ms=60000)
 )
 pipeline = Pipeline(app)
 # Wire generic save/load so save_model_button / load_model_button work, and
@@ -298,8 +298,8 @@ def train(data: TrainingData):
     for window, _ts, ci in iter_labeled_windows(
         data.paths,
         "emg",
-        WIN_SECONDS,
-        HOP_SECONDS,
+        WINDOW_MS,
+        HOP_MS,
         classes=data.classes,
     ):
         all_X.append(extract_features(window))

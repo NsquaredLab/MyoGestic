@@ -30,7 +30,7 @@ def extract(windows):
 @pipeline.train
 def train(data: TrainingData):
     X, y = [], []
-    for sw, _ts, c in iter_labeled_windows(data.paths, "emg", 0.2, 0.1, classes=data.classes):
+    for sw, _ts, c in iter_labeled_windows(data.paths, "emg", 200, 100, classes=data.classes):
         X.append(extract({"emg": sw.data}))
         y.append(c)
     return LogisticRegression().fit(np.array(X), np.array(y))
@@ -160,7 +160,7 @@ The same function runs from inside `train()` over recorded windows, and on the p
 @pipeline.train
 def train(data: TrainingData):
     X, y = [], []
-    for sw, _ts, c in iter_labeled_windows(data.paths, "emg", 0.2, 0.1, classes=data.classes):
+    for sw, _ts, c in iter_labeled_windows(data.paths, "emg", 200, 100, classes=data.classes):
         X.append(extract({"emg": sw.data}))
         y.append(c)
     return LogisticRegression().fit(np.array(X), np.array(y))

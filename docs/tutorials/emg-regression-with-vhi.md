@@ -89,7 +89,7 @@ The training callback handles **two kinds of session** transparently:
 
 ```python
 for emg_window, aligned, _ts in iter_aligned_windows(
-    kin_paths, "emg", ["vhi_control"], WIN_SECONDS, HOP_SECONDS,
+    kin_paths, "emg", ["vhi_control"], WINDOW_MS, HOP_MS,
     align_window_samples=10,
 ):
     kin = np.abs(aligned["vhi_control"][VHI_DOF_INDICES])
@@ -104,7 +104,7 @@ sessions with both EMG and kinematics.
 
 ```python
 for emg_window, _ts, ci in iter_labeled_windows(
-    label_paths, "emg", WIN_SECONDS, HOP_SECONDS,
+    label_paths, "emg", WINDOW_MS, HOP_MS,
     classes=data.classes if data.classes else None,
 ):
     kin = np.ones(5) if ci == 1 else np.zeros(5)

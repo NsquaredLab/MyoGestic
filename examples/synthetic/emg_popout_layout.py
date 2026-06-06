@@ -60,8 +60,8 @@ from myogestic.widgets.panels.log_box import render_log_buttons, render_log_popo
 N_CHANNELS = 32
 CLASSES = ["Rest", "Fist", "Pinch", "Open"]
 CTRL_VALUES = [0.0, 1.0, 2.0, 3.0]
-WIN_SECONDS = 0.25
-HOP_SECONDS = 0.1
+WINDOW_MS = 250
+HOP_MS = 100
 
 ctrl_outlet = control_outlet()
 
@@ -120,7 +120,7 @@ PROCESSES = [
 # becomes a tearable / dockable window.
 app = App("EMG 32ch Popout", ui_scale=0.85, docking=True)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG32"), window_ms=WIN_SECONDS * 1000, buffer_ms=60000)
+    Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, buffer_ms=60000)
 )
 pipeline = Pipeline(app)
 pipeline.save_model = save_pickle
@@ -170,7 +170,7 @@ def train(data: TrainingData):
         raise ValueError("Need ≥2 active classes.")
     X, y = [], []
     for window, _ts, ci in iter_labeled_windows(
-        data.paths, "emg", WIN_SECONDS, HOP_SECONDS, classes=data.classes
+        data.paths, "emg", WINDOW_MS, HOP_MS, classes=data.classes
     ):
         X.append(extract_features(window))
         y.append(ci)

@@ -97,12 +97,12 @@ PROCESSES = [
     *vhi.launcher(),
 ]
 
-WIN_SECONDS = 0.2
-HOP_SECONDS = 0.1
+WINDOW_MS = 200
+HOP_MS = 100
 
 app = App("EMG Classification (gRPC)", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG1"), window_ms=WIN_SECONDS * 1000, buffer_ms=60000)
+    Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000)
 )
 pipeline = Pipeline(app)
 
@@ -129,7 +129,7 @@ def train(data: TrainingData):
     all_X: list[np.ndarray] = []
     all_y: list[int] = []
     for window, _ts, class_idx in iter_labeled_windows(
-        data.paths, "emg", WIN_SECONDS, HOP_SECONDS, classes=data.classes
+        data.paths, "emg", WINDOW_MS, HOP_MS, classes=data.classes
     ):
         all_X.append(extract({"emg": window}))
         all_y.append(class_idx)
