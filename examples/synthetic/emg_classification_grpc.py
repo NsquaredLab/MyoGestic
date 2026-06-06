@@ -151,13 +151,14 @@ def train(data: TrainingData):
 # SetMovement re-triggers VHI's animation, so only command VHI when the
 # class actually changes. Two stages guard that:
 #   1. _StableClass swallows tick-to-tick flicker — the predicted class only
-#      "counts" once it has held for STABLE_TICKS predictions. Without it, the
-#      ~0.2 s sliding-window transition after a gesture (Fist EMG → Rest EMG)
+#      "counts" once it has held for ~STABLE_SECONDS of predictions. Without it,
+#      the ~0.2 s sliding-window transition after a gesture (Fist EMG → Rest EMG)
 #      makes argmax oscillate, and the control hand visibly jumps between poses
 #      before settling.
 #   2. The EdgeTrigger dedupes per class name; the manual gesture button (below)
 #      rebases both so a click + the next predict ticks don't re-fire.
-STABLE_TICKS = 5  # ~100 ms at predict_hz=50
+# Set the debounce as a duration (robust to predict_hz); convert to ticks below.
+STABLE_SECONDS = 0.1
 
 
 class _StableClass:
@@ -184,7 +185,7 @@ class _StableClass:
         self._candidate, self._count, self.stable = cls, self._k, cls
 
 
-stable_class = _StableClass(STABLE_TICKS)
+stable_class = _StableClass(max(1, round(STABLE_SECONDS * pipeline.predict_hz)))
 movement_trigger: EdgeTrigger[str] = EdgeTrigger(vhi_client.set_movement)
 
 
