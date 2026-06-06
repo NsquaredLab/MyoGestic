@@ -20,7 +20,7 @@ def test_identity_passthrough():
 
 def test_gaussian_first_call_returns_input():
     """Single sample → weighted mean of 1 sample = the sample itself."""
-    f = GaussianFilter(window=5, sigma=1.0)
+    f = GaussianFilter(n_vectors=5, sigma=1.0)
     x = np.array([1.0, 2.0, 3.0])
     out = f(x)
     assert np.allclose(out, x)
@@ -28,7 +28,7 @@ def test_gaussian_first_call_returns_input():
 
 def test_gaussian_smooths_step_input():
     """Step from 0→10 should be smoothed (output starts below 10 and rises)."""
-    f = GaussianFilter(window=5, sigma=1.0)
+    f = GaussianFilter(n_vectors=5, sigma=1.0)
     # Prime with zeros, then jump to 10.
     for _ in range(5):
         f(np.zeros(2))
@@ -37,8 +37,8 @@ def test_gaussian_smooths_step_input():
 
 
 def test_gaussian_rejects_bad_args():
-    with pytest.raises(ValueError, match="window"):
-        GaussianFilter(window=0)
+    with pytest.raises(ValueError, match="n_vectors"):
+        GaussianFilter(n_vectors=0)
     with pytest.raises(ValueError, match="sigma"):
         GaussianFilter(sigma=0)
 
@@ -119,7 +119,7 @@ def test_filter_preserves_input_dtype():
     x64 = np.array([1.0, 2.0], dtype=np.float64)
     assert f(x64).dtype == np.float64
 
-    g = GaussianFilter(window=3)
+    g = GaussianFilter(n_vectors=3)
     assert g(np.array([1.0, 2.0], dtype=np.float32)).dtype == np.float32
 
 
@@ -131,9 +131,9 @@ def test_make_filter_one_euro_propagates_hz():
 
 def test_make_filter_kwargs_tune_filter():
     """Extra kwargs are forwarded to the underlying filter constructor."""
-    g = make_filter("gaussian", window=10, sigma=2.0)
+    g = make_filter("gaussian", n_vectors=10, sigma=2.0)
     assert isinstance(g, GaussianFilter)
-    assert g.window == 10
+    assert g.n_vectors == 10
     assert g.sigma == 2.0
 
     o = make_filter("one_euro", hz=32, beta=0.05)
@@ -144,10 +144,10 @@ def test_make_filter_kwargs_tune_filter():
 
 def test_make_filter_rejects_unknown_kwargs():
     with pytest.raises(TypeError):
-        make_filter("identity", window=5)
+        make_filter("identity", n_vectors=5)
 
 
 def test_gaussian_rejects_non_1d_input():
-    f = GaussianFilter(window=3)
+    f = GaussianFilter(n_vectors=3)
     with pytest.raises(ValueError, match="1-D"):
         f(np.zeros((3, 4)))

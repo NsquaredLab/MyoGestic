@@ -143,9 +143,9 @@ class _MeanRegressor:
         return np.broadcast_to(mean, (X.shape[0], *mean.shape)).copy()
 
 
-def constant_classifier(class_idx: int = 0) -> _ConstantClassifier:
-    """Estimator that always predicts ``class_idx``. No deps."""
-    return _ConstantClassifier(class_idx=class_idx)
+def constant_classifier(class_index: int = 0) -> _ConstantClassifier:
+    """Estimator that always predicts ``class_index``. No deps."""
+    return _ConstantClassifier(class_idx=class_index)
 
 
 def mean_regressor() -> _MeanRegressor:

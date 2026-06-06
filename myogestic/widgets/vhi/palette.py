@@ -165,7 +165,7 @@ def vhi_movement_palette(
     current_movement: str = "",
     connected: bool = False,
     status: str = "",
-    label: str = "VHI Movements",
+    title: str = "VHI Movements",
 ) -> None:
     """Render VHI's movement names as a grid of command buttons.
 
@@ -178,7 +178,7 @@ def vhi_movement_palette(
     The grid uses as many columns as fit the panel width, so it reflows when
     the panel is resized; the button matching ``current_movement`` is highlighted.
     """
-    panel_header(label, fa.ICON_FA_HAND)
+    panel_header(title, fa.ICON_FA_HAND)
 
     if on_refresh is not None:
         if imgui.button(f"{fa.ICON_FA_ARROWS_ROTATE}  Refresh from VHI"):

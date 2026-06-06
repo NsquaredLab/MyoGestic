@@ -65,7 +65,7 @@ iter_aligned_windows(paths, primary_stream_name, aligned_stream_names,
 
 # --- Filters (myogestic.outputs.filters) -------------------------------
 OneEuroFilter(hz=50.0, min_cutoff_hz=1.0, beta=0.02, derivative_cutoff_hz=1.0)
-GaussianFilter(window=5, sigma=1.0)
+GaussianFilter(n_vectors=5, sigma=1.0)
 IdentityFilter()
 make_filter(name, hz=50.0, **kwargs) -> VectorFilter
   filter(x, t=None) -> np.ndarray                  # __call__ all filters
@@ -77,7 +77,7 @@ signal_viewer(ctx, stream_name, selectable=False,
 raw_signal_viewer(ctx, stream_name)                # every-sample, zero-alloc
 recording_controls(ctx, class_names, *, on_record, on_stop,
                    on_gesture=None)
-session_manager(base_path, label="Sessions", class_names=None)
+session_manager(base_path, title="Sessions", class_names=None)
   -> TrainingData(paths, class_names, classes)
 process_launcher(processes)
 scatter2d(label, points) / scatter3d(label, points)

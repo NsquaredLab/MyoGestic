@@ -49,28 +49,28 @@ class VhiMovementPanel:
         Click handler for a movement button. Defaults to
         ``client.set_movement``; pass a wrapper to layer side-effects
         (e.g. snap a session label, fire an edge-trigger).
-    refresh_min_interval_s
+    min_interval_s
         Minimum seconds between background state
         refreshes. Default 1 s.
-    label
+    title
         Panel header text rendered above the button grid.
     """
 
-    __slots__ = ("_cache", "_client", "_label", "_on_movement", "_refresh_interval")
+    __slots__ = ("_cache", "_client", "_on_movement", "_refresh_interval", "_title")
 
     def __init__(
         self,
         client: VhiControlClient,
         *,
         on_movement: Callable[[str], None] | None = None,
-        refresh_min_interval_s: float = 1.0,
-        label: str = "VHI Movements",
+        min_interval_s: float = 1.0,
+        title: str = "VHI Movements",
     ) -> None:
         self._client = client
         self._cache = VhiStateCache()
         self._on_movement = on_movement or client.set_movement
-        self._refresh_interval = refresh_min_interval_s
-        self._label = label
+        self._refresh_interval = min_interval_s
+        self._title = title
 
     def ui(self) -> None:
         """Render the panel — call once per frame inside ``@app.ui``."""
@@ -83,7 +83,7 @@ class VhiMovementPanel:
             status=snap.message,
             on_movement=self._on_movement,
             on_refresh=lambda: request_vhi_state_refresh(self._client, self._cache, force=True),
-            label=self._label,
+            title=self._title,
         )
 
 

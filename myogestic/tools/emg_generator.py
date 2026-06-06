@@ -34,8 +34,8 @@ ACTIVE_NOISE = np.float32(0.15)  # background noise while a gesture is active
 ENVELOPE_GAIN = np.float32(0.15)  # strength of the per-DoF activation envelope
 
 
-def _class_pattern(class_idx: int, n_classes: int, channels: int) -> np.ndarray:
-    """Deterministic per-class channel-activation envelope of shape ``(channels,)``.
+def _class_pattern(class_idx: int, n_classes: int, n_channels: int) -> np.ndarray:
+    """Deterministic per-class channel-activation envelope of shape ``(n_channels,)``.
 
     Class 0 is "rest" — all-zeros, so callers can short-circuit to a low-noise
     floor. Classes 1..n_classes-1 each activate a contiguous channel group via
@@ -43,12 +43,12 @@ def _class_pattern(class_idx: int, n_classes: int, channels: int) -> np.ndarray:
     inputs always give the same array (no RNG, no global state) so trials
     across runs are reproducible.
     """
-    if class_idx <= 0 or n_classes <= 1 or channels <= 0:
-        return np.zeros(channels, dtype=np.float32)
+    if class_idx <= 0 or n_classes <= 1 or n_channels <= 0:
+        return np.zeros(n_channels, dtype=np.float32)
     n_active = max(1, n_classes - 1)
     centre = (class_idx - 1 + 0.5) / n_active
     width = 1.0 / max(1, n_active * 1.5)
-    x = np.linspace(0.0, 1.0, channels, dtype=np.float32)
+    x = np.linspace(0.0, 1.0, n_channels, dtype=np.float32)
     pattern = np.exp(-((x - centre) ** 2) / (2.0 * width * width))
     pattern *= 1.0 / float(np.max(pattern))
     return pattern.astype(np.float32)
@@ -120,15 +120,16 @@ def control_outlet(name: str = DEFAULT_CONTROL_STREAM) -> StreamOutlet:
 
 def main(
     name: Annotated[str, typer.Option(help="Output stream name")] = "TestEMG1",
-    channels: Annotated[int, typer.Option(help="Number of EMG channels")] = 8,
+    n_channels: Annotated[int, typer.Option("--channels", help="Number of EMG channels")] = 8,
     fs: Annotated[float, typer.Option(help="Sample rate (Hz)")] = 256,
-    chunk: Annotated[int, typer.Option(help="Samples pushed per tick")] = 32,
-    classes: Annotated[
-        int, typer.Option(help="Number of distinct classes (default 2 = rest/fist).")
+    chunk_size: Annotated[int, typer.Option("--chunk", help="Samples pushed per tick")] = 32,
+    n_classes: Annotated[
+        int,
+        typer.Option("--classes", help="Number of distinct classes (default 2 = rest/fist)."),
     ] = 2,
-    control: Annotated[
+    control_stream_name: Annotated[
         str,
-        typer.Option(help="Control stream name (1ch float; sample value = class index)."),
+        typer.Option("--control", help="Control stream name (1ch float; sample value = class index)."),
     ] = "EMG_Control",
     multi_dof: Annotated[
         bool,
@@ -145,7 +146,7 @@ def main(
     ] = False,
 ) -> None:
     """Controllable synthetic EMG generator published as an LSL outlet."""
-    n_classes = max(2, int(classes))
+    n_classes = max(2, int(n_classes))
 
     # Refuse to double-publish: if a stream with the same name is already
     # alive on the network, exit before constructing a second outlet.
@@ -164,11 +165,11 @@ def main(
         )
         return
 
-    out_info = StreamInfo(name, "EMG", channels, fs, "float32", "emg_gen")
+    out_info = StreamInfo(name, "EMG", n_channels, fs, "float32", "emg_gen")
     outlet = StreamOutlet(out_info)
 
     patterns = np.stack(
-        [_class_pattern(i, n_classes, channels) for i in range(n_classes)],
+        [_class_pattern(i, n_classes, n_channels) for i in range(n_classes)],
         axis=0,
     )
 
@@ -177,10 +178,10 @@ def main(
     mask = 0  # multi-DoF mode (bitmask over `n_classes - 1` DoFs)
     n_dofs = max(1, n_classes - 1)  # only used when --multi-dof is set
 
-    interval = chunk / fs
+    interval = chunk_size / fs
     mode_label = "multi-DoF bitmask" if multi_dof else "class index"
-    print(f"EMG generator: {name} · {channels} ch · {fs} Hz · {n_classes} classes ({mode_label})")
-    print(f"Listening for control on '{control}' (sample value = {mode_label})")
+    print(f"EMG generator: {name} · {n_channels} ch · {fs} Hz · {n_classes} classes ({mode_label})")
+    print(f"Listening for control on '{control_stream_name}' (sample value = {mode_label})")
     print("Generating rest signal...")
 
     rng = np.random.default_rng()
@@ -189,10 +190,10 @@ def main(
             t0 = time.perf_counter()
 
             if inlet is None:
-                streams = resolve_streams(timeout=0.1, name=control)
+                streams = resolve_streams(timeout=0.1, name=control_stream_name)
                 if streams:
                     inlet = StreamInlet(streams[0])
-                    print(f"Connected to control stream '{control}'")
+                    print(f"Connected to control stream '{control_stream_name}'")
             else:
                 try:
                     if multi_dof:
@@ -202,20 +203,21 @@ def main(
                 except Exception:
                     inlet = None
 
-            noise = rng.standard_normal((chunk, channels)).astype(np.float32)
+            noise = rng.standard_normal((chunk_size, n_channels)).astype(np.float32)
             if multi_dof:
                 # Sum patterns of all set bits. Each active DoF i contributes
                 # the class-(i+1) Gaussian (class 0 reserved for rest).
                 if mask == 0:
                     samples = noise * REST_NOISE
                 else:
-                    summed_pattern = np.zeros(channels, dtype=np.float32)
+                    summed_pattern = np.zeros(n_channels, dtype=np.float32)
                     for i in range(n_dofs):
                         if mask & (1 << i):
                             summed_pattern += patterns[i + 1]
                     base = noise * ACTIVE_NOISE
                     burst = (
-                        rng.standard_normal((chunk, channels)).astype(np.float32) * summed_pattern
+                        rng.standard_normal((chunk_size, n_channels)).astype(np.float32)
+                        * summed_pattern
                     )
                     samples = base + burst + ENVELOPE_GAIN * summed_pattern
             elif mode_idx == 0:
@@ -223,7 +225,7 @@ def main(
             else:
                 pattern = patterns[mode_idx]
                 base = noise * ACTIVE_NOISE
-                burst = rng.standard_normal((chunk, channels)).astype(np.float32) * pattern
+                burst = rng.standard_normal((chunk_size, n_channels)).astype(np.float32) * pattern
                 samples = base + burst + ENVELOPE_GAIN * pattern
 
             for sample in samples:

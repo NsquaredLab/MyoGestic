@@ -21,7 +21,7 @@ __all__ = ["add_recorded_session", "session_manager"]
 
 def session_manager(
     base_path: str = "sessions",
-    label: str = "Sessions",
+    title: str = "Sessions",
     class_names: list[str] | None = None,
 ) -> TrainingData:
     """Session picker widget. Returns ``TrainingData(paths, class_names, classes)``.
@@ -35,18 +35,18 @@ def session_manager(
         def ui(ctx):
             pipeline.training_data = session_manager(...)
     """
-    uid = f"{label}_{base_path}"
-    state = get_state(uid)
+    widget_id = f"{title}_{base_path}"
+    state = get_state(widget_id)
 
-    panel_header(label, fa.ICON_FA_FOLDER_OPEN)
-    render_summary_and_buttons(uid, base_path, state)
+    panel_header(title, fa.ICON_FA_FOLDER_OPEN)
+    render_summary_and_buttons(widget_id, base_path, state)
     poll_file_dialog(state)
 
     classes_in_pool, active_classes = class_pool_and_active(state)
     render_class_buttons(
-        uid, state.deactivated_classes, classes_in_pool, active_classes, class_names
+        widget_id, state.deactivated_classes, classes_in_pool, active_classes, class_names
     )
-    render_session_rows(uid, state.sessions, class_names)
+    render_session_rows(widget_id, state.sessions, class_names)
 
     return TrainingData(
         paths=[s["path"] for s in state.sessions if s["selected"]],
@@ -55,7 +55,7 @@ def session_manager(
     )
 
 
-def render_summary_and_buttons(uid: str, base_path: str, state: SessionWidgetState) -> None:
+def render_summary_and_buttons(widget_id: str, base_path: str, state: SessionWidgetState) -> None:
     sessions = state.sessions
     n_selected = sum(1 for s in sessions if s["selected"])
     summary = f"{n_selected}/{len(sessions)} selected"
@@ -65,7 +65,7 @@ def render_summary_and_buttons(uid: str, base_path: str, state: SessionWidgetSta
     imgui.align_text_to_frame_padding()
     imgui.text(summary)
     imgui.same_line()
-    if imgui.button(f"Load Files...##{uid}"):
+    if imgui.button(f"Load Files...##{widget_id}"):
         state.folder_dialog = pfd.open_file(
             "Select session files",
             base_path,
@@ -81,7 +81,7 @@ def render_summary_and_buttons(uid: str, base_path: str, state: SessionWidgetSta
     if not sessions:
         return
     imgui.same_line()
-    if imgui.button(f"Clear##{uid}"):
+    if imgui.button(f"Clear##{widget_id}"):
         sessions.clear()
         state.last_load_msg = ""
     if imgui.is_item_hovered():
@@ -98,7 +98,7 @@ def poll_file_dialog(state: SessionWidgetState) -> None:
 
 
 def render_class_buttons(
-    uid: str,
+    widget_id: str,
     deactivated_classes: set[int],
     classes_in_pool: set[int],
     active_classes: set[int],
@@ -117,7 +117,7 @@ def render_class_buttons(
         is_active = ci in active_classes
         if is_active:
             imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.31, 0.61, 0.98, 0.9))
-        if imgui.button(f"{name}##{uid}_button{ci}"):
+        if imgui.button(f"{name}##{widget_id}_button{ci}"):
             if is_active:
                 deactivated_classes.add(ci)
             else:
@@ -128,9 +128,9 @@ def render_class_buttons(
     imgui.new_line()
 
 
-def render_session_rows(uid: str, sessions: list[dict], class_names: list[str] | None) -> None:
+def render_session_rows(widget_id: str, sessions: list[dict], class_names: list[str] | None) -> None:
     for i, row in enumerate(sessions):
-        changed, checked = imgui.checkbox(f"##{uid}_{i}", row["selected"])
+        changed, checked = imgui.checkbox(f"##{widget_id}_{i}", row["selected"])
         if changed:
             row["selected"] = checked
         imgui.same_line()

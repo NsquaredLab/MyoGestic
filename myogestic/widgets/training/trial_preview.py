@@ -30,7 +30,7 @@ from myogestic.widgets.signals.transforms import apply_display_filter
 
 
 def trial_preview(
-    uid: str,
+    widget_id: str,
     data: np.ndarray,
     fs: float,
     *,
@@ -44,13 +44,13 @@ def trial_preview(
     display_filter: Literal["none", "rectify", "dc_removal", "rms_env"] = "none",
     scale_mode: Literal["auto", "manual"] = "auto",
     y_range: tuple[float, float] = (-1.0, 1.0),
-    window: bool = False,
+    as_window: bool = False,
 ) -> None:
     """Render stacked multi-channel waveform with optional band overlay.
 
     Parameters
     ----------
-    uid
+    widget_id
         Stable identity string for ImPlot (combined into plot ids so
         two ``trial_preview`` calls in the same frame don't collide).
     data
@@ -87,7 +87,7 @@ def trial_preview(
         ``"manual"`` uses ``y_range`` directly.
     y_range
         ``(y_min, y_max)`` used in manual scale mode.
-    window
+    as_window
         When ``True``, the widget wraps itself in a free-floating
         ImGui window with title ``title``. When ``False`` (default),
         it draws inline at the current cursor position.
@@ -100,7 +100,7 @@ def trial_preview(
     else:
         arr = np.asarray(data, dtype=np.float64)
     if arr.ndim != 2 or arr.shape[0] == 0 or arr.shape[1] == 0:
-        if window:
+        if as_window:
             return
         imgui.text_disabled("(no data)")
         return
@@ -113,15 +113,15 @@ def trial_preview(
             arr.T.astype(np.float32, copy=False), display_filter, fs
         ).T.astype(np.float64)
 
-    if window:
+    if as_window:
         imgui.set_next_window_size(imgui.ImVec2(960, 480), imgui.Cond_.first_use_ever)
-        title_id = (title or "Trial Preview") + f"###trial_preview_{uid}"
+        title_id = (title or "Trial Preview") + f"###trial_preview_{widget_id}"
         opened, _is_open = imgui.begin(title_id, True)
         if not opened:
             imgui.end()
             return
 
-    if title is not None and not window:
+    if title is not None and not as_window:
         imgui.text(title)
 
     # `lane` = per-channel vertical spacing. In manual mode it's the user-
@@ -147,7 +147,7 @@ def trial_preview(
 
     flags = implot.Flags_.no_legend | implot.Flags_.no_title
     if implot.begin_plot(
-        f"trial_preview##{uid}",
+        f"trial_preview##{widget_id}",
         imgui.ImVec2(size[0], size[1]),
         flags=flags,
     ):
@@ -163,7 +163,7 @@ def trial_preview(
             spec.fill_color = imgui.ImVec4(bc[0], bc[1], bc[2], 1.0)
             spec.fill_alpha = bc[3] if len(bc) >= 4 else 0.22
             implot.plot_shaded(
-                f"band##{uid}",
+                f"band##{widget_id}",
                 np.array([float(band[0]), float(band[1])], dtype=np.float64),
                 np.array([y_hi, y_hi], dtype=np.float64),
                 np.array([y_lo, y_lo], dtype=np.float64),
@@ -173,8 +173,8 @@ def trial_preview(
         for ch in range(n_ch):
             ys = np.ascontiguousarray(arr[ch] * gain - ch * lane, dtype=np.float64)
             label = channel_names[ch] if channel_names and ch < len(channel_names) else f"ch{ch}"
-            implot.plot_line(f"{label}##{uid}", xs, ys)
+            implot.plot_line(f"{label}##{widget_id}", xs, ys)
         implot.end_plot()
 
-    if window:
+    if as_window:
         imgui.end()

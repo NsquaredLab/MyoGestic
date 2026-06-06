@@ -14,20 +14,20 @@ from mne_lsl.lsl import StreamInfo, StreamOutlet
 
 def main(
     name: Annotated[str, typer.Option(help="Stream name")] = "DummyEMG",
-    channels: Annotated[int, typer.Option(help="Number of channels")] = 8,
+    n_channels: Annotated[int, typer.Option("--channels", help="Number of channels")] = 8,
     fs: Annotated[float, typer.Option(help="Sample rate (Hz)")] = 256,
-    chunk: Annotated[int, typer.Option(help="Samples per push")] = 32,
+    chunk_size: Annotated[int, typer.Option("--chunk", help="Samples per push")] = 32,
 ) -> None:
     """Publish random float32 data on an LSL outlet for quick testing."""
-    info = StreamInfo(name, "EMG", channels, fs, "float32", "")
+    info = StreamInfo(name, "EMG", n_channels, fs, "float32", "")
     outlet = StreamOutlet(info)
-    interval = chunk / fs
+    interval = chunk_size / fs
 
-    print(f"LSL dummy: name={name}, {channels}ch, {fs}Hz, chunk={chunk}")
+    print(f"LSL dummy: name={name}, {n_channels}ch, {fs}Hz, chunk={chunk_size}")
 
     try:
         while True:
-            samples = (np.random.randn(chunk, channels) * 100).astype(np.float32)
+            samples = (np.random.randn(chunk_size, n_channels) * 100).astype(np.float32)
             for sample in samples:
                 outlet.push_sample(sample)
             time.sleep(interval)

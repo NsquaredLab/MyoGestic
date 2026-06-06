@@ -154,7 +154,7 @@ app.streams(
     Stream("emg", source=LSLSource(STREAM_NAME), window_ms=WINDOW_MS, buffer_ms=60000),
     Stream(
         "vhi_control",
-        source=LSLSource(vhi.control_stream or "VHI_Control"),
+        source=LSLSource(vhi.control_stream_name or "VHI_Control"),
         window_ms=1000,
         buffer_ms=60000,
     ),

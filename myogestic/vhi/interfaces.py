@@ -52,21 +52,21 @@ class InterfaceSpec:
         An empty list means "VHI not installed" — ``launcher()`` surfaces
         a friendly error pointing at ``install_vhi`` rather than letting
         Popen fail mysteriously.
-    output_stream
+    output_stream_name
         LSL outlet name the interface listens on.
     n_output_channels
         Number of channels in the output vector.
     output_hz
         Outlet send rate.
-    control_stream
+    control_stream_name
         LSL inlet name the interface publishes when the user
         drives it manually (used for regression targets). May be None.
     n_control_channels
         Channel count of the control stream, if known.
-    control_pose_stream
+    control_pose_stream_name
         LSL *outlet* name for streaming a continuous pose
         TO the interface's control hand (opt-in; consumed only when VHI is
-        in STREAM control mode). Opposite direction to ``control_stream``.
+        in STREAM control mode). Opposite direction to ``control_stream_name``.
     n_control_pose_channels
         Channel count of the control-pose outlet.
     control_pose_hz
@@ -82,12 +82,12 @@ class InterfaceSpec:
 
     name: str
     process: list[str]
-    output_stream: str
+    output_stream_name: str
     n_output_channels: int
     output_hz: float
-    control_stream: str | None = None
+    control_stream_name: str | None = None
     n_control_channels: int | None = None
-    control_pose_stream: str | None = None
+    control_pose_stream_name: str | None = None
     n_control_pose_channels: int | None = None
     control_pose_hz: float | None = None
     grpc_host: str = "127.0.0.1"
@@ -97,7 +97,7 @@ class InterfaceSpec:
     def outlet(self) -> LSLOutlet:
         """Construct an LSLOutlet matching this interface's output stream."""
         return LSLOutlet(
-            name=self.output_stream,
+            name=self.output_stream_name,
             n_channels=self.n_output_channels,
             hz=self.output_hz,
         )
@@ -118,10 +118,10 @@ class InterfaceSpec:
         ``control_client().set_control_mode("STREAM")``. Raises if this
         interface has no control-pose stream configured.
         """
-        if self.control_pose_stream is None:
-            raise ValueError(f"{self.name}: no control_pose_stream configured")
+        if self.control_pose_stream_name is None:
+            raise ValueError(f"{self.name}: no control_pose_stream_name configured")
         return LSLOutlet(
-            name=self.control_pose_stream,
+            name=self.control_pose_stream_name,
             n_channels=self.n_control_pose_channels or self.n_output_channels,
             hz=self.control_pose_hz or self.output_hz,
         )
@@ -278,7 +278,7 @@ def virtual_hand(
     vhi_path: str | None = None,
     grpc_host: str | None = None,
     grpc_port: int | None = None,
-    mode: str | None = None,
+    launch_mode: str | None = None,
 ) -> InterfaceSpec:
     """The MyoGestic Virtual Hand Interface (VHI).
 
@@ -299,9 +299,9 @@ def virtual_hand(
     grpc_port
         VHI gRPC port. Falls back to ``$VHI_GRPC_PORT`` then
         ``50051``.
-    mode
+    launch_mode
         Launch mode — ``"binary"``, ``"godot"``, or ``"auto"`` (default).
-        Also reads ``$VHI_LAUNCH_MODE``. Explicit ``mode`` always wins.
+        Also reads ``$VHI_LAUNCH_MODE``. Explicit ``launch_mode`` always wins.
 
     Returns
     -------
@@ -310,24 +310,24 @@ def virtual_hand(
     a ``FileNotFoundError`` pointing at ``install_vhi``.
     """
     install_root = Path(vhi_path or os.environ.get("VHI_PATH") or _default_install_root())
-    mode = mode or os.environ.get("VHI_LAUNCH_MODE", "auto")
-    if mode not in ("auto", "binary", "godot"):
-        raise ValueError(f"mode must be 'auto', 'binary', or 'godot'; got {mode!r}")
+    launch_mode = launch_mode or os.environ.get("VHI_LAUNCH_MODE", "auto")
+    if launch_mode not in ("auto", "binary", "godot"):
+        raise ValueError(f"launch_mode must be 'auto', 'binary', or 'godot'; got {launch_mode!r}")
     grpc_host = grpc_host or os.environ.get("VHI_GRPC_HOST", "127.0.0.1")
     if grpc_port is None:
         grpc_port = int(os.environ.get("VHI_GRPC_PORT", "50051"))
 
-    process = _resolve_vhi_launch(install_root, godot_bin, mode)
+    process = _resolve_vhi_launch(install_root, godot_bin, launch_mode)
 
     return InterfaceSpec(
         name="VHI Hand",
         process=process,
-        output_stream="MyoGestic_Output",
+        output_stream_name="MyoGestic_Output",
         n_output_channels=9,
         output_hz=32.0,
-        control_stream="VHI_Control",
+        control_stream_name="VHI_Control",
         n_control_channels=9,
-        control_pose_stream="MyoGestic_ControlPose",
+        control_pose_stream_name="MyoGestic_ControlPose",
         n_control_pose_channels=9,
         control_pose_hz=32.0,
         grpc_host=grpc_host,

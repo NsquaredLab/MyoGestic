@@ -52,7 +52,7 @@ class IdentityFilter:
 class GaussianFilter:
     """Rolling temporal smoothing for 1-D vectors.
 
-    Keeps the last ``window`` vectors and returns their Gaussian-weighted
+    Keeps the last ``n_vectors`` vectors and returns their Gaussian-weighted
     mean (weights peak at the most recent sample). During warmup (buffer
     not yet full), weights are renormalized over the available history —
     no zero-padding bias.
@@ -61,16 +61,16 @@ class GaussianFilter:
     dimension mismatch).
     """
 
-    def __init__(self, window: int = 5, sigma: float = 1.0):
-        if window < 1:
-            raise ValueError(f"window must be >= 1 (got {window})")
+    def __init__(self, n_vectors: int = 5, sigma: float = 1.0):
+        if n_vectors < 1:
+            raise ValueError(f"n_vectors must be >= 1 (got {n_vectors})")
         if sigma <= 0:
             raise ValueError(f"sigma must be > 0 (got {sigma})")
-        self.window = window
+        self.n_vectors = n_vectors
         self.sigma = sigma
         # Gaussian kernel centered on the most recent sample (last position).
-        idx = np.arange(window, dtype=np.float64)
-        weights = np.exp(-((idx - (window - 1)) ** 2) / (2.0 * sigma * sigma))
+        idx = np.arange(n_vectors, dtype=np.float64)
+        weights = np.exp(-((idx - (n_vectors - 1)) ** 2) / (2.0 * sigma * sigma))
         self._weights = weights / weights.sum()
         self._buf: list[np.ndarray] = []
 
@@ -82,7 +82,7 @@ class GaussianFilter:
         if x_arr.ndim != 1:
             raise ValueError(f"GaussianFilter expects a 1-D vector, got ndim={x_arr.ndim}")
         self._buf.append(x_arr)
-        if len(self._buf) > self.window:
+        if len(self._buf) > self.n_vectors:
             self._buf.pop(0)
         n = len(self._buf)
         w = self._weights[-n:]
@@ -190,7 +190,7 @@ def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
         ignored by the others.
     **kwargs
         Forwarded to the filter constructor — e.g.
-        ``make_filter("gaussian", window=10, sigma=2.0)``,
+        ``make_filter("gaussian", n_vectors=10, sigma=2.0)``,
         ``make_filter("one_euro", hz=32, beta=0.05)``.
 
     Raises
@@ -206,7 +206,7 @@ def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
             raise TypeError(f"identity takes no kwargs (got {list(kwargs)})")
         return IdentityFilter()
     if n == "gaussian":
-        # GaussianFilter's own defaults are window=5, sigma=1.0 — no need to
+        # GaussianFilter's own defaults are n_vectors=5, sigma=1.0 — no need to
         # restate them; kwargs overrides as needed.
         return GaussianFilter(**kwargs)
     if n == "one_euro":

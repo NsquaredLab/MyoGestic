@@ -53,13 +53,13 @@ class TemplateInspectorRow:
     energy: float | None = None
 
 
-# Per-uid selection state. Module-level so two render passes with the
-# same uid share state (immediate-mode render survives across frames).
+# Per-widget_id selection state. Module-level so two render passes with the
+# same widget_id share state (immediate-mode render survives across frames).
 _SELECTED: dict[str, str | None] = {}
 
 
 def template_inspector(
-    uid: str,
+    widget_id: str,
     rows: list[TemplateInspectorRow],
     *,
     title: str = "Templates",
@@ -70,8 +70,8 @@ def template_inspector(
 
     Parameters
     ----------
-    uid
-        Stable identity string. Two calls with the same uid share
+    widget_id
+        Stable identity string. Two calls with the same widget_id share
         selection state across frames; different uids are independent.
     rows
         List of ``TemplateInspectorRow`` to render. Mutated in place
@@ -93,11 +93,11 @@ def template_inspector(
     from imgui_bundle import imgui
 
     label_colors = label_colors or {}
-    selected = _SELECTED.get(uid)
+    selected = _SELECTED.get(widget_id)
     # Drop a stale selection if its row is no longer in the table.
     if selected is not None and not any(r.key == selected for r in rows):
         selected = None
-        _SELECTED[uid] = None
+        _SELECTED[widget_id] = None
 
     if title:
         imgui.text(title)
@@ -109,7 +109,7 @@ def template_inspector(
     e_max = max((r.energy or 0.0) for r in rows) or 1.0
 
     if imgui.begin_table(
-        f"##{uid}_tinsp",
+        f"##{widget_id}_tinsp",
         5,
         imgui.TableFlags_.borders_inner_h | imgui.TableFlags_.row_bg | imgui.TableFlags_.scroll_y,
         imgui.ImVec2(-1, height),
@@ -122,7 +122,7 @@ def template_inspector(
         for i, row in enumerate(rows):
             imgui.table_next_row()
             imgui.table_next_column()
-            changed, new_acc = imgui.checkbox(f"##{uid}_acc{i}", row.accepted)
+            changed, new_acc = imgui.checkbox(f"##{widget_id}_acc{i}", row.accepted)
             if changed:
                 row.accepted = new_acc
             imgui.table_next_column()
@@ -135,13 +135,13 @@ def template_inspector(
             is_selected = row.key == selected
             label_text = row.info_text or row.key
             clicked, _ = imgui.selectable(
-                f"{label_text}##{uid}_sel{i}",
+                f"{label_text}##{widget_id}_sel{i}",
                 is_selected,
                 imgui.SelectableFlags_.span_all_columns,
             )
             if clicked:
                 selected = row.key
-                _SELECTED[uid] = selected
+                _SELECTED[widget_id] = selected
             imgui.table_next_column()
             if row.energy is not None:
                 imgui.progress_bar(min(row.energy / e_max, 1.0), imgui.ImVec2(70, 0), "")
@@ -155,6 +155,6 @@ def template_inspector(
     return selected
 
 
-def clear_selection(uid: str) -> None:
-    """Drop the cached selection for ``uid`` (e.g. after Clear button)."""
-    _SELECTED[uid] = None
+def clear_selection(widget_id: str) -> None:
+    """Drop the cached selection for ``widget_id`` (e.g. after Clear button)."""
+    _SELECTED[widget_id] = None

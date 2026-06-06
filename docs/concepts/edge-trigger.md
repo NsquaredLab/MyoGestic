@@ -41,19 +41,19 @@ Without the `rebase`, the next `predict` tick would see the predicted class
 match what the button did and fire a redundant RPC (harmless if idempotent,
 disruptive if it restarts an animation).
 
-## `stable_ticks` - debounce flicker
+## `n_stable_ticks` - debounce flicker
 
 On a noisy signal the predicted class flickers tick-to-tick - and for
 ~100-200 ms right after a gesture, while the classifier's sliding window still
 holds the *old* data, `argmax` oscillates between the old and new class. With
-the default `stable_ticks=1` every flip is a "change", so the callback re-fires
+the default `n_stable_ticks=1` every flip is a "change", so the callback re-fires
 on each one and a robot hand visibly jumps between poses before settling.
 
-Pass `stable_ticks=N` to require a value to hold for **N consecutive ticks**
+Pass `n_stable_ticks=N` to require a value to hold for **N consecutive ticks**
 before it fires, swallowing sub-`N` flicker:
 
 ```python
-trigger = EdgeTrigger(vhi_client.set_movement, stable_ticks=5)
+trigger = EdgeTrigger(vhi_client.set_movement, n_stable_ticks=5)
 ```
 
 It counts *calls*, not time - convert a duration with the loop rate so the
@@ -65,7 +65,7 @@ import math
 STABLE_SECONDS = 0.1
 trigger = EdgeTrigger(
     vhi_client.set_movement,
-    stable_ticks=max(1, math.ceil(STABLE_SECONDS * pipeline.predict_hz)),
+    n_stable_ticks=max(1, math.ceil(STABLE_SECONDS * pipeline.predict_hz)),
 )
 ```
 
@@ -108,7 +108,7 @@ not here.
 * The downstream effect is genuinely per-tick continuous - e.g. streaming
   a pose vector. Use a normal call, not an edge trigger.
 * You need *tick-based* debouncing (ignore flicker shorter than N ticks) -
-  that's built in now via `stable_ticks` (above), including a seconds-derived
+  that's built in now via `n_stable_ticks` (above), including a seconds-derived
   window. For true *wall-clock* hysteresis independent of the tick rate, add a
   `time.monotonic()` gate inside your callback.
 

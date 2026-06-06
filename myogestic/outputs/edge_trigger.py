@@ -35,14 +35,14 @@ class EdgeTrigger[T]:
     ----------
     callback
         Invoked with the new value when an edge fires.
-    stable_ticks
+    n_stable_ticks
         Debounce: the new value must hold for this many *consecutive*
         :meth:`fire_if_changed` calls before firing. ``1`` (default) fires
         immediately on the first changed value — i.e. dedupe only. Use ``>1`` to
         swallow tick-to-tick flicker (e.g. a classifier's ``argmax`` oscillating
         during a sliding-window transition) so the side effect isn't re-fired on
         every flip. It counts *calls*, not time — convert a duration with the
-        loop rate: ``stable_ticks=math.ceil(seconds * predict_hz)``.
+        loop rate: ``n_stable_ticks=math.ceil(seconds * predict_hz)``.
 
     Notes
     -----
@@ -54,19 +54,19 @@ class EdgeTrigger[T]:
     (RPC dedup, audio-cue gating, robot-movement commands).
     """
 
-    __slots__ = ("_callback", "_stable_ticks", "_state")
+    __slots__ = ("_callback", "_n_stable_ticks", "_state")
 
-    def __init__(self, callback: Callable[[T], None], *, stable_ticks: int = 1) -> None:
-        if stable_ticks < 1:
-            raise ValueError(f"stable_ticks must be >= 1 (got {stable_ticks})")
+    def __init__(self, callback: Callable[[T], None], *, n_stable_ticks: int = 1) -> None:
+        if n_stable_ticks < 1:
+            raise ValueError(f"n_stable_ticks must be >= 1 (got {n_stable_ticks})")
         self._callback = callback
-        self._stable_ticks = stable_ticks
+        self._n_stable_ticks = n_stable_ticks
         # (last_fired, pending_candidate, candidate_count) — replaced atomically.
         self._state: tuple[T | None, T | None, int] = (None, None, 0)
 
     def fire_if_changed(self, value: T) -> bool:
         """Fire iff ``value`` differs from the last fired value and (when
-        ``stable_ticks > 1``) has held for ``stable_ticks`` consecutive calls.
+        ``n_stable_ticks > 1``) has held for ``n_stable_ticks`` consecutive calls.
 
         Returns ``True`` when the callback ran, ``False`` when suppressed.
         """
@@ -77,7 +77,7 @@ class EdgeTrigger[T]:
                 self._state = (last, None, 0)
             return False
         count = count + 1 if value == candidate else 1
-        if count >= self._stable_ticks:
+        if count >= self._n_stable_ticks:
             self._state = (value, None, 0)
             self._callback(value)
             return True
@@ -89,7 +89,7 @@ class EdgeTrigger[T]:
         debounce candidate.
 
         Use when another code path already performed the equivalent action; the
-        next *different* value must then earn the full ``stable_ticks`` count, so
+        next *different* value must then earn the full ``n_stable_ticks`` count, so
         a flicker candidate in progress can't complete on top of the manual one.
         """
         self._state = (value, None, 0)

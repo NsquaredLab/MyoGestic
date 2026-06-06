@@ -65,7 +65,7 @@ def test_typed_with_int():
 
 def test_stable_ticks_requires_consecutive_holds():
     fired = []
-    et = EdgeTrigger(fired.append, stable_ticks=3)
+    et = EdgeTrigger(fired.append, n_stable_ticks=3)
     assert et.fire_if_changed("A") is False  # 1st hold
     assert et.fire_if_changed("A") is False  # 2nd hold
     assert et.fire_if_changed("A") is True  # 3rd -> fires
@@ -74,7 +74,7 @@ def test_stable_ticks_requires_consecutive_holds():
 
 def test_stable_ticks_swallows_flicker():
     fired = []
-    et = EdgeTrigger(fired.append, stable_ticks=3)
+    et = EdgeTrigger(fired.append, n_stable_ticks=3)
     et.rebase("Rest")
     # Rapid Fist/Rest flicker never reaches 3 consecutive Fist -> nothing fires.
     for v in ["Fist", "Rest", "Fist", "Rest", "Fist", "Rest"]:
@@ -89,7 +89,7 @@ def test_stable_ticks_swallows_flicker():
 
 def test_stable_ticks_rebase_discards_pending_candidate():
     fired = []
-    et = EdgeTrigger(fired.append, stable_ticks=3)
+    et = EdgeTrigger(fired.append, n_stable_ticks=3)
     et.fire_if_changed("A")  # candidate A, count 1
     et.fire_if_changed("A")  # count 2 (not yet fired)
     et.rebase("Z")  # discard the half-formed A candidate
@@ -101,13 +101,13 @@ def test_stable_ticks_rebase_discards_pending_candidate():
 
 
 def test_stable_ticks_default_is_immediate():
-    """stable_ticks=1 (default) keeps the original fire-on-first-change behaviour."""
+    """n_stable_ticks=1 (default) keeps the original fire-on-first-change behaviour."""
     fired = []
-    et = EdgeTrigger(fired.append)  # default stable_ticks=1
+    et = EdgeTrigger(fired.append)  # default n_stable_ticks=1
     assert et.fire_if_changed("A") is True
     assert fired == ["A"]
 
 
 def test_stable_ticks_must_be_positive():
-    with pytest.raises(ValueError, match="stable_ticks"):
-        EdgeTrigger(lambda _v: None, stable_ticks=0)
+    with pytest.raises(ValueError, match="n_stable_ticks"):
+        EdgeTrigger(lambda _v: None, n_stable_ticks=0)
