@@ -90,7 +90,7 @@ The training callback handles **two kinds of session** transparently:
 ```python
 for emg_window, aligned, _ts in iter_aligned_windows(
     kin_paths, "emg", ["vhi_control"], WINDOW_MS, HOP_MS,
-    align_window_samples=10,
+    n_alignment_samples=10,
 ):
     kin = np.abs(aligned["vhi_control"][VHI_DOF_INDICES])
     all_X.append(extract_features(emg_window))

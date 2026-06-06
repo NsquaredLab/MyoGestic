@@ -89,7 +89,7 @@ data, ts = sess.get_continuous("emg")
 # data.shape == (n_samples, n_channels)  - sample-major as recorded
 
 # Per-trial slices (labelled segments)
-trials = sess.get_trials("emg", pre=0, post=0)
+trials = sess.get_trials("emg", pre_s=0, post_s=0)
 # list[Recording] - each has .data, .ts, .class_index, .class_name
 
 # Stream metadata
@@ -124,17 +124,17 @@ from myogestic.session import iter_aligned_windows
 
 for window, aligned, ts in iter_aligned_windows(
     data.paths,
-    primary_stream="emg",
-    aligned_streams=["vhi_control"],
+    primary_stream_name="emg",
+    aligned_stream_names=["vhi_control"],
     window_ms=200,
     hop_ms=50,
-    align_window_samples=1,
+    n_alignment_samples=1,
 ):
     feat = extract(window)
     target_pose = aligned["vhi_control"]  # shape (n_channels,)
 ```
 
-Yields the primary window plus a synchronised target snapshot per `aligned_streams` entry - handy when the ground truth is a continuous signal (kinematics, torque, joint angles).
+Yields the primary window plus a synchronised target snapshot per `aligned_stream_names` entry - handy when the ground truth is a continuous signal (kinematics, torque, joint angles).
 
 ## Backends
 

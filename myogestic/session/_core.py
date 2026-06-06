@@ -108,38 +108,38 @@ class Session:
         self.class_names: list[str] = []  # populated by save_meta / open_session_store
         self._streams_info: dict[str, StreamInfo] = {}
 
-    def init_stream(self, name: str, info: StreamInfo) -> None:
+    def init_stream(self, stream_name: str, info: StreamInfo) -> None:
         """Called once per stream when recording starts."""
-        self._streams_info[name] = info
-        self.stores[name] = zarr.open_array(
-            str(self.path / f"{name}.zarr"),
+        self._streams_info[stream_name] = info
+        self.stores[stream_name] = zarr.open_array(
+            str(self.path / f"{stream_name}.zarr"),
             mode="w",
             shape=(0, info.n_channels),
             chunks=(int(info.fs), info.n_channels),
             dtype=info.dtype,
         )
-        self.ts_stores[name] = zarr.open_array(
-            str(self.path / f"{name}_timestamps.zarr"),
+        self.ts_stores[stream_name] = zarr.open_array(
+            str(self.path / f"{stream_name}_timestamps.zarr"),
             mode="w",
             shape=(0,),
             chunks=(int(info.fs),),
             dtype=np.float64,
         )
 
-    def append(self, name: str, data: np.ndarray, timestamps: np.ndarray) -> None:
+    def append(self, stream_name: str, data: np.ndarray, timestamps: np.ndarray) -> None:
         """Called from acquire loop when recording. data: (n_samples, n_channels)."""
         # Defense-in-depth: Stream.detach_session() (under its lock) is what
         # actually prevents an append from racing pack_to_zip()'s clear(); this
         # guard keeps a stray/late append from raising KeyError if the stores
         # were already finalised, rather than crashing the caller's thread.
-        store = self.stores.get(name)
-        ts_store = self.ts_stores.get(name)
+        store = self.stores.get(stream_name)
+        ts_store = self.ts_stores.get(stream_name)
         if store is None or ts_store is None:
             # Should not happen now that Stream.detach_session() drains
             # in-flight appends before pack_to_zip() clears the stores; log
             # it so a future regression that drops samples is observable
             # rather than silent.
-            log.debug("dropping late append for finalised stream %r", name)
+            log.debug("dropping late append for finalised stream %r", stream_name)
             return
         store.append(data)
         ts_store.append(timestamps)
@@ -226,8 +226,8 @@ class Session:
     def get_trials(
         self,
         stream_name: str,
-        pre: float = 0.0,
-        post: float = 0.0,
+        pre_s: float = 0.0,
+        post_s: float = 0.0,
         class_names: list[str] | None = None,
     ) -> list[Recording]:
         """Extract discrete labeled windows for classification training."""
@@ -241,11 +241,11 @@ class Session:
             if event.class_index == -1:
                 continue
 
-            idx_start = int(np.argmin(np.abs(ts - (event.timestamp - pre))))
+            idx_start = int(np.argmin(np.abs(ts - (event.timestamp - pre_s))))
             if i + 1 < len(self.label_track):
                 idx_end = int(np.argmin(np.abs(ts - self.label_track[i + 1].timestamp)))
-            elif post > 0:
-                idx_end = int(np.argmin(np.abs(ts - (event.timestamp + post))))
+            elif post_s > 0:
+                idx_end = int(np.argmin(np.abs(ts - (event.timestamp + post_s))))
             else:
                 idx_end = len(ts)
 

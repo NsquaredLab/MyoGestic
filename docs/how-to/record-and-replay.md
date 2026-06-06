@@ -112,7 +112,7 @@ for sw, targets in iter_aligned_windows(
     aligned=["vhi_guide"],
     window_ms=200,
     hop_ms=50,
-    align_window_samples=1,
+    n_alignment_samples=1,
 ):
     X.append(rms(sw.data))
     Y.append(targets["vhi_guide"])  # 1-D vector synchronised to sw.ts[-1]
@@ -120,7 +120,7 @@ for sw, targets in iter_aligned_windows(
 
 - `primary` is the stream you slice into windows.
 - `aligned` is a list of *target* streams whose latest value at the window's end is paired with the EMG window.
-- `align_window_samples` is the tolerance (samples) for the alignment lookup.
+- `n_alignment_samples` is the tolerance (samples) for the alignment lookup.
 
 ## Replay as a Source
 

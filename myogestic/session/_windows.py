@@ -78,28 +78,28 @@ def iter_labeled_windows(
 
 def iter_aligned_windows(
     paths: list[str] | list[Path],
-    primary_stream: str,
-    aligned_streams: list[str],
+    primary_stream_name: str,
+    aligned_stream_names: list[str],
     window_ms: float,
     hop_ms: float,
-    align_window_samples: int = 1,
+    n_alignment_samples: int = 1,
 ) -> Iterator[tuple[np.ndarray, dict[str, np.ndarray], np.ndarray]]:
     """Yield ``(primary_window, aligned, ts)`` for regression training.
 
     ``primary_window`` is channels-first ``(n_channels, n_samples)``.
     For each primary window, find the nearest sample in every aligned
-    stream at the window midpoint and average ``align_window_samples``
+    stream at the window midpoint and average ``n_alignment_samples``
     around that index.
     """
     if window_ms <= 0:
         raise ValueError(f"window_ms must be > 0 (got {window_ms})")
     if hop_ms <= 0:
         raise ValueError(f"hop_ms must be > 0 (got {hop_ms})")
-    if align_window_samples < 1:
-        raise ValueError(f"align_window_samples must be >= 1 (got {align_window_samples})")
+    if n_alignment_samples < 1:
+        raise ValueError(f"n_alignment_samples must be >= 1 (got {n_alignment_samples})")
 
-    n_left = align_window_samples // 2
-    n_right = align_window_samples - n_left
+    n_left = n_alignment_samples // 2
+    n_right = n_alignment_samples - n_left
 
     for path in paths:
         try:
@@ -107,31 +107,31 @@ def iter_aligned_windows(
         except Exception as e:
             log.warning("skipping %s: %s", path, e)
             continue
-        if primary_stream not in sess.stores:
-            log.info("skipping %s: primary stream %r missing", path, primary_stream)
+        if primary_stream_name not in sess.stores:
+            log.info("skipping %s: primary stream %r missing", path, primary_stream_name)
             continue
-        missing = [s for s in aligned_streams if s not in sess.stores]
+        missing = [s for s in aligned_stream_names if s not in sess.stores]
         if missing:
             log.info("skipping %s: aligned streams missing: %s", path, missing)
             continue
 
-        info = sess.stream_info(primary_stream)
+        info = sess.stream_info(primary_stream_name)
         fs = info.fs
         if fs <= 0:
-            log.warning("skipping %s: bad fs=%s on %r", path, fs, primary_stream)
+            log.warning("skipping %s: bad fs=%s on %r", path, fs, primary_stream_name)
             continue
         win_samples = int(window_ms / 1000 * fs)
         hop_samples = max(1, int(hop_ms / 1000 * fs))
         if win_samples < 1:
             continue
 
-        primary_data = np.array(sess.stores[primary_stream]).astype(np.float32, copy=False)
-        primary_ts = np.array(sess.ts_stores[primary_stream])
+        primary_data = np.array(sess.stores[primary_stream_name]).astype(np.float32, copy=False)
+        primary_ts = np.array(sess.ts_stores[primary_stream_name])
         aligned_data = {
             name: np.array(sess.stores[name]).astype(np.float32, copy=False)
-            for name in aligned_streams
+            for name in aligned_stream_names
         }
-        aligned_ts = {name: np.array(sess.ts_stores[name]) for name in aligned_streams}
+        aligned_ts = {name: np.array(sess.ts_stores[name]) for name in aligned_stream_names}
 
         if (
             len(primary_data) == 0
@@ -150,7 +150,7 @@ def iter_aligned_windows(
             mid_t = primary_ts[start + win_samples // 2]
             aligned_vals: dict[str, np.ndarray] = {}
             ok = True
-            for name in aligned_streams:
+            for name in aligned_stream_names:
                 a_ts = aligned_ts[name]
                 a_data = aligned_data[name]
                 idx = int(np.argmin(np.abs(a_ts - mid_t)))
