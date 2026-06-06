@@ -86,15 +86,15 @@ X, y = [], []
 for window, ts, cls in iter_labeled_windows(
     data.paths,
     stream_name="emg",
-    win_seconds=0.2,
-    hop_seconds=0.1,
+    window_ms=200,
+    hop_ms=100,
     classes={0, 1, 2},
 ):
     X.append(rms(window))  # window: (n_channels, n_samples)
     y.append(cls)
 ```
 
-- `win_seconds` / `hop_seconds`: window duration / step in seconds.
+- `window_ms` / `hop_ms`: window duration / step in milliseconds.
 - `classes`: optional set of class indices to include (handy when you want to skip "rest").
 - Drops windows that straddle a label boundary so each window has exactly one class.
 - Each iteration yields `(window, ts, class_index)` - `ts` is the matching 1-D timestamp array.
@@ -110,8 +110,8 @@ for sw, targets in iter_aligned_windows(
     paths=data.paths,
     primary="emg",
     aligned=["vhi_guide"],
-    win_s=0.2,
-    hop_s=0.05,
+    window_ms=200,
+    hop_ms=50,
     align_window_samples=1,
 ):
     X.append(rms(sw.data))

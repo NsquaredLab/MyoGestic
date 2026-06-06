@@ -21,7 +21,7 @@ def extract(windows):
 @pipeline.train
 def train(data):
     X, y = [], []
-    for window, ts, cls in iter_labeled_windows(data.paths, "emg", win_seconds=0.2, hop_seconds=0.1):
+    for window, ts, cls in iter_labeled_windows(data.paths, "emg", window_ms=200, hop_ms=100):
         X.append(rms_features(window))
         y.append(cls)
     model = MyClassifier().fit(np.array(X), np.array(y))
@@ -129,8 +129,8 @@ def train(data):
         data.paths,
         primary="emg",
         aligned=["vhi_guide"],
-        win_s=0.2,
-        hop_s=0.05,
+        window_ms=200,
+        hop_ms=50,
     ):
         X.append(rms_features(sw.data))
         Y.append(targets["vhi_guide"])

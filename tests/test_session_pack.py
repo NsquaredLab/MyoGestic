@@ -105,8 +105,8 @@ def test_iter_labeled_windows_basic():
             iter_labeled_windows(
                 [str(zip_path)],
                 "emg",
-                win_seconds=0.2,
-                hop_seconds=0.1,
+                window_ms=200,
+                hop_ms=100,
             )
         )
 
@@ -136,7 +136,7 @@ def test_iter_labeled_windows_yields_aligned_timestamps():
         session.save_meta("TS")
         path = session.path
 
-        first = next(iter_labeled_windows([str(path)], "emg", 0.2, 0.1))
+        first = next(iter_labeled_windows([str(path)], "emg", 200, 100))
         shutil.rmtree(path, ignore_errors=True)
 
     _w, t, _ci = first
@@ -145,15 +145,15 @@ def test_iter_labeled_windows_yields_aligned_timestamps():
 
 
 def test_iter_labeled_windows_rejects_bad_args():
-    """win_seconds <= 0 and hop_seconds <= 0 must raise (no silent coercion)."""
+    """window_ms <= 0 and hop_ms <= 0 must raise (no silent coercion)."""
     import pytest
 
-    with pytest.raises(ValueError, match="win_seconds"):
-        list(iter_labeled_windows([], "emg", win_seconds=0.0, hop_seconds=0.1))
-    with pytest.raises(ValueError, match="hop_seconds"):
-        list(iter_labeled_windows([], "emg", win_seconds=0.2, hop_seconds=0.0))
-    with pytest.raises(ValueError, match="hop_seconds"):
-        list(iter_labeled_windows([], "emg", win_seconds=0.2, hop_seconds=-0.5))
+    with pytest.raises(ValueError, match="window_ms"):
+        list(iter_labeled_windows([], "emg", window_ms=0, hop_ms=100))
+    with pytest.raises(ValueError, match="hop_ms"):
+        list(iter_labeled_windows([], "emg", window_ms=200, hop_ms=0))
+    with pytest.raises(ValueError, match="hop_ms"):
+        list(iter_labeled_windows([], "emg", window_ms=200, hop_ms=-500))
 
 
 def test_iter_labeled_windows_class_filter():
@@ -175,16 +175,16 @@ def test_iter_labeled_windows_class_filter():
             iter_labeled_windows(
                 [str(path)],
                 "emg",
-                0.2,
-                0.2,
+                200,
+                200,
             )
         )
         windows_filt = list(
             iter_labeled_windows(
                 [str(path)],
                 "emg",
-                0.2,
-                0.2,
+                200,
+                200,
                 classes={0, 2},  # skip Index
             )
         )
@@ -223,8 +223,8 @@ def test_iter_aligned_windows_basic():
                 [str(path)],
                 "emg",
                 ["kin"],
-                0.2,
-                0.2,
+                200,
+                200,
                 align_window_samples=1,
             )
         )
@@ -256,8 +256,8 @@ def test_iter_aligned_windows_skips_session_missing_stream():
                 [str(path)],
                 "emg",
                 ["kin"],
-                0.2,
-                0.2,
+                200,
+                200,
             )
         )
         shutil.rmtree(path, ignore_errors=True)
@@ -268,12 +268,12 @@ def test_iter_aligned_windows_skips_session_missing_stream():
 def test_iter_aligned_windows_rejects_bad_args():
     import pytest
 
-    with pytest.raises(ValueError, match="win_seconds"):
-        list(iter_aligned_windows([], "a", ["b"], 0.0, 0.1))
-    with pytest.raises(ValueError, match="hop_seconds"):
-        list(iter_aligned_windows([], "a", ["b"], 0.2, 0.0))
+    with pytest.raises(ValueError, match="window_ms"):
+        list(iter_aligned_windows([], "a", ["b"], 0, 100))
+    with pytest.raises(ValueError, match="hop_ms"):
+        list(iter_aligned_windows([], "a", ["b"], 200, 0))
     with pytest.raises(ValueError, match="align_window_samples"):
-        list(iter_aligned_windows([], "a", ["b"], 0.2, 0.1, align_window_samples=0))
+        list(iter_aligned_windows([], "a", ["b"], 200, 100, align_window_samples=0))
 
 
 def test_iter_aligned_windows_averages_exactly_N_samples():
@@ -301,8 +301,8 @@ def test_iter_aligned_windows_averages_exactly_N_samples():
                 [str(path)],
                 "emg",
                 ["kin"],
-                0.2,
-                0.2,
+                200,
+                200,
                 align_window_samples=10,
             )
         )
@@ -312,8 +312,8 @@ def test_iter_aligned_windows_averages_exactly_N_samples():
                 [str(path)],
                 "emg",
                 ["kin"],
-                0.2,
-                0.2,
+                200,
+                200,
                 align_window_samples=11,
             )
         )

@@ -14,8 +14,8 @@ log = logging.getLogger("myogestic.session")
 def iter_labeled_windows(
     paths: list[str] | list[Path],
     stream_name: str,
-    win_seconds: float,
-    hop_seconds: float,
+    window_ms: float,
+    hop_ms: float,
     classes: set[int] | None = None,
 ) -> Iterator[tuple[np.ndarray, np.ndarray, int]]:
     """Yield ``(window, ts, class_index)`` triples from labeled segments.
@@ -27,10 +27,10 @@ def iter_labeled_windows(
     timestamp), and chops that interval into fixed-size windows. Works
     for folders and ``.session.zip`` sessions.
     """
-    if win_seconds <= 0:
-        raise ValueError(f"win_seconds must be > 0 (got {win_seconds})")
-    if hop_seconds <= 0:
-        raise ValueError(f"hop_seconds must be > 0 (got {hop_seconds})")
+    if window_ms <= 0:
+        raise ValueError(f"window_ms must be > 0 (got {window_ms})")
+    if hop_ms <= 0:
+        raise ValueError(f"hop_ms must be > 0 (got {hop_ms})")
 
     for path in paths:
         try:
@@ -46,8 +46,8 @@ def iter_labeled_windows(
         if fs <= 0:
             log.warning("skipping %s: bad fs=%s for stream %r", path, fs, stream_name)
             continue
-        win_samples = int(win_seconds * fs)
-        hop_samples = max(1, int(hop_seconds * fs))
+        win_samples = int(window_ms / 1000 * fs)
+        hop_samples = max(1, int(hop_ms / 1000 * fs))
         if win_samples < 1:
             continue
 
@@ -80,8 +80,8 @@ def iter_aligned_windows(
     paths: list[str] | list[Path],
     primary_stream: str,
     aligned_streams: list[str],
-    win_seconds: float,
-    hop_seconds: float,
+    window_ms: float,
+    hop_ms: float,
     align_window_samples: int = 1,
 ) -> Iterator[tuple[np.ndarray, dict[str, np.ndarray], np.ndarray]]:
     """Yield ``(primary_window, aligned, ts)`` for regression training.
@@ -91,10 +91,10 @@ def iter_aligned_windows(
     stream at the window midpoint and average ``align_window_samples``
     around that index.
     """
-    if win_seconds <= 0:
-        raise ValueError(f"win_seconds must be > 0 (got {win_seconds})")
-    if hop_seconds <= 0:
-        raise ValueError(f"hop_seconds must be > 0 (got {hop_seconds})")
+    if window_ms <= 0:
+        raise ValueError(f"window_ms must be > 0 (got {window_ms})")
+    if hop_ms <= 0:
+        raise ValueError(f"hop_ms must be > 0 (got {hop_ms})")
     if align_window_samples < 1:
         raise ValueError(f"align_window_samples must be >= 1 (got {align_window_samples})")
 
@@ -120,8 +120,8 @@ def iter_aligned_windows(
         if fs <= 0:
             log.warning("skipping %s: bad fs=%s on %r", path, fs, primary_stream)
             continue
-        win_samples = int(win_seconds * fs)
-        hop_samples = max(1, int(hop_seconds * fs))
+        win_samples = int(window_ms / 1000 * fs)
+        hop_samples = max(1, int(hop_ms / 1000 * fs))
         if win_samples < 1:
             continue
 

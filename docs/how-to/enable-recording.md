@@ -206,7 +206,7 @@ from myogestic.session import iter_labeled_windows, iter_aligned_windows
 # Classification: one (window, ts, class_index) per hop step.
 for window, ts, cls in iter_labeled_windows(
     [sess.path], stream_name="emg",
-    win_seconds=0.2, hop_seconds=0.1,
+    window_ms=200, hop_ms=100,
     classes={0, 1},
 ):
     ...
@@ -215,7 +215,7 @@ for window, ts, cls in iter_labeled_windows(
 for window, aligned, ts in iter_aligned_windows(
     [sess.path], primary_stream="emg",
     aligned_streams=["vhi_control"],
-    win_seconds=0.2, hop_seconds=0.05,
+    window_ms=200, hop_ms=50,
 ):
     target = aligned["vhi_control"]
     ...

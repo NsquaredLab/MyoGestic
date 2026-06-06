@@ -56,11 +56,11 @@ save_pickle(model, path) / load_pickle(path)
 
 # --- Session (myogestic.session) -------------------------------
 open_session_store(path) -> Session                # folder OR .session.zip
-iter_labeled_windows(paths, stream_name, win_seconds, hop_seconds,
+iter_labeled_windows(paths, stream_name, window_ms, hop_ms,
                      classes=None)
   -> Iterator[(window, ts, class_index)]            # window: (n_ch, n_samp)
 iter_aligned_windows(paths, primary_stream, aligned_streams,
-                     win_seconds, hop_seconds, align_window_samples=1)
+                     window_ms, hop_ms, align_window_samples=1)
   -> Iterator[(primary_window, {name: vec}, ts)]
 
 # --- Filters (myogestic.outputs.filters) -------------------------------
