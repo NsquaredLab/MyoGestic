@@ -100,11 +100,11 @@ def test_one_euro_with_explicit_timestamps():
 
     # Feed identical first samples
     f1(np.array([0.0]))
-    f2(np.array([0.0]), t=0.0)
+    f2(np.array([0.0]), timestamp=0.0)
 
     # Then a step at "real" 0.1s (dt=0.1) — much slower than hz fallback (0.02)
     out_fallback = f1(np.array([10.0]))
-    out_explicit = f2(np.array([10.0]), t=0.1)
+    out_explicit = f2(np.array([10.0]), timestamp=0.1)
 
     # Explicit longer-dt call → less smoothing (closer to input) since alpha grows with dt
     assert out_explicit[0] > out_fallback[0]
