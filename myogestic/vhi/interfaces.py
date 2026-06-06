@@ -54,20 +54,20 @@ class InterfaceSpec:
         Popen fail mysteriously.
     output_stream
         LSL outlet name the interface listens on.
-    output_channels
+    n_output_channels
         Number of channels in the output vector.
     output_hz
         Outlet send rate.
     control_stream
         LSL inlet name the interface publishes when the user
         drives it manually (used for regression targets). May be None.
-    control_channels
+    n_control_channels
         Channel count of the control stream, if known.
     control_pose_stream
         LSL *outlet* name for streaming a continuous pose
         TO the interface's control hand (opt-in; consumed only when VHI is
         in STREAM control mode). Opposite direction to ``control_stream``.
-    control_pose_channels
+    n_control_pose_channels
         Channel count of the control-pose outlet.
     control_pose_hz
         Send rate of the control-pose outlet.
@@ -83,12 +83,12 @@ class InterfaceSpec:
     name: str
     process: list[str]
     output_stream: str
-    output_channels: int
+    n_output_channels: int
     output_hz: float
     control_stream: str | None = None
-    control_channels: int | None = None
+    n_control_channels: int | None = None
     control_pose_stream: str | None = None
-    control_pose_channels: int | None = None
+    n_control_pose_channels: int | None = None
     control_pose_hz: float | None = None
     grpc_host: str = "127.0.0.1"
     grpc_port: int = 50051
@@ -98,7 +98,7 @@ class InterfaceSpec:
         """Construct an LSLOutlet matching this interface's output stream."""
         return LSLOutlet(
             name=self.output_stream,
-            n_channels=self.output_channels,
+            n_channels=self.n_output_channels,
             hz=self.output_hz,
         )
 
@@ -122,7 +122,7 @@ class InterfaceSpec:
             raise ValueError(f"{self.name}: no control_pose_stream configured")
         return LSLOutlet(
             name=self.control_pose_stream,
-            n_channels=self.control_pose_channels or self.output_channels,
+            n_channels=self.n_control_pose_channels or self.n_output_channels,
             hz=self.control_pose_hz or self.output_hz,
         )
 
@@ -323,12 +323,12 @@ def virtual_hand(
         name="VHI Hand",
         process=process,
         output_stream="MyoGestic_Output",
-        output_channels=9,
+        n_output_channels=9,
         output_hz=32.0,
         control_stream="VHI_Control",
-        control_channels=9,
+        n_control_channels=9,
         control_pose_stream="MyoGestic_ControlPose",
-        control_pose_channels=9,
+        n_control_pose_channels=9,
         control_pose_hz=32.0,
         grpc_host=grpc_host,
         grpc_port=grpc_port,
