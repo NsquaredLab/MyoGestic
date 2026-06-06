@@ -20,6 +20,7 @@ Workflow:
        hand (gRPC)
 """
 
+import math
 import sys
 
 import numpy as np
@@ -148,45 +149,18 @@ def train(data: TrainingData):
     return clf
 
 
-# SetMovement re-triggers VHI's animation, so only command VHI when the
-# class actually changes. Two stages guard that:
-#   1. _StableClass swallows tick-to-tick flicker — the predicted class only
-#      "counts" once it has held for ~STABLE_SECONDS of predictions. Without it,
-#      the ~0.2 s sliding-window transition after a gesture (Fist EMG → Rest EMG)
-#      makes argmax oscillate, and the control hand visibly jumps between poses
-#      before settling.
-#   2. The EdgeTrigger dedupes per class name; the manual gesture button (below)
-#      rebases both so a click + the next predict ticks don't re-fire.
-# Set the debounce as a duration (robust to predict_hz); convert to ticks below.
+# SetMovement re-triggers VHI's animation, so only command VHI when the class
+# actually changes *and has settled*. EdgeTrigger's stable_ticks debounce
+# swallows the tick-to-tick argmax flicker during the ~0.2 s sliding-window
+# transition after a gesture (Fist EMG → Rest EMG) — without it the control hand
+# visibly jumps between poses before settling. The manual gesture button (below)
+# rebases the trigger so a click doesn't re-fire on the next predict ticks.
+# Expressed as a duration (robust to predict_hz); converted to ticks here.
 STABLE_SECONDS = 0.1
-
-
-class _StableClass:
-    """Emit a class only after it has held for ``k`` consecutive updates."""
-
-    def __init__(self, k: int) -> None:
-        self._k = k
-        self._candidate: str | None = None
-        self._count = 0
-        self.stable: str | None = None
-
-    def update(self, cls: str) -> str | None:
-        """Feed the latest prediction; return the settled class (or None)."""
-        if cls == self._candidate:
-            self._count += 1
-        else:
-            self._candidate, self._count = cls, 1
-        if self._count >= self._k:
-            self.stable = cls
-        return self.stable
-
-    def rebase(self, cls: str) -> None:
-        """Force ``cls`` as the settled class (after a manual command)."""
-        self._candidate, self._count, self.stable = cls, self._k, cls
-
-
-stable_class = _StableClass(max(1, round(STABLE_SECONDS * pipeline.predict_hz)))
-movement_trigger: EdgeTrigger[str] = EdgeTrigger(vhi_client.set_movement)
+movement_trigger: EdgeTrigger[str] = EdgeTrigger(
+    vhi_client.set_movement,
+    stable_ticks=max(1, math.ceil(STABLE_SECONDS * pipeline.predict_hz)),
+)
 
 
 @pipeline.predict
@@ -201,11 +175,9 @@ def predict(model, features):
     hand = output_filter(hand).astype(np.float32)
     vhi_outlet.push(hand)
 
-    # Only command the control hand once the class has settled (swallows the
-    # window-transition flicker); the EdgeTrigger then dedupes repeats.
-    settled = stable_class.update(CLASSES[class_idx])
-    if settled is not None:
-        movement_trigger.fire_if_changed(settled)
+    # Debounced inside EdgeTrigger (stable_ticks): fires only once the class has
+    # settled, then dedupes repeats.
+    movement_trigger.fire_if_changed(CLASSES[class_idx])
 
     return {"class": class_idx, "proba": proba, "hand": hand}
 
@@ -230,9 +202,8 @@ def _on_gesture(i: int) -> None:
     """Manual class button: drive the fake generator and the VHI control hand."""
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
     vhi_client.set_movement(CLASSES[i])
-    # Rebase both gates: the click already commanded this class, so the next
-    # predict ticks (still on the old ~0.2 s window) must not re-fire / jump.
-    stable_class.rebase(CLASSES[i])
+    # The click already commanded this class; rebase so the next predict ticks
+    # (still on the old ~0.2 s window) don't re-fire / jump.
     movement_trigger.rebase(CLASSES[i])
 
 
