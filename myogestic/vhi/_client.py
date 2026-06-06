@@ -127,15 +127,20 @@ class VhiControlClient:
 
     # --- synchronous query ---------------------------------------------------
 
-    def get_state(self) -> pb2.StateReply | None:
+    def get_state(self, timeout: float | None = None) -> pb2.StateReply | None:
         """Synchronously query VHI state.
 
-        Intentionally blocking (short deadline): call on startup, on an explicit
-        GUI refresh, or for low-frequency connection checks — never inside the
-        60 fps frame loop. Returns None on any RPC failure.
+        Intentionally blocking: call on startup, on an explicit GUI refresh, or
+        for low-frequency connection checks — never inside the 60 fps frame loop.
+        Returns None on any RPC failure. ``timeout`` overrides the default
+        ``_RPC_TIMEOUT_S`` deadline — pass a small value for an auto-poll so a
+        down server fails fast instead of grinding through the full deadline.
         """
         try:
-            reply = self._stub.GetState(pb2.GetStateRequest(), timeout=_RPC_TIMEOUT_S)
+            reply = self._stub.GetState(
+                pb2.GetStateRequest(),
+                timeout=_RPC_TIMEOUT_S if timeout is None else timeout,
+            )
         except Exception as e:
             self.connected = False
             self._log_failure("get_state", e)
