@@ -65,8 +65,9 @@ HOP_SECONDS = 0.1  # 50% overlap
 N_WINDOW_SAMPLES = int(WIN_SECONDS * FS)
 RMS_WINDOW_MS = 60  # sliding-RMS window, in ms
 RMS_WINDOW_SAMPLES = round(RMS_WINDOW_MS / 1000 * FS)
-RMS_STRIDE = 1
-INPUT_LENGTH = (N_WINDOW_SAMPLES - RMS_WINDOW_SAMPLES) // RMS_STRIDE + 1
+RMS_STRIDE_MS = 0.5  # ~1 sample at 2048 Hz — i.e. max RMS time resolution
+RMS_STRIDE_SAMPLES = max(1, round(RMS_STRIDE_MS / 1000 * FS))
+INPUT_LENGTH = (N_WINDOW_SAMPLES - RMS_WINDOW_SAMPLES) // RMS_STRIDE_SAMPLES + 1
 
 # 5 VHI DOFs (mosaic-2.0 registry): wrist rotation + index/middle/ring/pinky.
 VHI_DOF_INDICES = [0, 2, 3, 4, 5]
@@ -87,8 +88,8 @@ def sliding_rms(emg: np.ndarray) -> np.ndarray:
     if n < RMS_WINDOW_SAMPLES:
         return np.zeros((n_ch, INPUT_LENGTH), dtype=np.float32)
     s = np.lib.stride_tricks.sliding_window_view(emg, RMS_WINDOW_SAMPLES, axis=1)
-    if RMS_STRIDE > 1:
-        s = s[:, ::RMS_STRIDE]
+    if RMS_STRIDE_SAMPLES > 1:
+        s = s[:, ::RMS_STRIDE_SAMPLES]
     out = np.sqrt(np.mean(s**2, axis=2)).astype(np.float32)
     if out.shape[1] >= INPUT_LENGTH:
         return out[:, -INPUT_LENGTH:]
