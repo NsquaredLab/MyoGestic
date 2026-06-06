@@ -56,7 +56,7 @@ def test_virtual_hand_output_spec():
     """Channel count, sample rate, and stream names match MyoGestic VHI."""
     spec = virtual_hand()
     assert spec.output_stream == "MyoGestic_Output"
-    assert spec.output_channels == 9
+    assert spec.n_output_channels == 9
     assert spec.output_hz == 32.0
     assert spec.control_stream == "VHI_Control"
 
@@ -138,7 +138,7 @@ def test_outlet_construction_uses_spec_fields():
         name="probe",
         process=[],
         output_stream="probe_out",
-        output_channels=3,
+        n_output_channels=3,
         output_hz=10.0,
     )
     pytest.importorskip("mne_lsl.lsl")
