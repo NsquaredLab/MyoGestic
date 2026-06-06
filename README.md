@@ -49,7 +49,7 @@ from myogestic.sources import LSLSource
 from myogestic.widgets import recording_controls, signal_viewer
 
 app = App("Hello EMG")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 
 @app.ui
 def ui(ctx):

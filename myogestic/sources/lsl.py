@@ -35,7 +35,7 @@ class LSLSource:
     >>> from myogestic import Stream
     >>> from myogestic.sources import LSLSource
     >>> stream = Stream("emg", source=LSLSource("TestEMG1"),
-    ...                 window_seconds=1.0)
+    ...                 window_ms=1000)
     >>> # keep a 16-bit amp's native format to halve memory / disk:
     >>> raw = LSLSource("TestEMG1", dtype=None)
 

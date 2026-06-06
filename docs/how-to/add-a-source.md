@@ -96,7 +96,7 @@ Use it:
 from myogestic import App, Stream
 
 app = App("CSV replay")
-app.streams(Stream("emg", source=CSVSource("recording.csv", fs=2000.0), window_seconds=1.0))
+app.streams(Stream("emg", source=CSVSource("recording.csv", fs=2000.0), window_ms=1000))
 app.run()
 ```
 

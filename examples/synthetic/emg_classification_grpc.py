@@ -102,7 +102,7 @@ HOP_SECONDS = 0.1
 
 app = App("EMG Classification (gRPC)", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG1"), window_seconds=WIN_SECONDS, buffer_seconds=60)
+    Stream("emg", source=LSLSource("TestEMG1"), window_ms=WIN_SECONDS * 1000, buffer_ms=60000)
 )
 pipeline = Pipeline(app)
 

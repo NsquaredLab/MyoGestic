@@ -139,7 +139,7 @@ app.streams(
             stream_name="emg",
             speed=1.0,  # 0.5 = half-speed, 2.0 = double-speed
         ),
-        window_seconds=1.0,
+        window_ms=1000,
     )
 )
 app.run()

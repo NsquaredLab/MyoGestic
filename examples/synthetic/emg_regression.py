@@ -85,12 +85,12 @@ PROCESSES = [
 
 app = App("EMG Regression", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG1"), window_seconds=1.0, buffer_seconds=60),
+    Stream("emg", source=LSLSource("TestEMG1"), window_ms=1000, buffer_ms=60000),
     Stream(
         "vhi_control",
         source=LSLSource(vhi.control_stream or "VHI_Control"),
-        window_seconds=1.0,
-        buffer_seconds=60,
+        window_ms=1000,
+        buffer_ms=60000,
     ),
 )
 pipeline = Pipeline(app)

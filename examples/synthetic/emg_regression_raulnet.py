@@ -151,12 +151,12 @@ PROCESSES = [
 
 app = App("EMG Regression — RaulNet", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource(STREAM_NAME), window_seconds=WINDOW_MS / 1000, buffer_seconds=60),
+    Stream("emg", source=LSLSource(STREAM_NAME), window_ms=WINDOW_MS, buffer_ms=60000),
     Stream(
         "vhi_control",
         source=LSLSource(vhi.control_stream or "VHI_Control"),
-        window_seconds=1.0,
-        buffer_seconds=60,
+        window_ms=1000,
+        buffer_ms=60000,
     ),
 )
 pipeline = Pipeline(app, predict_hz=20)

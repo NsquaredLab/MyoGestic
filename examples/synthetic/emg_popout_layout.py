@@ -120,7 +120,7 @@ PROCESSES = [
 # becomes a tearable / dockable window.
 app = App("EMG 32ch Popout", ui_scale=0.85, docking=True)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG32"), window_seconds=WIN_SECONDS, buffer_seconds=60)
+    Stream("emg", source=LSLSource("TestEMG32"), window_ms=WIN_SECONDS * 1000, buffer_ms=60000)
 )
 pipeline = Pipeline(app)
 pipeline.save_model = save_pickle

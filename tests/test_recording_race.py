@@ -56,7 +56,7 @@ def test_detach_session_waits_for_inflight_append():
     """``detach_session()`` must not return while an append is in flight —
     that mutual exclusion is what stops ``pack_to_zip()``'s ``clear()`` from
     racing the acquire loop."""
-    stream = Stream("emg", source=_FixedSource(), window_seconds=0.1, buffer_seconds=2)
+    stream = Stream("emg", source=_FixedSource(), window_ms=100, buffer_ms=2000)
     _connect_stream(stream)
 
     entered = threading.Event()
@@ -118,7 +118,7 @@ def test_clear_after_detach_does_not_crash_acquire_loop():
     threading.excepthook = lambda args: errors.append(args.exc_value)
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            stream = Stream("emg", source=_FixedSource(), window_seconds=0.1, buffer_seconds=2)
+            stream = Stream("emg", source=_FixedSource(), window_ms=100, buffer_ms=2000)
             stream.start()
             time.sleep(0.05)  # let it connect + stream
             assert stream.info is not None
