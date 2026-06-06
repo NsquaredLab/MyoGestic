@@ -147,7 +147,7 @@ Predictions go two places: into `pipeline.predictions` (read by widgets) and int
 @pipeline.predict
 def predict(model, features):
     pose = model.predict(features.reshape(1, -1))[0]
-    pose_smooth = pose_filter(pose, t=time.monotonic())
+    pose_smooth = pose_filter(pose, timestamp=time.monotonic())
     vhi_outlet.push(pose_smooth)  # to the actuator
     return {"pose": pose_smooth}  # to widgets / pipeline.predictions
 ```

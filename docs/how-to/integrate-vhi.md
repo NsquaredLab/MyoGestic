@@ -111,7 +111,7 @@ pose_filter = FilterControl(hz=20.0, default="one_euro")
 
 @pipeline.predict
 def predict(model, features):
-    pose = pose_filter(model.compose_pose(features), t=time.monotonic())
+    pose = pose_filter(model.compose_pose(features), timestamp=time.monotonic())
     vhi_outlet.push(pose)
     return {"pose": pose}
 
