@@ -12,7 +12,7 @@ stateDiagram-v2
     idle --> recording: app.start_recording(base_path="sessions")
     recording: state = "recording"\nacquisition threads also write to Zarr\nctx.session = Session(...)
 
-    recording --> recording: button click\n→ ctx.session.add_label(class_idx, t=local_clock())
+    recording --> recording: button click\n→ ctx.session.add_label(class_idx, timestamp=local_clock())
     recording --> idle: app.stop_recording()
 
     note right of idle

@@ -16,7 +16,7 @@ pose_filter = FilterControl(hz=20.0, default="one_euro")
 @pipeline.predict
 def predict(model, features):
     pose = model.predict(features)
-    pose_smooth = pose_filter(pose, t=time.monotonic())
+    pose_smooth = pose_filter(pose, timestamp=time.monotonic())
     vhi_outlet.push(pose_smooth)
     return {"pose": pose_smooth}
 
@@ -76,7 +76,7 @@ pose_filter = OneEuroFilter(hz=20.0, min_cutoff_hz=1.0, beta=0.02)
 @pipeline.predict
 def predict(model, features):
     pose = model.predict(features)
-    pose_smooth = pose_filter(pose, t=time.monotonic())
+    pose_smooth = pose_filter(pose, timestamp=time.monotonic())
     vhi_outlet.push(pose_smooth)
     return {"pose": pose_smooth}
 ```

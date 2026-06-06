@@ -68,7 +68,7 @@ OneEuroFilter(hz=50.0, min_cutoff_hz=1.0, beta=0.02, derivative_cutoff_hz=1.0)
 GaussianFilter(n_vectors=5, sigma=1.0)
 IdentityFilter()
 make_filter(name, hz=50.0, **kwargs) -> VectorFilter
-  filter(x, t=None) -> np.ndarray                  # __call__ all filters
+  filter(x, timestamp=None) -> np.ndarray                  # __call__ all filters
 
 # --- Widgets (myogestic.widgets) -------------------------------
 signal_viewer(ctx, stream_name, selectable=False,
