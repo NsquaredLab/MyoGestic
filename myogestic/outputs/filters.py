@@ -35,8 +35,29 @@ import numpy as np
 class VectorFilter(Protocol):
     """Stateful per-vector filter. Call once per output tick."""
 
-    def reset(self) -> None: ...
-    def __call__(self, x: np.ndarray, t: float | None = None) -> np.ndarray: ...
+    def reset(self) -> None:
+        """Clear internal state (history, previous sample)."""
+        ...
+
+    def __call__(self, x: np.ndarray, timestamp: float | None = None) -> np.ndarray:
+        """Smooth one output vector and return it.
+
+        Parameters
+        ----------
+        x
+            The latest 1-D output vector. Returned smoothed, same shape/dtype.
+        timestamp
+            Optional sample time in **seconds** (e.g. ``mne_lsl`` clock).
+            Time-aware filters use it for the real inter-call ``dt``; pass it
+            from your predict loop when the call rate is jittery. ``None``
+            falls back to the filter's configured rate. Stateless filters
+            (Identity, Gaussian) ignore it.
+
+        Returns
+        -------
+        The smoothed vector, same shape as ``x``.
+        """
+        ...
 
 
 class IdentityFilter:
@@ -45,7 +66,7 @@ class IdentityFilter:
     def reset(self) -> None:
         pass
 
-    def __call__(self, x: np.ndarray, t: float | None = None) -> np.ndarray:
+    def __call__(self, x: np.ndarray, timestamp: float | None = None) -> np.ndarray:
         return x
 
 
@@ -77,7 +98,7 @@ class GaussianFilter:
     def reset(self) -> None:
         self._buf.clear()
 
-    def __call__(self, x: np.ndarray, t: float | None = None) -> np.ndarray:
+    def __call__(self, x: np.ndarray, timestamp: float | None = None) -> np.ndarray:
         x_arr = np.asarray(x, dtype=np.float64)
         if x_arr.ndim != 1:
             raise ValueError(f"GaussianFilter expects a 1-D vector, got ndim={x_arr.ndim}")
@@ -106,7 +127,7 @@ class OneEuroFilter:
     hz
         Expected sample rate (Hz). Used as a fallback dt when no
         timestamp is passed to ``__call__``. Filter accuracy depends
-        on this matching the *actual* call rate; pass ``t`` from your
+        on this matching the *actual* call rate; pass ``timestamp`` from your
         predict loop if the rate is jittery.
     min_cutoff_hz
         Cutoff (Hz) at zero velocity — controls baseline smoothing.
@@ -147,13 +168,13 @@ class OneEuroFilter:
         self._dx_prev = None
         self._t_prev = None
 
-    def __call__(self, x: np.ndarray, t: float | None = None) -> np.ndarray:
+    def __call__(self, x: np.ndarray, timestamp: float | None = None) -> np.ndarray:
         x_arr = np.asarray(x, dtype=np.float64)
-        if t is not None and self._t_prev is not None:
-            dt = max(1e-6, t - self._t_prev)
+        if timestamp is not None and self._t_prev is not None:
+            dt = max(1e-6, timestamp - self._t_prev)
         else:
             dt = 1.0 / self.hz
-        self._t_prev = t
+        self._t_prev = timestamp
 
         # Bind to locals so the checker can narrow both Optionals together —
         # _x_prev and _dx_prev are always set (and cleared) as a pair.
