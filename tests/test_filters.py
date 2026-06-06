@@ -44,7 +44,7 @@ def test_gaussian_rejects_bad_args():
 
 
 def test_one_euro_first_call_returns_input():
-    f = OneEuroFilter(freq=50)
+    f = OneEuroFilter(hz=50)
     x = np.array([1.0, 2.0, 3.0])
     out = f(x)
     assert np.allclose(out, x)
@@ -52,7 +52,7 @@ def test_one_euro_first_call_returns_input():
 
 def test_one_euro_converges_on_constant_signal():
     """If we feed the same value forever, output → that value."""
-    f = OneEuroFilter(freq=50, min_cutoff=1.0)
+    f = OneEuroFilter(hz=50, min_cutoff_hz=1.0)
     x = np.array([5.0, -3.0])
     last = f(x)
     for _ in range(200):
@@ -61,7 +61,7 @@ def test_one_euro_converges_on_constant_signal():
 
 
 def test_one_euro_reset_clears_state():
-    f = OneEuroFilter(freq=50)
+    f = OneEuroFilter(hz=50)
     f(np.array([1.0]))
     f(np.array([2.0]))
     f.reset()
@@ -71,12 +71,12 @@ def test_one_euro_reset_clears_state():
 
 
 def test_one_euro_rejects_bad_args():
-    with pytest.raises(ValueError, match="freq"):
-        OneEuroFilter(freq=0)
-    with pytest.raises(ValueError, match="min_cutoff"):
-        OneEuroFilter(min_cutoff=0)
-    with pytest.raises(ValueError, match="d_cutoff"):
-        OneEuroFilter(d_cutoff=0)
+    with pytest.raises(ValueError, match="hz"):
+        OneEuroFilter(hz=0)
+    with pytest.raises(ValueError, match="min_cutoff_hz"):
+        OneEuroFilter(min_cutoff_hz=0)
+    with pytest.raises(ValueError, match="derivative_cutoff_hz"):
+        OneEuroFilter(derivative_cutoff_hz=0)
 
 
 def test_make_filter_dispatches():
@@ -93,16 +93,16 @@ def test_make_filter_rejects_unknown():
 
 
 def test_one_euro_with_explicit_timestamps():
-    """Passing real timestamps gives different smoothing than the freq fallback
+    """Passing real timestamps gives different smoothing than the hz fallback
     when calls aren't perfectly periodic."""
-    f1 = OneEuroFilter(freq=50)  # uses 0.02s default dt
-    f2 = OneEuroFilter(freq=50)  # will use real dt via t arg
+    f1 = OneEuroFilter(hz=50)  # uses 0.02s default dt
+    f2 = OneEuroFilter(hz=50)  # will use real dt via t arg
 
     # Feed identical first samples
     f1(np.array([0.0]))
     f2(np.array([0.0]), t=0.0)
 
-    # Then a step at "real" 0.1s (dt=0.1) — much slower than freq fallback (0.02)
+    # Then a step at "real" 0.1s (dt=0.1) — much slower than hz fallback (0.02)
     out_fallback = f1(np.array([10.0]))
     out_explicit = f2(np.array([10.0]), t=0.1)
 
@@ -112,7 +112,7 @@ def test_one_euro_with_explicit_timestamps():
 
 def test_filter_preserves_input_dtype():
     """Output dtype matches input dtype (float32 in → float32 out, etc.)."""
-    f = OneEuroFilter(freq=50)
+    f = OneEuroFilter(hz=50)
     x32 = np.array([1.0, 2.0], dtype=np.float32)
     assert f(x32).dtype == np.float32
     f.reset()
@@ -126,7 +126,7 @@ def test_filter_preserves_input_dtype():
 def test_make_filter_one_euro_propagates_hz():
     f = make_filter("one_euro", hz=32)
     assert isinstance(f, OneEuroFilter)
-    assert f.freq == 32.0
+    assert f.hz == 32.0
 
 
 def test_make_filter_kwargs_tune_filter():
@@ -139,7 +139,7 @@ def test_make_filter_kwargs_tune_filter():
     o = make_filter("one_euro", hz=32, beta=0.05)
     assert isinstance(o, OneEuroFilter)
     assert o.beta == 0.05
-    assert o.freq == 32.0
+    assert o.hz == 32.0
 
 
 def test_make_filter_rejects_unknown_kwargs():

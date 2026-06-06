@@ -64,7 +64,7 @@ iter_aligned_windows(paths, primary_stream, aligned_streams,
   -> Iterator[(primary_window, {name: vec}, ts)]
 
 # --- Filters (myogestic.outputs.filters) -------------------------------
-OneEuroFilter(freq=50.0, min_cutoff=1.0, beta=0.02, d_cutoff=1.0)
+OneEuroFilter(hz=50.0, min_cutoff_hz=1.0, beta=0.02, derivative_cutoff_hz=1.0)
 GaussianFilter(window=5, sigma=1.0)
 IdentityFilter()
 make_filter(name, hz=50.0, **kwargs) -> VectorFilter

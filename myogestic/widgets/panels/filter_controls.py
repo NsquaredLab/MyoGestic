@@ -68,7 +68,7 @@ class FilterControl:
         self._params: dict[str, dict[str, Any]] = {
             "identity": {},
             "gaussian": {"window": 5, "sigma": 1.0},
-            "one_euro": {"min_cutoff": 1.0, "beta": 0.02, "d_cutoff": 1.0},
+            "one_euro": {"min_cutoff_hz": 1.0, "beta": 0.02, "derivative_cutoff_hz": 1.0},
         }
         self._filter: VectorFilter = self._build()
 
@@ -175,14 +175,14 @@ class FilterControl:
             imgui.push_item_width(-100)
             ch, v = imgui.slider_float(
                 f"min cutoff##{label}_o_min",
-                params["min_cutoff"],
+                params["min_cutoff_hz"],
                 0.01,
                 10.0,
                 "%.2f Hz",
             )
             if ch:
-                params["min_cutoff"] = v
-                f.min_cutoff = v
+                params["min_cutoff_hz"] = v
+                f.min_cutoff_hz = v
             ch, v = imgui.slider_float(
                 f"beta##{label}_o_b",
                 params["beta"],
@@ -196,19 +196,19 @@ class FilterControl:
                 f.beta = v
             ch, v = imgui.slider_float(
                 f"d cutoff##{label}_o_d",
-                params["d_cutoff"],
+                params["derivative_cutoff_hz"],
                 0.01,
                 10.0,
                 "%.2f Hz",
             )
             if ch:
-                params["d_cutoff"] = v
-                f.d_cutoff = v
+                params["derivative_cutoff_hz"] = v
+                f.derivative_cutoff_hz = v
             imgui.pop_item_width()
             imgui.push_style_color(
                 imgui.Col_.text,
                 imgui.get_style().color_(imgui.Col_.text_disabled),
             )
-            tau_ms = 1000.0 / (2.0 * np.pi * params["min_cutoff"])
+            tau_ms = 1000.0 / (2.0 * np.pi * params["min_cutoff_hz"])
             imgui.text(f"  τ at rest ≈ {tau_ms:.0f} ms (actual lag varies with motion)")
             imgui.pop_style_color()

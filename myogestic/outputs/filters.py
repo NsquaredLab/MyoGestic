@@ -103,36 +103,36 @@ class OneEuroFilter:
 
     Parameters
     ----------
-    freq
+    hz
         Expected sample rate (Hz). Used as a fallback dt when no
         timestamp is passed to ``__call__``. Filter accuracy depends
         on this matching the *actual* call rate; pass ``t`` from your
         predict loop if the rate is jittery.
-    min_cutoff
+    min_cutoff_hz
         Cutoff (Hz) at zero velocity — controls baseline smoothing.
     beta
         Velocity-to-cutoff gain. Larger → more responsive on fast moves.
-    d_cutoff
+    derivative_cutoff_hz
         Cutoff (Hz) for the velocity smoother.
     """
 
     def __init__(
         self,
-        freq: float = 50.0,
-        min_cutoff: float = 1.0,
+        hz: float = 50.0,
+        min_cutoff_hz: float = 1.0,
         beta: float = 0.02,
-        d_cutoff: float = 1.0,
+        derivative_cutoff_hz: float = 1.0,
     ):
-        if freq <= 0:
-            raise ValueError(f"freq must be > 0 (got {freq})")
-        if min_cutoff <= 0:
-            raise ValueError(f"min_cutoff must be > 0 (got {min_cutoff})")
-        if d_cutoff <= 0:
-            raise ValueError(f"d_cutoff must be > 0 (got {d_cutoff})")
-        self.freq = freq
-        self.min_cutoff = min_cutoff
+        if hz <= 0:
+            raise ValueError(f"hz must be > 0 (got {hz})")
+        if min_cutoff_hz <= 0:
+            raise ValueError(f"min_cutoff_hz must be > 0 (got {min_cutoff_hz})")
+        if derivative_cutoff_hz <= 0:
+            raise ValueError(f"derivative_cutoff_hz must be > 0 (got {derivative_cutoff_hz})")
+        self.hz = hz
+        self.min_cutoff_hz = min_cutoff_hz
         self.beta = beta
-        self.d_cutoff = d_cutoff
+        self.derivative_cutoff_hz = derivative_cutoff_hz
         self._x_prev: np.ndarray | None = None
         self._dx_prev: np.ndarray | None = None
         self._t_prev: float | None = None
@@ -152,7 +152,7 @@ class OneEuroFilter:
         if t is not None and self._t_prev is not None:
             dt = max(1e-6, t - self._t_prev)
         else:
-            dt = 1.0 / self.freq
+            dt = 1.0 / self.hz
         self._t_prev = t
 
         # Bind to locals so the checker can narrow both Optionals together —
@@ -165,11 +165,11 @@ class OneEuroFilter:
             return x_arr.astype(x.dtype, copy=False)
 
         dx = (x_arr - x_prev) / dt
-        a_d = self._alpha(self.d_cutoff, dt)
+        a_d = self._alpha(self.derivative_cutoff_hz, dt)
         dx_smooth = a_d * dx + (1 - a_d) * dx_prev
         self._dx_prev = dx_smooth
 
-        cutoff = self.min_cutoff + self.beta * np.abs(dx_smooth)
+        cutoff = self.min_cutoff_hz + self.beta * np.abs(dx_smooth)
         a = self._alpha(cutoff, dt)
         x_smooth = a * x_arr + (1 - a) * x_prev
         self._x_prev = x_smooth
@@ -186,7 +186,7 @@ def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
     name
         ``"identity"`` | ``"gaussian"`` | ``"one_euro"``.
     hz
-        Expected sample rate. Forwarded as ``freq`` to ``one_euro``;
+        Expected sample rate. Forwarded as ``hz`` to ``one_euro``;
         ignored by the others.
     **kwargs
         Forwarded to the filter constructor — e.g.
@@ -212,10 +212,10 @@ def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
     if n == "one_euro":
         return OneEuroFilter(
             **{
-                "freq": hz,
-                "min_cutoff": 1.0,
+                "hz": hz,
+                "min_cutoff_hz": 1.0,
                 "beta": 0.02,
-                "d_cutoff": 1.0,
+                "derivative_cutoff_hz": 1.0,
                 **kwargs,
             }
         )

@@ -45,14 +45,14 @@ Parameters update *in place* - no rebuild - so smoothing history survives live t
 
 ### OneEuro tuning
 
-[`OneEuroFilter(freq, min_cutoff, beta, d_cutoff)`][myogestic.outputs.filters.OneEuroFilter]:
+[`OneEuroFilter(hz, min_cutoff_hz, beta, derivative_cutoff_hz)`][myogestic.outputs.filters.OneEuroFilter]:
 
-- `freq` - your tick rate (`predict_hz`). Used as fallback dt when `t` isn't passed.
-- `min_cutoff` - cutoff (Hz) at zero velocity. Lower = smoother at rest. Default 1.0.
+- `hz` - your tick rate (`predict_hz`). Used as fallback dt when `t` isn't passed.
+- `min_cutoff_hz` - cutoff (Hz) at zero velocity. Lower = smoother at rest. Default 1.0.
 - `beta` - velocity-to-cutoff gain. Higher = more responsive on fast moves. Default 0.02. **Bump this if the hand feels laggy on fast clenches; lower if it twitches at rest.**
-- `d_cutoff` - cutoff for the velocity smoother. Rarely needs tuning. Default 1.0.
+- `derivative_cutoff_hz` - cutoff for the velocity smoother. Rarely needs tuning. Default 1.0.
 
-The filter's secret is that it adapts: cutoff = `min_cutoff + beta * |velocity|`. Fast motion → high cutoff (responsive); slow motion → low cutoff (smooth).
+The filter's secret is that it adapts: cutoff = `min_cutoff_hz + beta * |velocity|`. Fast motion → high cutoff (responsive); slow motion → low cutoff (smooth).
 
 ### Gaussian tuning
 
@@ -70,7 +70,7 @@ If you don't need the UI panel:
 ```python
 from myogestic.outputs.filters import OneEuroFilter
 
-pose_filter = OneEuroFilter(freq=20.0, min_cutoff=1.0, beta=0.02)
+pose_filter = OneEuroFilter(hz=20.0, min_cutoff_hz=1.0, beta=0.02)
 
 
 @pipeline.predict
@@ -81,14 +81,14 @@ def predict(model, features):
     return {"pose": pose_smooth}
 ```
 
-Pass `t` (a monotonic clock value) so the filter computes real-elapsed dt instead of assuming `1/freq`. If your tick rate is jittery, this matters; if it's stable, it doesn't.
+Pass `t` (a monotonic clock value) so the filter computes real-elapsed dt instead of assuming `1/hz`. If your tick rate is jittery, this matters; if it's stable, it doesn't.
 
 [`make_filter(name, hz, **kwargs)`][myogestic.outputs.filters.make_filter] is the dispatch helper used by `FilterControl`:
 
 ```python
 from myogestic.outputs.filters import make_filter
 
-pose_filter = make_filter("one_euro", hz=20.0, min_cutoff=1.0, beta=0.05)
+pose_filter = make_filter("one_euro", hz=20.0, min_cutoff_hz=1.0, beta=0.05)
 # or
 pose_filter = make_filter("gaussian", window=5, sigma=1.0)
 ```
