@@ -12,7 +12,7 @@ def test_default_constructs_one_euro():
     c = FilterControl(hz=32)
     assert c.name == "one_euro"
     assert isinstance(c.filter, OneEuroFilter)
-    assert c.filter.freq == 32.0
+    assert c.filter.hz == 32.0
 
 
 def test_explicit_default_constructs_named_filter():
