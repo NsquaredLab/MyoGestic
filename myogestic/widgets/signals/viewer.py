@@ -68,7 +68,7 @@ def signal_viewer(
     scale_mode: str = "auto",
     y_range: tuple[float, float] = (-1.0, 1.0),
     show_markers: bool = False,
-    window_seconds: float = 5.0,
+    window_s: float = 5.0,
 ) -> None:
     """Real-time multi-channel signal viewer.
 
@@ -80,7 +80,7 @@ def signal_viewer(
     `scale_mode` supports "auto" for ImPlot fitting and "manual" for the
     user-set `y_range`.
 
-    `window_seconds` sets the *initial* display window in seconds — the user
+    `window_s` sets the *initial* display window in seconds — the user
     can still drag the slider afterwards. Defaults to 5 s, which is wide
     enough to scan visually across most real-time setups. Pass a smaller
     value when you want the display to mirror a short analysis window
@@ -94,7 +94,7 @@ def signal_viewer(
         scale_mode=scale_mode,
         y_range=y_range,
         show_markers=show_markers,
-        window_seconds=window_seconds,
+        window_s=window_s,
     )
     active_stream = v.selected_stream or stream_name
     stream = ctx.streams.get(active_stream)
