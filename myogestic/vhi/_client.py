@@ -143,7 +143,8 @@ class VhiControlClient:
             )
         except Exception as e:
             self.connected = False
-            self._log_failure("get_state", e)
+            # Background connection probe: VHI down/closing is expected, so DEBUG.
+            self._log_failure("get_state", e, level=logging.DEBUG)
             return None
 
         self.connected = True
@@ -196,19 +197,22 @@ class VhiControlClient:
             ack.message,
         )
 
-    def _log_failure(self, operation: str, error: Exception) -> None:
+    def _log_failure(self, operation: str, error: Exception, *, level: int = logging.WARNING) -> None:
         # Log once per (operation, status) — a noisy disconnect must not flood
         # the log, and the worker thread must never crash. Key on the gRPC
         # status code, NOT str(error): grpc's debug_error_string varies its
         # field order between calls, so str(error) would differ every time and
-        # defeat the dedup, spamming an identical warning each probe.
+        # defeat the dedup, spamming an identical message each probe.
+        # ``level`` lets background probes (get_state) log at DEBUG — VHI being
+        # down/closing is an expected operational state the panel already shows —
+        # while user-initiated command failures stay at WARNING.
         call = error if isinstance(error, grpc.Call) else None
         key = (operation, call.code().name if call is not None else type(error).__name__)
         if key in self._seen_send_errors:
             return
         self._seen_send_errors.add(key)
         detail = f"{call.code().name}: {call.details()}" if call is not None else repr(error)
-        log.warning("%s.%s failed — %s", type(self).__name__, operation, detail)
+        log.log(level, "%s.%s failed — %s", type(self).__name__, operation, detail)
 
 
 __all__ = ["VhiControlClient"]
