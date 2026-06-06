@@ -147,6 +147,7 @@ class VhiControlClient:
             return None
 
         self.connected = True
+        self._seen_send_errors.clear()  # reconnected — let the next disconnect log once
         return reply
 
     # --- lifecycle -----------------------------------------------------------
@@ -185,6 +186,7 @@ class VhiControlClient:
         ack: pb2.CommandAck = rpc(command.request, timeout=_RPC_TIMEOUT_S)
         self.last_ack = ack
         self.connected = True
+        self._seen_send_errors.clear()  # reconnected — let the next disconnect log once
         log.info(
             "VHI %s ack: applied=%s state=%r movement=%r message=%r",
             command.rpc_name,
@@ -195,19 +197,18 @@ class VhiControlClient:
         )
 
     def _log_failure(self, operation: str, error: Exception) -> None:
-        # Log once per (error class, message) pair — a noisy disconnect must not
-        # flood the log, and the worker thread must never crash.
-        key = (type(error).__name__, str(error))
+        # Log once per (operation, status) — a noisy disconnect must not flood
+        # the log, and the worker thread must never crash. Key on the gRPC
+        # status code, NOT str(error): grpc's debug_error_string varies its
+        # field order between calls, so str(error) would differ every time and
+        # defeat the dedup, spamming an identical warning each probe.
+        call = error if isinstance(error, grpc.Call) else None
+        key = (operation, call.code().name if call is not None else type(error).__name__)
         if key in self._seen_send_errors:
             return
         self._seen_send_errors.add(key)
-        log.warning(
-            "%s.%s failed: %s: %s",
-            type(self).__name__,
-            operation,
-            type(error).__name__,
-            error,
-        )
+        detail = f"{call.code().name}: {call.details()}" if call is not None else repr(error)
+        log.warning("%s.%s failed — %s", type(self).__name__, operation, detail)
 
 
 __all__ = ["VhiControlClient"]
