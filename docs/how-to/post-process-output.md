@@ -56,12 +56,12 @@ The filter's secret is that it adapts: cutoff = `min_cutoff_hz + beta * |velocit
 
 ### Gaussian tuning
 
-[`GaussianFilter(window, sigma)`][myogestic.outputs.filters.GaussianFilter]:
+[`GaussianFilter(n_vectors, sigma)`][myogestic.outputs.filters.GaussianFilter]:
 
-- `window` - number of past samples to weight. Default 5.
+- `n_vectors` - number of past samples to weight. Default 5.
 - `sigma` - Gaussian width. Default 1.0 (≈ standard deviation of the kernel).
 
-Higher `window` and `sigma` mean more lag and more smoothing. Linear, no adaptation.
+Higher `n_vectors` and `sigma` mean more lag and more smoothing. Linear, no adaptation.
 
 ## Without the widget: bare filter
 
@@ -90,7 +90,7 @@ from myogestic.outputs.filters import make_filter
 
 pose_filter = make_filter("one_euro", hz=20.0, min_cutoff_hz=1.0, beta=0.05)
 # or
-pose_filter = make_filter("gaussian", window=5, sigma=1.0)
+pose_filter = make_filter("gaussian", n_vectors=5, sigma=1.0)
 ```
 
 ## When to reset

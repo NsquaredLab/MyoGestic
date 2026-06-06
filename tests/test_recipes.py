@@ -15,7 +15,7 @@ from myogestic.recipes import estimators
 
 
 def test_constant_classifier_predicts_fixed_class():
-    clf = estimators.constant_classifier(class_idx=2)
+    clf = estimators.constant_classifier(class_index=2)
     X = np.zeros((5, 3))
     y = np.array([0, 1, 2, 1, 2])
     clf.fit(X, y)

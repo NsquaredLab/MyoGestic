@@ -41,15 +41,15 @@ def prediction_label(
     pipeline: Pipeline,
     class_names: Sequence[str],
     *,
-    key: str = "class",
-    proba_key: str = "proba",
-    label: str = "Prediction",
+    class_key: str = "class",
+    probability_key: str = "proba",
+    title: str = "Prediction",
     show_probability: bool = False,
     font_scale: float = 2.0,
 ) -> None:
     """Render the current predicted class name as a big centred label.
 
-    The class index is looked up in ``pipeline.predictions[key]`` and the
+    The class index is looked up in ``pipeline.predictions[class_key]`` and the
     name is taken from ``class_names``. Colour-codes each class with the
     shared :data:`myogestic.widgets.common.PALETTE` so the same class is
     always the same colour (matches the recording / session-manager
@@ -63,13 +63,13 @@ def prediction_label(
     class_names
         Class names indexed the same way as the model —
         ``class_names[i]`` is the name for class index ``i``.
-    key
+    class_key
         Dict key in ``predictions`` holding the class index. Default
         ``"class"`` matches the convention in the bundled examples.
-    proba_key
+    probability_key
         Dict key holding the per-class probability vector,
         consumed only when ``show_probability`` is on.
-    label
+    title
         Panel header text.
     show_probability
         When True, render a coloured progress bar of the
@@ -78,10 +78,10 @@ def prediction_label(
         Multiplier applied to the class name's text size.
         Defaults to 2× the panel font.
     """
-    panel_header(label, fa.ICON_FA_BRAIN)
+    panel_header(title, fa.ICON_FA_BRAIN)
     imgui.spacing()
 
-    idx = pipeline.predictions.get(key)
+    idx = pipeline.predictions.get(class_key)
     if not isinstance(idx, int) or not (0 <= idx < len(class_names)):
         imgui.text_disabled("—  (no prediction yet)")
         imgui.spacing()
@@ -106,9 +106,9 @@ def prediction_label(
         imgui.pop_font()
 
     if show_probability:
-        proba = pipeline.predictions.get(proba_key)
+        proba = pipeline.predictions.get(probability_key)
         try:
-            p = float(proba[idx])  # type: ignore[index]
+            p = float(proba[idx])  # type: ignore
         except (TypeError, IndexError):
             p = None
         imgui.spacing()

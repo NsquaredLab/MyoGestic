@@ -18,8 +18,8 @@ class SessionWidgetState:
 _states: dict[str, SessionWidgetState] = {}
 
 
-def get_state(uid: str) -> SessionWidgetState:
-    return _states.setdefault(uid, SessionWidgetState())
+def get_state(widget_id: str) -> SessionWidgetState:
+    return _states.setdefault(widget_id, SessionWidgetState())
 
 
 def scan_sessions(base_path: str) -> list[dict]:
@@ -101,8 +101,8 @@ def _streams_str(streams_meta: dict) -> str:
 
 def add_recorded_session(path: str, base_path: str = "sessions", label: str = "Sessions") -> None:
     """Register a freshly recorded session as selected."""
-    uid = f"{label}_{base_path}"
-    state = get_state(uid)
+    widget_id = f"{label}_{base_path}"
+    state = get_state(widget_id)
     if any(s["path"] == path for s in state.sessions):
         return
     for row in scan_sessions(str(Path(path).parent)):

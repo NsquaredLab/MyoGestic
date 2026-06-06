@@ -55,10 +55,10 @@ def test_virtual_hand_explicit_args_win_over_env(tmp_path, monkeypatch):
 def test_virtual_hand_output_spec():
     """Channel count, sample rate, and stream names match MyoGestic VHI."""
     spec = virtual_hand()
-    assert spec.output_stream == "MyoGestic_Output"
+    assert spec.output_stream_name == "MyoGestic_Output"
     assert spec.n_output_channels == 9
     assert spec.output_hz == 32.0
-    assert spec.control_stream == "VHI_Control"
+    assert spec.control_stream_name == "VHI_Control"
 
 
 def _real_paths(tmp_path: Path) -> tuple[str, str]:
@@ -137,7 +137,7 @@ def test_outlet_construction_uses_spec_fields():
     spec = InterfaceSpec(
         name="probe",
         process=[],
-        output_stream="probe_out",
+        output_stream_name="probe_out",
         n_output_channels=3,
         output_hz=10.0,
     )

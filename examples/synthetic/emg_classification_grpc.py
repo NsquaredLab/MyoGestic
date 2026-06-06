@@ -150,7 +150,7 @@ def train(data: TrainingData):
 
 
 # SetMovement re-triggers VHI's animation, so only command VHI when the class
-# actually changes *and has settled*. EdgeTrigger's stable_ticks debounce
+# actually changes *and has settled*. EdgeTrigger's n_stable_ticks debounce
 # swallows the tick-to-tick argmax flicker during the ~0.2 s sliding-window
 # transition after a gesture (Fist EMG → Rest EMG) — without it the control hand
 # visibly jumps between poses before settling. The manual gesture button (below)
@@ -159,7 +159,7 @@ def train(data: TrainingData):
 STABLE_SECONDS = 0.1
 movement_trigger: EdgeTrigger[str] = EdgeTrigger(
     vhi_client.set_movement,
-    stable_ticks=max(1, math.ceil(STABLE_SECONDS * pipeline.predict_hz)),
+    n_stable_ticks=max(1, math.ceil(STABLE_SECONDS * pipeline.predict_hz)),
 )
 
 
@@ -175,7 +175,7 @@ def predict(model, features):
     hand = output_filter(hand).astype(np.float32)
     vhi_outlet.push(hand)
 
-    # Debounced inside EdgeTrigger (stable_ticks): fires only once the class has
+    # Debounced inside EdgeTrigger (n_stable_ticks): fires only once the class has
     # settled, then dedupes repeats.
     movement_trigger.fire_if_changed(CLASSES[class_idx])
 

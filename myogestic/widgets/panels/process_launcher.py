@@ -107,8 +107,8 @@ class _ProcState:
 
 
 _selected: dict[str, int] = {}  # label -> selected index
-_popout_open: dict[tuple[str, str], bool] = {}  # (uid, proc_name) -> log popped out
-# Autoscroll defaults ON for every (uid, proc_name); flipped off when the
+_popout_open: dict[tuple[str, str], bool] = {}  # (widget_id, proc_name) -> log popped out
+# Autoscroll defaults ON for every (widget_id, proc_name); flipped off when the
 # user clicks the autoscroll toggle so they can scroll back to inspect
 # earlier output without being yanked back to the tail.
 _autoscroll: dict[tuple[str, str], bool] = {}
@@ -120,19 +120,19 @@ _autoscroll: dict[tuple[str, str], bool] = {}
 
 def process_launcher(
     processes: list[Process],
-    label: str = "",
+    widget_id: str = "",
     log_height: float = -1.0,
 ) -> None:
     """Dropdown + Launch/Stop + scrollable log panel.
 
     Multiple process_launcher() calls can coexist in the same UI —
-    each gets unique ImGui IDs via the label parameter.
+    each gets unique ImGui IDs via the widget_id parameter.
 
     Parameters
     ----------
     processes
         List of (name, command) tuples.
-    label
+    widget_id
         Unique ID for this launcher instance. Auto-generated if empty.
     log_height
         Height of the inline log panel in pixels. Pass ``<= 0``
@@ -146,20 +146,20 @@ def process_launcher(
         return
 
     # Auto-generate label from process names
-    uid = label or "_".join(n for n, _ in processes)
+    widget_id = widget_id or "_".join(n for n, _ in processes)
 
-    # Ensure state exists for all processes (keyed by (uid, name) so
+    # Ensure state exists for all processes (keyed by (widget_id, name) so
     # two launchers with same-named but different-command processes don't collide).
     for name, cmd in processes:
-        key = (uid, name)
+        key = (widget_id, name)
         if key not in _procs:
             _procs[key] = _ProcState(name, cmd)
 
     names = [name for name, _ in processes]
 
     # Persistent selected index per launcher
-    if uid not in _selected:
-        _selected[uid] = 0
+    if widget_id not in _selected:
+        _selected[widget_id] = 0
 
     # Render every popped-out log window owned by this launcher FIRST,
     # before the inline UI. This makes popouts independent of the dropdown
@@ -168,7 +168,7 @@ def process_launcher(
     # popout were rendered from inside the "currently selected" branch,
     # changing selection would stop submitting the popout's Begin/End and
     # the window would silently disappear.)
-    _render_open_popouts(uid)
+    _render_open_popouts(widget_id)
 
     panel_header("PROCESS", fa.ICON_FA_TERMINAL)
 
@@ -186,25 +186,25 @@ def process_launcher(
     # 3 spacings: combo→launch, launch→pop, pop→autoscroll.
     reserved = launch_w + pop_w + auto_w + 3 * style.item_spacing.x
     imgui.push_item_width(-reserved)
-    changed, new_idx = imgui.combo(f"##{uid}_select", _selected[uid], names)
+    changed, new_idx = imgui.combo(f"##{widget_id}_select", _selected[widget_id], names)
     if changed:
-        _selected[uid] = new_idx
+        _selected[widget_id] = new_idx
     imgui.pop_item_width()
 
-    selected_name = names[_selected[uid]]
-    state = _procs[(uid, selected_name)]
+    selected_name = names[_selected[widget_id]]
+    state = _procs[(widget_id, selected_name)]
     proc = state.process
 
     imgui.same_line()
     if proc is not None and proc.poll() is None:
         imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.6, 0.15, 0.15, 1.0))
-        if imgui.button(f"Stop##{uid}"):
+        if imgui.button(f"Stop##{widget_id}"):
             state.stop()
         imgui.pop_style_color()
         imgui.set_item_tooltip(f"Kill the running '{selected_name}' process (SIGKILL).")
     else:
         imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.15, 0.4, 0.15, 1.0))
-        if imgui.button(f"Launch##{uid}"):
+        if imgui.button(f"Launch##{widget_id}"):
             try:
                 state.start()
             except Exception as e:
@@ -217,11 +217,11 @@ def process_launcher(
     # Autoscroll + popout toggles — shared widgets/_log_box helpers, so the
     # buttons look + feel identical to the model panel's log controls.
     imgui.same_line()
-    pop_key = (uid, selected_name)
+    pop_key = (widget_id, selected_name)
     autoscroll_on = _autoscroll.setdefault(pop_key, True)
     popped = _popout_open.get(pop_key, False)
     autoscroll_on, popped = render_log_buttons(
-        f"{uid}_{selected_name}",
+        f"{widget_id}_{selected_name}",
         autoscroll=autoscroll_on,
         popped_out=popped,
     )
@@ -244,32 +244,32 @@ def process_launcher(
         imgui.text_disabled(f"(log popped out — see '{selected_name} log' window)")
     else:
         render_log(
-            f"{uid}_{selected_name}",
+            f"{widget_id}_{selected_name}",
             state.log,
             height=h,
             autoscroll=_autoscroll.get(pop_key, True),
         )
 
 
-def _render_open_popouts(uid: str) -> None:
+def _render_open_popouts(widget_id: str) -> None:
     """Render every popped-out log window owned by this launcher.
 
-    Iterates ``_popout_open`` filtered to this ``uid`` and renders one
+    Iterates ``_popout_open`` filtered to this ``widget_id`` and renders one
     floating ImGui window per ``True`` entry. Independent of which process
     is currently selected in the dropdown — once popped out, a log window
     stays open until the user closes it with the window's ``[x]``.
     """
     for (popped_uid, name), open_flag in list(_popout_open.items()):
-        if popped_uid != uid or not open_flag:
+        if popped_uid != widget_id or not open_flag:
             continue
-        state = _procs.get((uid, name))
+        state = _procs.get((widget_id, name))
         if state is None:
             continue
         still_open = render_log_popout(
-            f"{uid}_{name}",
+            f"{widget_id}_{name}",
             state.log,
             title=f"{name} log",
-            autoscroll=_autoscroll.get((uid, name), True),
+            autoscroll=_autoscroll.get((widget_id, name), True),
         )
         if not still_open:
-            _popout_open[(uid, name)] = False
+            _popout_open[(widget_id, name)] = False
