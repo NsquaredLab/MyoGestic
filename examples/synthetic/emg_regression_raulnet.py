@@ -53,8 +53,8 @@ from myogestic.widgets import (
 
 # ── Stream / window math ──────────────────────────────────────────────
 # Same 8-channel 2048 Hz synthetic EMG the other examples use, with a
-# 0.2 s analysis window. RaulNet's sliding-RMS feature drops 120 samples
-# per window (RMS_WINDOW with stride 1) → (8, INPUT_LENGTH) fed to the CNN.
+# 0.2 s analysis window. RaulNet's sliding-RMS feature uses an RMS_WINDOW_MS
+# window (stride 1), shortening it to (8, INPUT_LENGTH) fed to the CNN.
 
 STREAM_NAME = "TestEMG1"
 N_CHANNELS = 8
@@ -63,9 +63,10 @@ WIN_SECONDS = 0.2
 HOP_SECONDS = 0.1  # 50% overlap
 
 N_WINDOW_SAMPLES = int(WIN_SECONDS * FS)
-RMS_WINDOW = 120
+RMS_WINDOW_MS = 60  # sliding-RMS window, in ms
+RMS_WINDOW_SAMPLES = round(RMS_WINDOW_MS / 1000 * FS)
 RMS_STRIDE = 1
-INPUT_LENGTH = (N_WINDOW_SAMPLES - RMS_WINDOW) // RMS_STRIDE + 1
+INPUT_LENGTH = (N_WINDOW_SAMPLES - RMS_WINDOW_SAMPLES) // RMS_STRIDE + 1
 
 # 5 VHI DOFs (mosaic-2.0 registry): wrist rotation + index/middle/ring/pinky.
 VHI_DOF_INDICES = [0, 2, 3, 4, 5]
@@ -83,9 +84,9 @@ def sliding_rms(emg: np.ndarray) -> np.ndarray:
     stable even on the first frames where the ring buffer isn't full yet.
     """
     n_ch, n = emg.shape
-    if n < RMS_WINDOW:
+    if n < RMS_WINDOW_SAMPLES:
         return np.zeros((n_ch, INPUT_LENGTH), dtype=np.float32)
-    s = np.lib.stride_tricks.sliding_window_view(emg, RMS_WINDOW, axis=1)
+    s = np.lib.stride_tricks.sliding_window_view(emg, RMS_WINDOW_SAMPLES, axis=1)
     if RMS_STRIDE > 1:
         s = s[:, ::RMS_STRIDE]
     out = np.sqrt(np.mean(s**2, axis=2)).astype(np.float32)
@@ -98,10 +99,7 @@ def sliding_rms(emg: np.ndarray) -> np.ndarray:
 def save_raulnet(model: L.LightningModule, path: str) -> None:
     """Save the trained RaulNet as a torch checkpoint with hparams."""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {"state_dict": model.state_dict(), "hparams": dict(model.hparams)},
-        path,
-    )
+    torch.save({"state_dict": model.state_dict(), "hparams": dict(model.hparams)}, path)
 
 
 def load_raulnet(path: str) -> L.LightningModule:
