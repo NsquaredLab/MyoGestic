@@ -122,7 +122,7 @@ def get_viewer_state(
     scale_mode: str,
     y_range: tuple[float, float],
     show_markers: bool,
-    window_seconds: float | None = None,
+    window_s: float | None = None,
 ) -> ViewerState:
     v = _viewers.get(stream_name)
     if v is None:
@@ -130,8 +130,8 @@ def get_viewer_state(
         # Caller override wins; fall back to the stream's processing window
         # (typically tiny — 0.2 s for classification — which is fine for the
         # model but unreadable on screen).
-        if window_seconds is not None:
-            win0 = window_seconds
+        if window_s is not None:
+            win0 = window_s
         else:
             win0 = s0._window if s0 is not None else 1.0
         v = ViewerState(
