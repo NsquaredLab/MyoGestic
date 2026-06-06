@@ -1,3 +1,5 @@
+"""The :class:`Bridge` — a managed subprocess for heavy out-of-band data acquisition."""
+
 from __future__ import annotations
 
 import subprocess

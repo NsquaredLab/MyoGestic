@@ -1,3 +1,5 @@
+"""Widgets for the Virtual Hand Interface: movement palette and control panel."""
+
 from myogestic.widgets.vhi.palette import (
     VhiStateCache,
     VhiStateSnapshot,

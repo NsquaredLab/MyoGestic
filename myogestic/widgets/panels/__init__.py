@@ -1,3 +1,5 @@
+"""Panel widgets: logo, filter controls, logs, popouts, process launcher, recording."""
+
 from myogestic.widgets.panels.app_logo import app_logo
 from myogestic.widgets.panels.filter_controls import FilterControl
 from myogestic.widgets.panels.log_panel import log_panel

@@ -43,4 +43,5 @@ class TrainingData:
 
     @property
     def is_empty(self) -> bool:
+        """``True`` when no session paths have been assigned yet."""
         return not self.paths

@@ -24,8 +24,10 @@ _scans: dict[str, _ScanState] = {}
 
 
 def _scan_panel(stream_name: str, stream: object) -> None:
-    """Scan + dropdown + Connect — shared by the disconnected fallback and
-    the inline retarget-while-connected toggle. No "disconnected" framing.
+    """Render the scan + dropdown + Connect controls for a stream.
+
+    Shared by the disconnected fallback and the inline
+    retarget-while-connected toggle. No "disconnected" framing.
     """
     from myogestic.stream import Stream
 

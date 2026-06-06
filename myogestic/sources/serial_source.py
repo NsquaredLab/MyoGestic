@@ -1,3 +1,5 @@
+"""Serial-port source — reads fixed-width binary frames from a serial device."""
+
 from __future__ import annotations
 
 import struct
@@ -29,6 +31,7 @@ class SerialSource:
         self._frame_bytes = n_channels * 4  # float32 = 4 bytes
 
     def connect(self) -> StreamInfo:
+        """Open the serial port and return the configured :class:`StreamInfo`."""
         import serial  # type: ignore[import-not-found]
 
         self._ser = serial.Serial(self._port, self._baud, timeout=1.0)
@@ -39,6 +42,11 @@ class SerialSource:
         )
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
+        """Read one ``n_channels``-float32 frame, timestamped on arrival.
+
+        Returns ``(None, None)`` when the port is closed or a short read
+        yields fewer than ``n_channels`` values.
+        """
         if self._ser is None:
             return None, None
         raw = self._ser.read(self._frame_bytes)
@@ -50,6 +58,7 @@ class SerialSource:
         return data, ts
 
     def disconnect(self) -> None:
+        """Close the serial port if open."""
         if self._ser is not None:
             self._ser.close()
             self._ser = None

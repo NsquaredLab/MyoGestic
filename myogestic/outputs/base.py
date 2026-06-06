@@ -158,6 +158,9 @@ class Output:
         raise NotImplementedError
 
     def stop(self) -> None:
-        """Stop the send thread. Subclasses that hold resources (sockets,
-        serial ports) should override and call ``super().stop()`` first."""
+        """Stop the send thread.
+
+        Subclasses that hold resources (sockets, serial ports) should
+        override and call ``super().stop()`` first.
+        """
         self._running = False

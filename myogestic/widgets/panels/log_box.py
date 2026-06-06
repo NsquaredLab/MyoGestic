@@ -69,11 +69,12 @@ def render_log_buttons(
     autoscroll: bool,
     popped_out: bool,
 ) -> tuple[bool, bool]:
-    """Render the autoscroll + popout toggle buttons. Returns the (possibly
-    updated) ``(autoscroll, popped_out)`` state to be persisted by the caller.
+    """Render the autoscroll + popout toggle buttons.
 
-    Visual: double-chevron-down = autoscroll ON; single arrow = OFF. Box-out
-    icon = "pop out"; box-in icon = "dock back inline".
+    Returns the (possibly updated) ``(autoscroll, popped_out)`` state to
+    be persisted by the caller. Visual: double-chevron-down = autoscroll
+    ON; single arrow = OFF. Box-out icon = "pop out"; box-in icon = "dock
+    back inline".
     """
     icon = fa.ICON_FA_ANGLES_DOWN if autoscroll else fa.ICON_FA_ARROW_DOWN
     if imgui.button(f"{icon}##{widget_id}_autoscroll"):
@@ -106,8 +107,10 @@ def render_log_popout(
     title: str,
     autoscroll: bool,
 ) -> bool:
-    """Render the floating popout window. Returns ``False`` once the user
-    clicks the window's ``[x]`` (so the caller can re-dock the log inline).
+    """Render the floating popout window.
+
+    Returns ``False`` once the user clicks the window's ``[x]`` (so the
+    caller can re-dock the log inline).
     """
     imgui.set_next_window_size(imgui.ImVec2(640, 320), imgui.Cond_.first_use_ever)
     visible, still_open = imgui.begin(f"{title}##{widget_id}_popout_window", True)

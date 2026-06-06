@@ -65,10 +65,12 @@ class EdgeTrigger[T]:
         self._state: tuple[T | None, T | None, int] = (None, None, 0)
 
     def fire_if_changed(self, value: T) -> bool:
-        """Fire iff ``value`` differs from the last fired value and (when
-        ``n_stable_ticks > 1``) has held for ``n_stable_ticks`` consecutive calls.
+        """Fire the callback when ``value`` becomes a new, stable value.
 
-        Returns ``True`` when the callback ran, ``False`` when suppressed.
+        Fires iff ``value`` differs from the last fired value and (when
+        ``n_stable_ticks > 1``) has held for ``n_stable_ticks``
+        consecutive calls. Returns ``True`` when the callback ran,
+        ``False`` when suppressed.
         """
         last, candidate, count = self._state
         if value == last:
@@ -85,10 +87,10 @@ class EdgeTrigger[T]:
         return False
 
     def rebase(self, value: T) -> None:
-        """Set the "last fired" value without firing, discarding any pending
-        debounce candidate.
+        """Set the "last fired" value without firing.
 
-        Use when another code path already performed the equivalent action; the
+        Discards any pending debounce candidate. Use when another code
+        path already performed the equivalent action; the
         next *different* value must then earn the full ``n_stable_ticks`` count, so
         a flicker candidate in progress can't complete on top of the manual one.
         """

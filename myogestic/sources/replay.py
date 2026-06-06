@@ -1,3 +1,5 @@
+"""Replay source — plays a recorded session back as if it were a live stream."""
+
 from __future__ import annotations
 
 import time
@@ -25,6 +27,11 @@ class ReplaySource:
         self._chunk_size = 64
 
     def connect(self) -> StreamInfo:
+        """Open the recorded session and return its :class:`StreamInfo`.
+
+        Raises :class:`ValueError` if the requested stream name is not
+        present in the session.
+        """
         sess = open_session_store(self._path)
         if self._stream_name not in sess.stores:
             raise ValueError(
@@ -38,6 +45,11 @@ class ReplaySource:
         return info
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
+        """Return the next recorded chunk, paced to wall-clock time x ``speed``.
+
+        Returns ``(None, None)`` when no samples are due yet; loops back
+        to the start of the recording once the end is reached.
+        """
         now = time.perf_counter()
         if self._last_read_time is not None:
             elapsed = (now - self._last_read_time) * self._speed
@@ -60,4 +72,5 @@ class ReplaySource:
         return data, ts
 
     def disconnect(self) -> None:
+        """Rewind the replay position to the start."""
         self._pos = 0

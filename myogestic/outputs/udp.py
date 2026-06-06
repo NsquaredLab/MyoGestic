@@ -1,3 +1,5 @@
+"""UDP output — sends the latest vector as a datagram to a host:port."""
+
 from __future__ import annotations
 
 import socket

@@ -42,11 +42,18 @@ if TYPE_CHECKING:
 
 
 def train_button(pipeline: Pipeline, size: tuple[float, float] = (80, 0)) -> None:
+    """Draw a Train button that calls :meth:`Pipeline.start_training` on click."""
     if imgui.button(f"{fa.ICON_FA_GEARS}  Train##ml_train", imgui.ImVec2(*size)):
         pipeline.start_training()
 
 
 def predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> None:
+    """Draw a Predict/Stop toggle button reflecting the pipeline's predict state.
+
+    Enabled to start only when the state is ``idle``, a model is loaded,
+    and both the extract and predict callbacks are wired; shows a Stop
+    button while predicting and is disabled otherwise.
+    """
     state = pipeline.app.ctx.state
     # Predict needs three things together: the state must be idle, a model
     # must be loaded, AND both extract + predict callbacks must be wired.
@@ -84,6 +91,12 @@ def training_log(pipeline: Pipeline, height: float = 100.0, *, widget_id: str = 
 
 
 def save_model_button(pipeline: Pipeline, path: str, size: tuple[float, float] = (100, 0)) -> None:
+    """Draw a Save button that writes the model to ``path`` via ``pipeline.save_model``.
+
+    Disabled unless both ``pipeline.save_model`` and ``pipeline.model``
+    are set; on click calls ``save_model(model, path)`` and reports the
+    result through the status message and app log.
+    """
     if pipeline.save_model is None or pipeline.model is None:
         imgui.begin_disabled()
         imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save##ml_save", imgui.ImVec2(*size))
@@ -100,6 +113,12 @@ def save_model_button(pipeline: Pipeline, path: str, size: tuple[float, float] =
 
 
 def load_model_button(pipeline: Pipeline, path: str, size: tuple[float, float] = (100, 0)) -> None:
+    """Draw a Load button that reads a model from ``path`` via ``pipeline.load_model``.
+
+    Disabled unless ``pipeline.load_model`` is set; on click stores the
+    returned object on ``pipeline.model`` and reports the result through
+    the status message and app log.
+    """
     if pipeline.load_model is None:
         imgui.begin_disabled()
         imgui.button(f"{fa.ICON_FA_FOLDER_OPEN}  Load##ml_load", imgui.ImVec2(*size))
@@ -121,8 +140,10 @@ def pipeline_panel(
     log_height: float = 80.0,
     widget_id: str = "ml",
 ) -> None:
-    """Train + Predict + log as a single titled panel — matches the visual
-    style of `recording_controls`, `session_manager`, and `FilterControl`.
+    """Train + Predict + log as a single titled panel.
+
+    Matches the visual style of `recording_controls`, `session_manager`,
+    and `FilterControl`.
 
     The log inherits the same autoscroll + popout UX as the process
     launcher's log: a double-chevron-down icon toggles auto-tail-follow,
