@@ -10,7 +10,7 @@ from myogestic.sources import LSLSource
 from myogestic.widgets import recording_controls
 
 app = App("My recording")                                              # 1. construct App
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))  # 2. register stream(s)
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))  # 2. register stream(s)
 
 @app.ui
 def ui(ctx):
@@ -116,7 +116,7 @@ from myogestic import App, Stream
 from myogestic.sources import LSLSource
 
 app = App("Headless capture")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 
 
 def _capture(app):

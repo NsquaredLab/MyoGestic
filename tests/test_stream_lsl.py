@@ -33,7 +33,7 @@ def test_stream_roundtrip():
     stop = start_synthetic_stream("TestEMG_unit", n_channels=8, fs=256)
     time.sleep(0.5)  # let stream start
 
-    stream = Stream("test", source=LSLSource("TestEMG_unit"), window_seconds=0.5)
+    stream = Stream("test", source=LSLSource("TestEMG_unit"), window_ms=500)
     stream.start()
     time.sleep(2.0)  # collect data
 
@@ -58,7 +58,7 @@ def test_stream_reconnect_swaps_buffers_atomically():
     stop = start_synthetic_stream("ReconA", n_channels=4, fs=128)
     time.sleep(0.4)
 
-    stream = Stream("test", source=LSLSource("ReconA"), window_seconds=0.3)
+    stream = Stream("test", source=LSLSource("ReconA"), window_ms=300)
     stream.start()
     time.sleep(1.0)
 
@@ -99,7 +99,7 @@ def test_stream_reconnect_clears_m4_scratch():
     stop = start_synthetic_stream("M4Recon", n_channels=4, fs=128)
     time.sleep(0.4)
 
-    stream = Stream("test", source=LSLSource("M4Recon"), window_seconds=0.2)
+    stream = Stream("test", source=LSLSource("M4Recon"), window_ms=200)
     stream.start()
     time.sleep(0.5)
 

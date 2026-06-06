@@ -123,7 +123,7 @@ PROCESSES = [
 
 app = App("EMG 32ch Multi-Model", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG32"), window_seconds=WIN_SECONDS, buffer_seconds=60)
+    Stream("emg", source=LSLSource("TestEMG32"), window_ms=WIN_SECONDS * 1000, buffer_ms=60000)
 )
 pipeline = Pipeline(app)
 # Wire generic save/load so save_model_button / load_model_button work, and

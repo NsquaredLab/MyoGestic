@@ -13,7 +13,7 @@ App(name, theme=True, docking=False)
   .run(mode="gui" | "headless")
   .ctx                                             # Context
 
-Stream(name, source, window_seconds, buffer_seconds=10)
+Stream(name, source, window_ms, buffer_ms=10000)
   .start() / .stop() / .reconnect(target=None)
   .get_window() -> (data, ts)                      # data is channels-first
   .get_display(n_pixels) -> (env_min, env_max)

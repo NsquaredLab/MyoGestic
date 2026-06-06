@@ -70,7 +70,7 @@ def test_training_lifecycle():
     stop_lsl = start_synthetic_stream("MLTrainEMG", n_channels=2, fs=64)
     time.sleep(0.3)
 
-    stream = Stream("emg", source=LSLSource("MLTrainEMG"), window_seconds=0.1)
+    stream = Stream("emg", source=LSLSource("MLTrainEMG"), window_ms=100)
     app = App("MLTrain")
     app.streams(stream)
     pipeline = Pipeline(app)
@@ -198,7 +198,7 @@ def test_pipeline_predict_hz_caps_loop_rate():
     from myogestic.stream import Stream
 
     # Use a stream that won't actually connect, but make get_window return data
-    stream = Stream("emg", source=LSLSource("DoesNotExist"), window_seconds=0.01)
+    stream = Stream("emg", source=LSLSource("DoesNotExist"), window_ms=10)
     # Skip stream setup — just inject get_window-compatible data via monkeypatch
     fake_data = np.ones((1, 1), dtype=np.float32)  # channels-first (1 ch, 1 sample)
     fake_ts = np.array([0.0])

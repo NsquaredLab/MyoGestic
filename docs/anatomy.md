@@ -15,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 import numpy as np
 
 app = App("EMG Demo")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=0.2))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=200))
 
 pipeline = Pipeline(app, predict_hz=20)
 pipeline.save_model = save_pickle
@@ -108,14 +108,14 @@ One per process. [`App`][myogestic.App] owns the GUI loop, the shared [`Context`
 ## `Stream` - the data plumbing
 
 ```python
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=0.2))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=200))
 ```
 
 A [`Stream`][myogestic.Stream] wraps a [`Source`](concepts/streams.md) plus a fixed-memory ring buffer. Each stream owns one daemon acquisition thread that polls the source, appends to the buffer, refreshes the display snapshot, and (when `app.start_recording()` is active) writes to a Zarr array.
 
 Two reads come out the other side:
 
-- `stream.get_window()` returns the most recent `window_seconds` of data, **channels-first** `(n_channels, n_samples)`. This is what feature extractors and ML models consume.
+- `stream.get_window()` returns the most recent `window_ms` of data, **channels-first** `(n_channels, n_samples)`. This is what feature extractors and ML models consume.
 - `stream.get_display(n_pixels)` returns a min/max envelope decimated for rendering. This is what [`signal_viewer`][myogestic.widgets.signal_viewer] consumes.
 
 [`app.streams(*streams)`][myogestic.App.streams] registers one or more. The same method takes any `Source` implementation, so swapping [`LSLSource`][myogestic.sources.LSLSource] for [`ReplaySource`][myogestic.sources.ReplaySource] (offline replay) or your own custom source changes one line.

@@ -23,7 +23,7 @@ A named ring buffer in `ctx.streams`, fed by one Source. Many widgets and the pr
 
 ### Window
 
-A slice of a Stream's ring buffer at the current time. Length set by `Stream(window_seconds=...)`. Returned **channels-first** by `Stream.get_window()` to match what feature extractors expect.
+A slice of a Stream's ring buffer at the current time. Length set by `Stream(window_ms=...)`. Returned **channels-first** by `Stream.get_window()` to match what feature extractors expect.
 
 ### Trial
 

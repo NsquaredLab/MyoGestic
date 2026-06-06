@@ -54,8 +54,8 @@ class StreamInfo:
     n_channels
         Channel count. Fixed for the life of the source.
     fs
-        Sample rate in Hz. Used to convert ``window_seconds`` /
-        ``buffer_seconds`` into sample counts.
+        Sample rate in Hz. Used to convert ``window_ms`` /
+        ``buffer_ms`` into sample counts.
     dtype
         NumPy dtype of each sample, one of :data:`SUPPORTED_DTYPES`.
         Defaults to ``float32``. Accepts anything :func:`numpy.dtype`
@@ -160,7 +160,7 @@ class Stream:
       consumed by ``@pipeline.extract``) and :meth:`get_display`
       (min/max envelope decimated for 60 fps rendering, consumed by
       ``signal_viewer``).
-    - The ring buffer holds the last ``buffer_seconds`` of samples so
+    - The ring buffer holds the last ``buffer_ms`` of samples so
       transient consumers (slow extract, momentary GUI hitches) don't
       lose data.
 
@@ -171,7 +171,7 @@ class Stream:
     >>> app = App("hello")
     >>> app.streams(
     ...     Stream("emg", source=LSLSource("TestEMG1"),
-    ...            window_seconds=1.0, buffer_seconds=10),
+    ...            window_ms=1000, buffer_ms=10000),
     ... )
 
     See [Streams concept](../concepts/streams.md) for the buffer +
@@ -183,8 +183,8 @@ class Stream:
         self,
         name: str,
         source: Source,
-        window_seconds: float,
-        buffer_seconds: float = 10,
+        window_ms: float,
+        buffer_ms: float = 10000,
     ):
         """Live ring-buffered stream with display decimation.
 
@@ -194,16 +194,16 @@ class Stream:
             Stream label (also used as the recorded zarr stream key).
         source
             Anything implementing the :class:`Source` protocol.
-        window_seconds
-            Duration in **seconds** of the window returned
+        window_ms
+            Duration in **milliseconds** of the window returned
             by :meth:`get_window`.
-        buffer_seconds
-            Ring-buffer depth in seconds. Defaults to 10.
+        buffer_ms
+            Ring-buffer depth in milliseconds. Defaults to 10000 (10 s).
         """
         self.name = name
         self._source = source
-        self._window = float(window_seconds)
-        self._buffer_seconds = buffer_seconds
+        self._window = window_ms / 1000.0
+        self._buffer_seconds = buffer_ms / 1000.0
         self._running = False
         self._session: Session | None = None
         # Guards `_session` against the acquire loop. `stop_recording()` tears
@@ -552,7 +552,7 @@ class Stream:
         return work_t[:n_sel], work_d[:n_sel]
 
     def get_window(self) -> tuple[np.ndarray, np.ndarray]:
-        """Return the most recent ``window_seconds`` as ``(data, ts)``.
+        """Return the most recent ``window_ms`` as ``(data, ts)``.
 
         ``data`` is **channels-first** ``(n_channels, n_samples)`` — the
         same convention used everywhere user code touches signal data —

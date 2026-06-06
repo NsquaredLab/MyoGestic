@@ -161,7 +161,7 @@ def render_signal_viewer(out: Path) -> None:
             pass
 
     app = App("signal_viewer")
-    app.streams(Stream("emg", source=FakeSource(), window_seconds=2.0, buffer_seconds=10.0))
+    app.streams(Stream("emg", source=FakeSource(), window_ms=2000, buffer_ms=10000))
 
     @app.ui
     def ui(ctx):
