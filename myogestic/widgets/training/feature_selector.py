@@ -101,7 +101,7 @@ class FeatureSelector:
         """Check whether a specific feature is ticked."""
         return self._active.get(name, False)
 
-    def set_active(self, name: str, on: bool) -> None:
+    def set_active(self, name: str, active: bool) -> None:
         """Programmatically tick / untick a feature.
 
         Useful for restoring saved selections from a checkpoint, or for
@@ -109,7 +109,7 @@ class FeatureSelector:
         """
         if name not in self._features:
             raise ValueError(f"Unknown feature {name!r}")
-        self._active[name] = bool(on)
+        self._active[name] = bool(active)
 
     def __call__(self, emg: np.ndarray) -> np.ndarray:
         """Apply every ticked feature to ``emg``, stack along axis 0.
