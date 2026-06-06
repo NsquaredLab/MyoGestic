@@ -1,3 +1,5 @@
+"""Serial-port output — writes packed binary frames of the latest vector."""
+
 from __future__ import annotations
 
 import struct

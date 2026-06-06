@@ -1,3 +1,5 @@
+"""Reusable ImGui widgets for building MyoGestic ``@app.ui`` functions."""
+
 from myogestic.widgets.common import panel_header
 from myogestic.widgets.panels import (
     FilterControl,

@@ -74,13 +74,16 @@ class FilterControl:
 
     @property
     def name(self) -> str:
+        """Name of the currently active filter (``"identity"``/``"gaussian"``/``"one_euro"``)."""
         return self._name
 
     @property
     def filter(self) -> VectorFilter:
+        """The live :class:`~myogestic.outputs.filters.VectorFilter` instance."""
         return self._filter
 
     def __call__(self, x: np.ndarray, t: float | None = None) -> np.ndarray:
+        """Apply the active filter to vector ``x`` at optional timestamp ``t``."""
         return self._filter(x, t)
 
     def reset(self) -> None:

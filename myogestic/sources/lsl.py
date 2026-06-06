@@ -1,3 +1,5 @@
+"""Lab Streaming Layer source — pulls live samples from an LSL outlet by name."""
+
 from __future__ import annotations
 
 import numpy as np

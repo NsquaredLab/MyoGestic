@@ -113,10 +113,12 @@ class InterfaceSpec:
         return VhiControlClient(host=self.grpc_host, port=self.grpc_port)
 
     def control_outlet(self) -> LSLOutlet:
-        """Construct an LSLOutlet for streaming a continuous pose to the control
-        hand. Opt-in: only consumed when VHI is put in STREAM control mode via
-        ``control_client().set_control_mode("STREAM")``. Raises if this
-        interface has no control-pose stream configured.
+        """Construct an :class:`LSLOutlet` for streaming a continuous pose to the control hand.
+
+        Opt-in: only consumed when VHI is put in STREAM control mode via
+        ``control_client().set_control_mode("STREAM")``. Raises
+        :class:`ValueError` if this interface has no control-pose stream
+        configured.
         """
         if self.control_pose_stream_name is None:
             raise ValueError(f"{self.name}: no control_pose_stream_name configured")

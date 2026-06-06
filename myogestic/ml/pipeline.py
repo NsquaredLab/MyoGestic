@@ -89,18 +89,17 @@ class Pipeline:
     Constructor registers the predict thread + cleanup on the App's hook
     lists; they fire on `app.run()` start/exit. Decorators set the
     callbacks. Transition methods flip `app.ctx.state`.
+
+    Parameters
+    ----------
+    app
+        The myogestic App.
+    predict_hz
+        Maximum predict-loop tick rate. Set to 0 or negative to remove
+        the cap (run at full speed).
     """
 
     def __init__(self, app: App, predict_hz: float = 50.0):
-        """
-        Parameters
-        ----------
-        app
-            The myogestic App.
-        predict_hz
-            Maximum predict-loop tick rate. Set to 0 or
-            negative to remove the cap (run at full speed).
-        """
         self.app = app
         self.predict_hz = predict_hz
         self.model: Any = None
@@ -165,6 +164,13 @@ class Pipeline:
     # --- Transitions ---
 
     def start_training(self) -> None:
+        """Run the ``@pipeline.train`` callback on a worker thread.
+
+        No-op (sets ``ctx.status_message``) unless the state is ``idle``,
+        a train callback is registered, and non-empty
+        :attr:`training_data` is set. Flips the state to ``training`` for
+        the duration and stores the returned object on :attr:`model`.
+        """
         ctx = self.app.ctx
         if ctx.state != "idle":
             ctx.status_message = f"Cannot start training: state is {ctx.state!r}, expected 'idle'."
@@ -211,6 +217,11 @@ class Pipeline:
             threading.Thread(target=_worker, daemon=True).start()
 
     def start_predicting(self) -> None:
+        """Flip the state to ``predicting`` so the predict thread runs.
+
+        No-op (sets ``ctx.status_message``) unless the state is ``idle``
+        and a :attr:`model` is loaded.
+        """
         ctx = self.app.ctx
         if ctx.state != "idle":
             ctx.status_message = (
@@ -224,6 +235,11 @@ class Pipeline:
         ctx.status_message = "Predicting..."
 
     def stop_predicting(self) -> None:
+        """Return to ``idle``, pausing the predict loop.
+
+        No-op (sets ``ctx.status_message``) unless the state is currently
+        ``predicting``.
+        """
         ctx = self.app.ctx
         if ctx.state != PipelineState.PREDICTING:
             ctx.status_message = (

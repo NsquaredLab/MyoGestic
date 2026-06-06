@@ -117,6 +117,7 @@ select = [
     "UP",   # pyupgrade (modernize syntax)
     "I",    # isort (import ordering)
     "SIM",  # flake8-simplify
+    "D",    # pydocstyle (docstring presence + NumPy formatting)
 ]
 ignore = [
     "E501",   # line too long — line-length handles this
@@ -124,11 +125,17 @@ ignore = [
     "SIM108", # ternary vs if/else — readability call, leave to author
     "SIM105", # contextlib.suppress vs try/except/pass — try/except is clearer
     "SIM113", # use enumerate — doesn't apply when loop filter/counter diverge
+    "D105",   # magic methods — document only meaningful ones by policy
+    "D107",   # constructor params live on the class docstring (merge_init_into_class)
+    "D401",   # descriptive API summaries beat forced imperative mood
 ]
 
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011"]  # allow `assert` in tests
-"examples/**/*" = ["E402"]  # imports after module-level code (app = App(...) pattern)
+"tests/*" = ["B011", "D"]  # allow `assert`; tests don't need docstrings
+"examples/**/*" = ["E402", "D"]  # imports after module-level code; examples are prose-documented
 # Optional-dep imports at module bottom are intentional (conditional availability)
 "myogestic/outputs/__init__.py" = ["E402"]
 "myogestic/sources/__init__.py" = ["E402"]

@@ -76,10 +76,12 @@ class Px:
 
 @dataclass(frozen=True, slots=True)
 class Fr:
-    """Fractional unit (CSS-grid ``fr``). ``Fr(1)`` means "1 share of the
-    space remaining after :class:`Px` tracks are subtracted". Multiple
-    ``Fr`` entries split the remainder proportionally to their values, so
-    ``[Fr(1), Fr(2)]`` splits leftover space 1:2.
+    """Fractional unit (CSS-grid ``fr``).
+
+    ``Fr(1)`` means "1 share of the space remaining after :class:`Px`
+    tracks are subtracted". Multiple ``Fr`` entries split the remainder
+    proportionally to their values, so ``[Fr(1), Fr(2)]`` splits leftover
+    space 1:2.
     """
 
     value: float
@@ -95,7 +97,9 @@ Track = Px | Fr
 
 
 def _coerce(spec: object, axis: str, index: int) -> Track:
-    """Track entries must be ``Px(...)`` or ``Fr(...)`` — bare numbers
+    """Coerce a track spec to a :class:`Px` or :class:`Fr` instance.
+
+    Track entries must be ``Px(...)`` or ``Fr(...)`` — bare numbers are
     rejected so ``[300, 1, 1]`` can't be silently misread as pixels.
     """
     if isinstance(spec, (Px, Fr)):

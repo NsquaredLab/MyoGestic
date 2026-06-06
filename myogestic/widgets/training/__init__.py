@@ -1,3 +1,5 @@
+"""Training-workflow widgets: feature selection, session management, trial previews."""
+
 from myogestic.widgets.training.feature_selector import FeatureSelector
 from myogestic.widgets.training.prediction_label import prediction_label
 from myogestic.widgets.training.session_manager import session_manager

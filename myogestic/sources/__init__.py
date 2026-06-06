@@ -1,3 +1,5 @@
+"""Built-in data sources (LSL, replay, serial) that feed a :class:`~myogestic.stream.Stream`."""
+
 from myogestic.sources.lsl import LSLSource
 from myogestic.sources.replay import ReplaySource
 

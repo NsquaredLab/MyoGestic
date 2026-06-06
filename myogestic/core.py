@@ -1,3 +1,7 @@
+"""Core application object, shared context, and the app-state machine."""
+
+from __future__ import annotations
+
 import gc
 import logging
 import sys
@@ -41,7 +45,7 @@ TRANSITIONS: dict[str, set[str]] = {
 # the active App lazily without circular imports.
 
 _pending_popouts: list[Any] = []  # list[hello_imgui.DockableWindow]
-_active_app: "App | None" = None
+_active_app: App | None = None
 
 
 def can_transition(current: str, target: str) -> bool:
@@ -55,8 +59,11 @@ def can_transition(current: str, target: str) -> bool:
 
 @dataclass
 class Context:
-    """Shared state all threads read/write. Extensions may add own fields
-    dynamically on the owning `App`, but `Context` itself is core-only."""
+    """Shared state all threads read/write.
+
+    Extensions may add own fields dynamically on the owning `App`, but
+    `Context` itself is core-only.
+    """
 
     streams: dict[str, Stream] = field(default_factory=dict)
     bridges: dict[str, Any] = field(default_factory=dict)
@@ -83,8 +90,10 @@ class Context:
 
 
 class App:
-    """Top-level application object. Owns the GUI loop, the `Context`,
-    the run-loop lifecycle hooks, and the recording state machine.
+    """Top-level application object.
+
+    Owns the GUI loop, the `Context`, the run-loop lifecycle hooks, and
+    the recording state machine.
 
     Construct one per process. Register streams via `app.streams(...)`,
     register your UI via `@app.ui`, then call `app.run()`. Optional

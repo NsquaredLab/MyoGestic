@@ -1,3 +1,5 @@
+"""Stream abstraction — ring-buffered acquisition from a Source plus windowing."""
+
 from __future__ import annotations
 
 import asyncio
@@ -102,7 +104,9 @@ class Source(Protocol):
         ...
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
-        """Return ``(data, ts)`` where ``data`` is sample-major
+        """Poll for the next chunk of samples.
+
+        Return ``(data, ts)`` where ``data`` is sample-major
         ``(n_samples, n_channels)`` and ``ts`` is ``(n_samples,)``
         float64 LSL clock timestamps. Return ``(None, None)`` if no
         new data is available.
@@ -110,8 +114,10 @@ class Source(Protocol):
         ...
 
     def disconnect(self) -> None:
-        """Release the device. Idempotent - may be called multiple
-        times during shutdown."""
+        """Release the device.
+
+        Idempotent - may be called multiple times during shutdown.
+        """
         ...
 
 
@@ -254,8 +260,10 @@ class Stream:
         return True
 
     def _allocate_buffers(self) -> None:
-        """Allocate/resize buffers for the current self.info. Called after any
-        (re)connection that produced a fresh StreamInfo."""
+        """Allocate/resize buffers for the current self.info.
+
+        Called after any (re)connection that produced a fresh StreamInfo.
+        """
         assert self.info is not None
         self._cap = int(self.info.fs * self._buffer_seconds)
         self._data = RingBuffer(
@@ -318,6 +326,7 @@ class Stream:
             return True
 
     def start(self) -> None:
+        """Start the acquisition loop (a daemon thread, or a per-frame task in the browser)."""
         self._running = True
         if _IS_BROWSER:
             # Pyodide: no OS threads, and asyncio tasks scheduled here
@@ -333,6 +342,7 @@ class Stream:
             self._thread.start()
 
     def stop(self) -> None:
+        """Stop the acquisition loop and disconnect the source (errors suppressed)."""
         self._running = False
         try:
             self._source.disconnect()
@@ -340,9 +350,11 @@ class Stream:
             pass
 
     def attach_session(self, session: Session) -> None:
-        """Begin recording this stream into ``session`` (called by
-        :meth:`App.start_recording`). Set under ``_session_lock`` so the
-        acquire loop sees a fully-attached session atomically."""
+        """Begin recording this stream into ``session``.
+
+        Called by :meth:`App.start_recording`. Set under ``_session_lock``
+        so the acquire loop sees a fully-attached session atomically.
+        """
         with self._session_lock:
             self._session = session
 
@@ -352,7 +364,8 @@ class Stream:
         Holding ``_session_lock`` makes this *wait for* any append currently
         in flight on the acquire thread and guarantees no further append can
         start. Once this returns, the caller may safely finalise/clear the
-        session's Zarr stores without racing the acquire loop."""
+        session's Zarr stores without racing the acquire loop.
+        """
         with self._session_lock:
             self._session = None
 
@@ -427,8 +440,11 @@ class Stream:
                 time.sleep(delay)
 
     async def _acquire_loop_async(self) -> None:
-        """Browser variant: same step body, paced with asyncio.sleep so
-        the event loop can hand control back to the frame renderer."""
+        """Run the acquire loop in the browser, paced with ``asyncio.sleep``.
+
+        Same step body as :meth:`_acquire_loop`, but yields to the event
+        loop so it can hand control back to the frame renderer.
+        """
         while self._running:
             delay = self._acquire_step()
             # asyncio.sleep(0) still yields to the event loop, which is

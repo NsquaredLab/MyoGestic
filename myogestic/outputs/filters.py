@@ -64,9 +64,10 @@ class IdentityFilter:
     """Passthrough — useful as a baseline or "off" toggle."""
 
     def reset(self) -> None:
-        pass
+        """No-op — the passthrough filter holds no state."""
 
     def __call__(self, x: np.ndarray, timestamp: float | None = None) -> np.ndarray:
+        """Return ``x`` unchanged."""
         return x
 
 
@@ -96,9 +97,15 @@ class GaussianFilter:
         self._buf: list[np.ndarray] = []
 
     def reset(self) -> None:
+        """Clear the rolling vector history."""
         self._buf.clear()
 
     def __call__(self, x: np.ndarray, timestamp: float | None = None) -> np.ndarray:
+        """Return the Gaussian-weighted mean of the recent vector history.
+
+        ``x`` must be a 1-D vector of consistent length; ``timestamp`` is
+        ignored. Raises :class:`ValueError` if ``x`` is not 1-D.
+        """
         x_arr = np.asarray(x, dtype=np.float64)
         if x_arr.ndim != 1:
             raise ValueError(f"GaussianFilter expects a 1-D vector, got ndim={x_arr.ndim}")
@@ -164,11 +171,18 @@ class OneEuroFilter:
         return 1.0 / (1.0 + tau / dt)
 
     def reset(self) -> None:
+        """Clear the previous sample, velocity, and timestamp."""
         self._x_prev = None
         self._dx_prev = None
         self._t_prev = None
 
     def __call__(self, x: np.ndarray, timestamp: float | None = None) -> np.ndarray:
+        """Return the 1€-smoothed vector for one output tick.
+
+        ``timestamp`` (seconds) gives the real inter-call ``dt`` when
+        provided; otherwise ``dt`` falls back to ``1/hz``. The first call
+        passes ``x`` through to seed the filter state.
+        """
         x_arr = np.asarray(x, dtype=np.float64)
         if timestamp is not None and self._t_prev is not None:
             dt = max(1e-6, timestamp - self._t_prev)
@@ -198,9 +212,10 @@ class OneEuroFilter:
 
 
 def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
-    """Construct a filter by name. Swap filters in an experiment by
-    changing one string; pass extra kwargs to tune without instantiating
-    the class directly.
+    """Construct a filter by name.
+
+    Swap filters in an experiment by changing one string; pass extra
+    kwargs to tune without instantiating the class directly.
 
     Parameters
     ----------

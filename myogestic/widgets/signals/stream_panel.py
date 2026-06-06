@@ -196,8 +196,10 @@ def _connect_buttons(name: str, stream: object, scan: _ScanState) -> None:
 
 
 def _current_target(stream: object) -> str | None:
-    """Best-effort read of the LSL stream name the source is currently
-    targeting — used to suppress the redundant button for the failing target."""
+    """Best-effort read of the stream name the source is currently targeting.
+
+    Used to suppress the redundant button for the failing target.
+    """
     src = stream._source  # type: ignore[attr-defined]
     for attr in ("stream_name", "_stream_name", "name", "_name"):
         val = getattr(src, attr, None)

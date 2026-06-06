@@ -1,3 +1,5 @@
+"""Lab Streaming Layer output — publishes prediction vectors to an LSL outlet."""
+
 from __future__ import annotations
 
 import numpy as np
