@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 import myogestic.core
+import myogestic.vhi.interfaces
 
 EXAMPLES = sorted((Path(__file__).resolve().parent.parent / "examples" / "synthetic").glob("*.py"))
 
@@ -33,6 +34,11 @@ def test_example_wires_up(path, monkeypatch):
     # The GUI (and headless) run loop blocks forever — replace it with a no-op so
     # the script completes right after building the app.
     monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
+    # Examples call `vhi.launcher()` at module level, which raises FileNotFoundError
+    # unless the VHI binary is installed (an environment dep, not part of the API
+    # surface). Stub the env check to []; a renamed/removed `launcher` method would
+    # still raise AttributeError and fail the test.
+    monkeypatch.setattr(myogestic.vhi.interfaces.InterfaceSpec, "launcher", lambda self: [])
     try:
         runpy.run_path(str(path), run_name="__main__")
     except (ImportError, ModuleNotFoundError) as e:
