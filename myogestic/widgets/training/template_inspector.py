@@ -72,7 +72,7 @@ def template_inspector(
     ----------
     widget_id
         Stable identity string. Two calls with the same widget_id share
-        selection state across frames; different uids are independent.
+        selection state across frames; different widget_ids are independent.
     rows
         List of ``TemplateInspectorRow`` to render. Mutated in place
         (only ``accepted`` is touched by the widget).
