@@ -43,15 +43,19 @@ HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
 
 # Output-side smoothing applied to the hand pose vector before pushing
 # to VHI. Live-tunable via the FilterControl widget rendered in the UI.
+# --8<-- [start:filter]
 output_filter = FilterControl(hz=32, default="one_euro")
+# --8<-- [end:filter]
 
 # Reference RMS / MAV / WL / VAR / ZC live in myogestic.recipes.features; mix
 # with your own callables here — feature engineering is user code, this is
 # the seam where you'd add custom ones.
+# --8<-- [start:features]
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
     default=["RMS", "MAV"],
 )
+# --8<-- [end:features]
 
 PROCESSES = [
     (
@@ -75,6 +79,7 @@ PROCESSES = [
 CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
 
+# --8<-- [start:setup]
 WINDOW_MS = 200
 HOP_MS = 100
 
@@ -83,14 +88,18 @@ app.streams(
     Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000)
 )
 pipeline = Pipeline(app)
+# --8<-- [end:setup]
 
 
+# --8<-- [start:extract]
 @pipeline.extract
 def extract(windows: dict[str, np.ndarray]) -> np.ndarray:
     """Active features stacked along axis 0 → flat feature vector."""
     return features(windows["emg"])
+# --8<-- [end:extract]
 
 
+# --8<-- [start:train]
 @pipeline.train
 def train(data: TrainingData):
     """Train CatBoost classifier on numpy features from selected sessions.
@@ -142,8 +151,10 @@ def train(data: TrainingData):
     clf.fit(X, y)
     print(f"[train] done — accuracy on train: {clf.score(X, y):.2%}")
     return clf
+# --8<-- [end:train]
 
 
+# --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
     """Classify → map to hand pose → smooth → push to VHI.
@@ -157,6 +168,7 @@ def predict(model, features):
     hand = output_filter(hand).astype(np.float32)
     vhi_outlet.push(hand)
     return {"class": class_idx, "proba": proba, "hand": hand}
+# --8<-- [end:predict]
 
 
 # Branding cell is FIXED-pixel in both axes so it stays sized to the

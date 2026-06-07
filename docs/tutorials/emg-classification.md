@@ -1,6 +1,9 @@
 # EMG classification (CatBoost)
 
-End-to-end walkthrough of [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py): synthetic 8-channel EMG → MyoVerse RMS+MAV features → CatBoost binary classifier → smoothed hand pose → VHI.
+End-to-end walkthrough of [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py): synthetic 8-channel EMG → RMS+MAV features (from [`myogestic.recipes.features`][myogestic.recipes.features]) → CatBoost binary classifier → smoothed hand pose → VHI.
+
+!!! note "Code below is included from the example"
+    The Python blocks in this walkthrough are pulled verbatim from the example file via snippet includes, so they can't drift from the runnable script.
 
 228 lines, end to end, zero classes besides the framework's `App` and `Pipeline`.
 
@@ -51,33 +54,25 @@ VHI consumes a 9-vec pose; we hand-define the two target poses (rest and full fi
 ### 2. The output filter
 
 ```python
-output_filter = FilterControl(hz=32, default="one_euro")
+--8<-- "examples/synthetic/emg_classification.py:filter"
 ```
 
 [`FilterControl`][myogestic.widgets.FilterControl] is the post-processing widget - exposes a UI panel and is callable. We'll wire the call inside `predict()` and the panel inside `@app.ui`.
 
 See [Post-process predictions](../how-to/post-process-output.md) for tuning.
 
-### 3. Feature extractors (live and training)
+### 3. Feature set
 
 ```python
-rms_transform = RMS(window_size=32)
-mav_transform = MAV(window_size=32)
+--8<-- "examples/synthetic/emg_classification.py:features"
 ```
 
-Two MyoVerse windowed transforms. Both run on torch tensors.
+[`FeatureSelector`][myogestic.widgets.FeatureSelector] holds a menu of named feature functions - the reference `rms`/`mav`/`wl`/`var`/`zc` from [`myogestic.recipes.features`][myogestic.recipes.features], plus any of your own callables - and renders a panel to toggle them live. Calling it, `features(window)`, runs every active feature over the channels-first window and stacks the results into one flat vector. `default=["RMS", "MAV"]` ticks two on at startup.
 
 ### 4. App, stream, pipeline
 
 ```python
-WINDOW_MS = 200
-HOP_MS = 100  # 50% overlap
-
-app = App("EMG Classification")
-app.streams(
-    Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000)
-)
-pipeline = Pipeline(app)
+--8<-- "examples/synthetic/emg_classification.py:setup"
 ```
 
 The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s of EMG, channels-first as `(n_channels, n_samples)`. The buffer is 60 s so [`signal_viewer`][myogestic.widgets.signal_viewer] shows a longer history than the prediction window.
@@ -85,39 +80,15 @@ The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s o
 ### 5. `extract` - same code for training and live predict
 
 ```python
-@pipeline.extract
-def extract(windows):
-    emg = windows["emg"]  # (n_channels, n_samples)
-    tensor = torch.from_numpy(emg).float()
-    rms = rms_transform(tensor).numpy().flatten()
-    mav = mav_transform(tensor).numpy().flatten()
-    return np.concatenate([rms, mav])
+--8<-- "examples/synthetic/emg_classification.py:extract"
 ```
 
-Returns a flat feature vector. The same function is invoked from inside `train()` (over recorded windows) and on the predict thread (over live windows).
+`features(windows["emg"])` runs every active feature over the window (channels-first `(n_channels, n_samples)`) and returns one flat vector. The same function is invoked from inside `train()` (over recorded windows) and on the predict thread (over live windows), so training and inference always see identical features.
 
 ### 6. `train` - slice sessions, featurize, fit
 
 ```python
-@pipeline.train
-def train(data):
-    if data.is_empty:
-        raise ValueError("No sessions selected. ...")
-    if len(data.classes) < 2:
-        raise ValueError("Classification needs ≥2 active classes ...")
-
-    all_X, all_y = [], []
-    for window, _ts, class_idx in iter_labeled_windows(
-        data.paths, "emg", WINDOW_MS, HOP_MS, classes=data.classes
-    ):
-        all_X.append(extract({"emg": window}))
-        all_y.append(class_idx)
-
-    X = np.stack(all_X)
-    y = np.array(all_y)
-    clf = catboost_classifier(iterations=100)
-    clf.fit(X, y)
-    return clf
+--8<-- "examples/synthetic/emg_classification.py:train"
 ```
 
 [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] does all the session-loading, label-track walking, and overlapping-window slicing - see [Record and replay](../how-to/record-and-replay.md). We just call `extract()` on each window.
@@ -127,14 +98,7 @@ The validation up front (`is_empty`, `len(data.classes) < 2`) gives the user act
 ### 7. `predict` - classify, look up pose, smooth, push
 
 ```python
-@pipeline.predict
-def predict(model, features):
-    proba = model.predict_proba(features.reshape(1, -1))[0]
-    class_idx = int(np.argmax(proba))
-    hand = HAND_FIST.copy() if class_idx == 1 else HAND_REST.copy()
-    hand = output_filter(hand).astype(np.float32)
-    vhi_outlet.push(hand)
-    return {"class": class_idx, "proba": proba, "hand": hand}
+--8<-- "examples/synthetic/emg_classification.py:predict"
 ```
 
 The pose lookup is a hardcoded `if/else` - small enough not to need a class table. Smoothing happens *after* pose lookup so the user sees smooth blends between rest and fist as the classifier flips. The dict return goes to `pipeline.predictions` for any widgets that want to display class probabilities.
