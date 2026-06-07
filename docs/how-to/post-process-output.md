@@ -47,7 +47,7 @@ Parameters update *in place* - no rebuild - so smoothing history survives live t
 
 [`OneEuroFilter(hz, min_cutoff_hz, beta, derivative_cutoff_hz)`][myogestic.outputs.filters.OneEuroFilter]:
 
-- `hz` - your tick rate (`predict_hz`). Used as fallback dt when `t` isn't passed.
+- `hz` - your tick rate (`predict_hz`). Used as fallback dt when `timestamp` isn't passed.
 - `min_cutoff_hz` - cutoff (Hz) at zero velocity. Lower = smoother at rest. Default 1.0.
 - `beta` - velocity-to-cutoff gain. Higher = more responsive on fast moves. Default 0.02. **Bump this if the hand feels laggy on fast clenches; lower if it twitches at rest.**
 - `derivative_cutoff_hz` - cutoff for the velocity smoother. Rarely needs tuning. Default 1.0.
@@ -81,7 +81,7 @@ def predict(model, features):
     return {"pose": pose_smooth}
 ```
 
-Pass `t` (a monotonic clock value) so the filter computes real-elapsed dt instead of assuming `1/hz`. If your tick rate is jittery, this matters; if it's stable, it doesn't.
+Pass `timestamp` (a monotonic clock value) so the filter computes real-elapsed dt instead of assuming `1/hz`. If your tick rate is jittery, this matters; if it's stable, it doesn't.
 
 [`make_filter(name, hz, **kwargs)`][myogestic.outputs.filters.make_filter] is the dispatch helper used by `FilterControl`:
 

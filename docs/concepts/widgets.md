@@ -40,31 +40,33 @@ def ui(ctx):
 When a widget needs persistent per-instance state - selected channel set, scroll offsets, popup open/closed flags - it lives in a private module:
 
 ```text
-myogestic/widgets/
-├── signal.py                   # public: def signal_viewer(ctx, stream, ...)
-├── _signal_viewer_state.py     # private: state dict keyed by stream
-├── _signal_viewer_controls.py  # private: control panel rendering
-└── _signal_viewer_plot.py      # private: plot rendering
+myogestic/widgets/signals/
+├── viewer.py                   # public: def signal_viewer(ctx, stream, ...)
+├── raw.py                      # public: def raw_signal_viewer(ctx, stream)
+├── _state.py                   # private: state dict keyed by stream
+├── _controls.py                # private: control panel rendering
+├── _plot.py                    # private: plot rendering
+└── _scan.py                    # private: channel scan helper
 ```
 
 The private modules are explicitly underscore-prefixed and not exported from `myogestic.widgets`. User code never imports them. The split is purely organisational - keep the public entry under ~200 lines and any single helper under ~350, with each helper focused on one concern (state, controls, plot).
 
-Inside `_signal_viewer_state.py`:
+Inside `signals/_state.py`:
 
 ```python
 @dataclass
-class _ViewerState:
+class ViewerState:
     visible_channels: set[int] = field(default_factory=set)
     gain: float = 1.0
     scale_mode: str = "auto"
     # ...
 
 
-_states: dict[str, _ViewerState] = {}
+_states: dict[str, ViewerState] = {}
 
 
-def get_state(key: str) -> _ViewerState:
-    return _states.setdefault(key, _ViewerState())
+def get_state(key: str) -> ViewerState:
+    return _states.setdefault(key, ViewerState())
 ```
 
 The widget calls `get_state(stream_name)` to look up its state. Two `signal_viewer(ctx, "emg")` calls share the dict entry; `signal_viewer(ctx, "imu")` gets a separate one.

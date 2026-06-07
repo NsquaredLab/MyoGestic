@@ -165,7 +165,7 @@ VHI isn't installed at the location `virtual_hand()` looks at - by default `<rep
 You're pushing raw model output. VHI rendering at 32-50 Hz amplifies any per-tick jitter.
 
 !!! tip "Fix"
-    Pair every VHI integration with a [`FilterControl`][myogestic.widgets.FilterControl] block (1€ filter is the default and usually right). Pass `t=time.monotonic()` into the filter so it computes real elapsed dt.
+    Pair every VHI integration with a [`FilterControl`][myogestic.widgets.FilterControl] block (1€ filter is the default and usually right). Pass `timestamp=time.monotonic()` into the filter so it computes real elapsed dt.
 
 ### VHI hand drifts after retraining
 

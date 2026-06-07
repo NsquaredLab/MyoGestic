@@ -77,7 +77,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![FilterControl](images/widgets/FilterControl.png){ .widget-thumb loading=lazy }
 
-    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). Sliders tune parameters in place; Reset clears smoothing history. Pair with `output_filter(pose, t=time.monotonic())` inside `@pipeline.predict`.
+    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). Sliders tune parameters in place; Reset clears smoothing history. Pair with `output_filter(pose, timestamp=time.monotonic())` inside `@pipeline.predict`.
 
 </div>
 

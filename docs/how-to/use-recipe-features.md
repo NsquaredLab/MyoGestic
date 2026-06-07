@@ -1,4 +1,4 @@
-# Use the contrib feature set
+# Use the recipe feature set
 
 `myogestic.recipes.features` ships five classic time-domain EMG features
 that every starter example used to copy-paste:
@@ -79,7 +79,7 @@ when feature selection is part of the user's iteration loop.
 ## Mixing in your own
 
 A "feature" is just a `Callable[[np.ndarray], np.ndarray]` matching the
-shape contract. Drop yours in next to the contrib ones:
+shape contract. Drop yours in next to the recipe ones:
 
 ```python
 import numpy as np
@@ -102,7 +102,7 @@ feats = FeatureSelector(
 These five features assume **time-domain windowed sEMG**. If your
 pipeline already extracts richer representations - spectral features,
 learned embeddings from a frozen network, MyoVerse decomposition output
- - `contrib.features` is the wrong toolbox.
+ - `myogestic.recipes.features` is the wrong toolbox.
 
 Use it for:
 

@@ -135,7 +135,7 @@ nav:
           - Record and replay: how-to/record-and-replay.md
           - Record good training data: how-to/record-good-training-data.md
           - Feature extraction cookbook: how-to/feature-extraction-cookbook.md
-          - Use the contrib feature set: how-to/use-contrib-features.md
+          - Use the recipe feature set: how-to/use-recipe-features.md
           - Keep state between pipeline stages: how-to/inter-stage-state.md
           - Post-process predictions: how-to/post-process-output.md
           - Integrate the Virtual Hand: how-to/integrate-vhi.md

@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Library reorganization + public-API standardization. These are **breaking**
+changes; the migration is mostly mechanical (renames). Old → new below.
+
+### Changed
+
+- **Reorganized into responsibility subpackages** (`sources`, `outputs`, `ml`,
+  `recipes`, `session`, `vhi`, `widgets`, `bridges`). Most public imports are
+  unchanged — thin facades re-export the same names — but a few moved:
+  - `myogestic.interfaces` (VHI) → `myogestic.vhi`
+  - `myogestic.contrib.*` and `myogestic.models.*` → `myogestic.recipes`
+    (feature recipes `myogestic.recipes.features`; estimator recipes
+    `myogestic.recipes.estimators`)
+  - model persistence (`save_pickle` / `load_pickle`) → `myogestic.ml`
+  - output-smoothing filters → `myogestic.outputs.filters` (also re-exported
+    from `myogestic.outputs`); `EdgeTrigger` → `myogestic.outputs` (and still
+    top-level `myogestic.EdgeTrigger`)
+
+- **BREAKING — public parameters renamed** for a self-descriptive surface:
+  durations now carry unit suffixes (`_ms` / `_s`), rates use `hz` / `*_hz`,
+  counts use `n_`, and cryptic/abbreviated names are spelled out.
+
+  *Streams & window extraction*
+  - `Stream(window_seconds=, buffer_seconds=)` → `Stream(window_ms=, buffer_ms=)`
+  - `iter_labeled_windows(win_seconds=, hop_seconds=)` → `(window_ms=, hop_ms=)`
+  - `iter_aligned_windows(primary_stream=, aligned_streams=, win_seconds=, hop_seconds=, align_window_samples=)`
+    → `(primary_stream_name=, aligned_stream_names=, window_ms=, hop_ms=, n_alignment_samples=)`
+  - `signal_viewer(window_seconds=)` → `signal_viewer(window_s=)`
+
+  *Session*
+  - `Session.init_stream(name=)`, `Session.append(name=)` → `stream_name=`
+  - `Session.get_trials(pre=, post=)` → `pre_s=, post_s=`
+
+  *Filters & outputs*
+  - `OneEuroFilter(freq=, min_cutoff=, d_cutoff=)` → `(hz=, min_cutoff_hz=, derivative_cutoff_hz=)`
+  - `GaussianFilter(window=)` → `n_vectors=`
+  - filter `__call__(x, t=)` → `__call__(x, timestamp=)` (every filter and `FilterControl`)
+  - `EdgeTrigger(stable_ticks=)` → `n_stable_ticks=`
+
+  *Recipes & VHI*
+  - `constant_classifier(class_idx=)` → `class_index=`
+  - `InterfaceSpec`: `output_stream=/control_stream=/control_pose_stream=` →
+    `*_stream_name=`; `output_channels=/control_channels=/control_pose_channels=` →
+    `n_output_channels=/n_control_channels=/n_control_pose_channels=`
+  - `virtual_hand(mode=)` → `launch_mode=`
+  - `VhiMovementPanel(refresh_min_interval_s=)` → `min_interval_s=`
+
+  *Widgets*
+  - `template_inspector(uid=)`, `trial_preview(uid=)` → `widget_id=`
+  - `trial_preview(window=)` → `as_window=`
+  - `process_launcher(label=)`, `FilterControl.ui(label=)` → `widget_id=`
+  - panel-heading `label=` → `title=` (`prediction_label`, `session_manager`,
+    `vhi_movement_palette`, `VhiMovementPanel`)
+  - `prediction_label(key=, proba_key=)` → `class_key=, probability_key=`
+  - `FeatureSelector.set_active(on=)` → `active=`
+
+  *CLI tools* (flag names unchanged — `--channels`, `--classes`, `--chunk`,
+  `--control`): the Python params of `emg_generator` / `lsl_dummy` `main()`
+  were renamed `channels`/`classes`/`chunk`/`control` →
+  `n_channels`/`n_classes`/`chunk_size`/`control_stream_name`.
+
+### Added
+
+- Streams accept integer and float dtypes (`StreamInfo(dtype=...)`, default
+  `float32`).
+- `EdgeTrigger(n_stable_ticks=N)` debounce — fire only after a value holds for
+  N consecutive ticks (swallows classifier flicker).
+- Docstring coverage is enforced (ruff pydocstyle, NumPy convention): every
+  public module, class, and function is documented.
+
+### Changed (internal)
+
+- CLI tools (`emg_generator`, `lsl_dummy`, `install_vhi`, `webcam`) migrated
+  from `argparse` to Typer.
+
 ## [2.0.2] - 2026-06-03
 
 ### Fixed
