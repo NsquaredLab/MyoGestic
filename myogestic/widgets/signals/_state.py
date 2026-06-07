@@ -31,8 +31,8 @@ class ViewerState:
     per_channel_scale: bool = False
     rescale_pending: bool = False
     paused: bool = False
-    frozen_ts: object | None = None
-    frozen_data: object | None = None
+    frozen_ts: np.ndarray | None = None
+    frozen_data: np.ndarray | None = None
     show_diagnostics: bool | None = None
     display_filter: str = "none"
     show_markers: bool = True
@@ -150,7 +150,7 @@ def get_viewer_state(
 def build_signal_frame(stream: Stream, v: ViewerState) -> SignalFrame | None:
     """Read one live/frozen snapshot and return the visible window."""
     frame_start = _time.perf_counter()
-    if v.paused and v.frozen_data is not None:
+    if v.paused and v.frozen_data is not None and v.frozen_ts is not None:
         ts_raw = v.frozen_ts
         data_raw = v.frozen_data
     else:
@@ -179,6 +179,8 @@ def build_signal_frame(stream: Stream, v: ViewerState) -> SignalFrame | None:
         start_idx = 0
     data_win = data_raw[start_idx:]
     ts_win = ts_raw[start_idx:]
+    # Caller (viewer.py) guards `stream.info is None` before building a frame.
+    assert stream.info is not None
     data_win = apply_display_filter(data_win, v.display_filter, stream.info.fs)
 
     n_out = max(1, int(v.n_pixels)) * 4

@@ -22,6 +22,7 @@ from myogestic.widgets.signals._scan import _scans, _ScanState
 
 if TYPE_CHECKING:
     from myogestic.core import Context
+    from myogestic.stream import Stream
 
 _OK = imgui.ImVec4(0.31, 0.73, 0.40, 1.0)
 _BAD = imgui.ImVec4(0.84, 0.36, 0.36, 1.0)
@@ -158,7 +159,7 @@ def _kickoff_scan(name: str, stream: object) -> None:
     _threading.Thread(target=_run, daemon=True).start()
 
 
-def _connect_buttons(name: str, stream: object, scan: _ScanState) -> None:
+def _connect_buttons(name: str, stream: Stream, scan: _ScanState) -> None:
     """Render available discover() results as inline connect buttons.
 
     Skips the button whose name matches the stream's *current* (failed) target,

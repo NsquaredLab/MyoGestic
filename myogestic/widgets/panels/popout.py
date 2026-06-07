@@ -15,6 +15,10 @@ macOS Metal/Retina caveats apply - see the README "Status" note.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from imgui_bundle.hello_imgui import DockableWindow
 
 # Note: hello_imgui import is deferred to popout_panel() — importing it at
 # module load time would force every consumer of myogestic.widgets to pay the
@@ -31,7 +35,7 @@ def _make_dockable_window(
     default_open: bool = True,
     can_be_closed: bool = True,
     remember_is_visible: bool | None = None,
-) -> object:
+) -> DockableWindow:
     """Build the Hello ImGui DockableWindow object for a popout panel."""
     from imgui_bundle import hello_imgui
 

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import zarr
+import zarr.storage
 
 if TYPE_CHECKING:
     from myogestic.stream import StreamInfo
@@ -107,6 +108,10 @@ class Session:
         self.label_track: list[LabelEvent] = []
         self.class_names: list[str] = []  # populated by save_meta / open_session_store
         self._streams_info: dict[str, StreamInfo] = {}
+        # Anchors a ZipStore's lifetime when opened from a .session.zip (see
+        # open_session_store): zarr reads arrays lazily from the archive, so the
+        # store handle must outlive this Session. Assigned there, never read.
+        self._zip_store: zarr.storage.ZipStore | None = None
 
     def init_stream(self, stream_name: str, info: StreamInfo) -> None:
         """Called once per stream when recording starts."""

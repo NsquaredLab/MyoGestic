@@ -102,6 +102,25 @@ build-backend = "setuptools.build_meta"
 testpaths = ["tests"]
 norecursedirs = ["tools", "examples", ".venv", "*.egg-info", "sessions", "*.zarr"]
 
+[tool.ty.src]
+# Generated gRPC stubs (mirror the ruff exclude): the proto-compiler output
+# trips type-checkers (e.g. EnumTypeWrapper metaclass clashes) and must not be
+# edited, so keep it out of type checking entirely.
+exclude = ["myogestic/vhi/_proto"]
+
+[tool.ty.rules]
+# Project policy uses bare `# type: ignore` (ty does not honor bracketed
+# codes). Several guard the optional/untyped `pyserial` import and the
+# dvg-ringbuffer `dtype=` tuples; whether ty sees them as "needed" depends on
+# which optional extras are installed in the active environment, so do not flag
+# them as unused.
+unused-type-ignore-comment = "ignore"
+
+[tool.pyright]
+# Same generated gRPC stubs as the ruff/ty excludes: pyright flags the
+# proto-compiler output (e.g. `grpc.experimental`), which must not be edited.
+exclude = ["myogestic/vhi/_proto", "**/.venv", "**/node_modules", "**/__pycache__"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

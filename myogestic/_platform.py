@@ -57,10 +57,12 @@ def _try_set_macos_dock_icon() -> None:
     if sys.platform != "darwin":
         return
     try:
-        from AppKit import (  # type: ignore
-            NSApplication,
-            NSApplicationActivationPolicyRegular,
-            NSImage,
+        # pyobjc-framework-Cocoa ships incomplete stubs: ty can't see these
+        # AppKit members. Bare ignores (ty doesn't honor bracketed codes).
+        from AppKit import (
+            NSApplication,  # type: ignore
+            NSApplicationActivationPolicyRegular,  # type: ignore
+            NSImage,  # type: ignore
         )
     except ImportError:
         print("[myogestic] dock icon: pyobjc-framework-Cocoa not installed", file=sys.stderr)

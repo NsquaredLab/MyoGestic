@@ -119,7 +119,9 @@ def render_log_popout(
             render_log(f"{widget_id}_pop", lines, height=-1.0, autoscroll=autoscroll)
     finally:
         imgui.end()
-    return still_open
+    # imgui.begin types still_open as bool | None, but passing p_open=True
+    # guarantees a bool at runtime; coerce to satisfy the bool return type.
+    return bool(still_open)
 
 
 __all__ = ["render_log", "render_log_buttons", "render_log_popout"]

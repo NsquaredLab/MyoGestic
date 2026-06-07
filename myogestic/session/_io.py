@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import zarr
+import zarr.storage
 
 from myogestic.session._core import LabelEvent, Session
 from myogestic.stream import StreamInfo
