@@ -43,10 +43,7 @@ ctrl_outlet = control_outlet()
 `control_outlet()` is the one-liner over the boilerplate `StreamOutlet(StreamInfo(name="EMG_Control", stype="Control", n_channels=1, ...))` - see [`myogestic.tools.emg_generator.control_outlet`](../api/core.md). The synthetic generator listens on `EMG_Control` for which class pattern to emit. Click "Fist" in the button strip → `ctrl_outlet.push_sample([1.0])` → generator switches to pattern 1.
 
 ```python
-vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
-HAND_REST = np.zeros(9, dtype=np.float32)
-HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
+--8<-- "examples/synthetic/emg_classification.py:poses"
 ```
 
 VHI consumes a 9-vec pose; we hand-define the two target poses (rest and full fist). The model just chooses between them.
