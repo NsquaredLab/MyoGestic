@@ -61,8 +61,7 @@ regress; pick the recorded sessions in the session manager; click
 ## The five DoFs
 
 ```python
-VHI_DOF_INDICES = [0, 2, 3, 4, 5]
-N_DOF = len(VHI_DOF_INDICES)
+--8<-- "examples/synthetic/emg_regression.py:dofs"
 ```
 
 VHI's `VHI_Control` outlet is the full 9-channel pose (see the table in
@@ -145,13 +144,7 @@ The returned dict feeds `pipeline.predictions` so widgets like
 ## Layout - six rows, three columns
 
 ```python
-LOGO_CELL_W = 300
-WORDMARK_ASPECT = 800 / 540
-grid = Grid(
-    6, 3,
-    row_height=[Px(LOGO_CELL_W / WORDMARK_ASPECT), *[Fr(1)] * 5],
-    col_width=[Px(LOGO_CELL_W), Fr(1), Fr(1)],
-)
+--8<-- "examples/synthetic/emg_regression.py:grid"
 ```
 
 A 6×3 grid: a fixed-height top row sized to the wordmark aspect, then

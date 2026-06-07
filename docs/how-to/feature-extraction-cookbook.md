@@ -6,9 +6,25 @@ That said, almost every EMG project starts with the same five or six features. T
 
 Each snippet wraps in `@pipeline.extract`. Drop into your script, swap one for another, and re-train.
 
-## 1. RMS + MAV (MyoVerse)
+## 1. RMS + MAV (the shipped baseline)
 
-The `examples/synthetic/emg_classification.py` baseline. Two of the most common time-domain EMG features, both windowed.
+`examples/synthetic/emg_classification.py` registers a menu of reference features via [`FeatureSelector`][myogestic.widgets.FeatureSelector] and lets the user toggle them live in the GUI:
+
+```python
+--8<-- "examples/synthetic/emg_classification.py:features"
+```
+
+`extract` just calls it — the active features are stacked into one flat vector, identical for training and live predict:
+
+```python
+--8<-- "examples/synthetic/emg_classification.py:extract"
+```
+
+The reference `rms`/`mav`/`wl`/`var`/`zc` live in [`myogestic.recipes.features`][myogestic.recipes.features] — plain numpy, channels-first `(n_channels, n_samples)` in, one scalar per channel out. Mix your own callables into the same dict; feature engineering is user code.
+
+### …or bring your own (MyoVerse)
+
+Prefer a library's windowed transforms? Swap the dict for them — `@pipeline.extract` can return any feature vector:
 
 ```python
 import numpy as np
@@ -28,9 +44,7 @@ def extract(windows):
     return np.concatenate([rms, mav])
 ```
 
-`window_size=32` is a per-channel MyoVerse parameter (samples per sub-window inside the EMG window). Tune to match your fs.
-
-Install: `uv sync --extra examples`.
+`window_size=32` is a per-channel MyoVerse parameter (samples per sub-window inside the EMG window). Tune to match your fs. Install: `uv sync --extra examples`.
 
 ## 2. scipy bandpass + envelope
 

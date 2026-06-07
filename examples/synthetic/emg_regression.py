@@ -52,8 +52,10 @@ output_filter = FilterControl(hz=32, default="one_euro")
 # Mosaic-2.0 registry indices; selecting these from VHI_Control during
 # training gives a 5-DOF target (WristRot + 4 fingers) instead of the full
 # 9-DOF vector, which keeps the regressor manageable for a fake-EMG demo.
+# --8<-- [start:dofs]
 VHI_DOF_INDICES = [0, 2, 3, 4, 5]
 N_DOF = len(VHI_DOF_INDICES)
+# --8<-- [end:dofs]
 
 # MyoVerse transforms — preferred over hand-rolled numpy here so the feature
 # extraction stays compatible with downstream MyoGestic models.
@@ -218,6 +220,7 @@ def predict(model, features):
 
 # Branding cell pinned to the wordmark aspect; cols 1+2 are Fr so the
 # signal viewer + stream/log panels grow with window width.
+# --8<-- [start:grid]
 LOGO_CELL_W = 300
 WORDMARK_ASPECT = 800 / 540
 grid = Grid(
@@ -226,6 +229,7 @@ grid = Grid(
     row_height=[Px(LOGO_CELL_W / WORDMARK_ASPECT), *[Fr(1)] * 5],
     col_width=[Px(LOGO_CELL_W), Fr(1), Fr(1)],
 )
+# --8<-- [end:grid]
 
 
 def _on_gesture(i: int) -> None:

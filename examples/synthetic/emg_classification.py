@@ -36,10 +36,12 @@ from myogestic.widgets import (
 
 ctrl_outlet = control_outlet()
 
+# --8<-- [start:poses]
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 HAND_REST = np.zeros(9, dtype=np.float32)
 HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
+# --8<-- [end:poses]
 
 # Output-side smoothing applied to the hand pose vector before pushing
 # to VHI. Live-tunable via the FilterControl widget rendered in the UI.
