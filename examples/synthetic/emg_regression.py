@@ -146,7 +146,9 @@ def train(data: TrainingData):
         except Exception as e:
             log.append(f"  skip {p}: {e}")
             continue
-        if "vhi_control" in sess.stores:
+        has_kin = "vhi_control" in sess.stores
+        sess.close()  # only needed the store list — release the .session.zip handle
+        if has_kin:
             kin_paths.append(p)
         else:
             label_paths.append(p)

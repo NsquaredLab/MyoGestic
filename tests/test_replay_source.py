@@ -2,14 +2,16 @@
 
 import json
 import shutil
+import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
 import zarr
 
+from myogestic.session import Session
 from myogestic.sources.replay import ReplaySource
-from myogestic.stream import Stream
+from myogestic.stream import Stream, StreamInfo
 
 
 def create_synthetic_session(path: Path, stream_name: str, n_channels: int, fs: float):
@@ -148,3 +150,28 @@ def test_replay_into_stream():
 
     stream.stop()
     shutil.rmtree(session_path)
+
+
+def test_replay_source_closes_zip_on_disconnect():
+    """Replaying a .session.zip must release the ZipStore on disconnect.
+
+    An open ZipStore locks the archive on Windows, so a leaked handle would
+    block deleting / re-recording the file (and trip the tempdir cleanup here).
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        s = Session(base_path=tmp)
+        s.init_stream("emg", StreamInfo(n_channels=2, fs=64.0, dtype=np.dtype("float32")))
+        s.append("emg", np.ones((32, 2), np.float32), np.arange(32, dtype=np.float64))
+        s.save_meta("Replay")
+        zip_path = s.pack_to_zip()
+
+        src = ReplaySource(str(zip_path), "emg", speed=100.0)
+        src.connect()
+        src.read()
+        assert src._session is not None
+        src.disconnect()
+        assert src._session is None  # ZipStore released
+
+        # Would raise PermissionError (WinError 32) if the handle leaked.
+        zip_path.unlink()
+        assert not zip_path.exists()
