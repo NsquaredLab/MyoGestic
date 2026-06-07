@@ -2,6 +2,7 @@
 
 The most-used public symbols on one page, signatures only. This page is hand-maintained and not exhaustive. For prose, full Args/Returns, and source links, jump to the [API reference](../api/index.md).
 
+<!--docs:skip-->
 ```python
 # --- Core (myogestic) ------------------------------------------
 App(name, theme=True, docking=False)

@@ -79,6 +79,7 @@ for r in sess.get_trials("emg", pre_s=0, post_s=0):
 
 ### Classification - [`iter_labeled_windows`][myogestic.session.iter_labeled_windows]
 
+<!--docs:run-->
 ```python
 from myogestic.session import iter_labeled_windows
 
@@ -102,6 +103,7 @@ for window, ts, cls in iter_labeled_windows(
 
 ### Regression - [`iter_aligned_windows`][myogestic.session.iter_aligned_windows]
 
+<!--docs:run-->
 ```python
 from myogestic.session import iter_aligned_windows
 
