@@ -198,6 +198,7 @@ def train(data: TrainingData):
     return reg
 
 
+# --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
     """Regress 5-DOF → expand to 9-DOF → smooth → push to VHI."""
@@ -212,6 +213,7 @@ def predict(model, features):
     pred_9dof = output_filter(pred_9dof).astype(np.float32)
     vhi_outlet.push(pred_9dof)
     return {"dof": pred_5dof, "hand": pred_9dof}
+# --8<-- [end:predict]
 
 
 # Branding cell pinned to the wordmark aspect; cols 1+2 are Fr so the

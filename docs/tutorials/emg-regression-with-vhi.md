@@ -128,18 +128,7 @@ to the stacked `(X, y)`.
 ## Prediction: smoothed, expanded, pushed
 
 ```python
-@pipeline.predict
-def predict(model, features):
-    pred_5dof = model.predict(features.reshape(1, -1))[0]
-    pred_5dof = np.clip(pred_5dof, 0, 1)
-
-    pred_9dof = np.zeros(9, dtype=np.float32)
-    for i, vhi_idx in enumerate(VHI_DOF_INDICES):
-        pred_9dof[vhi_idx] = -pred_5dof[i]
-
-    pred_9dof = output_filter(pred_9dof).astype(np.float32)
-    vhi_outlet.push(pred_9dof)
-    return {"dof": pred_5dof, "hand": pred_9dof}
+--8<-- "examples/synthetic/emg_regression.py:predict"
 ```
 
 Three steps:
