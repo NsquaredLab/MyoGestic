@@ -2,7 +2,7 @@
 
 Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io/). Each subpackage has its own page:
 
-- [Core](core.md) - `App`, `Context`, `Stream`, `StreamInfo`, `Px`/`Fr`/`Grid`, `EdgeTrigger`, `TrainingData`, `virtual_hand`, `contrib.features`, `install_vhi`.
+- [Core](core.md) - `App`, `Context`, `Stream`, `StreamInfo`, `Px`/`Fr`/`Grid`, `EdgeTrigger`, `TrainingData`, `virtual_hand`, `recipes.features`, `install_vhi`.
 - [Sources](sources.md) - `LSLSource`, `ReplaySource`, `SerialSource`.
 - [Outputs](outputs.md) - `Output`, `LSLOutlet`, `UDPOutput`, `SerialOutput`.
 - [ML pipeline](ml.md) - `Pipeline`, `save_pickle`, `load_pickle`, ML widgets.

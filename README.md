@@ -93,7 +93,7 @@ Quick links into the source:
 
 - **[Getting Started](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/getting-started.md)** - install + run the synthetic-EMG demo.
 - **[Tutorials](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/tutorials)** - `emg-classification`, `emg-regression-with-vhi`.
-- **[How-to guides](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/how-to)** - recipes (custom source, custom widget, custom model, integrate the Virtual Hand, install VHI, the contrib feature set, ...).
+- **[How-to guides](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/how-to)** - recipes (custom source, custom widget, custom model, integrate the Virtual Hand, install VHI, the recipe feature set, ...).
 - **[Concepts](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/concepts)** - architecture, streams, pipeline, threading, recording, the `Px`/`Fr` grid, the `EdgeTrigger` pattern.
 - **[API reference](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/api)** - auto-generated from docstrings.
 - **[API cheatsheet](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/reference/api-cheatsheet.md)** - every public symbol on one page.

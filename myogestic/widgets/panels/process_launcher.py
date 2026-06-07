@@ -1,7 +1,7 @@
 """Process launcher widget for @app.ui.
 
 Usage:
-    from myogestic.proc import process_launcher
+    from myogestic.widgets import process_launcher
 
     PROCESSES = [
         ("8ch EMG", ["mne_lsl_player", "--n_channels", "8", "--fs", "256"]),

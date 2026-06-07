@@ -1,6 +1,6 @@
 # API cheatsheet
 
-Every public symbol on one page, signatures only. For prose, full Args/Returns, and source links, jump to the [API reference](../api/index.md).
+The most-used public symbols on one page, signatures only. This page is hand-maintained and not exhaustive. For prose, full Args/Returns, and source links, jump to the [API reference](../api/index.md).
 
 ```python
 # --- Core (myogestic) ------------------------------------------
@@ -81,12 +81,12 @@ session_manager(base_path, title="Sessions", class_names=None)
   -> TrainingData(paths, class_names, classes)
 process_launcher(processes)
 scatter2d(label, points) / scatter3d(label, points)
-heatmap(label, matrix) / line_plot(label, ys, xs=None)
+heatmap(label, data) / line_plot(label, data, channel_names=None)
 panel_header(title, icon=None)
 FilterControl(hz=50, default="one_euro").ui()
 popout_panel(title, gui_fn)
-template_inspector(uid, rows)
-trial_preview(uid, row, fs)
+template_inspector(widget_id, rows)
+trial_preview(widget_id, data, fs)
 
 # --- ML widgets (myogestic.ml.widgets) -------------------------
 train_button(pipeline)

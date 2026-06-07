@@ -44,7 +44,7 @@ Click **Record** → data flows into `sessions/<timestamp>/`. Click **Stop** →
        │   │ user clicks gesture buttons                  │   │
        │   │   recording_controls adds                    │   │
        │   │   ctx.session.add_label(class_idx,           │   │
-       │   │                          t=local_clock())    │   │
+       │   │                  timestamp=local_clock())    │   │
        │   │                                              │   │
        │   │ user clicks Stop                             │   │
        │   │ app.stop_recording()                         │   │
