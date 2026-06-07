@@ -255,6 +255,9 @@ def render_footer(
     ch_names: list[str] | None,
     show_diagnostics: bool,
 ) -> None:
+    # Caller only renders the footer for a connected stream (viewer.py guards
+    # `stream.info is None` and returns early), so info is non-None here.
+    assert stream.info is not None
     frame_dt = _time.perf_counter() - frame.frame_start
     v.fps.append(frame_dt)
     if len(v.fps) > 60:

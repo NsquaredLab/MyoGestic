@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time as _time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from imgui_bundle import imgui, implot
@@ -126,7 +126,9 @@ def raw_signal_viewer(
         }
         r.bufs = bufs
 
-    xs = bufs["xs"]
+    # `bufs` is a heterogeneous dict (str keys -> int / ndarray / dict); the
+    # casts tell the checker the concrete type behind each known key.
+    xs = cast("np.ndarray", bufs["xs"])
     np.subtract(ts, ts[0], out=xs[:n_samples])
     xs_view = xs[:n_samples]
 
@@ -150,11 +152,13 @@ def raw_signal_viewer(
 
     if implot.begin_plot(f"{stream_name}##{stream_name}_raw", imgui.ImVec2(size[0], size[1])):
         plot_idx = 0
+        ys_bufs = cast("dict[int, np.ndarray]", bufs["ys"])
+        cap = cast("int", bufs["cap"])
         for ch in sorted(enabled):
             offset = -plot_idx * channel_height
-            if ch not in bufs["ys"]:
-                bufs["ys"][ch] = np.empty(bufs["cap"], dtype=np.float64)
-            ys = bufs["ys"][ch]
+            if ch not in ys_bufs:
+                ys_bufs[ch] = np.empty(cap, dtype=np.float64)
+            ys = ys_bufs[ch]
             np.add(data[:, ch], offset, out=ys[:n_samples])
             label = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
             implot.plot_line(f"{label}##{stream_name}_raw", xs_view, ys[:n_samples], specs[ch])

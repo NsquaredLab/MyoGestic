@@ -5,6 +5,7 @@ import zipfile
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 
 @dataclass
@@ -72,7 +73,7 @@ def _label_counts(labels: list[object]) -> dict[str, int]:
     for lbl in labels:
         if not isinstance(lbl, dict):
             continue
-        ci = lbl.get("class_index", -1)
+        ci = cast("dict[str, object]", lbl).get("class_index", -1)
         counts[str(ci)] = counts.get(str(ci), 0) + 1
     return counts
 
