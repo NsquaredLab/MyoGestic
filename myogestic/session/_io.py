@@ -56,8 +56,9 @@ def open_session_store(path: str | Path) -> Session:
     ]
     session._streams_info = {}
     session.class_names = list(meta.get("class_names") or [])
-    if zip_store is not None:
-        session._zip_store = zip_store
+    # Always set (None for folder sessions): keeps Session.close() safe even
+    # though open_session_store bypasses __init__ via Session.__new__.
+    session._zip_store = zip_store
 
     for name, info in meta.get("streams", {}).items():
         data = open_array(f"{name}.zarr")

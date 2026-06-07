@@ -404,3 +404,56 @@ def test_pack_does_not_delete_a_concurrent_same_second_session(monkeypatch):
         assert s2.path.exists()
         assert np.array(s2.stores["emg"]).shape == (8, 2)
         assert np.allclose(np.array(s2.stores["emg"]), 2.0)
+
+
+def _quick_session(tmp: str) -> Session:
+    """Build a tiny one-stream, one-label session (helper for the tests below)."""
+    s = Session(base_path=tmp)
+    info = StreamInfo(n_channels=2, fs=64.0, dtype=np.dtype("float32"))
+    s.init_stream("emg", info)
+    s.append("emg", np.ones((16, 2), np.float32), np.arange(16, dtype=np.float64))
+    s.add_label(0, timestamp=0.0)
+    s.save_meta("Quick")
+    return s
+
+
+def test_pack_to_zip_overwrites_existing_target():
+    """pack_to_zip uses os.replace, which overwrites a pre-existing .session.zip.
+
+    On Windows ``Path.rename`` raises ``FileExistsError`` when the destination
+    exists; ``os.replace`` overwrites on every OS.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        s = _quick_session(tmp)
+        zip_path = s.path.with_name(s.path.name + ".session.zip")
+        zip_path.write_bytes(b"stale")  # a leftover file at the destination
+        out = s.pack_to_zip()
+        assert out == zip_path
+        with open_session_store(out) as loaded:  # real, readable zip (not stale)
+            assert np.array(loaded.stores["emg"]).shape == (16, 2)
+
+
+def test_session_close_releases_zipstore_and_is_idempotent():
+    """close() drops the ZipStore handle (so Windows can move/delete the zip),
+    is safe to call twice, and works as a context manager."""
+    with tempfile.TemporaryDirectory() as tmp:
+        zip_path = _quick_session(tmp).pack_to_zip()
+
+        s = open_session_store(zip_path)
+        assert s._zip_store is not None
+        s.close()
+        assert s._zip_store is None
+        s.close()  # idempotent — no error
+
+        with open_session_store(zip_path) as ctx:
+            assert ctx._zip_store is not None
+        assert ctx._zip_store is None  # closed on context exit
+
+
+def test_open_folder_session_has_no_zipstore_and_closes_safely():
+    """A folder session (no zip) exposes _zip_store=None so close() stays safe."""
+    with tempfile.TemporaryDirectory() as tmp:
+        s = _quick_session(tmp)
+        loaded = open_session_store(s.path)  # folder, not zip
+        assert loaded._zip_store is None
+        loaded.close()  # must not raise

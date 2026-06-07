@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import gc
 import json
 import logging
+import os
 import shutil
+import stat
 import time
 import uuid
 import zipfile
@@ -22,6 +25,36 @@ log = logging.getLogger(__name__)
 
 if find_spec("zarrs") is not None:
     zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
+
+
+def _robust_rmtree(path: Path, *, retries: int = 5, delay_s: float = 0.1) -> None:
+    """``shutil.rmtree`` that tolerates Windows file-handle lag.
+
+    On POSIX a single ``rmtree`` of a zarr folder always succeeds (open files can
+    be unlinked). On Windows a just-written chunk - or an antivirus scan - can
+    briefly hold a handle, so deletion raises ``PermissionError`` (WinError 32).
+    Force a GC to drop any lingering zarr handles, clear the read-only bit
+    Windows sets on locked files, and retry a few times before giving up.
+
+    Notes
+    -----
+    A no-op-different behaviour on POSIX: the first attempt succeeds, so the
+    retry/GC path is Windows-only in practice.
+    """
+
+    def _force_writable(func, p, _exc):  # noqa: ANN001
+        os.chmod(p, stat.S_IWRITE)
+        func(p)
+
+    for attempt in range(retries):
+        try:
+            shutil.rmtree(path, onexc=_force_writable)
+            return
+        except OSError:
+            if attempt == retries - 1:
+                raise
+            gc.collect()
+            time.sleep(delay_s)
 
 
 @dataclass
@@ -203,10 +236,14 @@ class Session:
         Uses ZIP_STORED (no compression). Zarr chunks are already compressed
         internally; an outer compression layer would add CPU for little gain.
         """
-        # zarr v3 arrays do not expose explicit close, but DirectoryStore
-        # flushes on append. Dropping refs before zip verification is enough.
+        # zarr v3 arrays expose no explicit close, so drop refs and force a GC
+        # to release the underlying chunk-file handles. On POSIX this is belt-
+        # and-braces (open files can be unlinked anyway); on Windows it is
+        # required - the later rmtree/replace fail with WinError 32 if any
+        # handle into the folder is still open.
         self.stores.clear()
         self.ts_stores.clear()
+        gc.collect()
 
         zip_path = self.path.with_name(self.path.name + ".session.zip")
         tmp_path = zip_path.with_suffix(zip_path.suffix + ".tmp")
@@ -233,8 +270,10 @@ class Session:
             tmp_path.unlink(missing_ok=True)
             raise
 
-        tmp_path.rename(zip_path)
-        shutil.rmtree(self.path)
+        # os.replace (not Path.rename): atomic overwrite on both OSes - Windows
+        # rename raises if the destination already exists.
+        os.replace(tmp_path, zip_path)
+        _robust_rmtree(self.path)
         self.path = zip_path
         return zip_path
 
@@ -285,3 +324,31 @@ class Session:
     def stream_info(self, stream_name: str) -> StreamInfo:
         """Public accessor for a stream's StreamInfo."""
         return self._streams_info[stream_name]
+
+    def close(self) -> None:
+        """Release file handles held by this session.
+
+        Closes the ``ZipStore`` opened by :func:`open_session_store` for a
+        ``.session.zip`` and drops the array references. Safe to call more than
+        once. On Windows an open ``ZipStore`` keeps the archive **locked**, so
+        close the session before moving or deleting the ``.session.zip``. Use as
+        a context manager (``with open_session_store(p) as s: ...``) to do this
+        automatically.
+        """
+        store = getattr(self, "_zip_store", None)
+        if store is not None:
+            try:
+                store.close()
+            except Exception:  # noqa: BLE001 - best-effort release on teardown
+                log.debug("ZipStore close failed for %s", self.path, exc_info=True)
+            self._zip_store = None
+        self.stores.clear()
+        self.ts_stores.clear()
+
+    def __enter__(self) -> Session:
+        """Return self so a session can be used as a context manager."""
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        """Close file handles on context exit."""
+        self.close()
