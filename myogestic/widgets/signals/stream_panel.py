@@ -141,7 +141,7 @@ def _kickoff_scan(name: str, stream: object) -> None:
     scan = _scans.setdefault(name, _ScanState())
     if scan.busy:
         return
-    discover_fn = getattr(stream._source, "discover", None)  # type: ignore[attr-defined]
+    discover_fn = getattr(stream._source, "discover", None)  # type: ignore
     if discover_fn is None:
         return
     scan.busy = True
@@ -200,7 +200,7 @@ def _current_target(stream: object) -> str | None:
 
     Used to suppress the redundant button for the failing target.
     """
-    src = stream._source  # type: ignore[attr-defined]
+    src = stream._source  # type: ignore
     for attr in ("stream_name", "_stream_name", "name", "_name"):
         val = getattr(src, attr, None)
         if isinstance(val, str) and val:

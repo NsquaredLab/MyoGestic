@@ -52,7 +52,7 @@ class SerialOutput(Output):
     """
 
     def __init__(self, port: str, baud: int = 115200, hz: float = 10, fmt: str = "f"):
-        import serial  # type: ignore[import-not-found]
+        import serial  # type: ignore
 
         self._ser = serial.Serial(port, baud)
         self._fmt = fmt

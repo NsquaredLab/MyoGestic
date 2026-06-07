@@ -145,10 +145,20 @@ class Session:
         ts_store.append(timestamps)
 
     def add_label(self, class_index: int, timestamp: float | None = None) -> None:
+        """Append a label event to the session's label track.
+
+        Parameters
+        ----------
+        class_index
+            Class index for the event; ``-1`` marks a rest / no-class boundary.
+        timestamp
+            Event time in seconds (``mne_lsl`` clock). Defaults to the current
+            ``local_clock()`` when omitted.
+        """
         from mne_lsl.lsl import local_clock
 
-        t = timestamp if timestamp is not None else local_clock()
-        self.label_track.append(LabelEvent(timestamp=t, class_index=class_index))
+        ts = timestamp if timestamp is not None else local_clock()
+        self.label_track.append(LabelEvent(timestamp=ts, class_index=class_index))
 
     def save_meta(self, app_name: str, class_names: list[str] | None = None) -> None:
         """Write meta.json + labels.json to the session folder.

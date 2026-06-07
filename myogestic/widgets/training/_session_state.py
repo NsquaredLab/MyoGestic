@@ -99,9 +99,9 @@ def _streams_str(streams_meta: dict) -> str:
     return " + ".join(stream_parts) if stream_parts else "—"
 
 
-def add_recorded_session(path: str, base_path: str = "sessions", label: str = "Sessions") -> None:
+def add_recorded_session(path: str, base_path: str = "sessions", title: str = "Sessions") -> None:
     """Register a freshly recorded session as selected."""
-    widget_id = f"{label}_{base_path}"
+    widget_id = f"{title}_{base_path}"
     state = get_state(widget_id)
     if any(s["path"] == path for s in state.sessions):
         return

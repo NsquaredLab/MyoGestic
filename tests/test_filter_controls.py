@@ -40,9 +40,17 @@ def test_reset_clears_active_filter_state():
     c(np.array([1.0]))
     c(np.array([2.0]))
     # Internal state populated
-    assert c.filter._x_prev is not None  # type: ignore[attr-defined]
+    assert c.filter._x_prev is not None  # type: ignore
     c.reset()
-    assert c.filter._x_prev is None  # type: ignore[attr-defined]
+    assert c.filter._x_prev is None  # type: ignore
     # First call after reset returns input verbatim
     out = c(np.array([10.0]))
     assert np.isclose(out[0], 10.0)
+
+
+def test_callable_accepts_timestamp_kwarg():
+    """__call__ takes ``timestamp`` (renamed from ``t``) and forwards it."""
+    c = FilterControl(default="one_euro", hz=50)
+    c(np.array([0.0], dtype=np.float32), timestamp=0.0)
+    out = c(np.array([10.0], dtype=np.float32), timestamp=0.1)
+    assert out.shape == (1,)

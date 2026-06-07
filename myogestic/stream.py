@@ -268,11 +268,11 @@ class Stream:
         self._cap = int(self.info.fs * self._buffer_seconds)
         self._data = RingBuffer(
             capacity=self._cap,
-            dtype=(self.info.dtype, self.info.n_channels),  # type: ignore[arg-type]
+            dtype=(self.info.dtype, self.info.n_channels),  # type: ignore
         )
         self._timestamps = RingBuffer(
             capacity=self._cap,
-            dtype=np.float64,  # type: ignore[arg-type]
+            dtype=np.float64,  # type: ignore
         )
         self._display_d = np.empty((self._cap, self.info.n_channels), dtype=self.info.dtype)
         self._display_t = np.empty(self._cap, dtype=np.float64)

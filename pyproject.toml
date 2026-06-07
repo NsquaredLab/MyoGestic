@@ -92,7 +92,7 @@ include = ["myogestic*"]
 # Ship the branding assets (icon + wordmark) and the gRPC proto inside the
 # wheel; without this, `pip install myogestic` would land them in the
 # wrong place (or skip them) and image_from_asset / gen_proto would fail.
-myogestic = ["assets/**/*", "_proto/*.proto"]
+myogestic = ["assets/**/*", "vhi/_proto/*.proto"]
 
 [build-system]
 requires = ["setuptools>=68.0"]
