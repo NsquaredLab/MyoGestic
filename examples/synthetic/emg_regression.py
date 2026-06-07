@@ -152,6 +152,7 @@ def train(data: TrainingData):
             label_paths.append(p)
 
     # Kinematics path
+    # --8<-- [start:kin_loop]
     for emg_window, aligned, _ts in iter_aligned_windows(
         kin_paths,
         "emg",
@@ -163,6 +164,7 @@ def train(data: TrainingData):
         kin = np.abs(aligned["vhi_control"][VHI_DOF_INDICES])
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
+    # --8<-- [end:kin_loop]
     if kin_paths:
         log.append(f"  kinematics: {len(all_X)} windows from {len(kin_paths)} sessions")
 
@@ -170,6 +172,7 @@ def train(data: TrainingData):
     # Honor the class chips here too — synthetic targets only get computed
     # for active classes.
     n_before_labels = len(all_X)
+    # --8<-- [start:label_loop]
     for emg_window, _ts, ci in iter_labeled_windows(
         label_paths,
         "emg",
@@ -180,6 +183,7 @@ def train(data: TrainingData):
         kin = np.ones(5, dtype=np.float64) if ci == 1 else np.zeros(5, dtype=np.float64)
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
+    # --8<-- [end:label_loop]
     if label_paths:
         log.append(
             f"  labels: {len(all_X) - n_before_labels} windows from {len(label_paths)} sessions"
@@ -208,9 +212,11 @@ def predict(model, features):
     pred_5dof = np.clip(pred_5dof, 0, 1)
 
     # Expand to 9-DOF and negate for VHI
+    # --8<-- [start:expand]
     pred_9dof = np.zeros(9, dtype=np.float32)
     for i, vhi_idx in enumerate(VHI_DOF_INDICES):
         pred_9dof[vhi_idx] = -pred_5dof[i]
+    # --8<-- [end:expand]
 
     pred_9dof = output_filter(pred_9dof).astype(np.float32)
     vhi_outlet.push(pred_9dof)

@@ -74,9 +74,7 @@ The expansion back to 9-DoF for `vhi_outlet.push()` zero-fills the
 unselected channels:
 
 ```python
-pred_9dof = np.zeros(9, dtype=np.float32)
-for i, vhi_idx in enumerate(VHI_DOF_INDICES):
-    pred_9dof[vhi_idx] = -pred_5dof[i]
+--8<-- "examples/synthetic/emg_regression.py:expand"
 ```
 
 The sign flip aligns the regressor's `[0, 1]` magnitude with VHI's
@@ -87,13 +85,7 @@ flexion convention (`-1` = full flex).
 The training callback handles **two kinds of session** transparently:
 
 ```python
-for emg_window, aligned, _ts in iter_aligned_windows(
-    kin_paths, "emg", ["vhi_control"], WINDOW_MS, HOP_MS,
-    n_alignment_samples=10,
-):
-    kin = np.abs(aligned["vhi_control"][VHI_DOF_INDICES])
-    all_X.append(extract_features(emg_window))
-    all_y.append(kin)
+--8<-- "examples/synthetic/emg_regression.py:kin_loop"
 ```
 
 `iter_aligned_windows` walks every EMG window in the session and
@@ -102,13 +94,7 @@ slice becomes the regression target. This is the primary path -
 sessions with both EMG and kinematics.
 
 ```python
-for emg_window, _ts, ci in iter_labeled_windows(
-    label_paths, "emg", WINDOW_MS, HOP_MS,
-    classes=data.classes if data.classes else None,
-):
-    kin = np.ones(5) if ci == 1 else np.zeros(5)
-    all_X.append(extract_features(emg_window))
-    all_y.append(kin)
+--8<-- "examples/synthetic/emg_regression.py:label_loop"
 ```
 
 `iter_labeled_windows` is the fallback for sessions that were recorded
