@@ -17,7 +17,7 @@ def extract(windows: dict[str, np.ndarray]):
 
 @pipeline.train
 def train(data: TrainingData):
-    rows = iter_labeled_windows(data.paths, "emg", win_s=0.2, hop_s=0.1)
+    rows = iter_labeled_windows(data.paths, "emg", window_ms=200, hop_ms=100)
     X, y = ...  # build feature matrix
     return CatBoostClassifier().fit(X, y)
 
@@ -71,7 +71,7 @@ Inside `predict()` you typically also push to outputs:
 @pipeline.predict
 def predict(model, features):
     pose = model.predict(features)
-    pose_smooth = pose_filter(pose, t=time.monotonic())
+    pose_smooth = pose_filter(pose, timestamp=time.monotonic())
     vhi_outlet.push(pose_smooth)
     return {"pose": pose_smooth}
 ```

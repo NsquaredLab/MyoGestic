@@ -36,12 +36,12 @@ from lightning.pytorch.callbacks import ModelCheckpoint, StochasticWeightAveragi
 from myoverse.models.raul_net.v17 import RaulNetV17
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import pipeline_panel
 from myogestic.session import iter_aligned_windows, iter_labeled_windows, open_session_store
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
+from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
     FilterControl,
     app_logo,
@@ -53,19 +53,26 @@ from myogestic.widgets import (
 
 # ── Stream / window math ──────────────────────────────────────────────
 # Same 8-channel 2048 Hz synthetic EMG the other examples use, with a
-# 0.2 s analysis window. RaulNet's sliding-RMS feature drops 120 samples
-# per window (RMS_WINDOW with stride 1) → (8, INPUT_LENGTH) fed to the CNN.
+# 200 ms analysis window. RaulNet's sliding-RMS feature runs an RMS_WINDOW_MS
+# window at an RMS_STRIDE_MS step, shortening it to (8, INPUT_LENGTH) for the CNN.
 
 STREAM_NAME = "TestEMG1"
 N_CHANNELS = 8
 FS = 2048
-WIN_SECONDS = 0.2
-HOP_SECONDS = 0.1  # 50% overlap
+WINDOW_MS = 200  # analysis window the model sees each prediction
+HOP_MS = 100  # training-window step (50% overlap)
 
-N_WINDOW_SAMPLES = int(WIN_SECONDS * FS)
-RMS_WINDOW = 120
-RMS_STRIDE = 1
-INPUT_LENGTH = (N_WINDOW_SAMPLES - RMS_WINDOW) // RMS_STRIDE + 1
+N_WINDOW_SAMPLES = int(WINDOW_MS / 1000 * FS)
+RMS_WINDOW_MS = 60  # sliding-RMS window, in ms (must be < WINDOW_MS)
+RMS_WINDOW_SAMPLES = round(RMS_WINDOW_MS / 1000 * FS)
+RMS_STRIDE_MS = 5  # sliding-RMS step, in ms
+RMS_STRIDE_SAMPLES = max(1, round(RMS_STRIDE_MS / 1000 * FS))
+INPUT_LENGTH = (N_WINDOW_SAMPLES - RMS_WINDOW_SAMPLES) // RMS_STRIDE_SAMPLES + 1
+if RMS_WINDOW_SAMPLES >= N_WINDOW_SAMPLES:
+    raise ValueError(
+        f"RMS_WINDOW_MS={RMS_WINDOW_MS} must be < WINDOW_MS={WINDOW_MS}: "
+        "the RMS kernel slides inside the analysis window."
+    )
 
 # 5 VHI DOFs (mosaic-2.0 registry): wrist rotation + index/middle/ring/pinky.
 VHI_DOF_INDICES = [0, 2, 3, 4, 5]
@@ -83,12 +90,12 @@ def sliding_rms(emg: np.ndarray) -> np.ndarray:
     stable even on the first frames where the ring buffer isn't full yet.
     """
     n_ch, n = emg.shape
-    if n < RMS_WINDOW:
+    if n < RMS_WINDOW_SAMPLES:
         return np.zeros((n_ch, INPUT_LENGTH), dtype=np.float32)
-    s = np.lib.stride_tricks.sliding_window_view(emg, RMS_WINDOW, axis=1)
-    if RMS_STRIDE > 1:
-        s = s[:, ::RMS_STRIDE]
-    out = np.sqrt(np.mean(s ** 2, axis=2)).astype(np.float32)
+    s = np.lib.stride_tricks.sliding_window_view(emg, RMS_WINDOW_SAMPLES, axis=1)
+    if RMS_STRIDE_SAMPLES > 1:
+        s = s[:, ::RMS_STRIDE_SAMPLES]
+    out = np.sqrt(np.mean(s**2, axis=2)).astype(np.float32)
     if out.shape[1] >= INPUT_LENGTH:
         return out[:, -INPUT_LENGTH:]
     pad = np.zeros((n_ch, INPUT_LENGTH - out.shape[1]), dtype=np.float32)
@@ -98,10 +105,7 @@ def sliding_rms(emg: np.ndarray) -> np.ndarray:
 def save_raulnet(model: L.LightningModule, path: str) -> None:
     """Save the trained RaulNet as a torch checkpoint with hparams."""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {"state_dict": model.state_dict(), "hparams": dict(model.hparams)},
-        path,
-    )
+    torch.save({"state_dict": model.state_dict(), "hparams": dict(model.hparams)}, path)
 
 
 def load_raulnet(path: str) -> L.LightningModule:
@@ -127,9 +131,17 @@ PROCESSES = [
     (
         "EMG Generator",
         [
-            sys.executable, "-m", "myogestic.tools.emg_generator",
-            "--name", STREAM_NAME, "--channels", str(N_CHANNELS),
-            "--fs", str(FS), "--control", "EMG_Control",
+            sys.executable,
+            "-m",
+            "myogestic.tools.emg_generator",
+            "--name",
+            STREAM_NAME,
+            "--channels",
+            str(N_CHANNELS),
+            "--fs",
+            str(FS),
+            "--control",
+            "EMG_Control",
         ],
     ),
     # vhi.launcher() returns a [(name, argv)] entry; splat it so EMG
@@ -139,11 +151,13 @@ PROCESSES = [
 
 app = App("EMG Regression — RaulNet", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource(STREAM_NAME),
-           window_seconds=WIN_SECONDS, buffer_seconds=60),
-    Stream("vhi_control",
-           source=LSLSource(vhi.control_stream or "VHI_Control"),
-           window_seconds=1.0, buffer_seconds=60),
+    Stream("emg", source=LSLSource(STREAM_NAME), window_ms=WINDOW_MS, buffer_ms=60000),
+    Stream(
+        "vhi_control",
+        source=LSLSource(vhi.control_stream_name or "VHI_Control"),
+        window_ms=1000,
+        buffer_ms=60000,
+    ),
 )
 pipeline = Pipeline(app, predict_hz=20)
 pipeline.save_model = save_raulnet
@@ -169,14 +183,11 @@ class _TrainLogCallback(L.Callback):
         super().__init__()
         self._log = log_list
 
-    def on_train_epoch_end(
-        self, trainer: L.Trainer, pl_module: L.LightningModule
-    ) -> None:
+    def on_train_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:
         loss = trainer.callback_metrics.get("train/loss")
         loss_str = f"{float(loss):.4f}" if loss is not None else "—"
         self._log.append(
-            f"  epoch {trainer.current_epoch + 1}/{trainer.max_epochs}"
-            f"  loss={loss_str}"
+            f"  epoch {trainer.current_epoch + 1}/{trainer.max_epochs}  loss={loss_str}"
         )
 
 
@@ -201,7 +212,9 @@ def train(data: TrainingData) -> L.LightningModule:
         except Exception as e:
             log.append(f"  skip {p}: {e}")
             continue
-        if "vhi_control" in sess.stores:
+        has_kin = "vhi_control" in sess.stores
+        sess.close()  # only needed the store list — release the .session.zip handle
+        if has_kin:
             kin_paths.append(p)
         else:
             label_paths.append(p)
@@ -210,8 +223,12 @@ def train(data: TrainingData) -> L.LightningModule:
     y_list: list[np.ndarray] = []
 
     for emg_window, aligned, _ts in iter_aligned_windows(
-        kin_paths, "emg", ["vhi_control"],
-        WIN_SECONDS, HOP_SECONDS, align_window_samples=10,
+        kin_paths,
+        "emg",
+        ["vhi_control"],
+        WINDOW_MS,
+        HOP_MS,
+        n_alignment_samples=10,
     ):
         X_list.append(sliding_rms(emg_window))
         y_list.append(np.abs(aligned["vhi_control"][VHI_DOF_INDICES]))
@@ -220,7 +237,10 @@ def train(data: TrainingData) -> L.LightningModule:
 
     n_before_labels = len(X_list)
     for emg_window, _ts, ci in iter_labeled_windows(
-        label_paths, "emg", WIN_SECONDS, HOP_SECONDS,
+        label_paths,
+        "emg",
+        WINDOW_MS,
+        HOP_MS,
         classes=data.classes if data.classes else None,
     ):
         target = np.ones(N_DOF, dtype=np.float32) if ci == 1 else np.zeros(N_DOF, dtype=np.float32)
@@ -237,8 +257,8 @@ def train(data: TrainingData) -> L.LightningModule:
             f"a few hundred for stable training."
         )
 
-    X = np.stack(X_list).astype(np.float32)              # (N, n_ch, INPUT_LENGTH)
-    y = np.stack(y_list).astype(np.float32)              # (N, n_dof)
+    X = np.stack(X_list).astype(np.float32)  # (N, n_ch, INPUT_LENGTH)
+    y = np.stack(y_list).astype(np.float32)  # (N, n_dof)
     log.append(f"  X shape={X.shape}, y shape={y.shape}")
 
     # RaulNet wants an extra channel dim: (N, 1, n_ch, INPUT_LENGTH).
@@ -246,7 +266,11 @@ def train(data: TrainingData) -> L.LightningModule:
     y_tensor = torch.from_numpy(y)
     dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
     loader = torch.utils.data.DataLoader(
-        dataset, batch_size=64, shuffle=True, num_workers=0, pin_memory=True,
+        dataset,
+        batch_size=64,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=True,
     )
 
     model = RaulNetV17(
@@ -271,17 +295,24 @@ def train(data: TrainingData) -> L.LightningModule:
     # On Apple Silicon (MPS) the loss-of-bf16 throughput is small; on CUDA
     # bump to fp16-mixed if you've patched RaulNet's traced ops.
     trainer = L.Trainer(
-        accelerator="auto", devices=1, precision="32-true",
+        accelerator="auto",
+        devices=1,
+        precision="32-true",
         max_epochs=50,
         # log_every_n_steps=1 so callback_metrics is populated even when
         # an epoch is a single batch (small training-set demo case).
         log_every_n_steps=1,
         callbacks=[
             StochasticWeightAveraging(
-                swa_lrs=1e-4, swa_epoch_start=0.5, annealing_epochs=5,
+                swa_lrs=1e-4,
+                swa_epoch_start=0.5,
+                annealing_epochs=5,
             ),
             ModelCheckpoint(
-                monitor="train/loss", mode="min", save_top_k=1, save_last=True,
+                monitor="train/loss",
+                mode="min",
+                save_top_k=1,
+                save_last=True,
                 dirpath="data/logs/raulnet/",
             ),
             _TrainLogCallback(log),
@@ -300,8 +331,8 @@ def predict(model: L.LightningModule, features: np.ndarray) -> dict:
     """Regress 5-DOF → expand to 9-DOF (negated) → smooth → push to VHI."""
     with torch.inference_mode():
         x = torch.from_numpy(features).float().to(model.device)
-        x = x.unsqueeze(0).unsqueeze(0)               # (1, 1, n_ch, INPUT_LENGTH)
-        out = model(x).cpu().numpy()[0]               # (5,)
+        x = x.unsqueeze(0).unsqueeze(0)  # (1, 1, n_ch, INPUT_LENGTH)
+        out = model(x).cpu().numpy()[0]  # (5,)
     pred_5dof = np.clip(out, 0, 1)
 
     pred_9dof = np.zeros(9, dtype=np.float32)
@@ -327,7 +358,7 @@ def _on_gesture(i: int) -> None:
     # cycle=False: snap to the movement's end pose and hold it. VHI_Control
     # settles to a static kinematic value per gesture, which the regressor
     # learns to map back from the corresponding EMG amplitude.
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
     vhi_client.set_movement(CLASSES[i], cycle=False)
 
 

@@ -21,7 +21,7 @@ a continuous 9-vec.
 ## The one-liner that wires it up
 
 ```python
-from myogestic.interfaces import virtual_hand
+from myogestic.vhi.interfaces import virtual_hand
 
 vhi = virtual_hand()                  # resolves install path + gRPC endpoint
 vhi_outlet = vhi.outlet()             # 9-ch LSL outlet @ 32 Hz
@@ -111,7 +111,7 @@ pose_filter = FilterControl(hz=20.0, default="one_euro")
 
 @pipeline.predict
 def predict(model, features):
-    pose = pose_filter(model.compose_pose(features), t=time.monotonic())
+    pose = pose_filter(model.compose_pose(features), timestamp=time.monotonic())
     vhi_outlet.push(pose)
     return {"pose": pose}
 
@@ -130,7 +130,7 @@ tick" - it's "tell VHI to play movement X *when the class changes*". The
 gRPC client is the discrete-event sibling of the LSL outlet:
 
 ```python
-from myogestic.edge_trigger import EdgeTrigger
+from myogestic.outputs import EdgeTrigger
 
 CLASSES = ["Rest", "Fist", "Pinch", "Point"]
 
@@ -177,7 +177,7 @@ movement buttons, dispatch clicks through gRPC" into one widget. Drop it
 in a grid cell and forget about it:
 
 ```python
-from myogestic.widgets.vhi_movement_panel import VhiMovementPanel
+from myogestic.widgets.vhi.panel import VhiMovementPanel
 
 panel = VhiMovementPanel(vhi_client)
 
@@ -233,7 +233,7 @@ def predict(model, features):
 Or attach `pylsl`'s `lslviewer.py` to the `MyoGestic_Output` stream. For
 the gRPC plane, the standard `grpcurl` works against the local server
 when VHI is running - the proto is at
-`myogestic/_proto/myogestic_vhi.proto`.
+`myogestic/vhi/_proto/myogestic_vhi.proto`.
 
 ## Common mistakes
 
@@ -260,6 +260,6 @@ symptom-organised debugging.
 * [Edge trigger](../concepts/edge-trigger.md) - fire-on-change pattern.
 * [Examples directory](../tutorials/examples-index.md) - every shipped
   example wires VHI either via LSL, gRPC, or both.
-* [`myogestic.interfaces.virtual_hand`](../api/core.md) - full signature.
-* [`myogestic.widgets.vhi_movement_panel.VhiMovementPanel`](../api/widgets.md) -
+* [`myogestic.vhi.interfaces.virtual_hand`](../api/core.md) - full signature.
+* [`myogestic.widgets.vhi.panel.VhiMovementPanel`](../api/widgets.md) -
   movement palette API.

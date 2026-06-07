@@ -56,7 +56,7 @@ Stateless function widgets you call from inside `@app.ui`. See [Widgets concept 
 
 ::: myogestic.widgets.template_inspector
 
-::: myogestic.widgets.template_inspector.TemplateInspectorRow
+::: myogestic.widgets.training.template_inspector.TemplateInspectorRow
 
 ::: myogestic.widgets.trial_preview
 
@@ -76,7 +76,7 @@ Stateless function widgets you call from inside `@app.ui`. See [Widgets concept 
 
 ## Branding
 
-::: myogestic.widgets.app_logo.app_logo
+::: myogestic.widgets.panels.app_logo.app_logo
 
 ![app_logo](../images/widgets/app_logo.png){ loading=lazy }
 
@@ -84,7 +84,7 @@ Stateless function widgets you call from inside `@app.ui`. See [Widgets concept 
 
 ## ML readout
 
-::: myogestic.widgets.prediction_label.prediction_label
+::: myogestic.widgets.training.prediction_label.prediction_label
 
 ![prediction_label](../images/widgets/prediction_label.png){ loading=lazy }
 
@@ -92,7 +92,7 @@ Stateless function widgets you call from inside `@app.ui`. See [Widgets concept 
 
 ## Virtual Hand integration
 
-::: myogestic.widgets.vhi_movement_panel.VhiMovementPanel
+::: myogestic.widgets.vhi.panel.VhiMovementPanel
 
 ![VhiMovementPanel](../images/widgets/VhiMovementPanel.png){ loading=lazy }
 
@@ -100,10 +100,10 @@ Stateless function widgets you call from inside `@app.ui`. See [Widgets concept 
 
 `VhiMovementPanel` wraps these for the common case. Reach for them directly when you want to share one state cache across multiple panels, or render the palette without owning a client.
 
-::: myogestic.widgets.vhi_movement_palette.vhi_movement_palette
+::: myogestic.widgets.vhi.palette.vhi_movement_palette
 
-::: myogestic.widgets.vhi_movement_palette.VhiStateCache
+::: myogestic.widgets.vhi.palette.VhiStateCache
 
-::: myogestic.widgets.vhi_movement_palette.VhiStateSnapshot
+::: myogestic.widgets.vhi.palette.VhiStateSnapshot
 
-::: myogestic.widgets.vhi_movement_palette.request_vhi_state_refresh
+::: myogestic.widgets.vhi.palette.request_vhi_state_refresh

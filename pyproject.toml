@@ -37,6 +37,7 @@ dependencies = [
     # without shipping a .app bundle. The PEP 508 marker keeps Linux /
     # Windows installs from pulling it in.
     "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
+    "typer>=0.12",
 ]
 
 [project.scripts]
@@ -91,7 +92,7 @@ include = ["myogestic*"]
 # Ship the branding assets (icon + wordmark) and the gRPC proto inside the
 # wheel; without this, `pip install myogestic` would land them in the
 # wrong place (or skip them) and image_from_asset / gen_proto would fail.
-myogestic = ["assets/**/*", "_proto/*.proto"]
+myogestic = ["assets/**/*", "vhi/_proto/*.proto"]
 
 [build-system]
 requires = ["setuptools>=68.0"]
@@ -101,10 +102,29 @@ build-backend = "setuptools.build_meta"
 testpaths = ["tests"]
 norecursedirs = ["tools", "examples", ".venv", "*.egg-info", "sessions", "*.zarr"]
 
+[tool.ty.src]
+# Generated gRPC stubs (mirror the ruff exclude): the proto-compiler output
+# trips type-checkers (e.g. EnumTypeWrapper metaclass clashes) and must not be
+# edited, so keep it out of type checking entirely.
+exclude = ["myogestic/vhi/_proto"]
+
+[tool.ty.rules]
+# Project policy uses bare `# type: ignore` (ty does not honor bracketed
+# codes). Several guard the optional/untyped `pyserial` import and the
+# dvg-ringbuffer `dtype=` tuples; whether ty sees them as "needed" depends on
+# which optional extras are installed in the active environment, so do not flag
+# them as unused.
+unused-type-ignore-comment = "ignore"
+
+[tool.pyright]
+# Same generated gRPC stubs as the ruff/ty excludes: pyright flags the
+# proto-compiler output (e.g. `grpc.experimental`), which must not be edited.
+exclude = ["myogestic/vhi/_proto", "**/.venv", "**/node_modules", "**/__pycache__"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-exclude = ["tools", "sessions", ".venv", "*.egg-info", "*.zarr", ".imgui_state"]
+exclude = ["tools", "sessions", ".venv", "*.egg-info", "*.zarr", ".imgui_state", "myogestic/vhi/_proto", "docs/playground"]
 
 [tool.ruff.lint]
 # Conservative defaults — catch real issues, don't fight style.
@@ -116,6 +136,7 @@ select = [
     "UP",   # pyupgrade (modernize syntax)
     "I",    # isort (import ordering)
     "SIM",  # flake8-simplify
+    "D",    # pydocstyle (docstring presence + NumPy formatting)
 ]
 ignore = [
     "E501",   # line too long — line-length handles this
@@ -123,13 +144,17 @@ ignore = [
     "SIM108", # ternary vs if/else — readability call, leave to author
     "SIM105", # contextlib.suppress vs try/except/pass — try/except is clearer
     "SIM113", # use enumerate — doesn't apply when loop filter/counter diverge
+    "D105",   # magic methods — document only meaningful ones by policy
+    "D107",   # constructor params live on the class docstring (merge_init_into_class)
+    "D401",   # descriptive API summaries beat forced imperative mood
 ]
 
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011"]  # allow `assert` in tests
-"examples/**/*" = ["E402"]  # imports after module-level code (app = App(...) pattern)
+"tests/*" = ["B011", "D"]  # allow `assert`; tests don't need docstrings
+"examples/**/*" = ["E402", "D"]  # imports after module-level code; examples are prose-documented
 # Optional-dep imports at module bottom are intentional (conditional availability)
 "myogestic/outputs/__init__.py" = ["E402"]
 "myogestic/sources/__init__.py" = ["E402"]
-# Intentional side-effect import that registers a zarr codec pipeline
-"myogestic/session.py" = ["F401"]

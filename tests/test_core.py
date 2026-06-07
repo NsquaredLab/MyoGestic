@@ -46,7 +46,7 @@ def test_recording_transitions():
     stop_lsl = start_synthetic_stream("CoreTestEMG", n_channels=4, fs=128)
     time.sleep(0.5)
 
-    stream = Stream("emg", source=LSLSource("CoreTestEMG"), window_seconds=0.2)
+    stream = Stream("emg", source=LSLSource("CoreTestEMG"), window_ms=200)
     app = App("TestApp")
     app.streams(stream)
 
@@ -80,7 +80,7 @@ def test_invalid_transitions_are_noop():
     stop_lsl = start_synthetic_stream("NoopTestEMG", n_channels=2, fs=64)
     time.sleep(0.5)
 
-    stream = Stream("sig", source=LSLSource("NoopTestEMG"), window_seconds=0.1)
+    stream = Stream("sig", source=LSLSource("NoopTestEMG"), window_ms=100)
     app = App("NoopTest")
     app.streams(stream)
     stream.start()
@@ -112,6 +112,7 @@ def test_run_is_not_reentrant():
     app = App("Reentrant")
     app._running = True
     import pytest
+
     with pytest.raises(RuntimeError, match="not re-entrant"):
         app.run()
     app._running = False
@@ -120,6 +121,7 @@ def test_run_is_not_reentrant():
 def test_run_unknown_mode_raises_before_startup():
     """Bad mode must fail loudly before any threads start."""
     import pytest
+
     app = App("UnknownMode")
     with pytest.raises(ValueError, match="unknown mode"):
         app.run(mode="banana")
@@ -139,6 +141,7 @@ def test_before_run_hooks_registered():
 def test_run_cleanup_fires_on_before_run_hook_failure(capsys):
     """If a before_run hook raises, cleanup hooks must still run (try/finally)."""
     app = App("CleanupOnFail")
+
     # Register UI so run() doesn't bail on missing _ui_fn
     @app.ui
     def _ui(ctx):
@@ -151,6 +154,7 @@ def test_run_cleanup_fires_on_before_run_hook_failure(capsys):
     app.cleanup_hooks.append(lambda a: cleanup_calls.append("cleanup2"))
 
     import pytest
+
     with pytest.raises(RuntimeError, match="hook2 boom"):
         app.run(mode="gui")
 
@@ -165,7 +169,7 @@ def test_run_cleanup_fires_on_before_run_hook_failure(capsys):
 def test_start_recording_skips_disconnected_streams():
     """start_recording must not attach session to a stream whose info is None —
     zarr would fail on append without init_stream."""
-    stream = Stream("never_connects", source=LSLSource("NoSuchStream"), window_seconds=0.2)
+    stream = Stream("never_connects", source=LSLSource("NoSuchStream"), window_ms=200)
     app = App("RecordingSkipDisconnected")
     app.streams(stream)
 
@@ -179,12 +183,14 @@ def test_start_recording_skips_disconnected_streams():
 
     app.stop_recording()
     import shutil
+
     shutil.rmtree("/tmp/myogestic_disconn_test", ignore_errors=True)
 
 
 def test_run_cleanup_continues_on_cleanup_hook_failure():
     """A cleanup hook that raises must not prevent later cleanup hooks."""
     app = App("CleanupChain")
+
     @app.ui
     def _ui(ctx):
         pass
@@ -197,6 +203,7 @@ def test_run_cleanup_continues_on_cleanup_hook_failure():
     app.cleanup_hooks.append(lambda a: calls.append("after_boom"))
 
     import pytest
+
     with pytest.raises(RuntimeError):
         app.run()
 

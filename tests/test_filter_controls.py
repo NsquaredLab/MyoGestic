@@ -4,15 +4,15 @@ we exercise only the pure state/parameter logic here."""
 import numpy as np
 import pytest
 
-from myogestic.filters import GaussianFilter, IdentityFilter, OneEuroFilter
-from myogestic.widgets.filter_controls import FilterControl
+from myogestic.outputs.filters import GaussianFilter, IdentityFilter, OneEuroFilter
+from myogestic.widgets.panels.filter_controls import FilterControl
 
 
 def test_default_constructs_one_euro():
     c = FilterControl(hz=32)
     assert c.name == "one_euro"
     assert isinstance(c.filter, OneEuroFilter)
-    assert c.filter.freq == 32.0
+    assert c.filter.hz == 32.0
 
 
 def test_explicit_default_constructs_named_filter():
@@ -40,9 +40,17 @@ def test_reset_clears_active_filter_state():
     c(np.array([1.0]))
     c(np.array([2.0]))
     # Internal state populated
-    assert c.filter._x_prev is not None  # type: ignore[attr-defined]
+    assert c.filter._x_prev is not None  # type: ignore
     c.reset()
-    assert c.filter._x_prev is None  # type: ignore[attr-defined]
+    assert c.filter._x_prev is None  # type: ignore
     # First call after reset returns input verbatim
     out = c(np.array([10.0]))
     assert np.isclose(out[0], 10.0)
+
+
+def test_callable_accepts_timestamp_kwarg():
+    """__call__ takes ``timestamp`` (renamed from ``t``) and forwards it."""
+    c = FilterControl(default="one_euro", hz=50)
+    c(np.array([0.0], dtype=np.float32), timestamp=0.0)
+    out = c(np.array([10.0], dtype=np.float32), timestamp=0.1)
+    assert out.shape == (1,)

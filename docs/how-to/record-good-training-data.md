@@ -29,7 +29,7 @@ Instead, do this in **one** Record→Stop session:
 [Stop]
 ```
 
-That's eight button clicks, ~24 seconds of data, in one session. After framework processing, classification models see ~12-15 overlapping windows per class (with the default `WIN_SECONDS=0.2`, `HOP_SECONDS=0.1`) - enough for the model to actually generalise.
+That's eight button clicks, ~24 seconds of data, in one session. After framework processing, classification models see ~12-15 overlapping windows per class (with the default `WINDOW_MS=200`, `HOP_MS=100`) - enough for the model to actually generalise.
 
 ## How many cycles
 

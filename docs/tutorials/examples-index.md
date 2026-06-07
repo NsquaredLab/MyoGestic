@@ -31,7 +31,7 @@ the canonical first read, and its line-by-line companion is the
 uv run python examples/synthetic/emg_classification.py
 ```
 
-**What to tweak:** swap `rms`/`mav` from `myogestic.contrib.features`
+**What to tweak:** swap `rms`/`mav` from `myogestic.recipes.features`
 for your own feature, change `CLASSES`, replace CatBoost with any
 sklearn-shaped classifier.
 

@@ -49,7 +49,7 @@ from myogestic.sources import LSLSource
 from myogestic.widgets import recording_controls, signal_viewer
 
 app = App("Hello EMG")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 
 @app.ui
 def ui(ctx):
@@ -93,10 +93,10 @@ Quick links into the source:
 
 - **[Getting Started](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/getting-started.md)** - install + run the synthetic-EMG demo.
 - **[Tutorials](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/tutorials)** - `emg-classification`, `emg-regression-with-vhi`.
-- **[How-to guides](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/how-to)** - recipes (custom source, custom widget, custom model, integrate the Virtual Hand, install VHI, the contrib feature set, ...).
+- **[How-to guides](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/how-to)** - recipes (custom source, custom widget, custom model, integrate the Virtual Hand, install VHI, the recipe feature set, ...).
 - **[Concepts](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/concepts)** - architecture, streams, pipeline, threading, recording, the `Px`/`Fr` grid, the `EdgeTrigger` pattern.
 - **[API reference](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/api)** - auto-generated from docstrings.
-- **[API cheatsheet](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/reference/api-cheatsheet.md)** - every public symbol on one page.
+- **[API cheatsheet](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/reference/api-cheatsheet.md)** - the most-used public symbols on one page.
 - **[Playground](https://nsquaredlab.github.io/MyoGestic/playground/)** - the in-browser demo (no install).
 
 The docs are deployed to GitHub Pages via [`.github/workflows/docs.yml`](https://github.com/NsquaredLab/MyoGestic/blob/main/.github/workflows/docs.yml) on every push to `main`.

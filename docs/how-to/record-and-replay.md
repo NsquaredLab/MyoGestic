@@ -69,16 +69,17 @@ info = sess.stream_info("emg")
 print(info.n_channels, info.fs, info.channel_names)
 
 # Per-trial slices
-for r in sess.get_trials("emg", pre=0, post=0):
-    print(r.class_name, r.data.shape, r.ts.shape)
+for r in sess.get_trials("emg", pre_s=0, post_s=0):
+    print(r.class_name, r.data.shape, r.timestamps.shape)
 ```
 
-`r.data` is `(n_channels, n_samples)` - channels-first like `Stream.get_window()`.
+`r.data` is `(n_samples, n_channels)` - sample-major (as stored on disk).
 
 ## Iterating windows for training
 
 ### Classification - [`iter_labeled_windows`][myogestic.session.iter_labeled_windows]
 
+<!--docs:run-->
 ```python
 from myogestic.session import iter_labeled_windows
 
@@ -86,41 +87,42 @@ X, y = [], []
 for window, ts, cls in iter_labeled_windows(
     data.paths,
     stream_name="emg",
-    win_seconds=0.2,
-    hop_seconds=0.1,
+    window_ms=200,
+    hop_ms=100,
     classes={0, 1, 2},
 ):
     X.append(rms(window))  # window: (n_channels, n_samples)
     y.append(cls)
 ```
 
-- `win_seconds` / `hop_seconds`: window duration / step in seconds.
+- `window_ms` / `hop_ms`: window duration / step in milliseconds.
 - `classes`: optional set of class indices to include (handy when you want to skip "rest").
 - Drops windows that straddle a label boundary so each window has exactly one class.
 - Each iteration yields `(window, ts, class_index)` - `ts` is the matching 1-D timestamp array.
-- `sw.data` is **channels-first** - match your feature extractor.
+- `window` is **channels-first** - match your feature extractor.
 
 ### Regression - [`iter_aligned_windows`][myogestic.session.iter_aligned_windows]
 
+<!--docs:run-->
 ```python
 from myogestic.session import iter_aligned_windows
 
 X, Y = [], []
-for sw, targets in iter_aligned_windows(
+for window, targets, ts in iter_aligned_windows(
     paths=data.paths,
-    primary="emg",
-    aligned=["vhi_guide"],
-    win_s=0.2,
-    hop_s=0.05,
-    align_window_samples=1,
+    primary_stream_name="emg",
+    aligned_stream_names=["vhi_guide"],
+    window_ms=200,
+    hop_ms=50,
+    n_alignment_samples=1,
 ):
-    X.append(rms(sw.data))
-    Y.append(targets["vhi_guide"])  # 1-D vector synchronised to sw.ts[-1]
+    X.append(rms(window))
+    Y.append(targets["vhi_guide"])  # 1-D vector synchronised to ts[-1]
 ```
 
 - `primary` is the stream you slice into windows.
 - `aligned` is a list of *target* streams whose latest value at the window's end is paired with the EMG window.
-- `align_window_samples` is the tolerance (samples) for the alignment lookup.
+- `n_alignment_samples` is the tolerance (samples) for the alignment lookup.
 
 ## Replay as a Source
 
@@ -139,7 +141,7 @@ app.streams(
             stream_name="emg",
             speed=1.0,  # 0.5 = half-speed, 2.0 = double-speed
         ),
-        window_seconds=1.0,
+        window_ms=1000,
     )
 )
 app.run()

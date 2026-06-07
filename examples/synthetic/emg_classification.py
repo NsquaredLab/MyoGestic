@@ -15,14 +15,14 @@ import sys
 import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.contrib.features import mav, rms, var, wl, zc
-from myogestic.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import pipeline_panel
-from myogestic.models import catboost_classifier
+from myogestic.recipes.estimators import catboost_classifier
+from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
+from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
     FeatureSelector,
     FilterControl,
@@ -36,22 +36,28 @@ from myogestic.widgets import (
 
 ctrl_outlet = control_outlet()
 
+# --8<-- [start:poses]
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 HAND_REST = np.zeros(9, dtype=np.float32)
 HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
+# --8<-- [end:poses]
 
 # Output-side smoothing applied to the hand pose vector before pushing
 # to VHI. Live-tunable via the FilterControl widget rendered in the UI.
+# --8<-- [start:filter]
 output_filter = FilterControl(hz=32, default="one_euro")
+# --8<-- [end:filter]
 
-# Reference RMS / MAV / WL / VAR / ZC live in myogestic.contrib.features; mix
+# Reference RMS / MAV / WL / VAR / ZC live in myogestic.recipes.features; mix
 # with your own callables here — feature engineering is user code, this is
 # the seam where you'd add custom ones.
+# --8<-- [start:features]
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
     default=["RMS", "MAV"],
 )
+# --8<-- [end:features]
 
 PROCESSES = [
     (
@@ -75,22 +81,27 @@ PROCESSES = [
 CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
 
-WIN_SECONDS = 0.2
-HOP_SECONDS = 0.1
+# --8<-- [start:setup]
+WINDOW_MS = 200
+HOP_MS = 100
 
 app = App("EMG Classification", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG1"), window_seconds=WIN_SECONDS, buffer_seconds=60)
+    Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000)
 )
 pipeline = Pipeline(app)
+# --8<-- [end:setup]
 
 
+# --8<-- [start:extract]
 @pipeline.extract
 def extract(windows: dict[str, np.ndarray]) -> np.ndarray:
     """Active features stacked along axis 0 → flat feature vector."""
     return features(windows["emg"])
+# --8<-- [end:extract]
 
 
+# --8<-- [start:train]
 @pipeline.train
 def train(data: TrainingData):
     """Train CatBoost classifier on numpy features from selected sessions.
@@ -120,7 +131,7 @@ def train(data: TrainingData):
     all_y: list[int] = []
 
     for window, _ts, class_idx in iter_labeled_windows(
-        data.paths, "emg", WIN_SECONDS, HOP_SECONDS, classes=data.classes
+        data.paths, "emg", WINDOW_MS, HOP_MS, classes=data.classes
     ):
         all_X.append(extract({"emg": window}))
         all_y.append(class_idx)
@@ -142,8 +153,10 @@ def train(data: TrainingData):
     clf.fit(X, y)
     print(f"[train] done — accuracy on train: {clf.score(X, y):.2%}")
     return clf
+# --8<-- [end:train]
 
 
+# --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
     """Classify → map to hand pose → smooth → push to VHI.
@@ -157,6 +170,7 @@ def predict(model, features):
     hand = output_filter(hand).astype(np.float32)
     vhi_outlet.push(hand)
     return {"class": class_idx, "proba": proba, "hand": hand}
+# --8<-- [end:predict]
 
 
 # Branding cell is FIXED-pixel in both axes so it stays sized to the
@@ -166,6 +180,7 @@ def predict(model, features):
 # Everything else uses Fr (CSS-grid "fraction unit") to share the leftover
 # space: cols 1+2 split the remaining width equally, rows 1-7 split the
 # remaining height equally.
+# --8<-- [start:layout]
 LOGO_CELL_W = 300
 WORDMARK_ASPECT = 800 / 540
 grid = Grid(
@@ -177,7 +192,7 @@ grid = Grid(
 
 
 def _on_gesture(i: int) -> None:
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
 @app.ui
@@ -218,6 +233,7 @@ def demo_ui(ctx):
 
     with grid[7, 0]:
         prediction_label(pipeline, CLASSES)
+# --8<-- [end:layout]
 
 
 def main() -> None:

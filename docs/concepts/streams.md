@@ -18,13 +18,13 @@ The transpose happens at one edge, in `Stream.get_window()`. New source adapters
 ## Construction
 
 ```python
-Stream(name, source, window_seconds, buffer_seconds=10)
+Stream(name, source, window_ms, buffer_ms=10000)
 ```
 
 - `name` keys the stream into `ctx.streams[name]`.
 - `source` is anything implementing the `Source` protocol (`connect`, `read`, `disconnect`).
-- `window_seconds` is the duration of `get_window()`'s slice. There's no upper bound; values like 30 s are intentional for slow-moving signals.
-- `buffer_seconds` defaults to 10 s. The ring buffer stores this much past data so the predict thread always has a window to slice and `signal_viewer` can render the recent history.
+- `window_ms` is the duration of `get_window()`'s slice. There's no upper bound; values like 30 s are intentional for slow-moving signals.
+- `buffer_ms` defaults to 10 s. The ring buffer stores this much past data so the predict thread always has a window to slice and `signal_viewer` can render the recent history.
 
 ## Reading the buffer
 
@@ -36,7 +36,7 @@ data, ts = stream.get_window()
 # ts.shape   == (n_samples,)        # pylsl.local_clock() values
 ```
 
-Returns the most recent `window_seconds` of data, channels-first. `ts[-1]` is the timestamp of the newest sample - pass this into stateful models (e.g. `model.step(emg, last_ts=ts[-1])`) so they can detect stale ticks (predict thread firing faster than acquisition).
+Returns the most recent `window_ms` of data, channels-first. `ts[-1]` is the timestamp of the newest sample - pass this into stateful models (e.g. `model.step(emg, last_ts=ts[-1])`) so they can detect stale ticks (predict thread firing faster than acquisition).
 
 ### `get_display(n_pixels)` - for widgets
 
@@ -45,7 +45,7 @@ env_min, env_max = stream.get_display(n_pixels=800)
 # both shape == (n_pixels, n_channels)
 ```
 
-Returns a min/max envelope decimated to `n_pixels` columns - typical screen widths land at 300–1500. 64 channels at 2048 Hz with `window_seconds=10` is 64 × 2 × 800 = ~102K points, which ImPlot draws at 60 fps without breaking a sweat. The decimation uses [tsdownsample](https://github.com/predict-idlab/tsdownsample)'s M4 algorithm under the hood - preserves visual peaks without sub-sampling artefacts.
+Returns a min/max envelope decimated to `n_pixels` columns - typical screen widths land at 300–1500. 64 channels at 2048 Hz with `window_ms=10000` is 64 × 2 × 800 = ~102K points, which ImPlot draws at 60 fps without breaking a sweat. The decimation uses [tsdownsample](https://github.com/predict-idlab/tsdownsample)'s M4 algorithm under the hood - preserves visual peaks without sub-sampling artefacts.
 
 ### `get_raw_snapshot()` - for diagnostics
 
@@ -72,7 +72,7 @@ You don't usually call `start()` / `stop()` directly:
 
 ```python
 app = App("Demo")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 app.run()  # starts every stream, runs the GUI, stops every stream on exit
 ```
 
@@ -101,6 +101,6 @@ info.channel_names  # ["EMG_01", "EMG_02", ...] or None
 
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
 
-- **Confusing window vs. buffer.** `window_seconds` is what `get_window` returns; `buffer_seconds` is how much history the buffer holds. The latter only matters if you want to look back further than a window (e.g. for a 30 s signal viewer with a 1 s prediction window).
+- **Confusing window vs. buffer.** `window_ms` is what `get_window` returns; `buffer_ms` is how much history the buffer holds. The latter only matters if you want to look back further than a window (e.g. for a 30 s signal viewer with a 1 s prediction window).
 - **Forgetting the transpose.** If you sub-class a Source and accidentally return `(n_channels, n_samples)`, the recording layer will write a Zarr array shaped wrong and replay won't match. Stay sample-major in the source.
 - **Computing on the display path.** `get_display` is decimated. For features, always use `get_window`.

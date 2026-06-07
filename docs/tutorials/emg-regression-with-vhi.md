@@ -61,8 +61,7 @@ regress; pick the recorded sessions in the session manager; click
 ## The five DoFs
 
 ```python
-VHI_DOF_INDICES = [0, 2, 3, 4, 5]
-N_DOF = len(VHI_DOF_INDICES)
+--8<-- "examples/synthetic/emg_regression.py:dofs"
 ```
 
 VHI's `VHI_Control` outlet is the full 9-channel pose (see the table in
@@ -75,9 +74,7 @@ The expansion back to 9-DoF for `vhi_outlet.push()` zero-fills the
 unselected channels:
 
 ```python
-pred_9dof = np.zeros(9, dtype=np.float32)
-for i, vhi_idx in enumerate(VHI_DOF_INDICES):
-    pred_9dof[vhi_idx] = -pred_5dof[i]
+--8<-- "examples/synthetic/emg_regression.py:expand"
 ```
 
 The sign flip aligns the regressor's `[0, 1]` magnitude with VHI's
@@ -88,13 +85,7 @@ flexion convention (`-1` = full flex).
 The training callback handles **two kinds of session** transparently:
 
 ```python
-for emg_window, aligned, _ts in iter_aligned_windows(
-    kin_paths, "emg", ["vhi_control"], WIN_SECONDS, HOP_SECONDS,
-    align_window_samples=10,
-):
-    kin = np.abs(aligned["vhi_control"][VHI_DOF_INDICES])
-    all_X.append(extract_features(emg_window))
-    all_y.append(kin)
+--8<-- "examples/synthetic/emg_regression.py:kin_loop"
 ```
 
 `iter_aligned_windows` walks every EMG window in the session and
@@ -103,13 +94,7 @@ slice becomes the regression target. This is the primary path -
 sessions with both EMG and kinematics.
 
 ```python
-for emg_window, _ts, ci in iter_labeled_windows(
-    label_paths, "emg", WIN_SECONDS, HOP_SECONDS,
-    classes=data.classes if data.classes else None,
-):
-    kin = np.ones(5) if ci == 1 else np.zeros(5)
-    all_X.append(extract_features(emg_window))
-    all_y.append(kin)
+--8<-- "examples/synthetic/emg_regression.py:label_loop"
 ```
 
 `iter_labeled_windows` is the fallback for sessions that were recorded
@@ -118,8 +103,10 @@ synthesises a 5-vec target from the class index - `Fist → all 1s`,
 `Rest → all 0s`. Useful for mixing pre-VHI data into a new training set
 without re-recording.
 
-Both iterators ignore class chips the user has un-ticked in the session
-manager, courtesy of the `classes=data.classes` argument.
+The labeled fallback honours the class chips the user un-ticked in the
+session manager, via its `classes=data.classes` argument; the kinematics
+path regresses every aligned window (kinematics are continuous, so there's
+nothing to filter by class).
 
 The model is a single
 [`catboost_regressor(loss_function="MultiRMSE")`](../api/models.md) fit
@@ -128,18 +115,7 @@ to the stacked `(X, y)`.
 ## Prediction: smoothed, expanded, pushed
 
 ```python
-@pipeline.predict
-def predict(model, features):
-    pred_5dof = model.predict(features.reshape(1, -1))[0]
-    pred_5dof = np.clip(pred_5dof, 0, 1)
-
-    pred_9dof = np.zeros(9, dtype=np.float32)
-    for i, vhi_idx in enumerate(VHI_DOF_INDICES):
-        pred_9dof[vhi_idx] = -pred_5dof[i]
-
-    pred_9dof = output_filter(pred_9dof).astype(np.float32)
-    vhi_outlet.push(pred_9dof)
-    return {"dof": pred_5dof, "hand": pred_9dof}
+--8<-- "examples/synthetic/emg_regression.py:predict"
 ```
 
 Three steps:
@@ -156,13 +132,7 @@ The returned dict feeds `pipeline.predictions` so widgets like
 ## Layout - six rows, three columns
 
 ```python
-LOGO_CELL_W = 300
-WORDMARK_ASPECT = 800 / 540
-grid = Grid(
-    6, 3,
-    row_height=[Px(LOGO_CELL_W / WORDMARK_ASPECT), *[Fr(1)] * 5],
-    col_width=[Px(LOGO_CELL_W), Fr(1), Fr(1)],
-)
+--8<-- "examples/synthetic/emg_regression.py:grid"
 ```
 
 A 6×3 grid: a fixed-height top row sized to the wordmark aspect, then

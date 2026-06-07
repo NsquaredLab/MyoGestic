@@ -21,7 +21,7 @@ def extract(windows):
 @pipeline.train
 def train(data):
     X, y = [], []
-    for window, ts, cls in iter_labeled_windows(data.paths, "emg", win_seconds=0.2, hop_seconds=0.1):
+    for window, ts, cls in iter_labeled_windows(data.paths, "emg", window_ms=200, hop_ms=100):
         X.append(rms_features(window))
         y.append(cls)
     model = MyClassifier().fit(np.array(X), np.array(y))
@@ -118,6 +118,7 @@ pipeline.load_model = load_torch
 
 Use [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] instead of [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] - it pairs each EMG window with a synchronised target vector:
 
+<!--docs:run-->
 ```python
 from myogestic.session import iter_aligned_windows
 
@@ -125,14 +126,14 @@ from myogestic.session import iter_aligned_windows
 @pipeline.train
 def train(data):
     X, Y = [], []
-    for sw, targets in iter_aligned_windows(
+    for window, targets, ts in iter_aligned_windows(
         data.paths,
-        primary="emg",
-        aligned=["vhi_guide"],
-        win_s=0.2,
-        hop_s=0.05,
+        primary_stream_name="emg",
+        aligned_stream_names=["vhi_guide"],
+        window_ms=200,
+        hop_ms=50,
     ):
-        X.append(rms_features(sw.data))
+        X.append(rms_features(window))
         Y.append(targets["vhi_guide"])
     return MultiOutputRegressor().fit(np.array(X), np.array(Y))
 ```
@@ -147,7 +148,7 @@ Predictions go two places: into `pipeline.predictions` (read by widgets) and int
 @pipeline.predict
 def predict(model, features):
     pose = model.predict(features.reshape(1, -1))[0]
-    pose_smooth = pose_filter(pose, t=time.monotonic())
+    pose_smooth = pose_filter(pose, timestamp=time.monotonic())
     vhi_outlet.push(pose_smooth)  # to the actuator
     return {"pose": pose_smooth}  # to widgets / pipeline.predictions
 ```

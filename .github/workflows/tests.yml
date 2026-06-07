@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Run on Linux + Windows: the session save/pack path (zarr DirectoryStore ->
+    # .session.zip) is POSIX-friendly but Windows-fragile (file-handle locking on
+    # rmtree/replace), so Windows must be exercised. fail-fast: false so one OS
+    # failing still reports the other.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up uv
+        # astral-sh/setup-uv has no moving major tag - pin the exact release
+        # (matches docs.yml). Bump as new minors land.
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      # Lint enforces the ruff rules (incl. pydocstyle `D` docstring coverage).
+      # OS-independent, so run it once on Linux.
+      - name: Lint
+        if: matrix.os == 'ubuntu-latest'
+        run: uv run --locked --extra dev ruff check .
+
+      # Full pytest suite, including tests/test_docs.py which parse-checks every
+      # docs/ code block and executes the `<!--docs:run-->`-tagged data-API ones.
+      # grpc + serial so the VHI / serial tests run instead of importorskip-ing;
+      # sklearn/catboost-only recipe assertions importorskip cleanly without the
+      # heavy `examples` extra (torch), keeping CI fast.
+      - name: Tests + doc code blocks
+        run: uv run --locked --extra dev --extra grpc --extra serial pytest -q

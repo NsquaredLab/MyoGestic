@@ -7,7 +7,7 @@ shim implements the same surface with a pure-NumPy approximation:
 evenly-spaced samples. Good enough for a static playground demo;
 clearly worse than M4 for noisy waveforms.
 
-If MyoGestic ever upgrades `_signal_viewer_state.py` to require more
+If MyoGestic ever upgrades `widgets/signals/_state.py` to require more
 of the tsdownsample API, mirror it here.
 """
 

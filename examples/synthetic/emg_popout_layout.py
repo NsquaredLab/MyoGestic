@@ -31,14 +31,11 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Stream, TrainingData
-from myogestic.interfaces import virtual_hand
-from myogestic.ml import Pipeline
+from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import predict_button, train_button, training_log
-from myogestic.models import (
+from myogestic.recipes.estimators import (
     catboost_classifier,
     constant_classifier,
-    load_model,
-    save_model,
     sklearn_classifier,
     sklearn_extra_trees_classifier,
     sklearn_logistic_classifier,
@@ -46,6 +43,7 @@ from myogestic.models import (
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
+from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
     log_panel,
     prediction_label,
@@ -55,15 +53,15 @@ from myogestic.widgets import (
     signal_viewer,
     stream_panel,
 )
-from myogestic.widgets._common import panel_header
-from myogestic.widgets._log_box import render_log_buttons, render_log_popout
-from myogestic.widgets.filter_controls import FilterControl
+from myogestic.widgets.common import panel_header
+from myogestic.widgets.panels.filter_controls import FilterControl
+from myogestic.widgets.panels.log_box import render_log_buttons, render_log_popout
 
 N_CHANNELS = 32
 CLASSES = ["Rest", "Fist", "Pinch", "Open"]
 CTRL_VALUES = [0.0, 1.0, 2.0, 3.0]
-WIN_SECONDS = 0.25
-HOP_SECONDS = 0.1
+WINDOW_MS = 250
+HOP_MS = 100
 
 ctrl_outlet = control_outlet()
 
@@ -85,11 +83,13 @@ wl_transform = WaveformLength(window_size=32)
 
 def extract_features(emg: np.ndarray) -> np.ndarray:
     tensor = torch.from_numpy(emg).float()
-    return np.concatenate([
-        rms_transform(tensor).numpy().flatten(),
-        mav_transform(tensor).numpy().flatten(),
-        wl_transform(tensor).numpy().flatten(),
-    ])
+    return np.concatenate(
+        [
+            rms_transform(tensor).numpy().flatten(),
+            mav_transform(tensor).numpy().flatten(),
+            wl_transform(tensor).numpy().flatten(),
+        ]
+    )
 
 
 PROCESSES = [
@@ -120,11 +120,11 @@ PROCESSES = [
 # becomes a tearable / dockable window.
 app = App("EMG 32ch Popout", ui_scale=0.85, docking=True)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG32"), window_seconds=WIN_SECONDS, buffer_seconds=60)
+    Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, buffer_ms=60000)
 )
 pipeline = Pipeline(app)
-pipeline.save_model = save_model
-pipeline.load_model = load_model
+pipeline.save_model = save_pickle
+pipeline.load_model = load_pickle
 
 MODELS_DIR = Path("models")
 
@@ -139,7 +139,9 @@ def extract(windows) -> np.ndarray:
 MODEL_RECIPES: dict[str, Callable[[], Any]] = {
     "CatBoost": lambda: catboost_classifier(iterations=150),
     "Random Forest": lambda: sklearn_classifier(n_estimators=200, random_state=0, n_jobs=-1),
-    "Extra Trees": lambda: sklearn_extra_trees_classifier(n_estimators=300, random_state=0, n_jobs=-1),
+    "Extra Trees": lambda: sklearn_extra_trees_classifier(
+        n_estimators=300, random_state=0, n_jobs=-1
+    ),
     "Logistic Regression": lambda: sklearn_logistic_classifier(max_iter=1000),
     "Dummy Constant": lambda: constant_classifier(0),
 }
@@ -168,7 +170,7 @@ def train(data: TrainingData):
         raise ValueError("Need ≥2 active classes.")
     X, y = [], []
     for window, _ts, ci in iter_labeled_windows(
-        data.paths, "emg", WIN_SECONDS, HOP_SECONDS, classes=data.classes
+        data.paths, "emg", WINDOW_MS, HOP_MS, classes=data.classes
     ):
         X.append(extract_features(window))
         y.append(ci)
@@ -206,7 +208,7 @@ def predict(model, features):
 
 
 def _on_gesture(i: int) -> None:
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
 # --- Per-block render functions (each becomes its own dockable window) -----
@@ -282,7 +284,7 @@ def _model_block() -> None:
         slug = _slug(MODEL_NAMES[selected_model_idx])
         ts = _time.strftime("%Y%m%d_%H%M%S")
         path = MODELS_DIR / f"{slug}_{ts}.joblib"
-        save_model(pipeline.model, str(path))
+        save_pickle(pipeline.model, str(path))
         app.ctx.log(f"Model saved → {path}")
     if not can_save:
         imgui.end_disabled()
@@ -293,12 +295,12 @@ def _model_block() -> None:
     imgui.same_line()
     imgui.text_disabled(f"({len(_list_saved())} saved)")
 
-    if _load_dialog is not None and _load_dialog.ready():  # type: ignore[union-attr]
-        result = _load_dialog.result()  # type: ignore[union-attr]
+    if _load_dialog is not None and _load_dialog.ready():  # type: ignore
+        result = _load_dialog.result()  # type: ignore
         _load_dialog = None
         if result:
             try:
-                pipeline.model = load_model(result[0])
+                pipeline.model = load_pickle(result[0])
                 app.ctx.log(f"Model loaded ← {result[0]}")
             except Exception as e:
                 app.ctx.log(f"Load failed: {e}")
