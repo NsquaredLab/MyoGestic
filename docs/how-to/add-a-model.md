@@ -118,6 +118,7 @@ pipeline.load_model = load_torch
 
 Use [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] instead of [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] - it pairs each EMG window with a synchronised target vector:
 
+<!--docs:run-->
 ```python
 from myogestic.session import iter_aligned_windows
 

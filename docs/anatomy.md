@@ -81,7 +81,7 @@ from myogestic import App, Stream, TrainingData            # the orchestrator + 
 from myogestic.ml import Pipeline, save_pickle, load_pickle # ML lifecycle layer (opt-in)
 from myogestic.session import iter_labeled_windows         # session reading helpers
 from myogestic.sources import LSLSource                    # one of the built-in sources
-from myogestic.widgets import recording_controls, ...      # stateless ImGui widgets
+from myogestic.widgets import recording_controls, session_manager, signal_viewer  # stateless ImGui widgets
 from sklearn.linear_model import LogisticRegression        # YOUR ML library
 ```
 
