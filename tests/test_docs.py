@@ -60,7 +60,13 @@ def _blocks(path: Path):
     """Yield ``(directive, code, line_number)`` for each python block in a file."""
     text = path.read_text(encoding="utf-8")
     for m in _BLOCK.finditer(text):
-        yield m.group(1), m.group(2), text[: m.start()].count("\n") + 1
+        directive, code = m.group(1), m.group(2)
+        # `--8<--` snippet includes pull real code from examples/ (parse/run-tested
+        # via tests/test_examples.py + the example itself) — they aren't literal
+        # python here, so skip both layers.
+        if directive is None and any(ln.lstrip().startswith("--8<--") for ln in code.splitlines()):
+            directive = "skip"
+        yield directive, code, text[: m.start()].count("\n") + 1
 
 
 _ALL = [(p, d, code, ln) for p in MD_FILES for d, code, ln in _blocks(p)]
