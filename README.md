@@ -96,7 +96,7 @@ Quick links into the source:
 - **[How-to guides](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/how-to)** - recipes (custom source, custom widget, custom model, integrate the Virtual Hand, install VHI, the recipe feature set, ...).
 - **[Concepts](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/concepts)** - architecture, streams, pipeline, threading, recording, the `Px`/`Fr` grid, the `EdgeTrigger` pattern.
 - **[API reference](https://github.com/NsquaredLab/MyoGestic/tree/main/docs/api)** - auto-generated from docstrings.
-- **[API cheatsheet](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/reference/api-cheatsheet.md)** - every public symbol on one page.
+- **[API cheatsheet](https://github.com/NsquaredLab/MyoGestic/blob/main/docs/reference/api-cheatsheet.md)** - the most-used public symbols on one page.
 - **[Playground](https://nsquaredlab.github.io/MyoGestic/playground/)** - the in-browser demo (no install).
 
 The docs are deployed to GitHub Pages via [`.github/workflows/docs.yml`](https://github.com/NsquaredLab/MyoGestic/blob/main/.github/workflows/docs.yml) on every push to `main`.

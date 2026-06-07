@@ -7,7 +7,7 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 - [Outputs](outputs.md) - `Output`, `LSLOutlet`, `UDPOutput`, `SerialOutput`.
 - [ML pipeline](ml.md) - `Pipeline`, `save_pickle`, `load_pickle`, ML widgets.
 - [Widgets](widgets.md) - every public widget function.
-- [Models](models.md) - CatBoost / scikit-learn constructor recipes, persistence helpers.
+- [Models](models.md) - CatBoost / scikit-learn constructor recipes.
 - [Session](session.md) - `open_session_store`, `iter_labeled_windows`, `iter_aligned_windows`.
 - [Filters](filters.md) - `OneEuroFilter`, `GaussianFilter`, `IdentityFilter`.
 

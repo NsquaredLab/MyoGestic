@@ -34,12 +34,12 @@ TrainingData(paths=[], class_names=[], classes=set())
 # --- Sources (myogestic.sources) -------------------------------
 LSLSource(stream_name)
 ReplaySource(session_path, stream_name, speed=1.0) # accepts .session.zip
-SerialSource(port, baud, n_channels, fs)           # extras: [serial]
+SerialSource(port, baud, n_channels, fs)  # extras:[serial]; from myogestic.sources.serial_source import SerialSource
 
 # --- Outputs (myogestic.outputs) -------------------------------
 LSLOutlet(name, n_channels, hz=50)
 UDPOutput(host, port, hz=50)
-SerialOutput(port, baud=115200, hz=10)             # extras: [serial]
+SerialOutput(port, baud=115200, hz=10)  # extras:[serial]; from myogestic.outputs.serial_output import SerialOutput
   .push(data) -> None                              # all outputs
 
 # --- ML pipeline (myogestic.ml) --------------------------------

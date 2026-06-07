@@ -125,14 +125,14 @@ from myogestic.session import iter_aligned_windows
 @pipeline.train
 def train(data):
     X, Y = [], []
-    for sw, targets in iter_aligned_windows(
+    for window, targets, ts in iter_aligned_windows(
         data.paths,
-        primary="emg",
-        aligned=["vhi_guide"],
+        primary_stream_name="emg",
+        aligned_stream_names=["vhi_guide"],
         window_ms=200,
         hop_ms=50,
     ):
-        X.append(rms_features(sw.data))
+        X.append(rms_features(window))
         Y.append(targets["vhi_guide"])
     return MultiOutputRegressor().fit(np.array(X), np.array(Y))
 ```
