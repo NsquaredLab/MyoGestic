@@ -12,7 +12,7 @@ tick where the value differs from the previous one.
 ## The pattern
 
 ```python
-from myogestic.edge_trigger import EdgeTrigger
+from myogestic.outputs import EdgeTrigger
 
 trigger = EdgeTrigger(callback=vhi_client.set_movement)
 
@@ -41,6 +41,37 @@ Without the `rebase`, the next `predict` tick would see the predicted class
 match what the button did and fire a redundant RPC (harmless if idempotent,
 disruptive if it restarts an animation).
 
+## `n_stable_ticks` - debounce flicker
+
+On a noisy signal the predicted class flickers tick-to-tick - and for
+~100-200 ms right after a gesture, while the classifier's sliding window still
+holds the *old* data, `argmax` oscillates between the old and new class. With
+the default `n_stable_ticks=1` every flip is a "change", so the callback re-fires
+on each one and a robot hand visibly jumps between poses before settling.
+
+Pass `n_stable_ticks=N` to require a value to hold for **N consecutive ticks**
+before it fires, swallowing sub-`N` flicker:
+
+```python
+trigger = EdgeTrigger(vhi_client.set_movement, n_stable_ticks=5)
+```
+
+It counts *calls*, not time - convert a duration with the loop rate so the
+window stays correct even if you change `predict_hz`:
+
+```python
+import math
+
+STABLE_SECONDS = 0.1
+trigger = EdgeTrigger(
+    vhi_client.set_movement,
+    n_stable_ticks=max(1, math.ceil(STABLE_SECONDS * pipeline.predict_hz)),
+)
+```
+
+`rebase()` discards any half-formed candidate, so a manual command can't be
+overridden by a flicker that was mid-count.
+
 ## Generic over `T`
 
 `EdgeTrigger[T]` is parameterized on the value type. Strings (class names),
@@ -63,11 +94,11 @@ trigger.fire_if_changed((class_name, dominant_dof))
 ## Thread-safety
 
 The typical wiring is *one writer* (the predict thread calling
-`fire_if_changed`) plus *occasional* `rebase()` from the UI thread. Both
-assignments to the internal `_last` slot are atomic under CPython's GIL, so
-no lock is needed. A race between the two paths can cause one extra
-suppressed-or-fired callback - harmless for the intended uses (RPC dedup,
-audio gating, log lines).
+`fire_if_changed`) plus *occasional* `rebase()` from the UI thread. The whole
+`(last, candidate, count)` state lives in one tuple that's replaced in a single
+assignment, so it updates atomically under CPython's GIL and no lock is needed.
+A race between the two paths can cause one extra suppressed-or-fired callback -
+harmless for the intended uses (RPC dedup, audio gating, log lines).
 
 If your callback itself is not thread-safe, gate it inside the callback,
 not here.
@@ -76,12 +107,13 @@ not here.
 
 * The downstream effect is genuinely per-tick continuous - e.g. streaming
   a pose vector. Use a normal call, not an edge trigger.
-* You need *time-based* debouncing (e.g. ignore changes faster than 100 ms).
-  `EdgeTrigger` is purely value-based; combine it with a `time.monotonic()`
-  check or a state machine for hysteresis.
+* You need *tick-based* debouncing (ignore flicker shorter than N ticks) -
+  that's built in now via `n_stable_ticks` (above), including a seconds-derived
+  window. For true *wall-clock* hysteresis independent of the tick rate, add a
+  `time.monotonic()` gate inside your callback.
 
 ## See also
 
 * [[integrate-vhi]] - the canonical use case, gating gRPC `SetMovement`
   on the predicted class.
-* [`myogestic.edge_trigger.EdgeTrigger`](../api/core.md) - full API reference.
+* [`myogestic.outputs.edge_trigger.EdgeTrigger`](../api/core.md) - full API reference.

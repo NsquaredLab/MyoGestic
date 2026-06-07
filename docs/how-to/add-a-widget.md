@@ -103,10 +103,10 @@ The keying matters: two `my_widget(ctx, key="emg")` calls share state; `my_widge
 If a widget grows past ~200 LOC, split it. Use the [`signal_viewer` layout](https://github.com/NsquaredLab/MyoGestic/tree/main/myogestic/widgets) as a template:
 
 ```text
-myogestic/widgets/signal.py                   # public entry - calls into the privates
-myogestic/widgets/_signal_viewer_state.py     # state dict, dataclass
-myogestic/widgets/_signal_viewer_controls.py  # control panel rendering
-myogestic/widgets/_signal_viewer_plot.py      # plot rendering
+myogestic/widgets/signals/viewer.py           # public entry - calls into the privates
+myogestic/widgets/signals/_state.py           # state dict, dataclass
+myogestic/widgets/signals/_controls.py        # control panel rendering
+myogestic/widgets/signals/_plot.py            # plot rendering
 ```
 
 Public function lives in one file. Private modules are explicitly underscore-prefixed and *not* exported from `myogestic.widgets.__init__`. User code never imports them.

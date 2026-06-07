@@ -77,7 +77,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![FilterControl](images/widgets/FilterControl.png){ .widget-thumb loading=lazy }
 
-    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). Sliders tune parameters in place; Reset clears smoothing history. Pair with `output_filter(pose, t=time.monotonic())` inside `@pipeline.predict`.
+    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). Sliders tune parameters in place; Reset clears smoothing history. Pair with `output_filter(pose, timestamp=time.monotonic())` inside `@pipeline.predict`.
 
 </div>
 
@@ -97,7 +97,7 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="grid cards" markdown>
 
--   __[app_logo][myogestic.widgets.app_logo.app_logo]__
+-   __[app_logo][myogestic.widgets.panels.app_logo.app_logo]__
 
     ![app_logo](images/widgets/app_logo.png){ .widget-thumb loading=lazy }
 
@@ -109,7 +109,7 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="grid cards" markdown>
 
--   __[prediction_label][myogestic.widgets.prediction_label.prediction_label]__
+-   __[prediction_label][myogestic.widgets.training.prediction_label.prediction_label]__
 
     ![prediction_label](images/widgets/prediction_label.png){ .widget-thumb loading=lazy }
 
@@ -121,7 +121,7 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="grid cards" markdown>
 
--   __[VhiMovementPanel][myogestic.widgets.vhi_movement_panel.VhiMovementPanel]__
+-   __[VhiMovementPanel][myogestic.widgets.vhi.panel.VhiMovementPanel]__
 
     ![VhiMovementPanel](images/widgets/VhiMovementPanel.png){ .widget-thumb loading=lazy }
 

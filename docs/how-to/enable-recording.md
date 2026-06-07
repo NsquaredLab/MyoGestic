@@ -10,7 +10,7 @@ from myogestic.sources import LSLSource
 from myogestic.widgets import recording_controls
 
 app = App("My recording")                                              # 1. construct App
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))  # 2. register stream(s)
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))  # 2. register stream(s)
 
 @app.ui
 def ui(ctx):
@@ -44,7 +44,7 @@ Click **Record** → data flows into `sessions/<timestamp>/`. Click **Stop** →
        │   │ user clicks gesture buttons                  │   │
        │   │   recording_controls adds                    │   │
        │   │   ctx.session.add_label(class_idx,           │   │
-       │   │                          t=local_clock())    │   │
+       │   │                  timestamp=local_clock())    │   │
        │   │                                              │   │
        │   │ user clicks Stop                             │   │
        │   │ app.stop_recording()                         │   │
@@ -116,7 +116,7 @@ from myogestic import App, Stream
 from myogestic.sources import LSLSource
 
 app = App("Headless capture")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 
 
 def _capture(app):
@@ -206,16 +206,16 @@ from myogestic.session import iter_labeled_windows, iter_aligned_windows
 # Classification: one (window, ts, class_index) per hop step.
 for window, ts, cls in iter_labeled_windows(
     [sess.path], stream_name="emg",
-    win_seconds=0.2, hop_seconds=0.1,
+    window_ms=200, hop_ms=100,
     classes={0, 1},
 ):
     ...
 
 # Regression: align a primary stream with one or more aligned streams.
 for window, aligned, ts in iter_aligned_windows(
-    [sess.path], primary_stream="emg",
-    aligned_streams=["vhi_control"],
-    win_seconds=0.2, hop_seconds=0.05,
+    [sess.path], primary_stream_name="emg",
+    aligned_stream_names=["vhi_control"],
+    window_ms=200, hop_ms=50,
 ):
     target = aligned["vhi_control"]
     ...

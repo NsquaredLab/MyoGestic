@@ -111,7 +111,7 @@ A retrain replaces the model object (and its state). If you need state that *sur
 You often want a side-effect (RPC, audio cue, serial write) to fire only when the prediction *changes*, not every tick. [`EdgeTrigger`](../concepts/edge-trigger.md) is the one-liner:
 
 ```python
-from myogestic.edge_trigger import EdgeTrigger
+from myogestic.outputs import EdgeTrigger
 
 trigger = EdgeTrigger(callback=vhi_client.set_movement)
 

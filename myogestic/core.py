@@ -1,3 +1,7 @@
+"""Core application object, shared context, and the app-state machine."""
+
+from __future__ import annotations
+
 import gc
 import logging
 import sys
@@ -5,9 +9,9 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
 from typing import Any
 
+from myogestic._platform import _register_assets_folder, _try_set_macos_dock_icon
 from myogestic.session import Session
 from myogestic.stream import Stream
 
@@ -21,6 +25,7 @@ class AppState(StrEnum):
     without subclassing. Each module validates transitions within its own
     namespace only.
     """
+
     IDLE = "idle"
     RECORDING = "recording"
 
@@ -33,14 +38,14 @@ TRANSITIONS: dict[str, set[str]] = {
 
 # --- Docking integration (experimental) -----------------------------------
 #
-# `popout_panel(...)` (myogestic.widgets.popout) appends `DockableWindow`
+# `popout_panel(...)` (myogestic.widgets.panels.popout) appends `DockableWindow`
 # objects here. `App._gui_loop` drains the list into the active
 # `RunnerParams.docking_params.dockable_windows` before launching the
 # render loop. List + flag live at module scope so the widget can resolve
 # the active App lazily without circular imports.
 
 _pending_popouts: list[Any] = []  # list[hello_imgui.DockableWindow]
-_active_app: "App | None" = None
+_active_app: App | None = None
 
 
 def can_transition(current: str, target: str) -> bool:
@@ -54,8 +59,12 @@ def can_transition(current: str, target: str) -> bool:
 
 @dataclass
 class Context:
-    """Shared state all threads read/write. Extensions may add own fields
-    dynamically on the owning `App`, but `Context` itself is core-only."""
+    """Shared state all threads read/write.
+
+    Extensions may add own fields dynamically on the owning `App`, but
+    `Context` itself is core-only.
+    """
+
     streams: dict[str, Stream] = field(default_factory=dict)
     bridges: dict[str, Any] = field(default_factory=dict)
     state: str = AppState.IDLE
@@ -73,6 +82,7 @@ class Context:
         chatter. Safe to call from any thread (list.append/pop are GIL-atomic).
         """
         from time import strftime
+
         line = f"[{strftime('%H:%M:%S')}] {message}"
         self.logs.append(line)
         if len(self.logs) > max_lines:
@@ -80,8 +90,10 @@ class Context:
 
 
 class App:
-    """Top-level application object. Owns the GUI loop, the `Context`,
-    the run-loop lifecycle hooks, and the recording state machine.
+    """Top-level application object.
+
+    Owns the GUI loop, the `Context`, the run-loop lifecycle hooks, and
+    the recording state machine.
 
     Construct one per process. Register streams via `app.streams(...)`,
     register your UI via `@app.ui`, then call `app.run()`. Optional
@@ -89,24 +101,30 @@ class App:
     `app.before_run_hooks` / `app.cleanup_hooks` - user code rarely
     needs to touch those lists directly.
 
-    Args:
-        name: Window title. Also used for the persisted ImGui state
-            file (``.imgui_state/<name>.ini``) when ``docking=True``.
-        theme: Apply MyoGestic's built-in ImGui theme. Set ``False`` to
-            keep the Dear ImGui defaults.
-        docking: Experimental - enable ImGui docking + multi-viewport
-            so panels registered via ``app.popout(...)`` become tearable
-            DockableWindows. macOS Retina viewport sizing of detached
-            windows can be wrong on initial draw; treat as experimental.
-        ui_scale: Global UI zoom factor - scales the font and imgui's style
-            metrics (padding, spacing, rounding). ``None`` uses
-            ``$MYOGESTIC_UI_SCALE`` then ``1.0``. The env var, if set,
-            overrides this - a per-machine display fix beats the example's
-            value. Clamped to ``[0.5, 2.0]``. Has no effect when ``theme=False``.
+    Parameters
+    ----------
+    name
+        Window title. Also used for the persisted ImGui state
+        file (``.imgui_state/<name>.ini``) when ``docking=True``.
+    theme
+        Apply MyoGestic's built-in ImGui theme. Set ``False`` to
+        keep the Dear ImGui defaults.
+    docking
+        Experimental - enable ImGui docking + multi-viewport
+        so panels registered via ``app.popout(...)`` become tearable
+        DockableWindows. macOS Retina viewport sizing of detached
+        windows can be wrong on initial draw; treat as experimental.
+    ui_scale
+        Global UI zoom factor - scales the font and imgui's style
+        metrics (padding, spacing, rounding). ``None`` uses
+        ``$MYOGESTIC_UI_SCALE`` then ``1.0``. The env var, if set,
+        overrides this - a per-machine display fix beats the example's
+        value. Clamped to ``[0.5, 2.0]``. Has no effect when ``theme=False``.
     """
 
-    def __init__(self, name: str, theme: bool = True, docking: bool = False,
-                 ui_scale: float | None = None):
+    def __init__(
+        self, name: str, theme: bool = True, docking: bool = False, ui_scale: float | None = None
+    ):
         self.name = name
         self.ctx = Context()
         self._ui_fn: Callable[[Context], None] | None = None
@@ -133,8 +151,10 @@ class App:
         registration time. Calling this with the same name overwrites
         the previous registration - typically you call it once at setup.
 
-        Args:
-            *streams: One or more :class:`Stream` instances.
+        Parameters
+        ----------
+        *streams
+            One or more :class:`Stream` instances.
         """
         for s in streams:
             self.ctx.streams[s.name] = s
@@ -149,10 +169,12 @@ class App:
         bridge is keyed by its ``.name`` into ``ctx.bridges``; calling
         with the same name overwrites the previous registration.
 
-        Args:
-            *bridges: One or more bridge instances - each must expose a
-                ``.name`` attribute and a Bridge-like interface
-                (``.start()``, ``.stop()``).
+        Parameters
+        ----------
+        *bridges
+            One or more bridge instances - each must expose a
+            ``.name`` attribute and a Bridge-like interface
+            (``.start()``, ``.stop()``).
         """
         for b in bridges:
             self.ctx.bridges[b.name] = b
@@ -183,9 +205,7 @@ class App:
         instead of discovering windows on the first render frame.
         """
         self._popout_specs = [spec for spec in self._popout_specs if spec[0] != title]
-        self._popout_specs.append(
-            (title, gui_fn, default_open, can_be_closed, remember_is_visible)
-        )
+        self._popout_specs.append((title, gui_fn, default_open, can_be_closed, remember_is_visible))
 
     # --- Recording (universal; ML is in myogestic.ml) ---
 
@@ -199,9 +219,11 @@ class App:
         the recording. Refuses to start if ``ctx.state`` isn't
         ``"idle"``; updates ``ctx.status_message`` with the result.
 
-        Args:
-            base_path: Directory where the per-session subfolder is
-                created. Defaults to ``"sessions"``.
+        Parameters
+        ----------
+        base_path
+            Directory where the per-session subfolder is
+            created. Defaults to ``"sessions"``.
         """
         if not can_transition(self.ctx.state, AppState.RECORDING):
             self.ctx.status_message = (
@@ -264,7 +286,10 @@ class App:
                     zip_path = session.pack_to_zip()
                     self.ctx.status_message = f"Saved {n} labels"
                     self.ctx.log(f"Session saved → {zip_path}")
-                    from myogestic.widgets.session_manager import add_recorded_session
+                    from myogestic.widgets.training.session_manager import (
+                        add_recorded_session,
+                    )
+
                     add_recorded_session(str(zip_path))
                     log.info("packed session to %s", zip_path)
                 except Exception as e:
@@ -273,9 +298,10 @@ class App:
                     self.ctx.log(f"Pack failed: {e} - folder kept at {session.path}")
                     # Fall back: register the folder so user doesn't lose it
                     try:
-                        from myogestic.widgets.session_manager import (
+                        from myogestic.widgets.training.session_manager import (
                             add_recorded_session,
                         )
+
                         add_recorded_session(str(session.path))
                     except Exception:
                         pass
@@ -313,8 +339,7 @@ class App:
             raise RuntimeError("App.run() is not re-entrant")
         if mode not in ("gui", "headless"):
             raise ValueError(
-                f"App.run(mode={mode!r}) - unknown mode. "
-                "Supported: 'gui', 'headless'."
+                f"App.run(mode={mode!r}) - unknown mode. Supported: 'gui', 'headless'."
             )
         self._running = True
 
@@ -340,7 +365,8 @@ class App:
                 except Exception as e:
                     log.exception("bridge stop failed: %s", e)
             try:
-                from myogestic.widgets.process_launcher import _cleanup_all
+                from myogestic.widgets.panels.process_launcher import _cleanup_all
+
                 _cleanup_all()
             except Exception as e:
                 log.exception("process cleanup failed: %s", e)
@@ -403,11 +429,14 @@ class App:
         # predict) - no threads, no asyncio. The desktop path uses real
         # daemon threads and the tick is a no-op.
         from myogestic._browser import IS_BROWSER, tick_all
+
         if IS_BROWSER:
+
             def gui_callback() -> None:
                 tick_all()
                 ui_fn(self.ctx)
         else:
+
             def gui_callback() -> None:
                 ui_fn(self.ctx)
 
@@ -436,12 +465,14 @@ class App:
             runner_params.callbacks.post_init = _try_set_macos_dock_icon
 
         import os
+
         os.makedirs(".imgui_state", exist_ok=True)
         runner_params.ini_filename_use_app_window_title = False
         runner_params.ini_filename = f".imgui_state/{self.name.replace(' ', '_')}.ini"
 
         if self._theme_enabled:
-            from myogestic.theme import apply_theme, load_fonts, set_ui_scale
+            from myogestic._theme import apply_theme, load_fonts, set_ui_scale
+
             set_ui_scale(self._ui_scale)  # consumed by load_fonts / apply_theme below
             runner_params.callbacks.default_icon_font = hello_imgui.DefaultIconFont.font_awesome6
             runner_params.callbacks.load_additional_fonts = load_fonts
@@ -459,7 +490,7 @@ class App:
             # Drain anything popout_panel() registered before run() (the
             # widget can also be called from inside @app.ui - that path
             # registers on the first frame, see widgets/popout.py).
-            from myogestic.widgets.popout import _make_dockable_window
+            from myogestic.widgets.panels.popout import _make_dockable_window
 
             dp = hello_imgui.DockingParams()
             dockable_windows = [
@@ -515,7 +546,8 @@ class App:
             # the same process (with overlapping panel titles) re-registers
             # cleanly. Without this, the second App's popout_panel calls
             # would short-circuit and never queue their DockableWindows.
-            from myogestic.widgets.popout import _reset_registry
+            from myogestic.widgets.panels.popout import _reset_registry
+
             _reset_registry()
 
     def _headless_loop(self) -> None:
@@ -525,86 +557,3 @@ class App:
                 time.sleep(0.1)
         except KeyboardInterrupt:
             pass
-
-
-# --- Branding helpers -------------------------------------------------------
-
-
-def _assets_folder() -> str:
-    """Absolute path to the shipped assets dir inside the installed package."""
-    import myogestic  # local import - `core` is imported during package init
-    return str(Path(myogestic.__file__).resolve().parent / "assets")
-
-
-def _register_assets_folder(hello_imgui_mod) -> None:
-    """Point HelloImGui at our shipped assets so `image_from_asset(...)` works.
-
-    `add_assets_search_path` is a no-op if the path is already registered, so
-    calling this on every `run()` is harmless. Wraps any HelloImGui internal
-    failure in a warning rather than crashing - a missing/broken asset folder
-    shouldn't prevent the UI from coming up.
-    """
-    try:
-        hello_imgui_mod.add_assets_search_path(_assets_folder())
-    except Exception as e:
-        print(f"[myogestic] could not register assets folder: {e}",
-              file=sys.stderr)
-
-
-def _try_set_macos_dock_icon() -> None:
-    """Set the macOS Dock icon to our packaged PNG.
-
-    No-op when not on macOS or when ``pyobjc-framework-Cocoa`` isn't installed.
-    On Linux/Windows the equivalent (window icon) is handled by HelloImGui's
-    `app_settings/icon.png` convention automatically once the assets folder
-    is registered - see ``_register_assets_folder``.
-
-    Why we need this at all: macOS bans changing the Dock icon at runtime
-    without going through ``NSApplication.setApplicationIconImage_``; GLFW's
-    `glfwSetWindowIcon` is a no-op on Cocoa, and Python's own process icon
-    sticks unless we explicitly swap it.
-
-    Two subtleties make this trickier than it looks:
-
-    1. GLFW's macOS backend creates the ``NSApplication`` during init; if we
-       call this before that, our icon gets overwritten. Caller wires this
-       up as HelloImGui's ``post_init`` callback so we run after the
-       NSApplication exists.
-    2. ``setApplicationIconImage_`` updates the image but doesn't always
-       force the Dock to redraw the tile. ``NSApp.dockTile().display()``
-       (no-op-cheap when the tile is already current) makes the change
-       actually appear without waiting for the next dock refresh tick.
-    """
-    if sys.platform != "darwin":
-        return
-    try:
-        from AppKit import (  # type: ignore
-            NSApplication,
-            NSApplicationActivationPolicyRegular,
-            NSImage,
-        )
-    except ImportError:
-        print("[myogestic] dock icon: pyobjc-framework-Cocoa not installed",
-              file=sys.stderr)
-        return
-    icon_path = Path(_assets_folder()) / "app_settings" / "icon.png"
-    if not icon_path.exists():
-        print(f"[myogestic] dock icon: file missing at {icon_path}",
-              file=sys.stderr)
-        return
-    image = NSImage.alloc().initWithContentsOfFile_(str(icon_path))
-    if image is None:
-        print(f"[myogestic] dock icon: NSImage failed to load {icon_path}",
-              file=sys.stderr)
-        return
-    app = NSApplication.sharedApplication()
-    # A python-launched process defaults to "Prohibited" activation policy;
-    # `setApplicationIconImage_` is silently dropped on the floor until the
-    # policy is Regular (= shows in the Dock + can have menu bar). GLFW
-    # flips this on window creation but the timing isn't guaranteed by the
-    # time post_init fires, so we set it explicitly.
-    app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
-    app.setApplicationIconImage_(image)
-    # Force the Dock to redraw the tile. Apple's API updates the underlying
-    # image but the dock-tile cache may persist until something nudges it.
-    app.dockTile().display()

@@ -9,7 +9,11 @@ from __future__ import annotations
 import pytest
 
 from myogestic import core
-from myogestic.widgets.popout import _make_dockable_window, _reset_registry, popout_panel
+from myogestic.widgets.panels.popout import (
+    _make_dockable_window,
+    _reset_registry,
+    popout_panel,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -185,6 +189,5 @@ def test_registry_cleared_between_apps():
     core._active_app = app_b
     popout_panel("Signal", lambda: None)
     assert len(core._pending_popouts) == 1, (
-        "second App should re-register the same title — got skipped due "
-        "to leaked _registered state"
+        "second App should re-register the same title — got skipped due to leaked _registered state"
     )

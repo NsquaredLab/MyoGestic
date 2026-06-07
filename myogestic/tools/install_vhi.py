@@ -22,7 +22,6 @@ VHI version with subtly different behaviour.
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import platform
@@ -36,6 +35,9 @@ import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
+from typing import Annotated
+
+import typer
 
 REPO = "NsquaredLab/MyoGestic-VHI"
 
@@ -66,8 +68,8 @@ EXEC_PATHS = {
 
 
 def _default_dest() -> Path:
-    """Mirror ``myogestic.interfaces._default_install_root()`` so both agree."""
-    from myogestic.interfaces import _default_install_root
+    """Mirror ``myogestic.vhi.interfaces._default_install_root()`` so both agree."""
+    from myogestic.vhi.interfaces import _default_install_root
 
     return _default_install_root()
 
@@ -121,8 +123,7 @@ def _fetch_release_digest(tag: str, asset: str) -> str | None:
             data = json.load(response)
     except (urllib.error.URLError, json.JSONDecodeError) as exc:
         print(
-            f"  WARNING: could not fetch release metadata ({exc}). "
-            f"Skipping checksum verification.",
+            f"  WARNING: could not fetch release metadata ({exc}). Skipping checksum verification.",
             file=sys.stderr,
         )
         return None
@@ -158,7 +159,7 @@ def _verify(archive: Path, expected: str | None) -> None:
             file=sys.stderr,
         )
         return
-    print(f"  verifying SHA-256...")
+    print("  verifying SHA-256...")
     actual = _sha256(archive)
     if actual != expected:
         raise SystemExit(
@@ -241,9 +242,7 @@ def _strip_quarantine(target: Path) -> None:
     if not app.exists():
         return
     print(f"  removing com.apple.quarantine xattr from {app}")
-    subprocess.run(
-        ["xattr", "-rd", "com.apple.quarantine", str(app)], check=False
-    )
+    subprocess.run(["xattr", "-rd", "com.apple.quarantine", str(app)], check=False)
 
 
 def _macos_gatekeeper_note(target: Path) -> None:
@@ -275,56 +274,53 @@ def _macos_gatekeeper_note(target: Path) -> None:
 
 def _write_marker(target: Path, tag: str, asset: str) -> None:
     (target / "vhi-version.txt").write_text(
-        f"installed_tag={tag}\n"
-        f"asset={asset}\n"
-        f"platform={platform.system()}/{platform.machine()}\n"
+        f"installed_tag={tag}\nasset={asset}\nplatform={platform.system()}/{platform.machine()}\n"
     )
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        prog="myogestic-install-vhi",
-        description="Install a MyoGestic-VHI release binary for this platform.",
-    )
-    parser.add_argument(
-        "--tag",
-        default="latest",
-        help="Release tag, e.g. 'v1.0.0' (default: 'latest'). Pin in "
-        "production for reproducible installs.",
-    )
-    parser.add_argument(
-        "--dest",
-        type=Path,
-        default=None,
-        help="Install directory (default: matches `virtual_hand()`'s install "
-        "root — repo `tools/MyoGestic-VHI` in a git checkout, else a per-user "
-        "data dir).",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Reinstall over an existing VHI install. Refuses by default to "
-        "avoid clobbering an unrelated directory.",
-    )
-    parser.add_argument(
-        "--no-verify",
-        action="store_true",
-        help="Skip SHA-256 verification against the GitHub release digest. "
-        "Default is to verify; disable only if you know what you're doing.",
-    )
-    args = parser.parse_args(argv)
-
-    dest = args.dest or _default_dest()
+def _install(
+    tag: Annotated[
+        str,
+        typer.Option(
+            help="Release tag, e.g. 'v1.0.0' (default: 'latest'). Pin in "
+            "production for reproducible installs."
+        ),
+    ] = "latest",
+    dest: Annotated[
+        Path | None,
+        typer.Option(
+            help="Install directory (default: matches `virtual_hand()`'s install "
+            "root — repo `tools/MyoGestic-VHI` in a git checkout, else a per-user "
+            "data dir)."
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Reinstall over an existing VHI install. Refuses by default to "
+            "avoid clobbering an unrelated directory.",
+        ),
+    ] = False,
+    no_verify: Annotated[
+        bool,
+        typer.Option(
+            "--no-verify",
+            help="Skip SHA-256 verification against the GitHub release digest. "
+            "Default is to verify; disable only if you know what you're doing.",
+        ),
+    ] = False,
+) -> None:
+    """Install a MyoGestic-VHI release binary for this platform."""
+    dest = dest or _default_dest()
     asset = _resolve_asset()
-    url = _download_url(args.tag, asset)
+    url = _download_url(tag, asset)
 
-    print(f"Installing VHI {args.tag} → {dest}")
+    print(f"Installing VHI {tag} → {dest}")
 
     if dest.exists() and any(dest.iterdir()):
-        looks_like_previous_install = any(
-            (dest / m).exists() for m in INSTALL_MARKERS
-        )
-        if not args.force:
+        looks_like_previous_install = any((dest / m).exists() for m in INSTALL_MARKERS)
+        if not force:
             hint = (
                 "Use --force to reinstall."
                 if looks_like_previous_install
@@ -332,7 +328,7 @@ def main(argv: list[str] | None = None) -> int:
                 "to clobber. Use --force or pass --dest to a fresh directory."
             )
             print(f"{dest} is non-empty. {hint}", file=sys.stderr)
-            return 1
+            raise typer.Exit(1)
         if not looks_like_previous_install:
             print(
                 f"WARNING: --force on a directory that does not look like a "
@@ -342,7 +338,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Fetch the expected digest before download so a missing-tag-on-API error
     # surfaces immediately, not after a 150 MB download.
-    expected_digest = None if args.no_verify else _fetch_release_digest(args.tag, asset)
+    expected_digest = None if no_verify else _fetch_release_digest(tag, asset)
 
     # Atomic install: stage in a temp dir, validate, then swap with dest.
     # A failed download or malformed archive never leaves a half-installed
@@ -352,13 +348,13 @@ def main(argv: list[str] | None = None) -> int:
         tmp_path = Path(tmp)
         archive = tmp_path / asset
         _download(url, archive)
-        if not args.no_verify:
+        if not no_verify:
             _verify(archive, expected_digest)
         staging = tmp_path / "staging"
         _unpack(archive, staging)
         _validate(staging)
         _restore_exec_bits(staging)
-        _write_marker(staging, args.tag, asset)
+        _write_marker(staging, tag, asset)
 
         if dest.exists():
             shutil.rmtree(dest)
@@ -369,10 +365,14 @@ def main(argv: list[str] | None = None) -> int:
         shutil.move(str(staging), str(dest))
 
     _strip_quarantine(dest)
-    print(f"✓ VHI {args.tag} installed at {dest}")
+    print(f"✓ VHI {tag} installed at {dest}")
     _macos_gatekeeper_note(dest)
-    return 0
+
+
+def main() -> None:
+    """Console-script entry point (``myogestic-install-vhi``)."""
+    typer.run(_install)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

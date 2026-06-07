@@ -66,7 +66,7 @@ plugins:
             - https://pytorch.org/docs/stable/objects.inv
             - https://scikit-learn.org/stable/objects.inv
           options:
-            docstring_style: google
+            docstring_style: numpy
             show_source: true
             show_root_heading: true
             show_root_full_path: false
@@ -102,6 +102,7 @@ markdown_extensions:
   - pymdownx.snippets:
       base_path: ["."]
       check_paths: true
+      dedent_subsections: true
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -135,7 +136,7 @@ nav:
           - Record and replay: how-to/record-and-replay.md
           - Record good training data: how-to/record-good-training-data.md
           - Feature extraction cookbook: how-to/feature-extraction-cookbook.md
-          - Use the contrib feature set: how-to/use-contrib-features.md
+          - Use the recipe feature set: how-to/use-recipe-features.md
           - Keep state between pipeline stages: how-to/inter-stage-state.md
           - Post-process predictions: how-to/post-process-output.md
           - Integrate the Virtual Hand: how-to/integrate-vhi.md

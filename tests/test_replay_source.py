@@ -2,14 +2,16 @@
 
 import json
 import shutil
+import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
 import zarr
 
+from myogestic.session import Session
 from myogestic.sources.replay import ReplaySource
-from myogestic.stream import Stream
+from myogestic.stream import Stream, StreamInfo
 
 
 def create_synthetic_session(path: Path, stream_name: str, n_channels: int, fs: float):
@@ -64,9 +66,7 @@ def test_replay_source_connect():
 def test_replay_source_reads_all_data():
     """Calling read() in a loop eventually returns all session data."""
     session_path = Path("/tmp/myogestic_replay_test_all")
-    original_data, original_ts = create_synthetic_session(
-        session_path, "emg", n_channels=4, fs=128
-    )
+    original_data, original_ts = create_synthetic_session(session_path, "emg", n_channels=4, fs=128)
 
     src = ReplaySource(str(session_path), "emg", speed=100.0)  # fast replay
     src.connect()
@@ -103,9 +103,7 @@ def test_replay_source_loops():
     """After reaching the end, ReplaySource resets to pos=0 and keeps going."""
     session_path = Path("/tmp/myogestic_replay_test_loop")
     # Short session: 0.5s at 64 Hz = 32 samples
-    original_data, _ = create_synthetic_session(
-        session_path, "sig", n_channels=2, fs=64
-    )
+    original_data, _ = create_synthetic_session(session_path, "sig", n_channels=2, fs=64)
     n_total = len(original_data)
 
     src = ReplaySource(str(session_path), "sig", speed=100.0)
@@ -140,15 +138,40 @@ def test_replay_into_stream():
     stream = Stream(
         "emg",
         source=ReplaySource(str(session_path), "emg", speed=10.0),
-        window_seconds=0.5,
+        window_ms=500,
     )
     stream.start()
     time.sleep(1.5)  # let replay feed the buffer
 
     data, ts = stream.get_window()
-    assert data.shape[0] == 8           # channels-first
+    assert data.shape[0] == 8  # channels-first
     assert data.shape[1] > 0
     assert len(ts) == data.shape[1]
 
     stream.stop()
     shutil.rmtree(session_path)
+
+
+def test_replay_source_closes_zip_on_disconnect():
+    """Replaying a .session.zip must release the ZipStore on disconnect.
+
+    An open ZipStore locks the archive on Windows, so a leaked handle would
+    block deleting / re-recording the file (and trip the tempdir cleanup here).
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        s = Session(base_path=tmp)
+        s.init_stream("emg", StreamInfo(n_channels=2, fs=64.0, dtype=np.dtype("float32")))
+        s.append("emg", np.ones((32, 2), np.float32), np.arange(32, dtype=np.float64))
+        s.save_meta("Replay")
+        zip_path = s.pack_to_zip()
+
+        src = ReplaySource(str(zip_path), "emg", speed=100.0)
+        src.connect()
+        src.read()
+        assert src._session is not None
+        src.disconnect()
+        assert src._session is None  # ZipStore released
+
+        # Would raise PermissionError (WinError 32) if the handle leaked.
+        zip_path.unlink()
+        assert not zip_path.exists()

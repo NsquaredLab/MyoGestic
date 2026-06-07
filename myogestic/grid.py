@@ -11,11 +11,13 @@ deliberately rejected so a reader can never confuse "300 pixels" with
 "300 shares of leftover space". Default (no track list) is all-``Fr(1)``,
 i.e. equal distribution.
 
-Example::
+Examples
+--------
+::
 
     from myogestic.grid import Grid, Px, Fr
 
-    grid = Grid(3, 4)                             # 3 equal rows × 4 equal cols
+    grid = Grid(3, 4) # 3 equal rows x 4 equal cols
     grid = Grid(
         8, 3,
         row_height=[Px(200), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1)],
@@ -36,7 +38,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Union
 
 from imgui_bundle import imgui
 
@@ -56,9 +57,7 @@ def _validate_value(value: object, kind: str) -> float:
         )
     v = float(value)
     if not math.isfinite(v) or v < 0:
-        raise ValueError(
-            f"{kind}({value!r}): value must be finite and non-negative"
-        )
+        raise ValueError(f"{kind}({value!r}): value must be finite and non-negative")
     return v
 
 
@@ -77,10 +76,12 @@ class Px:
 
 @dataclass(frozen=True, slots=True)
 class Fr:
-    """Fractional unit (CSS-grid ``fr``). ``Fr(1)`` means "1 share of the
-    space remaining after :class:`Px` tracks are subtracted". Multiple
-    ``Fr`` entries split the remainder proportionally to their values, so
-    ``[Fr(1), Fr(2)]`` splits leftover space 1:2.
+    """Fractional unit (CSS-grid ``fr``).
+
+    ``Fr(1)`` means "1 share of the space remaining after :class:`Px`
+    tracks are subtracted". Multiple ``Fr`` entries split the remainder
+    proportionally to their values, so ``[Fr(1), Fr(2)]`` splits leftover
+    space 1:2.
     """
 
     value: float
@@ -92,11 +93,13 @@ class Fr:
         return f"Fr({self.value:g})"
 
 
-Track = Union[Px, Fr]
+Track = Px | Fr
 
 
 def _coerce(spec: object, axis: str, index: int) -> Track:
-    """Track entries must be ``Px(...)`` or ``Fr(...)`` — bare numbers
+    """Coerce a track spec to a :class:`Px` or :class:`Fr` instance.
+
+    Track entries must be ``Px(...)`` or ``Fr(...)`` — bare numbers are
     rejected so ``[300, 1, 1]`` can't be silently misread as pixels.
     """
     if isinstance(spec, (Px, Fr)):
@@ -117,9 +120,7 @@ def _resolve_tracks(tracks: list[Track], avail: float) -> list[float]:
     fr_total = sum(t.value for t in tracks if isinstance(t, Fr))
     fr_avail = max(0.0, avail - fixed_total)
     fr_scale = (fr_avail / fr_total) if fr_total > 0 else 0.0
-    return [
-        t.value if isinstance(t, Px) else t.value * fr_scale for t in tracks
-    ]
+    return [t.value if isinstance(t, Px) else t.value * fr_scale for t in tracks]
 
 
 class Grid:
@@ -128,18 +129,26 @@ class Grid:
     Both axes accept the same Px/Fr track specs. See module docstring for
     examples.
 
-    Args:
-        rows: Number of rows.
-        cols: Number of columns.
-        row_height: Per-row track specs (length must equal ``rows``).
-            Default ``None`` → all rows share equally (``[Fr(1)] * rows``).
-        col_width: Per-column track specs (length must equal ``cols``).
-            Default ``None`` → all columns share equally (``[Fr(1)] * cols``).
+    Parameters
+    ----------
+    rows
+        Number of rows.
+    cols
+        Number of columns.
+    row_height
+        Per-row track specs (length must equal ``rows``).
+        Default ``None`` → all rows share equally (``[Fr(1)] * rows``).
+    col_width
+        Per-column track specs (length must equal ``cols``).
+        Default ``None`` → all columns share equally (``[Fr(1)] * cols``).
 
-    Raises:
-        ValueError: if a list length doesn't match ``rows`` / ``cols``, or
-            if any track value is non-finite or negative.
-        TypeError: if a track entry isn't Px, Fr, or a number.
+    Raises
+    ------
+    ValueError
+        if a list length doesn't match ``rows`` / ``cols``, or
+        if any track value is non-finite or negative.
+    TypeError
+        if a track entry isn't Px, Fr, or a number.
     """
 
     def __init__(
@@ -155,25 +164,17 @@ class Grid:
             raise ValueError(f"cols must be a positive int, got {cols!r}")
         self.rows = rows
         self.cols = cols
-        self._row_tracks: list[Track] = self._normalize(
-            row_height, rows, "row_height"
-        )
-        self._col_tracks: list[Track] = self._normalize(
-            col_width, cols, "col_width"
-        )
+        self._row_tracks: list[Track] = self._normalize(row_height, rows, "row_height")
+        self._col_tracks: list[Track] = self._normalize(col_width, cols, "col_width")
         self._scaled_heights: list[float] = [0.0] * rows
         self._last_frame: int = -1
 
     @staticmethod
-    def _normalize(
-        specs: list[Track] | None, expected_len: int, axis: str
-    ) -> list[Track]:
+    def _normalize(specs: list[Track] | None, expected_len: int, axis: str) -> list[Track]:
         if specs is None:
             return [Fr(1.0)] * expected_len
         if len(specs) != expected_len:
-            raise ValueError(
-                f"{axis} has {len(specs)} entries but grid has {expected_len} tracks"
-            )
+            raise ValueError(f"{axis} has {len(specs)} entries but grid has {expected_len} tracks")
         return [_coerce(s, axis, i) for i, s in enumerate(specs)]
 
     def _init_frame(self) -> None:
@@ -184,10 +185,7 @@ class Grid:
         self._last_frame = current_frame
         # Use window height minus padding, not content_region_avail
         # (which changes as child windows are drawn)
-        padding = (
-            imgui.get_style().window_padding.y * 2
-            + max(self.rows - 1, 0) * GUTTER
-        )
+        padding = imgui.get_style().window_padding.y * 2 + max(self.rows - 1, 0) * GUTTER
         avail_h = imgui.get_window_height() - padding
         self._scaled_heights = _resolve_tracks(self._row_tracks, avail_h)
 
@@ -196,9 +194,10 @@ class Grid:
         return sum(self._scaled_heights[r] for r in range(row)) + row * GUTTER
 
     def _row_span_h(self, row_start: int, row_end: int) -> float:
-        return sum(
-            self._scaled_heights[r] for r in range(row_start, row_end)
-        ) + max(row_end - row_start - 1, 0) * GUTTER
+        return (
+            sum(self._scaled_heights[r] for r in range(row_start, row_end))
+            + max(row_end - row_start - 1, 0) * GUTTER
+        )
 
     def _scaled_col_widths(self, avail_w: float) -> list[float]:
         return _resolve_tracks(self._col_tracks, avail_w)
@@ -207,13 +206,12 @@ class Grid:
         scaled = self._scaled_col_widths(avail_w)
         return sum(scaled[c] for c in range(col)) + col * GUTTER
 
-    def _col_span_w(
-        self, col_start: int, col_end: int, avail_w: float
-    ) -> float:
+    def _col_span_w(self, col_start: int, col_end: int, avail_w: float) -> float:
         scaled = self._scaled_col_widths(avail_w)
-        return sum(scaled[c] for c in range(col_start, col_end)) + max(
-            col_end - col_start - 1, 0
-        ) * GUTTER
+        return (
+            sum(scaled[c] for c in range(col_start, col_end))
+            + max(col_end - col_start - 1, 0) * GUTTER
+        )
 
     def __getitem__(self, key: tuple) -> _Cell:
         row, col = key

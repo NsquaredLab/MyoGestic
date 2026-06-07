@@ -18,7 +18,7 @@ from myogestic import App, Stream
 from myogestic.sources import LSLSource
 
 app = App("Unattended recorder")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 
 
 def run_recording():
@@ -61,7 +61,7 @@ from myogestic import App, Stream
 from myogestic.sources import LSLSource
 
 app = App("Protocol runner")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 
 PROTOCOL = [
     ("Rest", 10),
@@ -112,7 +112,7 @@ from myogestic import App, Stream
 from myogestic.sources import LSLSource
 
 app = App("Service")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=1.0))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 
 stop = threading.Event()
 
@@ -154,7 +154,7 @@ from myogestic.outputs import LSLOutlet
 from myogestic.sources import LSLSource
 
 app = App("Headless predictor")
-app.streams(Stream("emg", source=LSLSource("EMG"), window_seconds=0.2))
+app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=200))
 out = LSLOutlet("Predictions", n_channels=1, hz=20)
 
 pipeline = Pipeline(app, predict_hz=20)

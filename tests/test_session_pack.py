@@ -1,9 +1,11 @@
 """Round-trip test: write Session → pack to .session.zip → read via open_session_store."""
 
 import shutil
+import sys
 import tempfile
 
 import numpy as np
+import pytest
 
 from myogestic.session import (
     Session,
@@ -43,19 +45,25 @@ def test_pack_to_zip_roundtrip():
         assert not original_folder.exists()
         assert session.path == zip_path
 
-        # Reopen via the read API
-        loaded = open_session_store(zip_path)
-        assert "emg" in loaded.stores
-        emg_back = np.array(loaded.stores["emg"])
-        assert emg_back.shape == (64, 4)
-        assert np.allclose(emg_back, chunk)
+        # Reopen via the read API (context-managed so the ZipStore handle is
+        # released before the TemporaryDirectory cleanup — Windows locks it).
+        with open_session_store(zip_path) as loaded:
+            assert "emg" in loaded.stores
+            emg_back = np.array(loaded.stores["emg"])
+            assert emg_back.shape == (64, 4)
+            assert np.allclose(emg_back, chunk)
 
-        # Labels survived
-        assert len(loaded.label_track) == 2
-        assert loaded.label_track[0].class_index == 0
-        assert loaded.label_track[1].class_index == 1
+            # Labels survived
+            assert len(loaded.label_track) == 2
+            assert loaded.label_track[0].class_index == 0
+            assert loaded.label_track[1].class_index == 1
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="chmod(0o555) failure injection is POSIX-only — Windows ignores the "
+    "read-only bit on directories, so the pack succeeds instead of failing.",
+)
 def test_pack_to_zip_failure_keeps_folder():
     """If pack fails (we simulate by writing to a read-only target), the
     original folder should remain so the user doesn't lose data."""
@@ -69,6 +77,7 @@ def test_pack_to_zip_failure_keeps_folder():
 
         # Make the parent read-only to force the zip write to fail
         import os
+
         parent = original_folder.parent
         original_mode = os.stat(parent).st_mode
         os.chmod(parent, 0o555)
@@ -95,14 +104,19 @@ def test_iter_labeled_windows_basic():
         data = np.arange(200 * 2, dtype=np.float32).reshape(200, 2)
         ts = np.linspace(0.0, 2.0, 200, endpoint=False)
         session.append("emg", data, ts)
-        session.add_label(0, timestamp=0.0)   # Rest
-        session.add_label(1, timestamp=1.0)   # Fist
+        session.add_label(0, timestamp=0.0)  # Rest
+        session.add_label(1, timestamp=1.0)  # Fist
         session.save_meta("IterTest")
         zip_path = session.pack_to_zip()
 
-        windows = list(iter_labeled_windows(
-            [str(zip_path)], "emg", win_seconds=0.2, hop_seconds=0.1,
-        ))
+        windows = list(
+            iter_labeled_windows(
+                [str(zip_path)],
+                "emg",
+                window_ms=200,
+                hop_ms=100,
+            )
+        )
 
     # 0.2s windows, 0.1s hop, 1s segment = 100 samples, win = 20 samples.
     # Starts: 0, 10, 20, …, 80 → 9 windows per segment (inclusive of the
@@ -130,7 +144,7 @@ def test_iter_labeled_windows_yields_aligned_timestamps():
         session.save_meta("TS")
         path = session.path
 
-        first = next(iter_labeled_windows([str(path)], "emg", 0.2, 0.1))
+        first = next(iter_labeled_windows([str(path)], "emg", 200, 100))
         shutil.rmtree(path, ignore_errors=True)
 
     _w, t, _ci = first
@@ -139,14 +153,15 @@ def test_iter_labeled_windows_yields_aligned_timestamps():
 
 
 def test_iter_labeled_windows_rejects_bad_args():
-    """win_seconds <= 0 and hop_seconds <= 0 must raise (no silent coercion)."""
+    """window_ms <= 0 and hop_ms <= 0 must raise (no silent coercion)."""
     import pytest
-    with pytest.raises(ValueError, match="win_seconds"):
-        list(iter_labeled_windows([], "emg", win_seconds=0.0, hop_seconds=0.1))
-    with pytest.raises(ValueError, match="hop_seconds"):
-        list(iter_labeled_windows([], "emg", win_seconds=0.2, hop_seconds=0.0))
-    with pytest.raises(ValueError, match="hop_seconds"):
-        list(iter_labeled_windows([], "emg", win_seconds=0.2, hop_seconds=-0.5))
+
+    with pytest.raises(ValueError, match="window_ms"):
+        list(iter_labeled_windows([], "emg", window_ms=0, hop_ms=100))
+    with pytest.raises(ValueError, match="hop_ms"):
+        list(iter_labeled_windows([], "emg", window_ms=200, hop_ms=0))
+    with pytest.raises(ValueError, match="hop_ms"):
+        list(iter_labeled_windows([], "emg", window_ms=200, hop_ms=-500))
 
 
 def test_iter_labeled_windows_class_filter():
@@ -155,20 +170,32 @@ def test_iter_labeled_windows_class_filter():
         session = Session(base_path=tmp)
         info = StreamInfo(n_channels=1, fs=100.0, dtype=np.dtype("float32"))
         session.init_stream("emg", info)
-        session.append("emg", np.zeros((300, 1), dtype=np.float32),
-                       np.linspace(0.0, 3.0, 300, endpoint=False))
-        session.add_label(0, timestamp=0.0)   # Rest
-        session.add_label(1, timestamp=1.0)   # Index
-        session.add_label(2, timestamp=2.0)   # Middle
+        session.append(
+            "emg", np.zeros((300, 1), dtype=np.float32), np.linspace(0.0, 3.0, 300, endpoint=False)
+        )
+        session.add_label(0, timestamp=0.0)  # Rest
+        session.add_label(1, timestamp=1.0)  # Index
+        session.add_label(2, timestamp=2.0)  # Middle
         session.save_meta("FilterTest")
         path = session.path
 
-        windows_all = list(iter_labeled_windows(
-            [str(path)], "emg", 0.2, 0.2,
-        ))
-        windows_filt = list(iter_labeled_windows(
-            [str(path)], "emg", 0.2, 0.2, classes={0, 2},  # skip Index
-        ))
+        windows_all = list(
+            iter_labeled_windows(
+                [str(path)],
+                "emg",
+                200,
+                200,
+            )
+        )
+        windows_filt = list(
+            iter_labeled_windows(
+                [str(path)],
+                "emg",
+                200,
+                200,
+                classes={0, 2},  # skip Index
+            )
+        )
         shutil.rmtree(path, ignore_errors=True)
 
     assert len(windows_all) > 0
@@ -199,9 +226,16 @@ def test_iter_aligned_windows_basic():
         path = session.path
 
         # 0.2s windows, 0.2s hop, no overlap → 5 windows
-        windows = list(iter_aligned_windows(
-            [str(path)], "emg", ["kin"], 0.2, 0.2, align_window_samples=1,
-        ))
+        windows = list(
+            iter_aligned_windows(
+                [str(path)],
+                "emg",
+                ["kin"],
+                200,
+                200,
+                n_alignment_samples=1,
+            )
+        )
         shutil.rmtree(path, ignore_errors=True)
 
     assert len(windows) == 5
@@ -219,14 +253,21 @@ def test_iter_aligned_windows_skips_session_missing_stream():
         # Session with only emg, no kin
         session = Session(base_path=tmp)
         session.init_stream("emg", StreamInfo(n_channels=1, fs=100.0, dtype=np.dtype("float32")))
-        session.append("emg", np.zeros((100, 1), dtype=np.float32),
-                       np.linspace(0.0, 1.0, 100, endpoint=False))
+        session.append(
+            "emg", np.zeros((100, 1), dtype=np.float32), np.linspace(0.0, 1.0, 100, endpoint=False)
+        )
         session.save_meta("MissingKin")
         path = session.path
 
-        windows = list(iter_aligned_windows(
-            [str(path)], "emg", ["kin"], 0.2, 0.2,
-        ))
+        windows = list(
+            iter_aligned_windows(
+                [str(path)],
+                "emg",
+                ["kin"],
+                200,
+                200,
+            )
+        )
         shutil.rmtree(path, ignore_errors=True)
 
     assert windows == []
@@ -234,16 +275,17 @@ def test_iter_aligned_windows_skips_session_missing_stream():
 
 def test_iter_aligned_windows_rejects_bad_args():
     import pytest
-    with pytest.raises(ValueError, match="win_seconds"):
-        list(iter_aligned_windows([], "a", ["b"], 0.0, 0.1))
-    with pytest.raises(ValueError, match="hop_seconds"):
-        list(iter_aligned_windows([], "a", ["b"], 0.2, 0.0))
-    with pytest.raises(ValueError, match="align_window_samples"):
-        list(iter_aligned_windows([], "a", ["b"], 0.2, 0.1, align_window_samples=0))
+
+    with pytest.raises(ValueError, match="window_ms"):
+        list(iter_aligned_windows([], "a", ["b"], 0, 100))
+    with pytest.raises(ValueError, match="hop_ms"):
+        list(iter_aligned_windows([], "a", ["b"], 200, 0))
+    with pytest.raises(ValueError, match="n_alignment_samples"):
+        list(iter_aligned_windows([], "a", ["b"], 200, 100, n_alignment_samples=0))
 
 
 def test_iter_aligned_windows_averages_exactly_N_samples():
-    """`align_window_samples=N` averages exactly N samples (not N+1).
+    """`n_alignment_samples=N` averages exactly N samples (not N+1).
 
     Verified by giving kin a unit ramp and checking the mean equals the
     arithmetic mean of N consecutive integers around the midpoint.
@@ -262,13 +304,27 @@ def test_iter_aligned_windows_averages_exactly_N_samples():
 
         # win=0.2s @ 100Hz = 20 samples. First window midpoint at i=10.
         # N=10 → samples [5..15) (n_left=5, n_right=5) → mean = 9.5
-        first_n10 = next(iter_aligned_windows(
-            [str(path)], "emg", ["kin"], 0.2, 0.2, align_window_samples=10,
-        ))
+        first_n10 = next(
+            iter_aligned_windows(
+                [str(path)],
+                "emg",
+                ["kin"],
+                200,
+                200,
+                n_alignment_samples=10,
+            )
+        )
         # N=11 → samples [5..16) → mean = 10.0
-        first_n11 = next(iter_aligned_windows(
-            [str(path)], "emg", ["kin"], 0.2, 0.2, align_window_samples=11,
-        ))
+        first_n11 = next(
+            iter_aligned_windows(
+                [str(path)],
+                "emg",
+                ["kin"],
+                200,
+                200,
+                n_alignment_samples=11,
+            )
+        )
         shutil.rmtree(path, ignore_errors=True)
 
     _w, aligned10, _t = first_n10
@@ -286,8 +342,9 @@ def test_save_meta_persists_class_names():
     with tempfile.TemporaryDirectory() as tmp:
         session = Session(base_path=tmp)
         session.init_stream("emg", StreamInfo(n_channels=1, fs=100.0, dtype=np.dtype("float32")))
-        session.append("emg", np.zeros((10, 1), dtype=np.float32),
-                       np.linspace(0.0, 0.1, 10, endpoint=False))
+        session.append(
+            "emg", np.zeros((10, 1), dtype=np.float32), np.linspace(0.0, 0.1, 10, endpoint=False)
+        )
         session.save_meta("Persisted", class_names=["Rest", "Fist", "Pinch"])
         path = session.path
 
@@ -301,11 +358,13 @@ def test_save_meta_persists_class_names():
 def test_save_meta_omits_class_names_when_none():
     """No class_names → the meta.json key is absent (not an empty list)."""
     import json
+
     with tempfile.TemporaryDirectory() as tmp:
         session = Session(base_path=tmp)
         session.init_stream("emg", StreamInfo(n_channels=1, fs=50.0, dtype=np.dtype("float32")))
-        session.append("emg", np.zeros((5, 1), dtype=np.float32),
-                       np.array([0.0, 0.02, 0.04, 0.06, 0.08]))
+        session.append(
+            "emg", np.zeros((5, 1), dtype=np.float32), np.array([0.0, 0.02, 0.04, 0.06, 0.08])
+        )
         session.save_meta("NoNames")  # no class_names arg
         meta = json.loads((session.path / "meta.json").read_text())
         assert "class_names" not in meta
@@ -318,7 +377,7 @@ def test_sessions_in_same_second_get_distinct_folders(monkeypatch):
     """Two sessions created within the same wall-clock second must not share a
     folder — otherwise the first session's pack_to_zip() (which rmtree's its
     own folder on a daemon thread) can wipe the second recording's data."""
-    import myogestic._session_core as sc
+    import myogestic.session._core as sc
 
     monkeypatch.setattr(sc.time, "strftime", lambda *a, **k: "2026-06-03_14-30-05")
     with tempfile.TemporaryDirectory() as tmp:
@@ -332,7 +391,7 @@ def test_pack_does_not_delete_a_concurrent_same_second_session(monkeypatch):
     """Reproduce the Stop-then-immediately-Record data-loss scenario: with a
     shared (second-resolution) folder name, s1.pack_to_zip() deleted s2's data.
     Distinct folders keep s2 intact."""
-    import myogestic._session_core as sc
+    import myogestic.session._core as sc
 
     monkeypatch.setattr(sc.time, "strftime", lambda *a, **k: "2026-06-03_14-30-05")
     with tempfile.TemporaryDirectory() as tmp:
@@ -353,3 +412,56 @@ def test_pack_does_not_delete_a_concurrent_same_second_session(monkeypatch):
         assert s2.path.exists()
         assert np.array(s2.stores["emg"]).shape == (8, 2)
         assert np.allclose(np.array(s2.stores["emg"]), 2.0)
+
+
+def _quick_session(tmp: str) -> Session:
+    """Build a tiny one-stream, one-label session (helper for the tests below)."""
+    s = Session(base_path=tmp)
+    info = StreamInfo(n_channels=2, fs=64.0, dtype=np.dtype("float32"))
+    s.init_stream("emg", info)
+    s.append("emg", np.ones((16, 2), np.float32), np.arange(16, dtype=np.float64))
+    s.add_label(0, timestamp=0.0)
+    s.save_meta("Quick")
+    return s
+
+
+def test_pack_to_zip_overwrites_existing_target():
+    """pack_to_zip uses os.replace, which overwrites a pre-existing .session.zip.
+
+    On Windows ``Path.rename`` raises ``FileExistsError`` when the destination
+    exists; ``os.replace`` overwrites on every OS.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        s = _quick_session(tmp)
+        zip_path = s.path.with_name(s.path.name + ".session.zip")
+        zip_path.write_bytes(b"stale")  # a leftover file at the destination
+        out = s.pack_to_zip()
+        assert out == zip_path
+        with open_session_store(out) as loaded:  # real, readable zip (not stale)
+            assert np.array(loaded.stores["emg"]).shape == (16, 2)
+
+
+def test_session_close_releases_zipstore_and_is_idempotent():
+    """close() drops the ZipStore handle (so Windows can move/delete the zip),
+    is safe to call twice, and works as a context manager."""
+    with tempfile.TemporaryDirectory() as tmp:
+        zip_path = _quick_session(tmp).pack_to_zip()
+
+        s = open_session_store(zip_path)
+        assert s._zip_store is not None
+        s.close()
+        assert s._zip_store is None
+        s.close()  # idempotent — no error
+
+        with open_session_store(zip_path) as ctx:
+            assert ctx._zip_store is not None
+        assert ctx._zip_store is None  # closed on context exit
+
+
+def test_open_folder_session_has_no_zipstore_and_closes_safely():
+    """A folder session (no zip) exposes _zip_store=None so close() stays safe."""
+    with tempfile.TemporaryDirectory() as tmp:
+        s = _quick_session(tmp)
+        loaded = open_session_store(s.path)  # folder, not zip
+        assert loaded._zip_store is None
+        loaded.close()  # must not raise

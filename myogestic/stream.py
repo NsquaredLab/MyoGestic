@@ -1,3 +1,5 @@
+"""Stream abstraction — ring-buffered acquisition from a Source plus windowing."""
+
 from __future__ import annotations
 
 import asyncio
@@ -7,6 +9,14 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
+import numpy as np
+from dvg_ringbuffer import RingBuffer
+
+if TYPE_CHECKING:
+    from tsdownsample import M4Downsampler
+
+    from myogestic.session import Session
+
 # Pyodide reports sys.platform == "emscripten" and forbids OS threads
 # (Thread.start raises RuntimeError). When detected, the framework
 # schedules its acquire / send / predict loops as asyncio tasks on the
@@ -14,11 +24,23 @@ from typing import TYPE_CHECKING, Protocol
 # primitive (time.sleep vs await asyncio.sleep) differs.
 _IS_BROWSER = sys.platform == "emscripten"
 
-import numpy as np
 
-if TYPE_CHECKING:
-    from myogestic.session import Session
-from dvg_ringbuffer import RingBuffer
+#: Dtypes a :class:`Stream` / :class:`Source` may use. Covers every LSL wire
+#: format (``int8`` / ``int16`` / ``int32`` / ``int64`` / ``float32`` /
+#: ``float64``) plus ``float16`` as a storage-only cast. Unsigned ints are
+#: excluded: never an LSL wire format and unused for biosignals.
+SUPPORTED_DTYPES: tuple[np.dtype, ...] = tuple(
+    np.dtype(t)
+    for t in (
+        np.float16,
+        np.float32,
+        np.float64,
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+    )
+)
 
 
 @dataclass
@@ -29,20 +51,39 @@ class StreamInfo:
     the ring buffer, lay out the signal viewer, and decide how to
     serialise the stream when recording.
 
-    Attributes:
-        n_channels: Channel count. Fixed for the life of the source.
-        fs: Sample rate in Hz. Used to convert ``window_seconds`` /
-            ``buffer_seconds`` into sample counts.
-        dtype: NumPy dtype of each sample. Defaults to ``float32``;
-            most signal-processing widgets assume this.
-        channel_names: Optional per-channel labels for the signal viewer
-            legend. ``None`` (default) renders as ``ch0``, ``ch1``, ...
+    Attributes
+    ----------
+    n_channels
+        Channel count. Fixed for the life of the source.
+    fs
+        Sample rate in Hz. Used to convert ``window_ms`` /
+        ``buffer_ms`` into sample counts.
+    dtype
+        NumPy dtype of each sample, one of :data:`SUPPORTED_DTYPES`.
+        Defaults to ``float32``. Accepts anything :func:`numpy.dtype`
+        understands (``"int16"``, ``np.int16``, ``np.dtype("int16")``)
+        and normalises it. Picking a compact dtype (e.g. ``int16``)
+        keeps the ring buffer and Zarr recording small; the window
+        handed to ``@pipeline.extract`` is **always upcast to float32**
+        regardless, so feature/ML code never has to branch on dtype.
+    channel_names
+        Optional per-channel labels for the signal viewer
+        legend. ``None`` (default) renders as ``ch0``, ``ch1``, ...
     """
 
     n_channels: int
     fs: float
     dtype: np.dtype = np.dtype(np.float32)
     channel_names: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        # Normalise str / type / np.dtype to a canonical np.dtype, then validate.
+        self.dtype = np.dtype(self.dtype)
+        if self.dtype not in SUPPORTED_DTYPES:
+            supported = ", ".join(d.name for d in SUPPORTED_DTYPES)
+            raise ValueError(
+                f"Unsupported dtype {self.dtype.name!r}. Supported dtypes: {supported}."
+            )
 
 
 class Source(Protocol):
@@ -63,7 +104,9 @@ class Source(Protocol):
         ...
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
-        """Return ``(data, ts)`` where ``data`` is sample-major
+        """Poll for the next chunk of samples.
+
+        Return ``(data, ts)`` where ``data`` is sample-major
         ``(n_samples, n_channels)`` and ``ts`` is ``(n_samples,)``
         float64 LSL clock timestamps. Return ``(None, None)`` if no
         new data is available.
@@ -71,8 +114,10 @@ class Source(Protocol):
         ...
 
     def disconnect(self) -> None:
-        """Release the device. Idempotent - may be called multiple
-        times during shutdown."""
+        """Release the device.
+
+        Idempotent - may be called multiple times during shutdown.
+        """
         ...
 
 
@@ -121,18 +166,19 @@ class Stream:
       consumed by ``@pipeline.extract``) and :meth:`get_display`
       (min/max envelope decimated for 60 fps rendering, consumed by
       ``signal_viewer``).
-    - The ring buffer holds the last ``buffer_seconds`` of samples so
+    - The ring buffer holds the last ``buffer_ms`` of samples so
       transient consumers (slow extract, momentary GUI hitches) don't
       lose data.
 
-    Example:
-        >>> from myogestic import App, Stream
-        >>> from myogestic.sources import LSLSource
-        >>> app = App("hello")
-        >>> app.streams(
-        ...     Stream("emg", source=LSLSource("TestEMG1"),
-        ...            window_seconds=1.0, buffer_seconds=10),
-        ... )
+    Examples
+    --------
+    >>> from myogestic import App, Stream
+    >>> from myogestic.sources import LSLSource
+    >>> app = App("hello")
+    >>> app.streams(
+    ...     Stream("emg", source=LSLSource("TestEMG1"),
+    ...            window_ms=1000, buffer_ms=10000),
+    ... )
 
     See [Streams concept](../concepts/streams.md) for the buffer +
     decimation model in depth, and [Add a custom source](../how-to/add-a-source.md)
@@ -143,22 +189,27 @@ class Stream:
         self,
         name: str,
         source: Source,
-        window_seconds: float,
-        buffer_seconds: float = 10,
+        window_ms: float,
+        buffer_ms: float = 10000,
     ):
         """Live ring-buffered stream with display decimation.
 
-        Args:
-            name: Stream label (also used as the recorded zarr stream key).
-            source: Anything implementing the :class:`Source` protocol.
-            window_seconds: Duration in **seconds** of the window returned
-                by :meth:`get_window`.
-            buffer_seconds: Ring-buffer depth in seconds. Defaults to 10.
+        Parameters
+        ----------
+        name
+            Stream label (also used as the recorded zarr stream key).
+        source
+            Anything implementing the :class:`Source` protocol.
+        window_ms
+            Duration in **milliseconds** of the window returned
+            by :meth:`get_window`.
+        buffer_ms
+            Ring-buffer depth in milliseconds. Defaults to 10000 (10 s).
         """
         self.name = name
         self._source = source
-        self._window = float(window_seconds)
-        self._buffer_seconds = buffer_seconds
+        self._window = window_ms / 1000.0
+        self._buffer_seconds = buffer_ms / 1000.0
         self._running = False
         self._session: Session | None = None
         # Guards `_session` against the acquire loop. `stop_recording()` tears
@@ -190,7 +241,7 @@ class Stream:
         self._m4_d = np.empty(0)
         self._m4_n: int = 0
         # Per-stream M4 scratch (was module globals — not thread-safe across streams)
-        self._m4_downsampler: object | None = None
+        self._m4_downsampler: M4Downsampler | None = None
         self._m4_work_col: np.ndarray | None = None
         self._m4_work_idx: np.ndarray | None = None
         self._m4_work_d: np.ndarray | None = None
@@ -209,20 +260,21 @@ class Stream:
         return True
 
     def _allocate_buffers(self) -> None:
-        """Allocate/resize buffers for the current self.info. Called after any
-        (re)connection that produced a fresh StreamInfo."""
+        """Allocate/resize buffers for the current self.info.
+
+        Called after any (re)connection that produced a fresh StreamInfo.
+        """
         assert self.info is not None
         self._cap = int(self.info.fs * self._buffer_seconds)
         self._data = RingBuffer(
             capacity=self._cap,
-            dtype=(self.info.dtype, self.info.n_channels),  # type: ignore[arg-type]
+            dtype=(self.info.dtype, self.info.n_channels),  # type: ignore
         )
         self._timestamps = RingBuffer(
-            capacity=self._cap, dtype=np.float64  # type: ignore[arg-type]
+            capacity=self._cap,
+            dtype=np.float64,  # type: ignore
         )
-        self._display_d = np.empty(
-            (self._cap, self.info.n_channels), dtype=self.info.dtype
-        )
+        self._display_d = np.empty((self._cap, self.info.n_channels), dtype=self.info.dtype)
         self._display_t = np.empty(self._cap, dtype=np.float64)
         self._display_n = 0
         self._snap_interval = max(1, int(self.info.fs * 0.016))
@@ -235,9 +287,7 @@ class Stream:
         self._m4_work_idx = None
         self._m4_work_d = None
         self._m4_work_t = None
-        self._win_d = np.empty(
-            (self._cap, self.info.n_channels), dtype=self.info.dtype
-        )
+        self._win_d = np.empty((self._cap, self.info.n_channels), dtype=self.info.dtype)
         self._win_t = np.empty(self._cap, dtype=np.float64)
         self._connected = True
 
@@ -260,7 +310,9 @@ class Stream:
 
             try:
                 if hasattr(self._source, "reconnect"):
-                    self.info = self._source.reconnect(target)
+                    # `reconnect` is an optional Source extension (not in the
+                    # Protocol); the hasattr guard makes the call safe.
+                    self.info = self._source.reconnect(target)  # type: ignore
                 else:
                     self._source.disconnect()
                     self.info = self._source.connect()
@@ -274,6 +326,7 @@ class Stream:
             return True
 
     def start(self) -> None:
+        """Start the acquisition loop (a daemon thread, or a per-frame task in the browser)."""
         self._running = True
         if _IS_BROWSER:
             # Pyodide: no OS threads, and asyncio tasks scheduled here
@@ -282,12 +335,14 @@ class Stream:
             # per-frame scheduler instead - the App's GUI callback
             # ticks it every frame.
             from myogestic._browser import register
+
             register(lambda: self._acquire_step() if self._running else 1.0)
         else:
             self._thread = threading.Thread(target=self._acquire_loop, daemon=True)
             self._thread.start()
 
     def stop(self) -> None:
+        """Stop the acquisition loop and disconnect the source (errors suppressed)."""
         self._running = False
         try:
             self._source.disconnect()
@@ -295,9 +350,11 @@ class Stream:
             pass
 
     def attach_session(self, session: Session) -> None:
-        """Begin recording this stream into ``session`` (called by
-        :meth:`App.start_recording`). Set under ``_session_lock`` so the
-        acquire loop sees a fully-attached session atomically."""
+        """Begin recording this stream into ``session``.
+
+        Called by :meth:`App.start_recording`. Set under ``_session_lock``
+        so the acquire loop sees a fully-attached session atomically.
+        """
         with self._session_lock:
             self._session = session
 
@@ -307,7 +364,8 @@ class Stream:
         Holding ``_session_lock`` makes this *wait for* any append currently
         in flight on the acquire thread and guarantees no further append can
         start. Once this returns, the caller may safely finalise/clear the
-        session's Zarr stores without racing the acquire loop."""
+        session's Zarr stores without racing the acquire loop.
+        """
         with self._session_lock:
             self._session = None
 
@@ -343,6 +401,10 @@ class Stream:
             self.last_error = bad
             return 0.1
 
+        if self._data is None or self._timestamps is None:
+            # Shouldn't happen once connected (_connect initialises both), but
+            # narrows the Optional for the type checker and is harmless defence.
+            return 1.0
         with self._lock:
             self._data.extend(data)
             self._timestamps.extend(ts)
@@ -378,8 +440,11 @@ class Stream:
                 time.sleep(delay)
 
     async def _acquire_loop_async(self) -> None:
-        """Browser variant: same step body, paced with asyncio.sleep so
-        the event loop can hand control back to the frame renderer."""
+        """Run the acquire loop in the browser, paced with ``asyncio.sleep``.
+
+        Same step body as :meth:`_acquire_loop`, but yields to the event
+        loop so it can hand control back to the frame renderer.
+        """
         while self._running:
             delay = self._acquire_step()
             # asyncio.sleep(0) still yields to the event loop, which is
@@ -445,9 +510,7 @@ class Stream:
             self._m4_d = self._display_d[:n]
             self._m4_n = n
         else:
-            t_dec, d_dec = self._m4_decimate(
-                self._display_t[:n], self._display_d[:n], n_out
-            )
+            t_dec, d_dec = self._m4_decimate(self._display_t[:n], self._display_d[:n], n_out)
             self._m4_t = t_dec
             self._m4_d = d_dec
             self._m4_n = len(t_dec)
@@ -460,51 +523,60 @@ class Stream:
         Previously module-global — moved here because multiple streams running
         the acquire loop concurrently would stomp on shared scratch buffers.
         """
-        if self._m4_downsampler is None:
+        downsampler = self._m4_downsampler
+        if downsampler is None:
             from tsdownsample import M4Downsampler
-            self._m4_downsampler = M4Downsampler()
+
+            downsampler = self._m4_downsampler = M4Downsampler()
 
         n, n_ch = d.shape
 
-        if self._m4_work_col is None or self._m4_work_col.shape[0] < n:
-            self._m4_work_col = np.empty(n, dtype=d.dtype)
+        # Bind each scratch buffer to a local right after its lazy-alloc guard:
+        # the type checker can't narrow an Optional *instance attribute* across
+        # the loop + downsampler calls below, but it narrows a local; locals also
+        # save repeated attribute lookups in this per-frame hot path.
+        work_col = self._m4_work_col
+        if work_col is None or work_col.shape[0] < n:
+            work_col = self._m4_work_col = np.empty(n, dtype=d.dtype)
 
         max_idx = n_out * n_ch
-        if self._m4_work_idx is None or self._m4_work_idx.shape[0] < max_idx:
-            self._m4_work_idx = np.empty(max_idx, dtype=np.intp)
+        work_idx = self._m4_work_idx
+        if work_idx is None or work_idx.shape[0] < max_idx:
+            work_idx = self._m4_work_idx = np.empty(max_idx, dtype=np.intp)
 
         pos = 0
         for ch in range(n_ch):
-            np.copyto(self._m4_work_col[:n], d[:, ch])
-            idx = self._m4_downsampler.downsample(self._m4_work_col[:n], n_out=n_out)  # type: ignore[attr-defined]
+            np.copyto(work_col[:n], d[:, ch])
+            idx = downsampler.downsample(work_col[:n], n_out=n_out)
             idx_len = len(idx)
-            self._m4_work_idx[pos : pos + idx_len] = idx
+            work_idx[pos : pos + idx_len] = idx
             pos += idx_len
 
-        all_idx = np.unique(self._m4_work_idx[:pos])
+        all_idx = np.unique(work_idx[:pos])
         n_sel = len(all_idx)
 
-        if (
-            self._m4_work_d is None
-            or self._m4_work_d.shape[0] < n_sel
-            or self._m4_work_d.shape[1] != n_ch
-        ):
-            self._m4_work_d = np.empty((n_out * n_ch, n_ch), dtype=d.dtype)
-        if self._m4_work_t is None or self._m4_work_t.shape[0] < n_sel:
-            self._m4_work_t = np.empty(n_out * n_ch, dtype=np.float64)
+        work_d = self._m4_work_d
+        if work_d is None or work_d.shape[0] < n_sel or work_d.shape[1] != n_ch:
+            work_d = self._m4_work_d = np.empty((n_out * n_ch, n_ch), dtype=d.dtype)
+        work_t = self._m4_work_t
+        if work_t is None or work_t.shape[0] < n_sel:
+            work_t = self._m4_work_t = np.empty(n_out * n_ch, dtype=np.float64)
 
-        self._m4_work_t[:n_sel] = t[all_idx]
-        self._m4_work_d[:n_sel] = d[all_idx]
+        work_t[:n_sel] = t[all_idx]
+        work_d[:n_sel] = d[all_idx]
 
-        return self._m4_work_t[:n_sel], self._m4_work_d[:n_sel]
+        return work_t[:n_sel], work_d[:n_sel]
 
     def get_window(self) -> tuple[np.ndarray, np.ndarray]:
-        """Return the most recent ``window_seconds`` as ``(data, ts)``.
+        """Return the most recent ``window_ms`` as ``(data, ts)``.
 
         ``data`` is **channels-first** ``(n_channels, n_samples)`` — the
-        same convention used everywhere user code touches signal data.
-        Both arrays are views into a reusable per-stream buffer; copy
-        explicitly if you need to retain them past the next call.
+        same convention used everywhere user code touches signal data —
+        and **always float32**, whatever dtype the stream buffers in, so
+        ``@pipeline.extract`` never has to branch on dtype. ``ts`` is a
+        view into a reusable per-stream buffer; for a float32 stream
+        ``data`` is a view too, otherwise a fresh float32 copy. Copy
+        explicitly if you need to retain either past the next call.
         """
         if self._data is None or self._timestamps is None or self.info is None:
             return (
@@ -515,15 +587,16 @@ class Stream:
             nd = _unwrap_ring_into(self._data, self._win_d, self._cap)
             _unwrap_ring_into(self._timestamps, self._win_t, self._cap)
         if nd == 0:
-            return self._win_d[:0].T, self._win_t[:0]
+            return self._win_d[:0].T.astype(np.float32, copy=False), self._win_t[:0]
         n = int(self._window * self.info.fs)
         if nd < n:
-            return self._win_d[:nd].T, self._win_t[:nd]
-        return self._win_d[nd - n : nd].T, self._win_t[nd - n : nd]
+            return self._win_d[:nd].T.astype(np.float32, copy=False), self._win_t[:nd]
+        return (
+            self._win_d[nd - n : nd].T.astype(np.float32, copy=False),
+            self._win_t[nd - n : nd],
+        )
 
-    def get_display(
-        self, n_pixels: int = 800
-    ) -> tuple[np.ndarray, np.ndarray] | None:
+    def get_display(self, n_pixels: int = 800) -> tuple[np.ndarray, np.ndarray] | None:
         """Read pre-computed M4 result. Zero work on render thread.
 
         The acquire thread computes M4 in _update_display_snapshot.
@@ -556,5 +629,3 @@ class Stream:
                 return None
             ts = float(self._display_t[n - 1])
         return ts if ts > 0.0 else None
-
-
