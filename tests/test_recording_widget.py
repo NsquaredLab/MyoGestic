@@ -1,9 +1,9 @@
-"""Tests for myogestic.widgets.recording.
+"""Tests for myogestic.widgets.panels.recording.
 
 Tests the pure-logic helpers — full widget rendering needs ImGui context.
 """
 
-from myogestic.widgets.recording import _safe_label_index
+from myogestic.widgets.panels.recording import _safe_label_index
 
 
 def test_safe_label_index_in_range():
@@ -24,7 +24,7 @@ def test_safe_label_index_out_of_range_clamps_to_negative_one():
     a class index that doesn't exist."""
     assert _safe_label_index(3, 2) == -1
     assert _safe_label_index(99, 5) == -1
-    assert _safe_label_index(-2, 3) == -1   # weird negatives also rejected
+    assert _safe_label_index(-2, 3) == -1  # weird negatives also rejected
 
 
 def test_safe_label_index_zero_classes():
@@ -36,7 +36,7 @@ def test_safe_label_index_zero_classes():
 def test_state_colors_default_entries():
     """Core states are populated; ml states get added by myogestic.ml.widgets."""
     from myogestic.core import AppState
-    from myogestic.widgets.recording import STATE_COLORS
+    from myogestic.widgets.panels.recording import STATE_COLORS
 
     assert AppState.IDLE in STATE_COLORS
     assert AppState.RECORDING in STATE_COLORS

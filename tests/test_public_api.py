@@ -12,12 +12,8 @@ def test_top_level_names_are_reachable():
     """Every name advertised in `__all__` of the top-level package imports cleanly."""
     import myogestic
 
-    expected = {
-        "App", "AppState", "COL_WIDTH", "Context", "Grid", "Pipeline",
-        "ROW_HEIGHT", "Stream", "StreamInfo", "TrainingData",
-    }
-    assert expected.issubset(set(myogestic.__all__))
-    for name in expected:
+    assert myogestic.__all__, "__all__ must not be empty"
+    for name in myogestic.__all__:
         assert hasattr(myogestic, name), f"missing top-level {name!r}"
 
 

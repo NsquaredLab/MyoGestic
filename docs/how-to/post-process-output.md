@@ -1,6 +1,6 @@
 # Post-process predictions
 
-`myogestic.filters` smooths the **prediction output vector** before it leaves the app - the 9-float pose, the proportional control, the actuator command. It is *not* a DSP filter for raw EMG (that belongs upstream of `extract()` and the user's domain library, e.g. scipy).
+`myogestic.outputs.filters` smooths the **prediction output vector** before it leaves the app - the 9-float pose, the proportional control, the actuator command. It is *not* a DSP filter for raw EMG (that belongs upstream of `extract()` and the user's domain library, e.g. scipy).
 
 ## The fastest path: [`FilterControl`][myogestic.widgets.FilterControl] widget
 
@@ -16,7 +16,7 @@ pose_filter = FilterControl(hz=20.0, default="one_euro")
 @pipeline.predict
 def predict(model, features):
     pose = model.predict(features)
-    pose_smooth = pose_filter(pose, t=time.monotonic())
+    pose_smooth = pose_filter(pose, timestamp=time.monotonic())
     vhi_outlet.push(pose_smooth)
     return {"pose": pose_smooth}
 
@@ -45,52 +45,52 @@ Parameters update *in place* - no rebuild - so smoothing history survives live t
 
 ### OneEuro tuning
 
-[`OneEuroFilter(freq, min_cutoff, beta, d_cutoff)`][myogestic.filters.OneEuroFilter]:
+[`OneEuroFilter(hz, min_cutoff_hz, beta, derivative_cutoff_hz)`][myogestic.outputs.filters.OneEuroFilter]:
 
-- `freq` - your tick rate (`predict_hz`). Used as fallback dt when `t` isn't passed.
-- `min_cutoff` - cutoff (Hz) at zero velocity. Lower = smoother at rest. Default 1.0.
+- `hz` - your tick rate (`predict_hz`). Used as fallback dt when `timestamp` isn't passed.
+- `min_cutoff_hz` - cutoff (Hz) at zero velocity. Lower = smoother at rest. Default 1.0.
 - `beta` - velocity-to-cutoff gain. Higher = more responsive on fast moves. Default 0.02. **Bump this if the hand feels laggy on fast clenches; lower if it twitches at rest.**
-- `d_cutoff` - cutoff for the velocity smoother. Rarely needs tuning. Default 1.0.
+- `derivative_cutoff_hz` - cutoff for the velocity smoother. Rarely needs tuning. Default 1.0.
 
-The filter's secret is that it adapts: cutoff = `min_cutoff + beta * |velocity|`. Fast motion → high cutoff (responsive); slow motion → low cutoff (smooth).
+The filter's secret is that it adapts: cutoff = `min_cutoff_hz + beta * |velocity|`. Fast motion → high cutoff (responsive); slow motion → low cutoff (smooth).
 
 ### Gaussian tuning
 
-[`GaussianFilter(window, sigma)`][myogestic.filters.GaussianFilter]:
+[`GaussianFilter(n_vectors, sigma)`][myogestic.outputs.filters.GaussianFilter]:
 
-- `window` - number of past samples to weight. Default 5.
+- `n_vectors` - number of past samples to weight. Default 5.
 - `sigma` - Gaussian width. Default 1.0 (≈ standard deviation of the kernel).
 
-Higher `window` and `sigma` mean more lag and more smoothing. Linear, no adaptation.
+Higher `n_vectors` and `sigma` mean more lag and more smoothing. Linear, no adaptation.
 
 ## Without the widget: bare filter
 
 If you don't need the UI panel:
 
 ```python
-from myogestic.filters import OneEuroFilter
+from myogestic.outputs.filters import OneEuroFilter
 
-pose_filter = OneEuroFilter(freq=20.0, min_cutoff=1.0, beta=0.02)
+pose_filter = OneEuroFilter(hz=20.0, min_cutoff_hz=1.0, beta=0.02)
 
 
 @pipeline.predict
 def predict(model, features):
     pose = model.predict(features)
-    pose_smooth = pose_filter(pose, t=time.monotonic())
+    pose_smooth = pose_filter(pose, timestamp=time.monotonic())
     vhi_outlet.push(pose_smooth)
     return {"pose": pose_smooth}
 ```
 
-Pass `t` (a monotonic clock value) so the filter computes real-elapsed dt instead of assuming `1/freq`. If your tick rate is jittery, this matters; if it's stable, it doesn't.
+Pass `timestamp` (a monotonic clock value) so the filter computes real-elapsed dt instead of assuming `1/hz`. If your tick rate is jittery, this matters; if it's stable, it doesn't.
 
-[`make_filter(name, hz, **kwargs)`][myogestic.filters.make_filter] is the dispatch helper used by `FilterControl`:
+[`make_filter(name, hz, **kwargs)`][myogestic.outputs.filters.make_filter] is the dispatch helper used by `FilterControl`:
 
 ```python
-from myogestic.filters import make_filter
+from myogestic.outputs.filters import make_filter
 
-pose_filter = make_filter("one_euro", hz=20.0, min_cutoff=1.0, beta=0.05)
+pose_filter = make_filter("one_euro", hz=20.0, min_cutoff_hz=1.0, beta=0.05)
 # or
-pose_filter = make_filter("gaussian", window=5, sigma=1.0)
+pose_filter = make_filter("gaussian", n_vectors=5, sigma=1.0)
 ```
 
 ## When to reset

@@ -20,19 +20,20 @@ Workflow:
        hand (gRPC)
 """
 
+import math
 import sys
 
 import numpy as np
 
 from myogestic import App, EdgeTrigger, Fr, Grid, Px, Stream, TrainingData
-from myogestic.contrib.features import mav, rms, var, wl
-from myogestic.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import pipeline_panel
-from myogestic.models import catboost_classifier
+from myogestic.recipes.estimators import catboost_classifier
+from myogestic.recipes.features import mav, rms, var, wl
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
+from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
     FeatureSelector,
     FilterControl,
@@ -66,7 +67,7 @@ CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
 
 
-# Reference RMS / MAV / WL / VAR live in myogestic.contrib.features; mix
+# Reference RMS / MAV / WL / VAR live in myogestic.recipes.features; mix
 # with your own callables here — feature engineering is user code, this is
 # the seam where you'd add custom ones.
 features = FeatureSelector(
@@ -96,12 +97,12 @@ PROCESSES = [
     *vhi.launcher(),
 ]
 
-WIN_SECONDS = 0.2
-HOP_SECONDS = 0.1
+WINDOW_MS = 200
+HOP_MS = 100
 
 app = App("EMG Classification (gRPC)", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG1"), window_seconds=WIN_SECONDS, buffer_seconds=60)
+    Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000)
 )
 pipeline = Pipeline(app)
 
@@ -128,7 +129,7 @@ def train(data: TrainingData):
     all_X: list[np.ndarray] = []
     all_y: list[int] = []
     for window, _ts, class_idx in iter_labeled_windows(
-        data.paths, "emg", WIN_SECONDS, HOP_SECONDS, classes=data.classes
+        data.paths, "emg", WINDOW_MS, HOP_MS, classes=data.classes
     ):
         all_X.append(extract({"emg": window}))
         all_y.append(class_idx)
@@ -148,11 +149,18 @@ def train(data: TrainingData):
     return clf
 
 
-# SetMovement re-triggers VHI's animation, so only command VHI when the
-# class actually changes. The EdgeTrigger dedupes per class name; the
-# manual gesture button (below) rebases it so a click + the next predict
-# tick on the same class don't re-fire the movement.
-movement_trigger: EdgeTrigger[str] = EdgeTrigger(vhi_client.set_movement)
+# SetMovement re-triggers VHI's animation, so only command VHI when the class
+# actually changes *and has settled*. EdgeTrigger's n_stable_ticks debounce
+# swallows the tick-to-tick argmax flicker during the ~0.2 s sliding-window
+# transition after a gesture (Fist EMG → Rest EMG) — without it the control hand
+# visibly jumps between poses before settling. The manual gesture button (below)
+# rebases the trigger so a click doesn't re-fire on the next predict ticks.
+# Expressed as a duration (robust to predict_hz); converted to ticks here.
+STABLE_SECONDS = 0.1
+movement_trigger: EdgeTrigger[str] = EdgeTrigger(
+    vhi_client.set_movement,
+    n_stable_ticks=max(1, math.ceil(STABLE_SECONDS * pipeline.predict_hz)),
+)
 
 
 @pipeline.predict
@@ -167,6 +175,8 @@ def predict(model, features):
     hand = output_filter(hand).astype(np.float32)
     vhi_outlet.push(hand)
 
+    # Debounced inside EdgeTrigger (n_stable_ticks): fires only once the class has
+    # settled, then dedupes repeats.
     movement_trigger.fire_if_changed(CLASSES[class_idx])
 
     return {"class": class_idx, "proba": proba, "hand": hand}
@@ -190,10 +200,10 @@ grid = Grid(
 
 def _on_gesture(i: int) -> None:
     """Manual class button: drive the fake generator and the VHI control hand."""
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
     vhi_client.set_movement(CLASSES[i])
-    # Rebase so the next predict tick (which will see the same class) doesn't
-    # re-fire SetMovement on top of the manual click.
+    # The click already commanded this class; rebase so the next predict ticks
+    # (still on the old ~0.2 s window) don't re-fire / jump.
     movement_trigger.rebase(CLASSES[i])
 
 

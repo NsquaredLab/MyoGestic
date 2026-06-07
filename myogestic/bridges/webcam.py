@@ -1,41 +1,87 @@
-"""Standalone webcam bridge subprocess.
+"""The webcam bridge — both halves in one place.
 
-Captures frames from a webcam, writes them to zarr, and publishes
-an LSL clock stream so the main process can align timestamps.
+:class:`WebCamBridge` is the parent-side launcher you register with
+``app.bridges(...)``; :func:`main` is the child-side subprocess it spawns,
+which captures frames from a webcam, writes them to zarr, and publishes an LSL
+clock stream so the main process can align timestamps.
 
-Usage:
+Usage (subprocess, normally launched by ``WebCamBridge``):
     python -m myogestic.bridges.webcam --device 0 --zarr session/cam.zarr --lsl-name cam_clock
 """
 
 from __future__ import annotations
 
-import argparse
 import sys
 import time
+from typing import Annotated
 
 import numpy as np
+import typer
+
+from myogestic.bridges.base import Bridge
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Webcam bridge for myogestic")
-    parser.add_argument("--device", type=int, default=0, help="Camera device index")
-    parser.add_argument("--zarr", type=str, required=True, help="Path for zarr frame storage")
-    parser.add_argument("--lsl-name", type=str, required=True, help="LSL stream name for clock")
-    parser.add_argument("--fps", type=float, default=30.0, help="Target capture FPS")
-    args = parser.parse_args()
+class WebCamBridge(Bridge):
+    """Bridge that runs the built-in webcam decoder subprocess.
 
+    Wraps ``python -m myogestic.bridges.webcam`` (the :func:`main` below):
+    captures frames from an OpenCV device, writes them to a Zarr array, and
+    publishes the per-frame LSL clock so the rest of the app can align webcam
+    time with EMG time.
+
+    Parameters
+    ----------
+    name
+        Bridge label. The published LSL clock outlet is named
+        ``"{name}_clock"`` (e.g. ``WebCamBridge("cam")`` publishes
+        ``"cam_clock"``).
+    device
+        OpenCV device index. ``0`` is the system default
+        camera; secondary cameras get ``1``, ``2``, ... in the
+        order the OS enumerates them.
+    zarr_path
+        Where to write the frame array. Created if missing.
+    """
+
+    def __init__(self, name: str, device: int = 0, zarr_path: str = "session/cam.zarr"):
+        super().__init__(
+            name=name,
+            command=[
+                sys.executable,
+                "-m",
+                "myogestic.bridges.webcam",
+                "--device",
+                str(device),
+                "--zarr",
+                zarr_path,
+                "--lsl-name",
+                f"{name}_clock",
+            ],
+        )
+
+
+def main(
+    zarr: Annotated[str, typer.Option(help="Path for zarr frame storage")],
+    lsl_name: Annotated[str, typer.Option(help="LSL stream name for clock")],
+    device: Annotated[int, typer.Option(help="Camera device index")] = 0,
+    fps: Annotated[float, typer.Option(help="Target capture FPS")] = 30.0,
+) -> None:
+    """Capture webcam frames to a zarr store and publish a per-frame LSL clock."""
     try:
-        import cv2
+        import cv2  # type: ignore
     except ImportError:
-        print("opencv-python is required for webcam bridge: pip install opencv-python", file=sys.stderr)
+        print(
+            "opencv-python is required for webcam bridge: pip install opencv-python",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    import zarr
+    import zarr as _zarr
     from mne_lsl.lsl import StreamInfo, StreamOutlet, local_clock
 
-    cap = cv2.VideoCapture(args.device)
+    cap = cv2.VideoCapture(device)
     if not cap.isOpened():
-        print(f"Cannot open camera device {args.device}", file=sys.stderr)
+        print(f"Cannot open camera device {device}", file=sys.stderr)
         sys.exit(1)
 
     # Read one frame to discover shape
@@ -47,8 +93,8 @@ def main() -> None:
     h, w, c = frame.shape
 
     # Create zarr store for frames — shape (0, H, W, C), append along axis 0
-    store = zarr.open(
-        args.zarr,
+    store = _zarr.open(
+        zarr,
         mode="w",
         shape=(0, h, w, c),
         chunks=(1, h, w, c),
@@ -56,11 +102,11 @@ def main() -> None:
     )
 
     # LSL clock stream: 1 channel, publishes local_clock timestamp per frame
-    lsl_info = StreamInfo(args.lsl_name, "Clock", 1, args.fps, "float64", "")
+    lsl_info = StreamInfo(lsl_name, "Clock", 1, fps, "float64", "")
     outlet = StreamOutlet(lsl_info)
 
-    interval = 1.0 / args.fps
-    print(f"Webcam bridge started: device={args.device}, {w}x{h}, {args.fps} fps")
+    interval = 1.0 / fps
+    print(f"Webcam bridge started: device={device}, {w}x{h}, {fps} fps")
 
     try:
         while True:
@@ -73,10 +119,10 @@ def main() -> None:
             ts = local_clock()
 
             # Append frame to zarr
-            store.append(frame[np.newaxis])
+            store.append(frame[np.newaxis])  # type: ignore
 
             # Publish timestamp on LSL
-            outlet.push_sample([ts])
+            outlet.push_sample([ts])  # type: ignore
 
             elapsed = time.perf_counter() - t_start
             sleep_time = interval - elapsed
@@ -91,4 +137,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

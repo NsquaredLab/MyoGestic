@@ -19,13 +19,13 @@ import torch
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.interfaces import virtual_hand
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import pipeline_panel
-from myogestic.models import catboost_regressor
+from myogestic.recipes.estimators import catboost_regressor
 from myogestic.session import iter_aligned_windows, iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
+from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
     app_logo,
     log_panel,
@@ -34,8 +34,8 @@ from myogestic.widgets import (
     signal_viewer,
     stream_panel,
 )
-from myogestic.widgets.filter_controls import FilterControl
-from myogestic.widgets.recording import recording_controls
+from myogestic.widgets.panels.filter_controls import FilterControl
+from myogestic.widgets.panels.recording import recording_controls
 
 ctrl_outlet = control_outlet()
 CLASSES = ["Rest", "Fist"]
@@ -52,8 +52,10 @@ output_filter = FilterControl(hz=32, default="one_euro")
 # Mosaic-2.0 registry indices; selecting these from VHI_Control during
 # training gives a 5-DOF target (WristRot + 4 fingers) instead of the full
 # 9-DOF vector, which keeps the regressor manageable for a fake-EMG demo.
+# --8<-- [start:dofs]
 VHI_DOF_INDICES = [0, 2, 3, 4, 5]
 N_DOF = len(VHI_DOF_INDICES)
+# --8<-- [end:dofs]
 
 # MyoVerse transforms — preferred over hand-rolled numpy here so the feature
 # extraction stays compatible with downstream MyoGestic models.
@@ -85,12 +87,12 @@ PROCESSES = [
 
 app = App("EMG Regression", ui_scale=0.85)
 app.streams(
-    Stream("emg", source=LSLSource("TestEMG1"), window_seconds=1.0, buffer_seconds=60),
+    Stream("emg", source=LSLSource("TestEMG1"), window_ms=1000, buffer_ms=60000),
     Stream(
         "vhi_control",
-        source=LSLSource(vhi.control_stream or "VHI_Control"),
-        window_seconds=1.0,
-        buffer_seconds=60,
+        source=LSLSource(vhi.control_stream_name or "VHI_Control"),
+        window_ms=1000,
+        buffer_ms=60000,
     ),
 )
 pipeline = Pipeline(app)
@@ -110,8 +112,8 @@ def extract(windows) -> np.ndarray:
     return extract_features(windows["emg"])
 
 
-WIN_SECONDS = 0.2
-HOP_SECONDS = 0.1
+WINDOW_MS = 200
+HOP_MS = 100
 
 
 @pipeline.train
@@ -144,23 +146,27 @@ def train(data: TrainingData):
         except Exception as e:
             log.append(f"  skip {p}: {e}")
             continue
-        if "vhi_control" in sess.stores:
+        has_kin = "vhi_control" in sess.stores
+        sess.close()  # only needed the store list — release the .session.zip handle
+        if has_kin:
             kin_paths.append(p)
         else:
             label_paths.append(p)
 
     # Kinematics path
+    # --8<-- [start:kin_loop]
     for emg_window, aligned, _ts in iter_aligned_windows(
         kin_paths,
         "emg",
         ["vhi_control"],
-        WIN_SECONDS,
-        HOP_SECONDS,
-        align_window_samples=10,
+        WINDOW_MS,
+        HOP_MS,
+        n_alignment_samples=10,
     ):
         kin = np.abs(aligned["vhi_control"][VHI_DOF_INDICES])
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
+    # --8<-- [end:kin_loop]
     if kin_paths:
         log.append(f"  kinematics: {len(all_X)} windows from {len(kin_paths)} sessions")
 
@@ -168,16 +174,18 @@ def train(data: TrainingData):
     # Honor the class chips here too — synthetic targets only get computed
     # for active classes.
     n_before_labels = len(all_X)
+    # --8<-- [start:label_loop]
     for emg_window, _ts, ci in iter_labeled_windows(
         label_paths,
         "emg",
-        WIN_SECONDS,
-        HOP_SECONDS,
+        WINDOW_MS,
+        HOP_MS,
         classes=data.classes if data.classes else None,
     ):
         kin = np.ones(5, dtype=np.float64) if ci == 1 else np.zeros(5, dtype=np.float64)
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
+    # --8<-- [end:label_loop]
     if label_paths:
         log.append(
             f"  labels: {len(all_X) - n_before_labels} windows from {len(label_paths)} sessions"
@@ -198,6 +206,7 @@ def train(data: TrainingData):
     return reg
 
 
+# --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
     """Regress 5-DOF → expand to 9-DOF → smooth → push to VHI."""
@@ -205,17 +214,21 @@ def predict(model, features):
     pred_5dof = np.clip(pred_5dof, 0, 1)
 
     # Expand to 9-DOF and negate for VHI
+    # --8<-- [start:expand]
     pred_9dof = np.zeros(9, dtype=np.float32)
     for i, vhi_idx in enumerate(VHI_DOF_INDICES):
         pred_9dof[vhi_idx] = -pred_5dof[i]
+    # --8<-- [end:expand]
 
     pred_9dof = output_filter(pred_9dof).astype(np.float32)
     vhi_outlet.push(pred_9dof)
     return {"dof": pred_5dof, "hand": pred_9dof}
+# --8<-- [end:predict]
 
 
 # Branding cell pinned to the wordmark aspect; cols 1+2 are Fr so the
 # signal viewer + stream/log panels grow with window width.
+# --8<-- [start:grid]
 LOGO_CELL_W = 300
 WORDMARK_ASPECT = 800 / 540
 grid = Grid(
@@ -224,6 +237,7 @@ grid = Grid(
     row_height=[Px(LOGO_CELL_W / WORDMARK_ASPECT), *[Fr(1)] * 5],
     col_width=[Px(LOGO_CELL_W), Fr(1), Fr(1)],
 )
+# --8<-- [end:grid]
 
 
 def _on_gesture(i: int) -> None:
@@ -232,7 +246,7 @@ def _on_gesture(i: int) -> None:
     # Fist, all-zero for Rest), which the regressor learns to map back from
     # the corresponding EMG amplitude. CLASSES names are sent verbatim to
     # VHI; unknown names are rejected harmlessly (client logs the ack).
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
     vhi_client.set_movement(CLASSES[i], cycle=False)
 
 

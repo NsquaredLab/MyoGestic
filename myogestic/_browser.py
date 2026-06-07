@@ -51,6 +51,7 @@ class _BrowserScheduler:
                     # Step callbacks own their own error logging; a
                     # crash here must not freeze the GUI.
                     import traceback
+
                     traceback.print_exc()
                     delay = 1.0
                 entry[1] = now + max(0.0, float(delay))

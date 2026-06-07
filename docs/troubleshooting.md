@@ -84,7 +84,7 @@ By design. The state machine refuses to enter `training` while in `predicting` (
 
 ### `extract()` shape mismatch after retraining
 
-Your `extract()` returns a different feature dimensionality from what the trained model expects. Common cause: changed `WIN_SECONDS` or `HOP_SECONDS` between training and predicting.
+Your `extract()` returns a different feature dimensionality from what the trained model expects. Common cause: changed `WINDOW_MS` or `HOP_MS` between training and predicting.
 
 !!! tip "Fix"
     Keep extract's return shape stable. If you change feature engineering, retrain.
@@ -102,7 +102,7 @@ See: [Pipeline concept page](concepts/pipeline.md), [Add a custom model](how-to/
 
 ### Widget state shared accidentally between instances
 
-Two `signal_viewer(ctx, "emg")` calls share state because the key matches; that's intentional. If you want independent state, use different stream names or different `uid` arguments where the widget supports them.
+Two `signal_viewer(ctx, "emg")` calls share state because the key matches; that's intentional. If you want independent state, use different stream names or different `widget_id` arguments where the widget supports them.
 
 !!! tip "Fix"
     Match the widget's keying convention. Some key by `stream_name` (signal viewers), others by `uid` (template inspectors).
@@ -165,7 +165,7 @@ VHI isn't installed at the location `virtual_hand()` looks at - by default `<rep
 You're pushing raw model output. VHI rendering at 32-50 Hz amplifies any per-tick jitter.
 
 !!! tip "Fix"
-    Pair every VHI integration with a [`FilterControl`][myogestic.widgets.FilterControl] block (1€ filter is the default and usually right). Pass `t=time.monotonic()` into the filter so it computes real elapsed dt.
+    Pair every VHI integration with a [`FilterControl`][myogestic.widgets.FilterControl] block (1€ filter is the default and usually right). Pass `timestamp=time.monotonic()` into the filter so it computes real elapsed dt.
 
 ### VHI hand drifts after retraining
 
