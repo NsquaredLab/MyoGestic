@@ -46,7 +46,7 @@ def muovi_geometry(*, plus: bool, emg: bool, mode: int) -> MuoviGeometry:
 
 
 def muovi_control_byte(*, emg: bool, mode: int, go: bool) -> int:
-    """Muovi control byte: (EMG<<3) | (mode<<1) | GO. (Read_muovi.m formula.)"""
+    """Muovi control byte: (EMG<<3) | (mode<<1) | GO, per the Read_muovi.m formula."""
     return (int(emg) << 3) | ((mode & 0x3) << 1) | int(go)
 
 

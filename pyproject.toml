@@ -153,7 +153,7 @@ ignore = [
 convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011", "D"]  # allow `assert`; tests don't need docstrings
+"tests/*" = ["B011", "D", "E402"]  # allow `assert`; tests don't need docstrings
 "examples/**/*" = ["E402", "D"]  # imports after module-level code; examples are prose-documented
 # Optional-dep imports at module bottom are intentional (conditional availability)
 "myogestic/outputs/__init__.py" = ["E402"]
