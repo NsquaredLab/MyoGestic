@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Library reorganization + public-API standardization. These are **breaking**
-changes; the migration is mostly mechanical (renames). Old → new below.
+## [2.1.0] - 2026-06-07
+
+Library reorganization, public-API standardization, and Windows session-save
+reliability. The API changes are **breaking** but mostly mechanical renames —
+old → new below.
 
 ### Changed
 
@@ -19,7 +22,8 @@ changes; the migration is mostly mechanical (renames). Old → new below.
   - `myogestic.contrib.*` and `myogestic.models.*` → `myogestic.recipes`
     (feature recipes `myogestic.recipes.features`; estimator recipes
     `myogestic.recipes.estimators`)
-  - model persistence (`save_pickle` / `load_pickle`) → `myogestic.ml`
+  - model persistence: `myogestic.models.save_model` / `load_model` →
+    `myogestic.ml.save_pickle` / `load_pickle`
   - output-smoothing filters → `myogestic.outputs.filters` (also re-exported
     from `myogestic.outputs`); `EdgeTrigger` → `myogestic.outputs` (and still
     top-level `myogestic.EdgeTrigger`)
@@ -42,8 +46,9 @@ changes; the migration is mostly mechanical (renames). Old → new below.
   *Filters & outputs*
   - `OneEuroFilter(freq=, min_cutoff=, d_cutoff=)` → `(hz=, min_cutoff_hz=, derivative_cutoff_hz=)`
   - `GaussianFilter(window=)` → `n_vectors=`
+  - `make_filter(...)` forwards these kwargs, so `make_filter("one_euro", min_cutoff=, d_cutoff=)`
+    → `min_cutoff_hz=, derivative_cutoff_hz=` and `make_filter("gaussian", window=)` → `n_vectors=`
   - filter `__call__(x, t=)` → `__call__(x, timestamp=)` (every filter and `FilterControl`)
-  - `EdgeTrigger(stable_ticks=)` → `n_stable_ticks=`
 
   *Recipes & VHI*
   - `constant_classifier(class_idx=)` → `class_index=`
@@ -76,10 +81,30 @@ changes; the migration is mostly mechanical (renames). Old → new below.
 - Docstring coverage is enforced (ruff pydocstyle, NumPy convention): every
   public module, class, and function is documented.
 
+### Fixed
+
+- **Windows session saving**: finalizing a recording (`Session.pack_to_zip`)
+  assumed POSIX file semantics and failed on Windows with
+  `PermissionError: [WinError 32]` — open zarr / `ZipStore` handles can't be
+  deleted or renamed there. Packing now releases handles, retries the folder
+  cleanup, and uses `os.replace`, so saving a recording works on Windows.
+- **Leaked session file handles**: reading a session (`open_session_store`,
+  `ReplaySource`, `iter_labeled_windows` / `iter_aligned_windows`) left the
+  `.session.zip` open, which locks the file on Windows. `Session` is now
+  closeable (and usable as a context manager) and every reader releases the
+  handle when it is done.
+- **VHI connection robustness**: while the Virtual Hand is disconnected, the
+  gRPC state poll backs off and uses a short probe deadline, and repeated
+  failures are deduped/quieted — a closed or absent VHI no longer floods the log
+  or stutters the render loop.
+
 ### Changed (internal)
 
 - CLI tools (`emg_generator`, `lsl_dummy`, `install_vhi`, `webcam`) migrated
   from `argparse` to Typer.
+- Tests + CI: documentation code blocks are parse-checked (and the tagged ones
+  executed) and the example scripts are smoke-run, with the full test suite now
+  running on Linux **and Windows** (previously CI only built the docs).
 
 ## [2.0.2] - 2026-06-03
 
