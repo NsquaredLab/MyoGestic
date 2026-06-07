@@ -61,8 +61,8 @@ def _blocks(path: Path):
     text = path.read_text(encoding="utf-8")
     for m in _BLOCK.finditer(text):
         directive, code = m.group(1), m.group(2)
-        # `--8<--` snippet includes pull real code from examples/ (parse/run-tested
-        # via tests/test_examples.py + the example itself) — they aren't literal
+        # `--8<--` snippet includes pull real code from examples/ (the example is
+        # import/wire-tested by tests/test_examples.py) — they aren't literal
         # python here, so skip both layers.
         if directive is None and any(ln.lstrip().startswith("--8<--") for ln in code.splitlines()):
             directive = "skip"

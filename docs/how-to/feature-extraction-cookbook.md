@@ -4,7 +4,7 @@ The framework deliberately ships nothing inside [`@pipeline.extract`][myogestic.
 
 That said, almost every EMG project starts with the same five or six features. This page is a copy-paste cookbook so you can drop them in and iterate.
 
-Each snippet wraps in `@pipeline.extract`. Drop into your script, swap one for another, and re-train.
+Each recipe slots into `@pipeline.extract` (section 1 also shows the `FeatureSelector` that feeds it). Drop one into your script, swap it for another, and re-train.
 
 ## 1. RMS + MAV (the shipped baseline)
 

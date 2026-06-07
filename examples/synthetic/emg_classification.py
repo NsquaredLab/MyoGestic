@@ -180,6 +180,7 @@ def predict(model, features):
 # Everything else uses Fr (CSS-grid "fraction unit") to share the leftover
 # space: cols 1+2 split the remaining width equally, rows 1-7 split the
 # remaining height equally.
+# --8<-- [start:layout]
 LOGO_CELL_W = 300
 WORDMARK_ASPECT = 800 / 540
 grid = Grid(
@@ -232,6 +233,7 @@ def demo_ui(ctx):
 
     with grid[7, 0]:
         prediction_label(pipeline, CLASSES)
+# --8<-- [end:layout]
 
 
 def main() -> None:

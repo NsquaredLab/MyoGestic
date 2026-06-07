@@ -117,8 +117,10 @@ synthesises a 5-vec target from the class index - `Fist → all 1s`,
 `Rest → all 0s`. Useful for mixing pre-VHI data into a new training set
 without re-recording.
 
-Both iterators ignore class chips the user has un-ticked in the session
-manager, courtesy of the `classes=data.classes` argument.
+The labeled fallback honours the class chips the user un-ticked in the
+session manager, via its `classes=data.classes` argument; the kinematics
+path regresses every aligned window (kinematics are continuous, so there's
+nothing to filter by class).
 
 The model is a single
 [`catboost_regressor(loss_function="MultiRMSE")`](../api/models.md) fit
