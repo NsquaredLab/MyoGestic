@@ -38,42 +38,48 @@ def iter_labeled_windows(
         except Exception as e:
             log.warning("skipping %s: %s", path, e)
             continue
-        if stream_name not in sess.stores:
-            log.info("skipping %s: stream %r not present", path, stream_name)
-            continue
-        info = sess.stream_info(stream_name)
-        fs = info.fs
-        if fs <= 0:
-            log.warning("skipping %s: bad fs=%s for stream %r", path, fs, stream_name)
-            continue
-        win_samples = int(window_ms / 1000 * fs)
-        hop_samples = max(1, int(hop_ms / 1000 * fs))
-        if win_samples < 1:
-            continue
+        # finally: close the session each iteration so its zarr/ZipStore handles
+        # are released — on Windows an open ZipStore locks the .session.zip, so a
+        # leaked handle blocks deleting/moving the file after training.
+        try:
+            if stream_name not in sess.stores:
+                log.info("skipping %s: stream %r not present", path, stream_name)
+                continue
+            info = sess.stream_info(stream_name)
+            fs = info.fs
+            if fs <= 0:
+                log.warning("skipping %s: bad fs=%s for stream %r", path, fs, stream_name)
+                continue
+            win_samples = int(window_ms / 1000 * fs)
+            hop_samples = max(1, int(hop_ms / 1000 * fs))
+            if win_samples < 1:
+                continue
 
-        data = np.array(sess.stores[stream_name]).astype(np.float32, copy=False)
-        ts = np.array(sess.ts_stores[stream_name])
-        events = sess.label_track
-        if len(data) == 0 or not events:
-            log.info("skipping %s: empty data or no labels", path)
-            continue
+            data = np.array(sess.stores[stream_name]).astype(np.float32, copy=False)
+            ts = np.array(sess.ts_stores[stream_name])
+            events = sess.label_track
+            if len(data) == 0 or not events:
+                log.info("skipping %s: empty data or no labels", path)
+                continue
 
-        for i, event in enumerate(events):
-            if event.class_index < 0:
-                continue
-            if classes is not None and event.class_index not in classes:
-                continue
-            idx_start = int(np.argmin(np.abs(ts - event.timestamp)))
-            idx_end = (
-                int(np.argmin(np.abs(ts - events[i + 1].timestamp)))
-                if i + 1 < len(events)
-                else len(ts)
-            )
-            if idx_end - idx_start < win_samples:
-                continue
-            for start in range(idx_start, idx_end - win_samples + 1, hop_samples):
-                stop = start + win_samples
-                yield data[start:stop].T, ts[start:stop], event.class_index
+            for i, event in enumerate(events):
+                if event.class_index < 0:
+                    continue
+                if classes is not None and event.class_index not in classes:
+                    continue
+                idx_start = int(np.argmin(np.abs(ts - event.timestamp)))
+                idx_end = (
+                    int(np.argmin(np.abs(ts - events[i + 1].timestamp)))
+                    if i + 1 < len(events)
+                    else len(ts)
+                )
+                if idx_end - idx_start < win_samples:
+                    continue
+                for start in range(idx_start, idx_end - win_samples + 1, hop_samples):
+                    stop = start + win_samples
+                    yield data[start:stop].T, ts[start:stop], event.class_index
+        finally:
+            sess.close()
 
 
 def iter_aligned_windows(
@@ -107,59 +113,65 @@ def iter_aligned_windows(
         except Exception as e:
             log.warning("skipping %s: %s", path, e)
             continue
-        if primary_stream_name not in sess.stores:
-            log.info("skipping %s: primary stream %r missing", path, primary_stream_name)
-            continue
-        missing = [s for s in aligned_stream_names if s not in sess.stores]
-        if missing:
-            log.info("skipping %s: aligned streams missing: %s", path, missing)
-            continue
-
-        info = sess.stream_info(primary_stream_name)
-        fs = info.fs
-        if fs <= 0:
-            log.warning("skipping %s: bad fs=%s on %r", path, fs, primary_stream_name)
-            continue
-        win_samples = int(window_ms / 1000 * fs)
-        hop_samples = max(1, int(hop_ms / 1000 * fs))
-        if win_samples < 1:
-            continue
-
-        primary_data = np.array(sess.stores[primary_stream_name]).astype(np.float32, copy=False)
-        primary_ts = np.array(sess.ts_stores[primary_stream_name])
-        aligned_data = {
-            name: np.array(sess.stores[name]).astype(np.float32, copy=False)
-            for name in aligned_stream_names
-        }
-        aligned_ts = {name: np.array(sess.ts_stores[name]) for name in aligned_stream_names}
-
-        if (
-            len(primary_data) == 0
-            or len(primary_ts) == 0
-            or any(len(t) == 0 for t in aligned_ts.values())
-        ):
-            log.info("skipping %s: empty stream data", path)
-            continue
-
-        n = len(primary_data)
-        if n < win_samples:
-            continue
-
-        for start in range(0, n - win_samples + 1, hop_samples):
-            stop = start + win_samples
-            mid_t = primary_ts[start + win_samples // 2]
-            aligned_vals: dict[str, np.ndarray] = {}
-            ok = True
-            for name in aligned_stream_names:
-                a_ts = aligned_ts[name]
-                a_data = aligned_data[name]
-                idx = int(np.argmin(np.abs(a_ts - mid_t)))
-                lo = max(0, idx - n_left)
-                hi = min(len(a_data), idx + n_right)
-                if hi <= lo:
-                    ok = False
-                    break
-                aligned_vals[name] = np.mean(a_data[lo:hi], axis=0)
-            if not ok:
+        # finally: release the session's handles each iteration (see
+        # iter_labeled_windows) — a leaked ZipStore locks the .session.zip on
+        # Windows.
+        try:
+            if primary_stream_name not in sess.stores:
+                log.info("skipping %s: primary stream %r missing", path, primary_stream_name)
                 continue
-            yield primary_data[start:stop].T, aligned_vals, primary_ts[start:stop]
+            missing = [s for s in aligned_stream_names if s not in sess.stores]
+            if missing:
+                log.info("skipping %s: aligned streams missing: %s", path, missing)
+                continue
+
+            info = sess.stream_info(primary_stream_name)
+            fs = info.fs
+            if fs <= 0:
+                log.warning("skipping %s: bad fs=%s on %r", path, fs, primary_stream_name)
+                continue
+            win_samples = int(window_ms / 1000 * fs)
+            hop_samples = max(1, int(hop_ms / 1000 * fs))
+            if win_samples < 1:
+                continue
+
+            primary_data = np.array(sess.stores[primary_stream_name]).astype(np.float32, copy=False)
+            primary_ts = np.array(sess.ts_stores[primary_stream_name])
+            aligned_data = {
+                name: np.array(sess.stores[name]).astype(np.float32, copy=False)
+                for name in aligned_stream_names
+            }
+            aligned_ts = {name: np.array(sess.ts_stores[name]) for name in aligned_stream_names}
+
+            if (
+                len(primary_data) == 0
+                or len(primary_ts) == 0
+                or any(len(t) == 0 for t in aligned_ts.values())
+            ):
+                log.info("skipping %s: empty stream data", path)
+                continue
+
+            n = len(primary_data)
+            if n < win_samples:
+                continue
+
+            for start in range(0, n - win_samples + 1, hop_samples):
+                stop = start + win_samples
+                mid_t = primary_ts[start + win_samples // 2]
+                aligned_vals: dict[str, np.ndarray] = {}
+                ok = True
+                for name in aligned_stream_names:
+                    a_ts = aligned_ts[name]
+                    a_data = aligned_data[name]
+                    idx = int(np.argmin(np.abs(a_ts - mid_t)))
+                    lo = max(0, idx - n_left)
+                    hi = min(len(a_data), idx + n_right)
+                    if hi <= lo:
+                        ok = False
+                        break
+                    aligned_vals[name] = np.mean(a_data[lo:hi], axis=0)
+                if not ok:
+                    continue
+                yield primary_data[start:stop].T, aligned_vals, primary_ts[start:stop]
+        finally:
+            sess.close()

@@ -1,9 +1,11 @@
 """Round-trip test: write Session → pack to .session.zip → read via open_session_store."""
 
 import shutil
+import sys
 import tempfile
 
 import numpy as np
+import pytest
 
 from myogestic.session import (
     Session,
@@ -43,19 +45,25 @@ def test_pack_to_zip_roundtrip():
         assert not original_folder.exists()
         assert session.path == zip_path
 
-        # Reopen via the read API
-        loaded = open_session_store(zip_path)
-        assert "emg" in loaded.stores
-        emg_back = np.array(loaded.stores["emg"])
-        assert emg_back.shape == (64, 4)
-        assert np.allclose(emg_back, chunk)
+        # Reopen via the read API (context-managed so the ZipStore handle is
+        # released before the TemporaryDirectory cleanup — Windows locks it).
+        with open_session_store(zip_path) as loaded:
+            assert "emg" in loaded.stores
+            emg_back = np.array(loaded.stores["emg"])
+            assert emg_back.shape == (64, 4)
+            assert np.allclose(emg_back, chunk)
 
-        # Labels survived
-        assert len(loaded.label_track) == 2
-        assert loaded.label_track[0].class_index == 0
-        assert loaded.label_track[1].class_index == 1
+            # Labels survived
+            assert len(loaded.label_track) == 2
+            assert loaded.label_track[0].class_index == 0
+            assert loaded.label_track[1].class_index == 1
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="chmod(0o555) failure injection is POSIX-only — Windows ignores the "
+    "read-only bit on directories, so the pack succeeds instead of failing.",
+)
 def test_pack_to_zip_failure_keeps_folder():
     """If pack fails (we simulate by writing to a read-only target), the
     original folder should remain so the user doesn't lose data."""
