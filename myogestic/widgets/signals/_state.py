@@ -82,7 +82,7 @@ def _m4_decimate_visible_window(
         if v._m4_downsampler is None:
             idx = _m4_indices_numpy(col, n_out)
         else:
-            idx = v._m4_downsampler.downsample(  # type: ignore[attr-defined]
+            idx = v._m4_downsampler.downsample(  # type: ignore
                 col, n_out=n_out
             )
         idx_parts.append(np.asarray(idx, dtype=np.intp))

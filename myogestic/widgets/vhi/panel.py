@@ -56,7 +56,7 @@ class VhiMovementPanel:
         Panel header text rendered above the button grid.
     """
 
-    __slots__ = ("_cache", "_client", "_on_movement", "_refresh_interval", "_title")
+    __slots__ = ("_cache", "_client", "_on_movement", "_min_interval_s", "_title")
 
     def __init__(
         self,
@@ -69,12 +69,12 @@ class VhiMovementPanel:
         self._client = client
         self._cache = VhiStateCache()
         self._on_movement = on_movement or client.set_movement
-        self._refresh_interval = min_interval_s
+        self._min_interval_s = min_interval_s
         self._title = title
 
     def ui(self) -> None:
         """Render the panel — call once per frame inside ``@app.ui``."""
-        request_vhi_state_refresh(self._client, self._cache, min_interval_s=self._refresh_interval)
+        request_vhi_state_refresh(self._client, self._cache, min_interval_s=self._min_interval_s)
         snap = self._cache.snapshot()
         vhi_movement_palette(
             snap.movements,

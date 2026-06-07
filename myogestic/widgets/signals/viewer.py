@@ -85,7 +85,7 @@ def signal_viewer(
     enough to scan visually across most real-time setups. Pass a smaller
     value when you want the display to mirror a short analysis window
     (classification often runs at 0.2 s, for example). The stream's
-    ``buffer_seconds`` must be at least this large.
+    ``buffer_ms`` must be at least this large.
     """
     v = get_viewer_state(
         ctx,

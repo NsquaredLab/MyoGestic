@@ -82,9 +82,9 @@ class FilterControl:
         """The live :class:`~myogestic.outputs.filters.VectorFilter` instance."""
         return self._filter
 
-    def __call__(self, x: np.ndarray, t: float | None = None) -> np.ndarray:
-        """Apply the active filter to vector ``x`` at optional timestamp ``t``."""
-        return self._filter(x, t)
+    def __call__(self, x: np.ndarray, timestamp: float | None = None) -> np.ndarray:
+        """Apply the active filter to vector ``x`` at ``timestamp``."""
+        return self._filter(x, timestamp)
 
     def reset(self) -> None:
         """Clear the active filter's smoothing history."""

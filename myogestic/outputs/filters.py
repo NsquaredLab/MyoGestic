@@ -163,7 +163,7 @@ class OneEuroFilter:
         self.derivative_cutoff_hz = derivative_cutoff_hz
         self._x_prev: np.ndarray | None = None
         self._dx_prev: np.ndarray | None = None
-        self._t_prev: float | None = None
+        self._timestamp_prev: float | None = None
 
     @staticmethod
     def _alpha(cutoff: np.ndarray | float, dt: float) -> np.ndarray | float:
@@ -174,7 +174,7 @@ class OneEuroFilter:
         """Clear the previous sample, velocity, and timestamp."""
         self._x_prev = None
         self._dx_prev = None
-        self._t_prev = None
+        self._timestamp_prev = None
 
     def __call__(self, x: np.ndarray, timestamp: float | None = None) -> np.ndarray:
         """Return the 1€-smoothed vector for one output tick.
@@ -184,11 +184,11 @@ class OneEuroFilter:
         passes ``x`` through to seed the filter state.
         """
         x_arr = np.asarray(x, dtype=np.float64)
-        if timestamp is not None and self._t_prev is not None:
-            dt = max(1e-6, timestamp - self._t_prev)
+        if timestamp is not None and self._timestamp_prev is not None:
+            dt = max(1e-6, timestamp - self._timestamp_prev)
         else:
             dt = 1.0 / self.hz
-        self._t_prev = timestamp
+        self._timestamp_prev = timestamp
 
         # Bind to locals so the checker can narrow both Optionals together —
         # _x_prev and _dx_prev are always set (and cleared) as a pair.

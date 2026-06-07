@@ -67,19 +67,19 @@ def catboost_regressor(**kwargs: Any) -> Any:
 
 def sklearn_classifier(**kwargs: Any) -> Any:
     """RandomForestClassifier (sklearn)."""
-    skl = _require("sklearn.ensemble", "dev", pip_name="scikit-learn")
+    skl = _require("sklearn.ensemble", "examples", pip_name="scikit-learn")
     return skl.RandomForestClassifier(**kwargs)
 
 
 def sklearn_regressor(**kwargs: Any) -> Any:
     """RandomForestRegressor (sklearn)."""
-    skl = _require("sklearn.ensemble", "dev", pip_name="scikit-learn")
+    skl = _require("sklearn.ensemble", "examples", pip_name="scikit-learn")
     return skl.RandomForestRegressor(**kwargs)
 
 
 def sklearn_extra_trees_classifier(**kwargs: Any) -> Any:
     """ExtraTreesClassifier (sklearn). Defaults n_estimators=300, n_jobs=-1."""
-    skl = _require("sklearn.ensemble", "dev", pip_name="scikit-learn")
+    skl = _require("sklearn.ensemble", "examples", pip_name="scikit-learn")
     kwargs.setdefault("n_estimators", 300)
     kwargs.setdefault("random_state", 0)
     kwargs.setdefault("n_jobs", -1)
@@ -88,7 +88,7 @@ def sklearn_extra_trees_classifier(**kwargs: Any) -> Any:
 
 def sklearn_extra_trees_regressor(**kwargs: Any) -> Any:
     """ExtraTreesRegressor (sklearn). Same defaults as the classifier."""
-    skl = _require("sklearn.ensemble", "dev", pip_name="scikit-learn")
+    skl = _require("sklearn.ensemble", "examples", pip_name="scikit-learn")
     kwargs.setdefault("n_estimators", 300)
     kwargs.setdefault("random_state", 0)
     kwargs.setdefault("n_jobs", -1)
@@ -97,7 +97,7 @@ def sklearn_extra_trees_regressor(**kwargs: Any) -> Any:
 
 def sklearn_logistic_classifier(**kwargs: Any) -> Any:
     """Multinomial LogisticRegression (sklearn). max_iter=1000 default."""
-    skl = _require("sklearn.linear_model", "dev", pip_name="scikit-learn")
+    skl = _require("sklearn.linear_model", "examples", pip_name="scikit-learn")
     kwargs.setdefault("max_iter", 1000)
     return skl.LogisticRegression(**kwargs)
 
@@ -108,9 +108,9 @@ def sklearn_logistic_classifier(**kwargs: Any) -> Any:
 class _ConstantClassifier:
     """Always predicts a fixed class. Use as a placeholder for wiring tests."""
 
-    def __init__(self, class_idx: int = 0) -> None:
-        self.class_idx = int(class_idx)
-        self._n_classes: int = max(self.class_idx + 1, 2)
+    def __init__(self, class_index: int = 0) -> None:
+        self.class_index = int(class_index)
+        self._n_classes: int = max(self.class_index + 1, 2)
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> _ConstantClassifier:
         if y is not None and len(y):
@@ -118,11 +118,11 @@ class _ConstantClassifier:
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        return np.full(X.shape[0], self.class_idx, dtype=np.int64)
+        return np.full(X.shape[0], self.class_index, dtype=np.int64)
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         proba = np.zeros((X.shape[0], self._n_classes), dtype=np.float64)
-        proba[:, self.class_idx] = 1.0
+        proba[:, self.class_index] = 1.0
         return proba
 
 
@@ -145,7 +145,7 @@ class _MeanRegressor:
 
 def constant_classifier(class_index: int = 0) -> _ConstantClassifier:
     """Estimator that always predicts ``class_index``. No deps."""
-    return _ConstantClassifier(class_idx=class_index)
+    return _ConstantClassifier(class_index=class_index)
 
 
 def mean_regressor() -> _MeanRegressor:

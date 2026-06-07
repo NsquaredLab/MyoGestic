@@ -11,7 +11,7 @@ from mne_lsl.lsl import local_clock
 from myogestic.stream import StreamInfo
 
 if TYPE_CHECKING:
-    import serial  # type: ignore[import-not-found]
+    import serial  # type: ignore
 
 
 class SerialSource:
@@ -32,7 +32,7 @@ class SerialSource:
 
     def connect(self) -> StreamInfo:
         """Open the serial port and return the configured :class:`StreamInfo`."""
-        import serial  # type: ignore[import-not-found]
+        import serial  # type: ignore
 
         self._ser = serial.Serial(self._port, self._baud, timeout=1.0)
         return StreamInfo(
@@ -65,7 +65,7 @@ class SerialSource:
 
     def discover(self) -> list[dict[str, str]]:
         """List available serial ports."""
-        import serial.tools.list_ports  # type: ignore[import-not-found]
+        import serial.tools.list_ports  # type: ignore
 
         return [
             {"name": p.device, "info": p.description or p.device}
