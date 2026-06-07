@@ -2,7 +2,7 @@ from myogestic.sources.otb._crc import crc8
 
 
 def test_crc8_empty_is_zero():
-    assert crc8(bytes()) == 0
+    assert crc8(b"") == 0
 
 
 def test_crc8_matches_matlab_reference_algorithm():

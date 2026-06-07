@@ -78,11 +78,13 @@ class QuattrocentoSource(_OTBSource):
         )
 
     def _send_start(self) -> None:
+        assert self._sock is not None
         cfg = C.quattro_config(fs_mode=self._fs_mode, nch_mode=self._nch_mode,
                                acq_on=True)
         self._sock.sendall(cfg)
 
     def _send_stop(self) -> None:
+        assert self._sock is not None
         cfg = C.quattro_config(fs_mode=self._fs_mode, nch_mode=self._nch_mode,
                                acq_on=False)
         self._sock.sendall(cfg)

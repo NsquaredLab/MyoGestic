@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 
-from myogestic.sources.otb._constants import muovi_control_byte, muovi_geometry
+from myogestic.sources.otb._constants import muovi_geometry
 from myogestic.sources.otb.muovi import MuoviSource
 
 

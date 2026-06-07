@@ -78,6 +78,7 @@ class MuoviSource(_OTBSource):
         Runs the base lifecycle inline (NOT via base ``connect()``) because the
         server socket / accept is Muovi-specific.
         """
+        assert self._server is not None, "call connect_listen() before accept_and_start()"
         self._server.settimeout(self._accept_timeout)
         conn, _addr = self._server.accept()
         conn.setblocking(False)
@@ -104,10 +105,12 @@ class MuoviSource(_OTBSource):
         )
 
     def _send_start(self) -> None:
+        assert self._sock is not None
         cmd = C.muovi_control_byte(emg=self._emg, mode=self._mode, go=True)
         self._sock.sendall(bytes([cmd]))
 
     def _send_stop(self) -> None:
+        assert self._sock is not None
         cmd = C.muovi_control_byte(emg=self._emg, mode=self._mode, go=False)
         self._sock.sendall(bytes([cmd]))
 
@@ -123,6 +126,7 @@ class MuoviSource(_OTBSource):
         return np.concatenate([bio, aux], axis=1).astype(np.float32)
 
     def disconnect(self) -> None:
+        """Stop streaming and close the device + listening sockets."""
         super().disconnect()
         if self._server is not None:
             try:

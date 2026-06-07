@@ -13,7 +13,7 @@ The PC is the TCP **server**; the probe connects to it.
    from myogestic import Stream
    from myogestic.sources.otb import MuoviSource
    stream = Stream("emg", source=MuoviSource(plus=False, emg=True, mode=0),
-                   window_seconds=1.0)
+                   window_ms=1000)
    stream.start()
    ```
 
@@ -29,7 +29,7 @@ Give the PC NIC a `169.254.x.x` address on that segment.
 ```python
 from myogestic.sources.otb import QuattrocentoSource
 stream = Stream("emg", source=QuattrocentoSource(fs_mode=1, nch_mode=1),
-                window_seconds=1.0)  # 2048 Hz, 216 streamed ch
+                window_ms=1000)  # 2048 Hz, 216 streamed ch
 stream.start()
 ```
 

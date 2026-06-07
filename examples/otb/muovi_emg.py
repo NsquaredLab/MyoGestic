@@ -14,7 +14,7 @@ def main() -> None:
     stream = Stream(
         "emg",
         source=MuoviSource(plus=False, emg=True, mode=0),  # 32-ch gain-8 @2000Hz
-        window_seconds=1.0,
+        window_ms=1000,
     )
     stream.start()
     print("Connected. Reading 5 windows...")

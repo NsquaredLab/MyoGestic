@@ -55,16 +55,17 @@ class _OTBSource:
         return info
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
-        if self._sock is not None:
+        sock = self._sock  # local so the type checker keeps the None-narrowing
+        if sock is not None:
             try:
-                chunk = self._sock.recv(65536)
+                chunk = sock.recv(65536)
                 if chunk:
                     self._buf.extend(chunk)
                 else:
                     # Empty recv = peer closed the connection. Drop the socket so
                     # the acquire loop stops spinning, but still flush any whole
                     # frames already buffered (handled by _drain below).
-                    self._sock.close()
+                    sock.close()
                     self._sock = None
             except BlockingIOError:
                 pass
@@ -73,7 +74,7 @@ class _OTBSource:
                 # dead connection) but still flush any whole frames already
                 # buffered via _drain() below.
                 try:
-                    self._sock.close()
+                    sock.close()
                 finally:
                     self._sock = None
         return self._drain()
@@ -95,6 +96,7 @@ class _OTBSource:
         """Slice all complete frames out of the buffer, decode, timestamp."""
         if self._frame_nbytes <= 0 or len(self._buf) < self._frame_nbytes:
             return None, None
+        assert self._info is not None  # set by connect() alongside _frame_nbytes
         n_frames = len(self._buf) // self._frame_nbytes
         take = n_frames * self._frame_nbytes
         raw = bytes(self._buf[:take])

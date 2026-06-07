@@ -27,6 +27,7 @@ import ast
 import re
 import shutil
 import tempfile
+import textwrap
 from pathlib import Path
 
 import numpy as np
@@ -51,7 +52,9 @@ MD_FILES = sorted(
 
 # Optional `<!--docs:run-->` / `<!--docs:skip-->` directive on the line above a fence.
 _BLOCK = re.compile(
-    r"(?:<!--\s*docs:(run|skip)\s*-->[ \t]*\n)?```python\n(.*?)\n```",
+    # The closing fence may be indented (code block nested in a list item), so
+    # allow leading whitespace before it; textwrap.dedent then cleans the body.
+    r"(?:<!--\s*docs:(run|skip)\s*-->[ \t]*\n)?```python\n(.*?)\n[ \t]*```",
     re.DOTALL,
 )
 
@@ -61,6 +64,10 @@ def _blocks(path: Path):
     text = path.read_text(encoding="utf-8")
     for m in _BLOCK.finditer(text):
         directive, code = m.group(1), m.group(2)
+        # Dedent: code blocks nested in a list item (e.g. "3. ```python") carry
+        # the list's indentation, which mkdocs strips on render but ast.parse
+        # would choke on.
+        code = textwrap.dedent(code)
         # `--8<--` snippet includes pull real code from examples/ (the example is
         # import/wire-tested by tests/test_examples.py) — they aren't literal
         # python here, so skip both layers.
