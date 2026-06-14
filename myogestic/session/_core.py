@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import gc
 import json
 import logging
 import os
 import shutil
 import stat
+import sys
 import time
 import uuid
 import zipfile
@@ -55,6 +57,70 @@ def _robust_rmtree(path: Path, *, retries: int = 5, delay_s: float = 0.1) -> Non
                 raise
             gc.collect()
             time.sleep(delay_s)
+
+
+def _install_windows_zarr_atomic_write_retry(*, retries: int = 10, delay_s: float = 0.05) -> None:
+    """Make zarr's atomic chunk-write tolerate Windows file-handle lag.
+
+    zarr commits every chunk by writing a temp file and atomically renaming it
+    over the destination (``zarr.storage._local._atomic_write``). On POSIX that
+    rename never fails; on Windows the underlying ``MoveFileEx`` raises
+    ``PermissionError`` (WinError 5 / 32) whenever another handle to the file is
+    still open at that instant - an antivirus scan of the just-written chunk,
+    the search indexer, or the OS not having released the handle the microsecond
+    after ``close()`` returned. It is intermittent (a timing collision, not a
+    concurrency bug), but a high-rate multi-stream recording reliably hits it:
+    every :meth:`Session.append` grows the arrays, each trailing-chunk rewrite
+    is another rename, and losing the race once crashes the whole recording.
+
+    This is the write-path counterpart to :func:`_robust_rmtree`, which already
+    retries on the same Windows lag during teardown. The retry has to live at
+    the rename itself: :meth:`Session.append` -> ``zarr.Array.append`` cannot be
+    retried safely because it resizes (persists the new shape) *before* writing
+    the chunks, so a retry after a partial failure would write at the wrong
+    offset and corrupt the array.
+
+    The proper fix belongs upstream in zarr; this wraps ``_atomic_write`` with a
+    bounded exponential back-off until a fixed zarr is released. Windows-only,
+    and a guarded no-op if zarr's internals move so it can never break import.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import zarr.storage._local as _zlocal
+
+        _orig_safe_move = getattr(_zlocal, "_safe_move", None)
+
+        @contextlib.contextmanager
+        def _atomic_write_retry(path, mode, exclusive=False):  # noqa: ANN001, ANN202
+            tmp_path = path.with_suffix(f".{uuid.uuid4().hex}.partial")
+            try:
+                with tmp_path.open(mode) as f:
+                    yield f
+                for attempt in range(retries):
+                    try:
+                        if exclusive and _orig_safe_move is not None:
+                            _orig_safe_move(tmp_path, path)
+                        else:
+                            tmp_path.replace(path)
+                        break
+                    except PermissionError:
+                        if attempt == retries - 1:
+                            raise
+                        gc.collect()
+                        time.sleep(delay_s * (attempt + 1))
+            except Exception:
+                tmp_path.unlink(missing_ok=True)
+                raise
+
+        # LocalStore.set looks the name up as a module global at call time, so
+        # rebinding it here takes effect for every subsequent chunk write.
+        _zlocal._atomic_write = _atomic_write_retry
+    except Exception:
+        log.debug("could not install Windows zarr atomic-write retry", exc_info=True)
+
+
+_install_windows_zarr_atomic_write_retry()
 
 
 @dataclass
