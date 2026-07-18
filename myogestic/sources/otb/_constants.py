@@ -71,6 +71,35 @@ QUATTRO_N_ACCESSORY = 8     # last 8: counter / trigger / buffer / reserved (raw
 # Read_Quattrocento.m: GainFactor = 5/2^16/150*1000 (mV); AuxGain = 5/2^16/0.5 (V)
 QUATTRO_CONV_FACTOR_MV = 5 / 2 ** 16 / 150 * 1000
 QUATTRO_AUX_FACTOR_V = 5 / 2 ** 16 / 0.5
+# Per-input CONF2 byte = (side<<6) | (hpf<<4) | (lpf<<2) | detection. Codes per the
+# OTB Communication Protocol / Read_Quattrocento.m. ⚠️ Verify against the manual on
+# the first hardware run (design spec §10) — the encoding supersedes bdi's.
+QUATTRO_DETECTION_CODE = {"monopolar": 0b00, "differential": 0b01, "bipolar": 0b10}
+QUATTRO_HPF_CODE = {0.7: 0b00, 10: 0b01, 100: 0b10, 200: 0b11}  # Hz
+QUATTRO_LPF_CODE = {130: 0b00, 500: 0b01, 900: 0b10, 4400: 0b11}  # Hz
+
+
+def quattro_conf2(
+    *,
+    detection: str = "monopolar",
+    hpf: float = 10,
+    lpf: float = 500,
+    side: int = 0,
+) -> int:
+    """Build a per-input CONF2 byte from named settings.
+
+    ``detection`` in {monopolar, differential, bipolar}; ``hpf`` in {0.7, 10, 100,
+    200} Hz; ``lpf`` in {130, 500, 900, 4400} Hz. Defaults reproduce ``0x14``
+    (monopolar, HPF 10 Hz, LPF 500 Hz), the Read_Quattrocento.m default.
+    """
+    return (
+        ((side & 0x1) << 6)
+        | (QUATTRO_HPF_CODE[hpf] << 4)
+        | (QUATTRO_LPF_CODE[lpf] << 2)
+        | QUATTRO_DETECTION_CODE[detection]
+    )
+
+
 # Default per-input CONF2 (Read_Quattrocento.m = 0x14): monopolar, HPF 10Hz, LPF 500Hz
 _QUATTRO_DEFAULT_CONF2 = 0x14
 
@@ -84,18 +113,20 @@ def quattro_config(
     rec_on: bool = False,
     conf2: int = _QUATTRO_DEFAULT_CONF2,
 ) -> bytes:
-    """Build the 40-byte Quattrocento config string (with CRC-8 trailer)."""
-    if acq_on:
-        acq_sett = (
-            0x80
-            | (int(decim) << 6)
-            | (int(rec_on) << 5)
-            | ((fs_mode & 0x3) << 3)
-            | ((nch_mode & 0x3) << 1)
-            | 1
-        )
-    else:
-        acq_sett = 0x80
+    """Build the 40-byte Quattrocento config string (with CRC-8 trailer).
+
+    ``acq_on`` sets only bit 0 (the GO bit); the fs/nch/filter configuration is
+    encoded identically whether starting or stopping, so a stop preserves the
+    device's configured mode and flips only the acquisition bit.
+    """
+    acq_sett = (
+        0x80
+        | (int(decim) << 6)
+        | (int(rec_on) << 5)
+        | ((fs_mode & 0x3) << 3)
+        | ((nch_mode & 0x3) << 1)
+        | int(acq_on)
+    )
     cfg = bytearray(40)
     cfg[0] = acq_sett
     cfg[1] = 0  # AN_OUT_IN_SEL (analog out unused)
