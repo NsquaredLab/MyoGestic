@@ -163,8 +163,11 @@ def test_quattro_config_is_40_bytes_with_valid_crc():
 
 
 def test_quattro_stop_config_byte0():
-    cfg = C.quattro_config(fs_mode=1, nch_mode=3, acq_on=False)
-    assert cfg[0] == 0x80
+    # Stop preserves the configured fs/nch/filters and clears only the GO bit.
+    start = C.quattro_config(fs_mode=1, nch_mode=3, acq_on=True)
+    stop = C.quattro_config(fs_mode=1, nch_mode=3, acq_on=False)
+    assert stop[0] == start[0] & ~0x01
+    assert stop[0] == (0x80 | 8 | 6)  # 0x8E: fs/nch preserved, GO cleared
 
 
 def test_base_read_handles_peer_close_without_spinning():
@@ -215,7 +218,7 @@ def test_quattro_default_bio_partition_and_aux_scaling():
     from myogestic.sources.otb.quattrocento import QuattrocentoSource
 
     src = QuattrocentoSource(nch_mode=0, include_aux=True)  # 120 total
-    assert src._n_bio == 96  # 120 - 16 AUX - 8 accessory
+    assert src._wire_bio == 96  # 120 - 16 AUX - 8 accessory
     out = src._decode(_le_int16_bytes(list(range(120))))
     assert out.shape == (1, 120)
     np.testing.assert_allclose(out[0, 10], 10 * C.QUATTRO_CONV_FACTOR_MV, rtol=1e-5)
@@ -227,7 +230,7 @@ def test_quattro_default_bio_excludes_aux_when_biosignal_only():
     from myogestic.sources.otb.quattrocento import QuattrocentoSource
 
     src = QuattrocentoSource(nch_mode=1)  # 216 total, biosignal-only
-    assert src._n_bio == 192
+    assert src._wire_bio == 192
     out = src._decode(_le_int16_bytes(list(range(216))))
     assert out.shape == (1, 192)
 

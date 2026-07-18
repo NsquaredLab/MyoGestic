@@ -32,17 +32,21 @@ def test_quattrocento_loopback_validates_config_and_streams():
         seen["cfg_len"] = len(cfg)
         seen["crc_ok"] = (cfg[39] == C.crc8(cfg[:39]))
         frame = _le_int16_frame(list(range(nch)))
-        for _ in range(50):
-            conn.sendall(frame)
-            time.sleep(0.005)
-        time.sleep(0.2)
-        conn.close()
+        try:
+            for _ in range(50):
+                conn.sendall(frame)
+                time.sleep(0.005)
+            time.sleep(0.2)
+        except (BrokenPipeError, OSError):
+            pass  # source disconnected first — expected in this teardown race
+        finally:
+            conn.close()
 
     t = threading.Thread(target=fake_device, daemon=True)
     t.start()
 
     src = QuattrocentoSource(device_ip="127.0.0.1", port=port,
-                             fs_mode=0, nch_mode=0, n_bio=64)
+                             fs_mode=0, nch_mode=0, select=range(64))
     info = src.connect()
     assert info.n_channels == 64       # biosignal-only by default
     assert info.fs == 512.0
