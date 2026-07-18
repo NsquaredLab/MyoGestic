@@ -94,7 +94,7 @@ class MuoviSource(_OTBSource):
 
     # --- base hooks ---------------------------------------------------------
     def _open(self) -> StreamInfo:
-        self._buf.clear()
+        self._prepare_stream()
         n_out = self._geo.n_total if self._include_aux else self._geo.n_bio
         self._frame_nbytes = self._geo.n_total * self._geo.bytes_per_sample
         return StreamInfo(

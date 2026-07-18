@@ -20,7 +20,8 @@ class _OTBSource:
     Subclasses must set ``self._info`` (StreamInfo) and ``self._frame_nbytes``
     in ``_open()``, and implement ``_open``/``_send_start``/``_send_stop``/
     ``_decode``. ``self._sock`` is the connected/accepted socket used by
-    ``read`` for non-blocking recv.
+    ``read`` for non-blocking recv. Call ``_prepare_stream()`` at the top of
+    ``_open()`` to reset per-connection buffering/timestamp/closure state.
     """
 
     def __init__(self) -> None:
@@ -28,6 +29,10 @@ class _OTBSource:
         self._buf = bytearray()
         self._info: StreamInfo | None = None
         self._frame_nbytes: int = 0
+        # last emitted timestamp, for cross-batch monotonicity
+        self._last_ts: float | None = None
+        # set when the device drops the connection (empty recv / OSError)
+        self._peer_closed: bool = False
 
     # --- subclass hooks -----------------------------------------------------
     def _open(self) -> StreamInfo:
@@ -42,9 +47,19 @@ class _OTBSource:
     def _decode(self, frame: bytes) -> np.ndarray:
         raise NotImplementedError
 
+    def _apply_target(self, target: str) -> None:
+        """Update the connection target before a reconnect. Subclasses override
+        (e.g. Quattrocento sets the device IP); base does nothing."""
+
+    def _prepare_stream(self) -> None:
+        """Reset per-connection state (buffer, timestamp anchor, closure flag)."""
+        self._buf.clear()
+        self._last_ts = None
+        self._peer_closed = False
+
     # --- Source protocol ----------------------------------------------------
     def connect(self) -> StreamInfo:
-        self._buf.clear()
+        self._prepare_stream()
         info = self._open()
         self._info = info
         try:
@@ -54,6 +69,17 @@ class _OTBSource:
             raise
         return info
 
+    def reconnect(self, target: str | None = None) -> StreamInfo:
+        """Drop the current connection and re-establish it (re-open + restart).
+
+        Optional ``target`` retargets the source first (device IP for
+        Quattrocento, bind IP for Muovi). Probed by ``Stream.reconnect``.
+        """
+        self.disconnect()
+        if target is not None:
+            self._apply_target(target)
+        return self.connect()
+
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
         sock = self._sock  # local so the type checker keeps the None-narrowing
         if sock is not None:
@@ -62,22 +88,22 @@ class _OTBSource:
                 if chunk:
                     self._buf.extend(chunk)
                 else:
-                    # Empty recv = peer closed the connection. Drop the socket so
-                    # the acquire loop stops spinning, but still flush any whole
-                    # frames already buffered (handled by _drain below).
-                    sock.close()
-                    self._sock = None
+                    # Empty recv = peer closed the connection.
+                    self._on_peer_gone(sock)
             except BlockingIOError:
                 pass
             except OSError:
-                # Device reset / unplugged. Drop the socket (so we stop polling a
-                # dead connection) but still flush any whole frames already
-                # buffered via _drain() below.
-                try:
-                    sock.close()
-                finally:
-                    self._sock = None
-        return self._drain()
+                # Device reset / unplugged.
+                self._on_peer_gone(sock)
+        data, ts = self._drain()
+        if data is not None:
+            return data, ts  # flush whatever whole frames were already buffered
+        if self._peer_closed:
+            # Nothing left to flush and the device is gone: surface it so the
+            # Stream marks the source disconnected (its read() except path)
+            # instead of idling forever as "connected".
+            raise ConnectionError("OTB device closed the connection")
+        return None, None
 
     def disconnect(self) -> None:
         if self._sock is not None:
@@ -92,6 +118,14 @@ class _OTBSource:
         self._buf.clear()
 
     # --- internals ----------------------------------------------------------
+    def _on_peer_gone(self, sock: socket.socket) -> None:
+        """Drop a dead socket but keep any buffered frames for a final flush."""
+        try:
+            sock.close()
+        finally:
+            self._sock = None
+            self._peer_closed = True
+
     def _drain(self) -> tuple[np.ndarray | None, np.ndarray | None]:
         """Slice all complete frames out of the buffer, decode, timestamp."""
         if self._frame_nbytes <= 0 or len(self._buf) < self._frame_nbytes:
@@ -104,6 +138,13 @@ class _OTBSource:
         data = self._decode(raw)
         n = data.shape[0]
         fs = float(self._info.fs)
+        # Anchor the batch's end to the LSL clock, but never overlap the previous
+        # batch — viewers (and label alignment) assume strictly increasing
+        # timestamps, and per-batch back-dating can otherwise cross under jitter.
         end = local_clock()
-        ts = end - (np.arange(n - 1, -1, -1, dtype=np.float64) / fs)
+        first = end - (n - 1) / fs
+        if self._last_ts is not None:
+            first = max(first, self._last_ts + 1.0 / fs)
+        ts = first + np.arange(n, dtype=np.float64) / fs
+        self._last_ts = float(ts[-1])
         return data, ts
