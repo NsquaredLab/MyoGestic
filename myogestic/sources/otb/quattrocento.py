@@ -90,8 +90,11 @@ class QuattrocentoSource(_OTBSource):
         self._select = sel
 
     # --- base hooks ---------------------------------------------------------
+    def _apply_target(self, target: str) -> None:
+        self._device_ip = target
+
     def _open(self) -> StreamInfo:
-        self._buf.clear()
+        self._prepare_stream()
         if self._sock is not None:  # don't leak a prior socket on reconnect
             try:
                 self._sock.close()

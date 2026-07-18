@@ -170,9 +170,9 @@ def test_quattro_stop_config_byte0():
     assert stop[0] == (0x80 | 8 | 6)  # 0x8E: fs/nch preserved, GO cleared
 
 
-def test_base_read_handles_peer_close_without_spinning():
-    """Empty recv (peer closed) must flush buffered frames, then drop the
-    socket so the acquire loop stops polling a dead connection."""
+def test_base_read_flushes_then_signals_on_peer_close():
+    """Empty recv (peer closed) must flush buffered frames first, then raise so
+    the Stream marks the source disconnected instead of idling as connected."""
     a, b = socket.socketpair()
     src = _FakeOTB()
     src.connect()          # sets _info + frame_nbytes; _sock starts None
@@ -182,12 +182,12 @@ def test_base_read_handles_peer_close_without_spinning():
     b.close()
     time.sleep(0.05)
 
-    data, ts = src.read()               # drains the buffered frame
+    data, ts = src.read()               # drains the buffered frame (EOF not yet seen)
     assert data is not None and data.shape == (1, 2)
     np.testing.assert_array_equal(data[0], [5, 6])
 
-    data2, ts2 = src.read()             # peer gone -> drop socket, no spin
-    assert (data2, ts2) == (None, None)
+    with pytest.raises(ConnectionError):
+        src.read()                      # recv now returns EOF -> drop + signal
     assert src._sock is None
     a.close()
 
@@ -235,9 +235,9 @@ def test_quattro_default_bio_excludes_aux_when_biosignal_only():
     assert out.shape == (1, 192)
 
 
-def test_base_read_drops_socket_on_oserror():
-    """A recv() OSError (device reset) drops the socket instead of polling
-    a dead connection forever (Codex-flagged)."""
+def test_base_read_raises_and_drops_socket_on_oserror():
+    """A recv() OSError (device reset) drops the socket and raises so the Stream
+    marks it disconnected instead of polling a dead connection forever."""
 
     class _BoomRecv:
         def recv(self, _n):
@@ -249,5 +249,65 @@ def test_base_read_drops_socket_on_oserror():
     src = _FakeOTB()
     src.connect()
     src._sock = _BoomRecv()
-    assert src.read() == (None, None)
+    with pytest.raises(ConnectionError):
+        src.read()
     assert src._sock is None
+
+
+# A5: timestamps stay strictly increasing across batches
+def test_drain_timestamps_clamp_to_monotonic():
+    from mne_lsl.lsl import local_clock
+
+    src = _FakeOTB()  # fs = 4.0
+    src.connect()
+    base = local_clock() + 100.0  # pretend the previous batch ended in the future
+    src._last_ts = base
+    src.feed(_be_int16_bytes([1, 2]) + _be_int16_bytes([3, 4]))  # 2 frames
+    data, ts = src._drain()
+    assert data.shape == (2, 2)
+    # clamped to _last_ts + 1/fs, then 1/fs spacing within the batch
+    np.testing.assert_allclose(ts, [base + 0.25, base + 0.5])
+    assert np.all(np.diff(ts) > 0)
+    assert src._last_ts == ts[-1]
+
+
+def test_drain_timestamps_increase_across_batches():
+    src = _FakeOTB()
+    src.connect()
+    src.feed(_be_int16_bytes([1, 2]))
+    _d1, t1 = src._drain()
+    src.feed(_be_int16_bytes([3, 4]))
+    _d2, t2 = src._drain()
+    assert t2[0] > t1[-1]
+
+
+# A4: reconnect re-runs the connect lifecycle and can retarget
+def test_reconnect_reopens_and_can_retarget():
+    events = []
+
+    class _Recon(_FakeOTB):
+        def _open(self):
+            events.append("open")
+            self._frame_nbytes = 4
+            return self._info
+
+        def _send_start(self):
+            events.append("start")
+
+        def _apply_target(self, target):
+            events.append(f"target:{target}")
+
+    src = _Recon()
+    src.connect()
+    events.clear()
+    info = src.reconnect(target="1.2.3.4")
+    assert isinstance(info, StreamInfo)
+    assert events == ["target:1.2.3.4", "open", "start"]
+
+
+def test_quattro_apply_target_sets_device_ip():
+    from myogestic.sources.otb.quattrocento import QuattrocentoSource
+
+    src = QuattrocentoSource(nch_mode=0)
+    src._apply_target("169.254.1.99")
+    assert src._device_ip == "169.254.1.99"
