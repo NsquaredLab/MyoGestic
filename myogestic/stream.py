@@ -254,8 +254,6 @@ class Stream:
         self._display_d = np.empty(0)
         self._display_t = np.empty(0)
         self._display_n: int = 0
-        self._snap_interval: int = 1
-        self._samples_since_snap: int = 0
         self._m4_n_pixels: int = 2000
         self._m4_t = np.empty(0, dtype=np.float64)
         self._m4_d = np.empty(0)
@@ -297,7 +295,6 @@ class Stream:
         self._display_d = np.empty((self._cap, self.info.n_channels), dtype=self.info.dtype)
         self._display_t = np.empty(self._cap, dtype=np.float64)
         self._display_n = 0
-        self._snap_interval = max(1, int(self.info.fs * 0.016))
         self._m4_t = np.empty(0, dtype=np.float64)
         self._m4_d = np.empty((0, self.info.n_channels), dtype=self.info.dtype)
         self._m4_n = 0
@@ -431,14 +428,11 @@ class Stream:
         self.status = "connected"
         self.last_error = ""
 
-        # Update raw snapshot every chunk (cheap memcpy)
+        # Update raw snapshot every chunk (cheap memcpy). M4 decimation is deliberately
+        # NOT done here: nothing on the hot path consumes it, and the all-channel
+        # decimation starved the socket read at high channel counts (120-256 ch).
+        # get_display() computes it lazily on the render thread instead.
         self._update_raw_snapshot()
-
-        # M4 decimation at ~60Hz (heavier)
-        self._samples_since_snap += len(data)
-        if self._samples_since_snap >= self._snap_interval:
-            self._samples_since_snap = 0
-            self._update_m4_snapshot()
 
         # Append to zarr session if recording. Hold `_session_lock` across the
         # check-and-append so `detach_session()` (called from stop_recording)
@@ -520,17 +514,26 @@ class Stream:
         self._display_n = n
 
     def _update_m4_snapshot(self) -> None:
-        """Pre-compute M4 decimation. Runs at ~60Hz on acquire thread."""
-        n = self._display_n
-        if n < 2:
-            return
+        """Compute the M4-decimated display snapshot.
+
+        Called lazily from :meth:`get_display` on the render thread (no longer on the
+        acquire hot path), so it snapshots the display buffer under the lock before
+        decimating rather than reading it concurrently with the acquire thread.
+        """
+        with self._lock:
+            n = self._display_n
+            if n < 2:
+                self._m4_n = 0
+                return
+            t = self._display_t[:n].copy()
+            d = self._display_d[:n].copy()
         n_out = self._m4_n_pixels * 4
         if n <= n_out:
-            self._m4_t = self._display_t[:n]
-            self._m4_d = self._display_d[:n]
+            self._m4_t = t
+            self._m4_d = d
             self._m4_n = n
         else:
-            t_dec, d_dec = self._m4_decimate(self._display_t[:n], self._display_d[:n], n_out)
+            t_dec, d_dec = self._m4_decimate(t, d, n_out)
             self._m4_t = t_dec
             self._m4_d = d_dec
             self._m4_n = len(t_dec)
@@ -617,13 +620,14 @@ class Stream:
         )
 
     def get_display(self, n_pixels: int = 800) -> tuple[np.ndarray, np.ndarray] | None:
-        """Read pre-computed M4 result. Zero work on render thread.
+        """M4-decimated display snapshot, computed on demand on the render thread.
 
-        The acquire thread computes M4 in _update_display_snapshot.
-        This just reads the result via atomic ref (GIL-safe).
+        The acquire thread deliberately does NOT precompute this: nothing on the hot
+        path consumed it, and the all-channel decimation starved the socket read at
+        high channel counts. Recomputed per call from the current display buffer.
         """
-        # Update target resolution for next snapshot
         self._m4_n_pixels = n_pixels
+        self._update_m4_snapshot()
         n = self._m4_n
         if n < 2:
             return None
