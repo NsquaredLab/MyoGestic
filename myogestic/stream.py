@@ -43,6 +43,19 @@ SUPPORTED_DTYPES: tuple[np.dtype, ...] = tuple(
 )
 
 
+@dataclass(frozen=True)
+class ChannelGrid:
+    """A named electrode grid as a 2-D map of output-column indices (None = empty cell)."""
+
+    label: str
+    cells: list[list[int | None]]
+
+    @property
+    def columns(self) -> list[int]:
+        """Non-``None`` cell values, row-major order."""
+        return [c for row in self.cells for c in row if c is not None]
+
+
 @dataclass
 class StreamInfo:
     """Describes the shape and dtype of a :class:`Source`'s data.
@@ -69,12 +82,19 @@ class StreamInfo:
     channel_names
         Optional per-channel labels for the signal viewer
         legend. ``None`` (default) renders as ``ch0``, ``ch1``, ...
+    channel_grids
+        Optional list of :class:`ChannelGrid` electrode topologies for
+        the signal viewer's spatial channel selector. ``None``
+        (default) disables the grid selector. Not validated here — a
+        malformed layout must never block acquisition; the viewer
+        validates it before use.
     """
 
     n_channels: int
     fs: float
     dtype: np.dtype = np.dtype(np.float32)
     channel_names: list[str] | None = None
+    channel_grids: list[ChannelGrid] | None = None
 
     def __post_init__(self) -> None:
         # Normalise str / type / np.dtype to a canonical np.dtype, then validate.
