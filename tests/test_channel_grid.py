@@ -13,7 +13,11 @@ from myogestic.widgets.signals._channel_grid import (
     reduce_selection,
     resolve_initial,
 )
-from myogestic.widgets.signals._controls import render_channel_controls
+from myogestic.widgets.signals._controls import (
+    _hit_test,
+    _hit_test_xy,
+    render_channel_controls,
+)
 from myogestic.widgets.signals._state import ViewerState
 
 
@@ -87,6 +91,81 @@ def test_resolve_initial_policy():
     assert resolve_initial(None, 256, []) == set(range(16))  # large -> first 16
     assert resolve_initial(range(4), 256, []) == {0, 1, 2, 3}
     assert resolve_initial([1, 2, 999], 8, []) == {1, 2}  # clamp out-of-range
+
+
+# --- _hit_test geometry: row/col axes must use the matching spacing -------
+#
+# Cells are laid out with `same_line()` horizontally (column stride
+# `cell + item_spacing.x`) and wrap onto a new line vertically (row stride
+# `cell + item_spacing.y`). The app theme (`myogestic/_theme.py`) sets
+# `item_spacing = (8, 6)` — x != y — so a hit-test that reuses one spacing
+# value for both axes drifts on the row axis. These values (cell=14,
+# spacing_x=8, spacing_y=6) reproduce that theme; rows >= 8 are where the
+# ~2px/row drift from a single-spacing implementation first flips the
+# computed row (verified by hand against the buggy `step = cell +
+# spacing_x` formula for both axes).
+_HIT_TEST_CELL = 14.0
+_HIT_TEST_SPACING_X = 8.0
+_HIT_TEST_SPACING_Y = 6.0
+
+
+def _cell_center(row: int, col: int) -> tuple[float, float]:
+    """Mouse (x, y) at the exact center of `(row, col)` under the real layout."""
+    step_x = _HIT_TEST_CELL + _HIT_TEST_SPACING_X
+    step_y = _HIT_TEST_CELL + _HIT_TEST_SPACING_Y
+    return col * step_x + step_x / 2.0, row * step_y + step_y / 2.0
+
+
+@pytest.mark.parametrize(
+    "row,col",
+    [
+        (0, 0),
+        (1, 1),
+        (5, 0),  # vertical center of row 5 -> must be row 5, not 5 +/- drift
+        (5, 5),
+        (8, 1),
+        (10, 10),
+        (15, 15),  # last row of a 16x16 (256-ch) grid: drift is largest here
+    ],
+)
+def test_hit_test_xy_matches_actual_row_col_layout(row, col):
+    mouse_x, mouse_y = _cell_center(row, col)
+    got_row, got_col = _hit_test_xy(
+        mouse_x,
+        mouse_y,
+        0.0,
+        0.0,
+        _HIT_TEST_CELL,
+        _HIT_TEST_SPACING_X,
+        _HIT_TEST_SPACING_Y,
+    )
+    assert (got_row, got_col) == (row, col)
+
+
+def test_hit_test_wraps_pure_core_with_imgui_vec_types():
+    origin = imgui.ImVec2(100.0, 50.0)
+    row, col = 8, 3
+    dx, dy = _cell_center(row, col)
+    mouse = imgui.ImVec2(origin.x + dx, origin.y + dy)
+    assert _hit_test(origin, _HIT_TEST_CELL, _HIT_TEST_SPACING_X, _HIT_TEST_SPACING_Y, mouse) == (
+        row,
+        col,
+    )
+
+
+def test_hit_test_row_axis_uses_spacing_y_not_spacing_x():
+    # Directly pins the bug: swapping spacing_x/spacing_y on the row axis
+    # (i.e. reusing one spacing value for both axes, as the old code did)
+    # must change the result for a non-square spacing pair.
+    mouse_x, mouse_y = _cell_center(10, 0)
+    correct = _hit_test_xy(
+        mouse_x, mouse_y, 0.0, 0.0, _HIT_TEST_CELL, _HIT_TEST_SPACING_X, _HIT_TEST_SPACING_Y
+    )
+    buggy_single_spacing = _hit_test_xy(
+        mouse_x, mouse_y, 0.0, 0.0, _HIT_TEST_CELL, _HIT_TEST_SPACING_X, _HIT_TEST_SPACING_X
+    )
+    assert correct == (10, 0)
+    assert buggy_single_spacing != correct
 
 
 # --- render_channel_controls smoke test (imgui widget shell) ---------------

@@ -259,7 +259,9 @@ def render_grid(
     if not grid.cells or not grid.cells[0]:
         return hovered_ch
 
-    spacing = imgui.get_style().item_spacing.x
+    item_spacing = imgui.get_style().item_spacing
+    spacing_x = item_spacing.x
+    spacing_y = item_spacing.y
     origin = imgui.get_cursor_screen_pos()
 
     for row_idx, row in enumerate(grid.cells):
@@ -294,7 +296,7 @@ def render_grid(
             imgui.MouseButton_.left, io.mouse_drag_threshold
         ):
             drag.dragged = True
-            r1, c1 = _hit_test(origin, cell, spacing, imgui.get_mouse_pos())
+            r1, c1 = _hit_test(origin, cell, spacing_x, spacing_y, imgui.get_mouse_pos())
             new_enabled = reduce_selection(
                 drag.snapshot, drag.op, rect_to_channels(grid, drag.r0, drag.c0, r1, c1)
             )
@@ -305,7 +307,7 @@ def render_grid(
 
 
 def _hit_test(
-    origin: imgui.ImVec2, cell: float, spacing: float, mouse: imgui.ImVec2
+    origin: imgui.ImVec2, cell: float, spacing_x: float, spacing_y: float, mouse: imgui.ImVec2
 ) -> tuple[int, int]:
     """Map a screen-space mouse position to a `(row, col)` cell address.
 
@@ -313,12 +315,33 @@ def _hit_test(
     per-item hover, which ImGui suppresses for non-active items during a
     drag. Out-of-range results are expected and safe: `rect_to_channels`
     clamps them to the grid bounds.
+
+    Cells are laid out with `same_line()` horizontally — column stride is
+    `cell + spacing_x` — and wrap onto a new line vertically — row stride
+    is `cell + spacing_y`. The two axes use ImGui's independent
+    `item_spacing.x`/`.y`, so they must not be conflated (a single shared
+    `spacing` drifts the vertical hit-test whenever `x != y`, as it does
+    with this app's theme).
     """
-    step = cell + spacing
-    if step <= 0:
+    return _hit_test_xy(mouse.x, mouse.y, origin.x, origin.y, cell, spacing_x, spacing_y)
+
+
+def _hit_test_xy(
+    mouse_x: float,
+    mouse_y: float,
+    origin_x: float,
+    origin_y: float,
+    cell: float,
+    spacing_x: float,
+    spacing_y: float,
+) -> tuple[int, int]:
+    """Pure-float core of `_hit_test` (no imgui types) — see there for details."""
+    step_x = cell + spacing_x
+    step_y = cell + spacing_y
+    if step_x <= 0 or step_y <= 0:
         return 0, 0
-    row = int((mouse.y - origin.y) // step)
-    col = int((mouse.x - origin.x) // step)
+    row = int((mouse_y - origin_y) // step_y)
+    col = int((mouse_x - origin_x) // step_x)
     return row, col
 
 
@@ -336,7 +359,7 @@ def render_cell(
     hovered_ch: int,
 ) -> int:
     """Render one channel cell; returns the updated `hovered_ch`."""
-    imgui.invisible_button(f"##{stream_name}_cell_{ch}", imgui.ImVec2(cell, cell))
+    imgui.invisible_button(f"##{stream_name}_g{grid_idx}_cell_{ch}", imgui.ImVec2(cell, cell))
 
     is_on = ch in enabled
     color = PALETTE[ch % len(PALETTE)]
@@ -364,7 +387,7 @@ def render_cell(
         highlight = imgui.color_convert_float4_to_u32(imgui.ImVec4(1.0, 1.0, 1.0, 0.8))
         dl.add_rect(p_min, p_max, highlight, rounding=rounding, thickness=1.5)
 
-    if imgui.is_item_focused() and imgui.is_key_pressed(imgui.Key.space):
+    if imgui.is_item_focused() and imgui.is_key_pressed(imgui.Key.space, repeat=False):
         if is_on:
             enabled.discard(ch)
         else:
