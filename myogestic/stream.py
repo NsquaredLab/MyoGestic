@@ -43,6 +43,19 @@ SUPPORTED_DTYPES: tuple[np.dtype, ...] = tuple(
 )
 
 
+@dataclass(frozen=True)
+class ChannelGrid:
+    """A named electrode grid as a 2-D map of output-column indices (None = empty cell)."""
+
+    label: str
+    cells: list[list[int | None]]
+
+    @property
+    def columns(self) -> list[int]:
+        """Non-``None`` cell values, row-major order."""
+        return [c for row in self.cells for c in row if c is not None]
+
+
 @dataclass
 class StreamInfo:
     """Describes the shape and dtype of a :class:`Source`'s data.
@@ -69,12 +82,19 @@ class StreamInfo:
     channel_names
         Optional per-channel labels for the signal viewer
         legend. ``None`` (default) renders as ``ch0``, ``ch1``, ...
+    channel_grids
+        Optional list of :class:`ChannelGrid` electrode topologies for
+        the signal viewer's spatial channel selector. ``None``
+        (default) disables the grid selector. Not validated here — a
+        malformed layout must never block acquisition; the viewer
+        validates it before use.
     """
 
     n_channels: int
     fs: float
     dtype: np.dtype = np.dtype(np.float32)
     channel_names: list[str] | None = None
+    channel_grids: list[ChannelGrid] | None = None
 
     def __post_init__(self) -> None:
         # Normalise str / type / np.dtype to a canonical np.dtype, then validate.
@@ -234,8 +254,6 @@ class Stream:
         self._display_d = np.empty(0)
         self._display_t = np.empty(0)
         self._display_n: int = 0
-        self._snap_interval: int = 1
-        self._samples_since_snap: int = 0
         self._m4_n_pixels: int = 2000
         self._m4_t = np.empty(0, dtype=np.float64)
         self._m4_d = np.empty(0)
@@ -277,7 +295,6 @@ class Stream:
         self._display_d = np.empty((self._cap, self.info.n_channels), dtype=self.info.dtype)
         self._display_t = np.empty(self._cap, dtype=np.float64)
         self._display_n = 0
-        self._snap_interval = max(1, int(self.info.fs * 0.016))
         self._m4_t = np.empty(0, dtype=np.float64)
         self._m4_d = np.empty((0, self.info.n_channels), dtype=self.info.dtype)
         self._m4_n = 0
@@ -411,14 +428,11 @@ class Stream:
         self.status = "connected"
         self.last_error = ""
 
-        # Update raw snapshot every chunk (cheap memcpy)
+        # Update raw snapshot every chunk (cheap memcpy). M4 decimation is deliberately
+        # NOT done here: nothing on the hot path consumes it, and the all-channel
+        # decimation starved the socket read at high channel counts (120-256 ch).
+        # get_display() computes it lazily on the render thread instead.
         self._update_raw_snapshot()
-
-        # M4 decimation at ~60Hz (heavier)
-        self._samples_since_snap += len(data)
-        if self._samples_since_snap >= self._snap_interval:
-            self._samples_since_snap = 0
-            self._update_m4_snapshot()
 
         # Append to zarr session if recording. Hold `_session_lock` across the
         # check-and-append so `detach_session()` (called from stop_recording)
@@ -500,17 +514,26 @@ class Stream:
         self._display_n = n
 
     def _update_m4_snapshot(self) -> None:
-        """Pre-compute M4 decimation. Runs at ~60Hz on acquire thread."""
-        n = self._display_n
-        if n < 2:
-            return
+        """Compute the M4-decimated display snapshot.
+
+        Called lazily from :meth:`get_display` on the render thread (no longer on the
+        acquire hot path), so it snapshots the display buffer under the lock before
+        decimating rather than reading it concurrently with the acquire thread.
+        """
+        with self._lock:
+            n = self._display_n
+            if n < 2:
+                self._m4_n = 0
+                return
+            t = self._display_t[:n].copy()
+            d = self._display_d[:n].copy()
         n_out = self._m4_n_pixels * 4
         if n <= n_out:
-            self._m4_t = self._display_t[:n]
-            self._m4_d = self._display_d[:n]
+            self._m4_t = t
+            self._m4_d = d
             self._m4_n = n
         else:
-            t_dec, d_dec = self._m4_decimate(self._display_t[:n], self._display_d[:n], n_out)
+            t_dec, d_dec = self._m4_decimate(t, d, n_out)
             self._m4_t = t_dec
             self._m4_d = d_dec
             self._m4_n = len(t_dec)
@@ -555,12 +578,17 @@ class Stream:
         all_idx = np.unique(work_idx[:pos])
         n_sel = len(all_idx)
 
+        # Size the output scratch to the sample count, not `n_out * n_ch`.
+        # `all_idx` is the *unique* union of every channel's picks, so
+        # `n_sel <= n` (there are only `n` distinct sample indices to pick);
+        # `n_out * n_ch` over-allocated by ~100x here (~2 GiB at 256 ch /
+        # n_out=8000 vs the ~21 MB actually needed).
         work_d = self._m4_work_d
         if work_d is None or work_d.shape[0] < n_sel or work_d.shape[1] != n_ch:
-            work_d = self._m4_work_d = np.empty((n_out * n_ch, n_ch), dtype=d.dtype)
+            work_d = self._m4_work_d = np.empty((n, n_ch), dtype=d.dtype)
         work_t = self._m4_work_t
         if work_t is None or work_t.shape[0] < n_sel:
-            work_t = self._m4_work_t = np.empty(n_out * n_ch, dtype=np.float64)
+            work_t = self._m4_work_t = np.empty(n, dtype=np.float64)
 
         work_t[:n_sel] = t[all_idx]
         work_d[:n_sel] = d[all_idx]
@@ -597,13 +625,14 @@ class Stream:
         )
 
     def get_display(self, n_pixels: int = 800) -> tuple[np.ndarray, np.ndarray] | None:
-        """Read pre-computed M4 result. Zero work on render thread.
+        """M4-decimated display snapshot, computed on demand on the render thread.
 
-        The acquire thread computes M4 in _update_display_snapshot.
-        This just reads the result via atomic ref (GIL-safe).
+        The acquire thread deliberately does NOT precompute this: nothing on the hot
+        path consumed it, and the all-channel decimation starved the socket read at
+        high channel counts. Recomputed per call from the current display buffer.
         """
-        # Update target resolution for next snapshot
         self._m4_n_pixels = n_pixels
+        self._update_m4_snapshot()
         n = self._m4_n
         if n < 2:
             return None
