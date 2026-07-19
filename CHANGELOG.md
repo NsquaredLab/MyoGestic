@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-07-19
+
+Signal-viewer overhaul for high-channel HD-EMG: a spatial channel selector, an
+RMS-envelope display mode, and the performance work to make hundreds of channels
+usable. Backward-compatible — old sessions still load.
+
+### Added
+
+- **Spatial channel-grid selector.** A compact bar opens a floating grid of
+  cells laid out by electrode grid (showing the channel index); click to toggle,
+  drag to rubber-band a rectangle, shift-click for a linear range. Replaces the
+  one-button-per-channel wall.
+- **Configurable RMS-envelope display** (`display = rms_env`) with adjustable
+  **RMS window** and **RMS shift** — a sparse, scroll-stable trailing-RMS trace
+  computed on the incoming signal. Visual-only (recording/model input unaffected).
+- **`StreamInfo.channel_grids`** channel topology, persisted across session
+  save/load so a replayed recording keeps its layout.
+- **`signal_viewer(..., initial_channels=...)`** to bound the initially-enabled
+  channel set so a 256-channel stream doesn't open as 256 lines.
+
+### Changed
+
+- **M4 display decimation now runs lazily on the render thread**, not on the
+  acquire loop — where computing it for every channel ~60×/s starved
+  high-channel-count acquisition and pinned the viewer's frame rate.
+- **Viewer decimation rebuilt** as one vectorized shared-x MinMax over only the
+  enabled channels, anchored to an absolute-time bucket grid (scroll-stable).
+- **Per-channel viewer stats throttled** (~10 Hz) and computed without an
+  all-column copy.
+
+### Fixed
+
+- **Windows:** retry zarr's chunk-rename on transient file locks (antivirus /
+  search-indexer handles), fixing intermittent `PermissionError` crashes
+  mid-recording.
+- Guard the MinMax decimator against an out-of-memory blow-up on degenerate
+  flat-timestamp runs (a device clock stall or a monotonic-clamped session).
+- Size the M4 output scratch to the sample count instead of
+  `n_out * n_channels` (~2 GiB → ~21 MB at 256 ch).
+
 ## [2.1.0] - 2026-06-07
 
 Library reorganization, public-API standardization, and Windows session-save
