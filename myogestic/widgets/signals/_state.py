@@ -143,26 +143,50 @@ def m4_decimate_channel(
 def _minmax_grid_indices(bucket_id: np.ndarray, col: np.ndarray, n: int) -> np.ndarray:
     """Per-bucket argmin/argmax sample indices, vectorized (no per-bucket loop).
 
-    Assumes `bucket_id` is non-decreasing — true for every caller here,
-    since `t` is a monotonic window slice and `floor` preserves order — so
-    each distinct bucket occupies one contiguous run of `bucket_id`.
-    `np.lexsort` grouped by `bucket_id`, with `col` (or `-col`) as the
-    tiebreaker, puts each run's minimum (maximum) value first within that
-    run; the run's start offset (found once, from `bucket_id` directly)
-    then locates it in the sorted order for both the min and max pass.
+    O(n): no sort. Assumes `bucket_id` is non-decreasing — true for every
+    caller here, since `t` is a monotonic window slice and `floor`
+    preserves order — so each distinct bucket occupies one contiguous run
+    of `bucket_id`. `starts` locates each run's first offset; `run_len`
+    (via `starts` and the sentinel `n`) its length.
+
+    The per-run *value* extrema come from `np.fmin`/`np.fmax.reduceat`
+    over those runs — an O(n) reduction, and NaN-robust like the
+    pre-fix lexsort (which sorted NaN to the end of every run): a run
+    with any finite sample yields a finite extreme, an all-NaN run
+    yields NaN.
+
+    Recovering the extreme's *index* (not just its value) without a
+    per-run loop: broadcast each run's extreme value back onto its
+    member samples (`np.repeat`), mark samples matching their run's
+    extreme (NaN-aware, since `NaN == NaN` is `False`), replace
+    non-matching samples with a sentinel index (`n`, always out of the
+    valid `[0, n)` range), and take the minimum surviving index per run —
+    i.e. the first match, mirroring the previous lexsort's stable
+    tie-break (earliest sample wins a tie). `np.minimum.reduceat` here
+    operates on plain integer indices, not the data, so it never hits the
+    NaN-propagation footgun that ruled out `np.minimum`/`np.maximum` on
+    `col` directly.
+
     Also unions in the global first/last sample indices so the trace
     still spans the full input span and channels right-align.
     """
     starts = np.flatnonzero(np.r_[True, bucket_id[1:] != bucket_id[:-1]])
-    order_min = np.lexsort((col, bucket_id))
-    order_max = np.lexsort((-col, bucket_id))
-    idx = np.concatenate(
-        (
-            order_min[starts],
-            order_max[starts],
-            np.array([0, n - 1], dtype=np.intp),
-        )
-    )
+    run_len = np.diff(starts, append=n)
+
+    run_min = np.fmin.reduceat(col, starts)
+    run_max = np.fmax.reduceat(col, starts)
+    broadcast_min = np.repeat(run_min, run_len)
+    broadcast_max = np.repeat(run_max, run_len)
+
+    sample_idx = np.arange(n, dtype=np.intp)
+    is_min = (col == broadcast_min) | (np.isnan(col) & np.isnan(broadcast_min))
+    is_max = (col == broadcast_max) | (np.isnan(col) & np.isnan(broadcast_max))
+
+    sentinel = n  # always > any valid index, so it never wins the reduceat min
+    min_idx = np.minimum.reduceat(np.where(is_min, sample_idx, sentinel), starts)
+    max_idx = np.minimum.reduceat(np.where(is_max, sample_idx, sentinel), starts)
+
+    idx = np.concatenate((min_idx, max_idx, np.array([0, n - 1], dtype=np.intp)))
     return np.unique(idx.astype(np.intp))
 
 
