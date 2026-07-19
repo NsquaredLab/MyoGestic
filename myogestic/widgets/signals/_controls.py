@@ -204,6 +204,10 @@ class _GridUIState:
     # and drop the shift-click anchor so it can't briefly resolve a range
     # against the *new* stream's out-of-range channel indices.
     last_key: tuple[str, int] | None = None
+    # Whether the floating channel-grid window is open. Driven by the
+    # compact bar's `[Edit…]` button and by the window's own title-bar
+    # close button (see `render_grid_window`).
+    show_grid: bool = False
 
 
 _grid_ui: dict[str, _GridUIState] = {}
@@ -215,7 +219,12 @@ def render_channel_controls(
     v: ViewerState,
     n_channels: int,
 ) -> tuple[set[int], list[str] | None, int]:
-    """Render the spatial toggle-grid and mutate `v.channels` from user input.
+    """Render the compact channel bar, and mutate `v.channels` from user input.
+
+    The bar is always drawn inline; the spatial toggle-grid itself only
+    renders when `ui.show_grid` is set (via the bar's `[Edit…]` button), in
+    its own floating window — see `render_grid_window`. `hovered_ch` is -1
+    whenever that window is closed, since nothing can be hovered then.
 
     `resolve_enabled` (in `_state.py`) owns initializing `v.channels` before
     this runs each frame — this function only ever reads/mutates the
@@ -230,17 +239,103 @@ def render_channel_controls(
         ui.last_clicked = -1
         ui.last_key = v.active_channels_key
 
-    cell = imgui.get_frame_height()
-    hovered_ch = -1
-    for grid_idx, grid in enumerate(layout):
-        hovered_ch = render_grid(
-            stream_name, grid_idx, grid, enabled, ch_names, ui, cell, hovered_ch
-        )
+    render_channel_bar(stream_name, ui, enabled, n_channels)
 
+    hovered_ch = -1
+    if ui.show_grid:
+        hovered_ch = render_grid_window(stream_name, layout, enabled, ch_names, ui)
+
+    # Resolve a click/drag session on mouse-up even if the window closed
+    # mid-drag (e.g. the user hit the title-bar [x] while dragging) — cheap,
+    # and keeps `ui.drag` from staying armed forever.
     _finalize_drag(ui, enabled)
-    render_channel_footer(stream_name, enabled, n_channels)
 
     return enabled, ch_names, hovered_ch
+
+
+def render_channel_bar(
+    stream_name: str,
+    ui: _GridUIState,
+    enabled: set[int],
+    n_channels: int,
+) -> None:
+    """Render the always-inline, one-line channel bar.
+
+    `Channels {enabled}/{total}` + the global All/None/Invert ops (what the
+    full-grid footer did before) + `[Edit…]`, which toggles the floating
+    grid window (`ui.show_grid`) — the grid itself never renders inline.
+    """
+    imgui.text(f"Channels {len(enabled)}/{n_channels}")
+    imgui.same_line()
+    if imgui.small_button(f"All##{stream_name}_bar_all"):
+        enabled.clear()
+        enabled.update(range(n_channels))
+    imgui.same_line()
+    if imgui.small_button(f"None##{stream_name}_bar_none"):
+        enabled.clear()
+    imgui.same_line()
+    if imgui.small_button(f"Invert##{stream_name}_bar_invert"):
+        new_enabled = reduce_selection(enabled, "invert", range(n_channels))
+        enabled.clear()
+        enabled.update(new_enabled)
+    imgui.same_line()
+
+    # Highlight the toggle while the grid window is open — same "active
+    # state" cue as the Manual scale-mode button in render_filter_and_scale.
+    was_open = ui.show_grid
+    if was_open:
+        imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.31, 0.61, 0.98, 0.9))
+    if imgui.button(f"Edit…##{stream_name}_bar_edit"):
+        ui.show_grid = not ui.show_grid
+    if was_open:
+        imgui.pop_style_color()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Open the spatial channel grid (click / drag / shift-click to select).")
+
+
+def render_grid_window(
+    stream_name: str,
+    layout: list[ChannelGrid],
+    enabled: set[int],
+    ch_names: list[str] | None,
+    ui: _GridUIState,
+) -> int:
+    """Render the floating per-stream channel-grid window; returns `hovered_ch`.
+
+    A real `imgui.begin`/`imgui.end` window — movable, resizable, and
+    closable via the title-bar `[x]` (which clears `ui.show_grid`) — not a
+    `begin_popup`: that auto-closes on any click outside its bounds, which
+    would abort a rectangle drag the instant it strays past the popup's
+    edge.
+    """
+    imgui.set_next_window_size(imgui.ImVec2(520.0, 420.0), imgui.Cond_.first_use_ever)
+    visible, still_open = imgui.begin(
+        f"Channel selection — {stream_name}##{stream_name}_grid_window", True
+    )
+    hovered_ch = -1
+    try:
+        if visible:
+            cell = _grid_cell_size()
+            for grid_idx, grid in enumerate(layout):
+                hovered_ch = render_grid(
+                    stream_name, grid_idx, grid, enabled, ch_names, ui, cell, hovered_ch
+                )
+    finally:
+        imgui.end()
+
+    if not still_open:
+        ui.show_grid = False
+    return hovered_ch
+
+
+def _grid_cell_size() -> float:
+    """Cell edge length for the floating grid window.
+
+    Large enough that a 3-digit channel index (``"255"``) fits centered
+    without overflow — cells are no longer squeezed by the inline viewer's
+    vertical budget now that they live in their own resizable window.
+    """
+    return imgui.get_frame_height() * 1.6
 
 
 def render_grid(
@@ -354,6 +449,34 @@ def _hit_test_xy(
     return row, col
 
 
+def _draw_cell_label(
+    dl: imgui.ImDrawList, p_min: imgui.ImVec2, p_max: imgui.ImVec2, ch: int
+) -> None:
+    """Draw the global channel index `ch`, centered in the cell rect `p_min`-`p_max`.
+
+    Uses the theme's plain text color (not the per-channel accent) so the
+    number stays legible over *both* the enabled cell's tinted fill and the
+    disabled cell's hollow background — the accent color already carries
+    the on/off cue via the filled dot vs. hollow border in `render_cell`.
+    A modestly reduced font size (`push_font(None, ...)`, the imgui-bundle
+    idiom for a one-off size — see `prediction_label.py`) keeps a 3-digit
+    index from crowding the cell.
+    """
+    label = str(ch)
+    base_size = imgui.get_style().font_size_base
+    imgui.push_font(None, base_size * 0.8)
+    try:
+        text_size = imgui.calc_text_size(label)
+        color = imgui.color_convert_float4_to_u32(imgui.get_style_color_vec4(imgui.Col_.text))
+        pos = imgui.ImVec2(
+            (p_min.x + p_max.x) * 0.5 - text_size.x * 0.5,
+            (p_min.y + p_max.y) * 0.5 - text_size.y * 0.5,
+        )
+        dl.add_text(pos, color, label)
+    finally:
+        imgui.pop_font()
+
+
 def render_cell(
     stream_name: str,
     grid_idx: int,
@@ -388,6 +511,8 @@ def render_cell(
         # (colorblind-safe) — a filled dot vs. no dot, not just color.
         border = imgui.color_convert_float4_to_u32(imgui.ImVec4(0.5, 0.5, 0.5, 0.6))
         dl.add_rect(p_min, p_max, border, rounding=rounding)
+
+    _draw_cell_label(dl, p_min, p_max, ch)
 
     if imgui.is_item_hovered():
         hovered_ch = ch
@@ -442,23 +567,3 @@ def _finalize_drag(ui: _GridUIState, enabled: set[int]) -> None:
         else:
             enabled.discard(drag.ch0)
     drag.armed = False
-
-
-def render_channel_footer(
-    stream_name: str,
-    enabled: set[int],
-    n_channels: int,
-) -> None:
-    imgui.text(f"enabled {len(enabled)}/{n_channels}")
-    imgui.same_line()
-    if imgui.small_button(f"All##{stream_name}_foot_all"):
-        enabled.clear()
-        enabled.update(range(n_channels))
-    imgui.same_line()
-    if imgui.small_button(f"None##{stream_name}_foot_none"):
-        enabled.clear()
-    imgui.same_line()
-    if imgui.small_button(f"Invert##{stream_name}_foot_invert"):
-        new_enabled = reduce_selection(enabled, "invert", range(n_channels))
-        enabled.clear()
-        enabled.update(new_enabled)
