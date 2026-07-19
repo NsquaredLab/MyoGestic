@@ -50,8 +50,6 @@ class ViewerState:
     display_filter: str = "none"
     show_markers: bool = True
     show_retarget: bool = False
-    _m4_downsampler: object | None = field(default=None, repr=False)
-    _m4_numpy_fallback: bool = field(default=False, repr=False)
     # Per-channel M4 output-size target used by the *last* `render_plot`
     # call (sized to the live plot's pixel width there — see
     # `resolve_decimation_target`). `render_footer` reads it back to report
@@ -88,50 +86,84 @@ def normalize_scale_mode(scale_mode: str) -> str:
     return "manual" if scale_mode == "manual" else "auto"
 
 
-def _ensure_m4_downsampler(v: ViewerState) -> None:
-    if v._m4_downsampler is None and not v._m4_numpy_fallback:
-        try:
-            from tsdownsample import M4Downsampler
-        except ModuleNotFoundError:
-            v._m4_numpy_fallback = True
-        else:
-            v._m4_downsampler = M4Downsampler()
-
-
 def m4_decimate_channel(
     t: np.ndarray,
     col: np.ndarray,
     n_out: int,
     v: ViewerState,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """M4-decimate one channel's raw column independently, to ~`n_out` points.
+    """MinMax-decimate one channel's raw column independently, to ~`n_out` points.
 
-    Each enabled channel calls this on its own — its own M4 index set, its
-    own output x array — instead of the old approach of M4-decimating every
-    enabled channel and then *unioning* all their index sets onto one
-    shared x-axis. That union made the reduction vanish at high channel
-    counts (the union of many channels' distinct M4 picks approaches the
-    full window — e.g. 64 channels over a 5 s / 2048 Hz window unioned to
-    the *entire* window, zero point reduction). Decimating per channel
+    Each enabled channel calls this on its own — its own bucket/index set,
+    its own output x array — instead of the old approach of decimating
+    every enabled channel and then *unioning* all their index sets onto
+    one shared x-axis. That union made the reduction vanish at high
+    channel counts (the union of many channels' distinct picks approaches
+    the full window — e.g. 64 channels over a 5 s / 2048 Hz window unioned
+    to the *entire* window, zero point reduction). Decimating per channel
     instead bounds total draw points at `n_channels * n_out`, independent
     of window length or sample rate.
+
+    Buckets are anchored to an *absolute*-time grid, not to the window's
+    own start. `t` is the absolute (continuous) sample timestamp, and the
+    visible window slides every frame as new samples arrive — bucketing
+    relative to the window's own first timestamp would recompute
+    different bucket boundaries every frame even though the underlying
+    samples are unchanged, which is what caused the left-edge scrolling
+    flicker (most visible in the partial leftmost bucket, since its
+    boundary shifts the most between frames). Flooring the *absolute*
+    timestamp onto a grid whose width (`v.window / n_buckets`) is fixed
+    frame-to-frame instead maps a given sample to the same bucket
+    regardless of where the window currently starts, so the per-bucket
+    min/max — and therefore the drawn envelope — is stable as the window
+    scrolls.
     """
     n = len(col)
     if n <= n_out:
         return t, col
-    _ensure_m4_downsampler(v)
     col = np.ascontiguousarray(col)
-    if v._m4_downsampler is None:
-        idx = _m4_indices_numpy(col, n_out)
+
+    n_buckets = max(1, n_out // 2)
+    bucket_dt = v.window / n_buckets if v.window > 0 else 0.0
+    if not np.isfinite(bucket_dt) or bucket_dt <= 0:
+        # Degenerate window (<=0, or too small relative to n_buckets to
+        # produce a usable grid) -- fall back to splitting *this call's*
+        # samples into n_buckets equal-count groups so we still reduce the
+        # point count. Not scroll-stable, but v.window <= 0 is not a state
+        # the viewer should ever reach in practice (the window slider is
+        # floored at 0.1 s; see _controls.py).
+        bucket_id = (np.arange(n, dtype=np.int64) * n_buckets) // n
     else:
-        # tsdownsample's M4Downsampler requires n_out to be a multiple of 4;
-        # round defensively here regardless of what the caller passed in.
-        n_out_m4 = max(4, (n_out // 4) * 4)
-        idx = v._m4_downsampler.downsample(  # type: ignore
-            col, n_out=n_out_m4
-        )
-    idx = np.asarray(idx, dtype=np.intp)
+        bucket_id = np.floor(t / bucket_dt).astype(np.int64)
+
+    idx = _minmax_grid_indices(bucket_id, col, n)
     return t[idx], col[idx]
+
+
+def _minmax_grid_indices(bucket_id: np.ndarray, col: np.ndarray, n: int) -> np.ndarray:
+    """Per-bucket argmin/argmax sample indices, vectorized (no per-bucket loop).
+
+    Assumes `bucket_id` is non-decreasing — true for every caller here,
+    since `t` is a monotonic window slice and `floor` preserves order — so
+    each distinct bucket occupies one contiguous run of `bucket_id`.
+    `np.lexsort` grouped by `bucket_id`, with `col` (or `-col`) as the
+    tiebreaker, puts each run's minimum (maximum) value first within that
+    run; the run's start offset (found once, from `bucket_id` directly)
+    then locates it in the sorted order for both the min and max pass.
+    Also unions in the global first/last sample indices so the trace
+    still spans the full input span and channels right-align.
+    """
+    starts = np.flatnonzero(np.r_[True, bucket_id[1:] != bucket_id[:-1]])
+    order_min = np.lexsort((col, bucket_id))
+    order_max = np.lexsort((-col, bucket_id))
+    idx = np.concatenate(
+        (
+            order_min[starts],
+            order_max[starts],
+            np.array([0, n - 1], dtype=np.intp),
+        )
+    )
+    return np.unique(idx.astype(np.intp))
 
 
 #: Oversampling factor applied to the plot's pixel width when sizing each
@@ -162,27 +194,6 @@ def resolve_decimation_target(plot_width_px: float, v: ViewerState) -> int:
         width_target = max(_DECIMATE_MIN_POINTS, int(plot_width_px * _DECIMATE_PIXEL_FACTOR))
         target = min(cap, width_target)
     return max(4, (target // 4) * 4)
-
-
-def _m4_indices_numpy(y: np.ndarray, n_out: int) -> np.ndarray:
-    n = len(y)
-    if n <= n_out:
-        return np.arange(n, dtype=np.intp)
-
-    n_bins = max(1, n_out // 4)
-    edges = np.linspace(0, n, n_bins + 1, dtype=np.intp)
-    idx = np.empty(n_bins * 4, dtype=np.intp)
-    pos = 0
-    for start, end in zip(edges[:-1], edges[1:], strict=True):
-        if end <= start:
-            continue
-        segment = y[start:end]
-        idx[pos] = start
-        idx[pos + 1] = start + int(np.argmin(segment))
-        idx[pos + 2] = start + int(np.argmax(segment))
-        idx[pos + 3] = end - 1
-        pos += 4
-    return np.unique(idx[:pos])
 
 
 def get_viewer_state(

@@ -215,12 +215,13 @@ def test_per_channel_decimation_bounds_total_draw_points_by_channel_count():
         ts_ch, col_ch = m4_decimate_channel(frame.ts_win, col, n_out, v)
         assert len(ts_ch) == len(col_ch)
         # Bounded *per channel*, independent of how many other channels
-        # are enabled.
-        assert len(ts_ch) <= n_out
+        # are enabled. ~n_out (2 points/bucket) plus up to 2 for the
+        # preserved global first/last endpoints.
+        assert len(ts_ch) <= n_out + 2
         total_drawn += len(ts_ch)
 
     # Bounded by channels * N (the fix)...
-    assert total_drawn <= n_channels * n_out
+    assert total_drawn <= n_channels * (n_out + 2)
     # ...and dramatically less than the old union's worst case, which
     # approached the entire (raw_len, n_channels) window.
     old_union_worst_case = raw_len * n_channels
@@ -239,17 +240,94 @@ def test_m4_decimate_channel_below_threshold_returns_input_unchanged():
 
 
 def test_m4_decimate_channel_paired_output_bounded_by_n_out():
+    # `t` must be sized to actually span `v.window` -- the grid-aligned
+    # bucketing derives its fixed bucket width from `v.window`, not from
+    # `t`'s own span, so a `t` that doesn't match `v.window` (e.g. a bare
+    # sample-index array against the default `window=1.0`) would place
+    # almost every sample in its own bucket and defeat the point of this
+    # test (see `test_m4_decimate_channel_is_stable_as_the_window_scrolls`
+    # for why the width must come from `v.window`, not `t`).
+    fs = 1000.0
+    n = 5000
     rng = np.random.default_rng(0)
-    t = np.arange(5000, dtype=np.float64)
-    col = rng.standard_normal(5000).astype(np.float32)
-    v = ViewerState()
+    t = np.arange(n, dtype=np.float64) / fs
+    col = rng.standard_normal(n).astype(np.float32)
+    v = ViewerState(window=n / fs)
 
     t_out, col_out = m4_decimate_channel(t, col, n_out=200, v=v)
 
     assert len(t_out) == len(col_out)
-    assert len(t_out) <= 200
+    # ~n_out (2 points/bucket) plus up to 2 for the preserved global
+    # first/last endpoints, when they aren't already a bucket's min/max.
+    assert len(t_out) <= 200 + 2
     # Decimation must have actually reduced the point count.
     assert len(t_out) < len(col)
+
+
+def test_m4_decimate_channel_is_stable_as_the_window_scrolls():
+    """Regression for the left-edge scrolling flicker.
+
+    Decimation buckets must be anchored to *absolute* time, not to the
+    window's own start. Here two overlapping windows of the same
+    underlying signal are decimated with the same `v.window`/`n_out` — one
+    a `k`-sample scroll ahead of the other, exactly like consecutive
+    frames while the live plot scrolls. For any bucket whose full absolute
+    time span lies inside the two windows' overlap (trimmed by a few
+    bucket widths so we never compare a bucket that straddles either
+    window's own edge -- those legitimately differ, e.g. via the
+    forced-endpoint samples), its member samples are identical in both
+    calls, so a correctly (absolute-time) anchored implementation must
+    pick the *exact same set* of `(abs_time, value)` extrema for that
+    interior span in both decimations.
+
+    Against the pre-fix window-relative bucketing, "bucket i" instead
+    covers *relative* index range `[edges[i], edges[i+1])`, which maps to
+    a *different* absolute sample range in each window (shifted by `k`) —
+    so the chosen extrema for the interior span differ, and this test
+    fails against it (for `k` not a multiple of that implementation's bin
+    width, which is what makes `k = 37` below a deliberate choice).
+    """
+    fs = 1000.0
+    n_total = 20_000
+    rng = np.random.default_rng(0)
+    t_full = np.arange(n_total, dtype=np.float64) / fs
+    sig_full = rng.standard_normal(n_total).astype(np.float32)
+
+    window_s = 2.0
+    n_out = 200
+    a = 5000
+    b = a + int(window_s * fs)
+    k = 37  # a deliberately non-round scroll amount
+
+    v = ViewerState(window=window_s)
+
+    t0, col0 = m4_decimate_channel(t_full[a:b], sig_full[a:b], n_out, v)
+    t1, col1 = m4_decimate_channel(t_full[a + k : b + k], sig_full[a + k : b + k], n_out, v)
+
+    assert len(t0) == len(col0)
+    assert len(t1) == len(col1)
+
+    # The overlap of the two windows, in absolute time, trimmed by a
+    # several-bucket-wide margin at each end so only fully-interior
+    # buckets (present, whole, in *both* windows) are compared.
+    n_buckets = max(1, n_out // 2)
+    bucket_dt = window_s / n_buckets
+    margin = 3 * bucket_dt
+    lo = t_full[a + k] + margin
+    hi = t_full[b - 1] - margin
+    assert lo < hi  # sanity: the trimmed interior must be non-empty
+
+    def _points_in_interior(t_arr: np.ndarray, col_arr: np.ndarray) -> dict[float, float]:
+        mask = (t_arr >= lo) & (t_arr <= hi)
+        return dict(zip(t_arr[mask].tolist(), col_arr[mask].tolist(), strict=True))
+
+    pts0 = _points_in_interior(t0, col0)
+    pts1 = _points_in_interior(t1, col1)
+
+    # A meaningful number of interior points must exist, otherwise the
+    # set-equality assertion below would pass vacuously.
+    assert len(pts0) > n_out // 4
+    assert pts0 == pts1
 
 
 def test_resolve_decimation_target_scales_with_plot_width_up_to_the_cap():
