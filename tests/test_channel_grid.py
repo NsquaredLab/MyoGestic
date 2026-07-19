@@ -32,3 +32,10 @@ def test_normalize_drops_out_of_range_and_dupes_then_falls_back_if_empty():
     assert sorted(good[0].columns) == [0, 1, 2]  # 99 dropped, dup 1 dropped
     empty = normalize_layout([ChannelGrid("bad", [[50]])], 4)
     assert sorted(empty[0].columns) == [0, 1, 2, 3]  # invalid -> auto "all"
+
+
+def test_normalize_nulls_invalid_cells_in_place_for_rectangular_grid():
+    # Rectangular (both rows length 3) -> nulled in place, NOT re-auto-shaped.
+    layout = normalize_layout([ChannelGrid("R", [[0, 1, 99], [1, 2, None]])], 4)
+    assert layout[0].cells == [[0, 1, None], [None, 2, None]]  # 99 out-of-range, dup 1 nulled
+    assert layout[0].columns == [0, 1, 2]
