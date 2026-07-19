@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from myogestic.widgets.signals._channel_grid import resolve_initial
 from myogestic.widgets.signals.transforms import apply_display_filter
 
 if TYPE_CHECKING:
@@ -24,6 +25,7 @@ class ViewerState:
     specs: list = field(default_factory=list)
     fps: list[float] = field(default_factory=list)
     channels_initialized: bool = False
+    last_hovered: int = -1
     selected_stream: str | None = None
     scale_mode: str = "auto"
     y_min: float = -1.0
@@ -53,6 +55,12 @@ class SignalFrame:
     n_total: int
     is_decimated: bool
     frame_start: float
+    # Real channel index for each column of `data`, ascending: `data[:, i]`
+    # is channel `channel_map[i]`. `data` only spans the enabled subset, so
+    # callers must go through this map instead of indexing `data` by real
+    # channel index (`data_full` / `data_win` stay full-width and can still
+    # be indexed by real channel index directly).
+    channel_map: list[int]
 
 
 _viewers: dict[str, ViewerState] = {}
@@ -147,8 +155,39 @@ def get_viewer_state(
     return v
 
 
-def build_signal_frame(stream: Stream, v: ViewerState) -> SignalFrame | None:
-    """Read one live/frozen snapshot and return the visible window."""
+def resolve_enabled(v: ViewerState, n_channels: int) -> set[int]:
+    """Resolve the enabled channel set from persistent viewer state.
+
+    Must run before :func:`build_signal_frame` so the frame can decimate
+    only the enabled columns. Initialises `v.channels` via
+    :func:`~myogestic.widgets.signals._channel_grid.resolve_initial` the
+    first time it sees this stream (or after the channel count changes),
+    exactly like the guard `render_channel_controls` used to run inline —
+    that guard is now a no-op since this already ran first. Returns the
+    live `v.channels` set; safe because nothing reads it again until the
+    *next* frame, after which only `render_channel_controls` mutates it.
+    """
+    if not v.channels_initialized or max(v.channels, default=-1) >= n_channels:
+        v.channels = resolve_initial(None, n_channels, [])
+        v.specs = []
+        v.channels_initialized = True
+    return v.channels
+
+
+def build_signal_frame(
+    stream: Stream,
+    v: ViewerState,
+    enabled: set[int],
+) -> SignalFrame | None:
+    """Read one live/frozen snapshot, slice the visible window, and decimate.
+
+    Decimates only `enabled` columns. `data` (and `ts`) are compacted to
+    the enabled subset — see
+    `SignalFrame.channel_map` for how to translate a column of `data` back
+    to its real channel index. `data_full` / `data_win` stay full-width for
+    consumers that still need every channel (e.g. per-channel-scale ranges,
+    diagnostics) keyed by real channel index.
+    """
     frame_start = _time.perf_counter()
     if v.paused and v.frozen_data is not None and v.frozen_ts is not None:
         ts_raw = v.frozen_ts
@@ -183,13 +222,19 @@ def build_signal_frame(stream: Stream, v: ViewerState) -> SignalFrame | None:
     assert stream.info is not None
     data_win = apply_display_filter(data_win, v.display_filter, stream.info.fs)
 
+    # Decimate only the enabled columns — `data_win` stays full-width (it's
+    # stored on the frame for consumers that index it by real channel), but
+    # everything downstream of this slice only ever sees the enabled subset.
+    channel_map = sorted(c for c in enabled if 0 <= c < n_channels)
+    data_win_sel = data_win[:, channel_map]
+
     n_out = max(1, int(v.n_pixels)) * 4
-    if len(data_win) > n_out:
-        ts, data = _m4_decimate_visible_window(ts_win, data_win, n_out, v)
+    if len(data_win_sel) > n_out:
+        ts, data = _m4_decimate_visible_window(ts_win, data_win_sel, n_out, v)
         is_decimated = True
     else:
         ts = ts_win
-        data = data_win
+        data = data_win_sel
         is_decimated = False
 
     n_total = len(data)
@@ -205,4 +250,5 @@ def build_signal_frame(stream: Stream, v: ViewerState) -> SignalFrame | None:
         n_total=n_total,
         is_decimated=is_decimated,
         frame_start=frame_start,
+        channel_map=channel_map,
     )
