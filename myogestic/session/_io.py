@@ -9,7 +9,7 @@ import zarr
 import zarr.storage
 
 from myogestic.session._core import LabelEvent, Session
-from myogestic.stream import StreamInfo
+from myogestic.stream import ChannelGrid, StreamInfo
 
 
 def open_session_store(path: str | Path) -> Session:
@@ -64,10 +64,17 @@ def open_session_store(path: str | Path) -> Session:
         data = open_array(f"{name}.zarr")
         session.stores[name] = data
         session.ts_stores[name] = open_array(f"{name}_timestamps.zarr")
+        grids_raw = info.get("channel_grids")
+        channel_grids = (
+            [ChannelGrid(label=g["label"], cells=g["cells"]) for g in grids_raw]
+            if grids_raw is not None
+            else None
+        )
         session._streams_info[name] = StreamInfo(
             n_channels=int(info.get("n_channels", data.shape[1] if data.ndim > 1 else 1)),
             fs=float(info.get("fs", 0.0)),
             dtype=np.dtype(info.get("dtype", data.dtype)),
             channel_names=info.get("channel_names"),
+            channel_grids=channel_grids,
         )
     return session
