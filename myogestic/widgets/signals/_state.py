@@ -52,25 +52,32 @@ class ViewerState:
     show_retarget: bool = False
     _m4_downsampler: object | None = field(default=None, repr=False)
     _m4_numpy_fallback: bool = field(default=False, repr=False)
+    # Per-channel M4 output-size target used by the *last* `render_plot`
+    # call (sized to the live plot's pixel width there — see
+    # `resolve_decimation_target`). `render_footer` reads it back to report
+    # accurate decimation stats without needing a live ImPlot context of
+    # its own (it renders after `end_plot()`).
+    last_decim_n_out: int = 0
 
 
 @dataclass
 class SignalFrame:
-    ts: np.ndarray
     data: np.ndarray
     data_full: np.ndarray
     ts_win: np.ndarray
     data_win: np.ndarray
     n_channels: int
     n_points: int
-    n_total: int
-    is_decimated: bool
     frame_start: float
     # Real channel index for each column of `data`, ascending: `data[:, i]`
     # is channel `channel_map[i]`. `data` only spans the enabled subset, so
     # callers must go through this map instead of indexing `data` by real
     # channel index (`data_full` / `data_win` stay full-width and can still
-    # be indexed by real channel index directly).
+    # be indexed by real channel index directly). `data`'s rows pair with
+    # `ts_win` (same window, same row count) — there is no separate
+    # decimated `ts` field: decimation is now per-channel, sized to the
+    # plot's pixel width and done in the plot loop
+    # (`_plot.plot_channel` / `m4_decimate_channel`), not here.
     channel_map: list[int]
 
 
@@ -81,12 +88,7 @@ def normalize_scale_mode(scale_mode: str) -> str:
     return "manual" if scale_mode == "manual" else "auto"
 
 
-def _m4_decimate_visible_window(
-    t: np.ndarray,
-    d: np.ndarray,
-    n_out: int,
-    v: ViewerState,
-) -> tuple[np.ndarray, np.ndarray]:
+def _ensure_m4_downsampler(v: ViewerState) -> None:
     if v._m4_downsampler is None and not v._m4_numpy_fallback:
         try:
             from tsdownsample import M4Downsampler
@@ -95,22 +97,71 @@ def _m4_decimate_visible_window(
         else:
             v._m4_downsampler = M4Downsampler()
 
-    idx_parts = []
-    for ch in range(d.shape[1]):
-        col = np.ascontiguousarray(d[:, ch])
-        if v._m4_downsampler is None:
-            idx = _m4_indices_numpy(col, n_out)
-        else:
-            idx = v._m4_downsampler.downsample(  # type: ignore
-                col, n_out=n_out
-            )
-        idx_parts.append(np.asarray(idx, dtype=np.intp))
 
-    if not idx_parts:
-        return t[:0], d[:0]
+def m4_decimate_channel(
+    t: np.ndarray,
+    col: np.ndarray,
+    n_out: int,
+    v: ViewerState,
+) -> tuple[np.ndarray, np.ndarray]:
+    """M4-decimate one channel's raw column independently, to ~`n_out` points.
 
-    all_idx = np.unique(np.concatenate(idx_parts))
-    return t[all_idx], d[all_idx]
+    Each enabled channel calls this on its own — its own M4 index set, its
+    own output x array — instead of the old approach of M4-decimating every
+    enabled channel and then *unioning* all their index sets onto one
+    shared x-axis. That union made the reduction vanish at high channel
+    counts (the union of many channels' distinct M4 picks approaches the
+    full window — e.g. 64 channels over a 5 s / 2048 Hz window unioned to
+    the *entire* window, zero point reduction). Decimating per channel
+    instead bounds total draw points at `n_channels * n_out`, independent
+    of window length or sample rate.
+    """
+    n = len(col)
+    if n <= n_out:
+        return t, col
+    _ensure_m4_downsampler(v)
+    col = np.ascontiguousarray(col)
+    if v._m4_downsampler is None:
+        idx = _m4_indices_numpy(col, n_out)
+    else:
+        # tsdownsample's M4Downsampler requires n_out to be a multiple of 4;
+        # round defensively here regardless of what the caller passed in.
+        n_out_m4 = max(4, (n_out // 4) * 4)
+        idx = v._m4_downsampler.downsample(  # type: ignore
+            col, n_out=n_out_m4
+        )
+    idx = np.asarray(idx, dtype=np.intp)
+    return t[idx], col[idx]
+
+
+#: Oversampling factor applied to the plot's pixel width when sizing each
+#: channel's M4 target — a few points per pixel keeps sharp features
+#: visible without materially increasing draw cost.
+_DECIMATE_PIXEL_FACTOR = 3.0
+#: Floor on the width-derived target so a very narrow (or not-yet-laid-out)
+#: plot never collapses decimation down to near nothing.
+_DECIMATE_MIN_POINTS = 64
+
+
+def resolve_decimation_target(plot_width_px: float, v: ViewerState) -> int:
+    """Per-channel M4 output size, sized to the plot's own pixel width.
+
+    `plot_width_px` should come from the live plot (e.g.
+    ``implot.get_plot_size().x``, only valid between `begin_plot` /
+    `end_plot`). `v.n_pixels` (the "Resolution" control) is the ceiling on
+    the result — it also doubles as the fallback when `plot_width_px` isn't
+    available yet (e.g. the very first frame, reported as `<= 0`) — so the
+    control still has an effect once the plot has a real size, instead of
+    being the primary driver the way the old fixed `n_pixels * 4` budget
+    was.
+    """
+    cap = max(4, int(v.n_pixels))
+    if plot_width_px <= 0:
+        target = cap
+    else:
+        width_target = max(_DECIMATE_MIN_POINTS, int(plot_width_px * _DECIMATE_PIXEL_FACTOR))
+        target = min(cap, width_target)
+    return max(4, (target // 4) * 4)
 
 
 def _m4_indices_numpy(y: np.ndarray, n_out: int) -> np.ndarray:
@@ -222,14 +273,22 @@ def build_signal_frame(
     v: ViewerState,
     enabled: set[int],
 ) -> SignalFrame | None:
-    """Read one live/frozen snapshot, slice the visible window, and decimate.
+    """Read one live/frozen snapshot, slice the visible window, and filter.
 
-    Decimates only `enabled` columns. `data` (and `ts`) are compacted to
-    the enabled subset — see
-    `SignalFrame.channel_map` for how to translate a column of `data` back
-    to its real channel index. `data_full` / `data_win` stay full-width for
-    consumers that still need every channel (e.g. per-channel-scale ranges,
-    diagnostics) keyed by real channel index.
+    Slices to `enabled` columns only — `data` is compacted to that subset,
+    see `SignalFrame.channel_map` for how to translate a column of `data`
+    back to its real channel index. `data_full` / `data_win` stay
+    full-width for consumers that still need every channel (e.g.
+    per-channel-scale ranges, diagnostics, and the per-channel plot loop
+    itself, all keyed by real channel index).
+
+    Does *not* decimate: the old shared-union M4 decimation used to run
+    here, over all enabled columns at once, before this function returned.
+    That union made the reduction vanish at high channel counts (see
+    `m4_decimate_channel`'s docstring). Decimation now happens per channel,
+    sized to the plot's own pixel width, inside the plot loop
+    (`_plot.plot_channel`) — so this function only ever needs to hand it
+    the raw (filtered, windowed, enabled-column-sliced) samples.
     """
     frame_start = _time.perf_counter()
     if v.paused and v.frozen_data is not None and v.frozen_ts is not None:
@@ -265,33 +324,19 @@ def build_signal_frame(
     assert stream.info is not None
     data_win = apply_display_filter(data_win, v.display_filter, stream.info.fs)
 
-    # Decimate only the enabled columns — `data_win` stays full-width (it's
+    # Slice to only the enabled columns — `data_win` stays full-width (it's
     # stored on the frame for consumers that index it by real channel), but
-    # everything downstream of this slice only ever sees the enabled subset.
+    # `data` only ever exposes the enabled subset.
     channel_map = sorted(c for c in enabled if 0 <= c < n_channels)
-    data_win_sel = data_win[:, channel_map]
-
-    n_out = max(1, int(v.n_pixels)) * 4
-    if len(data_win_sel) > n_out:
-        ts, data = _m4_decimate_visible_window(ts_win, data_win_sel, n_out, v)
-        is_decimated = True
-    else:
-        ts = ts_win
-        data = data_win_sel
-        is_decimated = False
-
-    n_total = len(data)
+    data_sel = data_win[:, channel_map]
 
     return SignalFrame(
-        ts=ts,
-        data=data,
+        data=data_sel,
         data_full=data_raw,
         ts_win=ts_win,
         data_win=data_win,
         n_channels=n_channels,
-        n_points=len(data),
-        n_total=n_total,
-        is_decimated=is_decimated,
+        n_points=len(data_sel),
         frame_start=frame_start,
         channel_map=channel_map,
     )
