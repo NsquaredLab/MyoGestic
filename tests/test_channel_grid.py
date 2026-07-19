@@ -58,6 +58,15 @@ def test_rect_skips_holes_and_is_direction_invariant():
     assert a == b == {0, 1, 2, 3, 5}  # (1,1) hole excluded
 
 
+def test_rect_clamps_out_of_range_corners_without_wraparound():
+    # All four corners out of range (including small negatives) must clamp
+    # to the grid bounds, NOT wrap around via Python's negative-index rule.
+    full = rect_to_channels(GRID, 0, 0, 1, 2)
+    assert rect_to_channels(GRID, -1, -1, 99, 99) == full == {0, 1, 2, 3, 5}
+    # Asymmetric: negative row clamps to 0, single top-left cell only.
+    assert rect_to_channels(GRID, -5, 0, 0, 0) == {0}
+
+
 def test_invert_twice_is_identity_and_in_bounds():
     for _ in range(50):
         n = random.randint(1, 64)

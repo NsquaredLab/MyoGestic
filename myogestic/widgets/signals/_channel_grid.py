@@ -107,10 +107,18 @@ def rect_to_channels(grid: ChannelGrid, r0: int, c0: int, r1: int, c1: int) -> s
     """Return the non-``None`` channels covered by the cell rectangle `(r0, c0)`-`(r1, c1)`.
 
     The corners are order-independent (dragging in any direction yields the
-    same result); out-of-bounds row/column indices are simply clipped.
+    same result); out-of-range corners — including small negatives that
+    Python's slicing would otherwise wrap to the far edge — are clamped to
+    the grid bounds instead.
     """
+    n_rows = len(grid.cells)
+    n_cols = len(grid.cells[0]) if n_rows else 0
     top, bottom = sorted((r0, r1))
     left, right = sorted((c0, c1))
+    top = max(0, min(top, n_rows - 1))
+    bottom = max(0, min(bottom, n_rows - 1))
+    left = max(0, min(left, n_cols - 1))
+    right = max(0, min(right, n_cols - 1))
     channels: set[int] = set()
     for row in grid.cells[top : bottom + 1]:
         for cell in row[left : right + 1]:
