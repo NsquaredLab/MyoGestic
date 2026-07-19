@@ -148,7 +148,16 @@ def minmax_grid_all_shared_x(
     # order). `starts` locates each run's first offset; `lengths` its size.
     starts = np.flatnonzero(np.r_[True, bucket_id[1:] != bucket_id[:-1]])
     lengths = np.diff(starts, append=n)
-    width = int(lengths.max())
+    # Cap the padded run width. `blocks` below is `(n_buckets, width,
+    # n_channels)`; with `width = lengths.max()` a *single* pathological run
+    # would force *every* bucket to that width and blow the allocation up to
+    # gigabytes. Such a run is realistic: a device clock stall or a
+    # monotonic-clamped session drops many samples onto one timestamp, so
+    # they all land in one bucket. Cap width at a generous multiple of the
+    # uniform run length; the few runs that exceed the cap get an exact
+    # reduction below, so nothing is silently dropped.
+    uniform = -(-n // len(starts))  # ceil(n / n_buckets)
+    width = min(int(lengths.max()), max(4 * uniform, 64))
     # Gather every run into one (buckets, width, channels) block, padding
     # short runs by repeating their last sample (`np.minimum(..., lengths -
     # 1)` clamps the take-index so it never reads past a run's own end) —
@@ -158,6 +167,13 @@ def minmax_grid_all_shared_x(
     blocks = data[take]  # (buckets, width, channels); tail padded by repeat
     lows = np.fmin.reduce(blocks, axis=1)  # (buckets, channels), NaN-robust
     highs = np.fmax.reduce(blocks, axis=1)
+    # Runs longer than the cap had their tail ignored by the take-clamp
+    # above; recompute those (few) buckets exactly over their full run so a
+    # degenerate flat-timestamp block keeps its true min/max envelope.
+    for i in np.flatnonzero(lengths > width):
+        seg = data[starts[i] : starts[i] + lengths[i]]
+        lows[i] = np.fmin.reduce(seg, axis=0)
+        highs[i] = np.fmax.reduce(seg, axis=0)
 
     nb = len(starts)
     ys = np.empty((n_channels, 2 * nb + 2), dtype=np.float64)

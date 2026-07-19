@@ -427,6 +427,52 @@ def test_minmax_grid_all_shared_x_renders_plausible_envelope_for_a_complex_10khz
             assert raw_min == pytest.approx(-spike_val)
 
 
+def test_minmax_grid_all_shared_x_keeps_extrema_of_a_degenerate_flat_timestamp_run():
+    """A flat-timestamp run must not lose its envelope to the width cap.
+
+    A device clock stall or a monotonic-clamped session drops many samples
+    onto one timestamp, so they all land in a single bucket. The reduction
+    caps the padded run width (`width`) so one pathological run can't force
+    every bucket to that width and blow the `(n_buckets, width, n_channels)`
+    allocation up to gigabytes -- but the cap must not silently drop that
+    bucket's tail. Here the spike sits at the *end* of a 6000-sample flat
+    run planted mid-window (far past the cap, and not the forced global
+    last endpoint), so it survives only because runs longer than the cap get
+    an exact recompute over their full extent.
+    """
+    fs = 10_000.0
+    window_s = 2.0
+    n_channels = 4
+    n_out = 2000  # ~1000-bucket grid, so an uncapped `width` would multiply hugely
+
+    # Rising timestamps, then a long flat plateau (the stall), then rising
+    # again -- so the flat run is a genuine interior bucket, not the endpoint.
+    n1 = int(0.5 * fs)
+    t1 = np.arange(n1, dtype=np.float64) / fs
+    flat_len = 6000
+    t_flat = np.full(flat_len, t1[-1], dtype=np.float64)
+    n2 = int(0.5 * fs)
+    t2 = t1[-1] + np.arange(1, n2 + 1, dtype=np.float64) / fs
+    t = np.concatenate([t1, t_flat, t2])
+    n = t.size
+
+    rng = np.random.default_rng(7)
+    data = (0.1 * rng.standard_normal((n, n_channels))).astype(np.float32)
+    # Plant each channel's true global max on the LAST sample of the flat run
+    # -- its tail, which the width cap ignores unless the run is recomputed.
+    spike = 99.0
+    spike_idx = n1 + flat_len - 1
+    assert spike_idx != n - 1  # not the forced global endpoint
+    data[spike_idx, :] = spike
+
+    xs, ys = minmax_grid_all_shared_x(t, data, n_out, window_s)
+
+    for ch in range(n_channels):
+        assert float(ys[ch].max()) == pytest.approx(spike)
+    # The flat run collapses into its bucket; it does not expand the output.
+    assert ys.shape[1] <= n_out + 4
+
+
 def test_minmax_grid_all_shared_x_perf_well_under_10ms_for_64ch_5s_2048hz():
     """Non-flaky, loose perf micro-check: this is the call that replaced a
     ~15.7 ms/64ch per-channel Python loop with a ~0.9 ms/64ch vectorized
