@@ -51,7 +51,10 @@ def render_plot(
         flags=implot.Flags_.no_legend | implot.Flags_.no_title,
     ):
         setup_axes(v, enabled, channel_height)
-        for plot_idx, ch in enumerate(sorted(enabled)):
+        # Iterate `frame.channel_map` (not `sorted(enabled)`) — it's the
+        # authoritative record of which real channel landed in which column
+        # of the (enabled-only, decimated) `data` array.
+        for col_idx, ch in enumerate(frame.channel_map):
             plot_channel(
                 stream_name,
                 v,
@@ -61,7 +64,7 @@ def render_plot(
                 ch_names,
                 hovered_ch,
                 channel_height,
-                plot_idx,
+                col_idx,
                 ch,
             )
         render_markers(ctx, stream_name, v, frame.ts)
@@ -182,12 +185,19 @@ def plot_channel(
     ch_names: list[str] | None,
     hovered_ch: int,
     channel_height: float,
-    plot_idx: int,
+    col_idx: int,
     ch: int,
 ) -> None:
-    offset = -plot_idx * channel_height
+    """Plot one trace.
+
+    `data` is column-compacted to the enabled subset, so it must be indexed
+    by `col_idx` (`data`'s own column position) — `ch` (the real channel
+    index) is only for color/label/spec lookups against full-width tables
+    (`ch_names`, `v.specs`, `PALETTE`, `channel_ranges`).
+    """
+    offset = -col_idx * channel_height
     if v.per_channel_scale:
-        ch_data = np.asarray(data[:, ch], dtype=np.float64)
+        ch_data = np.asarray(data[:, col_idx], dtype=np.float64)
         if channel_ranges is not None and ch in channel_ranges:
             ch_min, ch_max = channel_ranges[ch]
         else:
@@ -200,7 +210,7 @@ def plot_channel(
             ys = np.full_like(ch_data, offset)
         ys = np.ascontiguousarray(ys, dtype=np.float64)
     else:
-        ys = np.ascontiguousarray(data[:, ch] * v.gain + offset, dtype=np.float64)
+        ys = np.ascontiguousarray(data[:, col_idx] * v.gain + offset, dtype=np.float64)
     label = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
     spec = v.specs[ch]
     if hovered_ch >= 0:
