@@ -154,6 +154,14 @@ def test_zero_hop_degenerates_to_per_sample_and_stays_bounded():
     assert rms_data.shape == (len(rms_ts), 1)
 
 
+def test_empty_input_returns_empty_without_raising():
+    """A size-0 input (e.g. a bare 1-D empty array from a direct caller) must
+    return the correct-shape empty result, not raise on the internal reshape."""
+    rms_ts, rms_data = compute_rms_trace(np.empty(0), np.empty(0), 1000.0, 100.0, 20.0)
+    assert rms_ts.shape == (0,)
+    assert rms_data.ndim == 2 and rms_data.shape[0] == 0
+
+
 def test_perf_reasonable_for_many_channels():
     """256 ch over a 5 s + pre-roll window at 2 kHz stays well under a frame."""
     fs = 2000.0

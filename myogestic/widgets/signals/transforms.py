@@ -65,6 +65,11 @@ def compute_rms_trace(
     non-uniform per-sample timestamps real sources produce under jitter.
     """
     data = np.asarray(data)
+    ts = np.asarray(ts)
+    if len(ts) == 0:
+        # Guard before the reshape below: `reshape(0, -1)` cannot infer the
+        # column count from a size-0 array and would raise.
+        return np.empty(0, dtype=np.float64), np.empty((0, 0), dtype=np.float64)
     if data.ndim != 2:
         data = data.reshape(len(ts), -1)
     n, n_ch = data.shape
