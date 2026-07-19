@@ -126,8 +126,9 @@ def signal_viewer(
     render_controls(ctx, stream_name, active_stream, stream, v, selectable)
 
     # Resolve which channels are enabled from persistent state *before*
-    # building the frame, so decimation only ever touches those columns —
-    # the channel toggle buttons (rendered after the plot below) mutate
+    # building the frame, so both the frame's column slice and the plot
+    # loop's per-channel decimation only ever touch those columns — the
+    # channel toggle buttons (rendered after the plot below) mutate
     # `v.channels` for the *next* frame, not this one.
     n_channels = stream.info.n_channels
     enabled = resolve_enabled(v, active_stream, n_channels, initial_channels)
@@ -139,11 +140,6 @@ def signal_viewer(
 
     ch_names = stream.info.channel_names
 
-    if v.display_filter == "rms_env":
-        data = frame.data
-    else:
-        data = apply_display_filter(frame.data, v.display_filter, stream.info.fs)
-
     channel_ranges = None
     if v.per_channel_scale:
         full_data = apply_display_filter(frame.data_full, v.display_filter, stream.info.fs)
@@ -151,9 +147,9 @@ def signal_viewer(
 
     # Honour a "Rescale" button click from the controls bar: snap y_min /
     # y_max to the current visible data range across enabled channels,
-    # then switch to Manual so it stays put. Uses the full-width, non-
-    # decimated `frame.data_win` (real-channel-indexed) rather than `data`,
-    # which is now compacted to the enabled subset.
+    # then switch to Manual so it stays put. Uses the full-width
+    # `frame.data_win` (real-channel-indexed) rather than `frame.data`,
+    # which is compacted to the enabled subset.
     if v.rescale_pending:
         v.rescale_pending = False
         ranges = _channel_ranges(frame.data_win, enabled)
@@ -175,7 +171,6 @@ def signal_viewer(
             stream=stream,
             v=v,
             frame=frame,
-            data=data,
             channel_ranges=channel_ranges,
             enabled=enabled,
             ch_names=ch_names,

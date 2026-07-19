@@ -7,6 +7,7 @@ import numpy as np
 from imgui_bundle import imgui, implot
 
 from myogestic.widgets.common import PALETTE
+from myogestic.widgets.signals._state import m4_decimate_channel, resolve_decimation_target
 
 if TYPE_CHECKING:
     from myogestic.core import Context
@@ -27,7 +28,6 @@ def render_plot(
     stream: Stream,
     v: ViewerState,
     frame: SignalFrame,
-    data: np.ndarray,
     channel_ranges: dict[int, tuple[float, float]] | None,
     enabled: set[int],
     ch_names: list[str] | None,
@@ -35,7 +35,6 @@ def render_plot(
     size: tuple[float, float],
     channel_height: float,
 ) -> None:
-    xs = build_x_axis(frame.ts)
     channel_height = resolve_channel_height(frame.data_win, enabled, channel_height, v)
     if v.per_channel_scale:
         channel_ranges = resolve_channel_ranges(frame.data_win, enabled)
@@ -45,36 +44,56 @@ def render_plot(
     if plot_h <= 0:
         plot_h = max(imgui.get_content_region_avail().y - 25, 50)
 
+    # Shared x-origin for every channel's trace and for the label markers —
+    # the raw window's first timestamp, *not* any one channel's own first
+    # surviving (post-decimation) sample, so traces stay aligned even
+    # though each channel is now decimated independently below.
+    t0 = float(frame.ts_win[0]) if len(frame.ts_win) else 0.0
+
     if implot.begin_plot(
         f"{stream_name}##{stream_name}_viewer",
         imgui.ImVec2(plot_w, plot_h),
         flags=implot.Flags_.no_legend | implot.Flags_.no_title,
     ):
         setup_axes(v, enabled, channel_height)
+        # Plot pixel width is only known once the plot is live — size each
+        # channel's M4 target off it (a few points per pixel) instead of a
+        # fixed budget, so per-channel draw cost tracks what's actually on
+        # screen regardless of window length / sample rate / channel count.
+        n_out = resolve_decimation_target(implot.get_plot_size().x, v)
+        v.last_decim_n_out = n_out
         # Iterate `frame.channel_map` (not `sorted(enabled)`) — it's the
         # authoritative record of which real channel landed in which column
-        # of the (enabled-only, decimated) `data` array.
+        # of the enabled-only `data` array.
         for col_idx, ch in enumerate(frame.channel_map):
             plot_channel(
                 stream_name,
                 v,
-                data,
+                frame,
                 channel_ranges,
-                xs,
+                t0,
                 ch_names,
                 hovered_ch,
                 channel_height,
+                n_out,
                 col_idx,
                 ch,
             )
-        render_markers(ctx, stream_name, v, frame.ts)
+        render_markers(ctx, stream_name, v, frame.ts_win)
         implot.end_plot()
 
 
-def build_x_axis(ts: np.ndarray) -> np.ndarray:
-    if len(ts) > 1:
-        return np.ascontiguousarray(ts - ts[0], dtype=np.float64)
-    return np.array([0.0], dtype=np.float64)
+def build_x_axis(ts: np.ndarray, t0: float) -> np.ndarray:
+    """Relative-time x-axis for one channel's (independently) decimated samples.
+
+    `t0` is a *shared* reference (the raw window's first timestamp), not
+    `ts[0]` — every channel must align to the same x origin even though
+    each is now decimated on its own and may not retain the exact same
+    first surviving sample as its neighbours.
+    """
+    if len(ts) == 0:
+        return ts.astype(np.float64, copy=False)
+    return np.ascontiguousarray(ts - t0, dtype=np.float64)
 
 
 def resolve_channel_height(
@@ -179,30 +198,43 @@ def setup_axes(
 def plot_channel(
     stream_name: str,
     v: ViewerState,
-    data: np.ndarray,
+    frame: SignalFrame,
     channel_ranges: dict[int, tuple[float, float]] | None,
-    xs: np.ndarray,
+    t0: float,
     ch_names: list[str] | None,
     hovered_ch: int,
     channel_height: float,
+    n_out: int,
     col_idx: int,
     ch: int,
 ) -> None:
-    """Plot one trace.
+    """Plot one trace, M4-decimated independently to ~`n_out` points.
 
-    `data` is column-compacted to the enabled subset, so it must be indexed
-    by `col_idx` (`data`'s own column position) — `ch` (the real channel
-    index) is only for color/label/spec lookups against full-width tables
-    (`ch_names`, `v.specs`, `PALETTE`, `channel_ranges`).
+    Reads straight from `frame.data_win` / `frame.ts_win` (full-width,
+    real-channel-indexed, already display-filtered raw samples) rather than
+    a shared pre-decimated array — each channel gets its own M4 index set
+    and its own x array here, so draw cost per channel is bounded by
+    `n_out` regardless of how many other channels are enabled or how long
+    the window is (no cross-channel index union; see
+    `m4_decimate_channel`). `col_idx` only matters for the vertical lane
+    offset — color/label/spec/range lookups key off `ch`, the real channel
+    index, against full-width tables (`ch_names`, `v.specs`, `PALETTE`,
+    `channel_ranges`).
     """
+    col = frame.data_win[:, ch]
+    ts_ch, col_ch = m4_decimate_channel(frame.ts_win, col, n_out, v)
+    xs = build_x_axis(ts_ch, t0)
+
     offset = -col_idx * channel_height
     if v.per_channel_scale:
-        ch_data = np.asarray(data[:, col_idx], dtype=np.float64)
+        ch_data = np.asarray(col_ch, dtype=np.float64)
         if channel_ranges is not None and ch in channel_ranges:
             ch_min, ch_max = channel_ranges[ch]
-        else:
+        elif ch_data.size:
             ch_min = float(ch_data.min())
             ch_max = float(ch_data.max())
+        else:
+            ch_min = ch_max = 0.0
         ch_range = ch_max - ch_min
         if ch_range > 1e-12:
             ys = (ch_data - 0.5 * (ch_min + ch_max)) / ch_range * (channel_height * 0.8) + offset
@@ -210,7 +242,7 @@ def plot_channel(
             ys = np.full_like(ch_data, offset)
         ys = np.ascontiguousarray(ys, dtype=np.float64)
     else:
-        ys = np.ascontiguousarray(data[:, col_idx] * v.gain + offset, dtype=np.float64)
+        ys = np.ascontiguousarray(col_ch * v.gain + offset, dtype=np.float64)
     label = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
     spec = v.specs[ch]
     if hovered_ch >= 0:
@@ -279,7 +311,19 @@ def render_footer(
     capacity = stream._data.maxlen if stream._data is not None else 0
     fill_pct = 100.0 * n_buf / capacity if capacity > 0 else 0.0
     paused_tag = "  ⏸ PAUSED" if v.paused else ""
-    display_tag = "raw" if not frame.is_decimated else f"M4 {len(frame.data_win)}->{frame.n_points}"
+
+    # Decimation itself now happens per channel inside the plot loop (which
+    # already ran, above, this same frame) — `v.last_decim_n_out` is that
+    # loop's plot-width-derived target, stashed on `v` since this function
+    # runs after `end_plot()` and can't query the live plot itself. Every
+    # channel shares the same raw window length, so whether decimation
+    # kicked in at all is uniform across channels and can be read off a
+    # single `raw_len > n_out` check.
+    raw_len = len(frame.data_win)
+    n_out = v.last_decim_n_out or raw_len
+    is_decimated = raw_len > n_out
+    pts_per_ch = min(raw_len, n_out) if is_decimated else raw_len
+    display_tag = "raw" if not is_decimated else f"M4 {raw_len}->{pts_per_ch}"
 
     imgui.text_colored(
         imgui.ImVec4(0.5, 0.5, 0.5, 1.0),
@@ -287,7 +331,7 @@ def render_footer(
         f"fs={stream.info.fs:.0f} Hz | "
         f"{frame.n_channels} ch | "
         f"buf {fill_pct:.0f}% | "
-        f"{frame.n_points} pts/ch" + f" ({display_tag})" + paused_tag,
+        f"{pts_per_ch} pts/ch" + f" ({display_tag})" + paused_tag,
     )
 
     imgui.same_line()
