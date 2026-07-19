@@ -6,37 +6,39 @@ Two fixes are covered here, at the two layers they now live in:
 - `build_signal_frame` (`_state.py`) slices the visible window to the
   *enabled* columns only, before anything else touches it — a 256-channel
   stream showing 3 channels only ever carries 3 columns downstream, not
-  256. It no longer decimates at all (see below).
-- Decimation itself moved from `build_signal_frame` (a *shared* M4 pass
-  over all enabled columns, whose per-channel index sets were then
-  *unioned* onto one x-axis) into the per-channel plot loop
-  (`_plot.plot_channel`, via `_state.m4_decimate_channel` /
-  `resolve_decimation_target`). The old union made the reduction vanish at
-  high channel counts: the union of many channels' distinct M4 picks
-  approaches the full window (e.g. 64 channels over a 5 s / 2048 Hz window
-  unioned to the *entire* window — zero point reduction). Decimating each
-  channel independently, sized to the plot's own pixel width, bounds total
-  draw points at `n_channels * N` instead, regardless of window length,
-  sample rate, or channel count.
+  256. It does not decimate at all (see below).
+- Decimation itself lives in `_state.minmax_grid_all_shared_x`, called once
+  per frame from `_plot.render_plot`, over every enabled column at once
+  (vectorized, no per-channel Python loop). Each channel keeps its own
+  min/max envelope over a *shared* x-axis — there is no cross-channel index
+  union, so total draw points stay bounded at `n_channels * n_out` instead
+  of approaching the full window (the failure mode of an earlier
+  shared-union design: 64 channels over a 5 s / 2048 Hz window unioned to
+  the *entire* window, zero point reduction). Processing every channel
+  together in one NumPy call (rather than one Python-level call per
+  channel) is what gets this from ~15.7 ms/64ch down to ~0.9 ms/64ch.
 
 Uses an in-process synthetic `Source` (no LSL), matching the pattern in
 `tests/test_recording_race.py` / `tests/test_stream_dtype.py`. The
-decimation-*target-sizing* and per-channel M4 call are pure functions
-(`resolve_decimation_target`, `m4_decimate_channel`) and are exercised
-directly here — the actual plot loop that calls them
-(`_plot.render_plot` / `plot_channel`) needs a live ImPlot context and
-isn't covered by this headless suite.
+decimation-*target-sizing* and the vectorized decimator are pure functions
+(`resolve_decimation_target`, `minmax_grid_all_shared_x`) and are exercised
+directly here — the actual plot loop that calls them (`_plot.render_plot` /
+`plot_channel`) needs a live ImPlot context and isn't covered by this
+headless suite.
 """
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
+import pytest
 
 from myogestic.stream import Stream, StreamInfo
 from myogestic.widgets.signals._state import (
     ViewerState,
     build_signal_frame,
-    m4_decimate_channel,
+    minmax_grid_all_shared_x,
     resolve_decimation_target,
     resolve_enabled,
 )
@@ -87,11 +89,11 @@ def _make_stream(
 
 
 def _viewer_state(n_pixels: int = 2) -> ViewerState:
-    # `n_pixels` no longer affects `build_signal_frame` at all (it stopped
-    # decimating there) — it's only consulted later, by
-    # `resolve_decimation_target`, when the plot loop sizes each channel's
-    # M4 target. Kept as a parameter here for the tests below that exercise
-    # that function directly.
+    # `n_pixels` no longer affects `build_signal_frame` at all (it never
+    # decimates there) — it's only consulted later, by
+    # `resolve_decimation_target`, when the plot loop sizes the shared
+    # decimation target. Kept as a parameter here for the tests below that
+    # exercise that function directly.
     return ViewerState(n_pixels=n_pixels, window=1000.0)
 
 
@@ -126,9 +128,9 @@ def test_empty_enabled_set_yields_an_empty_frame():
 def test_build_signal_frame_no_longer_decimates_regardless_of_channel_count():
     """`build_signal_frame`'s row count is now always the raw visible
     window's length — it stopped decimating, so it must be identical
-    whether 3 columns or every column is enabled. The actual per-channel
-    reduction now happens later; see
-    `test_per_channel_decimation_bounds_total_draw_points_by_channel_count`."""
+    whether 3 columns or every column is enabled. The actual reduction now
+    happens later; see
+    `test_minmax_grid_all_shared_x_bounds_total_draw_points_by_channel_count`."""
     stream = _make_stream(n_channels=64)
 
     v_subset = _viewer_state()
@@ -173,14 +175,15 @@ def test_frame_slices_to_enabled_columns_for_any_viewer_config():
     np.testing.assert_array_equal(frame.data, frame.data_win[:, [1, 3]])
 
 
-def test_per_channel_decimation_bounds_total_draw_points_by_channel_count():
+def test_minmax_grid_all_shared_x_bounds_total_draw_points_by_channel_count():
     """The actual perf fix, reproducing the reported scenario: 64 channels
     over a 5 s / 2048 Hz window.
 
-    Before this fix, the *union* of every enabled channel's M4 indices
-    approached the full `(10240, 64)` window (~655k points) — no
-    reduction at all. Decimating each channel independently instead bounds
-    total draw points at `n_channels * N`, not `window * n_channels`.
+    A naive per-channel *union* of M4 indices onto one shared x-axis would
+    approach the full `(10240, 64)` window (~655k points) — no reduction at
+    all. `minmax_grid_all_shared_x` instead keeps each channel's own
+    min/max envelope over a shared bucket grid, bounding total draw points
+    at `n_channels * N`, not `window * n_channels`.
     """
     fs = 2048.0
     n_channels = 64
@@ -209,67 +212,71 @@ def test_per_channel_decimation_bounds_total_draw_points_by_channel_count():
     n_out = resolve_decimation_target(plot_width_px=800.0, v=v)
     assert n_out == 2000
 
-    total_drawn = 0
-    for ch in frame.channel_map:
-        col = frame.data_win[:, ch]
-        ts_ch, col_ch = m4_decimate_channel(frame.ts_win, col, n_out, v)
-        assert len(ts_ch) == len(col_ch)
-        # Bounded *per channel*, independent of how many other channels
-        # are enabled. ~n_out (2 points/bucket) plus up to 2 for the
-        # preserved global first/last endpoints.
-        assert len(ts_ch) <= n_out + 2
-        total_drawn += len(ts_ch)
+    xs, ys = minmax_grid_all_shared_x(frame.ts_win, frame.data, n_out, v.window)
 
+    assert ys.shape[0] == len(frame.channel_map) == n_channels
+    assert ys.shape[1] == len(xs)
+    # ~n_out (2 pts/bucket) plus up to 2 for the preserved global first/last
+    # endpoints, plus up to 2 more since the absolute-time grid's phase
+    # generally doesn't line up with this window's own start/end -- an
+    # interval spanning exactly `n_buckets * bucket_dt` seconds can still
+    # touch one extra partial bucket at the edge (`n_buckets + 1` occupied
+    # buckets), regardless of channel count. Bounded *per channel row*,
+    # independent of how many channels are enabled.
+    assert xs.shape[0] <= n_out + 4
+
+    total_drawn = ys.shape[0] * ys.shape[1]
     # Bounded by channels * N (the fix)...
-    assert total_drawn <= n_channels * (n_out + 2)
+    assert total_drawn <= n_channels * (n_out + 4)
     # ...and dramatically less than the old union's worst case, which
     # approached the entire (raw_len, n_channels) window.
     old_union_worst_case = raw_len * n_channels
     assert total_drawn < old_union_worst_case * 0.2
 
 
-def test_m4_decimate_channel_below_threshold_returns_input_unchanged():
+def test_minmax_grid_all_shared_x_below_threshold_is_a_passthrough():
     t = np.arange(10, dtype=np.float64)
-    col = np.arange(10, dtype=np.float32)
-    v = ViewerState()
+    data = np.stack([np.arange(10, dtype=np.float32), np.arange(10, dtype=np.float32) + 1], axis=1)
 
-    t_out, col_out = m4_decimate_channel(t, col, n_out=100, v=v)
+    xs, ys = minmax_grid_all_shared_x(t, data, n_out=100, window_s=10.0)
 
-    np.testing.assert_array_equal(t_out, t)
-    np.testing.assert_array_equal(col_out, col)
+    np.testing.assert_array_equal(xs, t - t[0])
+    np.testing.assert_array_equal(ys, data.T)
 
 
-def test_m4_decimate_channel_paired_output_bounded_by_n_out():
-    # `t` must be sized to actually span `v.window` -- the grid-aligned
-    # bucketing derives its fixed bucket width from `v.window`, not from
-    # `t`'s own span, so a `t` that doesn't match `v.window` (e.g. a bare
-    # sample-index array against the default `window=1.0`) would place
+def test_minmax_grid_all_shared_x_paired_output_bounded_by_n_out():
+    # `t` must be sized to actually span `window_s` -- the grid-aligned
+    # bucketing derives its fixed bucket width from `window_s`, not from
+    # `t`'s own span, so a `t` that doesn't match `window_s` would place
     # almost every sample in its own bucket and defeat the point of this
-    # test (see `test_m4_decimate_channel_is_stable_as_the_window_scrolls`
-    # for why the width must come from `v.window`, not `t`).
+    # test (see `test_minmax_grid_all_shared_x_is_stable_as_the_window_scrolls`
+    # for why the width must come from `window_s`, not `t`).
     fs = 1000.0
     n = 5000
+    n_channels = 3
     rng = np.random.default_rng(0)
     t = np.arange(n, dtype=np.float64) / fs
-    col = rng.standard_normal(n).astype(np.float32)
-    v = ViewerState(window=n / fs)
+    data = rng.standard_normal((n, n_channels)).astype(np.float32)
+    window_s = n / fs
 
-    t_out, col_out = m4_decimate_channel(t, col, n_out=200, v=v)
+    xs, ys = minmax_grid_all_shared_x(t, data, n_out=200, window_s=window_s)
 
-    assert len(t_out) == len(col_out)
-    # ~n_out (2 points/bucket) plus up to 2 for the preserved global
-    # first/last endpoints, when they aren't already a bucket's min/max.
-    assert len(t_out) <= 200 + 2
+    assert ys.shape == (n_channels, len(xs))
+    # ~n_out (2 points/bucket) plus up to 4 slack: 2 for the preserved
+    # global first/last endpoints, 2 more for a possible extra partial
+    # bucket at the edge from absolute-grid/window phase misalignment (see
+    # `test_minmax_grid_all_shared_x_bounds_total_draw_points_by_channel_count`).
+    assert len(xs) <= 200 + 4
     # Decimation must have actually reduced the point count.
-    assert len(t_out) < len(col)
+    assert len(xs) < n
 
 
-def test_m4_decimate_channel_is_stable_as_the_window_scrolls():
+def test_minmax_grid_all_shared_x_is_stable_as_the_window_scrolls():
     """Regression for the left-edge scrolling flicker.
 
     Decimation buckets must be anchored to *absolute* time, not to the
     window's own start. Here two overlapping windows of the same
-    underlying signal are decimated with the same `v.window`/`n_out` — one
+    underlying signal are decimated with the same `window_s`/`n_out` — one
     a `k`-sample scroll ahead of the other, exactly like consecutive
     frames while the live plot scrolls. For any bucket whose full absolute
     time span lies inside the two windows' overlap (trimmed by a few
@@ -277,21 +284,22 @@ def test_m4_decimate_channel_is_stable_as_the_window_scrolls():
     window's own edge -- those legitimately differ, e.g. via the
     forced-endpoint samples), its member samples are identical in both
     calls, so a correctly (absolute-time) anchored implementation must
-    pick the *exact same set* of `(abs_time, value)` extrema for that
+    pick the *exact same* bucket-center x and min/max-derived y for that
     interior span in both decimations.
 
-    Against the pre-fix window-relative bucketing, "bucket i" instead
-    covers *relative* index range `[edges[i], edges[i+1])`, which maps to
-    a *different* absolute sample range in each window (shifted by `k`) —
-    so the chosen extrema for the interior span differ, and this test
-    fails against it (for `k` not a multiple of that implementation's bin
-    width, which is what makes `k = 37` below a deliberate choice).
+    Against a window-relative bucketing, "bucket i" instead covers
+    *relative* index range `[edges[i], edges[i+1])`, which maps to a
+    *different* absolute sample range in each window (shifted by `k`) — so
+    the chosen envelope for the interior span would differ, and this test
+    would fail against it (for `k` not a multiple of that implementation's
+    bin width, which is what makes `k = 37` below a deliberate choice).
     """
     fs = 1000.0
     n_total = 20_000
     rng = np.random.default_rng(0)
     t_full = np.arange(n_total, dtype=np.float64) / fs
     sig_full = rng.standard_normal(n_total).astype(np.float32)
+    data_full = sig_full[:, None]  # single channel, as a (n, 1) column
 
     window_s = 2.0
     n_out = 200
@@ -299,13 +307,18 @@ def test_m4_decimate_channel_is_stable_as_the_window_scrolls():
     b = a + int(window_s * fs)
     k = 37  # a deliberately non-round scroll amount
 
-    v = ViewerState(window=window_s)
+    xs0, ys0 = minmax_grid_all_shared_x(t_full[a:b], data_full[a:b], n_out, window_s)
+    xs1, ys1 = minmax_grid_all_shared_x(
+        t_full[a + k : b + k], data_full[a + k : b + k], n_out, window_s
+    )
 
-    t0, col0 = m4_decimate_channel(t_full[a:b], sig_full[a:b], n_out, v)
-    t1, col1 = m4_decimate_channel(t_full[a + k : b + k], sig_full[a + k : b + k], n_out, v)
+    assert ys0.shape[1] == len(xs0)
+    assert ys1.shape[1] == len(xs1)
 
-    assert len(t0) == len(col0)
-    assert len(t1) == len(col1)
+    # `xs` is relative to each call's own window start -- put both back on
+    # the shared absolute-time axis before comparing.
+    abs0 = xs0 + t_full[a]
+    abs1 = xs1 + t_full[a + k]
 
     # The overlap of the two windows, in absolute time, trimmed by a
     # several-bucket-wide margin at each end so only fully-interior
@@ -317,17 +330,129 @@ def test_m4_decimate_channel_is_stable_as_the_window_scrolls():
     hi = t_full[b - 1] - margin
     assert lo < hi  # sanity: the trimmed interior must be non-empty
 
-    def _points_in_interior(t_arr: np.ndarray, col_arr: np.ndarray) -> dict[float, float]:
-        mask = (t_arr >= lo) & (t_arr <= hi)
-        return dict(zip(t_arr[mask].tolist(), col_arr[mask].tolist(), strict=True))
+    def _points_in_interior(abs_t: np.ndarray, y_row: np.ndarray) -> dict[float, float]:
+        mask = (abs_t >= lo) & (abs_t <= hi)
+        return dict(zip(abs_t[mask].tolist(), y_row[mask].tolist(), strict=True))
 
-    pts0 = _points_in_interior(t0, col0)
-    pts1 = _points_in_interior(t1, col1)
+    pts0 = _points_in_interior(abs0, ys0[0])
+    pts1 = _points_in_interior(abs1, ys1[0])
 
     # A meaningful number of interior points must exist, otherwise the
-    # set-equality assertion below would pass vacuously.
+    # dict-equality assertion below would pass vacuously.
     assert len(pts0) > n_out // 4
     assert pts0 == pts1
+
+
+def test_minmax_grid_all_shared_x_renders_plausible_envelope_for_a_complex_10khz_signal():
+    """Plausibility check against a realistic signal, not just noise/ramps.
+
+    The other tests here use plain random noise or a linear ramp, which
+    don't stress the same thing a real EMG-like trace would: several
+    frequency components at once (including near Nyquist), a slow drift,
+    broadband noise, and sharp single-sample transients. This builds such a
+    signal at 10 kHz and checks that what actually gets handed to the
+    plotter is still faithful to it -- the whole point of MinMax
+    decimation over naive subsampling (which could silently skip a
+    transient) or averaging (which would smear one out):
+
+    - Each channel's global min/max survives decimation exactly (MinMax's
+      core guarantee: every bucket's low/high are real samples drawn from
+      that bucket, and the signal's true global extremum necessarily falls
+      inside *some* bucket).
+    - The envelope never overshoots the raw data's own range -- low/high
+      are real samples, never interpolated/invented values.
+    - A single-sample spike narrower than one decimation bucket, planted
+      well inside the window (not at the forced first/last endpoints),
+      is not silently averaged away.
+    - The point count is still reduced by roughly two orders of magnitude,
+      same as the synthetic-fixture tests above.
+    """
+    fs = 10_000.0
+    duration_s = 2.0
+    n = int(duration_s * fs)
+    n_channels = 8
+    n_out = 2000
+    rng = np.random.default_rng(42)
+    t = np.arange(n, dtype=np.float64) / fs
+
+    # A handful of components spanning the visible band up to near Nyquist
+    # (5 kHz), plus slow drift and broadband noise -- deliberately not just
+    # one clean tone.
+    freqs = (5.0, 50.0, 250.0, 1200.0, 4000.0)
+    data = np.zeros((n, n_channels), dtype=np.float64)
+    for ch in range(n_channels):
+        sig = 0.3 * np.sin(2 * np.pi * 0.2 * t)  # slow drift
+        for f in freqs:
+            amp = rng.uniform(0.3, 1.0)
+            phase = rng.uniform(0, 2 * np.pi)
+            sig = sig + amp * np.sin(2 * np.pi * f * t + phase)
+        sig = sig + 0.05 * rng.standard_normal(n)  # broadband noise
+        data[:, ch] = sig
+
+    # One single-sample outlier spike per channel, well inside the window
+    # and far larger than anything the sinusoid mixture can produce, so it
+    # is unambiguously that channel's true global extremum. Alternates
+    # sign across channels so both the max- and min-side get covered.
+    spike_val = 50.0
+    spike_indices = rng.integers(int(0.1 * n), int(0.9 * n), size=n_channels)
+    spike_is_max = [ch % 2 == 0 for ch in range(n_channels)]
+    for ch, idx in enumerate(spike_indices):
+        data[idx, ch] = spike_val if spike_is_max[ch] else -spike_val
+
+    data = data.astype(np.float32)
+
+    xs, ys = minmax_grid_all_shared_x(t, data, n_out, duration_s)
+
+    # Reduction actually happened, by roughly two orders of magnitude.
+    assert ys.shape[1] < n
+    assert ys.shape[1] <= n_out + 4
+
+    for ch in range(n_channels):
+        raw_col = data[:, ch]
+        raw_max, raw_min = float(raw_col.max()), float(raw_col.min())
+
+        # Global extrema exactly preserved...
+        assert float(ys[ch].max()) == pytest.approx(raw_max)
+        assert float(ys[ch].min()) == pytest.approx(raw_min)
+        # ...and the envelope never invents values outside the real range.
+        assert ys[ch].max() <= raw_max + 1e-4
+        assert ys[ch].min() >= raw_min - 1e-4
+
+        # The planted spike is that channel's true extremum, so it having
+        # survived decimation is exactly what the global-extrema check
+        # above already proves -- pin it down explicitly here too.
+        if spike_is_max[ch]:
+            assert raw_max == pytest.approx(spike_val)
+        else:
+            assert raw_min == pytest.approx(-spike_val)
+
+
+def test_minmax_grid_all_shared_x_perf_well_under_10ms_for_64ch_5s_2048hz():
+    """Non-flaky, loose perf micro-check: this is the call that replaced a
+    ~15.7 ms/64ch per-channel Python loop with a ~0.9 ms/64ch vectorized
+    pass. Assert an order of magnitude below the old per-channel cost
+    rather than pinning to the exact expected value, so this doesn't flake
+    on slower/shared CI hardware."""
+    fs = 2048.0
+    n_channels = 64
+    window_s = 5.0
+    n = int(window_s * fs)  # ~10240
+    rng = np.random.default_rng(0)
+    t = np.arange(n, dtype=np.float64) / fs
+    data = rng.standard_normal((n, n_channels)).astype(np.float32)
+    n_out = 2000
+
+    # Warm-up call (first call may pay one-off allocator/cache costs).
+    minmax_grid_all_shared_x(t, data, n_out, window_s)
+
+    n_reps = 20
+    start = time.perf_counter()
+    for _ in range(n_reps):
+        minmax_grid_all_shared_x(t, data, n_out, window_s)
+    elapsed_ms = (time.perf_counter() - start) / n_reps * 1000
+
+    print(f"minmax_grid_all_shared_x: {elapsed_ms:.3f} ms/call (64 ch, 5 s @ 2048 Hz)")
+    assert elapsed_ms < 10.0
 
 
 def test_resolve_decimation_target_scales_with_plot_width_up_to_the_cap():
@@ -338,7 +463,6 @@ def test_resolve_decimation_target_scales_with_plot_width_up_to_the_cap():
 
     assert narrow < wide
     assert wide <= v.n_pixels
-    # tsdownsample's M4Downsampler requires a multiple of 4.
     assert narrow % 4 == 0
     assert wide % 4 == 0
 
