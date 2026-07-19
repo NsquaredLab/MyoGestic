@@ -1,7 +1,15 @@
 """Tests for the ChannelGrid topology and StreamInfo.channel_grids field."""
 
+import random
+
 from myogestic.stream import ChannelGrid, StreamInfo
-from myogestic.widgets.signals._channel_grid import auto_shape, normalize_layout
+from myogestic.widgets.signals._channel_grid import (
+    auto_shape,
+    normalize_layout,
+    rect_to_channels,
+    reduce_selection,
+    resolve_initial,
+)
 
 
 def test_channel_grid_columns_and_streaminfo_field():
@@ -39,3 +47,29 @@ def test_normalize_nulls_invalid_cells_in_place_for_rectangular_grid():
     layout = normalize_layout([ChannelGrid("R", [[0, 1, 99], [1, 2, None]])], 4)
     assert layout[0].cells == [[0, 1, None], [None, 2, None]]  # 99 out-of-range, dup 1 nulled
     assert layout[0].columns == [0, 1, 2]
+
+
+GRID = ChannelGrid("g", [[0, 1, 2], [3, None, 5]])  # note the hole at (1,1)
+
+
+def test_rect_skips_holes_and_is_direction_invariant():
+    a = rect_to_channels(GRID, 0, 0, 1, 2)
+    b = rect_to_channels(GRID, 1, 2, 0, 0)  # dragged the other way
+    assert a == b == {0, 1, 2, 3, 5}  # (1,1) hole excluded
+
+
+def test_invert_twice_is_identity_and_in_bounds():
+    for _ in range(50):
+        n = random.randint(1, 64)
+        sel = set(random.sample(range(n), k=random.randint(0, n)))
+        once = reduce_selection(sel, "invert", range(n))
+        twice = reduce_selection(once, "invert", range(n))
+        assert twice == sel
+        assert once <= set(range(n))
+
+
+def test_resolve_initial_policy():
+    assert resolve_initial(None, 16, []) == set(range(16))  # small -> all
+    assert resolve_initial(None, 256, []) == set(range(16))  # large -> first 16
+    assert resolve_initial(range(4), 256, []) == {0, 1, 2, 3}
+    assert resolve_initial([1, 2, 999], 8, []) == {1, 2}  # clamp out-of-range
