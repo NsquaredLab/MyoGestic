@@ -16,7 +16,6 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
-import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
@@ -26,9 +25,9 @@ from myogestic.widgets.signals._controls import (
     render_controls,
 )
 from myogestic.widgets.signals._plot import (
-    apply_display_filter,
     render_footer,
     render_plot,
+    resolve_channel_ranges,
 )
 from myogestic.widgets.signals._scan import _disconnected_ui
 from myogestic.widgets.signals._state import (
@@ -39,24 +38,6 @@ from myogestic.widgets.signals._state import (
 
 if TYPE_CHECKING:
     from myogestic.core import Context
-
-
-def _channel_ranges(
-    data: np.ndarray,
-    enabled: set[int],
-) -> dict[int, tuple[float, float]]:
-    ranges: dict[int, tuple[float, float]] = {}
-    if data.size == 0:
-        return ranges
-    for ch in sorted(enabled):
-        if ch >= data.shape[1]:
-            continue
-        col = data[:, ch]
-        finite = col[np.isfinite(col)]
-        if finite.size == 0:
-            continue
-        ranges[ch] = (float(finite.min()), float(finite.max()))
-    return ranges
 
 
 def signal_viewer(
@@ -140,19 +121,16 @@ def signal_viewer(
 
     ch_names = stream.info.channel_names
 
+    # `render_plot` derives per-channel ranges from the drawn trace itself
+    # (`resolve_channel_ranges`), so none need to be precomputed here.
     channel_ranges = None
-    if v.per_channel_scale:
-        full_data = apply_display_filter(frame.data_full, v.display_filter, stream.info.fs)
-        channel_ranges = _channel_ranges(full_data, enabled)
 
     # Honour a "Rescale" button click from the controls bar: snap y_min /
-    # y_max to the current visible data range across enabled channels,
-    # then switch to Manual so it stays put. Uses the full-width
-    # `frame.data_win` (real-channel-indexed) rather than `frame.data`,
-    # which is compacted to the enabled subset.
+    # y_max to the range of what is actually drawn (the raw window, or the
+    # RMS envelope in rms_env mode), then switch to Manual so it stays put.
     if v.rescale_pending:
         v.rescale_pending = False
-        ranges = _channel_ranges(frame.data_win, enabled)
+        ranges = resolve_channel_ranges(frame.data, frame.channel_map)
         if ranges:
             mins = [lo for lo, _ in ranges.values()]
             maxs = [hi for _, hi in ranges.values()]

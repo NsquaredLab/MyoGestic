@@ -62,7 +62,7 @@ def render_controls(
             imgui.set_tooltip("Change source: scan + reconnect to a different LSL stream.")
         imgui.same_line()
 
-    render_filter_and_scale(stream_name, v)
+    render_filter_and_scale(stream_name, v, stream.info.fs if stream.info else 0.0)
 
     if v.show_retarget:
         _scan_panel(active_stream, stream)
@@ -70,7 +70,53 @@ def render_controls(
     render_resolution_controls(stream_name, stream, v)
 
 
-def render_filter_and_scale(stream_name: str, v: ViewerState) -> None:
+def _render_rms_sliders(stream_name: str, v: ViewerState, fs: float) -> None:
+    """The RMS-envelope window + hop sliders, shown only for the rms_env mode.
+
+    Hop is capped at ``min(100 ms, window)`` so windows always overlap or abut
+    (never leave gaps), and the invariant ``hop <= window`` is re-clamped every
+    frame in case the window slider was dragged below the current hop.
+    """
+    imgui.push_item_width(104)
+    w_changed, w_new = imgui.slider_float(
+        f"##{stream_name}_rmswin",
+        float(v.rms_window_ms),
+        10.0,
+        500.0,
+        "win %.0f ms",
+        flags=imgui.SliderFlags_.logarithmic,
+    )
+    if w_changed:
+        v.rms_window_ms = w_new
+    if imgui.is_item_hovered() and fs > 0:
+        imgui.set_tooltip(
+            f"RMS averaging window — how much signal each envelope point covers.\n"
+            f"{round(v.rms_window_ms * fs / 1000)} samples at {fs:.0f} Hz."
+        )
+    imgui.same_line()
+
+    hop_max = min(100.0, float(v.rms_window_ms))
+    h_changed, h_new = imgui.slider_float(
+        f"##{stream_name}_rmshop",
+        min(float(v.rms_hop_ms), hop_max),
+        1.0,
+        hop_max,
+        "hop %.0f ms",
+    )
+    if h_changed:
+        v.rms_hop_ms = h_new
+    if imgui.is_item_hovered() and fs > 0:
+        imgui.set_tooltip(
+            f"RMS shift — one envelope point every {round(v.rms_hop_ms * fs / 1000)} samples "
+            f"({v.rms_hop_ms:.0f} ms).\nSmaller = denser, smoother envelope."
+        )
+    imgui.pop_item_width()
+    # Keep hop <= min(100 ms, window) even after the window slider shrinks.
+    v.rms_hop_ms = min(float(v.rms_hop_ms), hop_max)
+    imgui.same_line()
+
+
+def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None:
     df_modes = ["none", "rectify", "dc_removal", "rms_env"]
     df_idx = df_modes.index(v.display_filter) if v.display_filter in df_modes else 0
     imgui.push_item_width(110)
@@ -81,6 +127,9 @@ def render_filter_and_scale(stream_name: str, v: ViewerState) -> None:
     if imgui.is_item_hovered():
         imgui.set_tooltip("Visual-only transform - never affects recording or model input.")
     imgui.same_line()
+
+    if v.display_filter == "rms_env":
+        _render_rms_sliders(stream_name, v, fs)
 
     label_for = {"auto": "Auto", "manual": "Manual"}
     next_for = {"auto": "manual", "manual": "auto"}

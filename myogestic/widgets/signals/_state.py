@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from myogestic.widgets.signals._channel_grid import resolve_initial
-from myogestic.widgets.signals.transforms import apply_display_filter
+from myogestic.widgets.signals.transforms import apply_display_filter, compute_rms_trace
 
 if TYPE_CHECKING:
     from myogestic.core import Context
@@ -48,6 +48,11 @@ class ViewerState:
     frozen_data: np.ndarray | None = None
     show_diagnostics: bool | None = None
     display_filter: str = "none"
+    # RMS-envelope controls (only used when `display_filter == "rms_env"`):
+    # the averaging window and the hop between envelope points, both in ms.
+    # See `transforms.compute_rms_trace`.
+    rms_window_ms: float = 100.0
+    rms_hop_ms: float = 20.0
     show_markers: bool = True
     show_retarget: bool = False
     # Decimation output-size target used by the *last* `render_plot` call
@@ -71,22 +76,32 @@ class ViewerState:
 
 @dataclass
 class SignalFrame:
+    # The enabled-subset trace to plot. Normally the raw (display-filtered)
+    # visible window; in `rms_env` mode the *sparse* RMS envelope. Its rows
+    # pair with `trace_ts` (not `ts_win`).
     data: np.ndarray
-    data_full: np.ndarray
+    # Visible-window timestamps (raw samples). Drives the label markers and is
+    # `trace_ts` in every non-`rms_env` mode. Kept distinct from `trace_ts`
+    # because the RMS envelope has its own, sparser time base.
     ts_win: np.ndarray
+    # Full-width visible window used by the footer diagnostics (kept RAW in
+    # `rms_env` mode so the numeric readout still describes the real signal).
     data_win: np.ndarray
+    # Timestamps paired with `data` for plotting. Equals `ts_win` normally; the
+    # hop-endpoint times of the RMS envelope in `rms_env` mode.
+    trace_ts: np.ndarray
+    # Time that maps to plot-x 0 — the visible window's left edge. Passed to
+    # the decimator so a sparse trace starting after the edge is not shifted
+    # left and the markers stay aligned.
+    x_origin: float
     n_channels: int
     n_points: int
     frame_start: float
     # Real channel index for each column of `data`, ascending: `data[:, i]`
     # is channel `channel_map[i]`. `data` only spans the enabled subset, so
     # callers must go through this map instead of indexing `data` by real
-    # channel index (`data_full` / `data_win` stay full-width and can still
-    # be indexed by real channel index directly). `data`'s rows pair with
-    # `ts_win` (same window, same row count) — there is no separate
-    # decimated `ts` field: decimation runs once, for every enabled column
-    # at once, sized to the plot's pixel width, in `render_plot`
-    # (`_state.minmax_grid_all_shared_x`), not here.
+    # channel index (`data_win` stays full-width and can still be indexed by
+    # real channel index directly).
     channel_map: list[int]
 
 
@@ -102,6 +117,7 @@ def minmax_grid_all_shared_x(
     data: np.ndarray,
     n_out: int,
     window_s: float,
+    x_origin: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """MinMax-decimate every enabled channel at once, to ~`n_out` points each.
 
@@ -137,8 +153,15 @@ def minmax_grid_all_shared_x(
     n, n_channels = data.shape
     if n == 0:
         return np.empty(0, dtype=np.float64), np.empty((n_channels, 0), dtype=np.float64)
+    # `x_origin` is the time that maps to plot-x 0 (the visible window's left
+    # edge). It defaults to the first sample's own timestamp — correct for a
+    # dense window that fills the view — but a *sparse* trace (e.g. the RMS
+    # envelope) can start after the left edge, and subtracting its own `t[0]`
+    # would slide it against the raw x-axis and misalign the label markers.
+    if x_origin is None:
+        x_origin = float(t[0])
     if n <= n_out:
-        xs = np.ascontiguousarray(t - t[0], dtype=np.float64)
+        xs = np.ascontiguousarray(t - x_origin, dtype=np.float64)
         return xs, np.ascontiguousarray(data.T, dtype=np.float64)
 
     n_buckets = max(1, n_out // 2)
@@ -200,7 +223,7 @@ def minmax_grid_all_shared_x(
     xs[1:-1:2] = centers
     xs[2:-1:2] = centers
     xs[-1] = t[-1]
-    xs -= t[0]
+    xs -= x_origin
     return xs, ys
 
 
@@ -359,28 +382,55 @@ def build_signal_frame(
     # seconds and the trace draws past the right edge of the plot's
     # hard `[0, v.window]` x-axis. Time-based slicing makes the rendered
     # span always equal `min(v.window, data_age)`.
-    if n_raw > 0:
-        last_ts = float(ts_raw[-1])
-        start_idx = int(np.searchsorted(ts_raw, last_ts - v.window, side="left"))
-    else:
-        start_idx = 0
-    data_win = data_raw[start_idx:]
-    ts_win = ts_raw[start_idx:]
     # Caller (viewer.py) guards `stream.info is None` before building a frame.
     assert stream.info is not None
-    data_win = apply_display_filter(data_win, v.display_filter, stream.info.fs)
+    fs = stream.info.fs
+    if n_raw > 0:
+        last_ts = float(ts_raw[-1])
+        vis_start_t = last_ts - v.window
+        start_idx = int(np.searchsorted(ts_raw, vis_start_t, side="left"))
+    else:
+        vis_start_t = 0.0
+        start_idx = 0
+    ts_win = ts_raw[start_idx:]
+    data_win_raw = data_raw[start_idx:]  # full-width RAW visible window
+    x_origin = float(ts_win[0]) if len(ts_win) else 0.0
 
-    # Slice to only the enabled columns — `data_win` stays full-width (it's
-    # stored on the frame for consumers that index it by real channel), but
-    # `data` only ever exposes the enabled subset.
+    # `channel_map` — the enabled real-channel indices, ascending. Everything
+    # the plot draws is compacted to this subset.
     channel_map = sorted(c for c in enabled if 0 <= c < n_channels)
-    data_sel = data_win[:, channel_map]
+
+    if v.display_filter == "rms_env":
+        # Sparse RMS envelope. Read one RMS window of PRE-ROLL before the
+        # visible edge so the leftmost envelope points have a full window of
+        # history (otherwise they are a scroll-dependent partial transient),
+        # and slice to the enabled columns *before* the O(window·ch) RMS work.
+        window_s = max(v.rms_window_ms, 0.0) / 1000.0
+        pre_idx = (
+            int(np.searchsorted(ts_raw, vis_start_t - window_s, side="left")) if n_raw > 0 else 0
+        )
+        ts_pre = ts_raw[pre_idx:]
+        data_pre = data_raw[pre_idx:][:, channel_map]
+        rms_ts, rms_data = compute_rms_trace(ts_pre, data_pre, fs, v.rms_window_ms, v.rms_hop_ms)
+        # Keep only endpoints inside the visible window (pre-roll was history).
+        keep = rms_ts >= vis_start_t
+        trace_ts = rms_ts[keep]
+        data_sel = rms_data[keep]
+        # Footer diagnostics read `data_win`; keep it the RAW visible window so
+        # the numeric rms/pp/mean still describe the real signal, not the
+        # envelope.
+        data_win = data_win_raw
+    else:
+        data_win = apply_display_filter(data_win_raw, v.display_filter, fs)
+        data_sel = data_win[:, channel_map]
+        trace_ts = ts_win
 
     return SignalFrame(
         data=data_sel,
-        data_full=data_raw,
         ts_win=ts_win,
         data_win=data_win,
+        trace_ts=trace_ts,
+        x_origin=x_origin,
         n_channels=n_channels,
         n_points=len(data_sel),
         frame_start=frame_start,

@@ -15,13 +15,6 @@ if TYPE_CHECKING:
     from myogestic.widgets.signals._state import SignalFrame, ViewerState
 
 
-def apply_display_filter(data: np.ndarray, mode: str, fs: float) -> np.ndarray:
-    # Display filters are applied to the raw visible window in
-    # build_signal_frame before M4 decimation. This shim keeps the existing
-    # signal.py call sites from filtering the decimated envelope a second time.
-    return data
-
-
 def render_plot(
     ctx: Context,
     stream_name: str,
@@ -35,9 +28,12 @@ def render_plot(
     size: tuple[float, float],
     channel_height: float,
 ) -> None:
-    channel_height = resolve_channel_height(frame.data_win, enabled, channel_height, v)
+    # Scale off the trace that is actually drawn (`frame.data`), not the raw
+    # window — so an RMS envelope fills its lane instead of being dwarfed by
+    # the raw amplitude, and warm-up/dropout NaNs are ignored.
+    channel_height = resolve_channel_height(frame.data, channel_height, v)
     if v.per_channel_scale:
-        channel_ranges = resolve_channel_ranges(frame.data_win, enabled)
+        channel_ranges = resolve_channel_ranges(frame.data, frame.channel_map)
     ensure_specs(v, frame.n_channels)
 
     plot_w, plot_h = size
@@ -63,7 +59,9 @@ def render_plot(
         # `minmax_grid_all_shared_x`'s docstring: no cross-channel index
         # union, so per-channel draw cost stays bounded regardless of how
         # many other channels are enabled).
-        xs_shared, ys_all = minmax_grid_all_shared_x(frame.ts_win, frame.data, n_out, v.window)
+        xs_shared, ys_all = minmax_grid_all_shared_x(
+            frame.trace_ts, frame.data, n_out, v.window, x_origin=frame.x_origin
+        )
         # Iterate `frame.channel_map` (not `sorted(enabled)`) — it's the
         # authoritative record of which real channel landed in which column
         # of the enabled-only `data` array (and therefore which row of
@@ -86,11 +84,16 @@ def render_plot(
 
 
 def resolve_channel_height(
-    data: np.ndarray,
-    enabled: set[int],
+    plotted: np.ndarray,
     channel_height: float,
     v: ViewerState | None = None,
 ) -> float:
+    """Lane height for the shared-axis layout, derived from the drawn trace.
+
+    `plotted` is the enabled-only trace (`frame.data`) — raw visible window in
+    normal modes, or the RMS envelope in `rms_env` mode — so the layout tracks
+    what is actually on screen. Non-finite warm-up/dropout values are ignored.
+    """
     if channel_height > 0:
         return channel_height
     if v is not None and v.per_channel_scale:
@@ -105,33 +108,31 @@ def resolve_channel_height(
         # fixed axis).
         span = float(v.y_max - v.y_min)
         return span if span > 0 else 1.0
-    # Auto mode: derive from the visible window so stale spikes in the raw
+    # Auto mode: derive from the visible trace so stale spikes in the raw
     # ring cannot flatten the live trace.
-    d_min, d_max = np.inf, -np.inf
-    for ch in enabled:
-        if ch >= data.shape[1]:
-            continue
-        col = data[:, ch]
-        if col.size == 0:
-            continue
-        d_min = min(d_min, float(np.min(col)))
-        d_max = max(d_max, float(np.max(col)))
-    data_range = d_max - d_min
+    if plotted.size == 0:
+        return 1.0
+    finite = plotted[np.isfinite(plotted)]
+    if finite.size == 0:
+        return 1.0
+    data_range = float(finite.max()) - float(finite.min())
     return data_range * 1.2 if data_range > 0 else 1.0
 
 
 def resolve_channel_ranges(
-    data: np.ndarray,
-    enabled: set[int],
+    plotted: np.ndarray,
+    channel_map: list[int],
 ) -> dict[int, tuple[float, float]]:
+    """Per-channel `(min, max)` of the drawn trace, keyed by real channel index.
+
+    `plotted[:, col]` is channel `channel_map[col]` (the enabled-only compaction
+    used everywhere the plot draws); non-finite values are dropped.
+    """
     ranges: dict[int, tuple[float, float]] = {}
-    if data.size == 0:
+    if plotted.size == 0:
         return ranges
-    for ch in sorted(enabled):
-        if ch >= data.shape[1]:
-            continue
-        col = data[:, ch]
-        finite = col[np.isfinite(col)]
+    for col, ch in enumerate(channel_map):
+        finite = plotted[:, col][np.isfinite(plotted[:, col])]
         if finite.size == 0:
             continue
         ranges[ch] = (float(finite.min()), float(finite.max()))
