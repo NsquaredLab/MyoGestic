@@ -36,8 +36,9 @@ def render_controls(
         imgui.pop_item_width()
         if changed:
             v.selected_stream = names[idx]
-            v.channels_initialized = False
-            v.specs = []
+            # Channel selection is *not* reset here: `resolve_enabled`
+            # (in `_state.py`) keys the selection by `(stream, n_channels)`
+            # and restores each stream's own set the next time it runs.
             v.paused = False
             v.frozen_ts = None
             v.frozen_data = None
@@ -198,6 +199,11 @@ class _GridUIState:
 
     drag: _DragSession = field(default_factory=_DragSession)
     last_clicked: int = -1
+    # `v.active_channels_key` as of the last frame this grid was rendered —
+    # lets `render_channel_controls` detect a stream/channel-count change
+    # and drop the shift-click anchor so it can't briefly resolve a range
+    # against the *new* stream's out-of-range channel indices.
+    last_key: tuple[str, int] | None = None
 
 
 _grid_ui: dict[str, _GridUIState] = {}
@@ -220,6 +226,9 @@ def render_channel_controls(
     channel_grids = stream.info.channel_grids if stream.info else None
     layout = normalize_layout(channel_grids, n_channels)
     ui = _grid_ui.setdefault(stream_name, _GridUIState())
+    if ui.last_key != v.active_channels_key:
+        ui.last_clicked = -1
+        ui.last_key = v.active_channels_key
 
     cell = imgui.get_frame_height()
     hovered_ch = -1

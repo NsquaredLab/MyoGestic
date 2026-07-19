@@ -13,6 +13,7 @@ the widget flow first.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -70,13 +71,16 @@ def signal_viewer(
     y_range: tuple[float, float] = (-1.0, 1.0),
     show_markers: bool = False,
     window_s: float = 5.0,
+    initial_channels: Iterable[int] | None = None,
 ) -> None:
     """Real-time multi-channel signal viewer.
 
     Includes decimation, pause, auto/manual Y scale, visual-only display
     filters, channel toggles, stats, stream retargeting, and label markers.
     The function argument `stream_name` is the stable widget ID; when
-    `selectable=True`, the user may switch the active stream from the UI.
+    `selectable=True`, the user may switch the active stream from the UI —
+    each stream's channel selection is tracked separately and restored
+    when the user switches back.
 
     `scale_mode` supports "auto" for ImPlot fitting and "manual" for the
     user-set `y_range`.
@@ -87,6 +91,15 @@ def signal_viewer(
     value when you want the display to mirror a short analysis window
     (classification often runs at 0.2 s, for example). The stream's
     ``buffer_ms`` must be at least this large.
+
+    `initial_channels` sets which channels open enabled, e.g. `range(16)`
+    for "the first 16" — do not pass a bare `int` for that, it would be
+    ambiguous with a single channel index. It only seeds the *first* time
+    a given stream/channel-count is shown; once a selection exists (here
+    or restored from a prior visit to that stream), the user's own toggle
+    edits are never overwritten. `None` (the default) falls back to
+    :func:`~myogestic.widgets.signals._channel_grid.resolve_initial`'s
+    policy: every channel when `n_channels <= 32`, otherwise the first 16.
     """
     v = get_viewer_state(
         ctx,
@@ -115,7 +128,7 @@ def signal_viewer(
     # the channel toggle buttons (rendered after the plot below) mutate
     # `v.channels` for the *next* frame, not this one.
     n_channels = stream.info.n_channels
-    enabled = resolve_enabled(v, n_channels)
+    enabled = resolve_enabled(v, active_stream, n_channels, initial_channels)
 
     frame = build_signal_frame(stream, v, enabled)
     if frame is None:

@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 
 from myogestic.stream import Stream, StreamInfo
-from myogestic.widgets.signals._state import ViewerState, build_signal_frame
+from myogestic.widgets.signals._state import ViewerState, build_signal_frame, resolve_enabled
 
 
 class _SynthSource:
@@ -132,3 +132,74 @@ def test_below_decimation_threshold_still_slices_to_enabled_columns():
     assert not frame.is_decimated
     assert frame.data.shape[1] == 2
     assert frame.channel_map == [1, 3]
+
+
+def test_initial_channels_seeds_first_open_only():
+    """`initial_channels` picks the opening selection, but only once — a
+    later user edit (simulated by mutating `v.channels` directly, as the
+    toggle grid does) must survive the next `resolve_enabled` call."""
+    v = ViewerState()
+
+    enabled = resolve_enabled(v, "emg", 64, initial_channels=range(16))
+
+    assert enabled == set(range(16))
+    assert v.channels == set(range(16))
+
+    v.channels = {2, 3, 40}  # simulate a user edit via the toggle grid
+    enabled_again = resolve_enabled(v, "emg", 64, initial_channels=range(16))
+
+    assert enabled_again == {2, 3, 40}
+
+
+def test_initial_channels_ignored_on_later_first_sight_of_another_stream():
+    """`initial_channels` is a one-shot hint for the *very first* selection
+    this `ViewerState` ever makes — a stream never seen before, reached via
+    a later switch, falls back to `resolve_initial`'s `None` policy rather
+    than reapplying the original caller's hint."""
+    v = ViewerState()
+    resolve_enabled(v, "emg", 64, initial_channels=range(16))
+
+    other = resolve_enabled(v, "aux", 8, initial_channels=range(16))
+
+    # aux has 8 channels (<=32) -> None-policy default is "all", not the
+    # emg-shaped range(16) hint.
+    assert other == set(range(8))
+
+
+def test_selectable_viewer_preserves_each_streams_own_selection():
+    """A `selectable=True` viewer switching between two streams must
+    restore each stream's own selection, not share/reset one set."""
+    v = ViewerState()
+
+    a = resolve_enabled(v, "emg", 8)
+    assert a == set(range(8))
+    v.channels = {1, 2}  # user edits stream A's selection
+
+    b = resolve_enabled(v, "aux", 4)
+    assert b == set(range(4))
+    v.channels = {3}  # user edits stream B's selection
+
+    back_to_a = resolve_enabled(v, "emg", 8)
+    assert back_to_a == {1, 2}
+
+    back_to_b = resolve_enabled(v, "aux", 4)
+    assert back_to_b == {3}
+
+
+def test_channel_count_change_on_same_stream_is_a_fresh_key():
+    """A reconnect that changes `n_channels` for the *same* stream name
+    must not reuse a selection captured at the old channel count (which
+    could contain now-out-of-range indices), and must not clobber a
+    previously-seen selection at that other channel count either."""
+    v = ViewerState()
+
+    resolve_enabled(v, "emg", 64)
+    v.channels = {0, 40, 63}
+
+    reconnected = resolve_enabled(v, "emg", 8)
+
+    assert reconnected == set(range(8))
+    assert max(reconnected) < 8
+
+    back = resolve_enabled(v, "emg", 64)
+    assert back == {0, 40, 63}
