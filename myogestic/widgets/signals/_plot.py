@@ -272,6 +272,50 @@ def render_markers(
         )
 
 
+#: How often `render_footer` recomputes the per-channel diagnostics readout.
+#: The values change slowly and are only a visual sanity check, so refreshing
+#: at ~10 Hz instead of every frame keeps a wide/high-rate window from paying
+#: the O(window_samples * n_channels) scan on every single frame.
+_STATS_REFRESH_S = 0.1
+
+
+def stats_need_recompute(
+    cache: tuple[list[int], np.ndarray, np.ndarray, np.ndarray] | None,
+    valid_channels: list[int],
+    now: float,
+    last_t: float,
+) -> bool:
+    """Whether the throttled footer stats must be recomputed this frame.
+
+    Recompute when there is no cache, when the enabled-channel set changed
+    (so a toggle updates immediately), or when `_STATS_REFRESH_S` has elapsed
+    since the cached values were computed. Otherwise the cached values stand.
+    """
+    return cache is None or cache[0] != valid_channels or (now - last_t) >= _STATS_REFRESH_S
+
+
+def channel_diagnostics(
+    data_win: np.ndarray,
+    valid_channels: list[int],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per-channel `(rms, pp, mean)` over the raw window, one vectorized pass.
+
+    `valid_channels` are real channel indices into `data_win`'s columns. The
+    three arrays are aligned to `valid_channels` order. Computed with `axis=0`
+    reductions over all requested columns at once (no per-channel Python
+    loop); NaN-propagating, matching the old per-channel readout.
+    """
+    cols = data_win[:, valid_channels]
+    if cols.size:
+        rms_all = np.sqrt(np.mean(cols * cols, axis=0))
+        pp_all = cols.max(axis=0) - cols.min(axis=0)
+        mean_all = cols.mean(axis=0)
+    else:
+        z = np.zeros(len(valid_channels))
+        rms_all = pp_all = mean_all = z
+    return rms_all, pp_all, mean_all
+
+
 def render_footer(
     stream_name: str,
     stream: Stream,
@@ -333,19 +377,22 @@ def render_footer(
     if not diag_on or len(enabled) == 0:
         return
 
-    # Vectorized like the decimator above: one axis=0 reduction over every
-    # valid enabled channel's column at once, instead of a Python loop
-    # re-scanning the raw (undecimated) window once per channel.
     valid_channels = [ch for ch in sorted(enabled) if ch < frame.data_win.shape[1]]
     if not valid_channels:
         return
-    cols = frame.data_win[:, valid_channels]
-    if cols.size:
-        rms_all = np.sqrt(np.mean(cols * cols, axis=0))
-        pp_all = cols.max(axis=0) - cols.min(axis=0)
-        mean_all = cols.mean(axis=0)
+    # The stats scan the *raw* (undecimated) window — O(window_samples *
+    # n_channels), tens of ms at a high sample rate / wide window / many
+    # channels. It is a slowly-changing readout, so recompute at most every
+    # `_STATS_REFRESH_S` (or immediately when the enabled set changes) and
+    # render the cached values on the frames in between, instead of paying
+    # the full scan every frame.
+    cache = v.stats_cache
+    if stats_need_recompute(cache, valid_channels, frame.frame_start, v.stats_last_t):
+        rms_all, pp_all, mean_all = channel_diagnostics(frame.data_win, valid_channels)
+        v.stats_cache = (valid_channels, rms_all, pp_all, mean_all)
+        v.stats_last_t = frame.frame_start
     else:
-        rms_all = pp_all = mean_all = np.zeros(len(valid_channels))
+        _, rms_all, pp_all, mean_all = cache
 
     for i, ch in enumerate(valid_channels):
         name = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"

@@ -56,6 +56,17 @@ class ViewerState:
     # accurate decimation stats without needing a live ImPlot context of
     # its own (it renders after `end_plot()`).
     last_decim_n_out: int = 0
+    # Cached per-channel diagnostics `(channels, rms, pp, mean)` and the
+    # perf_counter time they were computed. `render_footer` computes these
+    # over the *raw* (undecimated) window — O(window_samples * n_enabled),
+    # which is tens of ms at a high sample rate / wide window / many channels
+    # — so it throttles the recompute to ~10 Hz (and on an enabled-set
+    # change) and renders the cached values in between, rather than paying it
+    # every frame for a readout that changes slowly.
+    stats_cache: tuple[list[int], np.ndarray, np.ndarray, np.ndarray] | None = field(
+        default=None, repr=False
+    )
+    stats_last_t: float = 0.0
 
 
 @dataclass

@@ -473,6 +473,79 @@ def test_minmax_grid_all_shared_x_keeps_extrema_of_a_degenerate_flat_timestamp_r
     assert ys.shape[1] <= n_out + 4
 
 
+def test_channel_diagnostics_matches_a_per_channel_loop():
+    """The vectorized footer stats must equal a naive per-channel computation.
+
+    `channel_diagnostics` is the throttled stats readout's math, extracted so
+    it can be checked headlessly. It reduces only the requested (real-index)
+    columns, in that order, and must reproduce rms/pp/mean exactly, including
+    NaN propagation and the empty-window case.
+    """
+    from myogestic.widgets.signals._plot import channel_diagnostics
+
+    rng = np.random.default_rng(3)
+    data_win = rng.standard_normal((512, 8)).astype(np.float32)
+    data_win[10, 5] = np.nan  # a NaN must propagate into channel 5's stats
+
+    valid = [1, 5, 7]  # a subset, non-contiguous, in ascending order
+    rms_all, pp_all, mean_all = channel_diagnostics(data_win, valid)
+    assert rms_all.shape == pp_all.shape == mean_all.shape == (len(valid),)
+
+    for i, ch in enumerate(valid):
+        col = data_win[:, ch].astype(np.float64)
+        exp_rms = np.sqrt(np.mean(col * col))
+        exp_pp = col.max() - col.min()
+        exp_mean = col.mean()
+        if ch == 5:  # NaN column -> every stat is NaN
+            assert np.isnan(rms_all[i]) and np.isnan(pp_all[i]) and np.isnan(mean_all[i])
+            continue
+        assert rms_all[i] == pytest.approx(exp_rms, rel=1e-5)
+        assert pp_all[i] == pytest.approx(exp_pp, rel=1e-5)
+        assert mean_all[i] == pytest.approx(exp_mean, rel=1e-5)
+
+    # Empty window: zero-length reductions must not raise, return zeros.
+    rms0, pp0, mean0 = channel_diagnostics(np.empty((0, 8), dtype=np.float32), valid)
+    assert rms0.shape == (len(valid),)
+    assert not np.any(rms0) and not np.any(pp0) and not np.any(mean0)
+
+
+def test_stats_need_recompute_throttles_to_the_refresh_interval():
+    """The footer stats recompute on first sight, on a channel-set change, and
+    once per `_STATS_REFRESH_S` — otherwise the cached values stand.
+
+    This is what keeps a wide/high-rate window from re-scanning the raw window
+    on every frame: at 60 fps only ~10 frames/s recompute.
+    """
+    from myogestic.widgets.signals._plot import (
+        _STATS_REFRESH_S,
+        channel_diagnostics,
+        stats_need_recompute,
+    )
+
+    data_win = np.random.default_rng(0).standard_normal((4096, 8)).astype(np.float32)
+    valid = [0, 1, 2, 3]
+
+    # No cache yet -> must recompute.
+    assert stats_need_recompute(None, valid, now=0.0, last_t=0.0) is True
+
+    # Build a cache "computed" at t=0 and step 60 fps frames across 1 s; count
+    # how many frames the real predicate says to recompute.
+    cache = (valid, *channel_diagnostics(data_win, valid))
+    last_t = 0.0
+    recomputes = 0
+    for i in range(1, 61):
+        now = i / 60.0
+        if stats_need_recompute(cache, valid, now, last_t):
+            recomputes += 1
+            last_t = now
+    assert recomputes <= 12, recomputes  # ~10 Hz, not 60 Hz
+
+    # Within the interval, the same set does NOT recompute...
+    assert stats_need_recompute(cache, valid, now=_STATS_REFRESH_S / 2, last_t=0.0) is False
+    # ...but a changed enabled set forces an immediate recompute.
+    assert stats_need_recompute(cache, [0, 1, 2], now=_STATS_REFRESH_S / 2, last_t=0.0) is True
+
+
 def test_minmax_grid_all_shared_x_perf_well_under_10ms_for_64ch_5s_2048hz():
     """Non-flaky, loose perf micro-check: this is the call that replaced a
     ~15.7 ms/64ch per-channel Python loop with a ~0.9 ms/64ch vectorized
