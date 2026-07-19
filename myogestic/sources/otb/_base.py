@@ -48,8 +48,11 @@ class _OTBSource:
         raise NotImplementedError
 
     def _apply_target(self, target: str) -> None:
-        """Update the connection target before a reconnect. Subclasses override
-        (e.g. Quattrocento sets the device IP); base does nothing."""
+        """Update the connection target before a reconnect.
+
+        Subclasses override (e.g. Quattrocento sets the device IP); base does
+        nothing.
+        """
 
     def _prepare_stream(self) -> None:
         """Reset per-connection state (buffer, timestamp anchor, closure flag)."""
