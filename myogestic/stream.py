@@ -578,12 +578,17 @@ class Stream:
         all_idx = np.unique(work_idx[:pos])
         n_sel = len(all_idx)
 
+        # Size the output scratch to the sample count, not `n_out * n_ch`.
+        # `all_idx` is the *unique* union of every channel's picks, so
+        # `n_sel <= n` (there are only `n` distinct sample indices to pick);
+        # `n_out * n_ch` over-allocated by ~100x here (~2 GiB at 256 ch /
+        # n_out=8000 vs the ~21 MB actually needed).
         work_d = self._m4_work_d
         if work_d is None or work_d.shape[0] < n_sel or work_d.shape[1] != n_ch:
-            work_d = self._m4_work_d = np.empty((n_out * n_ch, n_ch), dtype=d.dtype)
+            work_d = self._m4_work_d = np.empty((n, n_ch), dtype=d.dtype)
         work_t = self._m4_work_t
         if work_t is None or work_t.shape[0] < n_sel:
-            work_t = self._m4_work_t = np.empty(n_out * n_ch, dtype=np.float64)
+            work_t = self._m4_work_t = np.empty(n, dtype=np.float64)
 
         work_t[:n_sel] = t[all_idx]
         work_d[:n_sel] = d[all_idx]
