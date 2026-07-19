@@ -14,9 +14,13 @@ from myogestic.widgets.signals._channel_grid import (
     resolve_initial,
 )
 from myogestic.widgets.signals._controls import (
+    _finalize_drag,
+    _grid_ui,
+    _GridUIState,
     _hit_test,
     _hit_test_xy,
     render_channel_controls,
+    render_grid,
 )
 from myogestic.widgets.signals._state import ViewerState
 
@@ -197,21 +201,7 @@ def imgui_ctx():
     imgui.destroy_context()
 
 
-@pytest.mark.parametrize("n_channels", [4, 64, 256])
-@pytest.mark.parametrize("with_grids", [False, True])
-def test_render_channel_controls_smoke(imgui_ctx, n_channels, with_grids):
-    """Never raises, and always returns a valid `(set, names_or_None, int)`."""
-    channel_grids = [ChannelGrid("g0", auto_shape(list(range(n_channels))))] if with_grids else None
-    info = StreamInfo(n_channels=n_channels, fs=1000.0, channel_grids=channel_grids)
-    stream = _FakeStream(info)
-    v = ViewerState(channels=set(range(n_channels)), channels_initialized=True)
-
-    imgui.new_frame()
-    imgui.begin(f"test##{n_channels}_{with_grids}")
-    result = render_channel_controls(f"emg_{n_channels}_{with_grids}", stream, v, n_channels)
-    imgui.end()
-    imgui.render()
-
+def _assert_valid_render_channel_controls_result(result: object, n_channels: int) -> None:
     assert isinstance(result, tuple)
     assert len(result) == 3
     enabled, names, hovered_ch = result
@@ -219,3 +209,154 @@ def test_render_channel_controls_smoke(imgui_ctx, n_channels, with_grids):
     assert all(isinstance(c, int) for c in enabled)
     assert names is None or isinstance(names, list)
     assert isinstance(hovered_ch, int)
+
+
+@pytest.mark.parametrize("n_channels", [4, 64, 256])
+@pytest.mark.parametrize("with_grids", [False, True])
+def test_render_channel_controls_smoke(imgui_ctx, n_channels, with_grids):
+    """Never raises, and always returns a valid `(set, names_or_None, int)`.
+
+    Exercises both the closed state — `render_channel_controls` draws only
+    the compact bar inline, `hovered_ch` is always -1 since nothing can be
+    hovered — and, with `_GridUIState.show_grid` set True, the open state,
+    where the grid renders in its own floating window.
+    """
+    channel_grids = [ChannelGrid("g0", auto_shape(list(range(n_channels))))] if with_grids else None
+    info = StreamInfo(n_channels=n_channels, fs=1000.0, channel_grids=channel_grids)
+    stream = _FakeStream(info)
+    v = ViewerState(channels=set(range(n_channels)), channels_initialized=True)
+    stream_name = f"emg_{n_channels}_{with_grids}"
+
+    # Closed (default): compact bar only, no popup window.
+    imgui.new_frame()
+    imgui.begin(f"test##{stream_name}")
+    result = render_channel_controls(stream_name, stream, v, n_channels)
+    imgui.end()
+    imgui.render()
+    _assert_valid_render_channel_controls_result(result, n_channels)
+    assert result[2] == -1  # hovered_ch: nothing hoverable while closed
+
+    # Open: flip `show_grid` (as the `[Edit…]` button would) and render
+    # again — the floating grid window now draws too.
+    _grid_ui[stream_name].show_grid = True
+    imgui.new_frame()
+    imgui.begin(f"test##{stream_name}")
+    result = render_channel_controls(stream_name, stream, v, n_channels)
+    imgui.end()
+    imgui.render()
+    _assert_valid_render_channel_controls_result(result, n_channels)
+
+
+# --- popup-window regression: nested-window origin correctness -------------
+#
+# `render_grid` now always renders inside the floating grid window
+# (`render_grid_window`), itself invoked from inside the caller's own
+# window — one level deeper than before this revision. `render_grid`'s
+# rectangle-drag hit-test relies entirely on `imgui.get_cursor_screen_pos()`
+# and `imgui.get_mouse_pos()`, both already in *absolute* screen
+# coordinates, so extra window nesting shouldn't change anything — but
+# that's an assumption worth pinning down with a real headless render plus
+# a simulated click/drag, not just re-asserting the pure-geometry formula
+# above (which never touches a window at all).
+
+
+def _draw_nested_grid_frame(
+    grid: ChannelGrid, enabled: set[int], ui: _GridUIState, cell: float, stream_id: str
+) -> tuple[int, imgui.ImVec2, imgui.ImVec2]:
+    """Render `grid` inside a window nested inside another window.
+
+    Mirrors the real layout: `render_channel_controls` draws the compact
+    bar in the caller's window, then `render_grid_window` opens a *second*,
+    separate `imgui.begin` window for the grid itself. Both windows are
+    pinned to a fixed position/size every frame so the geometry a test
+    derives from one frame stays valid in the next.
+    """
+    imgui.new_frame()
+    imgui.set_next_window_pos(imgui.ImVec2(50, 50), imgui.Cond_.always)
+    imgui.set_next_window_size(imgui.ImVec2(150, 150), imgui.Cond_.always)
+    imgui.begin("outer##nested_origin")
+    imgui.set_next_window_pos(imgui.ImVec2(220, 180), imgui.Cond_.always)
+    imgui.set_next_window_size(imgui.ImVec2(300, 300), imgui.Cond_.always)
+    imgui.begin(f"popup##{stream_id}")
+    hovered = render_grid(stream_id, 0, grid, enabled, None, ui, cell, -1)
+    rect_min = imgui.get_item_rect_min()
+    rect_max = imgui.get_item_rect_max()
+    imgui.end()
+    imgui.end()
+    imgui.render()
+    return hovered, rect_min, rect_max
+
+
+def test_grid_click_hits_correct_cell_when_nested_inside_another_window(imgui_ctx):
+    """A click on cell (0, 0) toggles channel 0 — even though `render_grid`
+    now always renders inside a *second*, nested `imgui.begin` window (the
+    popup), not directly in the caller's own window as before this revision.
+    """
+    grid = ChannelGrid("g", auto_shape(list(range(9))))  # 3x3, channels 0..8
+    enabled: set[int] = set()
+    ui = _GridUIState()
+    cell = 30.0
+    stream_id = "nested_click"
+
+    # Dry-run frame (mouse far away) just to read back cell 8's real
+    # on-screen rect from the actual, unmodified `render_grid` code path —
+    # not hand-derived — from which cell 0's center is backed out.
+    io = imgui.get_io()
+    io.mouse_pos = imgui.ImVec2(-1000.0, -1000.0)
+    _, rect_min, _ = _draw_nested_grid_frame(grid, enabled, ui, cell, stream_id)
+
+    style = imgui.get_style()
+    step_x = cell + style.item_spacing.x
+    step_y = cell + style.item_spacing.y
+    # Cell 8 is the bottom-right (row 2, col 2) of the 3x3 grid.
+    origin = imgui.ImVec2(rect_min.x - 2 * step_x, rect_min.y - 2 * step_y)
+    mouse = imgui.ImVec2(origin.x + step_x / 2, origin.y + step_y / 2)
+
+    io.mouse_pos = mouse
+    hovered, _, _ = _draw_nested_grid_frame(grid, enabled, ui, cell, stream_id)
+    assert hovered == 0  # imgui's own hover test, independent of `_hit_test`
+
+    io.add_mouse_button_event(0, True)
+    _draw_nested_grid_frame(grid, enabled, ui, cell, stream_id)
+    io.add_mouse_button_event(0, False)
+    _draw_nested_grid_frame(grid, enabled, ui, cell, stream_id)
+    _finalize_drag(ui, enabled)
+
+    assert enabled == {0}
+
+
+def test_grid_drag_rectangle_works_when_nested_inside_another_window(imgui_ctx):
+    """A drag from cell (0, 0) to cell (1, 1) selects the 2x2 block
+    `{0, 1, 3, 4}` — the rectangle-select path — inside the nested popup
+    window, driven frame by frame through a real mouse-down / drag / release
+    sequence (not a direct call into the pure `rect_to_channels` core).
+    """
+    grid = ChannelGrid("g", auto_shape(list(range(9))))
+    enabled: set[int] = set()
+    ui = _GridUIState()
+    cell = 30.0
+    stream_id = "nested_drag"
+
+    io = imgui.get_io()
+    io.mouse_pos = imgui.ImVec2(-1000.0, -1000.0)
+    _, rect_min, _ = _draw_nested_grid_frame(grid, enabled, ui, cell, stream_id)
+
+    style = imgui.get_style()
+    step_x = cell + style.item_spacing.x
+    step_y = cell + style.item_spacing.y
+    origin = imgui.ImVec2(rect_min.x - 2 * step_x, rect_min.y - 2 * step_y)
+
+    io.mouse_pos = imgui.ImVec2(origin.x + step_x / 2, origin.y + step_y / 2)
+    _draw_nested_grid_frame(grid, enabled, ui, cell, stream_id)  # settle hover
+    io.add_mouse_button_event(0, True)
+    _draw_nested_grid_frame(grid, enabled, ui, cell, stream_id)  # arm the drag
+
+    io.mouse_pos = imgui.ImVec2(origin.x + step_x * 1.5, origin.y + step_y * 1.5)
+    _draw_nested_grid_frame(grid, enabled, ui, cell, stream_id)  # past the threshold
+    assert ui.drag.dragged
+    assert enabled == {0, 1, 3, 4}
+
+    io.add_mouse_button_event(0, False)
+    _draw_nested_grid_frame(grid, enabled, ui, cell, stream_id)
+    _finalize_drag(ui, enabled)
+    assert enabled == {0, 1, 3, 4}
