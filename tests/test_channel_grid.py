@@ -2,6 +2,9 @@
 
 import random
 
+import pytest
+from imgui_bundle import imgui
+
 from myogestic.stream import ChannelGrid, StreamInfo
 from myogestic.widgets.signals._channel_grid import (
     auto_shape,
@@ -10,6 +13,8 @@ from myogestic.widgets.signals._channel_grid import (
     reduce_selection,
     resolve_initial,
 )
+from myogestic.widgets.signals._controls import render_channel_controls
+from myogestic.widgets.signals._state import ViewerState
 
 
 def test_channel_grid_columns_and_streaminfo_field():
@@ -82,3 +87,56 @@ def test_resolve_initial_policy():
     assert resolve_initial(None, 256, []) == set(range(16))  # large -> first 16
     assert resolve_initial(range(4), 256, []) == {0, 1, 2, 3}
     assert resolve_initial([1, 2, 999], 8, []) == {1, 2}  # clamp out-of-range
+
+
+# --- render_channel_controls smoke test (imgui widget shell) ---------------
+#
+# `render_channel_controls` only builds ImGui's CPU-side draw list (no
+# rasterization) — it never needs an actual GPU/window backend. A real
+# backend would call `io.fonts.get_tex_data_as_...()` (or the newer
+# texture-streaming callback) during `new_frame()` to build the font atlas;
+# without one, ImGui asserts unless the backend advertises that it owns
+# texture updates itself. Setting `BackendFlags_.renderer_has_textures`
+# sidesteps that — we never draw glyphs that need the atlas here — letting
+# this test drive the *real* imgui-bundle widget code (invisible_button,
+# draw-list calls, tooltip/hover/focus queries) headlessly.
+
+
+class _FakeStream:
+    def __init__(self, info: StreamInfo) -> None:
+        self.info = info
+
+
+@pytest.fixture
+def imgui_ctx():
+    imgui.create_context()
+    io = imgui.get_io()
+    io.display_size = imgui.ImVec2(800, 600)
+    io.delta_time = 1.0 / 60.0
+    io.backend_flags = io.backend_flags | imgui.BackendFlags_.renderer_has_textures
+    yield
+    imgui.destroy_context()
+
+
+@pytest.mark.parametrize("n_channels", [4, 64, 256])
+@pytest.mark.parametrize("with_grids", [False, True])
+def test_render_channel_controls_smoke(imgui_ctx, n_channels, with_grids):
+    """Never raises, and always returns a valid `(set, names_or_None, int)`."""
+    channel_grids = [ChannelGrid("g0", auto_shape(list(range(n_channels))))] if with_grids else None
+    info = StreamInfo(n_channels=n_channels, fs=1000.0, channel_grids=channel_grids)
+    stream = _FakeStream(info)
+    v = ViewerState(channels=set(range(n_channels)), channels_initialized=True)
+
+    imgui.new_frame()
+    imgui.begin(f"test##{n_channels}_{with_grids}")
+    result = render_channel_controls(f"emg_{n_channels}_{with_grids}", stream, v, n_channels)
+    imgui.end()
+    imgui.render()
+
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    enabled, names, hovered_ch = result
+    assert isinstance(enabled, set)
+    assert all(isinstance(c, int) for c in enabled)
+    assert names is None or isinstance(names, list)
+    assert isinstance(hovered_ch, int)
