@@ -175,6 +175,47 @@ def test_frame_slices_to_enabled_columns_for_any_viewer_config():
     np.testing.assert_array_equal(frame.data, frame.data_win[:, [1, 3]])
 
 
+def test_rms_env_frame_is_a_sparse_positive_envelope_within_the_window():
+    """In rms_env mode `build_signal_frame` hands the plot a sparse RMS
+    envelope: far fewer points than the raw window, all inside it, all
+    non-negative, on its own hop time base (distinct from the visible-sample
+    timestamps), with `x_origin` anchored to the visible left edge."""
+    fs = 1000.0
+    stream = _make_stream(n_channels=8, n_steps=30, fs=fs, chunk=50)
+    v = ViewerState(window=0.5, display_filter="rms_env", rms_window_ms=100.0, rms_hop_ms=20.0)
+    enabled = {0, 3, 7}
+
+    frame = build_signal_frame(stream, v, enabled)
+    assert frame is not None
+    # Sparse: ~ window/hop points, far fewer than the ~500 raw samples.
+    assert 0 < len(frame.trace_ts) < len(frame.ts_win)
+    assert frame.data.shape == (len(frame.trace_ts), 3)
+    # Its own time base, not the visible-sample timestamps.
+    assert frame.trace_ts is not frame.ts_win
+    # Every envelope point sits inside the visible window...
+    vis_start = float(frame.ts_win[0])
+    last_ts = float(frame.ts_win[-1])
+    assert np.all(frame.trace_ts >= vis_start - 1e-9)
+    assert np.all(frame.trace_ts <= last_ts + 1e-9)
+    # ...and RMS is non-negative.
+    assert np.all(frame.data[np.isfinite(frame.data)] >= 0.0)
+    # x_origin anchors plot-x 0 to the visible window's left edge.
+    assert frame.x_origin == pytest.approx(vis_start)
+    # data_win stays the RAW full-width visible window (footer stats over raw).
+    assert frame.data_win.shape[1] == 8
+
+
+def test_non_rms_frame_trace_ts_equals_the_visible_window():
+    """Regression: without rms_env, the plot's trace time base is exactly the
+    visible-window timestamps and `x_origin` is their start (no drift)."""
+    stream = _make_stream(n_channels=4, n_steps=10, fs=1000.0)
+    v = ViewerState(window=0.2, display_filter="none")
+    frame = build_signal_frame(stream, v, {0, 1, 2, 3})
+    assert frame is not None
+    np.testing.assert_array_equal(frame.trace_ts, frame.ts_win)
+    assert frame.x_origin == pytest.approx(float(frame.ts_win[0]))
+
+
 def test_minmax_grid_all_shared_x_bounds_total_draw_points_by_channel_count():
     """The actual perf fix, reproducing the reported scenario: 64 channels
     over a 5 s / 2048 Hz window.
