@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time as _time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -25,6 +26,16 @@ class ViewerState:
     specs: list = field(default_factory=list)
     fps: list[float] = field(default_factory=list)
     channels_initialized: bool = False
+    # `(stream_key, n_channels)` that `channels` currently reflects — set by
+    # `resolve_enabled`. `None` until the first resolve. Also read by
+    # `_controls.py` to reset the toggle-grid's shift-click anchor on a
+    # stream/channel-count change.
+    active_channels_key: tuple[str, int] | None = None
+    # Per-`(stream_key, n_channels)` selection cache so a `selectable`
+    # viewer that flips between streams restores each stream's own
+    # selection instead of sharing/resetting a single one. Populated by
+    # `resolve_enabled` whenever it moves `channels` to a new key.
+    _channels_by_key: dict[tuple[str, int], set[int]] = field(default_factory=dict, repr=False)
     last_hovered: int = -1
     selected_stream: str | None = None
     scale_mode: str = "auto"
@@ -155,22 +166,54 @@ def get_viewer_state(
     return v
 
 
-def resolve_enabled(v: ViewerState, n_channels: int) -> set[int]:
+def resolve_enabled(
+    v: ViewerState,
+    stream_key: str,
+    n_channels: int,
+    initial_channels: Iterable[int] | None = None,
+) -> set[int]:
     """Resolve the enabled channel set from persistent viewer state.
 
     Must run before :func:`build_signal_frame` so the frame can decimate
-    only the enabled columns. Initialises `v.channels` via
-    :func:`~myogestic.widgets.signals._channel_grid.resolve_initial` the
-    first time it sees this stream (or after the channel count changes),
-    exactly like the guard `render_channel_controls` used to run inline —
-    that guard is now a no-op since this already ran first. Returns the
-    live `v.channels` set; safe because nothing reads it again until the
-    *next* frame, after which only `render_channel_controls` mutates it.
+    only the enabled columns.
+
+    The selection is cached on `v` keyed by `(stream_key, n_channels)`, so
+    a `selectable` viewer that flips between streams restores each
+    stream's own selection instead of resetting a single shared one — and
+    a channel-count change on the active stream (e.g. a reconnect at a
+    different channel count) is treated as a fresh key rather than
+    clobbering that stream's other-size selection.
+
+    `initial_channels` seeds
+    :func:`~myogestic.widgets.signals._channel_grid.resolve_initial` only
+    the very first time this `ViewerState` ever creates a selection —
+    i.e. once, for whichever `(stream_key, n_channels)` is active on that
+    first call. Every later first-sight of a *different* key (a stream
+    switch, or a channel-count change) falls back to `resolve_initial`'s
+    `None` policy instead: every channel for streams with
+    `n_channels <= 32`, otherwise just the first 16. This keeps a user's
+    own edits from ever being silently overwritten by the caller's
+    one-shot hint. Returns the live `v.channels` set; safe because
+    nothing reads it again until the *next* frame, after which only
+    `render_channel_controls` mutates it.
     """
-    if not v.channels_initialized or max(v.channels, default=-1) >= n_channels:
-        v.channels = resolve_initial(None, n_channels, [])
-        v.specs = []
-        v.channels_initialized = True
+    key = (stream_key, n_channels)
+    if v.channels_initialized and v.active_channels_key == key:
+        return v.channels
+
+    first_ever = not v.channels_initialized
+    if v.channels_initialized and v.active_channels_key is not None:
+        v._channels_by_key[v.active_channels_key] = v.channels
+
+    cached = v._channels_by_key.get(key)
+    if cached is not None:
+        v.channels = set(cached)
+    else:
+        v.channels = resolve_initial(initial_channels if first_ever else None, n_channels, [])
+
+    v.specs = []
+    v.channels_initialized = True
+    v.active_channels_key = key
     return v.channels
 
 
