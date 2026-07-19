@@ -13,9 +13,9 @@ the widget flow first.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
-import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
@@ -25,36 +25,19 @@ from myogestic.widgets.signals._controls import (
     render_controls,
 )
 from myogestic.widgets.signals._plot import (
-    apply_display_filter,
     render_footer,
     render_plot,
+    resolve_channel_ranges,
 )
 from myogestic.widgets.signals._scan import _disconnected_ui
 from myogestic.widgets.signals._state import (
     build_signal_frame,
     get_viewer_state,
+    resolve_enabled,
 )
 
 if TYPE_CHECKING:
     from myogestic.core import Context
-
-
-def _channel_ranges(
-    data: np.ndarray,
-    enabled: set[int],
-) -> dict[int, tuple[float, float]]:
-    ranges: dict[int, tuple[float, float]] = {}
-    if data.size == 0:
-        return ranges
-    for ch in sorted(enabled):
-        if ch >= data.shape[1]:
-            continue
-        col = data[:, ch]
-        finite = col[np.isfinite(col)]
-        if finite.size == 0:
-            continue
-        ranges[ch] = (float(finite.min()), float(finite.max()))
-    return ranges
 
 
 def signal_viewer(
@@ -69,13 +52,16 @@ def signal_viewer(
     y_range: tuple[float, float] = (-1.0, 1.0),
     show_markers: bool = False,
     window_s: float = 5.0,
+    initial_channels: Iterable[int] | None = None,
 ) -> None:
     """Real-time multi-channel signal viewer.
 
     Includes decimation, pause, auto/manual Y scale, visual-only display
     filters, channel toggles, stats, stream retargeting, and label markers.
     The function argument `stream_name` is the stable widget ID; when
-    `selectable=True`, the user may switch the active stream from the UI.
+    `selectable=True`, the user may switch the active stream from the UI —
+    each stream's channel selection is tracked separately and restored
+    when the user switches back.
 
     `scale_mode` supports "auto" for ImPlot fitting and "manual" for the
     user-set `y_range`.
@@ -86,6 +72,17 @@ def signal_viewer(
     value when you want the display to mirror a short analysis window
     (classification often runs at 0.2 s, for example). The stream's
     ``buffer_ms`` must be at least this large.
+
+    `initial_channels` sets which channels open enabled, e.g. `range(16)`
+    for "the first 16" — do not pass a bare `int` for that, it would be
+    ambiguous with a single channel index. It seeds only the very first
+    selection this viewer resolves (its initial stream/channel-count); a
+    different stream later shown through a `selectable` viewer falls back
+    to the `None` policy, not this hint. Once a selection exists (here or
+    restored from a prior visit), the user's own toggle edits are never
+    overwritten. `None` (the default) falls back to
+    :func:`~myogestic.widgets.signals._channel_grid.resolve_initial`'s
+    policy: every channel when `n_channels <= 32`, otherwise the first 16.
     """
     v = get_viewer_state(
         ctx,
@@ -109,34 +106,31 @@ def signal_viewer(
 
     render_controls(ctx, stream_name, active_stream, stream, v, selectable)
 
-    frame = build_signal_frame(stream, v)
+    # Resolve which channels are enabled from persistent state *before*
+    # building the frame, so both the frame's column slice and the plot
+    # loop's per-channel decimation only ever touch those columns — the
+    # channel toggle buttons (rendered after the plot below) mutate
+    # `v.channels` for the *next* frame, not this one.
+    n_channels = stream.info.n_channels
+    enabled = resolve_enabled(v, active_stream, n_channels, initial_channels)
+
+    frame = build_signal_frame(stream, v, enabled)
     if frame is None:
         imgui.text(f"{active_stream}: no data")
         return
 
-    enabled, ch_names, hovered_ch = render_channel_controls(
-        stream_name, stream, v, frame.n_channels
-    )
-    if not enabled:
-        imgui.text("No channels enabled")
-        return
+    ch_names = stream.info.channel_names
 
-    if v.display_filter == "rms_env":
-        data = frame.data
-    else:
-        data = apply_display_filter(frame.data, v.display_filter, stream.info.fs)
-
+    # `render_plot` derives per-channel ranges from the drawn trace itself
+    # (`resolve_channel_ranges`), so none need to be precomputed here.
     channel_ranges = None
-    if v.per_channel_scale:
-        full_data = apply_display_filter(frame.data_full, v.display_filter, stream.info.fs)
-        channel_ranges = _channel_ranges(full_data, enabled)
 
     # Honour a "Rescale" button click from the controls bar: snap y_min /
-    # y_max to the current visible data range across enabled channels,
-    # then switch to Manual so it stays put.
+    # y_max to the range of what is actually drawn (the raw window, or the
+    # RMS envelope in rms_env mode), then switch to Manual so it stays put.
     if v.rescale_pending:
         v.rescale_pending = False
-        ranges = _channel_ranges(data, enabled)
+        ranges = resolve_channel_ranges(frame.data, frame.channel_map)
         if ranges:
             mins = [lo for lo, _ in ranges.values()]
             maxs = [hi for _, hi in ranges.values()]
@@ -148,20 +142,32 @@ def signal_viewer(
             v.y_max = hi + pad
             v.scale_mode = "manual"
 
-    render_plot(
-        ctx=ctx,
-        stream_name=stream_name,
-        stream=stream,
-        v=v,
-        frame=frame,
-        data=data,
-        channel_ranges=channel_ranges,
-        enabled=enabled,
-        ch_names=ch_names,
-        hovered_ch=hovered_ch,
-        size=size,
-        channel_height=channel_height,
-    )
+    if enabled:
+        render_plot(
+            ctx=ctx,
+            stream_name=stream_name,
+            stream=stream,
+            v=v,
+            frame=frame,
+            channel_ranges=channel_ranges,
+            enabled=enabled,
+            ch_names=ch_names,
+            # This frame's hover state isn't known yet — the toggle buttons
+            # that report it render after the plot (below). One-frame lag
+            # is imperceptible and keeps decimation from blocking on them.
+            hovered_ch=v.last_hovered,
+            size=size,
+            channel_height=channel_height,
+        )
+    else:
+        imgui.text("No channels enabled")
+
+    # Draw the channel toggle buttons after the plot: this both reports
+    # `hovered_ch` for next frame's render_plot call and mutates
+    # `v.channels` (via the toggle buttons) for next frame's `enabled`.
+    _, _, hovered_ch = render_channel_controls(stream_name, stream, v, n_channels)
+    v.last_hovered = hovered_ch
+
     render_footer(
         stream_name=stream_name,
         stream=stream,
