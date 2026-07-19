@@ -79,7 +79,15 @@ def test_acquire_loop_never_runs_m4_and_keeps_up(capsys):
 
 
 def test_viewer_decimation_path_still_valid():
-    from myogestic.widgets.signals._state import ViewerState, _m4_decimate_visible_window
+    # The viewer-side decimator was replaced (`_m4_decimate_visible_window` ->
+    # the vectorized shared-x `minmax_grid_all_shared_x`). Same end-to-end
+    # guard, through the real frame path: acquire loop -> build_signal_frame ->
+    # decimate returns a valid, reduced, channels-first envelope.
+    from myogestic.widgets.signals._state import (
+        ViewerState,
+        build_signal_frame,
+        minmax_grid_all_shared_x,
+    )
 
     src = _SynthSource(n_channels=64, fs=2048.0, chunk=64)
     stream = Stream("emg", source=src, window_ms=1000, buffer_ms=3000)
@@ -87,14 +95,16 @@ def test_viewer_decimation_path_still_valid():
     for _ in range(200):
         stream._acquire_step()
 
-    snap = stream.get_raw_snapshot()
-    assert snap is not None
-    ts_raw, data_raw = snap
-    assert data_raw.shape[1] == 64
+    v = ViewerState(n_pixels=500, window=1.0)  # n_out = 2000 < ~2048/window -> decimates
+    frame = build_signal_frame(stream, v, set(range(64)))
+    assert frame is not None
+    assert frame.data.shape[1] == 64  # enabled-subset trace, all 64 channels
 
-    v = ViewerState(n_pixels=500)  # n_out = 2000 < ~6144 buffered -> decimation runs
     n_out = max(1, v.n_pixels) * 4
-    ts, data = _m4_decimate_visible_window(ts_raw, data_raw, n_out, v)
-    assert np.all(np.diff(ts) > 0)  # strictly increasing time
-    assert data.shape[1] == 64  # full channel width preserved
-    assert len(ts) == data.shape[0] <= len(ts_raw)
+    xs, ys = minmax_grid_all_shared_x(
+        frame.trace_ts, frame.data, n_out, v.window, x_origin=frame.x_origin
+    )
+    assert np.all(np.diff(xs) >= 0)  # shared x monotonic (low/high share a bucket center)
+    assert ys.shape[0] == 64  # channels-first, full width preserved
+    assert xs.shape[0] == ys.shape[1] and ys.shape[1] >= 2
+    assert xs.shape[0] <= len(frame.trace_ts)  # reduced, never more points than the window
