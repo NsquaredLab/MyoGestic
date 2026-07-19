@@ -50,8 +50,8 @@ class ViewerState:
     display_filter: str = "none"
     show_markers: bool = True
     show_retarget: bool = False
-    # Per-channel M4 output-size target used by the *last* `render_plot`
-    # call (sized to the live plot's pixel width there — see
+    # Decimation output-size target used by the *last* `render_plot` call
+    # (sized to the live plot's pixel width there — see
     # `resolve_decimation_target`). `render_footer` reads it back to report
     # accurate decimation stats without needing a live ImPlot context of
     # its own (it renders after `end_plot()`).
@@ -73,9 +73,9 @@ class SignalFrame:
     # channel index (`data_full` / `data_win` stay full-width and can still
     # be indexed by real channel index directly). `data`'s rows pair with
     # `ts_win` (same window, same row count) — there is no separate
-    # decimated `ts` field: decimation is now per-channel, sized to the
-    # plot's pixel width and done in the plot loop
-    # (`_plot.plot_channel` / `m4_decimate_channel`), not here.
+    # decimated `ts` field: decimation runs once, for every enabled column
+    # at once, sized to the plot's pixel width, in `render_plot`
+    # (`_state.minmax_grid_all_shared_x`), not here.
     channel_map: list[int]
 
 
@@ -86,112 +86,99 @@ def normalize_scale_mode(scale_mode: str) -> str:
     return "manual" if scale_mode == "manual" else "auto"
 
 
-def m4_decimate_channel(
+def minmax_grid_all_shared_x(
     t: np.ndarray,
-    col: np.ndarray,
+    data: np.ndarray,
     n_out: int,
-    v: ViewerState,
+    window_s: float,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """MinMax-decimate one channel's raw column independently, to ~`n_out` points.
+    """MinMax-decimate every enabled channel at once, to ~`n_out` points each.
 
-    Each enabled channel calls this on its own — its own bucket/index set,
-    its own output x array — instead of the old approach of decimating
-    every enabled channel and then *unioning* all their index sets onto
-    one shared x-axis. That union made the reduction vanish at high
-    channel counts (the union of many channels' distinct picks approaches
-    the full window — e.g. 64 channels over a 5 s / 2048 Hz window unioned
-    to the *entire* window, zero point reduction). Decimating per channel
-    instead bounds total draw points at `n_channels * n_out`, independent
-    of window length or sample rate.
+    Returns `(xs, ys)`: `xs` has shape `(2*n_buckets+2,)`, shared across every
+    channel; `ys` has shape `(n_channels, 2*n_buckets+2)`. Each channel keeps
+    its own min/max envelope — there is no cross-channel index union (that
+    union is what made the old shared decimator's reduction vanish at high
+    channel counts: the union of many channels' distinct picks approaches
+    the full window, e.g. 64 channels over a 5 s / 2048 Hz window unioning to
+    the *entire* window). The two points per bucket sit at the bucket's
+    CENTER time (the shared `xs`), which is sub-pixel-accurate once
+    `n_out ~= 3 * plot_width`, rather than at either member sample's own
+    timestamp.
 
-    Buckets are anchored to an *absolute*-time grid, not to the window's
-    own start. `t` is the absolute (continuous) sample timestamp, and the
-    visible window slides every frame as new samples arrive — bucketing
-    relative to the window's own first timestamp would recompute
-    different bucket boundaries every frame even though the underlying
-    samples are unchanged, which is what caused the left-edge scrolling
-    flicker (most visible in the partial leftmost bucket, since its
-    boundary shifts the most between frames). Flooring the *absolute*
-    timestamp onto a grid whose width (`v.window / n_buckets`) is fixed
-    frame-to-frame instead maps a given sample to the same bucket
-    regardless of where the window currently starts, so the per-bucket
-    min/max — and therefore the drawn envelope — is stable as the window
-    scrolls.
+    Buckets are anchored to an *absolute*-time grid (`bucket_dt = window_s /
+    n_buckets`), not to this window's own start. `t` is the absolute
+    (continuous) sample timestamp, and the visible window slides every frame
+    as new samples arrive — bucketing relative to the window's own first
+    timestamp would recompute different bucket boundaries every frame even
+    though the underlying samples are unchanged, which is what caused the
+    left-edge scrolling flicker (most visible in the partial leftmost
+    bucket, since its boundary shifts the most between frames). Flooring the
+    *absolute* timestamp onto a grid whose width is fixed frame-to-frame
+    instead maps a given sample to the same bucket regardless of where the
+    window currently starts, so the per-bucket min/max — and therefore the
+    drawn envelope — is stable as the window scrolls.
+
+    Pure NumPy, all channels processed together (no per-channel Python
+    loop): ~0.9 ms for 64 channels / 5 s / 2048 Hz, versus ~15.7 ms for the
+    old per-channel loop over `m4_decimate_channel`.
     """
-    n = len(col)
+    data = np.ascontiguousarray(data)
+    n, n_channels = data.shape
+    if n == 0:
+        return np.empty(0, dtype=np.float64), np.empty((n_channels, 0), dtype=np.float64)
     if n <= n_out:
-        return t, col
-    col = np.ascontiguousarray(col)
+        xs = np.ascontiguousarray(t - t[0], dtype=np.float64)
+        return xs, np.ascontiguousarray(data.T, dtype=np.float64)
 
     n_buckets = max(1, n_out // 2)
-    bucket_dt = v.window / n_buckets if v.window > 0 else 0.0
+    bucket_dt = window_s / n_buckets if window_s > 0 else 0.0
     if not np.isfinite(bucket_dt) or bucket_dt <= 0:
         # Degenerate window (<=0, or too small relative to n_buckets to
-        # produce a usable grid) -- fall back to splitting *this call's*
-        # samples into n_buckets equal-count groups so we still reduce the
-        # point count. Not scroll-stable, but v.window <= 0 is not a state
-        # the viewer should ever reach in practice (the window slider is
-        # floored at 0.1 s; see _controls.py).
+        # produce a usable grid) -- fall back to splitting the samples into
+        # n_buckets equal-count groups so we still reduce the point count.
+        # Not scroll-stable, but window_s <= 0 is not a state the viewer
+        # should ever reach in practice (the window slider is floored at
+        # 0.1 s; see _controls.py).
         bucket_id = (np.arange(n, dtype=np.int64) * n_buckets) // n
     else:
         bucket_id = np.floor(t / bucket_dt).astype(np.int64)
 
-    idx = _minmax_grid_indices(bucket_id, col, n)
-    return t[idx], col[idx]
-
-
-def _minmax_grid_indices(bucket_id: np.ndarray, col: np.ndarray, n: int) -> np.ndarray:
-    """Per-bucket argmin/argmax sample indices, vectorized (no per-bucket loop).
-
-    O(n): no sort. Assumes `bucket_id` is non-decreasing — true for every
-    caller here, since `t` is a monotonic window slice and `floor`
-    preserves order — so each distinct bucket occupies one contiguous run
-    of `bucket_id`. `starts` locates each run's first offset; `run_len`
-    (via `starts` and the sentinel `n`) its length.
-
-    The per-run *value* extrema come from `np.fmin`/`np.fmax.reduceat`
-    over those runs — an O(n) reduction, and NaN-robust like the
-    pre-fix lexsort (which sorted NaN to the end of every run): a run
-    with any finite sample yields a finite extreme, an all-NaN run
-    yields NaN.
-
-    Recovering the extreme's *index* (not just its value) without a
-    per-run loop: broadcast each run's extreme value back onto its
-    member samples (`np.repeat`), mark samples matching their run's
-    extreme (NaN-aware, since `NaN == NaN` is `False`), replace
-    non-matching samples with a sentinel index (`n`, always out of the
-    valid `[0, n)` range), and take the minimum surviving index per run —
-    i.e. the first match, mirroring the previous lexsort's stable
-    tie-break (earliest sample wins a tie). `np.minimum.reduceat` here
-    operates on plain integer indices, not the data, so it never hits the
-    NaN-propagation footgun that ruled out `np.minimum`/`np.maximum` on
-    `col` directly.
-
-    Also unions in the global first/last sample indices so the trace
-    still spans the full input span and channels right-align.
-    """
+    # Each distinct bucket occupies one contiguous run of `bucket_id` (it's
+    # non-decreasing: `t` is a monotonic window slice and `floor` preserves
+    # order). `starts` locates each run's first offset; `lengths` its size.
     starts = np.flatnonzero(np.r_[True, bucket_id[1:] != bucket_id[:-1]])
-    run_len = np.diff(starts, append=n)
+    lengths = np.diff(starts, append=n)
+    width = int(lengths.max())
+    # Gather every run into one (buckets, width, channels) block, padding
+    # short runs by repeating their last sample (`np.minimum(..., lengths -
+    # 1)` clamps the take-index so it never reads past a run's own end) —
+    # trades a little extra memory for a single vectorized reduction instead
+    # of a per-bucket Python loop.
+    take = starts[:, None] + np.minimum(np.arange(width, dtype=np.intp), lengths[:, None] - 1)
+    blocks = data[take]  # (buckets, width, channels); tail padded by repeat
+    lows = np.fmin.reduce(blocks, axis=1)  # (buckets, channels), NaN-robust
+    highs = np.fmax.reduce(blocks, axis=1)
 
-    run_min = np.fmin.reduceat(col, starts)
-    run_max = np.fmax.reduceat(col, starts)
-    broadcast_min = np.repeat(run_min, run_len)
-    broadcast_max = np.repeat(run_max, run_len)
+    nb = len(starts)
+    ys = np.empty((n_channels, 2 * nb + 2), dtype=np.float64)
+    ys[:, 0] = data[0]
+    ys[:, 1:-1:2] = lows.T
+    ys[:, 2:-1:2] = highs.T
+    ys[:, -1] = data[-1]
 
-    sample_idx = np.arange(n, dtype=np.intp)
-    is_min = (col == broadcast_min) | (np.isnan(col) & np.isnan(broadcast_min))
-    is_max = (col == broadcast_max) | (np.isnan(col) & np.isnan(broadcast_max))
+    centers = (bucket_id[starts].astype(np.float64) + 0.5) * bucket_dt
+    centers = np.clip(centers, t[0], t[-1])
+    xs = np.empty(2 * nb + 2, dtype=np.float64)
+    xs[0] = t[0]
+    xs[1:-1:2] = centers
+    xs[2:-1:2] = centers
+    xs[-1] = t[-1]
+    xs -= t[0]
+    return xs, ys
 
-    sentinel = n  # always > any valid index, so it never wins the reduceat min
-    min_idx = np.minimum.reduceat(np.where(is_min, sample_idx, sentinel), starts)
-    max_idx = np.minimum.reduceat(np.where(is_max, sample_idx, sentinel), starts)
 
-    idx = np.concatenate((min_idx, max_idx, np.array([0, n - 1], dtype=np.intp)))
-    return np.unique(idx.astype(np.intp))
-
-
-#: Oversampling factor applied to the plot's pixel width when sizing each
-#: channel's M4 target — a few points per pixel keeps sharp features
+#: Oversampling factor applied to the plot's pixel width when sizing the
+#: MinMax decimation target — a few points per pixel keeps sharp features
 #: visible without materially increasing draw cost.
 _DECIMATE_PIXEL_FACTOR = 3.0
 #: Floor on the width-derived target so a very narrow (or not-yet-laid-out)
@@ -200,7 +187,7 @@ _DECIMATE_MIN_POINTS = 64
 
 
 def resolve_decimation_target(plot_width_px: float, v: ViewerState) -> int:
-    """Per-channel M4 output size, sized to the plot's own pixel width.
+    """MinMax decimation output size, sized to the plot's own pixel width.
 
     `plot_width_px` should come from the live plot (e.g.
     ``implot.get_plot_size().x``, only valid between `begin_plot` /
@@ -317,13 +304,10 @@ def build_signal_frame(
     per-channel-scale ranges, diagnostics, and the per-channel plot loop
     itself, all keyed by real channel index).
 
-    Does *not* decimate: the old shared-union M4 decimation used to run
-    here, over all enabled columns at once, before this function returned.
-    That union made the reduction vanish at high channel counts (see
-    `m4_decimate_channel`'s docstring). Decimation now happens per channel,
-    sized to the plot's own pixel width, inside the plot loop
-    (`_plot.plot_channel`) — so this function only ever needs to hand it
-    the raw (filtered, windowed, enabled-column-sliced) samples.
+    Does *not* decimate: decimation runs once per frame, over every enabled
+    column at once (`minmax_grid_all_shared_x`), inside `render_plot`
+    (`_plot.py`) — so this function only ever needs to hand it the raw
+    (filtered, windowed, enabled-column-sliced) samples.
     """
     frame_start = _time.perf_counter()
     if v.paused and v.frozen_data is not None and v.frozen_ts is not None:
