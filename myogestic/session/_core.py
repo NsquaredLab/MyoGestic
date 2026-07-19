@@ -26,6 +26,13 @@ log = logging.getLogger(__name__)
 if find_spec("zarrs") is not None:
     zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 
+#: ``meta.json`` schema version. Bump whenever the on-disk shape of a
+#: per-stream entry changes (e.g. a new field). Readers must stay tolerant
+#: of older, unversioned meta.json files (see `open_session_store`), so
+#: this is informational rather than enforced. Bumped to 2 for
+#: `channel_names` + `channel_grids` (see `StreamInfo.channel_grids`).
+_META_SCHEMA_VERSION = 2
+
 
 def _robust_rmtree(path: Path, *, retries: int = 5, delay_s: float = 0.1) -> None:
     """``shutil.rmtree`` that tolerates Windows file-handle lag.
@@ -211,6 +218,7 @@ class Session:
             render labels without an external lookup.
         """
         meta: dict[str, object] = {
+            "schema_version": _META_SCHEMA_VERSION,
             "app_name": app_name,
             "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "streams": {
@@ -218,6 +226,12 @@ class Session:
                     "n_channels": info.n_channels,
                     "fs": info.fs,
                     "dtype": str(info.dtype),
+                    "channel_names": info.channel_names,
+                    "channel_grids": (
+                        [{"label": g.label, "cells": g.cells} for g in info.channel_grids]
+                        if info.channel_grids is not None
+                        else None
+                    ),
                 }
                 for name, info in self._streams_info.items()
             },
