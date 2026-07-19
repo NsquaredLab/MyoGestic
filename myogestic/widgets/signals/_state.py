@@ -347,17 +347,19 @@ def build_signal_frame(
 ) -> SignalFrame | None:
     """Read one live/frozen snapshot, slice the visible window, and filter.
 
-    Slices to `enabled` columns only — `data` is compacted to that subset,
-    see `SignalFrame.channel_map` for how to translate a column of `data`
-    back to its real channel index. `data_full` / `data_win` stay
-    full-width for consumers that still need every channel (e.g.
-    per-channel-scale ranges, diagnostics, and the per-channel plot loop
-    itself, all keyed by real channel index).
+    `data` is the enabled-only trace the plot draws (compacted to
+    `channel_map`); `data_win` stays the full-width visible window for the
+    footer diagnostics, which index it by real channel. In every mode except
+    `rms_env`, `data` is the display-filtered visible window and `trace_ts`
+    equals `ts_win`. In `rms_env` mode `data` is instead the *sparse* RMS
+    envelope from `compute_rms_trace` (computed over a pre-roll-extended,
+    enabled-only slice), `trace_ts` is its hop-endpoint time base, and
+    `data_win` is kept RAW so the footer's rms/pp/mean still describe the real
+    signal.
 
-    Does *not* decimate: decimation runs once per frame, over every enabled
-    column at once (`minmax_grid_all_shared_x`), inside `render_plot`
-    (`_plot.py`) — so this function only ever needs to hand it the raw
-    (filtered, windowed, enabled-column-sliced) samples.
+    Does *not* MinMax-decimate: that runs once per frame over every enabled
+    column at once (`minmax_grid_all_shared_x`) inside `render_plot`
+    (`_plot.py`) — this function only hands it the trace to draw.
     """
     frame_start = _time.perf_counter()
     if v.paused and v.frozen_data is not None and v.frozen_ts is not None:

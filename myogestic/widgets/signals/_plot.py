@@ -355,18 +355,24 @@ def render_footer(
     fill_pct = 100.0 * n_buf / capacity if capacity > 0 else 0.0
     paused_tag = "  ⏸ PAUSED" if v.paused else ""
 
-    # Decimation itself now happens once for every enabled channel together
-    # inside the plot loop (which already ran, above, this same frame) —
-    # `v.last_decim_n_out` is that call's plot-width-derived target, stashed
-    # on `v` since this function runs after `end_plot()` and can't query the
-    # live plot itself. Every channel shares the same raw window length, so
-    # whether decimation kicked in at all is uniform across channels and can
-    # be read off a single `raw_len > n_out` check.
-    raw_len = len(frame.data_win)
-    n_out = v.last_decim_n_out or raw_len
-    is_decimated = raw_len > n_out
-    pts_per_ch = min(raw_len, n_out) if is_decimated else raw_len
-    display_tag = "raw" if not is_decimated else f"MinMax {raw_len}->{pts_per_ch}"
+    # Report the points-per-channel actually drawn. In rms_env mode the trace
+    # is the *sparse* RMS envelope (`frame.trace_ts`), already ~window/hop
+    # points and never decimated — so describe it as such rather than as a
+    # raw→MinMax reduction of the (undrawn) raw window. Otherwise: decimation
+    # happened once for every enabled channel inside the plot loop that already
+    # ran this frame; `v.last_decim_n_out` is that call's plot-width-derived
+    # target (stashed on `v` since this runs after `end_plot()`), and every
+    # channel shares the same raw window length so a single `raw_len > n_out`
+    # check tells us whether it kicked in.
+    if v.display_filter == "rms_env":
+        pts_per_ch = len(frame.trace_ts)
+        display_tag = "RMS env"
+    else:
+        raw_len = len(frame.data_win)
+        n_out = v.last_decim_n_out or raw_len
+        is_decimated = raw_len > n_out
+        pts_per_ch = min(raw_len, n_out) if is_decimated else raw_len
+        display_tag = "raw" if not is_decimated else f"MinMax {raw_len}->{pts_per_ch}"
 
     imgui.text_colored(
         imgui.ImVec4(0.5, 0.5, 0.5, 1.0),
