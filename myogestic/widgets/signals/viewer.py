@@ -94,10 +94,12 @@ def signal_viewer(
 
     `initial_channels` sets which channels open enabled, e.g. `range(16)`
     for "the first 16" — do not pass a bare `int` for that, it would be
-    ambiguous with a single channel index. It only seeds the *first* time
-    a given stream/channel-count is shown; once a selection exists (here
-    or restored from a prior visit to that stream), the user's own toggle
-    edits are never overwritten. `None` (the default) falls back to
+    ambiguous with a single channel index. It seeds only the very first
+    selection this viewer resolves (its initial stream/channel-count); a
+    different stream later shown through a `selectable` viewer falls back
+    to the `None` policy, not this hint. Once a selection exists (here or
+    restored from a prior visit), the user's own toggle edits are never
+    overwritten. `None` (the default) falls back to
     :func:`~myogestic.widgets.signals._channel_grid.resolve_initial`'s
     policy: every channel when `n_channels <= 32`, otherwise the first 16.
     """
