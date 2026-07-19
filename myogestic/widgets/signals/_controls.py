@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from imgui_bundle import imgui
 
 from myogestic.widgets.common import PALETTE
+from myogestic.widgets.signals._channel_grid import (
+    normalize_layout,
+    rect_to_channels,
+    reduce_selection,
+)
 from myogestic.widgets.signals._scan import _scan_panel
 
 if TYPE_CHECKING:
     from myogestic.core import Context
-    from myogestic.stream import Stream
+    from myogestic.stream import ChannelGrid, Stream
     from myogestic.widgets.signals._state import ViewerState
 
 
@@ -161,80 +167,266 @@ def render_resolution_controls(
     imgui.pop_item_width()
 
 
+@dataclass
+class _DragSession:
+    """In-flight click/drag session for one grid's toggle-grid.
+
+    Armed on mouse-down over a cell, resolved on release. `dragged`
+    distinguishes a below-threshold click (single toggle, resolved from
+    `op`/`ch0`) from a rectangle drag (already applied live, frame by
+    frame, from `snapshot`).
+    """
+
+    armed: bool = False
+    grid_idx: int = -1
+    r0: int = -1
+    c0: int = -1
+    ch0: int = -1
+    op: str = "add"
+    snapshot: set[int] = field(default_factory=set)
+    dragged: bool = False
+
+
+@dataclass
+class _GridUIState:
+    """Per-stream interaction state for the channel grid.
+
+    Mirrors the module-level per-stream-name dict pattern already used by
+    `_scan.py`'s `_ScanState` for transient widget state that must survive
+    across frames but doesn't belong on the shared `ViewerState`.
+    """
+
+    drag: _DragSession = field(default_factory=_DragSession)
+    last_clicked: int = -1
+
+
+_grid_ui: dict[str, _GridUIState] = {}
+
+
 def render_channel_controls(
     stream_name: str,
     stream: Stream,
     v: ViewerState,
     n_channels: int,
 ) -> tuple[set[int], list[str] | None, int]:
-    if not v.channels_initialized or max(v.channels, default=-1) >= n_channels:
-        v.channels = set(range(n_channels))
-        v.specs = []
-        v.channels_initialized = True
+    """Render the spatial toggle-grid and mutate `v.channels` from user input.
+
+    `resolve_enabled` (in `_state.py`) owns initializing `v.channels` before
+    this runs each frame — this function only ever reads/mutates the
+    existing selection, it never (re)seeds it.
+    """
     enabled = v.channels
     ch_names = stream.info.channel_names if stream.info else None
+    channel_grids = stream.info.channel_grids if stream.info else None
+    layout = normalize_layout(channel_grids, n_channels)
+    ui = _grid_ui.setdefault(stream_name, _GridUIState())
 
-    render_channel_presets(stream_name, enabled, n_channels)
-
+    cell = imgui.get_frame_height()
     hovered_ch = -1
-    for ch in range(n_channels):
-        if ch > 0:
-            imgui.same_line()
-            if imgui.get_content_region_avail().x < 80:
-                imgui.new_line()
-        hovered_ch = render_channel_toggle(stream_name, enabled, ch_names, hovered_ch, ch)
+    for grid_idx, grid in enumerate(layout):
+        hovered_ch = render_grid(
+            stream_name, grid_idx, grid, enabled, ch_names, ui, cell, hovered_ch
+        )
+
+    _finalize_drag(ui, enabled)
+    render_channel_footer(stream_name, enabled, n_channels)
 
     return enabled, ch_names, hovered_ch
 
 
-def render_channel_presets(
+def render_grid(
     stream_name: str,
-    enabled: set[int],
-    n_channels: int,
-) -> None:
-    if n_channels <= 4:
-        return
-    if imgui.small_button(f"All##{stream_name}_all"):
-        enabled.clear()
-        enabled.update(range(n_channels))
-    imgui.same_line()
-    if imgui.small_button(f"None##{stream_name}_none"):
-        enabled.clear()
-    imgui.same_line()
-    if imgui.small_button(f"Even##{stream_name}_even"):
-        enabled.clear()
-        enabled.update(range(0, n_channels, 2))
-    imgui.same_line()
-    if imgui.small_button(f"Odd##{stream_name}_odd"):
-        enabled.clear()
-        enabled.update(range(1, n_channels, 2))
-    if n_channels >= 8:
-        imgui.same_line()
-        if imgui.small_button(f"First 8##{stream_name}_f8"):
-            enabled.clear()
-            enabled.update(range(8))
-
-
-def render_channel_toggle(
-    stream_name: str,
+    grid_idx: int,
+    grid: ChannelGrid,
     enabled: set[int],
     ch_names: list[str] | None,
+    ui: _GridUIState,
+    cell: float,
     hovered_ch: int,
-    ch: int,
 ) -> int:
+    """Render one grid's header + cells; returns the updated `hovered_ch`."""
+    columns = grid.columns
+    total = len(columns)
+    sel = sum(1 for c in columns if c in enabled)
+    imgui.text(f"{grid.label}  {sel}/{total}")
+    imgui.same_line()
+    if imgui.small_button(f"All##{stream_name}_g{grid_idx}_all"):
+        enabled.update(columns)
+    imgui.same_line()
+    if imgui.small_button(f"None##{stream_name}_g{grid_idx}_none"):
+        enabled.difference_update(columns)
+
+    if not grid.cells or not grid.cells[0]:
+        return hovered_ch
+
+    spacing = imgui.get_style().item_spacing.x
+    origin = imgui.get_cursor_screen_pos()
+
+    for row_idx, row in enumerate(grid.cells):
+        for col_idx, ch in enumerate(row):
+            if col_idx > 0:
+                imgui.same_line()
+            if ch is None:
+                imgui.dummy(imgui.ImVec2(cell, cell))
+                continue
+            hovered_ch = render_cell(
+                stream_name,
+                grid_idx,
+                row_idx,
+                col_idx,
+                ch,
+                enabled,
+                ch_names,
+                grid.label,
+                ui,
+                cell,
+                hovered_ch,
+            )
+
+    # Live rectangle update: recompute from the mouse-down snapshot every
+    # frame the drag is in progress, hit-testing the cursor against this
+    # frame's own grid geometry — a hovered *item* isn't reliable here since
+    # ImGui suppresses other items' hover while the origin cell is active.
+    drag = ui.drag
+    if drag.armed and drag.grid_idx == grid_idx and imgui.is_mouse_down(imgui.MouseButton_.left):
+        io = imgui.get_io()
+        if drag.dragged or imgui.is_mouse_dragging(
+            imgui.MouseButton_.left, io.mouse_drag_threshold
+        ):
+            drag.dragged = True
+            r1, c1 = _hit_test(origin, cell, spacing, imgui.get_mouse_pos())
+            new_enabled = reduce_selection(
+                drag.snapshot, drag.op, rect_to_channels(grid, drag.r0, drag.c0, r1, c1)
+            )
+            enabled.clear()
+            enabled.update(new_enabled)
+
+    return hovered_ch
+
+
+def _hit_test(
+    origin: imgui.ImVec2, cell: float, spacing: float, mouse: imgui.ImVec2
+) -> tuple[int, int]:
+    """Map a screen-space mouse position to a `(row, col)` cell address.
+
+    Purely geometric (uniform grid, known origin/step) — no reliance on
+    per-item hover, which ImGui suppresses for non-active items during a
+    drag. Out-of-range results are expected and safe: `rect_to_channels`
+    clamps them to the grid bounds.
+    """
+    step = cell + spacing
+    if step <= 0:
+        return 0, 0
+    row = int((mouse.y - origin.y) // step)
+    col = int((mouse.x - origin.x) // step)
+    return row, col
+
+
+def render_cell(
+    stream_name: str,
+    grid_idx: int,
+    row_idx: int,
+    col_idx: int,
+    ch: int,
+    enabled: set[int],
+    ch_names: list[str] | None,
+    grid_label: str,
+    ui: _GridUIState,
+    cell: float,
+    hovered_ch: int,
+) -> int:
+    """Render one channel cell; returns the updated `hovered_ch`."""
+    imgui.invisible_button(f"##{stream_name}_cell_{ch}", imgui.ImVec2(cell, cell))
+
     is_on = ch in enabled
     color = PALETTE[ch % len(PALETTE)]
+    p_min = imgui.get_item_rect_min()
+    p_max = imgui.get_item_rect_max()
+    dl = imgui.get_window_draw_list()
+    rounding = cell * 0.15
+
     if is_on:
-        imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(color[0], color[1], color[2], 0.7))
+        bg = imgui.color_convert_float4_to_u32(imgui.ImVec4(color[0], color[1], color[2], 0.35))
+        dl.add_rect_filled(p_min, p_max, bg, rounding=rounding)
+        center = imgui.ImVec2((p_min.x + p_max.x) * 0.5, (p_min.y + p_max.y) * 0.5)
+        dot = imgui.color_convert_float4_to_u32(imgui.ImVec4(color[0], color[1], color[2], 1.0))
+        dl.add_circle_filled(center, cell * 0.18, dot)
     else:
-        imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.3, 0.3, 0.3, 0.5))
-    label = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
-    if imgui.button(f"{label}##{stream_name}_tog{ch}"):
+        # Dim + hollow border: an on/off cue beyond brightness alone
+        # (colorblind-safe) — a filled dot vs. no dot, not just color.
+        border = imgui.color_convert_float4_to_u32(imgui.ImVec4(0.5, 0.5, 0.5, 0.6))
+        dl.add_rect(p_min, p_max, border, rounding=rounding)
+
+    if imgui.is_item_hovered():
+        hovered_ch = ch
+        name = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
+        imgui.set_tooltip(f"{grid_label} · col {ch} · {name}")
+        highlight = imgui.color_convert_float4_to_u32(imgui.ImVec4(1.0, 1.0, 1.0, 0.8))
+        dl.add_rect(p_min, p_max, highlight, rounding=rounding, thickness=1.5)
+
+    if imgui.is_item_focused() and imgui.is_key_pressed(imgui.Key.space):
         if is_on:
             enabled.discard(ch)
         else:
             enabled.add(ch)
-    if imgui.is_item_hovered():
-        hovered_ch = ch
-    imgui.pop_style_color()
+
+    if imgui.is_item_activated():
+        io = imgui.get_io()
+        if io.key_shift and ui.last_clicked >= 0:
+            lo, hi = sorted((ui.last_clicked, ch))
+            new_enabled = reduce_selection(enabled, "add", range(lo, hi + 1))
+            enabled.clear()
+            enabled.update(new_enabled)
+            ui.drag.armed = False
+        else:
+            ui.drag = _DragSession(
+                armed=True,
+                grid_idx=grid_idx,
+                r0=row_idx,
+                c0=col_idx,
+                ch0=ch,
+                op="remove" if is_on else "add",
+                snapshot=set(enabled),
+                dragged=False,
+            )
+            ui.last_clicked = ch
+
     return hovered_ch
+
+
+def _finalize_drag(ui: _GridUIState, enabled: set[int]) -> None:
+    """Resolve an armed click/drag session once the mouse button lets go.
+
+    A rectangle drag has already been applied live (see `render_grid`), so
+    only a below-threshold click needs resolving here: a plain toggle of
+    the mouse-down cell via the `op` captured at mouse-down.
+    """
+    drag = ui.drag
+    if not drag.armed or imgui.is_mouse_down(imgui.MouseButton_.left):
+        return
+    if not drag.dragged:
+        if drag.op == "add":
+            enabled.add(drag.ch0)
+        else:
+            enabled.discard(drag.ch0)
+    drag.armed = False
+
+
+def render_channel_footer(
+    stream_name: str,
+    enabled: set[int],
+    n_channels: int,
+) -> None:
+    imgui.text(f"enabled {len(enabled)}/{n_channels}")
+    imgui.same_line()
+    if imgui.small_button(f"All##{stream_name}_foot_all"):
+        enabled.clear()
+        enabled.update(range(n_channels))
+    imgui.same_line()
+    if imgui.small_button(f"None##{stream_name}_foot_none"):
+        enabled.clear()
+    imgui.same_line()
+    if imgui.small_button(f"Invert##{stream_name}_foot_invert"):
+        new_enabled = reduce_selection(enabled, "invert", range(n_channels))
+        enabled.clear()
+        enabled.update(new_enabled)
