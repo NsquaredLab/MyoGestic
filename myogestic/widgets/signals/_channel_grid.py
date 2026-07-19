@@ -8,6 +8,7 @@ non-imgui frontend.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from math import ceil, sqrt
 
 from myogestic.stream import ChannelGrid
@@ -100,3 +101,59 @@ def normalize_layout(channel_grids: list[ChannelGrid] | None, n_channels: int) -
         result.append(ChannelGrid(grid.label, new_cells))
 
     return result if result else fallback
+
+
+def rect_to_channels(grid: ChannelGrid, r0: int, c0: int, r1: int, c1: int) -> set[int]:
+    """Return the non-``None`` channels covered by the cell rectangle `(r0, c0)`-`(r1, c1)`.
+
+    The corners are order-independent (dragging in any direction yields the
+    same result); out-of-bounds row/column indices are simply clipped.
+    """
+    top, bottom = sorted((r0, r1))
+    left, right = sorted((c0, c1))
+    channels: set[int] = set()
+    for row in grid.cells[top : bottom + 1]:
+        for cell in row[left : right + 1]:
+            if cell is not None:
+                channels.add(cell)
+    return channels
+
+
+def reduce_selection(enabled: set[int], op: str, targets: Iterable[int]) -> set[int]:
+    """Apply a selection `op` to `enabled`, returning the new selection set.
+
+    `op` is one of ``"add"``, ``"remove"``, ``"toggle"``, ``"set"``,
+    ``"invert"``, ``"all"``, ``"none"``. Callers drive ``invert``/``all``/
+    ``none`` by passing the full channel range as `targets`.
+    """
+    target_set = set(targets)
+    if op == "add" or op == "all":
+        return enabled | target_set
+    if op == "remove" or op == "none":
+        return enabled - target_set
+    if op == "toggle" or op == "invert":
+        return enabled ^ target_set
+    if op == "set":
+        return target_set
+    msg = f"unknown selection op: {op!r}"
+    raise ValueError(msg)
+
+
+def resolve_initial(
+    initial_channels: Iterable[int] | None,
+    n_channels: int,
+    layout: list[ChannelGrid],
+) -> set[int]:
+    """Resolve the widget's initial selection.
+
+    ``None`` selects every channel when `n_channels` is small (``<= 32``),
+    otherwise the first ``min(n_channels, 16)``. An explicit iterable is
+    clamped to the valid ``[0, n_channels)`` range. `layout` is accepted for
+    interface symmetry with future policies but isn't consulted yet.
+    """
+    del layout
+    if initial_channels is None:
+        if n_channels <= 32:
+            return set(range(n_channels))
+        return set(range(min(n_channels, 16)))
+    return {c for c in initial_channels if 0 <= c < n_channels}
