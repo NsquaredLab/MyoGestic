@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-07-20
+
+### Fixed
+
+- **Log boxes are selectable and copyable again.** `render_log` — used by the
+  model training log and the process launcher — drew each line with
+  `imgui.text_unformatted`, which paints static glyphs that cannot be
+  selected, so the log text could not be copied out. It now renders a
+  read-only `input_text_multiline`, the same widget `log_panel` already uses,
+  so the text can be selected and copied (Ctrl/Cmd+C). The box scrolls
+  natively; the previous forced stick-to-bottom autoscroll is no longer
+  applied (consistent with `log_panel`).
+
 ## [2.2.0] - 2026-07-19
 
 Signal-viewer overhaul for high-channel HD-EMG: a spatial channel selector, an

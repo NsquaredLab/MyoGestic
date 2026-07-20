@@ -26,41 +26,40 @@ def render_log(
     height: float = -1.0,
     autoscroll: bool = True,
 ) -> None:
-    """Render ``lines`` as a scrollable child window with smart autoscroll.
+    """Render ``lines`` as a scrollable, read-only text box.
 
-    Smart autoscroll: only snaps to the bottom when the user is **already**
-    at (or within 1 px of) the bottom — scrolling up to inspect older
-    lines pauses the auto-follow until the user scrolls back down. This
-    means the autoscroll button toggles the *default* behavior; the user
-    can always opt out for a frame by scrolling up.
+    Uses a read-only ``input_text_multiline`` — the same widget
+    :func:`~myogestic.widgets.panels.log_panel.log_panel` uses — so the log
+    text can be **selected and copied** (Ctrl/Cmd+C). The previous renderer
+    drew each line with ``imgui.text_unformatted``, which paints static
+    glyphs that cannot be selected, so log text could not be copied out.
 
     Parameters
     ----------
     widget_id
-        Unique per-panel ID for the child window's ImGui label.
+        Unique per-panel ID for the box's ImGui label.
     lines
         Any sequence — list, tuple, deque, anything iterable. Caller
         is responsible for thread-safe access; we snapshot under the
         GIL via ``list(lines)`` to dodge concurrent-mutation issues
         with deques/lists appended to from a worker thread.
     height
-        Pixel height of the log box. ``-1`` (default) fills the
+        Pixel height of the box. ``-1`` (default) fills the
         remaining vertical space of the parent.
     autoscroll
-        Stick-to-bottom toggle (typically wired to a button
-        elsewhere on the parent panel).
+        Accepted for call-site compatibility. The read-only box scrolls
+        natively; the previous forced stick-to-bottom tail-follow is no
+        longer applied (matches ``log_panel``).
     """
-    imgui.begin_child(
-        f"##{widget_id}_log_child",
-        imgui.ImVec2(-1, height),
-        child_flags=imgui.ChildFlags_.borders,
-        window_flags=imgui.WindowFlags_.horizontal_scrollbar,
+    del autoscroll  # retained in the signature for existing call sites
+    text = "\n".join(list(lines))
+    h = height if height > 0 else -1.0
+    imgui.input_text_multiline(
+        f"##{widget_id}_log",
+        text,
+        imgui.ImVec2(-1, h),
+        flags=imgui.InputTextFlags_.read_only,
     )
-    for line in list(lines):
-        imgui.text_unformatted(line)
-    if autoscroll and imgui.get_scroll_y() >= imgui.get_scroll_max_y() - 1:
-        imgui.set_scroll_here_y(1.0)
-    imgui.end_child()
 
 
 def render_log_buttons(
