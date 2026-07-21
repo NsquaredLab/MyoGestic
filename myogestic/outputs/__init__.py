@@ -22,6 +22,7 @@ from myogestic.outputs.filters import (
     IdentityFilter,
     OneEuroFilter,
     VectorFilter,
+    chain,
     make_filter,
 )
 from myogestic.outputs.lsl import LSLOutlet
@@ -35,6 +36,7 @@ __all__ = [
     "IdentityFilter",
     "GaussianFilter",
     "OneEuroFilter",
+    "chain",
     "make_filter",
     "EdgeTrigger",
 ]

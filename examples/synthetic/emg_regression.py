@@ -29,12 +29,12 @@ from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
+    PostProcessor,
     ProcessLauncher,
     SessionManager,
     SignalViewer,
     StreamPanel,
 )
-from myogestic.widgets.panels.filter_controls import FilterControl
 from myogestic.widgets.panels.recording import RecordingControls
 
 ctrl_outlet = control_outlet()
@@ -46,8 +46,8 @@ vhi_outlet = vhi.outlet()
 vhi_client = vhi.control_client()
 
 # Output-side smoothing applied to the 9-DOF hand vector before pushing
-# to VHI. Live-tunable via the FilterControl widget rendered in the UI.
-output_filter = FilterControl(hz=32, default="one_euro")
+# to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
+output_filter = PostProcessor(hz=32)
 
 # Mosaic-2.0 registry indices; selecting these from VHI_Control during
 # training gives a 5-DOF target (WristRot + 4 fingers) instead of the full

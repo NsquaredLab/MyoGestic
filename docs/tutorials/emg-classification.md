@@ -54,7 +54,7 @@ VHI consumes a 9-vec pose; we hand-define the two target poses (rest and full fi
 --8<-- "examples/synthetic/emg_classification.py:filter"
 ```
 
-[`FilterControl`][myogestic.widgets.FilterControl] is the post-processing widget - exposes a UI panel and is callable. We'll wire the call inside `predict()` and the panel inside `@app.ui`.
+[`PostProcessor`][myogestic.widgets.PostProcessor] is the post-processing widget - exposes a UI panel and is callable. We'll wire the call inside `predict()` and the panel inside `@app.ui`.
 
 See [Post-process predictions](../how-to/post-process-output.md) for tuning.
 

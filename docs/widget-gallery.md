@@ -73,7 +73,7 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="grid cards" markdown>
 
--   __[FilterControl][myogestic.widgets.FilterControl]__
+-   __[PostProcessor][myogestic.widgets.PostProcessor]__
 
     ![FilterControl](images/widgets/FilterControl.png){ .widget-thumb loading=lazy }
 

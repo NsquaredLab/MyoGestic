@@ -51,13 +51,26 @@ function but `FeatureSelector` an object?".
   instances hold state, so rebuilding one every frame resets its selections /
   tuning.
 
-- **`FilterControl`'s `widget_id`** moved from `.ui(widget_id=...)` to the
-  constructor (`FilterControl(..., widget_id=...)`); `.ui()` now takes no args.
+- **`FilterControl` replaced by `PostProcessor` / `FilterProcessor`.** The
+  output-smoothing widget is now an **extensible** palette: `PostProcessor(hz=…)`
+  is the drop-in preset (three built-in filters, one-euro default) and
+  `FilterProcessor(filters=[…])` accepts your own filters as `FilterSpec`s
+  (auto-generated sliders from each spec's `FilterParam`s). `FilterControl(hz=32,
+  default="one_euro")` becomes `PostProcessor(hz=32)`.
+
+### Added
+
+- **Extensible output filters.** Register custom smoothers via `FilterSpec` /
+  `FilterParam`, and compose several into one with
+  [`chain`][myogestic.outputs.chain] (`chain(GaussianFilter(...),
+  OneEuroFilter(...))` is a single `VectorFilter`). One Euro now retains its
+  smoothing history while you tune it (in-place reconfigure, no reset-on-drag).
 
 ### Fixed
 
 - **`FeatureSelector` ImGui id collision.** Two selectors in one window no longer
-  collide (the render is scoped per instance).
+  collide (the render is scoped per instance), and columns are laid out in a
+  content-sized table so a label never clips under the next checkbox.
 
 ## [2.2.0] - 2026-07-19
 

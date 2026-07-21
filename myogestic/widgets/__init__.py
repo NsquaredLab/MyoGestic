@@ -2,10 +2,14 @@
 
 from myogestic.widgets.common import panel_header
 from myogestic.widgets.panels import (
+    BUILTIN_FILTERS,
     AppLogo,
-    FilterControl,
+    FilterParam,
+    FilterProcessor,
+    FilterSpec,
     Image,
     LogPanel,
+    PostProcessor,
     ProcessLauncher,
     RecordingControls,
     popout_panel,
@@ -33,13 +37,17 @@ from myogestic.widgets.vhi import (
 )
 
 __all__ = [
+    "BUILTIN_FILTERS",
     "AppLogo",
     "FeatureSelector",
-    "FilterControl",
+    "FilterParam",
+    "FilterProcessor",
+    "FilterSpec",
     "Heatmap",
     "Image",
     "LinePlot",
     "LogPanel",
+    "PostProcessor",
     "PredictionLabel",
     "ProcessLauncher",
     "RawSignalViewer",

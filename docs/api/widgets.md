@@ -42,9 +42,15 @@ Widget classes you construct once and render with `.ui(...)` from inside `@app.u
 
 ---
 
-::: myogestic.widgets.FilterControl
+::: myogestic.widgets.PostProcessor
 
 ![FilterControl](../images/widgets/FilterControl.png){ loading=lazy }
+
+::: myogestic.widgets.FilterProcessor
+
+::: myogestic.widgets.FilterSpec
+
+::: myogestic.widgets.FilterParam
 
 ---
 

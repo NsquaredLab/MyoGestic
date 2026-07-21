@@ -48,6 +48,7 @@ from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
+    PostProcessor,
     PredictionLabel,
     ProcessLauncher,
     RecordingControls,
@@ -56,7 +57,6 @@ from myogestic.widgets import (
     StreamPanel,
 )
 from myogestic.widgets.common import panel_header
-from myogestic.widgets.panels.filter_controls import FilterControl
 from myogestic.widgets.panels.log_box import render_log_buttons, render_log_popout
 
 N_CHANNELS = 32
@@ -69,7 +69,7 @@ ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
-output_filter = FilterControl(hz=32, default="one_euro")
+output_filter = PostProcessor(hz=32)
 
 # Per-class 9-DOF hand poses. Library only ships the rest pose conceptually;
 # anything richer is experiment-specific and lives here.

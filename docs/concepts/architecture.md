@@ -40,7 +40,7 @@ A typical tick of the system:
 
 1. **Acquisition thread** for stream `"emg"` reads a chunk from `LSLSource`, appends to the ring buffer, refreshes the display snapshot, and (if `ctx.session` is non-`None`) appends to the active Zarr array.
 2. **Predict thread**, once per `1/predict_hz`, pulls a window via `Stream.get_window()` (channels-first), forwards it to `@pipeline.extract`, then to `@pipeline.predict(model, features)`. The returned `dict[str, Any]` is stored in `pipeline.predictions`.
-3. **Render thread** (main) draws widgets from `ctx`. `SignalViewer` calls `Stream.get_display(n_pixels)` for a min/max envelope. The pose-output filter (`FilterControl`) renders its panel.
+3. **Render thread** (main) draws widgets from `ctx`. `SignalViewer` calls `Stream.get_display(n_pixels)` for a min/max envelope. The pose-output filter (`PostProcessor`) renders its panel.
 4. **Output thread** for `LSLOutlet` checks its atomic latest-value slot every `1/hz`, sends if changed.
 
 Every box runs on its own daemon thread. The shared `Context` is the only synchronisation surface.

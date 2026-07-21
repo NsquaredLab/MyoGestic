@@ -67,7 +67,7 @@ Each thing visible in the window maps directly to one MyoGestic primitive. Once 
 - **Process launchers** (top-left) - the [`ProcessLauncher`](api/widgets.md) widget. Each entry is a subprocess command - here, the synthetic EMG generator and the Virtual Hand.
 - **Recording controls** with `Rest` / `Fist` buttons and a Record button - the [`RecordingControls`](api/widgets.md) widget. Clicking a button writes a label event; clicking Record toggles `app.start_recording()` / `app.stop_recording()`.
 - **Train / Predict / Save / Load** buttons - [`PipelinePanel`](api/ml.md) plus `SaveModelButton` / `LoadModelButton`. They drive the `Pipeline` state machine.
-- **Post-processing filter panel** - a [`FilterControl`](api/widgets.md) widget. The script also calls it from inside `predict()` to smooth the output vector before pushing.
+- **Post-processing filter panel** - a [`PostProcessor`](api/widgets.md) widget. The script also calls it from inside `predict()` to smooth the output vector before pushing.
 - **Sessions** - the [`SessionManager`](api/widgets.md) widget. It returns a `TrainingData` object the script assigns to `pipeline.training_data`, which is what `@pipeline.train` receives when you click Train.
 
 Want the code-side view of the same thing? Read **[Anatomy of a MyoGestic app](anatomy.md)** - it walks through a complete 35-line script in the order you write it.

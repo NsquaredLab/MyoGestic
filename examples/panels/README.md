@@ -29,7 +29,7 @@ the stream-backed examples.
 | `feature_selector.py` | [`FeatureSelector`][fs] | Feature tick-list + active count |
 | `template_inspector.py` | [`template_inspector`][ti] | Accept/reject/select table of rows |
 | `trial_preview.py` | [`trial_preview`][tp] | Stacked waveform + shaded band overlay |
-| `filter_control.py` | [`FilterControl`][fc] | Live-tunable output smoother |
+| `post_processor.py` | [`PostProcessor`][pp2] | Live-tunable output smoother (extensible filter palette) |
 | `process_launcher.py` | [`process_launcher`][pr] | Start/stop external subprocesses |
 | `log_panel.py` | [`log_panel`][lg] | App-event log (seeded with dummy lines) |
 | `image.py` | [`image`][im] | Generic fit-to-cell image widget (shipped app icon) |
@@ -67,7 +67,7 @@ and the non-widget helpers `TemplateInspectorRow`, `request_vhi_state_refresh`,
 [fs]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.FeatureSelector
 [ti]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.template_inspector
 [tp]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.trial_preview
-[fc]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.FilterControl
+[pp2]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.PostProcessor
 [pr]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.process_launcher
 [lg]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.log_panel
 [im]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.image

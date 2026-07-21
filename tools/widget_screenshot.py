@@ -229,10 +229,10 @@ def render_session_manager(out: Path) -> None:
 
 def render_filter_control(out: Path) -> None:
     from myogestic import App
-    from myogestic.widgets import FilterControl
+    from myogestic.widgets import PostProcessor
 
     app = App("FilterControl")
-    fc = FilterControl(hz=20.0, default="one_euro")
+    fc = PostProcessor(hz=20.0)
 
     @app.ui
     def ui(ctx):

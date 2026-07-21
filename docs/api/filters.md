@@ -17,3 +17,7 @@ Output-side smoothing filters for prediction-output control vectors. Custom filt
 ## Factory
 
 ::: myogestic.outputs.filters.make_filter
+
+## Composition
+
+::: myogestic.outputs.filters.chain
