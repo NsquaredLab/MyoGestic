@@ -17,10 +17,10 @@ import sys
 from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.sources import LSLSource
 from myogestic.widgets import (
-    log_panel,
-    process_launcher,
-    signal_viewer,
-    stream_panel,
+    LogPanel,
+    ProcessLauncher,
+    SignalViewer,
+    StreamPanel,
 )
 
 N_CHANNELS = 256
@@ -57,17 +57,22 @@ grid = Grid(
     col_width=[Px(260), Fr(1)],
 )
 
+viewer = SignalViewer("emg", selectable=True)
+processes = ProcessLauncher(PROCESSES)
+streams = StreamPanel()
+log = LogPanel()
+
 
 @app.ui
 def demo_ui(ctx):
     with grid[0:5, 1]:
-        signal_viewer(ctx, "emg", selectable=True)
+        viewer.ui(ctx)
     with grid[0, 0]:
-        process_launcher(PROCESSES)
+        processes.ui()
     with grid[1, 0]:
-        stream_panel(ctx)
+        streams.ui(ctx)
     with grid[2, 0]:
-        log_panel(ctx)
+        log.ui(ctx)
 
 
 def main() -> None:

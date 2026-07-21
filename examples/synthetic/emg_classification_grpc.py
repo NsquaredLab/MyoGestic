@@ -27,7 +27,7 @@ import numpy as np
 
 from myogestic import App, EdgeTrigger, Fr, Grid, Px, Stream, TrainingData
 from myogestic.ml import Pipeline
-from myogestic.ml.widgets import pipeline_panel
+from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
 from myogestic.recipes.features import mav, rms, var, wl
 from myogestic.session import iter_labeled_windows
@@ -35,15 +35,15 @@ from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
+    AppLogo,
     FeatureSelector,
     FilterControl,
+    PredictionLabel,
+    ProcessLauncher,
+    RecordingControls,
+    SessionManager,
+    SignalViewer,
     VhiMovementPanel,
-    app_logo,
-    prediction_label,
-    process_launcher,
-    recording_controls,
-    session_manager,
-    signal_viewer,
 )
 
 ctrl_outlet = control_outlet()
@@ -101,9 +101,7 @@ WINDOW_MS = 200
 HOP_MS = 100
 
 app = App("EMG Classification (gRPC)", ui_scale=0.85)
-app.streams(
-    Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000)
-)
+app.streams(Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 
 
@@ -222,45 +220,52 @@ def _on_stop() -> None:
 # get_state() refresh, so the @app.ui body stays free of plumbing.
 vhi_panel = VhiMovementPanel(vhi_client)
 
+viewer = SignalViewer("emg")
+logo = AppLogo()
+processes = ProcessLauncher(PROCESSES)
+recording = RecordingControls(
+    CLASSES,
+    on_record=_on_record,
+    on_stop=_on_stop,
+    on_gesture=_on_gesture,
+)
+sessions = SessionManager("sessions", class_names=CLASSES)
+panel = PipelinePanel(pipeline)
+prediction = PredictionLabel(pipeline, CLASSES)
+
 
 @app.ui
 def demo_ui(ctx):
     with grid[0:9, 1:3]:
-        signal_viewer(ctx, "emg")
+        viewer.ui(ctx)
 
     with grid[0, 0]:
         # No size cap — let the wordmark grow to the cell. The widget
         # fits-in-rect (preserving aspect), so the image always renders
         # at the largest aspect-preserving box that fits the current
         # cell dimensions and centres itself.
-        app_logo()
+        logo.ui()
 
     with grid[1, 0]:
-        process_launcher(PROCESSES)
+        processes.ui()
 
     with grid[2, 0]:
-        recording_controls(
-            ctx,
-            CLASSES,
-            on_record=_on_record,
-            on_stop=_on_stop,
-            on_gesture=_on_gesture,
-        )
+        recording.ui(ctx)
 
     with grid[3, 0]:
         features.ui()
 
     with grid[4, 0]:
-        pipeline.training_data = session_manager("sessions", class_names=CLASSES)
+        pipeline.training_data = sessions.ui()
 
     with grid[5, 0]:
-        pipeline_panel(pipeline)
+        panel.ui()
 
     with grid[6, 0]:
         output_filter.ui()
 
     with grid[7, 0]:
-        prediction_label(pipeline, CLASSES)
+        prediction.ui()
 
     with grid[8, 0]:
         vhi_panel.ui()

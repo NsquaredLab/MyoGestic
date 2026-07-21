@@ -8,7 +8,7 @@ A typical first run looks like this:
 
 1. Click **Record** → click **Rest** → wait → click **Fist** → click **Stop**.
 2. Repeat for two more sessions.
-3. Tick all three sessions in [`session_manager`][myogestic.widgets.session_manager], click **Train**.
+3. Tick all three sessions in [`SessionManager`][myogestic.widgets.SessionManager], click **Train**.
 4. Click **Predict**. Hand barely moves. Confidence numbers are mediocre. Single classes get confused with each other.
 
 Each session above has **exactly two label events** (Rest, Fist) with maybe 3-5 seconds of data total. After framework processing, classification models see one window per class - far less than CatBoost / sklearn / etc. need, and the first segment is dropped anyway (the framework's "skip first" heuristic - it's usually onset noise).
@@ -44,7 +44,7 @@ The "comfortable" column is the regime where models start performing within a fe
 
 ## Verifying before you train
 
-The `template_inspector` and `trial_preview` widgets show the trials extracted from your selected sessions. Look at:
+The `TemplateInspector` and `TrialPreview` widgets show the trials extracted from your selected sessions. Look at:
 
 - **Counts**: at least 5 trials of each class for classification; more if your hardware is noisy.
 - **Per-trial preview pop-out**: each trial should show a clean activation onset followed by sustained activity. If a "trial" lands on a flat baseline, your labelling went wrong (usually because the recording started with the user already gripping).
@@ -55,7 +55,7 @@ The `template_inspector` and `trial_preview` widgets show the trials extracted f
 - **Return to rest between gestures.** Don't transition gesture → gesture directly. Rest is the framework's reference; muddy rest segments degrade both training and prediction.
 - **Record several sessions on different days** if you can. Cross-day variance is the largest noise source for surface EMG; one-day models often fail tomorrow.
 - **Check your signal viewer first.** If the live signal looks like noise across all channels even when you flex, your electrode placement is wrong - fix it before recording.
-- **Use `recording_controls`'s button strip, not just the Record button.** Each button click writes a [`LabelEvent`][myogestic.session.LabelEvent]; the trial slicer needs those events to know where one trial ends and the next begins.
+- **Use `RecordingControls`'s button strip, not just the Record button.** Each button click writes a [`LabelEvent`][myogestic.session.LabelEvent]; the trial slicer needs those events to know where one trial ends and the next begins.
 
 ## Common mistakes
 

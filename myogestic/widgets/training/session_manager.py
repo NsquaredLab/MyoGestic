@@ -16,43 +16,57 @@ from myogestic.widgets.training._session_state import (
     load_session_files,
 )
 
-__all__ = ["add_recorded_session", "session_manager"]
+__all__ = ["SessionManager", "add_recorded_session"]
 
 
-def session_manager(
-    base_path: str = "sessions",
-    title: str = "Sessions",
-    class_names: list[str] | None = None,
-) -> TrainingData:
-    """Session picker widget. Returns ``TrainingData(paths, class_names, classes)``.
+class SessionManager:
+    """Session picker widget. ``ui()`` returns ``TrainingData(paths, class_names, classes)``.
 
-    The widget has two training filters: selected session files and selected
-    class indices. Session scanning/state lives in
-    ``_session_manager_state.py``. Assign the returned value to
+    Construct once with the base path / title / class names, then call
+    :meth:`ui` each frame. The widget has two training filters: selected
+    session files and selected class indices. Assign the returned value to
     ``pipeline.training_data`` to make it visible to ``@pipeline.train``::
+
+        sessions = SessionManager("sessions", class_names=CLASSES)
 
         @app.ui
         def ui(ctx):
-            pipeline.training_data = session_manager(...)
+            pipeline.training_data = sessions.ui()
     """
-    widget_id = f"{title}_{base_path}"
-    state = get_state(widget_id)
 
-    panel_header(title, fa.ICON_FA_FOLDER_OPEN)
-    render_summary_and_buttons(widget_id, base_path, state)
-    poll_file_dialog(state)
+    def __init__(
+        self,
+        base_path: str = "sessions",
+        *,
+        title: str = "Sessions",
+        class_names: list[str] | None = None,
+    ) -> None:
+        self._base_path = base_path
+        self._title = title
+        self._class_names = class_names
+        self._widget_id = f"{title}_{base_path}"
 
-    classes_in_pool, active_classes = class_pool_and_active(state)
-    render_class_buttons(
-        widget_id, state.deactivated_classes, classes_in_pool, active_classes, class_names
-    )
-    render_session_rows(widget_id, state.sessions, class_names)
+    def ui(self) -> TrainingData:
+        """Render the picker and return the current training selection."""
+        widget_id = self._widget_id
+        class_names = self._class_names
+        state = get_state(widget_id)
 
-    return TrainingData(
-        paths=[s["path"] for s in state.sessions if s["selected"]],
-        class_names=list(class_names) if class_names else [],
-        classes=set(active_classes) if classes_in_pool else set(),
-    )
+        panel_header(self._title, fa.ICON_FA_FOLDER_OPEN)
+        render_summary_and_buttons(widget_id, self._base_path, state)
+        poll_file_dialog(state)
+
+        classes_in_pool, active_classes = class_pool_and_active(state)
+        render_class_buttons(
+            widget_id, state.deactivated_classes, classes_in_pool, active_classes, class_names
+        )
+        render_session_rows(widget_id, state.sessions, class_names)
+
+        return TrainingData(
+            paths=[s["path"] for s in state.sessions if s["selected"]],
+            class_names=list(class_names) if class_names else [],
+            classes=set(active_classes) if classes_in_pool else set(),
+        )
 
 
 def render_summary_and_buttons(widget_id: str, base_path: str, state: SessionWidgetState) -> None:
@@ -128,7 +142,9 @@ def render_class_buttons(
     imgui.new_line()
 
 
-def render_session_rows(widget_id: str, sessions: list[dict], class_names: list[str] | None) -> None:
+def render_session_rows(
+    widget_id: str, sessions: list[dict], class_names: list[str] | None
+) -> None:
     for i, row in enumerate(sessions):
         changed, checked = imgui.checkbox(f"##{widget_id}_{i}", row["selected"])
         if changed:

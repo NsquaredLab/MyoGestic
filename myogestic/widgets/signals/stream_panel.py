@@ -34,32 +34,36 @@ _MUTED = imgui.ImVec4(0.65, 0.65, 0.65, 1.0)
 _auto_scanned: set[str] = set()
 
 
-def stream_panel(
-    ctx: Context,
-    selectable: bool = True,
-    show_header: bool = True,
-) -> None:
-    """Render one row per stream with status + metadata + reconnect.
+class StreamPanel:
+    """Per-stream status panel — one row per stream with status + reconnect.
+
+    Construct once (optionally toggling ``selectable`` / ``show_header``),
+    then call :meth:`ui` with the live ``ctx`` each frame.
 
     Parameters
     ----------
-    ctx
-        App context.
     selectable
-        When True and the stream's source supports `discover()`,
+        When True and the stream's source supports ``discover()``,
         auto-populate available targets as inline connect buttons.
     show_header
-        Render a uniform `panel_header` above the rows.
+        Render a uniform ``panel_header`` above the rows.
     """
-    if show_header:
-        panel_header("Streams", fa.ICON_FA_PLUG)
 
-    if not ctx.streams:
-        imgui.text_colored(_MUTED, "(no streams registered)")
-        return
+    def __init__(self, *, selectable: bool = True, show_header: bool = True) -> None:
+        self._selectable = selectable
+        self._show_header = show_header
 
-    for name, stream in ctx.streams.items():
-        _stream_row(name, stream, selectable=selectable)
+    def ui(self, ctx: Context) -> None:
+        """Render one row per registered stream. Call once per frame."""
+        if self._show_header:
+            panel_header("Streams", fa.ICON_FA_PLUG)
+
+        if not ctx.streams:
+            imgui.text_colored(_MUTED, "(no streams registered)")
+            return
+
+        for name, stream in ctx.streams.items():
+            _stream_row(name, stream, selectable=self._selectable)
 
 
 def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
@@ -233,4 +237,4 @@ def _last_ts_age(stream: object) -> float | None:
     return age if age >= 0.0 else None
 
 
-__all__ = ["stream_panel"]
+__all__ = ["StreamPanel"]

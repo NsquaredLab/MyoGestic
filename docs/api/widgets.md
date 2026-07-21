@@ -1,44 +1,44 @@
 # Widgets
 
-Stateless function widgets you call from inside `@app.ui`. See [Widgets concept page](../concepts/widgets.md) for the contract and the [widget gallery](../widget-gallery.md) for a visual index of all of them on one page.
+Widget classes you construct once and render with `.ui(...)` from inside `@app.ui`. See the [Widgets concept page](../concepts/widgets.md) for the contract and the [widget gallery](../widget-gallery.md) for a visual index of all of them on one page.
 
 ---
 
-::: myogestic.widgets.signal_viewer
+::: myogestic.widgets.SignalViewer
 
 ![signal_viewer](../images/widgets/signal_viewer.png){ loading=lazy }
 
 ---
 
-::: myogestic.widgets.raw_signal_viewer
+::: myogestic.widgets.RawSignalViewer
 
 ---
 
-::: myogestic.widgets.recording_controls
+::: myogestic.widgets.RecordingControls
 
 ![recording_controls](../images/widgets/recording_controls.png){ loading=lazy }
 
 ---
 
-::: myogestic.widgets.session_manager
+::: myogestic.widgets.SessionManager
 
 ![session_manager](../images/widgets/session_manager.png){ loading=lazy }
 
 ---
 
-::: myogestic.widgets.process_launcher
+::: myogestic.widgets.ProcessLauncher
 
 ![process_launcher](../images/widgets/process_launcher.png){ loading=lazy }
 
 ---
 
-::: myogestic.widgets.scatter2d
+::: myogestic.widgets.Scatter2D
 
-::: myogestic.widgets.scatter3d
+::: myogestic.widgets.Scatter3D
 
-::: myogestic.widgets.heatmap
+::: myogestic.widgets.Heatmap
 
-::: myogestic.widgets.line_plot
+::: myogestic.widgets.LinePlot
 
 ---
 
@@ -54,11 +54,11 @@ Stateless function widgets you call from inside `@app.ui`. See [Widgets concept 
 
 ---
 
-::: myogestic.widgets.template_inspector
+::: myogestic.widgets.TemplateInspector
 
 ::: myogestic.widgets.training.template_inspector.TemplateInspectorRow
 
-::: myogestic.widgets.trial_preview
+::: myogestic.widgets.TrialPreview
 
 ::: myogestic.widgets.panel_header
 
@@ -68,15 +68,17 @@ Stateless function widgets you call from inside `@app.ui`. See [Widgets concept 
 
 ## Status and logs
 
-::: myogestic.widgets.stream_panel
+::: myogestic.widgets.StreamPanel
 
-::: myogestic.widgets.log_panel
+::: myogestic.widgets.LogPanel
 
 ---
 
 ## Branding
 
-::: myogestic.widgets.panels.app_logo.app_logo
+::: myogestic.widgets.Image
+
+::: myogestic.widgets.AppLogo
 
 ![app_logo](../images/widgets/app_logo.png){ loading=lazy }
 
@@ -84,7 +86,7 @@ Stateless function widgets you call from inside `@app.ui`. See [Widgets concept 
 
 ## ML readout
 
-::: myogestic.widgets.training.prediction_label.prediction_label
+::: myogestic.widgets.PredictionLabel
 
 ![prediction_label](../images/widgets/prediction_label.png){ loading=lazy }
 

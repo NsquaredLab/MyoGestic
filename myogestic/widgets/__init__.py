@@ -2,26 +2,27 @@
 
 from myogestic.widgets.common import panel_header
 from myogestic.widgets.panels import (
+    AppLogo,
     FilterControl,
-    app_logo,
-    log_panel,
+    Image,
+    LogPanel,
+    ProcessLauncher,
+    RecordingControls,
     popout_panel,
-    process_launcher,
-    recording_controls,
 )
-from myogestic.widgets.plots import heatmap, line_plot, scatter2d, scatter3d
+from myogestic.widgets.plots import Heatmap, LinePlot, Scatter2D, Scatter3D
 from myogestic.widgets.signals import (
-    raw_signal_viewer,
-    signal_viewer,
-    stream_panel,
+    RawSignalViewer,
+    SignalViewer,
+    StreamPanel,
 )
 from myogestic.widgets.training import (
     FeatureSelector,
+    PredictionLabel,
+    SessionManager,
+    TemplateInspector,
     TemplateInspectorRow,
-    prediction_label,
-    session_manager,
-    template_inspector,
-    trial_preview,
+    TrialPreview,
 )
 from myogestic.widgets.vhi import (
     VhiMovementPanel,
@@ -32,29 +33,30 @@ from myogestic.widgets.vhi import (
 )
 
 __all__ = [
+    "AppLogo",
     "FeatureSelector",
     "FilterControl",
+    "Heatmap",
+    "Image",
+    "LinePlot",
+    "LogPanel",
+    "PredictionLabel",
+    "ProcessLauncher",
+    "RawSignalViewer",
+    "RecordingControls",
+    "Scatter2D",
+    "Scatter3D",
+    "SessionManager",
+    "SignalViewer",
+    "StreamPanel",
+    "TemplateInspector",
     "TemplateInspectorRow",
+    "TrialPreview",
     "VhiMovementPanel",
     "VhiStateCache",
     "VhiStateSnapshot",
-    "app_logo",
-    "heatmap",
-    "line_plot",
-    "log_panel",
     "panel_header",
     "popout_panel",
-    "prediction_label",
-    "process_launcher",
-    "raw_signal_viewer",
-    "recording_controls",
     "request_vhi_state_refresh",
-    "scatter2d",
-    "scatter3d",
-    "session_manager",
-    "signal_viewer",
-    "stream_panel",
-    "template_inspector",
-    "trial_preview",
     "vhi_movement_palette",
 ]

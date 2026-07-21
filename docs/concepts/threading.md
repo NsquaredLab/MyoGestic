@@ -91,7 +91,7 @@ The bridge process:
 - Writes frames directly to a Zarr array - that's the persistence step.
 - Publishes an LSL "clock" stream so the main app knows what frame number is current.
 
-The main app never touches the camera frames; it just reads frame-number stamps from the LSL stream and looks up frames in the Zarr if the experiment needs them. A `process_launcher` panel shows the bridge's start/stop state.
+The main app never touches the camera frames; it just reads frame-number stamps from the LSL stream and looks up frames in the Zarr if the experiment needs them. A `ProcessLauncher` panel shows the bridge's start/stop state.
 
 ## Common mistakes
 

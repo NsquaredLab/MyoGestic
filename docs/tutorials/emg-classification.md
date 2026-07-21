@@ -9,7 +9,7 @@ End to end, zero classes besides the framework's `App` and `Pipeline`.
 
 ## Run it first
 
-One terminal, then click **Launch** in the GUI's [`process_launcher`][myogestic.widgets.process_launcher] panel to spawn the synthetic EMG generator.
+One terminal, then click **Launch** in the GUI's [`ProcessLauncher`][myogestic.widgets.ProcessLauncher] panel to spawn the synthetic EMG generator.
 
 ```bash
 uv run python examples/synthetic/emg_classification.py
@@ -72,7 +72,7 @@ See [Post-process predictions](../how-to/post-process-output.md) for tuning.
 --8<-- "examples/synthetic/emg_classification.py:setup"
 ```
 
-The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s of EMG, channels-first as `(n_channels, n_samples)`. The buffer is 60 s so [`signal_viewer`][myogestic.widgets.signal_viewer] shows a longer history than the prediction window.
+The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s of EMG, channels-first as `(n_channels, n_samples)`. The buffer is 60 s so [`SignalViewer`][myogestic.widgets.SignalViewer] shows a longer history than the prediction window.
 
 ### 5. `extract` - same code for training and live predict
 
@@ -90,7 +90,7 @@ The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s o
 
 [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] does all the session-loading, label-track walking, and overlapping-window slicing - see [Record and replay](../how-to/record-and-replay.md). We just call `extract()` on each window.
 
-The validation up front (`is_empty`, `len(data.classes) < 2`) gives the user actionable error messages - the framework's design principle "errors tell you what to write." If you forget to tick a session in [`session_manager`][myogestic.widgets.session_manager], you'll see "No sessions selected. Load some and tick the checkboxes." in the status panel.
+The validation up front (`is_empty`, `len(data.classes) < 2`) gives the user actionable error messages - the framework's design principle "errors tell you what to write." If you forget to tick a session in [`SessionManager`][myogestic.widgets.SessionManager], you'll see "No sessions selected. Load some and tick the checkboxes." in the status panel.
 
 ### 7. `predict` - classify, look up pose, smooth, push
 
@@ -109,7 +109,7 @@ The pose lookup is a hardcoded `if/else` - small enough not to need a class tabl
 --8<-- "examples/synthetic/emg_classification.py:layout"
 ```
 
-An 8×3 grid: the signal viewer fills the right two columns, and the left column stacks eight widget calls top-to-bottom - logo, EMG-generator launcher, recording controls, feature selector, session manager, pipeline panel, output-filter panel, prediction label. Every panel is a plain function call. `session_manager` returns a `TrainingData` instance - assigning it to `pipeline.training_data` is the only line that connects "what's ticked in the UI" to "what `train()` will see."
+An 8×3 grid: the signal viewer fills the right two columns, and the left column stacks eight widget calls top-to-bottom - logo, EMG-generator launcher, recording controls, feature selector, session manager, pipeline panel, output-filter panel, prediction label. Every panel is a plain function call. `SessionManager` returns a `TrainingData` instance - assigning it to `pipeline.training_data` is the only line that connects "what's ticked in the UI" to "what `train()` will see."
 
 ### 9. The actual experiment loop
 

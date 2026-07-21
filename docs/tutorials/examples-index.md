@@ -2,7 +2,7 @@
 
 Every runnable example under [`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic),
 what it teaches, and what's tweakable. All six are hardware-free - the
-`process_launcher` panel spawns `myogestic.tools.emg_generator` for you,
+`ProcessLauncher` panel spawns `myogestic.tools.emg_generator` for you,
 so one terminal is enough.
 
 For VHI integration, install once with `python -m myogestic.tools.install_vhi`

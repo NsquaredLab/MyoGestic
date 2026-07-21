@@ -1,16 +1,18 @@
 """Process launcher widget for @app.ui.
 
 Usage:
-    from myogestic.widgets import process_launcher
+    from myogestic.widgets import ProcessLauncher
 
     PROCESSES = [
         ("8ch EMG", ["mne_lsl_player", "--n_channels", "8", "--fs", "256"]),
         ("Webcam", [sys.executable, "-m", "myogestic.bridges.webcam", ...]),
     ]
 
+    launcher = ProcessLauncher(PROCESSES)
+
     @app.ui
     def my_ui(ctx):
-        process_launcher(PROCESSES)
+        launcher.ui()
 """
 
 import atexit
@@ -118,14 +120,40 @@ _autoscroll: dict[tuple[str, str], bool] = {}
 # with pipeline_panel so the autoscroll + popout UX stays identical.
 
 
-def process_launcher(
+class ProcessLauncher:
+    """Dropdown + Launch/Stop + scrollable log panel.
+
+    Construct once with the process list, then call :meth:`ui` each frame.
+    Multiple launchers can coexist — each gets unique ImGui IDs via
+    ``widget_id`` (auto-generated from the process names when empty). The
+    live subprocess registry is app-global, so processes are still killed on
+    exit (``atexit`` + ``App.run`` cleanup) regardless of instance lifetime.
+    """
+
+    def __init__(
+        self,
+        processes: list[Process],
+        *,
+        widget_id: str = "",
+        log_height: float = -1.0,
+    ) -> None:
+        self._processes = processes
+        self._widget_id = widget_id
+        self._log_height = log_height
+
+    def ui(self) -> None:
+        """Render the launcher. Call once per frame inside ``@app.ui``."""
+        _render_process_launcher(self._processes, self._widget_id, self._log_height)
+
+
+def _render_process_launcher(
     processes: list[Process],
     widget_id: str = "",
     log_height: float = -1.0,
 ) -> None:
     """Dropdown + Launch/Stop + scrollable log panel.
 
-    Multiple process_launcher() calls can coexist in the same UI —
+    Multiple launchers can coexist in the same UI —
     each gets unique ImGui IDs via the widget_id parameter.
 
     Parameters

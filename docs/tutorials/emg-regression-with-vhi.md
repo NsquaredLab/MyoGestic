@@ -29,7 +29,7 @@ specific script.
 uv run --extra examples --extra grpc python examples/synthetic/emg_regression.py
 ```
 
-The `process_launcher` panel inside the GUI spawns the EMG generator
+The `ProcessLauncher` panel inside the GUI spawns the EMG generator
 and the VHI binary. No env vars required if VHI was installed with
 `python -m myogestic.tools.install_vhi`.
 
@@ -127,7 +127,7 @@ Three steps:
    one-euro at 32 Hz) and push to the LSL outlet.
 
 The returned dict feeds `pipeline.predictions` so widgets like
-`prediction_label` (when configured) can render the current 5-vec.
+`PredictionLabel` (when configured) can render the current 5-vec.
 
 ## Layout - six rows, three columns
 

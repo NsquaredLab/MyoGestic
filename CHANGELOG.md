@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-07-21
+
+Widget API unification: **every widget is now a class** you construct once and
+render with `.ui(...)`, replacing the mix of free functions and `.ui()` objects.
+One convention for humans and LLMs alike — no more "why is `signal_viewer` a
+function but `FeatureSelector` an object?".
+
+### Changed (breaking)
+
+- **Every widget is a class rendered via `.ui(...)`.** Construct once (config in
+  the constructor), then call `.ui(...)` each frame with only the per-frame
+  inputs — `ctx` for stream/recording/log widgets, live data for plots, nothing
+  for widgets that read from held refs. Renames: `signal_viewer` →
+  `SignalViewer`, `raw_signal_viewer` → `RawSignalViewer`, `stream_panel` →
+  `StreamPanel`, `line_plot` → `LinePlot`, `heatmap` → `Heatmap`, `scatter2d` /
+  `scatter3d` → `Scatter2D` / `Scatter3D`, `recording_controls` →
+  `RecordingControls`, `session_manager` → `SessionManager`, `prediction_label`
+  → `PredictionLabel`, `template_inspector` → `TemplateInspector`,
+  `trial_preview` → `TrialPreview`, `log_panel` → `LogPanel`, `app_logo` →
+  `AppLogo`, `image` → `Image`, `process_launcher` → `ProcessLauncher`; and in
+  `myogestic.ml.widgets`: `pipeline_panel` → `PipelinePanel`, `train_button` /
+  `predict_button` → `TrainButton` / `PredictButton`, `training_log` →
+  `TrainingLog`, `save_model_button` / `load_model_button` → `SaveModelButton` /
+  `LoadModelButton`. `FeatureSelector`, `FilterControl`, and `VhiMovementPanel`
+  were already classes and are unchanged.
+
+  ```python
+  # before
+  @app.ui
+  def ui(ctx):
+      signal_viewer(ctx, "emg", selectable=True)
+
+  # after — construct once, render each frame
+  viewer = SignalViewer("emg", selectable=True)
+
+  @app.ui
+  def ui(ctx):
+      viewer.ui(ctx)
+  ```
+
+  **Construct the widget once (module/app scope), not inside `@app.ui`** —
+  instances hold state, so rebuilding one every frame resets its selections /
+  tuning.
+
+- **`FilterControl`'s `widget_id`** moved from `.ui(widget_id=...)` to the
+  constructor (`FilterControl(..., widget_id=...)`); `.ui()` now takes no args.
+
+### Fixed
+
+- **`FeatureSelector` ImGui id collision.** Two selectors in one window no longer
+  collide (the render is scoped per instance).
+
 ## [2.2.0] - 2026-07-19
 
 Signal-viewer overhaul for high-channel HD-EMG: a spatial channel selector, an

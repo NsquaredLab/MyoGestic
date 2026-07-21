@@ -7,16 +7,18 @@ Capture every registered `Stream`'s incoming biosignal data to a Zarr-backed `.s
 ```python
 from myogestic import App, Stream
 from myogestic.sources import LSLSource
-from myogestic.widgets import recording_controls
+from myogestic.widgets import RecordingControls
 
 app = App("My recording")                                              # 1. construct App
 app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))  # 2. register stream(s)
 
+recording = RecordingControls(["Rest", "Fist"],
+                              on_record=app.start_recording,             # 3. wire Record button
+                              on_stop=app.stop_recording)                # 4. wire Stop button
+
 @app.ui
 def ui(ctx):
-    recording_controls(ctx, ["Rest", "Fist"],
-                       on_record=app.start_recording,                    # 3. wire Record button
-                       on_stop=app.stop_recording)                       # 4. wire Stop button
+    recording.ui(ctx)
 
 app.run()
 ```
@@ -145,7 +147,7 @@ The artifact lands at `sessions/<timestamp>.session.zip` just as in the GUI flow
 
 ## Custom GUI integration
 
-For non-default UX (custom Record button placement, conditional triggers, multi-step protocols), call the API directly instead of using `recording_controls`:
+For non-default UX (custom Record button placement, conditional triggers, multi-step protocols), call the API directly instead of using `RecordingControls`:
 
 ```python
 from imgui_bundle import imgui
@@ -226,9 +228,9 @@ These skip windows that straddle a label boundary and handle the window/hop math
 ## Common pitfalls
 
 - **Calling `start_recording` before streams connect.** A `Stream` whose `info is None` is silently skipped (no Zarr schema yet). Either wait for `app.ctx.streams["emg"].info is not None` or trigger recording from a `before_run_hook` plus a short sleep, as in the headless example.
-- **Recording with the synthetic generator paused.** The generator only produces data while it's running. Click Launch in the `process_launcher` panel before Record, or in headless flow start the generator subprocess before `app.run()`.
+- **Recording with the synthetic generator paused.** The generator only produces data while it's running. Click Launch in the `ProcessLauncher` panel before Record, or in headless flow start the generator subprocess before `app.run()`.
 - **Killing the process mid-recording.** The `.session.zip` is packed only at `stop_recording()`. Crashes leave the raw `sessions/<timestamp>/` folder; you can pack it later with `Session(base_path=...).pack_to_zip()` after re-attaching to it, or just load the folder directly with `open_session_store("sessions/<timestamp>/")` - both work.
-- **Forgetting `class_names` in `save_meta`**. `recording_controls` passes them through automatically. If you call `add_label` directly from custom code, also call `app.ctx.session.save_meta(app_name="...", class_names=[...])` before `stop_recording` or your labels will only be integers in `labels.json` with no name lookup.
+- **Forgetting `class_names` in `save_meta`**. `RecordingControls` passes them through automatically. If you call `add_label` directly from custom code, also call `app.ctx.session.save_meta(app_name="...", class_names=[...])` before `stop_recording` or your labels will only be integers in `labels.json` with no name lookup.
 
 ## See also
 

@@ -97,7 +97,7 @@ threading.Thread(target=run_protocol, daemon=True).start()
 app.run(mode="headless")
 ```
 
-The protocol thread writes [`LabelEvent`][myogestic.session.LabelEvent]s directly to the session via `app.ctx.session.add_label(class_idx)`. That's exactly what the [`recording_controls`][myogestic.widgets.recording_controls] widget does in GUI mode - the label track is just a list of timestamped events.
+The protocol thread writes [`LabelEvent`][myogestic.session.LabelEvent]s directly to the session via `app.ctx.session.add_label(class_idx)`. That's exactly what the [`RecordingControls`][myogestic.widgets.RecordingControls] widget does in GUI mode - the label track is just a list of timestamped events.
 
 ## A signal-handled, graceful-exit recorder
 

@@ -72,28 +72,36 @@ make_filter(name, hz=50.0, **kwargs) -> VectorFilter
   filter(x, timestamp=None) -> np.ndarray                  # __call__ all filters
 
 # --- Widgets (myogestic.widgets) -------------------------------
-signal_viewer(ctx, stream_name, selectable=False,
-              scale_mode="auto", y_range=(-1, 1),
-              show_diagnostics=False, show_markers=False)
-raw_signal_viewer(ctx, stream_name)                # every-sample, zero-alloc
-recording_controls(ctx, class_names, *, on_record, on_stop,
-                   on_gesture=None)
-session_manager(base_path, title="Sessions", class_names=None)
-  -> TrainingData(paths, class_names, classes)
-process_launcher(processes)
-scatter2d(label, points) / scatter3d(label, points)
-heatmap(label, data) / line_plot(label, data, channel_names=None)
+# Construct once (setup scope), then call .ui(...) each frame in @app.ui.
+SignalViewer(stream_name, selectable=False, scale_mode="auto",
+             y_range=(-1, 1), show_diagnostics=False, show_markers=False)
+  .ui(ctx)
+RawSignalViewer(stream_name)                        # every-sample, zero-alloc
+  .ui(ctx)
+RecordingControls(class_names, *, on_record, on_stop, on_gesture=None)
+  .ui(ctx)
+SessionManager(base_path, title="Sessions", class_names=None)
+  .ui() -> TrainingData(paths, class_names, classes)
+ProcessLauncher(processes)
+  .ui()
+Scatter2D(label) / Scatter3D(label)
+  .ui(points, labels=None, class_names=None)
+Heatmap(label, label_fmt="%.1f") / LinePlot(label)
+  .ui(data)                                         # LinePlot: .ui(data, channel_names=None)
 panel_header(title, icon=None)
-FilterControl(hz=50, default="one_euro").ui()
+output_filter = FilterControl(hz=50, default="one_euro")
+output_filter.ui()
 popout_panel(title, gui_fn)
-template_inspector(widget_id, rows)
-trial_preview(widget_id, data, fs)
+TemplateInspector(widget_id)
+  .ui(rows)
+TrialPreview(widget_id=widget_id)
+  .ui(data, fs)
 
 # --- ML widgets (myogestic.ml.widgets) -------------------------
-train_button(pipeline)
-predict_button(pipeline)
-training_log(pipeline)
-save_model_button(pipeline, path)
-load_model_button(pipeline, path)
-pipeline_panel(pipeline)
+TrainButton(pipeline)               .ui()
+PredictButton(pipeline)             .ui()
+TrainingLog(pipeline)               .ui()
+SaveModelButton(pipeline, path)     .ui()
+LoadModelButton(pipeline, path)     .ui()
+PipelinePanel(pipeline)             .ui()
 ```

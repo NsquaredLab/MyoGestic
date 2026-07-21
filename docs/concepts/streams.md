@@ -24,7 +24,7 @@ Stream(name, source, window_ms, buffer_ms=10000)
 - `name` keys the stream into `ctx.streams[name]`.
 - `source` is anything implementing the `Source` protocol (`connect`, `read`, `disconnect`).
 - `window_ms` is the duration of `get_window()`'s slice. There's no upper bound; values like 30 s are intentional for slow-moving signals.
-- `buffer_ms` defaults to 10 s. The ring buffer stores this much past data so the predict thread always has a window to slice and `signal_viewer` can render the recent history.
+- `buffer_ms` defaults to 10 s. The ring buffer stores this much past data so the predict thread always has a window to slice and `SignalViewer` can render the recent history.
 
 ## Reading the buffer
 
@@ -55,7 +55,7 @@ ts, data = stream.get_raw_snapshot()
 # ts.shape   == (capacity,)
 ```
 
-The full ring-buffer contents in their native orientation. Used by `raw_signal_viewer` for zero-allocation rendering of every sample. Most user code should prefer `get_window` or `get_display`.
+The full ring-buffer contents in their native orientation. Used by `RawSignalViewer` for zero-allocation rendering of every sample. Most user code should prefer `get_window` or `get_display`.
 
 ## Why dvg-ringbuffer
 
@@ -82,7 +82,7 @@ For dynamic device swaps:
 ctx.streams["emg"].reconnect(target=LSLSource("EMG_v2"))
 ```
 
-`reconnect` stops the acquisition thread, swaps the source, and restarts cleanly. The ring buffer is preserved across the swap so `signal_viewer` doesn't blank.
+`reconnect` stops the acquisition thread, swaps the source, and restarts cleanly. The ring buffer is preserved across the swap so `SignalViewer` doesn't blank.
 
 ## Channel naming
 
@@ -95,7 +95,7 @@ info.fs  # 2048.0
 info.channel_names  # ["EMG_01", "EMG_02", ...] or None
 ```
 
-`signal_viewer` uses these names in its channel toggle list. If a source returns `None`, names default to `"ch_0"`, `"ch_1"`, …
+`SignalViewer` uses these names in its channel toggle list. If a source returns `None`, names default to `"ch_0"`, `"ch_1"`, …
 
 ## Common mistakes
 

@@ -63,19 +63,19 @@ class LabelEvent:
 
 The label track is a list of these events, persisted to `labels.json` on stop. Each consecutive pair `(events[i], events[i+1])` defines one **trial** - every sample in between is labelled `class_index`. The `-1` terminator at the end marks the boundary of the last trial so iterators know where to stop.
 
-[`recording_controls`][myogestic.widgets.recording_controls] writes labels when the user clicks a button:
+[`RecordingControls`][myogestic.widgets.RecordingControls] writes labels when the user clicks a button:
 
 ```python
-recording_controls(
-    ctx,
+rec_controls = RecordingControls(
     ["Rest", "Fist", "Open"],
     on_record=app.start_recording,
     on_stop=app.stop_recording,
     on_gesture=lambda idx: ctrl_outlet.push_sample([float(idx)]),
 )
+rec_controls.ui(ctx)
 ```
 
-`on_gesture` is yours - typically you forward to a control LSL stream (so a synthetic generator can change pattern), or a robot, or just log it. The label itself is added by `recording_controls` itself before calling your callback.
+`on_gesture` is yours - typically you forward to a control LSL stream (so a synthetic generator can change pattern), or a robot, or just log it. The label itself is added by `RecordingControls` itself before calling your callback.
 
 ## Reading recordings
 
@@ -149,6 +149,6 @@ If `zarrs` is installed, the codec is registered on import; if not, recording fa
 
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
 
-- **`sess.class_names = [...]` after `save_meta`.** The class names persist only when passed as a kwarg to `save_meta(name, class_names=...)`, not when set as an attribute after the fact. (`recording_controls` handles this for you when it calls `app.start_recording`.)
+- **`sess.class_names = [...]` after `save_meta`.** The class names persist only when passed as a kwarg to `save_meta(name, class_names=...)`, not when set as an attribute after the fact. (`RecordingControls` handles this for you when it calls `app.start_recording`.)
 - **Treating the label track as a stream.** It isn't - it's events. To iterate "rest periods" by time, slice with the labels and the timestamp arrays manually, or use `iter_labeled_windows`.
 - **Single-click sessions.** A session with two clicks (Rest + DoF0) yields exactly one usable trial after the skip-first heuristic. Long cycle-style recordings (rest 3 s → DoF 3 s → rest 3 s → DoF 3 s, etc.) yield many trials per session and produce robust models.

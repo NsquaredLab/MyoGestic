@@ -43,7 +43,7 @@ A session with two label clicks (e.g. Rest + Fist) and a few seconds of data ext
 Setting `class_names` as an attribute on the session object after the fact doesn't write it to `meta.json`. The class names persist only when passed as a kwarg: `sess.save_meta(name, class_names=[...])`.
 
 !!! tip "Fix"
-    `recording_controls` calls `app.start_recording` which handles this for you. Only relevant if you're constructing sessions manually.
+    `RecordingControls` calls `app.start_recording` which handles this for you. Only relevant if you're constructing sessions manually.
 
 ### `.session.zip` truncated when script exits
 
@@ -102,7 +102,7 @@ See: [Pipeline concept page](concepts/pipeline.md), [Add a custom model](how-to/
 
 ### Widget state shared accidentally between instances
 
-Two `signal_viewer(ctx, "emg")` calls share state because the key matches; that's intentional. If you want independent state, use different stream names or different `widget_id` arguments where the widget supports them.
+Two `SignalViewer("emg")` instances share state because the stream-name key matches; that's intentional. If you want independent state, use different stream names or different `widget_id` arguments where the widget supports them.
 
 !!! tip "Fix"
     Match the widget's keying convention. Some key by `stream_name` (signal viewers), others by `uid` (template inspectors).

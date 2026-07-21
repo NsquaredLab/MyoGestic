@@ -73,7 +73,7 @@ only for ad-hoc local builds where no digest exists.
 VHI is ad-hoc signed (no Apple Developer ID, no notarisation). Two
 launch paths, two different stories:
 
-* **Via MyoGestic's `process_launcher`** - works directly. The launcher
+* **Via MyoGestic's `ProcessLauncher`** - works directly. The launcher
   calls `subprocess.Popen`, which bypasses Gatekeeper / LaunchServices
   entirely. This is the integrated workflow and the one you usually
   want.

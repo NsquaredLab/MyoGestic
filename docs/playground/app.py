@@ -13,14 +13,14 @@ import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, StreamInfo, TrainingData
 from myogestic.ml import Pipeline
-from myogestic.ml.widgets import pipeline_panel
+from myogestic.ml.widgets import PipelinePanel
 from myogestic.widgets import (
+    AppLogo,
     FilterControl,
-    app_logo,
+    PredictionLabel,
+    RecordingControls,
+    SignalViewer,
     panel_header,
-    prediction_label,
-    recording_controls,
-    signal_viewer,
 )
 from imgui_bundle import imgui
 
@@ -375,6 +375,17 @@ def _mobile_panel(label: str, height: float, render):
         imgui.end_child()
 
 
+# Widgets are constructed once here and rendered with `.ui(...)` every frame
+# inside `@app.ui` (never rebuilt per-frame or inside a lambda).
+logo = AppLogo()
+rec_controls = RecordingControls(
+    CLASSES, on_record=_on_record, on_stop=_on_stop, on_gesture=_on_gesture
+)
+emg_viewer = SignalViewer("emg")
+ml_panel = PipelinePanel(pipeline)
+pred_label = PredictionLabel(pipeline, CLASSES, show_probability=True)
+
+
 @app.ui
 def ui(ctx):
     _apply_touch_style()
@@ -390,18 +401,11 @@ def ui(ctx):
             window_flags=imgui.WindowFlags_.always_vertical_scrollbar,
         )
         try:
-            _mobile_panel("logo", 90, lambda: app_logo())
-            _mobile_panel("rec", 200, lambda: recording_controls(
-                ctx, CLASSES,
-                on_record=_on_record,
-                on_stop=_on_stop,
-                on_gesture=_on_gesture,
-            ))
-            _mobile_panel("signal", 500, lambda: signal_viewer(ctx, "emg"))
-            _mobile_panel("pipe", 160, lambda: pipeline_panel(pipeline))
-            _mobile_panel("pred", 140, lambda: prediction_label(
-                pipeline, CLASSES, show_probability=True
-            ))
+            _mobile_panel("logo", 90, lambda: logo.ui())
+            _mobile_panel("rec", 200, lambda: rec_controls.ui(ctx))
+            _mobile_panel("signal", 500, lambda: emg_viewer.ui(ctx))
+            _mobile_panel("pipe", 160, lambda: ml_panel.ui())
+            _mobile_panel("pred", 140, lambda: pred_label.ui())
             _mobile_panel("sessions", 220, _sessions_panel)
             _mobile_panel("filter", 180, lambda: proba_filter.ui())
 
@@ -418,24 +422,19 @@ def ui(ctx):
         return
 
     with grid[0, 0:2]:
-        app_logo()
+        logo.ui()
 
     with grid[1, 0]:
-        recording_controls(
-            ctx, CLASSES,
-            on_record=_on_record,
-            on_stop=_on_stop,
-            on_gesture=_on_gesture,
-        )
+        rec_controls.ui(ctx)
 
     with grid[1, 1]:
-        signal_viewer(ctx, "emg")
+        emg_viewer.ui(ctx)
 
     with grid[2, 0]:
-        pipeline_panel(pipeline)
+        ml_panel.ui()
 
     with grid[2, 1]:
-        prediction_label(pipeline, CLASSES, show_probability=True)
+        pred_label.ui()
 
     with grid[3, 0]:
         _sessions_panel()

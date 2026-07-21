@@ -60,11 +60,14 @@ class FilterControl:
         Initial filter name — ``"identity"`` | ``"gaussian"`` | ``"one_euro"``.
     """
 
-    def __init__(self, hz: float = 50.0, default: str = "one_euro"):
+    def __init__(
+        self, hz: float = 50.0, default: str = "one_euro", *, widget_id: str = "output_filter"
+    ):
         if default not in _NAMES:
             raise ValueError(f"default must be one of {_NAMES}, got {default!r}")
         self.hz = hz
         self._name = default
+        self._widget_id = widget_id
         self._params: dict[str, dict[str, Any]] = {
             "identity": {},
             "gaussian": {"n_vectors": 5, "sigma": 1.0},
@@ -95,8 +98,9 @@ class FilterControl:
 
     # --- UI ---
 
-    def ui(self, widget_id: str = "output_filter") -> None:
+    def ui(self) -> None:
         """Render the full panel. Call once per frame inside @app.ui."""
+        widget_id = self._widget_id
         muted = imgui.get_style().color_(imgui.Col_.text_disabled)
         # Header (shared helper) + right-aligned Reset button on the same row
         panel_header("POST-PROCESSING", fa.ICON_FA_WAVE_SQUARE)
@@ -151,11 +155,15 @@ class FilterControl:
         if self._name == "gaussian":
             rebuild = False
             imgui.push_item_width(-100)  # leave room for the value text
-            ch, v = imgui.slider_int(f"window (samples)##{widget_id}_g_w", params["n_vectors"], 1, 30)
+            ch, v = imgui.slider_int(
+                f"window (samples)##{widget_id}_g_w", params["n_vectors"], 1, 30
+            )
             if ch:
                 params["n_vectors"] = v
                 rebuild = True
-            ch, v = imgui.slider_float(f"sigma##{widget_id}_g_s", params["sigma"], 0.1, 10.0, "%.2f")
+            ch, v = imgui.slider_float(
+                f"sigma##{widget_id}_g_s", params["sigma"], 0.1, 10.0, "%.2f"
+            )
             if ch:
                 params["sigma"] = v
                 rebuild = True

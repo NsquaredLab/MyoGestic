@@ -33,7 +33,7 @@ from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
 from myogestic.ml import Pipeline, load_pickle, save_pickle
-from myogestic.ml.widgets import predict_button, train_button, training_log
+from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
     catboost_classifier,
     constant_classifier,
@@ -46,14 +46,14 @@ from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
-    app_logo,
-    log_panel,
-    prediction_label,
-    process_launcher,
-    recording_controls,
-    session_manager,
-    signal_viewer,
-    stream_panel,
+    AppLogo,
+    LogPanel,
+    PredictionLabel,
+    ProcessLauncher,
+    RecordingControls,
+    SessionManager,
+    SignalViewer,
+    StreamPanel,
 )
 from myogestic.widgets.common import panel_header
 from myogestic.widgets.panels.filter_controls import FilterControl
@@ -122,9 +122,7 @@ PROCESSES = [
 ]
 
 app = App("EMG 32ch Multi-Model", ui_scale=0.85)
-app.streams(
-    Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, buffer_ms=60000)
-)
+app.streams(Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 # Wire generic save/load so save_model_button / load_model_button work, and
 # so the example's custom picker can call them through the pipeline too.
@@ -163,6 +161,10 @@ _load_dialog: object | None = None  # in-flight pfd.open_file future, None if id
 _MODEL_WIDGET_ID = "ml_multi"
 _autoscroll_on = True
 _popout_open = False
+
+_train_btn = TrainButton(pipeline)
+_predict_btn = PredictButton(pipeline)
+_training_log = TrainingLog(pipeline, height=80.0, widget_id=_MODEL_WIDGET_ID)
 
 
 def _slug(name: str) -> str:
@@ -220,9 +222,9 @@ def model_panel() -> None:
     _, selected_model_idx = imgui.combo("##model_selector", selected_model_idx, MODEL_NAMES)
     imgui.pop_item_width()
 
-    train_button(pipeline)
+    _train_btn.ui()
     imgui.same_line()
-    predict_button(pipeline)
+    _predict_btn.ui()
     imgui.same_line()
     _autoscroll_on, _popout_open = render_log_buttons(
         _MODEL_WIDGET_ID, autoscroll=_autoscroll_on, popped_out=_popout_open
@@ -231,7 +233,7 @@ def model_panel() -> None:
     if _popout_open:
         imgui.text_disabled("(log popped out — see 'Model training log' window)")
     else:
-        training_log(pipeline, height=80.0, widget_id=_MODEL_WIDGET_ID)
+        _training_log.ui()
 
     # --- Save / Load ------------------------------------------------------
     can_save = pipeline.model is not None
@@ -369,34 +371,43 @@ def _on_gesture(i: int) -> None:
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
+viewer = SignalViewer("emg", selectable=True)
+streams = StreamPanel()
+log = LogPanel()
+logo = AppLogo()
+processes = ProcessLauncher(PROCESSES)
+recording = RecordingControls(
+    CLASSES,
+    on_record=app.start_recording,
+    on_stop=app.stop_recording,
+    on_gesture=_on_gesture,
+)
+sessions = SessionManager("sessions", class_names=CLASSES)
+prediction = PredictionLabel(pipeline, CLASSES)
+
+
 @app.ui
 def demo_ui(ctx):
     with grid[0:5, 1:3]:
-        signal_viewer(ctx, "emg", selectable=True)
+        viewer.ui(ctx)
 
     with grid[5:7, 1:2]:
-        stream_panel(ctx)
+        streams.ui(ctx)
 
     with grid[5:7, 2:3]:
-        log_panel(ctx)
+        log.ui(ctx)
 
     with grid[0, 0]:
-        app_logo()
+        logo.ui()
 
     with grid[1, 0]:
-        process_launcher(PROCESSES)
+        processes.ui()
 
     with grid[2, 0]:
-        recording_controls(
-            ctx,
-            CLASSES,
-            on_record=app.start_recording,
-            on_stop=app.stop_recording,
-            on_gesture=_on_gesture,
-        )
+        recording.ui(ctx)
 
     with grid[3, 0]:
-        pipeline.training_data = session_manager("sessions", class_names=CLASSES)
+        pipeline.training_data = sessions.ui()
 
     with grid[4, 0]:
         model_panel()
@@ -405,7 +416,7 @@ def demo_ui(ctx):
         output_filter.ui()
 
     with grid[6, 0]:
-        prediction_label(pipeline, CLASSES)
+        prediction.ui()
 
 
 def main() -> None:
