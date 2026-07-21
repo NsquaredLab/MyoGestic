@@ -68,10 +68,13 @@ class FeatureSelector:
         self,
         features: dict[str, FeatureFn],
         default: Iterable[str] | None = None,
+        *,
+        widget_id: str = "features",
     ) -> None:
         if not features:
             raise ValueError("FeatureSelector needs at least one feature")
         self._features: dict[str, FeatureFn] = dict(features)
+        self._widget_id = widget_id
         if default is None:
             default_set = set(self._features)
         else:
@@ -139,35 +142,45 @@ class FeatureSelector:
     def ui(self) -> None:
         """Render the panel inside an ImGui frame.
 
-        Call from inside ``@app.ui``. Renders a header, the feature
-        checkboxes laid out in a **wrapping grid** that reflows with the
-        panel's current width (one column when narrow, many when wide),
-        and a footer line showing the active count. State updates take
-        effect on the next predict-thread tick.
+        Call from inside ``@app.ui``. The header carries the active count
+        (``FEATURES (2)``) and the feature checkboxes reflow into a
+        content-sized table so columns stay aligned: each column is as wide
+        as its own widest ``box + label``, so a label never clips under the
+        next column's checkbox. State updates take effect on the next
+        predict-thread tick.
         """
-        panel_header("FEATURES", fa.ICON_FA_LAYER_GROUP)
+        # Scope every ImGui id below to this instance so two selectors in one
+        # window (their same-named checkboxes / the table id) don't collide.
+        imgui.push_id(self._widget_id)
+        try:
+            # Active count in the header. Rendered before the checkboxes, so a
+            # click this frame shows in the title next frame — imperceptible at
+            # UI frame rates.
+            panel_header(f"FEATURES ({self.n_active})", fa.ICON_FA_LAYER_GROUP)
 
-        # Compute how many checkboxes fit per row at the current panel
-        # width. Item width = checkbox indicator (~one frame-height
-        # square) + inner spacing + the widest label. We size every
-        # column to the widest label so the grid stays a clean alignment.
-        style = imgui.get_style()
-        spacing = style.item_spacing.x
-        inner = style.item_inner_spacing.x
-        frame_h = imgui.get_frame_height()
-        max_label_w = max(imgui.calc_text_size(name).x for name in self._features)
-        item_w = frame_h + inner + max_label_w
-        avail_w = imgui.get_content_region_avail().x
-        n_cols = max(1, int((avail_w + spacing) / (item_w + spacing)) if item_w > 0 else 1)
+            # How many columns fit at the current width. Item width = checkbox
+            # square + inner spacing + the widest label, so the column estimate
+            # already accounts for the label text.
+            style = imgui.get_style()
+            spacing = style.item_spacing.x
+            inner = style.item_inner_spacing.x
+            frame_h = imgui.get_frame_height()
+            features = self._features
+            max_label_w = max(imgui.calc_text_size(name).x for name in features)
+            item_w = frame_h + inner + max_label_w
+            avail_w = imgui.get_content_region_avail().x
+            fit = int((avail_w + spacing) / (item_w + spacing)) if item_w > 0 else 1
+            n_cols = max(1, min(fit, len(features)))
 
-        for i, name in enumerate(self._features):
-            if i > 0 and i % n_cols != 0:
-                imgui.same_line()
-            on = self._active[name]
-            changed, new_val = imgui.checkbox(name, on)
-            if changed:
-                self._active[name] = new_val
-
-        n = self.n_active
-        suffix = "" if n == 1 else "s"
-        imgui.text_disabled(f"{n} active feature{suffix}")
+            # A content-sized table lays out the grid: each column sizes to its
+            # own widest box+label and cells never overlap — unlike a manual
+            # same_line() grid, a label can't clip under the next column's box.
+            if imgui.begin_table("##features_grid", n_cols, imgui.TableFlags_.sizing_fixed_fit):
+                for name in features:
+                    imgui.table_next_column()
+                    changed, new_val = imgui.checkbox(name, self._active[name])
+                    if changed:
+                        self._active[name] = new_val
+                imgui.end_table()
+        finally:
+            imgui.pop_id()
