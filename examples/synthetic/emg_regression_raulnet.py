@@ -44,7 +44,7 @@ from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
     AppLogo,
-    FilterControl,
+    PostProcessor,
     ProcessLauncher,
     RecordingControls,
     SessionManager,
@@ -124,8 +124,8 @@ vhi_outlet = vhi.outlet()
 vhi_client = vhi.control_client()
 
 # Output-side smoothing applied to the 9-DOF hand vector before pushing
-# to VHI. Live-tunable via the FilterControl widget rendered in the UI.
-output_filter = FilterControl(hz=32, default="one_euro")
+# to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
+output_filter = PostProcessor(hz=32)
 
 PROCESSES = [
     (

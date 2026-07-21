@@ -106,10 +106,10 @@ Pair it with a smoothing filter - raw model output looks twitchy on a
 60 fps render:
 
 ```python
-from myogestic.widgets import FilterControl
+from myogestic.widgets import PostProcessor
 import time
 
-pose_filter = FilterControl(hz=20.0, default="one_euro")
+pose_filter = PostProcessor(hz=20.0)
 
 @pipeline.predict
 def predict(model, features):

@@ -165,14 +165,14 @@ VHI isn't installed at the location `virtual_hand()` looks at - by default `<rep
 You're pushing raw model output. VHI rendering at 32-50 Hz amplifies any per-tick jitter.
 
 !!! tip "Fix"
-    Pair every VHI integration with a [`FilterControl`][myogestic.widgets.FilterControl] block (1€ filter is the default and usually right). Pass `timestamp=time.monotonic()` into the filter so it computes real elapsed dt.
+    Pair every VHI integration with a [`PostProcessor`][myogestic.widgets.PostProcessor] block (1€ filter is the default and usually right). Pass `timestamp=time.monotonic()` into the filter so it computes real elapsed dt.
 
 ### VHI hand drifts after retraining
 
 The `OneEuroFilter` keeps smoothing history across training boundaries; the first few frames after a retrain blend the new model's first prediction with the old model's tail.
 
 !!! tip "Fix"
-    Call `pose_filter.reset()` (or the FilterControl version) inside `@pipeline.train` before returning the new model.
+    Call `pose_filter.reset()` (or the PostProcessor version) inside `@pipeline.train` before returning the new model.
 
 See: [Integrate the Virtual Hand](how-to/integrate-vhi.md), [Post-process predictions](how-to/post-process-output.md).
 

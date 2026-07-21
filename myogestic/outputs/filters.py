@@ -256,3 +256,40 @@ def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
             }
         )
     raise ValueError(f"Unknown filter {name!r}. Choose: 'identity', 'gaussian', 'one_euro'.")
+
+
+class _FilterChain:
+    """Composite :class:`VectorFilter` applying several filters left-to-right."""
+
+    def __init__(self, filters: tuple[VectorFilter, ...]) -> None:
+        self._filters = filters
+
+    def reset(self) -> None:
+        """Reset every filter in the chain."""
+        for f in self._filters:
+            f.reset()
+
+    def __call__(self, x: np.ndarray, timestamp: float | None = None) -> np.ndarray:
+        """Apply each filter in order — the output of one feeds the next."""
+        for f in self._filters:
+            x = f(x, timestamp)
+        return x
+
+
+def chain(*filters: VectorFilter) -> VectorFilter:
+    """Compose filters into one :class:`VectorFilter`, applied left-to-right.
+
+    Lets you present a pipeline of filters as a single filter — e.g. drop
+    ``chain(GaussianFilter(...), OneEuroFilter(...))`` into a
+    ``FilterProcessor`` palette as one entry. ``reset()`` resets every filter;
+    ``chain()`` with no args is the identity (returns its input unchanged).
+
+    Contract: this is function composition — each filter's output must be a
+    valid input to the next. Shape-changing filters (e.g. a channel
+    differential, ``n -> n-1``) are allowed *only* if the downstream filter
+    accepts the new shape **and** the output dimension stays constant across
+    frames (the stateful smoothers stack a history and reject a shape that
+    varies over time). For output post-processing keep every filter
+    shape-preserving — the sink (e.g. VHI) expects a fixed-size control vector.
+    """
+    return _FilterChain(filters)

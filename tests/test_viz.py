@@ -52,3 +52,13 @@ def test_imports_from_widgets_init():
     for widget_cls in (SignalViewer, ProcessLauncher, StreamPanel, LogPanel):
         assert hasattr(widget_cls, "ui")
     assert callable(popout_panel)
+
+
+def test_heatmap_renders_with_per_cell_ticks(implot_frame):
+    """The heatmap renders one tick per cell — default index labels, custom
+    labels, and a non-square grid — without error."""
+    cm = np.array([[0.9, 0.1], [0.2, 0.8]])
+    hm = Heatmap("Confusion")
+    implot_frame(lambda: hm.ui(cm))
+    implot_frame(lambda: hm.ui(cm, x_tick_labels=["A", "B"], y_tick_labels=["A", "B"]))
+    implot_frame(lambda: hm.ui(np.arange(6.0).reshape(2, 3)))

@@ -37,7 +37,7 @@ from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
-    FilterControl,
+    PostProcessor,
     PredictionLabel,
     ProcessLauncher,
     RecordingControls,
@@ -56,8 +56,8 @@ HAND_REST = np.zeros(9, dtype=np.float32)
 HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
 
 # Output-side smoothing applied to the hand pose vector before pushing
-# to VHI. Live-tunable via the FilterControl widget rendered in the UI.
-output_filter = FilterControl(hz=32, default="one_euro")
+# to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
+output_filter = PostProcessor(hz=32)
 
 # CLASSES are sent verbatim to VHI as movement names — keep them in sync
 # with VHI's movement set (see MovementDefinitions.cs). "Rest" and "Fist"

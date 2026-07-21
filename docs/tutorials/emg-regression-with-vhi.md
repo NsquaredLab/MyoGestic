@@ -123,7 +123,7 @@ Three steps:
 1. Predict 5 DOFs, clamp to `[0, 1]`.
 2. Expand to a 9-vec with the sign flip.
 3. Apply the live-tunable
-   [`FilterControl`](../how-to/post-process-output.md) (defaults to
+   [`PostProcessor`](../how-to/post-process-output.md) (defaults to
    one-euro at 32 Hz) and push to the LSL outlet.
 
 The returned dict feeds `pipeline.predictions` so widgets like

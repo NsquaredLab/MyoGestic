@@ -249,7 +249,7 @@ class PipelinePanel:
     """Train + Predict + log as a single titled panel.
 
     Matches the visual style of :class:`RecordingControls`,
-    :class:`SessionManager`, and :class:`FilterControl`. The log inherits the
+    :class:`SessionManager`, and :class:`PostProcessor`. The log inherits the
     same autoscroll + popout UX as the process launcher's log.
     """
 

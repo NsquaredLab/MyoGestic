@@ -2,15 +2,15 @@
 
 `myogestic.outputs.filters` smooths the **prediction output vector** before it leaves the app - the 9-float pose, the proportional control, the actuator command. It is *not* a DSP filter for raw EMG (that belongs upstream of `extract()` and the user's domain library, e.g. scipy).
 
-## The fastest path: [`FilterControl`][myogestic.widgets.FilterControl] widget
+## The fastest path: [`PostProcessor`][myogestic.widgets.PostProcessor] widget
 
 Drop it in `@app.ui` and you get a tunable panel with the OneEuro / Gaussian / Identity options:
 
 ```python
-from myogestic.widgets import FilterControl
+from myogestic.widgets import PostProcessor
 import time
 
-pose_filter = FilterControl(hz=20.0, default="one_euro")
+pose_filter = PostProcessor(hz=20.0)
 
 
 @pipeline.predict
@@ -33,7 +33,7 @@ The panel:
 - Sliders for the active filter's parameters
 - A **Reset** button that clears smoothing history (use after Train so the new model's first frames don't get blended with the old one's tail)
 
-Parameters update *in place* - no rebuild - so smoothing history survives live tuning.
+One Euro's parameters update *in place* - no rebuild - so smoothing history survives live tuning. Gaussian rebuilds its kernel when you change its window.
 
 ## Choosing a filter
 
@@ -83,7 +83,7 @@ def predict(model, features):
 
 Pass `timestamp` (a monotonic clock value) so the filter computes real-elapsed dt instead of assuming `1/hz`. If your tick rate is jittery, this matters; if it's stable, it doesn't.
 
-[`make_filter(name, hz, **kwargs)`][myogestic.outputs.filters.make_filter] is the dispatch helper used by `FilterControl`:
+[`make_filter(name, hz, **kwargs)`][myogestic.outputs.filters.make_filter] is the dispatch helper used by `PostProcessor`:
 
 ```python
 from myogestic.outputs.filters import make_filter
@@ -97,7 +97,7 @@ pose_filter = make_filter("gaussian", n_vectors=5, sigma=1.0)
 
 Whenever the upstream signal *resumes* after being stopped or rebuilt:
 
-- After `pipeline.start_training()` finishes - call `pose_filter.reset()` (or the FilterControl version) before the new model starts predicting. Otherwise the first few frames of the new model blend with the previous model's tail.
+- After `pipeline.start_training()` finishes - call `pose_filter.reset()` (or the PostProcessor version) before the new model starts predicting. Otherwise the first few frames of the new model blend with the previous model's tail.
 - After `pipeline.start_predicting()` *and* the previous filter state is stale.
 - On model swap (`pipeline.load_model`).
 
@@ -110,7 +110,7 @@ def train(data):
     return MyModel().fit(...)
 ```
 
-`FilterControl` exposes `.reset()` too.
+`PostProcessor` exposes `.reset()` too.
 
 ## Where to put the filter
 

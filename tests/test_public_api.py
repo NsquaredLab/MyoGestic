@@ -21,16 +21,22 @@ def test_widget_helpers_are_public():
     """The common widgets live in `myogestic.widgets` — every example imports
     them, so they must be reachable without diving into private modules."""
     from myogestic.widgets import (
-        FilterControl,
+        PostProcessor,
         RecordingControls,
         SessionManager,
         SignalViewer,
         panel_header,
     )
 
-    assert callable(FilterControl)
     assert callable(panel_header)
     # Widgets are classes constructed once, then rendered with `.ui(...)`.
-    for widget_cls in (RecordingControls, SessionManager, SignalViewer):
+    for widget_cls in (PostProcessor, RecordingControls, SessionManager, SignalViewer):
         assert isinstance(widget_cls, type)
         assert hasattr(widget_cls, "ui")
+
+
+def test_filter_chain_helper_is_public():
+    """`chain` composes VectorFilters into one — reachable from `myogestic.outputs`."""
+    from myogestic.outputs import chain
+
+    assert callable(chain)

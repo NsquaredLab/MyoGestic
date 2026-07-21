@@ -16,7 +16,7 @@ from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.widgets import (
     AppLogo,
-    FilterControl,
+    PostProcessor,
     PredictionLabel,
     RecordingControls,
     SignalViewer,
@@ -262,7 +262,7 @@ def _sessions_panel() -> None:
 # use to smooth a 9-DoF pose before pushing to VHI; here we feed it the
 # per-class probability vector so the prediction_label's confidence bar
 # smooths instead of jittering frame-to-frame.
-proba_filter = FilterControl(hz=20.0, default="one_euro")
+proba_filter = PostProcessor(hz=20.0)
 
 
 @pipeline.predict
