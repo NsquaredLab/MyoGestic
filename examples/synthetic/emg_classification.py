@@ -16,7 +16,7 @@ import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
 from myogestic.ml import Pipeline
-from myogestic.ml.widgets import pipeline_panel
+from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
 from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.session import iter_labeled_windows
@@ -24,14 +24,14 @@ from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
+    AppLogo,
     FeatureSelector,
     FilterControl,
-    app_logo,
-    prediction_label,
-    process_launcher,
-    recording_controls,
-    session_manager,
-    signal_viewer,
+    PredictionLabel,
+    ProcessLauncher,
+    RecordingControls,
+    SessionManager,
+    SignalViewer,
 )
 
 ctrl_outlet = control_outlet()
@@ -86,9 +86,7 @@ WINDOW_MS = 200
 HOP_MS = 100
 
 app = App("EMG Classification", ui_scale=0.85)
-app.streams(
-    Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000)
-)
+app.streams(Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 # --8<-- [end:setup]
 
@@ -98,6 +96,8 @@ pipeline = Pipeline(app)
 def extract(windows: dict[str, np.ndarray]) -> np.ndarray:
     """Active features stacked along axis 0 → flat feature vector."""
     return features(windows["emg"])
+
+
 # --8<-- [end:extract]
 
 
@@ -153,6 +153,8 @@ def train(data: TrainingData):
     clf.fit(X, y)
     print(f"[train] done — accuracy on train: {clf.score(X, y):.2%}")
     return clf
+
+
 # --8<-- [end:train]
 
 
@@ -170,6 +172,8 @@ def predict(model, features):
     hand = output_filter(hand).astype(np.float32)
     vhi_outlet.push(hand)
     return {"class": class_idx, "proba": proba, "hand": hand}
+
+
 # --8<-- [end:predict]
 
 
@@ -195,44 +199,54 @@ def _on_gesture(i: int) -> None:
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
+viewer = SignalViewer("emg")
+logo = AppLogo()
+processes = ProcessLauncher(PROCESSES)
+recording = RecordingControls(
+    CLASSES,
+    on_record=app.start_recording,
+    on_stop=app.stop_recording,
+    on_gesture=_on_gesture,
+)
+sessions = SessionManager("sessions", class_names=CLASSES)
+panel = PipelinePanel(pipeline)
+prediction = PredictionLabel(pipeline, CLASSES)
+
+
 @app.ui
 def demo_ui(ctx):
     with grid[0:8, 1:3]:
-        signal_viewer(ctx, "emg")
+        viewer.ui(ctx)
 
     with grid[0, 0]:
         # No size cap — let the wordmark grow to the cell. The widget
         # fits-in-rect (preserving aspect), so the image always renders
         # at the largest aspect-preserving box that fits the current
         # cell dimensions and centres itself.
-        app_logo()
+        logo.ui()
 
     with grid[1, 0]:
-        process_launcher(PROCESSES)
+        processes.ui()
 
     with grid[2, 0]:
-        recording_controls(
-            ctx,
-            CLASSES,
-            on_record=app.start_recording,
-            on_stop=app.stop_recording,
-            on_gesture=_on_gesture,
-        )
+        recording.ui(ctx)
 
     with grid[3, 0]:
         features.ui()
 
     with grid[4, 0]:
-        pipeline.training_data = session_manager("sessions", class_names=CLASSES)
+        pipeline.training_data = sessions.ui()
 
     with grid[5, 0]:
-        pipeline_panel(pipeline)
+        panel.ui()
 
     with grid[6, 0]:
         output_filter.ui()
 
     with grid[7, 0]:
-        prediction_label(pipeline, CLASSES)
+        prediction.ui()
+
+
 # --8<-- [end:layout]
 
 

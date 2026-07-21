@@ -52,11 +52,12 @@ class TrainingData:
 
 Return any object - it's stored on `pipeline.model` and forwarded to every subsequent `predict()` call. If `pipeline.save_model` is set, the **Save Model** button calls it as `save_model(pipeline.model, path)`. The persistence helpers [`save_pickle`][myogestic.ml.save_pickle] / [`load_pickle`][myogestic.ml.load_pickle] from `myogestic.ml` are the simplest sane default.
 
-`pipeline.training_data` is set externally - usually from [`session_manager`][myogestic.widgets.session_manager] inside `@app.ui`:
+`pipeline.training_data` is set externally - usually from [`SessionManager`][myogestic.widgets.SessionManager] inside `@app.ui`:
 
 ```python
+sessions = SessionManager(str(Path("sessions")), class_names=CLASSES)
 with grid[2, 0]:
-    pipeline.training_data = session_manager(str(Path("sessions")), class_names=CLASSES)
+    pipeline.training_data = sessions.ui()
 ```
 
 This separation lets the `Train` button stay disabled until at least one session is ticked.
@@ -98,7 +99,7 @@ stateDiagram-v2
 
 Only one state at a time. **Training pauses prediction** (and vice versa) - there's no parallel GPU contention juggling. When the user clicks Train while predict is running, predict stops first; when training completes, the user clicks Predict again to resume.
 
-The user-facing UI layer (`pipeline_panel`, `train_button`, `predict_button`) handles transitions; user code rarely calls `start_training()` / `stop_predicting()` directly.
+The user-facing UI layer (`PipelinePanel`, `TrainButton`, `PredictButton`) handles transitions; user code rarely calls `start_training()` / `stop_predicting()` directly.
 
 ## Stale-tick guard
 
@@ -129,6 +130,6 @@ A stateful model can use exactly this - its `step()` returns the previous predic
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
 
 - **Returning a non-dict from `predict()`.** Silently dropped. Always return `{"key": value}`.
-- **Mutating `pipeline.training_data` outside `@app.ui`.** It can be set anywhere, but most experiments let `session_manager` write it from the UI.
+- **Mutating `pipeline.training_data` outside `@app.ui`.** It can be set anywhere, but most experiments let `SessionManager` write it from the UI.
 - **Heavy work inside `extract()` or `predict()`.** They run on the predict thread at `predict_hz`. Keep CPU work bounded; offload long jobs to the training thread.
 - **Forgetting `pipeline.save_model = save_pickle`.** The save/load buttons render but do nothing without it.

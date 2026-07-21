@@ -1,16 +1,17 @@
 """Recording controls widget.
 
-    from myogestic.widgets.panels.recording import recording_controls
+    from myogestic.widgets import RecordingControls
+
+    recording = RecordingControls(
+        CLASSES,
+        on_record=app.start_recording,
+        on_stop=app.stop_recording,
+        on_gesture=lambda i: ctrl_outlet.push_sample(...),
+    )
 
     @app.ui
     def my_ui(ctx):
-        recording_controls(
-            ctx,
-            CLASSES,
-            on_record=app.start_recording,
-            on_stop=app.stop_recording,
-            on_gesture=lambda i: ctrl_outlet.push_sample(...),
-        )
+        recording.ui(ctx)
 
 Record/Stop + label buttons + state pill. Training/prediction controls live
 in `myogestic.ml.widgets` (they require `Pipeline(app)`).
@@ -84,7 +85,40 @@ def _safe_label_index(current: int, n_classes: int) -> int:
     return current if 0 <= current < n_classes else -1
 
 
-def recording_controls(
+class RecordingControls:
+    """Record/Stop toggle + per-class label buttons + state pill.
+
+    Construct once with the class names and callbacks, then call :meth:`ui`
+    with the live ``ctx`` each frame. Pass ``app.start_recording`` /
+    ``app.stop_recording`` for ``on_record`` / ``on_stop`` if you're using
+    the standard App.
+    """
+
+    def __init__(
+        self,
+        class_names: list[str] | None = None,
+        *,
+        on_record: Callable[[], None],
+        on_stop: Callable[[], None],
+        on_gesture: Callable[[int], None] | None = None,
+    ) -> None:
+        self._class_names = class_names
+        self._on_record = on_record
+        self._on_stop = on_stop
+        self._on_gesture = on_gesture
+
+    def ui(self, ctx: Context) -> None:
+        """Render the recording controls. Call once per frame inside ``@app.ui``."""
+        _render_recording_controls(
+            ctx,
+            self._class_names,
+            on_record=self._on_record,
+            on_stop=self._on_stop,
+            on_gesture=self._on_gesture,
+        )
+
+
+def _render_recording_controls(
     ctx: Context,
     class_names: list[str] | None = None,
     *,

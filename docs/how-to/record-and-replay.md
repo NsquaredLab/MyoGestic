@@ -1,39 +1,41 @@
 # Record and replay
 
-End-to-end: capture sessions in the GUI, browse them in [`session_manager`][myogestic.widgets.session_manager], train on them, then replay one offline as a Source so you can debug the predict path without re-running the experiment.
+End-to-end: capture sessions in the GUI, browse them in [`SessionManager`][myogestic.widgets.SessionManager], train on them, then replay one offline as a Source so you can debug the predict path without re-running the experiment.
 
 ## Live capture
 
 Drop two widgets in `@app.ui`:
 
 ```python
-from myogestic.widgets import recording_controls, session_manager
+from myogestic.widgets import RecordingControls, SessionManager
 
 CLASSES = ["Rest", "Fist", "Open"]
+
+recording = RecordingControls(
+    CLASSES,
+    on_record=app.start_recording,
+    on_stop=app.stop_recording,
+    on_gesture=lambda i: ctrl_outlet.push_sample([float(i)]),
+)
+sessions = SessionManager(base_path="sessions", class_names=CLASSES)
 
 
 @app.ui
 def ui(ctx):
     with grid[0, 0]:
-        recording_controls(
-            ctx,
-            CLASSES,
-            on_record=app.start_recording,
-            on_stop=app.stop_recording,
-            on_gesture=lambda i: ctrl_outlet.push_sample([float(i)]),
-        )
+        recording.ui(ctx)
     with grid[1, 0]:
-        pipeline.training_data = session_manager(base_path="sessions", class_names=CLASSES)
+        pipeline.training_data = sessions.ui()
 ```
 
-[`recording_controls`][myogestic.widgets.recording_controls] renders:
+[`RecordingControls`][myogestic.widgets.RecordingControls] renders:
 
 - **Record / Stop** buttons that call `app.start_recording("sessions")` / `app.stop_recording()`.
 - One **button** per class. Clicking a button writes a `LabelEvent(class_index, timestamp=local_clock())` to the active session's label track and fires your `on_gesture` callback. Use the callback to drive an external pattern (synthetic generator, robot, prompt screen).
 
-The `on_gesture` callback is yours; the label is added by `recording_controls` itself before calling it. You don't need to call `ctx.session.add_label()` manually.
+The `on_gesture` callback is yours; the label is added by `RecordingControls` itself before calling it. You don't need to call `ctx.session.add_label()` manually.
 
-`session_manager` lists every folder/archive under `base_path`, lets the user tick which to include in training, and returns a [`TrainingData`][myogestic.TrainingData] instance ready for `@pipeline.train`.
+`SessionManager` lists every folder/archive under `base_path`, lets the user tick which to include in training, and returns a [`TrainingData`][myogestic.TrainingData] instance ready for `@pipeline.train`.
 
 ## Recording cycles
 
@@ -160,6 +162,6 @@ The replay loops by default; set `speed=0` if you want to step manually (TODO: n
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
 
 - **Recording too short.** A session with 2 label clicks (e.g. Rest + Fist) and 1.5 s of data yields exactly **one** usable trial after skip-first. Cycle-style sessions are the only way to get robust models with limited recording time per session.
-- **`sess.class_names = [...]` after `save_meta`.** Class names persist only when passed as a kwarg to `save_meta(name, class_names=...)`. (`recording_controls` handles this when it triggers `app.start_recording`.)
+- **`sess.class_names = [...]` after `save_meta`.** Class names persist only when passed as a kwarg to `save_meta(name, class_names=...)`. (`RecordingControls` handles this when it triggers `app.start_recording`.)
 - **Sample-major in user code.** `sess.get_continuous("emg")` returns sample-major (matches storage). `iter_labeled_windows` and `iter_aligned_windows` flip to channels-first (matches predict). Don't transpose twice by accident.
 - **Replay-then-predict-on-live.** `ReplaySource` and a real `LSLSource` can't share the stream name. Pick one per app.

@@ -31,7 +31,7 @@ uv sync --extra examples   # to run the EMG demos
 
 ## Run the synthetic-EMG demo
 
-The repository ships a synthetic LSL stream so the demos run without any hardware. **One terminal, then click two buttons in the GUI** - the demo's `process_launcher` panel spawns the generator (and the Virtual Hand) for you.
+The repository ships a synthetic LSL stream so the demos run without any hardware. **One terminal, then click two buttons in the GUI** - the demo's `ProcessLauncher` panel spawns the generator (and the Virtual Hand) for you.
 
 ```bash
 uv run python examples/synthetic/emg_classification.py
@@ -63,12 +63,12 @@ The rest of the layout:
 
 Each thing visible in the window maps directly to one MyoGestic primitive. Once you can map the GUI to the framework, the rest of the docs make a lot more sense.
 
-- **Signal viewer** (right two columns) - a [`signal_viewer`](api/widgets.md) widget reading from a `Stream`. The stream owns the ring buffer; the widget just renders a decimated min/max envelope.
-- **Process launchers** (top-left) - the [`process_launcher`](api/widgets.md) widget. Each entry is a subprocess command - here, the synthetic EMG generator and the Virtual Hand.
-- **Recording controls** with `Rest` / `Fist` buttons and a Record button - the [`recording_controls`](api/widgets.md) widget. Clicking a button writes a label event; clicking Record toggles `app.start_recording()` / `app.stop_recording()`.
-- **Train / Predict / Save / Load** buttons - [`pipeline_panel`](api/ml.md) plus `save_model_button` / `load_model_button`. They drive the `Pipeline` state machine.
+- **Signal viewer** (right two columns) - a [`SignalViewer`](api/widgets.md) widget reading from a `Stream`. The stream owns the ring buffer; the widget just renders a decimated min/max envelope.
+- **Process launchers** (top-left) - the [`ProcessLauncher`](api/widgets.md) widget. Each entry is a subprocess command - here, the synthetic EMG generator and the Virtual Hand.
+- **Recording controls** with `Rest` / `Fist` buttons and a Record button - the [`RecordingControls`](api/widgets.md) widget. Clicking a button writes a label event; clicking Record toggles `app.start_recording()` / `app.stop_recording()`.
+- **Train / Predict / Save / Load** buttons - [`PipelinePanel`](api/ml.md) plus `SaveModelButton` / `LoadModelButton`. They drive the `Pipeline` state machine.
 - **Post-processing filter panel** - a [`FilterControl`](api/widgets.md) widget. The script also calls it from inside `predict()` to smooth the output vector before pushing.
-- **Sessions** - the [`session_manager`](api/widgets.md) widget. It returns a `TrainingData` object the script assigns to `pipeline.training_data`, which is what `@pipeline.train` receives when you click Train.
+- **Sessions** - the [`SessionManager`](api/widgets.md) widget. It returns a `TrainingData` object the script assigns to `pipeline.training_data`, which is what `@pipeline.train` receives when you click Train.
 
 Want the code-side view of the same thing? Read **[Anatomy of a MyoGestic app](anatomy.md)** - it walks through a complete 35-line script in the order you write it.
 

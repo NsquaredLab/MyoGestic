@@ -19,7 +19,7 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="grid cards" markdown>
 
--   __[signal_viewer][myogestic.widgets.signal_viewer]__
+-   __[SignalViewer][myogestic.widgets.SignalViewer]__
 
     ![signal_viewer](images/widgets/signal_viewer.png){ .widget-thumb loading=lazy }
 
@@ -31,13 +31,13 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="grid cards" markdown>
 
--   __[recording_controls][myogestic.widgets.recording_controls]__
+-   __[RecordingControls][myogestic.widgets.RecordingControls]__
 
     ![recording_controls](images/widgets/recording_controls.png){ .widget-thumb loading=lazy }
 
     One button per class plus a Record toggle. Clicking a class button writes a [`LabelEvent`][myogestic.session.LabelEvent] and fires your `on_gesture` callback. Status pill shows IDLE / RECORDING.
 
--   __[session_manager][myogestic.widgets.session_manager]__
+-   __[SessionManager][myogestic.widgets.SessionManager]__
 
     ![session_manager](images/widgets/session_manager.png){ .widget-thumb loading=lazy }
 
@@ -49,7 +49,7 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="grid cards" markdown>
 
--   __[process_launcher][myogestic.widgets.process_launcher]__
+-   __[ProcessLauncher][myogestic.widgets.ProcessLauncher]__
 
     ![process_launcher](images/widgets/process_launcher.png){ .widget-thumb loading=lazy }
 
@@ -61,11 +61,11 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="grid cards" markdown>
 
--   __[pipeline_panel][myogestic.ml.widgets.pipeline_panel]__
+-   __[PipelinePanel][myogestic.ml.widgets.PipelinePanel]__
 
     ![pipeline_panel](images/widgets/pipeline_panel.png){ .widget-thumb loading=lazy }
 
-    Train / Predict button row plus state indicator. Buttons grey out automatically based on `pipeline.state` (no Train while Predicting). Individual buttons: [`train_button`][myogestic.ml.widgets.train_button], [`predict_button`][myogestic.ml.widgets.predict_button].
+    Train / Predict button row plus state indicator. Buttons grey out automatically based on `pipeline.state` (no Train while Predicting). Individual buttons: [`TrainButton`][myogestic.ml.widgets.TrainButton], [`PredictButton`][myogestic.ml.widgets.PredictButton].
 
 </div>
 
@@ -97,7 +97,7 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="grid cards" markdown>
 
--   __[app_logo][myogestic.widgets.panels.app_logo.app_logo]__
+-   __[AppLogo][myogestic.widgets.panels.app_logo.AppLogo]__
 
     ![app_logo](images/widgets/app_logo.png){ .widget-thumb loading=lazy }
 
@@ -109,7 +109,7 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="grid cards" markdown>
 
--   __[prediction_label][myogestic.widgets.training.prediction_label.prediction_label]__
+-   __[PredictionLabel][myogestic.widgets.training.prediction_label.PredictionLabel]__
 
     ![prediction_label](images/widgets/prediction_label.png){ .widget-thumb loading=lazy }
 
@@ -135,8 +135,8 @@ These need richer fixtures (live data, trained models, recorded trials) than the
 
 <div class="other-widgets" markdown>
 
-- **Display primitives**: [`raw_signal_viewer`][myogestic.widgets.raw_signal_viewer], [`scatter2d`][myogestic.widgets.scatter2d], [`scatter3d`][myogestic.widgets.scatter3d], [`heatmap`][myogestic.widgets.heatmap], [`line_plot`][myogestic.widgets.line_plot], [`panel_header`][myogestic.widgets.panel_header], [`popout_panel`][myogestic.widgets.popout_panel].
-- **ML buttons**: [`train_button`][myogestic.ml.widgets.train_button], [`predict_button`][myogestic.ml.widgets.predict_button], [`training_log`][myogestic.ml.widgets.training_log], [`save_model_button`][myogestic.ml.widgets.save_model_button], [`load_model_button`][myogestic.ml.widgets.load_model_button].
-- **Inspectors**: [`template_inspector`][myogestic.widgets.template_inspector], [`trial_preview`][myogestic.widgets.trial_preview].
+- **Display primitives**: [`RawSignalViewer`][myogestic.widgets.RawSignalViewer], [`Scatter2D`][myogestic.widgets.Scatter2D], [`Scatter3D`][myogestic.widgets.Scatter3D], [`Heatmap`][myogestic.widgets.Heatmap], [`LinePlot`][myogestic.widgets.LinePlot], [`panel_header`][myogestic.widgets.panel_header], [`popout_panel`][myogestic.widgets.popout_panel].
+- **ML buttons**: [`TrainButton`][myogestic.ml.widgets.TrainButton], [`PredictButton`][myogestic.ml.widgets.PredictButton], [`TrainingLog`][myogestic.ml.widgets.TrainingLog], [`SaveModelButton`][myogestic.ml.widgets.SaveModelButton], [`LoadModelButton`][myogestic.ml.widgets.LoadModelButton].
+- **Inspectors**: [`TemplateInspector`][myogestic.widgets.TemplateInspector], [`TrialPreview`][myogestic.widgets.TrialPreview].
 
 </div>

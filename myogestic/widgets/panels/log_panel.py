@@ -20,41 +20,63 @@ if TYPE_CHECKING:
     from myogestic.core import Context
 
 
-def log_panel(
-    ctx: Context,
-    height: float = -1.0,
-    title: str = "App Log",
-    show_header: bool = True,
-) -> None:
-    """Render the app log as a scrollable, read-only panel.
+class LogPanel:
+    """Render the app log as a scrollable, read-only panel."""
 
-    Parameters
-    ----------
-    ctx
-        App context; reads from ``ctx.logs``.
-    height
-        Panel height in pixels. Pass a value ``<= 0`` (default) to
-        fill the remaining vertical space of the parent cell — matches
-        the ImGui convention where ``-1`` means "fill available".
-    title
-        Header label (only shown when ``show_header=True``).
-    show_header
-        Render the button-style ``panel_header`` above the log.
-    """
-    if show_header:
-        panel_header(title, fa.ICON_FA_TERMINAL)
+    def __init__(
+        self,
+        *,
+        height: float = -1.0,
+        title: str = "App Log",
+        show_header: bool = True,
+        widget_id: str | None = None,
+    ) -> None:
+        """Configure the log panel.
 
-    if imgui.button(f"{fa.ICON_FA_BROOM}  Clear##log_panel"):
-        ctx.logs.clear()
+        Parameters
+        ----------
+        height
+            Panel height in pixels. Pass a value ``<= 0`` (default) to
+            fill the remaining vertical space of the parent cell — matches
+            the ImGui convention where ``-1`` means "fill available".
+        title
+            Header label (only shown when ``show_header=True``).
+        show_header
+            Render the button-style ``panel_header`` above the log.
+        widget_id
+            Optional per-instance ImGui id scope. Defaults to ``title``.
+        """
+        self._height = height
+        self._title = title
+        self._show_header = show_header
+        self._widget_id = widget_id
 
-    text = "\n".join(ctx.logs) if ctx.logs else "(no events yet)"
-    h = height if height > 0 else -1.0
-    imgui.input_text_multiline(
-        "##log_panel",
-        text,
-        imgui.ImVec2(-1, h),
-        flags=imgui.InputTextFlags_.read_only,
-    )
+    def ui(self, ctx: Context) -> None:
+        """Render the app log.
+
+        Parameters
+        ----------
+        ctx
+            App context; reads from ``ctx.logs``.
+        """
+        imgui.push_id(self._widget_id or self._title)
+        try:
+            if self._show_header:
+                panel_header(self._title, fa.ICON_FA_TERMINAL)
+
+            if imgui.button(f"{fa.ICON_FA_BROOM}  Clear##log_panel"):
+                ctx.logs.clear()
+
+            text = "\n".join(ctx.logs) if ctx.logs else "(no events yet)"
+            h = self._height if self._height > 0 else -1.0
+            imgui.input_text_multiline(
+                "##log_panel",
+                text,
+                imgui.ImVec2(-1, h),
+                flags=imgui.InputTextFlags_.read_only,
+            )
+        finally:
+            imgui.pop_id()
 
 
-__all__ = ["log_panel"]
+__all__ = ["LogPanel"]

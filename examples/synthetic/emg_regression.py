@@ -20,22 +20,22 @@ from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
 from myogestic.ml import Pipeline
-from myogestic.ml.widgets import pipeline_panel
+from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_regressor
 from myogestic.session import iter_aligned_windows, iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
-    app_logo,
-    log_panel,
-    process_launcher,
-    session_manager,
-    signal_viewer,
-    stream_panel,
+    AppLogo,
+    LogPanel,
+    ProcessLauncher,
+    SessionManager,
+    SignalViewer,
+    StreamPanel,
 )
 from myogestic.widgets.panels.filter_controls import FilterControl
-from myogestic.widgets.panels.recording import recording_controls
+from myogestic.widgets.panels.recording import RecordingControls
 
 ctrl_outlet = control_outlet()
 CLASSES = ["Rest", "Fist"]
@@ -223,6 +223,8 @@ def predict(model, features):
     pred_9dof = output_filter(pred_9dof).astype(np.float32)
     vhi_outlet.push(pred_9dof)
     return {"dof": pred_5dof, "hand": pred_9dof}
+
+
 # --8<-- [end:predict]
 
 
@@ -262,37 +264,46 @@ def _on_stop() -> None:
     vhi_client.set_session_active(False)
 
 
+viewer = SignalViewer("emg", selectable=True)
+streams = StreamPanel()
+log = LogPanel()
+logo = AppLogo()
+processes = ProcessLauncher(PROCESSES)
+recording = RecordingControls(
+    CLASSES,
+    on_record=_on_record,
+    on_stop=_on_stop,
+    on_gesture=_on_gesture,
+)
+sessions = SessionManager("sessions", class_names=CLASSES)
+panel = PipelinePanel(pipeline)
+
+
 @app.ui
 def demo_ui(ctx):
     with grid[0:4, 1:3]:
-        signal_viewer(ctx, "emg", selectable=True)
+        viewer.ui(ctx)
 
     with grid[4:6, 1:2]:
-        stream_panel(ctx)
+        streams.ui(ctx)
 
     with grid[4:6, 2:3]:
-        log_panel(ctx)
+        log.ui(ctx)
 
     with grid[0, 0]:
-        app_logo()
+        logo.ui()
 
     with grid[1, 0]:
-        process_launcher(PROCESSES)
+        processes.ui()
 
     with grid[2, 0]:
-        recording_controls(
-            ctx,
-            CLASSES,
-            on_record=_on_record,
-            on_stop=_on_stop,
-            on_gesture=_on_gesture,
-        )
+        recording.ui(ctx)
 
     with grid[3, 0]:
-        pipeline.training_data = session_manager("sessions", class_names=CLASSES)
+        pipeline.training_data = sessions.ui()
 
     with grid[4, 0]:
-        pipeline_panel(pipeline)
+        panel.ui()
 
     with grid[5, 0]:
         output_filter.ui()

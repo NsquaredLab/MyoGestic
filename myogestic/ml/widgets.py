@@ -1,13 +1,17 @@
 """ML-pipeline widgets. Take a `Pipeline` argument, not `App`.
 
 from myogestic.ml import Pipeline
-from myogestic.ml.widgets import train_button, predict_button, training_log
+from myogestic.ml.widgets import TrainButton, PredictButton, TrainingLog
+
+train = TrainButton(pipeline)
+predict = PredictButton(pipeline)
+log = TrainingLog(pipeline)
 
 @app.ui
 def my_ui(ctx):
-    train_button(pipeline)
-    predict_button(pipeline)
-    training_log(pipeline)
+    train.ui()
+    predict.ui()
+    log.ui()
 """
 
 from __future__ import annotations
@@ -27,8 +31,7 @@ from myogestic.widgets.panels.log_box import (
 from myogestic.widgets.panels.recording import STATE_COLORS
 
 # Per-panel persistent log UX state, keyed by widget_id (defaults to "ml").
-# Lets each pipeline_panel instance remember its own autoscroll + popout
-# state across frames without making the caller pass them in.
+# Lets each panel remember its own autoscroll + popout state across frames.
 _autoscroll: dict[str, bool] = {}
 _popout_open: dict[str, bool] = {}
 
@@ -41,23 +44,18 @@ if TYPE_CHECKING:
     from myogestic.ml import Pipeline
 
 
-def train_button(pipeline: Pipeline, size: tuple[float, float] = (80, 0)) -> None:
-    """Draw a Train button that calls :meth:`Pipeline.start_training` on click."""
+# --- Render functions (private; the classes below are the public API) ------
+
+
+def _render_train_button(pipeline: Pipeline, size: tuple[float, float] = (80, 0)) -> None:
     if imgui.button(f"{fa.ICON_FA_GEARS}  Train##ml_train", imgui.ImVec2(*size)):
         pipeline.start_training()
 
 
-def predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> None:
-    """Draw a Predict/Stop toggle button reflecting the pipeline's predict state.
-
-    Enabled to start only when the state is ``idle``, a model is loaded,
-    and both the extract and predict callbacks are wired; shows a Stop
-    button while predicting and is disabled otherwise.
-    """
+def _render_predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> None:
     state = pipeline.app.ctx.state
     # Predict needs three things together: the state must be idle, a model
     # must be loaded, AND both extract + predict callbacks must be wired.
-    # A model alone (e.g. just-loaded from disk) is not sufficient.
     can_start = (
         state == "idle"
         and pipeline.model is not None
@@ -76,27 +74,18 @@ def predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> N
         imgui.end_disabled()
 
 
-def training_log(pipeline: Pipeline, height: float = 100.0, *, widget_id: str = "ml") -> None:
-    """Read-only view of ``pipeline.train_log`` with smart autoscroll.
-
-    Uses the same scrollable-child + tail-follow renderer as
-    ``process_launcher``. The autoscroll/popout *toggles* aren't drawn
-    here — they're rendered as part of ``pipeline_panel``'s control row
-    so they sit next to Train/Predict.
-    """
+def _render_training_log(
+    pipeline: Pipeline, height: float = 100.0, *, widget_id: str = "ml"
+) -> None:
     if not pipeline.train_log:
         return
     autoscroll = _autoscroll.setdefault(widget_id, True)
     render_log(widget_id, pipeline.train_log, height=height, autoscroll=autoscroll)
 
 
-def save_model_button(pipeline: Pipeline, path: str, size: tuple[float, float] = (100, 0)) -> None:
-    """Draw a Save button that writes the model to ``path`` via ``pipeline.save_model``.
-
-    Disabled unless both ``pipeline.save_model`` and ``pipeline.model``
-    are set; on click calls ``save_model(model, path)`` and reports the
-    result through the status message and app log.
-    """
+def _render_save_model_button(
+    pipeline: Pipeline, path: str, size: tuple[float, float] = (100, 0)
+) -> None:
     if pipeline.save_model is None or pipeline.model is None:
         imgui.begin_disabled()
         imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save##ml_save", imgui.ImVec2(*size))
@@ -112,13 +101,9 @@ def save_model_button(pipeline: Pipeline, path: str, size: tuple[float, float] =
             pipeline.app.ctx.log(f"Model save failed: {e}")
 
 
-def load_model_button(pipeline: Pipeline, path: str, size: tuple[float, float] = (100, 0)) -> None:
-    """Draw a Load button that reads a model from ``path`` via ``pipeline.load_model``.
-
-    Disabled unless ``pipeline.load_model`` is set; on click stores the
-    returned object on ``pipeline.model`` and reports the result through
-    the status message and app log.
-    """
+def _render_load_model_button(
+    pipeline: Pipeline, path: str, size: tuple[float, float] = (100, 0)
+) -> None:
     if pipeline.load_model is None:
         imgui.begin_disabled()
         imgui.button(f"{fa.ICON_FA_FOLDER_OPEN}  Load##ml_load", imgui.ImVec2(*size))
@@ -134,22 +119,9 @@ def load_model_button(pipeline: Pipeline, path: str, size: tuple[float, float] =
             pipeline.app.ctx.log(f"Model load failed: {e}")
 
 
-def pipeline_panel(
-    pipeline: Pipeline,
-    *,
-    log_height: float = 80.0,
-    widget_id: str = "ml",
+def _render_pipeline_panel(
+    pipeline: Pipeline, *, log_height: float = 80.0, widget_id: str = "ml"
 ) -> None:
-    """Train + Predict + log as a single titled panel.
-
-    Matches the visual style of `recording_controls`, `session_manager`,
-    and `FilterControl`.
-
-    The log inherits the same autoscroll + popout UX as the process
-    launcher's log: a double-chevron-down icon toggles auto-tail-follow,
-    a box-out icon detaches the log into a floating ImGui window that
-    survives across selection / frame churn.
-    """
     # Render any open popout first so it survives frames even when the
     # surrounding panel scrolls out of view (same pattern as
     # process_launcher._render_open_popouts).
@@ -165,9 +137,9 @@ def pipeline_panel(
             _popout_open[widget_id] = False
 
     panel_header("MODEL", fa.ICON_FA_BRAIN)
-    train_button(pipeline)
+    _render_train_button(pipeline)
     imgui.same_line()
-    predict_button(pipeline)
+    _render_predict_button(pipeline)
 
     # Autoscroll + popout toggles, same look as the process launcher.
     imgui.same_line()
@@ -186,3 +158,120 @@ def pipeline_panel(
             height=log_height,
             autoscroll=autoscroll,
         )
+
+
+# --- Public widgets --------------------------------------------------------
+
+
+class TrainButton:
+    """Train button — calls :meth:`Pipeline.start_training` on click."""
+
+    def __init__(self, pipeline: Pipeline, *, size: tuple[float, float] = (80, 0)) -> None:
+        self._pipeline = pipeline
+        self._size = size
+
+    def ui(self) -> None:
+        """Render the Train button. Call once per frame inside ``@app.ui``."""
+        _render_train_button(self._pipeline, self._size)
+
+
+class PredictButton:
+    """Predict/Stop toggle reflecting the pipeline's predict state.
+
+    Enabled to start only when the state is ``idle``, a model is loaded, and
+    both the extract and predict callbacks are wired; shows a Stop button
+    while predicting and is disabled otherwise.
+    """
+
+    def __init__(self, pipeline: Pipeline, *, size: tuple[float, float] = (92, 0)) -> None:
+        self._pipeline = pipeline
+        self._size = size
+
+    def ui(self) -> None:
+        """Render the Predict/Stop button. Call once per frame."""
+        _render_predict_button(self._pipeline, self._size)
+
+
+class TrainingLog:
+    """Read-only view of ``pipeline.train_log`` with smart autoscroll.
+
+    The autoscroll/popout *toggles* aren't drawn here — they're part of
+    :class:`PipelinePanel`'s control row so they sit next to Train/Predict.
+    """
+
+    def __init__(self, pipeline: Pipeline, *, height: float = 100.0, widget_id: str = "ml") -> None:
+        self._pipeline = pipeline
+        self._height = height
+        self._widget_id = widget_id
+
+    def ui(self) -> None:
+        """Render the training log. Call once per frame."""
+        _render_training_log(self._pipeline, self._height, widget_id=self._widget_id)
+
+
+class SaveModelButton:
+    """Save button — writes the model to ``path`` via ``pipeline.save_model``.
+
+    Disabled unless both ``pipeline.save_model`` and ``pipeline.model`` are set.
+    """
+
+    def __init__(
+        self, pipeline: Pipeline, path: str, *, size: tuple[float, float] = (100, 0)
+    ) -> None:
+        self._pipeline = pipeline
+        self._path = path
+        self._size = size
+
+    def ui(self) -> None:
+        """Render the Save button. Call once per frame."""
+        _render_save_model_button(self._pipeline, self._path, self._size)
+
+
+class LoadModelButton:
+    """Load button — reads a model from ``path`` via ``pipeline.load_model``.
+
+    Disabled unless ``pipeline.load_model`` is set.
+    """
+
+    def __init__(
+        self, pipeline: Pipeline, path: str, *, size: tuple[float, float] = (100, 0)
+    ) -> None:
+        self._pipeline = pipeline
+        self._path = path
+        self._size = size
+
+    def ui(self) -> None:
+        """Render the Load button. Call once per frame."""
+        _render_load_model_button(self._pipeline, self._path, self._size)
+
+
+class PipelinePanel:
+    """Train + Predict + log as a single titled panel.
+
+    Matches the visual style of :class:`RecordingControls`,
+    :class:`SessionManager`, and :class:`FilterControl`. The log inherits the
+    same autoscroll + popout UX as the process launcher's log.
+    """
+
+    def __init__(
+        self, pipeline: Pipeline, *, log_height: float = 80.0, widget_id: str = "ml"
+    ) -> None:
+        self._pipeline = pipeline
+        self._log_height = log_height
+        self._widget_id = widget_id
+
+    def ui(self) -> None:
+        """Render the pipeline panel. Call once per frame inside ``@app.ui``."""
+        _render_pipeline_panel(
+            self._pipeline, log_height=self._log_height, widget_id=self._widget_id
+        )
+
+
+__all__ = [
+    "LoadModelButton",
+    "PipelinePanel",
+    "PredictButton",
+    "SaveModelButton",
+    "TrainButton",
+    "TrainingLog",
+]

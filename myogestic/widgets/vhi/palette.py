@@ -129,7 +129,9 @@ def request_vhi_state_refresh(
     """
     now = time.monotonic()
     with cache.lock:
-        interval = min_interval_s if cache.connected else max(min_interval_s, disconnected_interval_s)
+        interval = (
+            min_interval_s if cache.connected else max(min_interval_s, disconnected_interval_s)
+        )
         if cache.refreshing or (not force and now - cache.last_attempt_s < interval):
             return
         cache.refreshing = True

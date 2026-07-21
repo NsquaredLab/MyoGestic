@@ -7,10 +7,10 @@ By the end, the 35-line script below will read like prose. Open it in your edito
 ```python
 from myogestic import App, Stream, TrainingData
 from myogestic.ml import Pipeline, save_pickle, load_pickle
-from myogestic.ml.widgets import pipeline_panel
+from myogestic.ml.widgets import PipelinePanel
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
-from myogestic.widgets import recording_controls, session_manager, signal_viewer
+from myogestic.widgets import RecordingControls, SessionManager, SignalViewer
 from sklearn.linear_model import LogisticRegression
 import numpy as np
 
@@ -41,14 +41,20 @@ def predict(model, features):
     return {"class": int(model.predict(features.reshape(1, -1))[0])}
 
 
+emg_viewer = SignalViewer("emg")
+rec_controls = RecordingControls(
+    ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
+)
+sessions = SessionManager("sessions", class_names=["Rest", "Fist"])
+ml_panel = PipelinePanel(pipeline)
+
+
 @app.ui
 def ui(ctx):
-    signal_viewer(ctx, "emg")
-    recording_controls(
-        ctx, ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
-    )
-    pipeline.training_data = session_manager("sessions", class_names=["Rest", "Fist"])
-    pipeline_panel(pipeline)
+    emg_viewer.ui(ctx)
+    rec_controls.ui(ctx)
+    pipeline.training_data = sessions.ui()
+    ml_panel.ui()
 
 
 app.run()
@@ -81,7 +87,7 @@ from myogestic import App, Stream, TrainingData            # the orchestrator + 
 from myogestic.ml import Pipeline, save_pickle, load_pickle # ML lifecycle layer (opt-in)
 from myogestic.session import iter_labeled_windows         # session reading helpers
 from myogestic.sources import LSLSource                    # one of the built-in sources
-from myogestic.widgets import recording_controls, session_manager, signal_viewer  # stateless ImGui widgets
+from myogestic.widgets import RecordingControls, SessionManager, SignalViewer  # ImGui widget classes
 from sklearn.linear_model import LogisticRegression        # YOUR ML library
 ```
 
@@ -116,7 +122,7 @@ A [`Stream`][myogestic.Stream] wraps a [`Source`](concepts/streams.md) plus a fi
 Two reads come out the other side:
 
 - `stream.get_window()` returns the most recent `window_ms` of data, **channels-first** `(n_channels, n_samples)`. This is what feature extractors and ML models consume.
-- `stream.get_display(n_pixels)` returns a min/max envelope decimated for rendering. This is what [`signal_viewer`][myogestic.widgets.signal_viewer] consumes.
+- `stream.get_display(n_pixels)` returns a min/max envelope decimated for rendering. This is what [`SignalViewer`][myogestic.widgets.SignalViewer] consumes.
 
 [`app.streams(*streams)`][myogestic.App.streams] registers one or more. The same method takes any `Source` implementation, so swapping [`LSLSource`][myogestic.sources.LSLSource] for [`ReplaySource`][myogestic.sources.ReplaySource] (offline replay) or your own custom source changes one line.
 
@@ -166,7 +172,7 @@ def train(data: TrainingData):
     return LogisticRegression().fit(np.array(X), np.array(y))
 ```
 
-Runs on a one-shot training thread when the user clicks **Train**. Receives [`TrainingData`][myogestic.TrainingData] (with `paths`, `class_names`, `classes`) populated by [`session_manager`][myogestic.widgets.session_manager]. Return any object - it lands on `pipeline.model` and stays there.
+Runs on a one-shot training thread when the user clicks **Train**. Receives [`TrainingData`][myogestic.TrainingData] (with `paths`, `class_names`, `classes`) populated by [`SessionManager`][myogestic.widgets.SessionManager]. Return any object - it lands on `pipeline.model` and stays there.
 
 [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] does the heavy lifting of opening sessions (folder or `.session.zip`), walking the label track, and slicing trials into overlapping windows. You only write the feature extraction.
 
@@ -187,23 +193,29 @@ If you push to outputs (LSL, robots, VHI), do it inside `predict()` before retur
 ## `@app.ui` - the rendering surface
 
 ```python
+emg_viewer = SignalViewer("emg")
+rec_controls = RecordingControls(
+    ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
+)
+sessions = SessionManager("sessions", class_names=["Rest", "Fist"])
+ml_panel = PipelinePanel(pipeline)
+
+
 @app.ui
 def ui(ctx):
-    signal_viewer(ctx, "emg")
-    recording_controls(
-        ctx, ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
-    )
-    pipeline.training_data = session_manager("sessions", class_names=["Rest", "Fist"])
-    pipeline_panel(pipeline)
+    emg_viewer.ui(ctx)
+    rec_controls.ui(ctx)
+    pipeline.training_data = sessions.ui()
+    ml_panel.ui()
 ```
 
 The `@app.ui` callback runs on the **main thread** every frame. The function body is a flat sequence of widget calls; each widget is a stateless function that draws ImGui commands from `ctx` (and arguments).
 
 Three things live here:
 
-1. **Display widgets** ([`signal_viewer`][myogestic.widgets.signal_viewer]) - render data from `ctx.streams`.
-2. **Control widgets** ([`recording_controls`][myogestic.widgets.recording_controls], [`pipeline_panel`][myogestic.ml.widgets.pipeline_panel]) - fire callbacks to mutate state (start recording, train, predict).
-3. **Bridge widgets** ([`session_manager`][myogestic.widgets.session_manager]) - return a `TrainingData` you assign to `pipeline.training_data`. This is how UI selection feeds into ML training.
+1. **Display widgets** ([`SignalViewer`][myogestic.widgets.SignalViewer]) - render data from `ctx.streams`.
+2. **Control widgets** ([`RecordingControls`][myogestic.widgets.RecordingControls], [`PipelinePanel`][myogestic.ml.widgets.PipelinePanel]) - fire callbacks to mutate state (start recording, train, predict).
+3. **Bridge widgets** ([`SessionManager`][myogestic.widgets.SessionManager]) - return a `TrainingData` you assign to `pipeline.training_data`. This is how UI selection feeds into ML training.
 
 For grid layouts use [`Grid`][myogestic.Grid] and `with grid[r, c]:`. For pop-out windows use `App(docking=True) + app.popout(...)`.
 
@@ -228,7 +240,7 @@ Last line of every script. In order:
 
 ## What's not in this script
 
-- **Recording.** Streams *flow* whether you record or not. Recording starts when [`app.start_recording()`][myogestic.App.start_recording] is called (typically from the [`recording_controls`][myogestic.widgets.recording_controls] widget's **Record** button). See [Recording](concepts/recording.md).
+- **Recording.** Streams *flow* whether you record or not. Recording starts when [`app.start_recording()`][myogestic.App.start_recording] is called (typically from the [`RecordingControls`][myogestic.widgets.RecordingControls] widget's **Record** button). See [Recording](concepts/recording.md).
 - **Outputs.** This skeleton predicts a class index but doesn't push to anything physical. Add an [`LSLOutlet`][myogestic.outputs.LSLOutlet], [`UDPOutput`][myogestic.outputs.UDPOutput], `SerialOutput`, or your own subclass and call `outlet.push(value)` from `predict()`. See [Add a custom output](how-to/add-an-output.md).
 - **Multi-stream.** A second `Stream("imu", ...)` and your `extract()` sees `windows["imu"]` too. Match the [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] pattern in `train()` for paired primary/target streams. See [Recording](concepts/recording.md).
 - **Bridges.** Heavy-data sources (webcam, ultrasound) run as subprocesses via [`app.bridges(...)`][myogestic.App.bridges]. See [Threading](concepts/threading.md).

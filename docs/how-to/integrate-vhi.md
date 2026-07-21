@@ -39,12 +39,12 @@ If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
 
 ## Launching the VHI process
 
-Drop the launcher into your `process_launcher` panel and the user gets
+Drop the launcher into your `ProcessLauncher` panel and the user gets
 a Start/Stop button for VHI:
 
 ```python
 import sys
-from myogestic.widgets import process_launcher
+from myogestic.widgets import ProcessLauncher
 
 PROCESSES = [
     ("EMG Generator", [sys.executable, "-m", "myogestic.tools.emg_generator",
@@ -52,10 +52,12 @@ PROCESSES = [
     *vhi.launcher(),
 ]
 
+launcher = ProcessLauncher(PROCESSES)
+
 @app.ui
 def ui(ctx):
     with grid[0, 0]:
-        process_launcher(PROCESSES)
+        launcher.ui()
 ```
 
 `vhi.launcher()` prefers a packaged binary install when present and

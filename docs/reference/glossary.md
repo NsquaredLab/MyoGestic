@@ -6,7 +6,7 @@ Terms that mean different things in different parts of the codebase. The "common
 
 Three meanings, kept separate by convention:
 
-1. **Display transform** in `signal_viewer` (rectify, DC removal, RMS envelope). Affects only what's drawn on screen - never recording, never `extract()`, never the model. See the widget tooltip.
+1. **Display transform** in `SignalViewer` (rectify, DC removal, RMS envelope). Affects only what's drawn on screen - never recording, never `extract()`, never the model. See the widget tooltip.
 2. **Post-prediction smoother** like `OneEuroFilter` or `GaussianFilter` from `myogestic.outputs.filters`. Smooths the *prediction output vector* (pose, control command) before it leaves the app. UI panel via `FilterControl`.
 
 ### Source

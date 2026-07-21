@@ -122,7 +122,7 @@ Don't filter inside the model - the model should produce raw predictions; smooth
 
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
 
-- **Filtering raw EMG.** Wrong layer. EMG filtering belongs upstream of `extract()` (scipy.signal, etc.) and is the user's domain. The on-screen filters in `signal_viewer` (rectify, dc removal, rms-envelope) are *display* transforms - they don't affect what `extract()` sees.
+- **Filtering raw EMG.** Wrong layer. EMG filtering belongs upstream of `extract()` (scipy.signal, etc.) and is the user's domain. The on-screen filters in `SignalViewer` (rectify, dc removal, rms-envelope) are *display* transforms - they don't affect what `extract()` sees.
 - **Filtering classification output (integer class indices).** The filter expects a float vector. For classification, hold a smoothed soft-output (probabilities) and argmax that, or use a model with its own temporal smoothing built-in.
 - **Forgetting `pose_filter.reset()` after training.** First few predictions look weird because they're blending with the previous model's tail.
 - **Per-channel filter parameters.** `OneEuroFilter` applies the same parameters to every dimension. If you want different smoothing per joint (e.g. fingertips smoother than wrist), run multiple filters and concatenate.

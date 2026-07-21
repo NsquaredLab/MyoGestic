@@ -38,11 +38,13 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 # Self-capture helper
 # ─────────────────────────────────────────────────────────────────────
 
+
 def _self_capture_after(seconds: float, output_path: Path) -> None:
     """In a background thread, wait ``seconds``, find this process's
     main GUI window via Quartz, screencapture it, then SIGINT main to
     exit cleanly.
     """
+
     def _run() -> None:
         time.sleep(seconds)
         try:
@@ -105,7 +107,7 @@ def render_signal_viewer(out: Path) -> None:
     import time
     import numpy as np
     from myogestic import App, Stream, StreamInfo
-    from myogestic.widgets import signal_viewer
+    from myogestic.widgets import SignalViewer
 
     FS = 256.0
     N = 32  # samples per read - 32 / 256 = 125 ms per chunk
@@ -129,6 +131,7 @@ def render_signal_viewer(out: Path) -> None:
 
         def connect(self):
             from mne_lsl.lsl import local_clock
+
             self._next_tick = local_clock()
             return StreamInfo(n_channels=4, fs=FS, dtype=np.dtype("float32"))
 
@@ -146,12 +149,14 @@ def render_signal_viewer(out: Path) -> None:
 
             t = (self._t + np.arange(N)) / FS
             self._t += N
-            data = np.column_stack([
-                1.2 * np.sin(2 * np.pi * 5 * t) + 0.15 * np.random.randn(N),
-                1.0 * np.cos(2 * np.pi * 7 * t) + 0.15 * np.random.randn(N),
-                0.8 * np.sin(2 * np.pi * 3 * t) + 0.10 * np.random.randn(N),
-                0.6 * np.cos(2 * np.pi * 11 * t) + 0.10 * np.random.randn(N),
-            ]).astype(np.float32)
+            data = np.column_stack(
+                [
+                    1.2 * np.sin(2 * np.pi * 5 * t) + 0.15 * np.random.randn(N),
+                    1.0 * np.cos(2 * np.pi * 7 * t) + 0.15 * np.random.randn(N),
+                    0.8 * np.sin(2 * np.pi * 3 * t) + 0.10 * np.random.randn(N),
+                    0.6 * np.cos(2 * np.pi * 11 * t) + 0.10 * np.random.randn(N),
+                ]
+            ).astype(np.float32)
             # Timestamps end at the wall clock we just paced to, one chunk
             # spanning N samples ending at `target`.
             ts = (target + (np.arange(N) - (N - 1)) / FS).astype(np.float64)
@@ -163,9 +168,11 @@ def render_signal_viewer(out: Path) -> None:
     app = App("signal_viewer")
     app.streams(Stream("emg", source=FakeSource(), window_ms=2000, buffer_ms=10000))
 
+    viewer = SignalViewer("emg")
+
     @app.ui
     def ui(ctx):
-        signal_viewer(ctx, "emg")
+        viewer.ui(ctx)
 
     # 7 s delay gives the paced source enough samples to fill the viewer's
     # persisted 5 s resolution window edge-to-edge before capture.
@@ -175,18 +182,20 @@ def render_signal_viewer(out: Path) -> None:
 
 def render_recording_controls(out: Path) -> None:
     from myogestic import App
-    from myogestic.widgets import recording_controls
+    from myogestic.widgets import RecordingControls
 
     app = App("recording_controls")
 
+    controls = RecordingControls(
+        ["Rest", "Fist", "Open", "Pinch"],
+        on_record=lambda: None,
+        on_stop=lambda: None,
+        on_gesture=lambda i: None,
+    )
+
     @app.ui
     def ui(ctx):
-        recording_controls(
-            ctx, ["Rest", "Fist", "Open", "Pinch"],
-            on_record=lambda: None,
-            on_stop=lambda: None,
-            on_gesture=lambda i: None,
-        )
+        controls.ui(ctx)
 
     _self_capture_after(3.0, out)
     app.run(window_size=SIZES["recording_controls"])
@@ -194,7 +203,7 @@ def render_recording_controls(out: Path) -> None:
 
 def render_session_manager(out: Path) -> None:
     from myogestic import App
-    from myogestic.widgets import session_manager
+    from myogestic.widgets import SessionManager
 
     # Fake sessions folder with a couple of placeholder folders
     tmp = Path(tempfile.mkdtemp(prefix="widget_screenshot_sessions_"))
@@ -208,9 +217,11 @@ def render_session_manager(out: Path) -> None:
 
     app = App("session_manager")
 
+    manager = SessionManager(str(tmp), class_names=["Rest", "Fist"])
+
     @app.ui
     def ui(ctx):
-        session_manager(str(tmp), class_names=["Rest", "Fist"])
+        manager.ui()
 
     _self_capture_after(3.0, out)
     app.run(window_size=SIZES["session_manager"])
@@ -234,7 +245,7 @@ def render_filter_control(out: Path) -> None:
 def render_process_launcher(out: Path) -> None:
     import sys as _sys
     from myogestic import App
-    from myogestic.widgets import process_launcher
+    from myogestic.widgets import ProcessLauncher
 
     PROCESSES = [
         ("EMG Generator", [_sys.executable, "-c", "import time; time.sleep(60)"]),
@@ -243,9 +254,11 @@ def render_process_launcher(out: Path) -> None:
 
     app = App("process_launcher")
 
+    launcher = ProcessLauncher(PROCESSES)
+
     @app.ui
     def ui(ctx):
-        process_launcher(PROCESSES)
+        launcher.ui()
 
     _self_capture_after(3.0, out)
     app.run(window_size=SIZES["process_launcher"])
@@ -254,14 +267,16 @@ def render_process_launcher(out: Path) -> None:
 def render_pipeline_panel(out: Path) -> None:
     from myogestic import App
     from myogestic.ml import Pipeline
-    from myogestic.ml.widgets import pipeline_panel
+    from myogestic.ml.widgets import PipelinePanel
 
     app = App("pipeline_panel")
     pipeline = Pipeline(app)
 
+    panel = PipelinePanel(pipeline)
+
     @app.ui
     def ui(ctx):
-        pipeline_panel(pipeline)
+        panel.ui()
 
     _self_capture_after(3.0, out)
     app.run(window_size=SIZES["pipeline_panel"])
@@ -274,7 +289,7 @@ def render_feature_selector(out: Path) -> None:
 
     selector = FeatureSelector(
         {
-            "RMS": lambda x: np.sqrt(np.mean(x ** 2, axis=1)),
+            "RMS": lambda x: np.sqrt(np.mean(x**2, axis=1)),
             "MAV": lambda x: np.mean(np.abs(x), axis=1),
             "WL": lambda x: np.sum(np.abs(np.diff(x, axis=1)), axis=1),
             "VAR": lambda x: np.var(x, axis=1),
@@ -295,13 +310,15 @@ def render_feature_selector(out: Path) -> None:
 
 def render_app_logo(out: Path) -> None:
     from myogestic import App
-    from myogestic.widgets import app_logo
+    from myogestic.widgets import AppLogo
 
     app = App("app_logo")
 
+    logo = AppLogo()
+
     @app.ui
     def ui(ctx):
-        app_logo()
+        logo.ui()
 
     _self_capture_after(3.0, out)
     app.run(window_size=SIZES["app_logo"])
@@ -310,7 +327,7 @@ def render_app_logo(out: Path) -> None:
 def render_prediction_label(out: Path) -> None:
     import numpy as np
     from myogestic import App
-    from myogestic.widgets.training.prediction_label import prediction_label
+    from myogestic.widgets import PredictionLabel
 
     # prediction_label only reads `.predictions`, so a tiny duck-typed stub is
     # enough - no need to spin up a full Pipeline + extract/train/predict chain.
@@ -325,9 +342,11 @@ def render_prediction_label(out: Path) -> None:
 
     app = App("prediction_label")
 
+    label = PredictionLabel(pipeline, classes, show_probability=True)
+
     @app.ui
     def ui(ctx):
-        prediction_label(pipeline, classes, show_probability=True)
+        label.ui()
 
     _self_capture_after(3.0, out)
     app.run(window_size=SIZES["prediction_label"])
@@ -342,9 +361,18 @@ def render_vhi_movement_panel(out: Path) -> None:
     from myogestic.widgets.vhi.palette import vhi_movement_palette
 
     MOVEMENTS = (
-        "Rest", "Fist", "Open", "Pinch", "ThumbsUp", "PointIndex",
-        "ThreeFingerPinch", "WristFlex", "WristExtend", "WristPronate",
-        "WristSupinate", "KeyGrip",
+        "Rest",
+        "Fist",
+        "Open",
+        "Pinch",
+        "ThumbsUp",
+        "PointIndex",
+        "ThreeFingerPinch",
+        "WristFlex",
+        "WristExtend",
+        "WristPronate",
+        "WristSupinate",
+        "KeyGrip",
     )
 
     app = App("VhiMovementPanel")
@@ -387,7 +415,10 @@ def main() -> None:
     parser.add_argument("widget", nargs="?", help="Widget name to render")
     parser.add_argument("--all", action="store_true", help="Render every widget in the registry")
     parser.add_argument(
-        "--out", type=Path, default=None, help="Output PNG path (default: docs/images/widgets/<name>.png)"
+        "--out",
+        type=Path,
+        default=None,
+        help="Output PNG path (default: docs/images/widgets/<name>.png)",
     )
     args = parser.parse_args()
 

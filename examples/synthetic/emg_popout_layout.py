@@ -32,7 +32,7 @@ from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Stream, TrainingData
 from myogestic.ml import Pipeline, load_pickle, save_pickle
-from myogestic.ml.widgets import predict_button, train_button, training_log
+from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
     catboost_classifier,
     constant_classifier,
@@ -45,13 +45,13 @@ from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi.interfaces import virtual_hand
 from myogestic.widgets import (
-    log_panel,
-    prediction_label,
-    process_launcher,
-    recording_controls,
-    session_manager,
-    signal_viewer,
-    stream_panel,
+    LogPanel,
+    PredictionLabel,
+    ProcessLauncher,
+    RecordingControls,
+    SessionManager,
+    SignalViewer,
+    StreamPanel,
 )
 from myogestic.widgets.common import panel_header
 from myogestic.widgets.panels.filter_controls import FilterControl
@@ -119,9 +119,7 @@ PROCESSES = [
 # docking=True enables ImGui multi-viewport so each app.popout(...) panel
 # becomes a tearable / dockable window.
 app = App("EMG 32ch Popout", ui_scale=0.85, docking=True)
-app.streams(
-    Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, buffer_ms=60000)
-)
+app.streams(Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 pipeline.save_model = save_pickle
 pipeline.load_model = load_pickle
@@ -214,35 +212,53 @@ def _on_gesture(i: int) -> None:
 # --- Per-block render functions (each becomes its own dockable window) -----
 
 
+_signal_viewer = SignalViewer("emg", selectable=True)
+
+
 def _signal_block() -> None:
-    signal_viewer(app.ctx, "emg", selectable=True)
+    _signal_viewer.ui(app.ctx)
+
+
+_streams = StreamPanel()
 
 
 def _streams_block() -> None:
-    stream_panel(app.ctx)
+    _streams.ui(app.ctx)
+
+
+_log = LogPanel()
 
 
 def _log_block() -> None:
-    log_panel(app.ctx)
+    _log.ui(app.ctx)
+
+
+_processes = ProcessLauncher(PROCESSES)
 
 
 def _processes_block() -> None:
-    process_launcher(PROCESSES)
+    _processes.ui()
+
+
+_recording = RecordingControls(
+    CLASSES,
+    on_record=app.start_recording,
+    on_stop=app.stop_recording,
+    on_gesture=_on_gesture,
+)
 
 
 def _recording_block() -> None:
-    recording_controls(
-        app.ctx,
-        CLASSES,
-        on_record=app.start_recording,
-        on_stop=app.stop_recording,
-        on_gesture=_on_gesture,
-    )
+    _recording.ui(app.ctx)
 
 
 _MODEL_WIDGET_ID = "ml_popout"
 _autoscroll_on = True
 _log_popout_open = False
+
+_train_btn = TrainButton(pipeline)
+_predict_btn = PredictButton(pipeline)
+_training_log = TrainingLog(pipeline, height=80.0, widget_id=_MODEL_WIDGET_ID)
 
 
 def _model_block() -> None:
@@ -264,9 +280,9 @@ def _model_block() -> None:
     imgui.push_item_width(-1)
     _, selected_model_idx = imgui.combo("##model_sel", selected_model_idx, MODEL_NAMES)
     imgui.pop_item_width()
-    train_button(pipeline)
+    _train_btn.ui()
     imgui.same_line()
-    predict_button(pipeline)
+    _predict_btn.ui()
     imgui.same_line()
     _autoscroll_on, _log_popout_open = render_log_buttons(
         _MODEL_WIDGET_ID, autoscroll=_autoscroll_on, popped_out=_log_popout_open
@@ -274,7 +290,7 @@ def _model_block() -> None:
     if _log_popout_open:
         imgui.text_disabled("(log popped out — see 'Model training log' window)")
     else:
-        training_log(pipeline, height=80.0, widget_id=_MODEL_WIDGET_ID)
+        _training_log.ui()
 
     can_save = pipeline.model is not None
     if not can_save:
@@ -310,12 +326,18 @@ def _filter_block() -> None:
     output_filter.ui()
 
 
+_sessions = SessionManager("sessions", class_names=CLASSES)
+
+
 def _sessions_block() -> None:
-    pipeline.training_data = session_manager("sessions", class_names=CLASSES)
+    pipeline.training_data = _sessions.ui()
+
+
+_prediction = PredictionLabel(pipeline, CLASSES)
 
 
 def _prediction_block() -> None:
-    prediction_label(pipeline, CLASSES)
+    _prediction.ui()
 
 
 def _panel(title: str, fn: Callable[[], None]) -> None:

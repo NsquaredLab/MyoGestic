@@ -18,19 +18,19 @@ def test_top_level_names_are_reachable():
 
 
 def test_widget_helpers_are_public():
-    """FilterControl + panel_header live in `myogestic.widgets` — every
-    example imports them, so they must be reachable without diving into
-    private modules."""
+    """The common widgets live in `myogestic.widgets` — every example imports
+    them, so they must be reachable without diving into private modules."""
     from myogestic.widgets import (
         FilterControl,
+        RecordingControls,
+        SessionManager,
+        SignalViewer,
         panel_header,
-        recording_controls,
-        session_manager,
-        signal_viewer,
     )
 
     assert callable(FilterControl)
     assert callable(panel_header)
-    assert callable(recording_controls)
-    assert callable(session_manager)
-    assert callable(signal_viewer)
+    # Widgets are classes constructed once, then rendered with `.ui(...)`.
+    for widget_cls in (RecordingControls, SessionManager, SignalViewer):
+        assert isinstance(widget_cls, type)
+        assert hasattr(widget_cls, "ui")

@@ -36,12 +36,16 @@ at first render.
 Index the grid in `[row, col]` form. Slices span across tracks:
 
 ```python
+emg_viewer = SignalViewer("emg")
+umap = Scatter2D("UMAP")
+
+
 @app.ui
 def my_ui(ctx):
     with grid[0, 0:4]:        # row 0, full width (4-column span)
-        signal_viewer(ctx, "emg")
+        emg_viewer.ui(ctx)
     with grid[1, 0:2]:        # row 1, left half
-        scatter2d("UMAP", pts)
+        umap.ui(pts)
     with grid[2, 0]:          # single cell
         imgui.button("Record")
 ```
@@ -71,18 +75,20 @@ status panels, logos).
 
 ```python
 grid = Grid(7, 3, row_height=[Px(80), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1)])
+logo = AppLogo()
 with grid[0, 0:3]:
-    app_logo()
+    logo.ui()
 ```
 
 **A fixed control palette on the left:**
 
 ```python
 grid = Grid(4, 3, col_width=[Px(280), Fr(1), Fr(1)])
+emg_viewer = SignalViewer("emg")
 with grid[0:4, 0]:
     movement_palette(...)
 with grid[0, 1:3]:
-    signal_viewer(...)
+    emg_viewer.ui(ctx)
 ```
 
 **Equal split - no track list:**

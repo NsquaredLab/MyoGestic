@@ -25,15 +25,29 @@ import pytest
 import myogestic.core
 import myogestic.vhi.interfaces
 
-EXAMPLES = sorted((Path(__file__).resolve().parent.parent / "examples" / "synthetic").glob("*.py"))
+_EXAMPLES_ROOT = Path(__file__).resolve().parent.parent / "examples"
+# `panels/*.py` are single-widget demos; `panels/_fixtures.py` is a shared
+# helper, not an example, so underscore-prefixed files are skipped.
+EXAMPLES = sorted(
+    p
+    for sub in ("synthetic", "panels")
+    for p in (_EXAMPLES_ROOT / sub).glob("*.py")
+    if not p.name.startswith("_")
+)
 
 
-@pytest.mark.parametrize("path", [pytest.param(p, id=p.name) for p in EXAMPLES])
+@pytest.mark.parametrize(
+    "path", [pytest.param(p, id=f"{p.parent.name}/{p.name}") for p in EXAMPLES]
+)
 def test_example_wires_up(path, monkeypatch):
     """Run an example with the GUI loop stubbed; any API-wiring error fails."""
     # The GUI (and headless) run loop blocks forever — replace it with a no-op so
     # the script completes right after building the app.
     monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
+    # Panel examples import a sibling `_fixtures` module; running via runpy
+    # (unlike a real `python examples/panels/foo.py`) doesn't put the script's
+    # own directory on sys.path, so add it.
+    monkeypatch.syspath_prepend(str(path.parent))
     # Examples call `vhi.launcher()` at module level, which raises FileNotFoundError
     # unless the VHI binary is installed (an environment dep, not part of the API
     # surface). Stub the env check to []; a renamed/removed `launcher` method would

@@ -1,17 +1,17 @@
-"""Test widget helpers are importable and callable (no GUI)."""
+"""Test widget classes are importable and render-ready (no GUI)."""
 
 import numpy as np
 
 from myogestic.widgets.common import PALETTE
-from myogestic.widgets.panels.log_panel import log_panel
+from myogestic.widgets.panels.log_panel import LogPanel
 from myogestic.widgets.panels.popout import popout_panel
-from myogestic.widgets.panels.process_launcher import process_launcher
-from myogestic.widgets.plots.heatmap import heatmap
-from myogestic.widgets.plots.line_plot import line_plot
-from myogestic.widgets.plots.scatter import scatter2d, scatter3d
-from myogestic.widgets.signals.raw import raw_signal_viewer
-from myogestic.widgets.signals.stream_panel import stream_panel
-from myogestic.widgets.signals.viewer import signal_viewer
+from myogestic.widgets.panels.process_launcher import ProcessLauncher
+from myogestic.widgets.plots.heatmap import Heatmap
+from myogestic.widgets.plots.line_plot import LinePlot
+from myogestic.widgets.plots.scatter import Scatter2D, Scatter3D
+from myogestic.widgets.signals.raw import RawSignalViewer
+from myogestic.widgets.signals.stream_panel import StreamPanel
+from myogestic.widgets.signals.viewer import SignalViewer
 
 
 def test_palette_shape():
@@ -19,40 +19,21 @@ def test_palette_shape():
     assert PALETTE.dtype == np.float32
 
 
-def test_scatter2d_is_callable():
-    assert callable(scatter2d)
-
-
-def test_scatter3d_is_callable():
-    assert callable(scatter3d)
-
-
-def test_heatmap_is_callable():
-    assert callable(heatmap)
-
-
-def test_line_plot_is_callable():
-    assert callable(line_plot)
-
-
-def test_signal_viewer_is_callable():
-    assert callable(signal_viewer)
-
-
-def test_raw_signal_viewer_is_callable():
-    assert callable(raw_signal_viewer)
-
-
-def test_process_launcher_is_callable():
-    assert callable(process_launcher)
-
-
-def test_stream_panel_is_callable():
-    assert callable(stream_panel)
-
-
-def test_log_panel_is_callable():
-    assert callable(log_panel)
+def test_widget_classes_have_ui():
+    """Every widget is a class exposing a `.ui()` render method."""
+    for widget_cls in (
+        Scatter2D,
+        Scatter3D,
+        Heatmap,
+        LinePlot,
+        SignalViewer,
+        RawSignalViewer,
+        ProcessLauncher,
+        StreamPanel,
+        LogPanel,
+    ):
+        assert isinstance(widget_cls, type)
+        assert callable(getattr(widget_cls, "ui", None))
 
 
 def test_popout_panel_is_callable():
@@ -61,15 +42,13 @@ def test_popout_panel_is_callable():
 
 def test_imports_from_widgets_init():
     from myogestic.widgets import (
-        log_panel,
+        LogPanel,
+        ProcessLauncher,
+        SignalViewer,
+        StreamPanel,
         popout_panel,
-        process_launcher,
-        signal_viewer,
-        stream_panel,
     )
 
-    assert callable(signal_viewer)
-    assert callable(process_launcher)
-    assert callable(stream_panel)
-    assert callable(log_panel)
+    for widget_cls in (SignalViewer, ProcessLauncher, StreamPanel, LogPanel):
+        assert hasattr(widget_cls, "ui")
     assert callable(popout_panel)
