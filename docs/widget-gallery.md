@@ -23,7 +23,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![signal_viewer](images/widgets/signal_viewer.png){ .widget-thumb loading=lazy }
 
-    Renders a stream's ring buffer as a min/max envelope decimated for 60 fps. Per-channel toggles, optional display filters (rectify, DC removal, RMS envelope), pause/rescale. Keyed by `stream_name`.
+    Renders a stream's ring buffer as a min/max envelope decimated for 60 fps. Per-channel toggles, a 50/60 Hz mains-hum notch, optional display filters (rectify, DC removal, RMS envelope), pause/rescale. Keyed by `stream_name`.
 
 </div>
 
