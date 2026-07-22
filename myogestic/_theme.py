@@ -75,23 +75,25 @@ def apply_theme() -> None:
     hello_imgui.imgui_default_settings.setup_default_imgui_style()
     style = imgui.get_style()
 
-    # macOS control metrics: NSButton bezel ~5px, slightly tighter spacing
-    style.window_rounding = 10.0
-    style.child_rounding = 6.0
-    style.frame_rounding = 5.0
-    style.grab_rounding = 5.0
-    style.popup_rounding = 6.0
-    style.scrollbar_rounding = 8.0
-    style.tab_rounding = 5.0
-    style.window_padding = imgui.ImVec2(12, 10)
-    style.frame_padding = imgui.ImVec2(10, 5)
-    style.item_spacing = imgui.ImVec2(8, 6)
-    style.item_inner_spacing = imgui.ImVec2(6, 5)
+    # macOS control metrics: NSButton bezel ~5px, slightly tighter spacing.
+    # Radii follow a decrease-inward rule (container >= control) and a 4/8 rhythm.
+    style.window_rounding = 10.0  # forced to 0 on desktop by the viewport tweak
+    style.child_rounding = 8.0
+    style.frame_rounding = 6.0
+    style.grab_rounding = 6.0
+    style.popup_rounding = 8.0
+    style.scrollbar_rounding = 6.0
+    style.tab_rounding = 6.0
+    style.window_padding = imgui.ImVec2(12, 12)
+    style.frame_padding = imgui.ImVec2(10, 6)
+    style.item_spacing = imgui.ImVec2(8, 8)
+    style.item_inner_spacing = imgui.ImVec2(6, 4)
     style.scrollbar_size = 12.0
     style.grab_min_size = 10.0
     style.window_border_size = 0.0
     style.frame_border_size = 0.0
     style.child_border_size = 1.0
+    style.disabled_alpha = 0.45  # disabled controls recede but stay legible
 
     dark = _is_mac_dark()
     if dark:
@@ -99,30 +101,46 @@ def apply_theme() -> None:
         accent_hi = _rgba(64, 156, 255)
         text = _rgba(255, 255, 255)
         text_dim = _rgba(235, 235, 245, 153)  # secondaryLabel
-        window_bg = _rgba(30, 30, 30)  # NSVisualEffectView.dark
-        child_bg = _rgba(30, 30, 30)  # match window_bg — borders delineate cells
-        control_bg = _rgba(58, 58, 60, 230)  # systemGray5 dark
-        control_hi = _rgba(72, 72, 74)
-        border = _rgba(84, 84, 88, 100)  # separator
+        # Surface ladder (depth from tone, not lines): each level a step lighter
+        # as it comes forward — canvas < card < raised < control.
+        window_bg = _rgba(28, 28, 30)  # canvas (systemGray6 dark)
+        child_bg = _rgba(36, 36, 38)  # panels / cards, raised a step above canvas
+        raised = _rgba(44, 44, 46)  # popups / menus / table headers (a further step)
+        control_bg = _rgba(58, 58, 60, 235)  # systemGray5 dark — buttons / inputs
+        control_hi = _rgba(72, 72, 74)  # hover, and neutral pressed
+        border = _rgba(84, 84, 88, 128)  # separator
         header = _rgba(99, 99, 102, 90)
+        row_alt = _rgba(255, 255, 255, 6)  # zebra row (~2.5% white)
+        table_line = _rgba(255, 255, 255, 16)  # light table rule (~6% white)
+        sel_text_bg = _rgba(10, 132, 255, 90)  # text selection (accent @ .35)
+        link = _rgba(100, 181, 255)
+        modal_dim = _rgba(0, 0, 0, 158)  # modal backdrop (~.62)
+        dock_prev = _rgba(10, 132, 255, 76)  # docking drop preview (accent @ .30)
     else:
         accent = _rgba(0, 122, 255)
         accent_hi = _rgba(64, 156, 255)
         text = _rgba(0, 0, 0)
         text_dim = _rgba(60, 60, 67, 153)
-        window_bg = _rgba(246, 246, 246)
-        child_bg = _rgba(255, 255, 255)
+        window_bg = _rgba(243, 244, 246)  # canvas
+        child_bg = _rgba(255, 255, 255)  # cards sit above the canvas
+        raised = _rgba(255, 255, 255)
         control_bg = _rgba(235, 235, 240)
         control_hi = _rgba(220, 220, 225)
         border = _rgba(198, 198, 200)
         header = _rgba(210, 210, 215)
+        row_alt = _rgba(0, 0, 0, 6)
+        table_line = _rgba(0, 0, 0, 16)
+        sel_text_bg = _rgba(0, 122, 255, 80)
+        link = _rgba(0, 100, 210)
+        modal_dim = _rgba(0, 0, 0, 90)
+        dock_prev = _rgba(0, 122, 255, 76)
 
     colors = {
         imgui.Col_.text: text,
         imgui.Col_.text_disabled: text_dim,
         imgui.Col_.window_bg: window_bg,
         imgui.Col_.child_bg: child_bg,
-        imgui.Col_.popup_bg: child_bg,
+        imgui.Col_.popup_bg: raised,
         imgui.Col_.border: border,
         imgui.Col_.frame_bg: control_bg,
         imgui.Col_.frame_bg_hovered: control_hi,
@@ -140,7 +158,9 @@ def apply_theme() -> None:
         imgui.Col_.slider_grab_active: accent_hi,
         imgui.Col_.button: control_bg,
         imgui.Col_.button_hovered: control_hi,
-        imgui.Col_.button_active: accent,
+        # Neutral pressed state — accent is reserved for selection / primary
+        # action / focus, not a flash on every button press.
+        imgui.Col_.button_active: control_hi,
         imgui.Col_.header: header,
         imgui.Col_.header_hovered: control_hi,
         imgui.Col_.header_active: accent,
@@ -154,6 +174,24 @@ def apply_theme() -> None:
         imgui.Col_.tab_hovered: control_hi,
         imgui.Col_.plot_lines: accent,
         imgui.Col_.plot_histogram: accent,
+        # Fill the slots HelloImGui otherwise leaves at stock defaults, so
+        # tables, tabs, text selection, nav focus and docking match the theme
+        # instead of leaking a foreign blue-gray.
+        imgui.Col_.tab_selected: control_hi,
+        imgui.Col_.tab_selected_overline: accent,
+        imgui.Col_.tab_dimmed: control_bg,
+        imgui.Col_.tab_dimmed_selected: control_hi,
+        imgui.Col_.table_header_bg: raised,
+        imgui.Col_.table_row_bg: window_bg,
+        imgui.Col_.table_row_bg_alt: row_alt,
+        imgui.Col_.table_border_strong: border,
+        imgui.Col_.table_border_light: table_line,
+        imgui.Col_.text_selected_bg: sel_text_bg,
+        imgui.Col_.nav_cursor: accent_hi,
+        imgui.Col_.modal_window_dim_bg: modal_dim,
+        imgui.Col_.docking_preview: dock_prev,
+        imgui.Col_.docking_empty_bg: window_bg,
+        imgui.Col_.text_link: link,
     }
     for key, value in colors.items():
         style.set_color_(key, value)

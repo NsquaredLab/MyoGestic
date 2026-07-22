@@ -129,16 +129,21 @@ class SignalViewer:
         render_controls(ctx, stream_name, active_stream, stream, v, self._selectable)
 
         # Resolve which channels are enabled from persistent state *before*
-        # building the frame, so both the frame's column slice and the plot
-        # loop's per-channel decimation only ever touch those columns — the
-        # channel toggle buttons (rendered after the plot below) mutate
-        # `v.channels` for the *next* frame, not this one.
+        # building the frame, so the frame's column slice and the plot loop's
+        # per-channel decimation only ever touch those columns.
         n_channels = stream.info.n_channels
         enabled = resolve_enabled(v, active_stream, n_channels, self._initial_channels)
 
+        # Channel bar at the top, above the plot. It reads/mutates `v.channels`
+        # (the same set `enabled` points at) and reports grid-hover — all
+        # applied this frame, so channel toggles and the hover highlight take
+        # effect immediately instead of a frame late.
+        _, _, hovered_ch = render_channel_controls(stream_name, stream, v, n_channels)
+        v.last_hovered = hovered_ch
+
         frame = build_signal_frame(stream, v, enabled)
         if frame is None:
-            imgui.text(f"{active_stream}: no data")
+            imgui.text_disabled(f"{active_stream}: no data")
             return
 
         ch_names = stream.info.channel_names
@@ -174,21 +179,12 @@ class SignalViewer:
                 channel_ranges=channel_ranges,
                 enabled=enabled,
                 ch_names=ch_names,
-                # This frame's hover state isn't known yet — the toggle buttons
-                # that report it render after the plot (below). One-frame lag
-                # is imperceptible and keeps decimation from blocking on them.
-                hovered_ch=v.last_hovered,
+                hovered_ch=hovered_ch,
                 size=self._size,
                 channel_height=self._channel_height,
             )
         else:
             imgui.text("No channels enabled")
-
-        # Draw the channel toggle buttons after the plot: this both reports
-        # `hovered_ch` for next frame's render_plot call and mutates
-        # `v.channels` (via the toggle buttons) for next frame's `enabled`.
-        _, _, hovered_ch = render_channel_controls(stream_name, stream, v, n_channels)
-        v.last_hovered = hovered_ch
 
         render_footer(
             stream_name=stream_name,

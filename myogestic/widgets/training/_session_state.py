@@ -14,6 +14,7 @@ class SessionWidgetState:
     folder_dialog: object | None = None
     last_load_msg: str = ""
     deactivated_classes: set[int] = field(default_factory=set)
+    scanned: bool = False  # base_path listed yet? (one-shot on first render)
 
 
 _states: dict[str, SessionWidgetState] = {}
@@ -24,7 +25,7 @@ def get_state(widget_id: str) -> SessionWidgetState:
 
 
 def scan_sessions(base_path: str) -> list[dict]:
-    """Find all session folders and .session.zip archives with meta.json."""
+    """Find all session folders and .zip archives that contain a meta.json."""
     base = Path(base_path)
     sessions = []
     if not base.exists():
@@ -42,7 +43,10 @@ def _session_row(path: Path) -> dict | None:
             meta = json.loads((path / "meta.json").read_text())
             labels_file = path / "labels.json"
             labels = json.loads(labels_file.read_text()) if labels_file.exists() else []
-        elif path.is_file() and path.name.endswith(".session.zip"):
+        elif path.is_file() and path.name.endswith(".zip"):
+            # Any .zip with a meta.json inside is a session (matches the
+            # "Load Files..." dialog filter + tooltip); recordings write
+            # .session.zip, but a hand-renamed .zip must load too.
             with zipfile.ZipFile(path) as zf:
                 names = set(zf.namelist())
                 if "meta.json" not in names:
@@ -54,7 +58,9 @@ def _session_row(path: Path) -> dict | None:
 
         streams_meta = meta.get("streams", {})
         return {
-            "path": str(path),
+            # Canonical path so the same session dedups across spellings
+            # (symlinks, /var vs /private/var on macOS, relative vs absolute).
+            "path": str(path.resolve()),
             "name": path.name,
             "date_str": _date_str(meta, path),
             "streams_str": _streams_str(streams_meta),
@@ -104,6 +110,7 @@ def add_recorded_session(path: str, base_path: str = "sessions", title: str = "S
     """Register a freshly recorded session as selected."""
     widget_id = f"{title}_{base_path}"
     state = get_state(widget_id)
+    path = str(Path(path).resolve())  # match the canonical paths stored on rows
     if any(s["path"] == path for s in state.sessions):
         return
     for row in scan_sessions(str(Path(path).parent)):
@@ -118,7 +125,11 @@ def load_session_files(state: SessionWidgetState, paths: list[str]) -> None:
     existing_paths = {s["path"] for s in state.sessions}
     added = 0
     by_parent: dict[str, list[str]] = defaultdict(list)
-    for path_str in paths:
+    for raw in paths:
+        # Canonicalize the picked path so it dedups against the already-listed
+        # (also canonical) rows instead of being re-added under a different
+        # spelling — e.g. the macOS dialog's /private/var vs a /var scan.
+        path_str = str(Path(raw).resolve())
         if path_str not in existing_paths:
             by_parent[str(Path(path_str).parent)].append(path_str)
 

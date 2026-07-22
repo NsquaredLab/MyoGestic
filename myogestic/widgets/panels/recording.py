@@ -26,7 +26,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.core import AppState
-from myogestic.widgets.common import panel_header
+from myogestic.widgets.common import DANGER, IDLE, panel_header, pop_selected, push_selected
 
 if TYPE_CHECKING:
     from myogestic.core import Context
@@ -67,14 +67,14 @@ def _status_pill(label: str, color: imgui.ImVec4) -> None:
 
 
 STATE_COLORS: dict[str, imgui.ImVec4] = {
-    AppState.IDLE: imgui.ImVec4(0.55, 0.60, 0.68, 1.0),
-    AppState.RECORDING: imgui.ImVec4(1.0, 0.28, 0.28, 1.0),
+    AppState.IDLE: IDLE,
+    AppState.RECORDING: DANGER,
     # Extensions register their own states by appending to this dict, e.g.:
     #     from myogestic.widgets.panels.recording import STATE_COLORS
     #     STATE_COLORS["training"] = imgui.ImVec4(...)
     # (Populated by myogestic.ml.widgets on import.)
 }
-_DEFAULT_COLOR = imgui.ImVec4(0.5, 0.5, 0.5, 1.0)
+_DEFAULT_COLOR = IDLE
 
 
 def _safe_label_index(current: int, n_classes: int) -> int:
@@ -177,12 +177,18 @@ def _render_recording_controls(
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(12, 8))
     try:
         if class_names:
+            # Wrap the label buttons onto the next row instead of letting a
+            # wide class list (or a narrow cell) run them off the right edge.
+            # (get_window_content_region_max isn't in this binding, so derive
+            # the row's right edge from the cursor + available width.)
+            spacing = imgui.get_style().item_spacing.x
+            right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
             for i, name in enumerate(class_names):
-                if i > 0:
+                if i > 0 and imgui.get_item_rect_max().x + spacing + _LABEL_BTN_W <= right:
                     imgui.same_line()
                 selected = ctx.current_label == i
                 if selected:
-                    imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.31, 0.61, 0.98, 0.9))
+                    push_selected()
                 try:
                     if imgui.button(
                         f"{name}##rec_gesture{i}", imgui.ImVec2(_LABEL_BTN_W, _LABEL_BTN_H)
@@ -198,7 +204,7 @@ def _render_recording_controls(
                             ctx.session.add_label(i)
                 finally:
                     if selected:
-                        imgui.pop_style_color()
+                        pop_selected()
             imgui.spacing()
 
         # Record / Stop

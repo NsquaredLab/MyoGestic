@@ -100,6 +100,8 @@ class TemplateInspector:
         """
         from imgui_bundle import imgui
 
+        from myogestic.widgets.common import panel_header
+
         widget_id = self._widget_id
         title = self._title
         height = self._height
@@ -112,7 +114,7 @@ class TemplateInspector:
             _SELECTED[widget_id] = None
 
         if title:
-            imgui.text(title)
+            panel_header(title)
         if not rows:
             imgui.text_disabled("(no rows)")
             return selected

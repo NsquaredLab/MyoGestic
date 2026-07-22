@@ -17,15 +17,15 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import panel_header
+from myogestic.widgets.common import DANGER, SUCCESS, panel_header
 from myogestic.widgets.signals._scan import _scans, _ScanState
 
 if TYPE_CHECKING:
     from myogestic.core import Context
     from myogestic.stream import Stream
 
-_OK = imgui.ImVec4(0.31, 0.73, 0.40, 1.0)
-_BAD = imgui.ImVec4(0.84, 0.36, 0.36, 1.0)
+_OK = SUCCESS
+_BAD = DANGER
 _MUTED = imgui.ImVec4(0.65, 0.65, 0.65, 1.0)
 
 # Streams we've already auto-discovered once. Forces the auto-scan to fire

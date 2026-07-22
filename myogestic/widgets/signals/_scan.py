@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 
 from imgui_bundle import imgui
 
+from myogestic.widgets.common import DANGER
+
 
 @dataclass
 class _ScanState:
@@ -88,10 +90,7 @@ def _disconnected_ui(stream_name: str, stream: object) -> None:
         imgui.text(f"{stream_name}: disconnected")
         return
 
-    imgui.text_colored(
-        imgui.ImVec4(1.0, 0.4, 0.4, 1.0),
-        f"{stream_name}: disconnected",
-    )
+    imgui.text_colored(DANGER, f"{stream_name}: disconnected")
     if stream.last_error:
         imgui.same_line()
         imgui.text_colored(imgui.ImVec4(0.6, 0.6, 0.6, 1.0), f"({stream.last_error})")

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-from imgui_bundle import imgui
+from imgui_bundle import imgui, implot
 
 # 10 distinct colors for class labels (Category10-like)
 PALETTE = np.array(
@@ -23,7 +23,73 @@ PALETTE = np.array(
 )
 
 
+# Semantic status colours — the single source for good / warn / bad / info /
+# idle, so the same status reads as the same colour across every widget
+# (Apple system palette). Separate from the accent hue used for chrome.
+SUCCESS = imgui.ImVec4(48 / 255, 209 / 255, 88 / 255, 1.0)  # systemGreen
+WARNING = imgui.ImVec4(255 / 255, 159 / 255, 10 / 255, 1.0)  # systemOrange
+DANGER = imgui.ImVec4(255 / 255, 69 / 255, 58 / 255, 1.0)  # systemRed
+INFO = imgui.ImVec4(10 / 255, 132 / 255, 255 / 255, 1.0)  # systemBlue
+IDLE = imgui.ImVec4(142 / 255, 142 / 255, 147 / 255, 1.0)  # systemGray
+
+
+_IMPLOT_STYLED = False
+
+
+def ensure_implot_style() -> None:
+    """Apply the app's plot styling to ImPlot once, lazily.
+
+    Call at the top of any plot widget — ImPlot's global style needs a live
+    context, so it's set on the first render. Plots then read as part of the
+    app instead of stock ImPlot: no chart border (surface tone frames them), a
+    transparent plot background so the card shows through, and a faint grid.
+    """
+    global _IMPLOT_STYLED
+    if _IMPLOT_STYLED:
+        return
+    _IMPLOT_STYLED = True
+    st = implot.get_style()
+    st.plot_border_size = 0.0
+    st.set_color_(implot.Col_.plot_bg, imgui.ImVec4(0.0, 0.0, 0.0, 0.0))
+    st.set_color_(implot.Col_.frame_bg, imgui.ImVec4(0.0, 0.0, 0.0, 0.0))
+    st.set_color_(implot.Col_.axis_grid, imgui.ImVec4(1.0, 1.0, 1.0, 0.05))
+    st.set_color_(implot.Col_.legend_bg, imgui.ImVec4(0.17, 0.17, 0.18, 0.95))
+
+
 _ELLIPSIS = "…"
+
+# The one definition of the "this control is the active choice" cue, used for
+# *persistent selection* (a momentary press is now neutral gray). Wrap the
+# active button:  push_selected(); imgui.button(...); pop_selected().  Keeping
+# it here means selection can be restyled app-wide from a single place — e.g.
+# to the proposed translucent-accent fill + 2px underline — instead of the five
+# hard-coded copies this replaced.
+_ACCENT = imgui.ImVec4(0.31, 0.61, 0.98, 1.0)
+_SELECTED_FILL = imgui.ImVec4(0.31, 0.61, 0.98, 0.28)  # translucent accent tint (rest)
+_SELECTED_HOVER = imgui.ImVec4(0.31, 0.61, 0.98, 0.40)
+
+
+def push_selected() -> None:
+    """Tint the next button as the selected / active choice (pair with :func:`pop_selected`).
+
+    Instead of a solid accent fill, the selected control gets a translucent
+    accent *tint* plus a 2px accent underline (drawn in :func:`pop_selected`) —
+    a calmer "this is on" cue that reads as selection, not a momentary press.
+    """
+    imgui.push_style_color(imgui.Col_.button, _SELECTED_FILL)
+    imgui.push_style_color(imgui.Col_.button_hovered, _SELECTED_HOVER)
+    imgui.push_style_color(imgui.Col_.button_active, _SELECTED_HOVER)
+
+
+def pop_selected() -> None:
+    """Undo the tint pushed by :func:`push_selected` and draw the accent underline."""
+    imgui.pop_style_color(3)
+    p0 = imgui.get_item_rect_min()
+    p1 = imgui.get_item_rect_max()
+    y = p1.y - 2.0
+    imgui.get_window_draw_list().add_rect_filled(
+        imgui.ImVec2(p0.x + 3.0, y), imgui.ImVec2(p1.x - 3.0, p1.y), imgui.get_color_u32(_ACCENT), 1.0
+    )
 
 
 def panel_header(title: str, icon: str | None = None, *, reserve: float = 0.0) -> None:
@@ -74,3 +140,29 @@ def _truncate_to_width(s: str, budget: float) -> str:
     while s and imgui.calc_text_size(s).x > budget:
         s = s[:-1]
     return s
+
+
+def panel_header_button(title: str, icon: str | None, button_icon: str, *, tooltip: str = "") -> bool:
+    """Render a :func:`panel_header` with a right-aligned icon-only button.
+
+    Returns ``True`` on the frame the button is clicked. The button is
+    prioritized: when the row can't fit the header icon + button side by side
+    it drops to its own line below the (icon-only) header — the same behaviour
+    as the Reset button on the post-processing panel.
+    """
+    style = imgui.get_style()
+    sp = style.item_spacing.x
+    btn_w = imgui.calc_text_size(button_icon).x + style.frame_padding.x * 2
+    icon_w = imgui.calc_text_size(icon).x if icon else 0.0
+    inline = imgui.get_content_region_avail().x >= icon_w + sp + btn_w
+    panel_header(title, icon, reserve=(btn_w + sp) if inline else 0.0)
+    if inline:
+        imgui.same_line()
+        avail = imgui.get_content_region_avail().x
+        if avail > btn_w:
+            imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + (avail - btn_w))
+    # else: the button renders on the next line (no same_line), left-aligned.
+    clicked = imgui.small_button(f"{button_icon}##_panel_hdr_btn")
+    if tooltip and imgui.is_item_hovered():
+        imgui.set_tooltip(tooltip)
+    return clicked

@@ -4,9 +4,10 @@ import time as _time
 from typing import TYPE_CHECKING
 
 import numpy as np
+from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui, implot
 
-from myogestic.widgets.common import PALETTE
+from myogestic.widgets.common import PALETTE, ensure_implot_style
 from myogestic.widgets.signals._state import minmax_grid_all_shared_x, resolve_decimation_target
 
 if TYPE_CHECKING:
@@ -40,12 +41,16 @@ def render_plot(
     if plot_h <= 0:
         plot_h = max(imgui.get_content_region_avail().y - 25, 50)
 
+    ensure_implot_style()
     if implot.begin_plot(
         f"{stream_name}##{stream_name}_viewer",
         imgui.ImVec2(plot_w, plot_h),
-        flags=implot.Flags_.no_legend | implot.Flags_.no_title,
+        # no_mouse_text: the default readout's y is a lane-offset + gain (or
+        # per-channel-normalized) number, not physical amplitude — misleading,
+        # so suppress it until there's a real per-lane hover readout.
+        flags=implot.Flags_.no_legend | implot.Flags_.no_title | implot.Flags_.no_mouse_text,
     ):
-        setup_axes(v, enabled, channel_height)
+        setup_axes(v, enabled, channel_height, frame.channel_map, ch_names)
         # Plot pixel width is only known once the plot is live — size the
         # decimation target off it (a few points per pixel) instead of a
         # fixed budget, so draw cost tracks what's actually on screen
@@ -155,34 +160,47 @@ def setup_axes(
     v: ViewerState,
     enabled: set[int],
     channel_height: float,
+    channel_map: list[int],
+    ch_names: list[str] | None,
 ) -> None:
-    implot.setup_axis(implot.ImAxis_.x1)
+    implot.setup_axis(implot.ImAxis_.x1, "Time (s)")
     implot.setup_axis_limits(
         implot.ImAxis_.x1,
         0,
         v.window,
         implot.Cond_.always,  # type: ignore[attr-defined]
     )
-    if v.scale_mode == "auto":
-        implot.setup_axis(
-            implot.ImAxis_.y1,
-            flags=implot.AxisFlags_.auto_fit | implot.AxisFlags_.no_tick_labels,
-        )
-        return
 
-    implot.setup_axis(implot.ImAxis_.y1, flags=implot.AxisFlags_.no_tick_labels)
-    y_min, y_max = v.y_min, v.y_max
-    n_enabled = max(1, len(enabled))
-    axis_min = y_min - (n_enabled - 1) * channel_height
-    axis_max = y_max
-    if axis_min >= axis_max:
-        axis_max = axis_min + 1e-6
-    implot.setup_axis_limits(
-        implot.ImAxis_.y1,
-        axis_min,
-        axis_max,
-        implot.Cond_.always,  # type: ignore[attr-defined]
-    )
+    if v.scale_mode == "auto":
+        implot.setup_axis(implot.ImAxis_.y1, flags=implot.AxisFlags_.auto_fit)
+    else:
+        implot.setup_axis(implot.ImAxis_.y1)
+        y_min, y_max = v.y_min, v.y_max
+        n_enabled = max(1, len(enabled))
+        axis_min = y_min - (n_enabled - 1) * channel_height
+        axis_max = y_max
+        if axis_min >= axis_max:
+            axis_max = axis_min + 1e-6
+        implot.setup_axis_limits(
+            implot.ImAxis_.y1,
+            axis_min,
+            axis_max,
+            implot.Cond_.always,  # type: ignore[attr-defined]
+        )
+
+    # Channel-identity gutter: one y-tick per lane at its baseline (the same
+    # `-col_idx * channel_height` offset plot_channel draws at), labelled with
+    # the channel name — replaces the old `no_tick_labels` suppression so a
+    # channel can be identified past the ~10 distinguishable trace colours.
+    # ponytail: at very high enabled counts the labels crowd; that's the job of
+    # the future full-array raster overview, not this per-trace view.
+    if channel_map:
+        positions = [-col_idx * channel_height for col_idx in range(len(channel_map))]
+        labels = [
+            ch_names[ch] if ch_names and 0 <= ch < len(ch_names) else f"ch{ch}"
+            for ch in channel_map
+        ]
+        implot.setup_axis_ticks(implot.ImAxis_.y1, positions, labels)
 
 
 def plot_channel(
@@ -348,12 +366,15 @@ def render_footer(
     if len(v.fps) > 60:
         v.fps.pop(0)
     avg_ms = np.mean(v.fps) * 1000
-    fps = 1000.0 / avg_ms if avg_ms > 0 else 0
+    # Real loop rate from ImGui (smoothed). The old `1000/avg_ms` divided by
+    # per-frame *viewer work*, not the inter-frame interval, so it read absurdly
+    # high (~800); keep that work time as an explicit render-cost readout.
+    ui_fps = imgui.get_io().framerate
 
     n_buf = stream._data.shape[0] if stream._data is not None else 0
     capacity = stream._data.maxlen if stream._data is not None else 0
     fill_pct = 100.0 * n_buf / capacity if capacity > 0 else 0.0
-    paused_tag = "  ⏸ PAUSED" if v.paused else ""
+    paused_tag = f"  {fa.ICON_FA_PAUSE} PAUSED" if v.paused else ""
 
     # Report the points-per-channel actually drawn. In rms_env mode the trace
     # is the *sparse* RMS envelope (`frame.trace_ts`), already ~window/hop
@@ -365,30 +386,23 @@ def render_footer(
     # channel shares the same raw window length so a single `raw_len > n_out`
     # check tells us whether it kicked in.
     if v.display_filter == "rms_env":
-        pts_per_ch = len(frame.trace_ts)
-        display_tag = "RMS env"
+        pts_str = f"{len(frame.trace_ts):,} pts/ch (RMS env)"
     else:
         raw_len = len(frame.data_win)
         n_out = v.last_decim_n_out or raw_len
-        is_decimated = raw_len > n_out
-        pts_per_ch = min(raw_len, n_out) if is_decimated else raw_len
-        display_tag = "raw" if not is_decimated else f"MinMax {raw_len}->{pts_per_ch}"
+        if raw_len > n_out:  # one expression instead of printing the target twice
+            pts_str = f"MinMax {raw_len:,}→{n_out:,} pts/ch"
+        else:
+            pts_str = f"{raw_len:,} pts/ch (raw)"
 
     imgui.text_colored(
         imgui.ImVec4(0.5, 0.5, 0.5, 1.0),
-        f"{fps:.0f} fps ({avg_ms:.1f} ms) | "
+        f"{ui_fps:.0f} fps ({avg_ms:.1f} ms viewer) | "
         f"fs={stream.info.fs:.0f} Hz | "
         f"{frame.n_channels} ch | "
         f"buf {fill_pct:.0f}% | "
-        f"{pts_per_ch} pts/ch" + f" ({display_tag})" + paused_tag,
+        f"{pts_str}" + paused_tag,
     )
-
-    imgui.same_line()
-    changed, per_channel = imgui.checkbox(f"Per-Ch##{stream_name}_per_channel", v.per_channel_scale)
-    if changed:
-        v.per_channel_scale = per_channel
-    if imgui.is_item_hovered():
-        imgui.set_tooltip("Normalize each enabled channel into its own lane.")
 
     diag_on = v.show_diagnostics if v.show_diagnostics is not None else show_diagnostics
     imgui.same_line()

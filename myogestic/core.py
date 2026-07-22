@@ -101,6 +101,12 @@ class App:
     `app.before_run_hooks` / `app.cleanup_hooks` - user code rarely
     needs to touch those lists directly.
 
+    On desktop, ImGui **multi-viewport** is enabled by default: floating
+    windows (e.g. the signal viewer's channel-grid ``Edit…`` window) open as
+    their own native OS windows and can be dragged outside the app / onto
+    another monitor. It's skipped in the browser (no backend for extra OS
+    windows). Detached windows are square-cornered with an opaque background.
+
     Parameters
     ----------
     name
@@ -110,10 +116,12 @@ class App:
         Apply MyoGestic's built-in ImGui theme. Set ``False`` to
         keep the Dear ImGui defaults.
     docking
-        Experimental - enable ImGui docking + multi-viewport
-        so panels registered via ``app.popout(...)`` become tearable
-        DockableWindows. macOS Retina viewport sizing of detached
-        windows can be wrong on initial draw; treat as experimental.
+        Experimental - enable ImGui docking (a full-screen dockspace) so
+        panels registered via ``app.popout(...)`` become tearable
+        DockableWindows. Multi-viewport itself is already on by default on
+        desktop (see above); this adds the dockspace on top. macOS Retina
+        viewport sizing of detached windows can be wrong on initial draw;
+        treat as experimental.
     ui_scale
         Global UI zoom factor - scales the font and imgui's style
         metrics (padding, spacing, rounding). ``None`` uses
@@ -442,6 +450,12 @@ class App:
 
         runner_params = hello_imgui.RunnerParams()
         runner_params.fps_idling.enable_idling = False
+        # Multi-viewport (native pop-out windows) on by default on desktop, so a
+        # tear-off window like the signal viewer's channel grid opens as its own
+        # OS window. Emscripten has no backend for sibling OS windows, so skip it
+        # in the browser (it would silently stay merged there anyway).
+        if not IS_BROWSER:
+            runner_params.imgui_window_params.enable_viewports = True
         runner_params.callbacks.show_gui = gui_callback
         runner_params.app_window_params.window_title = self.name
         runner_params.app_window_params.window_geometry.size = window_size
@@ -477,6 +491,24 @@ class App:
             runner_params.callbacks.default_icon_font = hello_imgui.DefaultIconFont.font_awesome6
             runner_params.callbacks.load_additional_fonts = load_fonts
             runner_params.callbacks.setup_imgui_style = apply_theme
+
+        # Detached viewport windows are real, rectangular OS windows, so square
+        # off the corners and force an opaque window bg — otherwise the theme's
+        # rounded / translucent bg shows the desktop through a detached window's
+        # corners. Chained after the theme's setup so it overrides the rounding.
+        if not IS_BROWSER:
+            _prev_style = runner_params.callbacks.setup_imgui_style
+
+            def _setup_with_viewports() -> None:
+                if _prev_style is not None:
+                    _prev_style()
+                style = imgui.get_style()
+                style.window_rounding = 0.0
+                bg = style.color_(imgui.Col_.window_bg)
+                bg.w = 1.0
+                style.set_color_(imgui.Col_.window_bg, bg)
+
+            runner_params.callbacks.setup_imgui_style = _setup_with_viewports
 
         # --- Experimental: docking + multi-viewport ---
         if self._docking:

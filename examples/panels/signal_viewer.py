@@ -5,6 +5,9 @@ fps, with per-channel toggles and optional display filters (rectify, DC
 removal, RMS envelope). Fed here by an 8-channel in-process synthetic
 source so the traces scroll and every control works without hardware.
 
+Click ``Edit…`` on the channel bar to open the spatial channel grid — on
+desktop it opens as its own native OS window you can move beside the app.
+
 Run with:
     uv run python examples/panels/signal_viewer.py
 """

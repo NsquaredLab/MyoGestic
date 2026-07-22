@@ -49,7 +49,7 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import panel_header
+from myogestic.widgets.common import DANGER, SUCCESS, panel_header, pop_selected, push_selected
 
 if TYPE_CHECKING:
     from myogestic.vhi._client import VhiControlClient
@@ -59,9 +59,8 @@ if TYPE_CHECKING:
 _BTN_W = 132.0
 _BTN_H = 28.0
 
-_DOT_OK = imgui.ImVec4(0.17, 0.63, 0.17, 1.0)
-_DOT_BAD = imgui.ImVec4(0.84, 0.15, 0.16, 1.0)
-_BTN_CURRENT = imgui.ImVec4(0.31, 0.61, 0.98, 0.9)
+_DOT_OK = SUCCESS
+_DOT_BAD = DANGER
 
 
 @dataclass(frozen=True)
@@ -207,11 +206,11 @@ def vhi_movement_palette(
             imgui.same_line()
         is_current = name == current_movement
         if is_current:
-            imgui.push_style_color(imgui.Col_.button, _BTN_CURRENT)
+            push_selected()
         if imgui.button(f"{name}##vhi_mv_{i}", imgui.ImVec2(_BTN_W, _BTN_H)):
             on_movement(name)
         if is_current:
-            imgui.pop_style_color()
+            pop_selected()
     imgui.end_disabled()
 
 

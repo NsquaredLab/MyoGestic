@@ -8,6 +8,8 @@ from __future__ import annotations
 import numpy as np
 from imgui_bundle import imgui, implot
 
+from myogestic.widgets.common import PALETTE, ensure_implot_style
+
 __all__ = ["LinePlot"]
 
 
@@ -49,12 +51,13 @@ class LinePlot:
         imgui.push_id(self._widget_id or self._label)
         try:
             if len(data) == 0:
-                imgui.text(f"{self._label}: no data")
+                imgui.text_disabled(f"{self._label}: no data")
                 return
 
             if data.ndim == 1:
                 data = data[:, np.newaxis]
 
+            ensure_implot_style()
             if implot.begin_plot(self._label, imgui.ImVec2(*self._size)):
                 for ch in range(data.shape[1]):
                     name = (
@@ -62,7 +65,13 @@ class LinePlot:
                         if channel_names and ch < len(channel_names)
                         else f"ch{ch}"
                     )
-                    implot.plot_line(name, np.ascontiguousarray(data[:, ch]))
+                    # Colour from the shared PALETTE (like the scatter + signal
+                    # viewer) so channel N is the same colour across the app,
+                    # not ImPlot's separate default cycle.
+                    c = PALETTE[ch % len(PALETTE)]
+                    spec = implot.Spec()
+                    spec.line_color = imgui.ImVec4(float(c[0]), float(c[1]), float(c[2]), 1.0)
+                    implot.plot_line(name, np.ascontiguousarray(data[:, ch]), spec=spec)
                 implot.end_plot()
         finally:
             imgui.pop_id()

@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 from imgui_bundle import imgui, implot, implot3d
 
-from myogestic.widgets.common import PALETTE
+from myogestic.widgets.common import PALETTE, ensure_implot_style
 
 __all__ = ["Scatter2D", "Scatter3D"]
 
@@ -63,12 +63,13 @@ class Scatter2D:
         imgui.push_id(self._widget_id or self._label)
         try:
             if len(points) == 0:
-                imgui.text(f"{self._label}: no data")
+                imgui.text_disabled(f"{self._label}: no data")
                 return
 
             xs = np.ascontiguousarray(points[:, 0], dtype=np.float64)
             ys = np.ascontiguousarray(points[:, 1], dtype=np.float64)
 
+            ensure_implot_style()
             if implot.begin_plot(self._label, imgui.ImVec2(*self._size)):
                 if labels is None:
                     spec = implot.Spec()
@@ -142,7 +143,7 @@ class Scatter3D:
         imgui.push_id(self._widget_id or self._label)
         try:
             if len(points) == 0:
-                imgui.text(f"{self._label}: no data")
+                imgui.text_disabled(f"{self._label}: no data")
                 return
 
             xs = np.ascontiguousarray(points[:, 0], dtype=np.float64)
