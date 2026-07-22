@@ -80,11 +80,14 @@ class SyntheticSource:
         n = self._CHUNK
         t = (self._pos + np.arange(n)) / self._fs
         self._pos += n
-        # One distinct sine (5..5+n_channels Hz) + noise per channel.
+        # One distinct sine (5..5+n_channels Hz) + noise per channel, plus a
+        # shared 50 Hz mains hum on every channel so the viewer's Notch control
+        # has something to remove.
         freqs = 5.0 + np.arange(self._n)
-        data = (np.sin(2 * np.pi * np.outer(t, freqs)) + 0.12 * np.random.randn(n, self._n)).astype(
-            np.float32
-        )
+        hum = 0.35 * np.sin(2 * np.pi * 50.0 * t)[:, None]
+        data = (
+            np.sin(2 * np.pi * np.outer(t, freqs)) + hum + 0.12 * np.random.randn(n, self._n)
+        ).astype(np.float32)
         # Chunk of `n` samples ending at the wall clock we just paced to.
         ts = (target + (np.arange(n) - (n - 1)) / self._fs).astype(np.float64)
         return data, ts

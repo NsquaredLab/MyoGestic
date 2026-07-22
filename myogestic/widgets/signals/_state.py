@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from myogestic.widgets.signals._channel_grid import resolve_initial
-from myogestic.widgets.signals.transforms import apply_display_filter, compute_rms_trace
+from myogestic.widgets.signals.transforms import (
+    apply_display_filter,
+    apply_mains_notch,
+    compute_rms_trace,
+)
 
 if TYPE_CHECKING:
     from myogestic.core import Context
@@ -48,6 +52,10 @@ class ViewerState:
     frozen_data: np.ndarray | None = None
     show_diagnostics: bool | None = None
     display_filter: str = "none"
+    # Optional mains-hum notch (0 = off, else 50 or 60 Hz) applied to the
+    # visible window *before* `display_filter`. Visual-only — recording and
+    # model input are untouched. See `transforms.apply_mains_notch`.
+    mains_notch: int = 0
     # RMS-envelope controls (only used when `display_filter == "rms_env"`):
     # the averaging window and the hop between envelope points, both in ms.
     # See `transforms.compute_rms_trace`.
@@ -340,6 +348,48 @@ def resolve_enabled(
     return v.channels
 
 
+#: Causal-notch settle time to warm the filter up before the shown region.
+_NOTCH_WARMUP_S = 0.5
+
+
+def _notch_from(
+    data_raw: np.ndarray,
+    ts_raw: np.ndarray,
+    region_start_idx: int,
+    region_start_t: float,
+    fs: float,
+    freq: int,
+    channel_map: list[int] | None = None,
+) -> np.ndarray:
+    """``data_raw[region_start_idx:]`` (columns ``channel_map``) with a notch.
+
+    Warms the causal notch up over ``_NOTCH_WARMUP_S`` of samples *before*
+    ``region_start_t`` and then drops that warm-up, so the returned region is
+    the filter's *settled* output — the same values frame-to-frame as the
+    window scrolls (a causal filter never revises the past). ``freq == 0`` is a
+    no-op; if there is no history before the region it degrades gracefully to
+    filtering from the region start (a brief startup transient at the far-left
+    edge, right after the stream connects).
+
+    ``channel_map`` restricts the notch (and the returned columns) to the
+    channels actually drawn — per-frame IIR cost scales with that count, not
+    the full array width. Column-selection commutes with every per-sample
+    display filter, so slicing here matches slicing after.
+
+    ponytail: recomputed over the whole window each frame; fine to ~a hundred
+    drawn channels. For very high channel counts the upgrade is a stateful
+    streaming filter (persist per-channel `zi`, filter only new samples).
+    """
+    def _cols(a: np.ndarray) -> np.ndarray:
+        return a if channel_map is None else a[:, channel_map]
+
+    if not freq:
+        return _cols(data_raw[region_start_idx:])
+    warm_idx = int(np.searchsorted(ts_raw, region_start_t - _NOTCH_WARMUP_S, side="left"))
+    notched = apply_mains_notch(_cols(data_raw[warm_idx:]), fs, freq)
+    return notched[region_start_idx - warm_idx :]
+
+
 def build_signal_frame(
     stream: Stream,
     v: ViewerState,
@@ -412,7 +462,9 @@ def build_signal_frame(
             int(np.searchsorted(ts_raw, vis_start_t - window_s, side="left")) if n_raw > 0 else 0
         )
         ts_pre = ts_raw[pre_idx:]
-        data_pre = data_raw[pre_idx:][:, channel_map]
+        data_pre = _notch_from(
+            data_raw, ts_raw, pre_idx, vis_start_t - window_s, fs, v.mains_notch, channel_map
+        )
         rms_ts, rms_data = compute_rms_trace(ts_pre, data_pre, fs, v.rms_window_ms, v.rms_hop_ms)
         # Keep only endpoints inside the visible window (pre-roll was history).
         keep = rms_ts >= vis_start_t
@@ -423,8 +475,13 @@ def build_signal_frame(
         # envelope.
         data_win = data_win_raw
     else:
+        # Footer stats read `data_win` (full width); keep it the RAW visible
+        # window (display-filtered), like the rms_env branch, so the numbers
+        # describe the real signal. Only the *drawn* trace gets the notch, and
+        # only on the channels actually plotted (`channel_map`).
         data_win = apply_display_filter(data_win_raw, v.display_filter, fs)
-        data_sel = data_win[:, channel_map]
+        notched = _notch_from(data_raw, ts_raw, start_idx, vis_start_t, fs, v.mains_notch, channel_map)
+        data_sel = apply_display_filter(notched, v.display_filter, fs)
         trace_ts = ts_win
 
     return SignalFrame(

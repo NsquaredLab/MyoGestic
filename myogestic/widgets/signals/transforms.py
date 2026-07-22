@@ -3,6 +3,66 @@
 from __future__ import annotations
 
 import numpy as np
+from scipy.signal import iirnotch, lfilter, lfilter_zi
+
+#: -3 dB width of each notch, in Hz. `Q = f0 / _NOTCH_BW_HZ`.
+_NOTCH_BW_HZ = 3.0
+
+#: Fundamental + this many harmonics are notched (each is one biquad, so this
+#: bounds per-frame cost). The fundamental and low harmonics carry essentially
+#: all the visible mains energy; higher ones are lost in the trace anyway.
+_NOTCH_MAX_LINES = 5
+
+
+def apply_mains_notch(data: np.ndarray, fs: float, freq: int) -> np.ndarray:
+    """Remove mains-line interference at ``freq`` Hz (and its harmonics).
+
+    A visual-only notch for the signal viewer, meant to run *before* the display
+    filter. Implemented as a **causal** IIR notch — one 2nd-order
+    :func:`scipy.signal.iirnotch` biquad per harmonic below Nyquist, cascaded
+    and applied with :func:`scipy.signal.lfilter` along axis 0.
+
+    Causal is the whole point: the scope scrolls, so a given sample is
+    re-filtered on many frames as the visible window slides over it. A causal
+    filter's output at sample ``i`` depends only on samples ``<= i``, so that
+    output never changes as newer samples arrive — the already-drawn trace
+    stays put. (A zero-phase/FFT notch couples the whole window and rewrites
+    past samples every frame, which reads as jitter.) The caller is responsible
+    for feeding a warm-up slice *before* the region it displays and dropping it,
+    so the shown region is the filter's settled steady state.
+
+    Each biquad is initialised to the steady state for the first sample
+    (:func:`scipy.signal.lfilter_zi`) to suppress the DC start-up step. Returns
+    ``data`` unchanged when ``freq`` is 0/None, ``fs`` is invalid, or the window
+    is too short to filter.
+
+    Parameters
+    ----------
+    data
+        Samples ``(n,)`` or ``(n, n_channels)``.
+    fs
+        Sample rate in Hz.
+    freq
+        Mains frequency to reject (``50`` or ``60``); ``0`` disables the notch.
+    """
+    n = len(data)
+    if not freq or not np.isfinite(fs) or fs <= 0.0 or n < 8:
+        return data
+    x = np.ascontiguousarray(data, dtype=np.float64)
+    was_1d = x.ndim == 1
+    y = x[:, None] if was_1d else x
+    nyquist = fs / 2.0
+    f = float(freq)
+    lines = 0
+    while f < nyquist and lines < _NOTCH_MAX_LINES:  # fundamental + harmonics
+        lines += 1
+        b, a = iirnotch(f / nyquist, f / _NOTCH_BW_HZ)
+        # Per-channel initial state = steady state for each channel's first
+        # sample, so a DC offset doesn't ring in as a startup transient.
+        zi = lfilter_zi(b, a)[:, None] * y[0][None, :]
+        y, _ = lfilter(b, a, y, axis=0, zi=zi)
+        f += freq
+    return y[:, 0] if was_1d else y
 
 
 def apply_display_filter(data: np.ndarray, mode: str, fs: float) -> np.ndarray:
