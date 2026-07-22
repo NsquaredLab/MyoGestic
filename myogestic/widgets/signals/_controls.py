@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import PALETTE, pop_selected, push_selected
+from myogestic.widgets.common import PALETTE, pop_selected, push_selected, segmented
 from myogestic.widgets.signals._channel_grid import (
     normalize_layout,
     rect_to_channels,
@@ -142,26 +142,17 @@ def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None
     # (Auto/Manual/Rescale, manual bounds, and Gain) is inert, so those controls
     # grey out to make the active mode unambiguous.
     per_ch = v.per_channel_scale
-    label_for = {"auto": "Auto", "manual": "Manual"}
-    next_for = {"auto": "manual", "manual": "auto"}
-    if v.scale_mode not in label_for:
+    if v.scale_mode not in ("auto", "manual"):
         v.scale_mode = "auto"
-    is_manual = v.scale_mode == "manual"
 
     if per_ch:
         imgui.begin_disabled()
-    if is_manual:
-        push_selected()
-    if imgui.button(f"{label_for[v.scale_mode]}##{stream_name}_scale"):
-        v.scale_mode = next_for[v.scale_mode]
-    if is_manual:
-        pop_selected()
+    # Segmented Auto/Manual instead of a cycle button — both modes visible, the
+    # active one raised.
+    scale_i = segmented(f"{stream_name}_scale", ["Auto", "Manual"], 1 if v.scale_mode == "manual" else 0)
+    v.scale_mode = "manual" if scale_i == 1 else "auto"
     if imgui.is_item_hovered():
-        imgui.set_tooltip(
-            "Y-axis scale mode (click to cycle):\n"
-            "  Auto   — real-time per-frame fit (default)\n"
-            "  Manual — fixed y_min/y_max"
-        )
+        imgui.set_tooltip("Y-axis scale: Auto = per-frame fit · Manual = fixed y_min/y_max.")
 
     # One-shot "rescale now" — captures the current visible window's
     # y-range into Manual mode. Useful when the user wants to lock in a

@@ -34,7 +34,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic._theme import display_font
-from myogestic.widgets.common import PALETTE, panel_header
+from myogestic.widgets.common import PALETTE, flash_color, panel_header
 
 if TYPE_CHECKING:
     from myogestic.ml import Pipeline
@@ -114,6 +114,11 @@ class PredictionLabel:
             name = self._class_names[idx]
             rgb = PALETTE[idx % len(PALETTE)]
             rgba = imgui.ImVec4(float(rgb[0]), float(rgb[1]), float(rgb[2]), 1.0)
+            # Flash toward white when the predicted class changes — a subtle
+            # "new prediction" pulse on the hero readout.
+            rgba = flash_color(
+                self._widget_id or self._title, idx, rgba, imgui.ImVec4(1.0, 1.0, 1.0, 1.0)
+            )
 
             # Big, centred class name. `set_window_font_scale` was removed
             # upstream; the modern API is `push_font(None, unscaled_base_size)`

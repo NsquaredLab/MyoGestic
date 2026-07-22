@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
 from imgui_bundle import imgui, implot
 
@@ -31,6 +33,39 @@ WARNING = imgui.ImVec4(255 / 255, 159 / 255, 10 / 255, 1.0)  # systemOrange
 DANGER = imgui.ImVec4(255 / 255, 69 / 255, 58 / 255, 1.0)  # systemRed
 INFO = imgui.ImVec4(10 / 255, 132 / 255, 255 / 255, 1.0)  # systemBlue
 IDLE = imgui.ImVec4(142 / 255, 142 / 255, 147 / 255, 1.0)  # systemGray
+
+
+_flash_state: dict[str, tuple[object, float]] = {}
+
+
+def flash_color(
+    key: str,
+    value: object,
+    base: imgui.ImVec4,
+    accent: imgui.ImVec4,
+    duration: float = 0.18,
+) -> imgui.ImVec4:
+    """A colour that flashes on change, then decays back to ``base``.
+
+    Flashes toward ``accent`` when ``value`` changes for ``key``, then decays
+    over ``duration`` seconds — the "this just updated" cue for a live readout.
+    The app renders continuously, so the decay animates frame to frame.
+    """
+    now = time.perf_counter()
+    prev = _flash_state.get(key)
+    if prev is None or prev[0] != value:
+        _flash_state[key] = (value, now)
+        f = 1.0
+    else:
+        f = max(0.0, 1.0 - (now - prev[1]) / duration)
+    if f <= 0.0:
+        return base
+    return imgui.ImVec4(
+        base.x + (accent.x - base.x) * f,
+        base.y + (accent.y - base.y) * f,
+        base.z + (accent.z - base.z) * f,
+        base.w,
+    )
 
 
 _IMPLOT_STYLED = False
@@ -90,6 +125,36 @@ def pop_selected() -> None:
     imgui.get_window_draw_list().add_rect_filled(
         imgui.ImVec2(p0.x + 3.0, y), imgui.ImVec2(p1.x - 3.0, p1.y), imgui.get_color_u32(_ACCENT), 1.0
     )
+
+
+def segmented(widget_id: str, options: list[str], selected: int) -> int:
+    """Render a macOS-style segmented control; return the selected index.
+
+    A tight row of segments where the active one is a raised chip and the rest
+    are flat with secondary-coloured text — use it in place of a cycle button so
+    every option is visible at once. ``selected`` is the current index; the
+    return value is the new index (changed on click).
+    """
+    style = imgui.get_style()
+    chip = style.color_(imgui.Col_.button_hovered)
+    prim = style.color_(imgui.Col_.text)
+    dim = style.color_(imgui.Col_.text_disabled)
+    clear = imgui.ImVec4(0.0, 0.0, 0.0, 0.0)
+    result = selected
+    imgui.push_style_var(imgui.StyleVar_.item_spacing, imgui.ImVec2(2.0, style.item_spacing.y))
+    for i, opt in enumerate(options):
+        if i > 0:
+            imgui.same_line()
+        on = i == selected
+        imgui.push_style_color(imgui.Col_.button, chip if on else clear)
+        imgui.push_style_color(imgui.Col_.button_hovered, chip)
+        imgui.push_style_color(imgui.Col_.button_active, chip)
+        imgui.push_style_color(imgui.Col_.text, prim if on else dim)
+        if imgui.button(f"{opt}##{widget_id}_seg{i}"):
+            result = i
+        imgui.pop_style_color(4)
+    imgui.pop_style_var()
+    return result
 
 
 def panel_header(title: str, icon: str | None = None, *, reserve: float = 0.0) -> None:
