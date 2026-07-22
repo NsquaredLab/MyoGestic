@@ -114,7 +114,6 @@ def _render_rms_sliders(stream_name: str, v: ViewerState, fs: float) -> None:
     imgui.pop_item_width()
     # Keep hop <= min(100 ms, window) even after the window slider shrinks.
     v.rms_hop_ms = min(float(v.rms_hop_ms), hop_max)
-    imgui.same_line()
 
 
 def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None:
@@ -132,11 +131,13 @@ def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None
         v.display_filter = df_modes[df_new]
     if imgui.is_item_hovered():
         imgui.set_tooltip("Visual-only transform - never affects recording or model input.")
-    imgui.same_line()
 
     if v.display_filter == "rms_env":
+        imgui.same_line()
         _render_rms_sliders(stream_name, v, fs)
 
+    # Row break: the y-scaling group drops to its own line below source /
+    # transport / View, instead of crowding them all onto one row.
     # Y-scaling group kept together: Auto/Manual + Rescale + Per-Ch. When Per-Ch
     # normalizes each channel into its own unit-height lane, the shared scale
     # (Auto/Manual/Rescale, manual bounds, and Gain) is inert, so those controls
