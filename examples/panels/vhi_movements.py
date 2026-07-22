@@ -42,6 +42,7 @@ class _FakeVhiClient:
         return SimpleNamespace(
             available_movements=MOVEMENTS,
             current_movement=self.current,
+            current_state="idle",
             mode="MOVEMENT",
         )
 
