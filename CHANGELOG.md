@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.3.0] - 2026-07-21
+## [2.3.0] - 2026-07-22
 
-Widget API unification: **every widget is now a class** you construct once and
-render with `.ui(...)`, replacing the mix of free functions and `.ui()` objects.
-One convention for humans and LLMs alike — no more "why is `signal_viewer` a
-function but `FeatureSelector` an object?".
+A large release on two fronts: the **widget API is unified on classes**
+(construct once, render with `.ui(...)`, replacing the old mix of free functions
+and `.ui()` objects), and the whole UI gets an aesthetic pass ("Calm Instrument")
+plus native pop-out windows.
 
 ### Changed (breaking)
 
@@ -65,12 +65,61 @@ function but `FeatureSelector` an object?".
   [`chain`][myogestic.outputs.chain] (`chain(GaussianFilter(...),
   OneEuroFilter(...))` is a single `VectorFilter`). One Euro now retains its
   smoothing history while you tune it (in-place reconfigure, no reset-on-drag).
+- **Native pop-out windows (multi-viewport).** On desktop, ImGui viewports are
+  enabled by default; the signal viewer's channel-grid `Edit…` opens as its own
+  OS window you can move to another monitor.
+- **Bundled fonts** (OFL / permissive): Instrument Serif for the prediction hero
+  readout, IBM Plex Mono for the console logs.
+- **`Heatmap(colormap=…)`** with a perceptually-uniform default (viridis).
+- **Reason tooltips on disabled ML buttons** — Predict / Save / Load explain
+  why they are unavailable.
+
+### Changed
+
+- **Aesthetic theme pass ("Calm Instrument", from a codex + fable design
+  consult).** Surface elevation (flat `#1E1E1E` → canvas / card / raised /
+  control tiers); accent reserved for selection / primary action / focus with a
+  neutral pressed state; the previously un-styled ImGui slots filled (tabs,
+  tables, text-selection, nav, docking); a 4/8 spacing + rounding rhythm; and one
+  semantic status palette (`SUCCESS`/`WARNING`/`DANGER`/`INFO`/`IDLE`) across the
+  status dots, the recording pill and the pipeline states.
+- **Selection cue** is now a translucent accent tint + underline (from one shared
+  `push_selected()` primitive), not a solid fill.
+- **Themed plots** — every multi-series plot uses the shared class palette, the
+  heatmap uses viridis, and ImPlot itself is styled (no chart border, faint grid,
+  clear background).
+- **Signature touches** — an Instrument Serif hero prediction readout; mono / dark
+  **console logs** (still selectable & copyable, per 2.2.1); a macOS **segmented
+  control** for the signal viewer's Auto/Manual; a **value-flash** on the
+  prediction readout; Font Awesome transport icons; `panel_header` on every
+  widget; and muted empty-states.
+- **Signal control bar** split into grouped rows (source / transport / view ·
+  y-scaling · resolution) so it composes when narrow.
 
 ### Fixed
 
 - **`FeatureSelector` ImGui id collision.** Two selectors in one window no longer
   collide (the render is scoped per instance), and columns are laid out in a
   content-sized table so a label never clips under the next checkbox.
+- **Session manager** lists the sessions already in its folder on open, accepts
+  any `.zip` containing a `meta.json`, and dedups by canonical path (fixes the
+  macOS `/var` vs `/private/var` double-add through the file dialog).
+- **Responsive control layouts** — the process launcher, the recording class
+  buttons, and the post-processing Reset no longer overflow or clip in narrow
+  cells.
+- **Heatmap axis ticks** align to the cell grid; the **VHI movements example** no
+  longer crashes its refresh thread on an incomplete reply.
+
+## [2.2.1] - 2026-07-20
+
+### Fixed
+
+- **Log boxes are selectable and copyable again.** `render_log` — used by the
+  model training log and the process launcher — drew each line with
+  `imgui.text_unformatted`, which paints static glyphs that cannot be selected,
+  so the log text could not be copied out. It now renders a read-only
+  `input_text_multiline`, the same widget `log_panel` uses, so the text can be
+  selected and copied (Ctrl/Cmd+C).
 
 ## [2.2.0] - 2026-07-19
 

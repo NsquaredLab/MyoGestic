@@ -4,7 +4,7 @@ Consumed by both ``process_launcher`` (subprocess stdout) and
 ``pipeline_panel`` (ML training log) so the autoscroll + popout + tooltip
 UX stays identical across the framework. Three thin functions:
 
-* :func:`render_log` — scrollable child window with smart autoscroll.
+* :func:`render_log` — selectable, read-only console text box (mono, dark).
 * :func:`render_log_buttons` — autoscroll + popout toggle buttons (returns
   the updated state to the caller — the panel owns the state, not us).
 * :func:`render_log_popout` — floating ``Begin``/``End`` window mirroring
@@ -33,48 +33,49 @@ def render_log(
     height: float = -1.0,
     autoscroll: bool = True,
 ) -> None:
-    """Render ``lines`` as a scrollable child window with smart autoscroll.
+    """Render ``lines`` as a scrollable, read-only text box.
 
-    Smart autoscroll: only snaps to the bottom when the user is **already**
-    at (or within 1 px of) the bottom — scrolling up to inspect older
-    lines pauses the auto-follow until the user scrolls back down. This
-    means the autoscroll button toggles the *default* behavior; the user
-    can always opt out for a frame by scrolling up.
+    Uses a read-only ``input_text_multiline`` — the same widget
+    :func:`~myogestic.widgets.panels.log_panel.log_panel` uses — so the log
+    text can be **selected and copied** (Ctrl/Cmd+C). The previous renderer
+    drew each line with ``imgui.text_unformatted``, which paints static
+    glyphs that cannot be selected, so log text could not be copied out.
 
     Parameters
     ----------
     widget_id
-        Unique per-panel ID for the child window's ImGui label.
+        Unique per-panel ID for the box's ImGui label.
     lines
         Any sequence — list, tuple, deque, anything iterable. Caller
         is responsible for thread-safe access; we snapshot under the
         GIL via ``list(lines)`` to dodge concurrent-mutation issues
         with deques/lists appended to from a worker thread.
     height
-        Pixel height of the log box. ``-1`` (default) fills the
+        Pixel height of the box. ``-1`` (default) fills the
         remaining vertical space of the parent.
     autoscroll
-        Stick-to-bottom toggle (typically wired to a button
-        elsewhere on the parent panel).
+        Accepted for call-site compatibility. The read-only box scrolls
+        natively; the previous forced stick-to-bottom tail-follow is no
+        longer applied (matches ``log_panel``).
     """
-    imgui.push_style_color(imgui.Col_.child_bg, _CONSOLE_BG)
+    del autoscroll  # the read-only box scrolls natively (see docstring)
+    text = "\n".join(list(lines))
+    h = height if height > 0 else -1.0
+    # Console styling on the selectable read-only box: a sunken dark surface
+    # (its frame bg) + light monospace text, in both themes.
+    imgui.push_style_color(imgui.Col_.frame_bg, _CONSOLE_BG)
     imgui.push_style_color(imgui.Col_.text, _CONSOLE_TEXT)
-    imgui.begin_child(
-        f"##{widget_id}_log_child",
-        imgui.ImVec2(-1, height),
-        child_flags=imgui.ChildFlags_.borders,
-        window_flags=imgui.WindowFlags_.horizontal_scrollbar,
-    )
     font = mono_font()
     if font is not None:
         imgui.push_font(font, imgui.get_font_size())
-    for line in list(lines):
-        imgui.text_unformatted(line)
+    imgui.input_text_multiline(
+        f"##{widget_id}_log",
+        text,
+        imgui.ImVec2(-1, h),
+        flags=imgui.InputTextFlags_.read_only,
+    )
     if font is not None:
         imgui.pop_font()
-    if autoscroll and imgui.get_scroll_y() >= imgui.get_scroll_max_y() - 1:
-        imgui.set_scroll_here_y(1.0)
-    imgui.end_child()
     imgui.pop_style_color(2)
 
 
