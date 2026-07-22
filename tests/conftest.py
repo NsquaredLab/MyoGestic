@@ -26,6 +26,10 @@ def imgui_frame():
 
     def frame(draw):
         imgui.new_frame()
+        # Force a deterministic window width so width-dependent tests (e.g.
+        # panel-header truncation) don't hinge on a stray imgui.ini — which is
+        # wide on a dev box but absent on fresh CI, flipping "does it fit".
+        imgui.set_next_window_size(imgui.ImVec2(680.0, 480.0))
         imgui.begin("t")
         draw()
         imgui.end()
