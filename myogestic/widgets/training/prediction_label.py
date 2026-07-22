@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
+from myogestic._theme import display_font
 from myogestic.widgets.common import PALETTE, panel_header
 
 if TYPE_CHECKING:
@@ -119,8 +120,10 @@ class PredictionLabel:
             # — pass None to keep the current font, and a size in the
             # *unscaled* base unit (style global scale factors are applied on
             # top automatically).
+            # Hero readout in Instrument Serif (display face); falls back to the
+            # body font when the display face isn't loaded (display_font None).
             base_size = imgui.get_style().font_size_base
-            imgui.push_font(None, base_size * self._font_scale)
+            imgui.push_font(display_font(), base_size * self._font_scale)
             try:
                 avail = imgui.get_content_region_avail().x
                 text_w = imgui.calc_text_size(name).x
