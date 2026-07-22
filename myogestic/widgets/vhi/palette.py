@@ -148,11 +148,18 @@ def request_vhi_state_refresh(
                 cache.connected = False
                 cache.message = "VHI not reachable — launch it, then refresh."
                 return
+            try:
+                cache.movements = list(reply.available_movements)
+                cache.current_movement = reply.current_movement
+                cache.current_state = reply.current_state
+                cache.mode = reply.mode
+            except AttributeError as e:
+                # A malformed reply (e.g. an incomplete stub) must not take down
+                # this daemon thread — surface it instead.
+                cache.connected = False
+                cache.message = f"VHI reply malformed: {e}"
+                return
             cache.connected = True
-            cache.movements = list(reply.available_movements)
-            cache.current_movement = reply.current_movement
-            cache.current_state = reply.current_state
-            cache.mode = reply.mode
             cache.message = f"{reply.mode} mode · {len(cache.movements)} movements"
 
     threading.Thread(target=_worker, daemon=True, name="vhi-state-refresh").start()

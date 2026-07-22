@@ -8,6 +8,7 @@ from imgui_bundle import hello_imgui, imgui
 
 _FONT: imgui.ImFont | None = None
 _DISPLAY_FONT: imgui.ImFont | None = None  # Instrument Serif — hero/display text
+_MONO_FONT: imgui.ImFont | None = None  # IBM Plex Mono — console / logs
 _IS_MAC = platform.system() == "Darwin"
 
 
@@ -212,7 +213,7 @@ _SYS_FONTS = {
 
 
 def load_fonts() -> None:
-    global _FONT, _DISPLAY_FONT
+    global _FONT, _DISPLAY_FONT, _MONO_FONT
     if _FONT is not None:
         return
 
@@ -242,9 +243,22 @@ def load_fonts() -> None:
     except Exception:  # noqa: BLE001
         _DISPLAY_FONT = None
 
+    # IBM Plex Mono (OFL) — console face for log views. Same best-effort load.
+    try:
+        _MONO_FONT = hello_imgui.load_font(
+            "fonts/IBMPlexMono-Regular.ttf", 13.0 * _ui_scale(), hello_imgui.FontLoadingParams()
+        )
+    except Exception:  # noqa: BLE001
+        _MONO_FONT = None
+
     imgui.get_io().font_default = _FONT
 
 
 def display_font() -> imgui.ImFont | None:
     """Instrument Serif display face for hero text (``None`` if unavailable)."""
     return _DISPLAY_FONT
+
+
+def mono_font() -> imgui.ImFont | None:
+    """IBM Plex Mono face for console / log text (``None`` if unavailable)."""
+    return _MONO_FONT

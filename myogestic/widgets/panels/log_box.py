@@ -18,6 +18,13 @@ from collections.abc import Sequence
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
+from myogestic._theme import mono_font
+
+# A sunken dark "console" surface with light mono text — reads as program
+# output in both light and dark themes (terminals stay dark on a light UI).
+_CONSOLE_BG = imgui.ImVec4(0.075, 0.078, 0.086, 1.0)
+_CONSOLE_TEXT = imgui.ImVec4(0.88, 0.89, 0.91, 1.0)
+
 
 def render_log(
     widget_id: str,
@@ -50,17 +57,25 @@ def render_log(
         Stick-to-bottom toggle (typically wired to a button
         elsewhere on the parent panel).
     """
+    imgui.push_style_color(imgui.Col_.child_bg, _CONSOLE_BG)
+    imgui.push_style_color(imgui.Col_.text, _CONSOLE_TEXT)
     imgui.begin_child(
         f"##{widget_id}_log_child",
         imgui.ImVec2(-1, height),
         child_flags=imgui.ChildFlags_.borders,
         window_flags=imgui.WindowFlags_.horizontal_scrollbar,
     )
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, imgui.get_font_size())
     for line in list(lines):
         imgui.text_unformatted(line)
+    if font is not None:
+        imgui.pop_font()
     if autoscroll and imgui.get_scroll_y() >= imgui.get_scroll_max_y() - 1:
         imgui.set_scroll_here_y(1.0)
     imgui.end_child()
+    imgui.pop_style_color(2)
 
 
 def render_log_buttons(
