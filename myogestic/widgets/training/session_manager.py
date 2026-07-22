@@ -7,13 +7,14 @@ from imgui_bundle import imgui
 from imgui_bundle import portable_file_dialogs as pfd
 
 from myogestic.contracts import TrainingData
-from myogestic.widgets.common import PALETTE, panel_header
+from myogestic.widgets.common import PALETTE, panel_header, pop_selected, push_selected
 from myogestic.widgets.training._session_state import (
     SessionWidgetState,
     add_recorded_session,
     class_pool_and_active,
     get_state,
     load_session_files,
+    scan_sessions,
 )
 
 __all__ = ["SessionManager", "add_recorded_session"]
@@ -51,6 +52,17 @@ class SessionManager:
         widget_id = self._widget_id
         class_names = self._class_names
         state = get_state(widget_id)
+
+        if not state.scanned:
+            # A session *manager* should list what's already in its folder, so
+            # on first render we scan base_path once. Merge (don't overwrite) so
+            # a just-recorded session added via add_recorded_session survives.
+            # ponytail: synchronous scan; a huge base_path would hitch one frame.
+            state.scanned = True
+            existing = {s["path"] for s in state.sessions}
+            state.sessions.extend(
+                r for r in scan_sessions(self._base_path) if r["path"] not in existing
+            )
 
         panel_header(self._title, fa.ICON_FA_FOLDER_OPEN)
         render_summary_and_buttons(widget_id, self._base_path, state)
@@ -130,14 +142,14 @@ def render_class_buttons(
         )
         is_active = ci in active_classes
         if is_active:
-            imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.31, 0.61, 0.98, 0.9))
+            push_selected()
         if imgui.button(f"{name}##{widget_id}_button{ci}"):
             if is_active:
                 deactivated_classes.add(ci)
             else:
                 deactivated_classes.discard(ci)
         if is_active:
-            imgui.pop_style_color()
+            pop_selected()
         imgui.same_line()
     imgui.new_line()
 

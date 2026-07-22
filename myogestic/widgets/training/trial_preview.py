@@ -26,6 +26,7 @@ from typing import Literal
 
 import numpy as np
 
+from myogestic.widgets.common import PALETTE, ensure_implot_style, panel_header
 from myogestic.widgets.signals.transforms import apply_display_filter
 
 
@@ -149,7 +150,7 @@ class TrialPreview:
                     return
 
             if self._title is not None and not self._as_window:
-                imgui.text(self._title)
+                panel_header(self._title)
 
             # `lane` = per-channel vertical spacing. In manual mode it's the
             # user-provided y_range height; in auto mode it's the global data
@@ -172,6 +173,7 @@ class TrialPreview:
 
             xs = np.arange(n_samp, dtype=np.float64) / fs
 
+            ensure_implot_style()
             flags = implot.Flags_.no_legend | implot.Flags_.no_title
             if implot.begin_plot(
                 f"trial_preview##{self._widget_id}",
@@ -207,7 +209,12 @@ class TrialPreview:
                         if self._channel_names and ch < len(self._channel_names)
                         else f"ch{ch}"
                     )
-                    implot.plot_line(f"{label}##{self._widget_id}", xs, ys)
+                    # Per-channel PALETTE colour, same as the signal viewer /
+                    # line plot, so channel N is consistent across the app.
+                    c = PALETTE[ch % len(PALETTE)]
+                    spec = implot.Spec()
+                    spec.line_color = imgui.ImVec4(float(c[0]), float(c[1]), float(c[2]), 1.0)
+                    implot.plot_line(f"{label}##{self._widget_id}", xs, ys, spec)
                 implot.end_plot()
 
             if self._as_window:

@@ -87,7 +87,7 @@ class RawSignalViewer:
 
         snapshot = stream.get_raw_snapshot()
         if snapshot is None:
-            imgui.text(f"{stream_name}: no data")
+            imgui.text_disabled(f"{stream_name}: no data")
             return
         all_ts, all_data = snapshot
         n_win = int(r.window * stream.info.fs)

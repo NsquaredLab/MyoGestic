@@ -22,7 +22,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.ml import PipelineState
-from myogestic.widgets.common import panel_header
+from myogestic.widgets.common import INFO, WARNING, panel_header
 from myogestic.widgets.panels.log_box import (
     render_log,
     render_log_buttons,
@@ -37,8 +37,8 @@ _popout_open: dict[str, bool] = {}
 
 # Register ml state colors on the core recording widget's state-pill dict.
 # (Inverts coupling: ml depends on widgets, not the other way around.)
-STATE_COLORS.setdefault(PipelineState.TRAINING, imgui.ImVec4(1.0, 0.74, 0.24, 1.0))
-STATE_COLORS.setdefault(PipelineState.PREDICTING, imgui.ImVec4(0.31, 0.73, 0.98, 1.0))
+STATE_COLORS.setdefault(PipelineState.TRAINING, WARNING)
+STATE_COLORS.setdefault(PipelineState.PREDICTING, INFO)
 
 if TYPE_CHECKING:
     from myogestic.ml import Pipeline
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 # --- Render functions (private; the classes below are the public API) ------
 
 
-def _render_train_button(pipeline: Pipeline, size: tuple[float, float] = (80, 0)) -> None:
+def _render_train_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> None:
     if imgui.button(f"{fa.ICON_FA_GEARS}  Train##ml_train", imgui.ImVec2(*size)):
         pipeline.start_training()
 
@@ -72,6 +72,16 @@ def _render_predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 
         imgui.begin_disabled()
         imgui.button(f"{fa.ICON_FA_PLAY}  Predict##ml_pred", imgui.ImVec2(*size))
         imgui.end_disabled()
+        # Say *why* Predict is unavailable — a disabled control with no reason
+        # is a dead end (flagged by both design reviews).
+        if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+            if state != "idle":
+                why = "Busy — wait until the current action finishes."
+            elif pipeline.model is None:
+                why = "No model yet — train or load a model first."
+            else:
+                why = "Prediction needs @pipeline.extract and @pipeline.predict wired."
+            imgui.set_tooltip(why)
 
 
 def _render_training_log(
@@ -84,12 +94,18 @@ def _render_training_log(
 
 
 def _render_save_model_button(
-    pipeline: Pipeline, path: str, size: tuple[float, float] = (100, 0)
+    pipeline: Pipeline, path: str, size: tuple[float, float] = (92, 0)
 ) -> None:
     if pipeline.save_model is None or pipeline.model is None:
         imgui.begin_disabled()
         imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save##ml_save", imgui.ImVec2(*size))
         imgui.end_disabled()
+        if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+            imgui.set_tooltip(
+                "No model to save — train or load one first."
+                if pipeline.model is None
+                else "No save function set (pipeline.save_model)."
+            )
         return
     if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save##ml_save", imgui.ImVec2(*size)):
         try:
@@ -102,12 +118,14 @@ def _render_save_model_button(
 
 
 def _render_load_model_button(
-    pipeline: Pipeline, path: str, size: tuple[float, float] = (100, 0)
+    pipeline: Pipeline, path: str, size: tuple[float, float] = (92, 0)
 ) -> None:
     if pipeline.load_model is None:
         imgui.begin_disabled()
         imgui.button(f"{fa.ICON_FA_FOLDER_OPEN}  Load##ml_load", imgui.ImVec2(*size))
         imgui.end_disabled()
+        if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+            imgui.set_tooltip("No load function set (pipeline.load_model).")
         return
     if imgui.button(f"{fa.ICON_FA_FOLDER_OPEN}  Load##ml_load", imgui.ImVec2(*size)):
         try:
@@ -141,23 +159,20 @@ def _render_pipeline_panel(
     imgui.same_line()
     _render_predict_button(pipeline)
 
-    # Autoscroll + popout toggles, same look as the process launcher.
-    imgui.same_line()
+    # The log's autoscroll + popout toggles only mean something once a log
+    # exists to control, so they render with it (inline above the log) rather
+    # than dangling on the Train/Predict row over a hidden, empty log.
     autoscroll = _autoscroll.setdefault(widget_id, True)
     popped = _popout_open.get(widget_id, False)
-    autoscroll, popped = render_log_buttons(widget_id, autoscroll=autoscroll, popped_out=popped)
-    _autoscroll[widget_id] = autoscroll
-    _popout_open[widget_id] = popped
-
-    if popped:
-        imgui.text_disabled("(log popped out — see 'Model training log' window)")
-    elif pipeline.train_log:
-        render_log(
-            widget_id,
-            pipeline.train_log,
-            height=log_height,
-            autoscroll=autoscroll,
-        )
+    if pipeline.train_log or popped:
+        imgui.same_line()
+        autoscroll, popped = render_log_buttons(widget_id, autoscroll=autoscroll, popped_out=popped)
+        _autoscroll[widget_id] = autoscroll
+        _popout_open[widget_id] = popped
+        if popped:
+            imgui.text_disabled("(log popped out — see 'Model training log' window)")
+        else:
+            render_log(widget_id, pipeline.train_log, height=log_height, autoscroll=autoscroll)
 
 
 # --- Public widgets --------------------------------------------------------
@@ -166,7 +181,7 @@ def _render_pipeline_panel(
 class TrainButton:
     """Train button — calls :meth:`Pipeline.start_training` on click."""
 
-    def __init__(self, pipeline: Pipeline, *, size: tuple[float, float] = (80, 0)) -> None:
+    def __init__(self, pipeline: Pipeline, *, size: tuple[float, float] = (92, 0)) -> None:
         self._pipeline = pipeline
         self._size = size
 
@@ -216,7 +231,7 @@ class SaveModelButton:
     """
 
     def __init__(
-        self, pipeline: Pipeline, path: str, *, size: tuple[float, float] = (100, 0)
+        self, pipeline: Pipeline, path: str, *, size: tuple[float, float] = (92, 0)
     ) -> None:
         self._pipeline = pipeline
         self._path = path
@@ -234,7 +249,7 @@ class LoadModelButton:
     """
 
     def __init__(
-        self, pipeline: Pipeline, path: str, *, size: tuple[float, float] = (100, 0)
+        self, pipeline: Pipeline, path: str, *, size: tuple[float, float] = (92, 0)
     ) -> None:
         self._pipeline = pipeline
         self._path = path

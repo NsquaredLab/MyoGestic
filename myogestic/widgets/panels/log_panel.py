@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import panel_header
+from myogestic.widgets.common import panel_header_button
+from myogestic.widgets.panels.log_box import render_log
 
 if TYPE_CHECKING:
     from myogestic.core import Context
@@ -27,7 +28,7 @@ class LogPanel:
         self,
         *,
         height: float = -1.0,
-        title: str = "App Log",
+        title: str = "Log",
         show_header: bool = True,
         widget_id: str | None = None,
     ) -> None:
@@ -61,19 +62,29 @@ class LogPanel:
         """
         imgui.push_id(self._widget_id or self._title)
         try:
+            # Clear is a right-aligned icon button on the header row (same look
+            # as the post-processing panel's Reset). Without a header, it keeps
+            # its own line above the log.
             if self._show_header:
-                panel_header(self._title, fa.ICON_FA_TERMINAL)
-
-            if imgui.button(f"{fa.ICON_FA_BROOM}  Clear##log_panel"):
+                clear = panel_header_button(
+                    self._title, fa.ICON_FA_TERMINAL, fa.ICON_FA_BROOM, tooltip="Clear the log"
+                )
+            else:
+                clear = imgui.small_button(f"{fa.ICON_FA_BROOM}##clear")
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip("Clear the log")
+            if clear:
                 ctx.logs.clear()
 
-            text = "\n".join(ctx.logs) if ctx.logs else "(no events yet)"
+            # Shared log renderer: a child window with a horizontal scrollbar
+            # and non-wrapping lines, so long entries scroll sideways in a
+            # narrow panel instead of wrapping or clipping (same UX as the
+            # process / training logs). Auto-follows the tail.
             h = self._height if self._height > 0 else -1.0
-            imgui.input_text_multiline(
-                "##log_panel",
-                text,
-                imgui.ImVec2(-1, h),
-                flags=imgui.InputTextFlags_.read_only,
+            render_log(
+                self._widget_id or self._title,
+                ctx.logs or ["(no events yet)"],
+                height=h,
             )
         finally:
             imgui.pop_id()

@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import PALETTE
+from myogestic.widgets.common import PALETTE, pop_selected, push_selected
 from myogestic.widgets.signals._channel_grid import (
     normalize_layout,
     rect_to_channels,
@@ -44,7 +45,7 @@ def render_controls(
             v.frozen_data = None
         imgui.same_line()
 
-    pause_label = "▶ Resume" if v.paused else "⏸ Pause"
+    pause_label = f"{fa.ICON_FA_PLAY}  Resume" if v.paused else f"{fa.ICON_FA_PAUSE}  Pause"
     if imgui.button(f"{pause_label}##{stream_name}_pause"):
         v.paused = not v.paused
         if not v.paused:
@@ -56,7 +57,7 @@ def render_controls(
 
     discover_fn = getattr(stream._source, "discover", None)
     if discover_fn is not None:
-        if imgui.button(f"↻##{stream_name}_retarget"):
+        if imgui.button(f"{fa.ICON_FA_ARROWS_ROTATE}##{stream_name}_retarget"):
             v.show_retarget = not v.show_retarget
         if imgui.is_item_hovered():
             imgui.set_tooltip("Change source: scan + reconnect to a different LSL stream.")
@@ -117,10 +118,15 @@ def _render_rms_sliders(stream_name: str, v: ViewerState, fs: float) -> None:
 
 
 def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None:
+    # Visual-only display transform, label on the left so it can't be mistaken
+    # for the scaling controls that follow it on the row.
     df_modes = ["none", "rectify", "dc_removal", "rms_env"]
+    df_labels = ["Raw", "Rectified", "DC removed", "RMS envelope"]
     df_idx = df_modes.index(v.display_filter) if v.display_filter in df_modes else 0
-    imgui.push_item_width(110)
-    df_changed, df_new = imgui.combo(f"display##{stream_name}_df", df_idx, df_modes)
+    imgui.text("View")
+    imgui.same_line()
+    imgui.push_item_width(130)
+    df_changed, df_new = imgui.combo(f"##{stream_name}_df", df_idx, df_labels)
     imgui.pop_item_width()
     if df_changed:
         v.display_filter = df_modes[df_new]
@@ -131,20 +137,25 @@ def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None
     if v.display_filter == "rms_env":
         _render_rms_sliders(stream_name, v, fs)
 
+    # Y-scaling group kept together: Auto/Manual + Rescale + Per-Ch. When Per-Ch
+    # normalizes each channel into its own unit-height lane, the shared scale
+    # (Auto/Manual/Rescale, manual bounds, and Gain) is inert, so those controls
+    # grey out to make the active mode unambiguous.
+    per_ch = v.per_channel_scale
     label_for = {"auto": "Auto", "manual": "Manual"}
     next_for = {"auto": "manual", "manual": "auto"}
     if v.scale_mode not in label_for:
         v.scale_mode = "auto"
     is_manual = v.scale_mode == "manual"
+
+    if per_ch:
+        imgui.begin_disabled()
     if is_manual:
-        imgui.push_style_color(
-            imgui.Col_.button,
-            imgui.ImVec4(0.31, 0.61, 0.98, 0.9),
-        )
+        push_selected()
     if imgui.button(f"{label_for[v.scale_mode]}##{stream_name}_scale"):
         v.scale_mode = next_for[v.scale_mode]
     if is_manual:
-        imgui.pop_style_color()
+        pop_selected()
     if imgui.is_item_hovered():
         imgui.set_tooltip(
             "Y-axis scale mode (click to cycle):\n"
@@ -164,8 +175,17 @@ def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None
             "Capture the current y-range into Manual mode.\n"
             "Click again any time the trace goes off-scale."
         )
+    if per_ch:
+        imgui.end_disabled()
 
-    if v.scale_mode != "manual":
+    imgui.same_line()
+    ch_pc, pc = imgui.checkbox(f"Per-Ch##{stream_name}_perch", v.per_channel_scale)
+    if ch_pc:
+        v.per_channel_scale = pc
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Normalize each enabled channel into its own unit-height lane.")
+
+    if per_ch or v.scale_mode != "manual":
         return
 
     imgui.same_line()
@@ -185,36 +205,51 @@ def render_resolution_controls(
     stream: Stream,
     v: ViewerState,
 ) -> None:
-    third = imgui.get_content_region_avail().x * 0.33
-    imgui.push_item_width(third)
-    changed_r, new_r = imgui.slider_int(f"Resolution##{stream_name}", v.n_pixels, 100, 10000)
+    # Three label+slider columns in a stretch table, so each label sits
+    # directly left of its own slider (no floating-between-sliders ambiguity)
+    # and the widths track the panel width / DPI instead of hand-computed pixels.
+    max_window = stream._buffer_seconds if hasattr(stream, "_buffer_seconds") else 60.0
+    per_ch = v.per_channel_scale
+    if not imgui.begin_table(f"{stream_name}_scope_row", 3, imgui.TableFlags_.sizing_stretch_same):
+        return
+    imgui.table_next_row()
+
+    imgui.table_next_column()
+    imgui.text("Point cap")
+    imgui.same_line()
+    imgui.set_next_item_width(-1)
+    changed_r, new_r = imgui.slider_int(f"##{stream_name}_res", v.n_pixels, 100, 10000, "%d pts")
     if changed_r:
         v.n_pixels = new_r
-    imgui.pop_item_width()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(
+            "Ceiling on the points drawn per channel — the plot-width target is\n"
+            "capped here. Lower = coarser MinMax decimation, cheaper to draw."
+        )
 
+    imgui.table_next_column()
+    imgui.text("Window")
     imgui.same_line()
-    imgui.push_item_width(third)
-    max_window = stream._buffer_seconds if hasattr(stream, "_buffer_seconds") else 60.0
-    changed_w, new_w = imgui.slider_float(
-        f"Window##{stream_name}_win", v.window, 0.1, max_window, "%.1f s"
-    )
+    imgui.set_next_item_width(-1)
+    changed_w, new_w = imgui.slider_float(f"##{stream_name}_win", v.window, 0.1, max_window, "%.1f s")
     if changed_w:
         v.window = new_w
-    imgui.pop_item_width()
 
+    imgui.table_next_column()
+    imgui.text("Gain")
     imgui.same_line()
-    imgui.push_item_width(imgui.get_content_region_avail().x)
+    if per_ch:
+        imgui.begin_disabled()
+    imgui.set_next_item_width(-1)
     changed_g, new_g = imgui.slider_float(
-        f"Gain##{stream_name}_gain",
-        v.gain,
-        0.01,
-        100.0,
-        "%.2fx",
-        flags=imgui.SliderFlags_.logarithmic,
+        f"##{stream_name}_gain", v.gain, 0.01, 100.0, "%.2fx", flags=imgui.SliderFlags_.logarithmic
     )
     if changed_g:
         v.gain = new_g
-    imgui.pop_item_width()
+    if per_ch:
+        imgui.end_disabled()
+
+    imgui.end_table()
 
 
 @dataclass
@@ -333,11 +368,13 @@ def render_channel_bar(
     # state" cue as the Manual scale-mode button in render_filter_and_scale.
     was_open = ui.show_grid
     if was_open:
-        imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.31, 0.61, 0.98, 0.9))
-    if imgui.button(f"Edit…##{stream_name}_bar_edit"):
+        push_selected()
+    # small_button (not button) so it matches the All/None/Invert pills — a full
+    # button is taller and sits out of line with them.
+    if imgui.small_button(f"Edit…##{stream_name}_bar_edit"):
         ui.show_grid = not ui.show_grid
     if was_open:
-        imgui.pop_style_color()
+        pop_selected()
     if imgui.is_item_hovered():
         imgui.set_tooltip("Open the spatial channel grid (click / drag / shift-click to select).")
 
@@ -357,6 +394,21 @@ def render_grid_window(
     would abort a rectangle drag the instant it strays past the popup's
     edge.
     """
+    # When multi-viewport is on (desktop default), open the grid as its OWN
+    # native OS window instead of a panel confined to the app window. A
+    # NoAutoMerge window class keeps it a separate platform window even when
+    # dragged back over the app; positioned just inside the main window so it
+    # opens on-screen (the user can move it, and the position persists). With
+    # viewports off (browser / older build) this is skipped and it stays a
+    # normal in-app floating window.
+    if imgui.get_io().config_flags & imgui.ConfigFlags_.viewports_enable.value:
+        wc = imgui.WindowClass()
+        wc.viewport_flags_override_set = imgui.ViewportFlags_.no_auto_merge
+        imgui.set_next_window_class(wc)
+        mv = imgui.get_main_viewport()
+        imgui.set_next_window_pos(
+            imgui.ImVec2(mv.pos.x + 100.0, mv.pos.y + 100.0), imgui.Cond_.first_use_ever
+        )
     imgui.set_next_window_size(imgui.ImVec2(520.0, 420.0), imgui.Cond_.first_use_ever)
     visible, still_open = imgui.begin(
         f"Channel selection — {stream_name}##{stream_name}_grid_window", True

@@ -23,7 +23,7 @@ from collections import deque
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import panel_header
+from myogestic.widgets.common import IDLE, SUCCESS, panel_header
 from myogestic.widgets.panels.log_box import (
     render_log,
     render_log_buttons,
@@ -109,6 +109,7 @@ class _ProcState:
 
 
 _selected: dict[str, int] = {}  # label -> selected index
+_MIN_COMBO_W = 90.0  # below this the dropdown drops to its own row (see row 1)
 _popout_open: dict[tuple[str, str], bool] = {}  # (widget_id, proc_name) -> log popped out
 # Autoscroll defaults ON for every (widget_id, proc_name); flipped off when the
 # user clicks the autoscroll toggle so they can scroll back to inspect
@@ -200,20 +201,24 @@ def _render_process_launcher(
 
     panel_header("PROCESS", fa.ICON_FA_TERMINAL)
 
-    # Row 1: dropdown + Launch/Stop button + popout toggle + autoscroll toggle
-    # (compact — status text would crop on narrow cells, so it gets its own
-    # row below). Reserve the right side dynamically based on the actual
-    # button widths at the current font scale, instead of a hardcoded fudge.
+    # Row 1: dropdown + Launch/Stop + popout + autoscroll. Keep every control
+    # reachable when the cell is narrow: the dropdown shares the row with the
+    # button cluster only while a usable dropdown (>= _MIN_COMBO_W) still fits;
+    # otherwise it takes its own full-width row and the buttons drop below it
+    # instead of being pushed off the right edge. Status text gets its own row.
     style = imgui.get_style()
+    sp = style.item_spacing.x
     launch_w = imgui.calc_text_size("Launch").x + 2 * style.frame_padding.x
     pop_w = (
         imgui.calc_text_size(fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER).x
         + 2 * style.frame_padding.x
     )
     auto_w = imgui.calc_text_size(fa.ICON_FA_ANGLES_DOWN).x + 2 * style.frame_padding.x
-    # 3 spacings: combo→launch, launch→pop, pop→autoscroll.
-    reserved = launch_w + pop_w + auto_w + 3 * style.item_spacing.x
-    imgui.push_item_width(-reserved)
+    cluster_w = launch_w + pop_w + auto_w + 2 * sp  # Launch + popout + autoscroll
+    # ponytail: below ~cluster_w the icon cluster itself would clip; a third
+    # row would fix it but no real cell is that narrow.
+    inline = imgui.get_content_region_avail().x >= _MIN_COMBO_W + sp + cluster_w
+    imgui.push_item_width(-(cluster_w + sp) if inline else -1.0)
     changed, new_idx = imgui.combo(f"##{widget_id}_select", _selected[widget_id], names)
     if changed:
         _selected[widget_id] = new_idx
@@ -223,7 +228,8 @@ def _render_process_launcher(
     state = _procs[(widget_id, selected_name)]
     proc = state.process
 
-    imgui.same_line()
+    if inline:
+        imgui.same_line()
     if proc is not None and proc.poll() is None:
         imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.6, 0.15, 0.15, 1.0))
         if imgui.button(f"Stop##{widget_id}"):
@@ -258,12 +264,9 @@ def _render_process_launcher(
 
     # Row 2: status text on its own line so it can never get cropped.
     if proc is not None and proc.poll() is None:
-        imgui.text_colored(
-            imgui.ImVec4(0.2, 0.8, 0.2, 1.0),
-            f"Running (PID {proc.pid})",
-        )
+        imgui.text_colored(SUCCESS, f"Running (PID {proc.pid})")
     else:
-        imgui.text_colored(imgui.ImVec4(0.5, 0.5, 0.5, 1.0), "Stopped")
+        imgui.text_colored(IDLE, "Stopped")
 
     # Log area: inline if not popped, placeholder otherwise. The popout
     # itself is rendered at the top of the function (see _render_open_popouts).
