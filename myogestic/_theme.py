@@ -7,6 +7,7 @@ import subprocess
 from imgui_bundle import hello_imgui, imgui
 
 _FONT: imgui.ImFont | None = None
+_DISPLAY_FONT: imgui.ImFont | None = None  # Instrument Serif — hero/display text
 _IS_MAC = platform.system() == "Darwin"
 
 
@@ -211,7 +212,7 @@ _SYS_FONTS = {
 
 
 def load_fonts() -> None:
-    global _FONT
+    global _FONT, _DISPLAY_FONT
     if _FONT is not None:
         return
 
@@ -231,4 +232,19 @@ def load_fonts() -> None:
             "fonts/Roboto/Roboto-Regular.ttf", size
         )
 
+    # Instrument Serif (OFL) — a display face for hero text (the prediction
+    # readout). Found in myogestic/assets/fonts via the asset search path;
+    # best-effort, so a missing asset just falls back to the body font.
+    try:
+        _DISPLAY_FONT = hello_imgui.load_font(
+            "fonts/InstrumentSerif-Regular.ttf", 28.0 * _ui_scale(), hello_imgui.FontLoadingParams()
+        )
+    except Exception:  # noqa: BLE001
+        _DISPLAY_FONT = None
+
     imgui.get_io().font_default = _FONT
+
+
+def display_font() -> imgui.ImFont | None:
+    """Instrument Serif display face for hero text (``None`` if unavailable)."""
+    return _DISPLAY_FONT
