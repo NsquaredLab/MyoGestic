@@ -1,9 +1,10 @@
 """``signal_viewer`` in isolation — a live decimated multi-channel scope.
 
 Renders one stream's ring buffer as a min/max envelope decimated for 60
-fps, with per-channel toggles and optional display filters (rectify, DC
-removal, RMS envelope). Fed here by an 8-channel in-process synthetic
-source so the traces scroll and every control works without hardware.
+fps, with per-channel toggles, a 50/60 Hz mains-hum Notch, and optional
+display filters (rectify, DC removal, RMS envelope). Fed here by an
+8-channel in-process synthetic source (with a deliberate 50 Hz hum so the
+Notch has something to remove) so every control works without hardware.
 
 Click ``Edit…`` on the channel bar to open the spatial channel grid — on
 desktop it opens as its own native OS window you can move beside the app.

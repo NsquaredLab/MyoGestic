@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-07-22
+
+### Added
+
+- **Signal viewer — mains-hum Notch.** A new `Notch` control (Off / 50 Hz /
+  60 Hz) on the signal viewer's control bar removes mains-line interference and
+  its low harmonics from the display, applied before the `View` transform. It is
+  a visual-only, **causal** IIR notch (`scipy.signal.iirnotch` cascaded over the
+  fundamental + first harmonics), so a given sample's filtered value never
+  changes as the scope scrolls — the trace does not jitter. Recording and model
+  input are left untouched.
+
+### Changed
+
+- `scipy` is now a core dependency, used by the signal viewer's causal notch
+  (`scipy.signal.iirnotch` / `lfilter`).
+
 ## [2.3.0] - 2026-07-22
 
 A large release on two fronts: the **widget API is unified on classes**

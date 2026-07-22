@@ -117,6 +117,23 @@ def _render_rms_sliders(stream_name: str, v: ViewerState, fs: float) -> None:
 
 
 def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None:
+    # Mains-hum notch (visual only) — runs before the display transform below.
+    notch_vals = [0, 50, 60]
+    n_idx = notch_vals.index(v.mains_notch) if v.mains_notch in notch_vals else 0
+    imgui.text("Notch")
+    imgui.same_line()
+    imgui.push_item_width(84)
+    n_changed, n_new = imgui.combo(f"##{stream_name}_notch", n_idx, ["Off", "50 Hz", "60 Hz"])
+    imgui.pop_item_width()
+    if n_changed:
+        v.mains_notch = notch_vals[n_new]
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(
+            "Remove mains-line hum (50 / 60 Hz + harmonics) from the display —\n"
+            "visual only, applied before the View transform. Recording is untouched."
+        )
+    imgui.same_line()
+
     # Visual-only display transform, label on the left so it can't be mistaken
     # for the scaling controls that follow it on the row.
     df_modes = ["none", "rectify", "dc_removal", "rms_env"]

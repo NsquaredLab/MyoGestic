@@ -1511,7 +1511,7 @@ wheels = [
 
 [[package]]
 name = "myogestic"
-version = "2.3.0"
+version = "2.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "dvg-ringbuffer" },
@@ -1521,6 +1521,7 @@ dependencies = [
     { name = "numpy" },
     { name = "platformdirs" },
     { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "scipy" },
     { name = "tsdownsample" },
     { name = "typer" },
     { name = "zarr" },
@@ -1596,6 +1597,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6.0" },
     { name = "scikit-learn", marker = "extra == 'dev'", specifier = ">=1.4" },
     { name = "scikit-learn", marker = "extra == 'examples'", specifier = ">=1.4" },
+    { name = "scipy", specifier = ">=1.11.0" },
     { name = "torch", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'examples'", specifier = ">=2.0" },
     { name = "tsdownsample", specifier = ">=0.1.4.1" },
