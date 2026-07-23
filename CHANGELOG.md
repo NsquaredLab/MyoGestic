@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.2] - 2026-07-23
+
 ### Changed
 
 - **Signal viewer — incremental mains-notch.** The display notch now filters
@@ -19,7 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scrolls (the old per-frame notch re-seeded a fresh 0.5 s warm-up each frame).
   `Stream` gained a locked `get_raw_snapshot_stable()` (a copy tagged with an
   `epoch` + absolute sample sequence) so the stateful filter can tell new
-  samples from seen ones and never tears on a concurrent buffer refresh.
+  samples from seen ones and never tears on a concurrent buffer refresh. The
+  cached filter is robust to a mid-stream reconnect (the sample rate is captured
+  atomically with each snapshot), to widening the window while paused, and to a
+  looping `ReplaySource` (a backward timestamp cold-resets the cached state).
 
 ## [2.3.1] - 2026-07-22
 
