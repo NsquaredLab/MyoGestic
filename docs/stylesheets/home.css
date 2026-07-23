@@ -5,6 +5,15 @@
    inside <p><img class="home-logo">. We target the <img> directly, and use
    descendant (not child) selectors throughout. */
 
+/* The home page hides both sidebars (index.md front-matter), so its content
+   would otherwise span the full viewport-proportional grid (up to ~2600px) and
+   strand the hero + "Try it" callout far from centre. Cap it to a comfortable
+   landing-page measure and centre it, so the page reads as one composed block. */
+.md-typeset:has(.home-tagline) {
+  max-width: 1280px;
+  margin-inline: auto;
+}
+
 .md-typeset img.home-logo {
   width: min(280px, 72vw);
   height: auto;
