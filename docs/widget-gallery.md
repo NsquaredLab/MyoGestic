@@ -15,7 +15,20 @@ Captured by [`tools/widget_screenshot.py`](https://github.com/NsquaredLab/MyoGes
 uv run python tools/widget_screenshot.py --all
 ```
 
-## Display
+<div class="gallery-nav" markdown>
+[Signal viewers](#signal-viewers)
+[Recording & sessions](#recording-and-sessions)
+[Process management](#process-management)
+[ML pipeline](#ml-pipeline)
+[Output processing](#output-processing)
+[Feature selection](#feature-selection)
+[Branding](#branding)
+[ML readout](#ml-readout)
+[Virtual Hand](#virtual-hand-integration)
+[Other](#other-widgets)
+</div>
+
+## Signal viewers
 
 <div class="grid cards" markdown>
 
@@ -69,7 +82,7 @@ uv run python tools/widget_screenshot.py --all
 
 </div>
 
-## Output post-processing
+## Output processing
 
 <div class="grid cards" markdown>
 
@@ -81,7 +94,7 @@ uv run python tools/widget_screenshot.py --all
 
 </div>
 
-## Feature engineering
+## Feature selection
 
 <div class="grid cards" markdown>
 
@@ -131,12 +144,14 @@ uv run python tools/widget_screenshot.py --all
 
 ## Other widgets
 
-These need richer fixtures (live data, trained models, recorded trials) than the screenshot script currently produces. They're documented in the API reference:
+These need richer fixtures (live data, trained models, recorded trials) than the screenshot script produces, so they're listed here and documented in full on the [Widgets API](api/widgets.md) page.
 
 <div class="other-widgets" markdown>
 
-- **Display primitives**: [`RawSignalViewer`][myogestic.widgets.RawSignalViewer], [`Scatter2D`][myogestic.widgets.Scatter2D], [`Scatter3D`][myogestic.widgets.Scatter3D], [`Heatmap`][myogestic.widgets.Heatmap], [`LinePlot`][myogestic.widgets.LinePlot], [`panel_header`][myogestic.widgets.panel_header], [`popout_panel`][myogestic.widgets.popout_panel].
+- **Signal & plotting**: [`RawSignalViewer`][myogestic.widgets.RawSignalViewer], [`Scatter2D`][myogestic.widgets.Scatter2D], [`Scatter3D`][myogestic.widgets.Scatter3D], [`Heatmap`][myogestic.widgets.Heatmap], [`LinePlot`][myogestic.widgets.LinePlot].
+- **Training & inspection**: [`TemplateInspector`][myogestic.widgets.TemplateInspector], [`TrialPreview`][myogestic.widgets.TrialPreview].
 - **ML buttons**: [`TrainButton`][myogestic.ml.widgets.TrainButton], [`PredictButton`][myogestic.ml.widgets.PredictButton], [`TrainingLog`][myogestic.ml.widgets.TrainingLog], [`SaveModelButton`][myogestic.ml.widgets.SaveModelButton], [`LoadModelButton`][myogestic.ml.widgets.LoadModelButton].
-- **Inspectors**: [`TemplateInspector`][myogestic.widgets.TemplateInspector], [`TrialPreview`][myogestic.widgets.TrialPreview].
+- **Status & logs**: [`StreamPanel`][myogestic.widgets.StreamPanel], [`LogPanel`][myogestic.widgets.LogPanel].
+- **Layout & branding**: [`panel_header`][myogestic.widgets.panel_header], [`popout_panel`][myogestic.widgets.popout_panel], [`Image`][myogestic.widgets.Image].
 
 </div>
