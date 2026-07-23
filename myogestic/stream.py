@@ -266,6 +266,16 @@ class Stream:
         self._m4_work_t: np.ndarray | None = None
         self._win_d = np.empty(0)
         self._win_t = np.empty(0)
+        # Display-buffer identity for stateful render-side consumers (the
+        # incremental notch, `_state.NotchCache`). `epoch` bumps on every
+        # (re)allocation — a possibly-new fs/n_channels means "start over".
+        # `_total_seq` counts samples appended this epoch (written only under
+        # `_lock`); `_display_seq_end` is `_total_seq` captured together with
+        # `_display_n` under the snapshot lock, so a reader gets a *consistent*
+        # (count, newest-sequence) pair and can tell new samples from seen ones.
+        self.epoch = 0
+        self._total_seq = 0
+        self._display_seq_end = 0
 
     def _connect(self) -> bool:
         """Connect to source and allocate buffers. Returns True on success."""
@@ -295,6 +305,11 @@ class Stream:
         self._display_d = np.empty((self._cap, self.info.n_channels), dtype=self.info.dtype)
         self._display_t = np.empty(self._cap, dtype=np.float64)
         self._display_n = 0
+        # Fresh buffer identity: a new epoch invalidates any cached filter state
+        # keyed to the old buffer, and the sample counter restarts.
+        self.epoch += 1
+        self._total_seq = 0
+        self._display_seq_end = 0
         self._m4_t = np.empty(0, dtype=np.float64)
         self._m4_d = np.empty((0, self.info.n_channels), dtype=self.info.dtype)
         self._m4_n = 0
@@ -425,6 +440,7 @@ class Stream:
         with self._lock:
             self._data.extend(data)
             self._timestamps.extend(ts)
+            self._total_seq += len(data)
         self.status = "connected"
         self.last_error = ""
 
@@ -511,7 +527,12 @@ class Stream:
         with self._lock:
             n = _unwrap_ring_into(self._data, self._display_d, self._cap)
             _unwrap_ring_into(self._timestamps, self._display_t, self._cap)
-        self._display_n = n
+            # Set the count and its matching newest-sequence together under the
+            # lock so a concurrent `get_raw_snapshot_stable` never reads a count
+            # that disagrees with `_total_seq` (which the append bumped in a
+            # separate lock acquisition just before this call).
+            self._display_n = n
+            self._display_seq_end = self._total_seq
 
     def _update_m4_snapshot(self) -> None:
         """Compute the M4-decimated display snapshot.
@@ -644,6 +665,39 @@ class Stream:
         if n < 2:
             return None
         return self._display_t[:n], self._display_d[:n]
+
+    def get_raw_snapshot_stable(
+        self, max_samples: int | None = None
+    ) -> tuple[int, int, np.ndarray, np.ndarray] | None:
+        """Locked *copy* of the (tail of the) display snapshot, tagged with buffer identity.
+
+        Like [`get_raw_snapshot`][] but returns arrays the acquire thread cannot overwrite,
+        plus the current ``epoch`` and the absolute sample sequence just past the newest
+        sample. A render-side consumer that carries state across frames (the incremental
+        display notch, [`_state.NotchCache`][]) needs both: the copy so a concurrent in-place
+        buffer refresh can't tear the samples it filters (a torn read would poison the IIR
+        state permanently), and ``(epoch, end_seq)`` so it can tell which samples are new and
+        detect a reallocation.
+
+        ``max_samples`` copies only the newest ``max_samples`` samples (the caller's visible
+        window + warm-up) instead of the whole buffer — a 60 s buffer at 10 kHz is ~40 MB and
+        copying all of it every frame is pure waste when only a few seconds are drawn.
+        ``end_seq`` stays absolute, so the returned ``data[i]`` still has sequence
+        ``end_seq - len(data) + i``.
+
+        Returns ``(epoch, end_seq, ts, data)`` or ``None`` if fewer than 2 samples are buffered.
+        """
+        with self._lock:
+            n = self._display_n
+            if n < 2:
+                return None
+            start = 0 if max_samples is None else max(0, n - int(max_samples))
+            return (
+                self.epoch,
+                self._display_seq_end,
+                self._display_t[start:n].copy(),
+                self._display_d[start:n].copy(),
+            )
 
     def last_timestamp(self) -> float | None:
         """Most recent sample timestamp, or None if no samples yet.
