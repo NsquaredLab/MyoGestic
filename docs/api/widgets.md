@@ -2,35 +2,31 @@
 
 Widget classes you construct once and render with `.ui(...)` from inside `@app.ui`. See the [Widgets concept page](../concepts/widgets.md) for the contract and the [widget gallery](../widget-gallery.md) for a visual index of all of them on one page.
 
----
+## Signal viewers
 
 ::: myogestic.widgets.SignalViewer
 
 ![signal_viewer](../images/widgets/signal_viewer.png){ loading=lazy }
 
----
-
 ::: myogestic.widgets.RawSignalViewer
 
----
+## Recording and sessions
 
 ::: myogestic.widgets.RecordingControls
 
 ![recording_controls](../images/widgets/recording_controls.png){ loading=lazy }
 
----
-
 ::: myogestic.widgets.SessionManager
 
 ![session_manager](../images/widgets/session_manager.png){ loading=lazy }
 
----
+## Process management
 
 ::: myogestic.widgets.ProcessLauncher
 
 ![process_launcher](../images/widgets/process_launcher.png){ loading=lazy }
 
----
+## Plotting
 
 ::: myogestic.widgets.Scatter2D
 
@@ -40,25 +36,29 @@ Widget classes you construct once and render with `.ui(...)` from inside `@app.u
 
 ::: myogestic.widgets.LinePlot
 
----
+## Output processing
 
 ::: myogestic.widgets.PostProcessor
 
 ![FilterControl](../images/widgets/FilterControl.png){ loading=lazy }
 
 ::: myogestic.widgets.FilterProcessor
+    options:
+      summary:
+        functions: true
+        attributes: true
 
 ::: myogestic.widgets.FilterSpec
 
 ::: myogestic.widgets.FilterParam
 
----
+## Feature selection
 
 ::: myogestic.widgets.FeatureSelector
 
 ![FeatureSelector](../images/widgets/FeatureSelector.png){ loading=lazy }
 
----
+## Training and inspection
 
 ::: myogestic.widgets.TemplateInspector
 
@@ -66,19 +66,17 @@ Widget classes you construct once and render with `.ui(...)` from inside `@app.u
 
 ::: myogestic.widgets.TrialPreview
 
+## Layout helpers
+
 ::: myogestic.widgets.panel_header
 
 ::: myogestic.widgets.popout_panel
-
----
 
 ## Status and logs
 
 ::: myogestic.widgets.StreamPanel
 
 ::: myogestic.widgets.LogPanel
-
----
 
 ## Branding
 
@@ -88,15 +86,11 @@ Widget classes you construct once and render with `.ui(...)` from inside `@app.u
 
 ![app_logo](../images/widgets/app_logo.png){ loading=lazy }
 
----
-
 ## ML readout
 
 ::: myogestic.widgets.PredictionLabel
 
 ![prediction_label](../images/widgets/prediction_label.png){ loading=lazy }
-
----
 
 ## Virtual Hand integration
 

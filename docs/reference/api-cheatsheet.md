@@ -1,10 +1,13 @@
 # API cheatsheet
 
-The most-used public symbols on one page, signatures only. This page is hand-maintained and not exhaustive. For prose, full Args/Returns, and source links, jump to the [API reference](../api/index.md).
+The most-used public symbols, signatures only — hand-maintained and not exhaustive. Each name links to its full entry (prose, Args/Returns, source) in the [API reference](../api/index.md).
+
+## Core
+
+[`App`][myogestic.App] · [`Stream`][myogestic.Stream] · [`Context`][myogestic.Context] · [`StreamInfo`][myogestic.StreamInfo] · [`Grid`][myogestic.Grid] · [`TrainingData`][myogestic.TrainingData]
 
 <!--docs:skip-->
 ```python
-# --- Core (myogestic) ------------------------------------------
 App(name, theme=True, docking=False)
   .streams(*streams)
   .ui(fn)                                          # decorator
@@ -31,19 +34,37 @@ Grid(rows, cols)                                   # @app.ui layout helper
 StreamInfo(n_channels, fs, dtype=float32, channel_names=None)
 TrainingData(paths=[], class_names=[], classes=set())
   .is_empty
+```
 
-# --- Sources (myogestic.sources) -------------------------------
+## Sources
+
+[`LSLSource`][myogestic.sources.LSLSource] · [`ReplaySource`][myogestic.sources.ReplaySource] · [`SerialSource`][myogestic.sources.serial_source.SerialSource]
+
+<!--docs:skip-->
+```python
 LSLSource(stream_name)
 ReplaySource(session_path, stream_name, speed=1.0) # accepts .session.zip
 SerialSource(port, baud, n_channels, fs)  # extras:[serial]; from myogestic.sources.serial_source import SerialSource
+```
 
-# --- Outputs (myogestic.outputs) -------------------------------
+## Outputs
+
+[`LSLOutlet`][myogestic.outputs.LSLOutlet] · [`UDPOutput`][myogestic.outputs.UDPOutput] · [`SerialOutput`][myogestic.outputs.serial_output.SerialOutput]
+
+<!--docs:skip-->
+```python
 LSLOutlet(name, n_channels, hz=50)
 UDPOutput(host, port, hz=50)
 SerialOutput(port, baud=115200, hz=10)  # extras:[serial]; from myogestic.outputs.serial_output import SerialOutput
   .push(data) -> None                              # all outputs
+```
 
-# --- ML pipeline (myogestic.ml) --------------------------------
+## ML pipeline
+
+[`Pipeline`][myogestic.ml.Pipeline] · [`save_pickle`][myogestic.ml.save_pickle] · [`load_pickle`][myogestic.ml.load_pickle]
+
+<!--docs:skip-->
+```python
 Pipeline(app, predict_hz=50)
   @pipeline.extract(windows: dict[str, np.ndarray])  # channels-first
   @pipeline.train(data: TrainingData)
@@ -54,8 +75,14 @@ Pipeline(app, predict_hz=50)
   .model / .predictions / .train_log
 
 save_pickle(model, path) / load_pickle(path)
+```
 
-# --- Session (myogestic.session) -------------------------------
+## Session
+
+[`open_session_store`][myogestic.session.open_session_store] · [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] · [`iter_aligned_windows`][myogestic.session.iter_aligned_windows]
+
+<!--docs:skip-->
+```python
 open_session_store(path) -> Session                # folder OR .session.zip
 iter_labeled_windows(paths, stream_name, window_ms, hop_ms,
                      classes=None)
@@ -63,16 +90,29 @@ iter_labeled_windows(paths, stream_name, window_ms, hop_ms,
 iter_aligned_windows(paths, primary_stream_name, aligned_stream_names,
                      window_ms, hop_ms, n_alignment_samples=1)
   -> Iterator[(primary_window, {name: vec}, ts)]
+```
 
-# --- Filters (myogestic.outputs.filters) -------------------------------
+## Filters
+
+[`OneEuroFilter`][myogestic.outputs.filters.OneEuroFilter] · [`GaussianFilter`][myogestic.outputs.filters.GaussianFilter] · [`IdentityFilter`][myogestic.outputs.filters.IdentityFilter] · [`make_filter`][myogestic.outputs.filters.make_filter]
+
+<!--docs:skip-->
+```python
 OneEuroFilter(hz=50.0, min_cutoff_hz=1.0, beta=0.02, derivative_cutoff_hz=1.0)
 GaussianFilter(n_vectors=5, sigma=1.0)
 IdentityFilter()
 make_filter(name, hz=50.0, **kwargs) -> VectorFilter
   filter(x, timestamp=None) -> np.ndarray                  # __call__ all filters
+```
 
-# --- Widgets (myogestic.widgets) -------------------------------
-# Construct once (setup scope), then call .ui(...) each frame in @app.ui.
+## Widgets
+
+Construct once (setup scope), then call `.ui(...)` each frame in `@app.ui`. Full list on the [Widgets API](../api/widgets.md) page.
+
+[`SignalViewer`][myogestic.widgets.SignalViewer] · [`RawSignalViewer`][myogestic.widgets.RawSignalViewer] · [`RecordingControls`][myogestic.widgets.RecordingControls] · [`SessionManager`][myogestic.widgets.SessionManager] · [`Heatmap`][myogestic.widgets.Heatmap] · [`LinePlot`][myogestic.widgets.LinePlot] · [`PostProcessor`][myogestic.widgets.PostProcessor]
+
+<!--docs:skip-->
+```python
 SignalViewer(stream_name, selectable=False, scale_mode="auto",
              y_range=(-1, 1), show_diagnostics=False, show_markers=False)
   .ui(ctx)
@@ -96,8 +136,14 @@ TemplateInspector(widget_id)
   .ui(rows)
 TrialPreview(widget_id=widget_id)
   .ui(data, fs)
+```
 
-# --- ML widgets (myogestic.ml.widgets) -------------------------
+## ML widgets
+
+[`TrainButton`][myogestic.ml.widgets.TrainButton] · [`PredictButton`][myogestic.ml.widgets.PredictButton] · [`TrainingLog`][myogestic.ml.widgets.TrainingLog] · [`SaveModelButton`][myogestic.ml.widgets.SaveModelButton] · [`LoadModelButton`][myogestic.ml.widgets.LoadModelButton] · [`PipelinePanel`][myogestic.ml.widgets.PipelinePanel]
+
+<!--docs:skip-->
+```python
 TrainButton(pipeline)               .ui()
 PredictButton(pipeline)             .ui()
 TrainingLog(pipeline)               .ui()

@@ -3,12 +3,20 @@
 ## App lifecycle
 
 ::: myogestic.App
+    options:
+      summary:
+        functions: true
+        attributes: true
 
 ::: myogestic.AppState
 
 ::: myogestic.Context
 
 ::: myogestic.Stream
+    options:
+      summary:
+        functions: true
+        attributes: true
 
 ::: myogestic.StreamInfo
 
