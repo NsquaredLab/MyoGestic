@@ -72,10 +72,12 @@ class NotchFilter:
     carries each biquad's [`scipy.signal.lfilter`][] state, so successive :meth:`step` calls
     filter only the *new* samples as if one uninterrupted ``lfilter`` ran over the whole
     stream. Feeding the same samples through :meth:`step` in *any* chunking yields output
-    identical (within one SciPy build) to :func:`apply_mains_notch` over their concatenation.
-    That equivalence is what lets the signal viewer filter only the newly-arrived samples each
-    frame instead of re-filtering the whole visible window — the notch analog of the M4
-    display-decimation perf fix.
+    identical (within one SciPy build) to :func:`apply_mains_notch` over their concatenation
+    — for concatenations of **≥ 8 samples**, below which ``apply_mains_notch`` no-ops as a
+    too-short guard while :meth:`step` always filters (the viewer's warm-up region is many
+    thousands of samples, so this never bites there). That equivalence is what lets the signal
+    viewer filter only the newly-arrived samples each frame instead of re-filtering the whole
+    visible window — the notch analog of the M4 display-decimation perf fix.
 
     A non-finite sample would poison the IIR state indefinitely, so a chunk containing any
     non-finite value **resets the state after processing**: the poisoned output scrolls off and
