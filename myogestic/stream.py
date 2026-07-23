@@ -88,6 +88,13 @@ class StreamInfo:
         (default) disables the grid selector. Not validated here — a
         malformed layout must never block acquisition; the viewer
         validates it before use.
+
+    Examples
+    --------
+    >>> from myogestic import StreamInfo
+    >>> info = StreamInfo(8, 2048.0, dtype="int16")
+    >>> (info.n_channels, info.fs, info.dtype.name)
+    (8, 2048.0, 'int16')
     """
 
     n_channels: int
@@ -674,7 +681,7 @@ class Stream:
         Like [`get_raw_snapshot`][] but returns arrays the acquire thread cannot overwrite,
         plus the current ``epoch``, the sample rate, and the absolute sample sequence just
         past the newest sample. A render-side consumer that carries state across frames (the
-        incremental display notch, [`_state.NotchCache`][]) needs these: the copy so a
+        incremental display notch, `_state.NotchCache`) needs these: the copy so a
         concurrent in-place buffer refresh can't tear the samples it filters (a torn read
         would poison the IIR state permanently), ``(epoch, end_seq)`` so it can tell which
         samples are new and detect a reallocation, and ``fs`` so the rate always matches the
