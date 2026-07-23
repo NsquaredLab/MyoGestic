@@ -42,11 +42,20 @@
   background: color-mix(in srgb, var(--md-accent-fg-color) 7%, transparent);
 }
 
-/* A faint spine tying a symbol's prose, tables, and members together. */
+/* A spine tying a symbol's prose, tables, and members together, indented enough
+   that the class level reads as its own column. */
 .md-typeset .doc-object > .doc-contents.first {
-  margin-left: 0.35rem;
-  padding-left: 0.95rem;
-  border-left: 1px solid var(--md-default-fg-color--lightest);
+  margin-left: 0.5rem;
+  padding-left: 2.5rem;
+  border-left: 2px solid var(--md-default-fg-color--lighter);
+}
+
+/* Nested members (methods / attributes) step in further under their class, each
+   with its own spine, so the class → member hierarchy reads as a tree. */
+.md-typeset .doc-contents .doc-object > .doc-contents {
+  margin-left: 0.4rem;
+  padding-left: 1.9rem;
+  border-left: 2px solid var(--md-default-fg-color--lightest);
 }
 
 /* Member methods (H4 under a class): subordinate but legible. layout.css
@@ -60,7 +69,11 @@
 @media (max-width: 720px) {
   .md-typeset .doc-object > .doc-contents.first {
     margin-left: 0;
-    padding-left: 0.55rem;
+    padding-left: 1.1rem;
+  }
+  .md-typeset .doc-contents .doc-object > .doc-contents {
+    margin-left: 0;
+    padding-left: 0.85rem;
   }
 }
 
