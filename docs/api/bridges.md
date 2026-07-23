@@ -4,7 +4,11 @@ A `Bridge` is a subprocess MyoGestic spawns alongside the app for **heavy-data a
 
 Bridges are registered via `app.bridges(...)`, started before the GUI loop, and terminated as part of `App.run()`'s cleanup hook chain.
 
+## Base class
+
 ::: myogestic.bridges.Bridge
+
+## Built-in bridges
 
 ::: myogestic.bridges.WebCamBridge
 

@@ -12,8 +12,7 @@ A `Source` wraps a device, file, or transport behind a uniform interface. Built-
 
 ::: myogestic.sources.ReplaySource
 
-### `SerialSource`
-
-Opt-in: lives at `myogestic.sources.serial_source.SerialSource`. Direct import only (requires the `serial` extra for `pyserial`).
+!!! info "Optional — requires the `serial` extra"
+    `SerialSource` is import-only from `myogestic.sources.serial_source` (needs `pyserial`).
 
 ::: myogestic.sources.serial_source.SerialSource

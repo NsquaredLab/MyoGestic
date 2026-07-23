@@ -1,8 +1,16 @@
 # ML pipeline
 
+## Pipeline
+
 ::: myogestic.ml.Pipeline
+    options:
+      summary:
+        functions: true
+        attributes: true
 
 ::: myogestic.ml.PipelineState
+
+## Persistence
 
 ::: myogestic.ml.save_pickle
 

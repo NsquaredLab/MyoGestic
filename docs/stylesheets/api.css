@@ -1,0 +1,108 @@
+/* API reference presentation. Pairs with layout.css (which already styles the
+   H1/H2/H3 hierarchy and the right-hand TOC). Here we handle the pieces that
+   are specific to mkdocstrings-rendered objects: symbol-type badges, parameter
+   tables, and grouping each object into one readable unit.
+
+   Restraint on purpose — the reference is dense, so every rule earns its keep:
+   thin rules and faint fills, no loud boxes around every method. */
+
+/* ------------------------------------------------------------------ *
+ * Symbol-type badges (show_symbol_type_heading / _toc)
+ * The `class` / `func` / `attr` chip before a name, in the body and the TOC.
+ * ------------------------------------------------------------------ */
+.md-typeset .doc-symbol {
+  font-size: 0.66em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.12em 0.42em;
+  border-radius: 0.35em;
+  vertical-align: middle;
+}
+
+/* A hair of breathing room between the badge and the symbol name. */
+.md-typeset .doc-heading .doc-symbol-heading {
+  margin-right: 0.5em;
+}
+
+/* Keep TOC badges from crowding the entry text. */
+.md-nav__link .doc-symbol-toc {
+  margin-right: 0.4em;
+}
+
+/* ------------------------------------------------------------------ *
+ * Each object reads as one unit
+ * Box only the ROOT object's heading (`.doc-contents.first` marks a
+ * top-level object); nested methods stay light so the page doesn't turn
+ * into nested cards.
+ * ------------------------------------------------------------------ */
+.md-typeset .doc-object:has(> .doc-contents.first) > .doc-heading {
+  padding: 0.4rem 0.6rem;
+  border-left: 0.18rem solid var(--md-accent-fg-color);
+  border-radius: 0.2rem;
+  background: color-mix(in srgb, var(--md-accent-fg-color) 7%, transparent);
+}
+
+/* A faint spine tying a symbol's prose, tables, and members together. */
+.md-typeset .doc-object > .doc-contents.first {
+  margin-left: 0.35rem;
+  padding-left: 0.95rem;
+  border-left: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* Member methods (H4 under a class): subordinate but legible. layout.css
+   stops styling at H3, so without this they read as flat body text. */
+.md-typeset .doc-contents .doc-heading:is(h4, h5) {
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+  margin-top: 1.1rem;
+}
+
+@media (max-width: 720px) {
+  .md-typeset .doc-object > .doc-contents.first {
+    margin-left: 0;
+    padding-left: 0.55rem;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Parameter / Returns / Attributes tables
+ * mkdocstrings emits a bare <table> (no Material scroll wrapper), and the
+ * global overflow-x:hidden guard in layout.css would clip a wide one. Make
+ * the table itself the scroll container while keeping real column layout
+ * (width:max-content capped at 100%).
+ * ------------------------------------------------------------------ */
+.md-typeset .doc-contents table {
+  width: 100%;
+  margin: 0.5rem 0 1.15rem;
+  font-size: 0.82rem;
+}
+
+/* On narrow screens let a wide table scroll rather than clip (the global
+   overflow-x:hidden guard would otherwise cut it off). On desktop it fills the
+   column and the Description wraps. */
+@media (max-width: 720px) {
+  .md-typeset .doc-contents table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+.md-typeset .doc-contents table th {
+  background: var(--md-code-bg-color);
+  white-space: nowrap;
+}
+
+.md-typeset .doc-contents table td {
+  vertical-align: top;
+}
+
+/* Zebra striping so rows track across the four columns on wide tables. */
+.md-typeset .doc-contents table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--md-code-bg-color) 45%, transparent);
+}
+
+/* The first column is the parameter name — let it read as an identifier. */
+.md-typeset .doc-contents table td:first-child {
+  white-space: nowrap;
+  font-weight: 600;
+}
