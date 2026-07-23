@@ -9,14 +9,115 @@ import numpy as np
 
 from myogestic.widgets.signals._channel_grid import resolve_initial
 from myogestic.widgets.signals.transforms import (
+    NotchFilter,
     apply_display_filter,
-    apply_mains_notch,
     compute_rms_trace,
 )
 
 if TYPE_CHECKING:
     from myogestic.core import Context
     from myogestic.stream import Stream
+
+
+#: Causal-notch settle time to warm the filter up before the shown region.
+_NOTCH_WARMUP_S = 0.5
+
+
+def _cols(a: np.ndarray, channel_map: list[int] | None) -> np.ndarray:
+    """Select the drawn columns.
+
+    Callers MUST row-slice ``a`` to the region they need first — ``data_raw[:, channel_map]``
+    over a full 60 s buffer fancy-copies tens of MB per frame.
+    """
+    return a if channel_map is None else a[:, channel_map]
+
+
+class NotchCache:
+    """Incremental causal mains-notch — the stateful counterpart of ``apply_mains_notch``.
+
+    Holds a `NotchFilter` and the filtered tail it has produced so far, keyed by the
+    stream / epoch / rate / freq / drawn-channels it was built for. Each frame it filters only
+    the newly-arrived samples (identified by absolute sample *sequence*) and reuses the
+    already-filtered values for the rest of the visible window, so the output equals
+    re-notching the whole window every frame (``apply_mains_notch``) at a fraction of the
+    cost. A key change, a coverage gap (the warm-up now reaches back before the cached tail),
+    a sequence discontinuity, or a reconnect (new `epoch`) triggers a cold rebuild.
+
+    Persistent state means already-drawn samples are never revised as the window scrolls —
+    strictly better than re-seeding a fresh warm-up each frame, which the old per-frame notch
+    did (their settled outputs agree to well within the trace's line width).
+
+    ponytail: the tail is re-`concatenate`d each frame — a bounded ~window-sized copy, far
+    cheaper than the O(window) IIR it replaces; a preallocated ring would drop even that copy
+    if it ever profiles hot.
+    """
+
+    def __init__(self) -> None:
+        self._key: tuple | None = None
+        self._filter: NotchFilter | None = None
+        self._filtered: np.ndarray | None = None  # filtered tail spanning [_start_seq, _next_seq)
+        self._start_seq = 0
+        self._next_seq = 0
+
+    def release(self) -> None:
+        """Drop the cached filter and tail (notch turned off, or stream abandoned)."""
+        self.__init__()
+
+    def notched(
+        self,
+        stream_id: int,
+        epoch: int,
+        end_seq: int,
+        data_raw: np.ndarray,
+        ts_raw: np.ndarray,
+        region_start_idx: int,
+        region_start_t: float,
+        fs: float,
+        freq: int,
+        channel_map: list[int] | None,
+    ) -> np.ndarray:
+        """``data_raw[region_start_idx:]`` (columns ``channel_map``) with the notch applied.
+
+        Same result as [`apply_mains_notch`][myogestic.widgets.signals.transforms.apply_mains_notch]
+        over a warm-up-extended slice, but filtering only samples newer than the last call.
+        ``end_seq`` is the sequence just past ``data_raw``'s newest row (from
+        [`Stream.get_raw_snapshot_stable`][]): ``data_raw[i]`` has sequence
+        ``end_seq - len(data_raw) + i``.
+        """
+        n = len(data_raw)
+        oldest_seq = end_seq - n
+        warm_idx = int(np.searchsorted(ts_raw, region_start_t - _NOTCH_WARMUP_S, side="left"))
+        warm_seq = oldest_seq + warm_idx
+        key = (stream_id, epoch, fs, freq, tuple(channel_map) if channel_map is not None else None)
+
+        cold = (
+            self._key != key
+            or self._filter is None
+            or self._filtered is None
+            or self._next_seq > end_seq  # sequence regressed (shouldn't happen within an epoch)
+            or self._next_seq < oldest_seq  # cache fell behind the ring (render stalled)
+            or self._start_seq > warm_seq  # cached tail no longer reaches the warm-up start
+        )
+        if cold:
+            self._key = key
+            self._filter = NotchFilter(fs, freq)
+            # Column-select ONLY the warm-up+region rows, never the whole buffer:
+            # `data_raw[:, channel_map]` over a 60 s buffer fancy-copies ~40 MB/frame.
+            self._filtered = self._filter.step(_cols(data_raw[warm_idx:], channel_map))
+            self._start_seq = warm_seq
+            self._next_seq = end_seq
+        else:
+            new_count = end_seq - self._next_seq
+            if new_count > 0:  # filter ONLY the newly-arrived samples (column-select just those rows)
+                fresh = self._filter.step(_cols(data_raw[n - new_count :], channel_map))
+                self._filtered = np.concatenate([self._filtered, fresh])
+                self._next_seq = end_seq
+            drop = warm_seq - self._start_seq  # >= 0 unless it was cold
+            if drop:
+                self._filtered = self._filtered[drop:]
+                self._start_seq = warm_seq
+        # _filtered now spans [warm_seq, end_seq); return from the region start.
+        return self._filtered[region_start_idx - warm_idx :]
 
 
 @dataclass
@@ -80,6 +181,14 @@ class ViewerState:
         default=None, repr=False
     )
     stats_last_t: float = 0.0
+    # Incremental causal-notch state (see `NotchCache`): persists the filtered
+    # tail + per-biquad IIR state so the notch filters only the newly-arrived
+    # samples each frame instead of re-notching the whole visible window.
+    notch_cache: NotchCache = field(default_factory=NotchCache, repr=False)
+    # Buffer identity captured when paused, so the notch cache treats the frozen
+    # window as one unchanging snapshot (no re-filtering while paused).
+    frozen_epoch: int = 0
+    frozen_seq: int = 0
 
 
 @dataclass
@@ -348,11 +457,11 @@ def resolve_enabled(
     return v.channels
 
 
-#: Causal-notch settle time to warm the filter up before the shown region.
-_NOTCH_WARMUP_S = 0.5
-
-
 def _notch_from(
+    v: ViewerState,
+    stream_id: int,
+    epoch: int,
+    end_seq: int,
     data_raw: np.ndarray,
     ts_raw: np.ndarray,
     region_start_idx: int,
@@ -363,31 +472,24 @@ def _notch_from(
 ) -> np.ndarray:
     """``data_raw[region_start_idx:]`` (columns ``channel_map``) with a notch.
 
-    Warms the causal notch up over ``_NOTCH_WARMUP_S`` of samples *before*
-    ``region_start_t`` and then drops that warm-up, so the returned region is
-    the filter's *settled* output — the same values frame-to-frame as the
-    window scrolls (a causal filter never revises the past). ``freq == 0`` is a
-    no-op; if there is no history before the region it degrades gracefully to
-    filtering from the region start (a brief startup transient at the far-left
-    edge, right after the stream connects).
+    Delegates to ``v.notch_cache`` (see `NotchCache`), which warms the causal notch up over
+    ``_NOTCH_WARMUP_S`` of samples before ``region_start_t``, drops that warm-up, and — the
+    whole point of the cache — filters only the samples newer than the previous frame while
+    reusing the already-filtered tail. ``freq == 0`` is a no-op (and releases the cache so its
+    tail/IIR state is not retained while the notch is off). ``(epoch, end_seq)`` come from
+    [`Stream.get_raw_snapshot_stable`][] and identify the snapshot for the cache.
 
-    ``channel_map`` restricts the notch (and the returned columns) to the
-    channels actually drawn — per-frame IIR cost scales with that count, not
-    the full array width. Column-selection commutes with every per-sample
-    display filter, so slicing here matches slicing after.
-
-    ponytail: recomputed over the whole window each frame; fine to ~a hundred
-    drawn channels. For very high channel counts the upgrade is a stateful
-    streaming filter (persist per-channel `zi`, filter only new samples).
+    ``channel_map`` restricts the notch (and the returned columns) to the channels actually
+    drawn — per-frame IIR cost scales with that count, not the full array width. Column
+    selection commutes with every per-sample display filter, so slicing here matches slicing
+    after.
     """
-    def _cols(a: np.ndarray) -> np.ndarray:
-        return a if channel_map is None else a[:, channel_map]
-
     if not freq:
-        return _cols(data_raw[region_start_idx:])
-    warm_idx = int(np.searchsorted(ts_raw, region_start_t - _NOTCH_WARMUP_S, side="left"))
-    notched = apply_mains_notch(_cols(data_raw[warm_idx:]), fs, freq)
-    return notched[region_start_idx - warm_idx :]
+        v.notch_cache.release()
+        return _cols(data_raw[region_start_idx:], channel_map)  # row-slice FIRST, then columns
+    return v.notch_cache.notched(
+        stream_id, epoch, end_seq, data_raw, ts_raw, region_start_idx, region_start_t, fs, freq, channel_map
+    )
 
 
 def build_signal_frame(
@@ -415,14 +517,30 @@ def build_signal_frame(
     if v.paused and v.frozen_data is not None and v.frozen_ts is not None:
         ts_raw = v.frozen_ts
         data_raw = v.frozen_data
+        epoch, end_seq = v.frozen_epoch, v.frozen_seq
     else:
-        raw = stream.get_raw_snapshot()
+        # Stable (locked-copy) snapshot: the notch cache carries IIR state across
+        # frames, so it needs samples the acquire thread can't overwrite mid-filter,
+        # plus (epoch, end_seq) to tell new samples from already-filtered ones.
+        # Copy only the visible window + notch warm-up (+ rms pre-roll), not the whole
+        # 60 s buffer — that copy alone was the dominant per-frame cost at 10 kHz.
+        assert stream.info is not None
+        fs_hint = stream.info.fs
+        margin_s = v.window + _NOTCH_WARMUP_S + 0.25
+        if v.display_filter == "rms_env":
+            margin_s += max(v.rms_window_ms, 0.0) / 1000.0
+        max_samples = int(margin_s * fs_hint) + 4 if np.isfinite(fs_hint) and fs_hint > 0 else None
+        raw = stream.get_raw_snapshot_stable(max_samples)
         if raw is None:
             return None
-        ts_raw, data_raw = raw
+        epoch, end_seq, ts_raw, data_raw = raw
         if v.paused:
-            v.frozen_ts = ts_raw.copy()
-            v.frozen_data = data_raw.copy()
+            # Freeze the samples AND their identity, so the notch cache sees one
+            # unchanging snapshot while paused and resumes cleanly on play.
+            v.frozen_ts = ts_raw
+            v.frozen_data = data_raw
+            v.frozen_epoch = epoch
+            v.frozen_seq = end_seq
 
     n_raw = len(data_raw)
     n_channels = data_raw.shape[1]
@@ -463,7 +581,8 @@ def build_signal_frame(
         )
         ts_pre = ts_raw[pre_idx:]
         data_pre = _notch_from(
-            data_raw, ts_raw, pre_idx, vis_start_t - window_s, fs, v.mains_notch, channel_map
+            v, id(stream), epoch, end_seq, data_raw, ts_raw, pre_idx,
+            vis_start_t - window_s, fs, v.mains_notch, channel_map,
         )
         rms_ts, rms_data = compute_rms_trace(ts_pre, data_pre, fs, v.rms_window_ms, v.rms_hop_ms)
         # Keep only endpoints inside the visible window (pre-roll was history).
@@ -480,7 +599,10 @@ def build_signal_frame(
         # describe the real signal. Only the *drawn* trace gets the notch, and
         # only on the channels actually plotted (`channel_map`).
         data_win = apply_display_filter(data_win_raw, v.display_filter, fs)
-        notched = _notch_from(data_raw, ts_raw, start_idx, vis_start_t, fs, v.mains_notch, channel_map)
+        notched = _notch_from(
+            v, id(stream), epoch, end_seq, data_raw, ts_raw, start_idx,
+            vis_start_t, fs, v.mains_notch, channel_map,
+        )
         data_sel = apply_display_filter(notched, v.display_filter, fs)
         trace_ts = ts_win
 
