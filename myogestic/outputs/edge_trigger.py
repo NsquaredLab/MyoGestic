@@ -37,7 +37,7 @@ class EdgeTrigger[T]:
         Invoked with the new value when an edge fires.
     n_stable_ticks
         Debounce: the new value must hold for this many *consecutive*
-        :meth:`fire_if_changed` calls before firing. ``1`` (default) fires
+        [`fire_if_changed`][] calls before firing. ``1`` (default) fires
         immediately on the first changed value — i.e. dedupe only. Use ``>1`` to
         swallow tick-to-tick flicker (e.g. a classifier's ``argmax`` oscillating
         during a sliding-window transition) so the side effect isn't re-fired on

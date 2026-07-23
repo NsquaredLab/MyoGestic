@@ -19,8 +19,8 @@ def apply_mains_notch(data: np.ndarray, fs: float, freq: int) -> np.ndarray:
 
     A visual-only notch for the signal viewer, meant to run *before* the display
     filter. Implemented as a **causal** IIR notch — one 2nd-order
-    :func:`scipy.signal.iirnotch` biquad per harmonic below Nyquist, cascaded
-    and applied with :func:`scipy.signal.lfilter` along axis 0.
+    [`scipy.signal.iirnotch`][] biquad per harmonic below Nyquist, cascaded
+    and applied with [`scipy.signal.lfilter`][] along axis 0.
 
     Causal is the whole point: the scope scrolls, so a given sample is
     re-filtered on many frames as the visible window slides over it. A causal
@@ -32,7 +32,7 @@ def apply_mains_notch(data: np.ndarray, fs: float, freq: int) -> np.ndarray:
     so the shown region is the filter's settled steady state.
 
     Each biquad is initialised to the steady state for the first sample
-    (:func:`scipy.signal.lfilter_zi`) to suppress the DC start-up step. Returns
+    ([`scipy.signal.lfilter_zi`][]) to suppress the DC start-up step. Returns
     ``data`` unchanged when ``freq`` is 0/None, ``fs`` is invalid, or the window
     is too short to filter.
 

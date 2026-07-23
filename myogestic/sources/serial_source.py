@@ -31,7 +31,7 @@ class SerialSource:
         self._frame_bytes = n_channels * 4  # float32 = 4 bytes
 
     def connect(self) -> StreamInfo:
-        """Open the serial port and return the configured :class:`StreamInfo`."""
+        """Open the serial port and return the configured [`StreamInfo`][]."""
         import serial  # type: ignore
 
         self._ser = serial.Serial(self._port, self._baud, timeout=1.0)

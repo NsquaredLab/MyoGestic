@@ -28,9 +28,9 @@ class ReplaySource:
         self._session: Session | None = None
 
     def connect(self) -> StreamInfo:
-        """Open the recorded session and return its :class:`StreamInfo`.
+        """Open the recorded session and return its [`StreamInfo`][].
 
-        Raises :class:`ValueError` if the requested stream name is not
+        Raises [`ValueError`][] if the requested stream name is not
         present in the session.
         """
         sess = open_session_store(self._path)

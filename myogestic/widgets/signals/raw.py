@@ -2,7 +2,7 @@
 
 For when you need to see every sample exactly (debugging glitches,
 validating timestamps, sanity-checking acquisition). For higher-channel
-counts and longer windows, use :class:`SignalViewer` instead.
+counts and longer windows, use [`SignalViewer`][] instead.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class RawSignalViewer:
     """Raw signal viewer — every sample, no decimation, zero-alloc render path.
 
     Construct once with the stream name (+ optional size / channel height),
-    then call :meth:`ui` with the live ``ctx`` each frame.
+    then call [`ui`][] with the live ``ctx`` each frame.
     """
 
     def __init__(

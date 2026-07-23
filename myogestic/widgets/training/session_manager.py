@@ -24,7 +24,7 @@ class SessionManager:
     """Session picker widget. ``ui()`` returns ``TrainingData(paths, class_names, classes)``.
 
     Construct once with the base path / title / class names, then call
-    :meth:`ui` each frame. The widget has two training filters: selected
+    [`ui`][] each frame. The widget has two training filters: selected
     session files and selected class indices. Assign the returned value to
     ``pipeline.training_data`` to make it visible to ``@pipeline.train``::
 

@@ -38,7 +38,7 @@ class StreamPanel:
     """Per-stream status panel — one row per stream with status + reconnect.
 
     Construct once (optionally toggling ``selectable`` / ``show_header``),
-    then call :meth:`ui` with the live ``ctx`` each frame.
+    then call [`ui`][] with the live ``ctx`` each frame.
 
     Parameters
     ----------

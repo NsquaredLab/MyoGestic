@@ -1,7 +1,7 @@
-"""The :class:`Output` base class — the send-side counterpart to ``Source``.
+"""The [`Output`][] base class — the send-side counterpart to ``Source``.
 
 Concrete outputs (``LSLOutlet``, ``UDPOutput``, ``SerialOutput``) subclass this;
-they live in their own modules and are re-exported from :mod:`myogestic.outputs`.
+they live in their own modules and are re-exported from [`myogestic.outputs`][].
 """
 
 from __future__ import annotations
@@ -25,19 +25,19 @@ _IS_BROWSER = sys.platform == "emscripten"
 class Output:
     """Base class for "send the latest pushed vector at ``hz``" outputs.
 
-    Subclass to define a new transport: override :meth:`_send` with the
+    Subclass to define a new transport: override `_send` with the
     actual write (LSL `push_sample`, UDP `sendto`, serial `write`, gRPC
     RPC, ...). The base class handles everything else:
 
     - A daemon **output thread** is started in ``__init__`` and runs
       for the lifetime of the Output. Each tick it reads the latest
-      pushed vector and calls :meth:`_send`.
-    - :meth:`push` is the caller-facing API: write the latest value to
+      pushed vector and calls `_send`.
+    - [`push`][] is the caller-facing API: write the latest value to
       an atomic slot (CPython's GIL guarantees atomic reference
       assignment). It is **latest-wins, not queued** - if you push
       faster than ``hz``, intermediate values are overwritten and
       never sent. That's the contract.
-    - Exceptions raised by :meth:`_send` are caught, deduplicated per
+    - Exceptions raised by `_send` are caught, deduplicated per
       ``(error class, message)`` pair, and logged once. A flapping
       destination logs one line per failure mode and the send thread
       keeps running.
@@ -50,8 +50,8 @@ class Output:
     2. Implement ``_send(self, data: np.ndarray) -> None``. Treat
        ``data`` as read-only; validate shape; raise on misuse rather
        than silently mis-sending.
-    3. Override :meth:`stop` if you need to close a resource (see
-       :class:`~myogestic.outputs.UDPOutput` for an example).
+    3. Override [`stop`][] if you need to close a resource (see
+       [`UDPOutput`][myogestic.outputs.UDPOutput] for an example).
 
     Outputs are **user-owned**: instantiate them at module scope, call
     ``.push(data)`` from inside ``@pipeline.predict``. Do not register

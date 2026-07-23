@@ -1,7 +1,7 @@
 """The webcam bridge — both halves in one place.
 
-:class:`WebCamBridge` is the parent-side launcher you register with
-``app.bridges(...)``; :func:`main` is the child-side subprocess it spawns,
+[`WebCamBridge`][] is the parent-side launcher you register with
+``app.bridges(...)``; `main` is the child-side subprocess it spawns,
 which captures frames from a webcam, writes them to zarr, and publishes an LSL
 clock stream so the main process can align timestamps.
 
@@ -24,7 +24,7 @@ from myogestic.bridges.base import Bridge
 class WebCamBridge(Bridge):
     """Bridge that runs the built-in webcam decoder subprocess.
 
-    Wraps ``python -m myogestic.bridges.webcam`` (the :func:`main` below):
+    Wraps ``python -m myogestic.bridges.webcam`` (the `main` below):
     captures frames from an OpenCV device, writes them to a Zarr array, and
     publishes the per-frame LSL clock so the rest of the app can align webcam
     time with EMG time.

@@ -4,10 +4,10 @@ Consumed by both ``process_launcher`` (subprocess stdout) and
 ``pipeline_panel`` (ML training log) so the autoscroll + popout + tooltip
 UX stays identical across the framework. Three thin functions:
 
-* :func:`render_log` — selectable, read-only console text box (mono, dark).
-* :func:`render_log_buttons` — autoscroll + popout toggle buttons (returns
+* [`render_log`][] — selectable, read-only console text box (mono, dark).
+* [`render_log_buttons`][] — autoscroll + popout toggle buttons (returns
   the updated state to the caller — the panel owns the state, not us).
-* :func:`render_log_popout` — floating ``Begin``/``End`` window mirroring
+* [`render_log_popout`][] — floating ``Begin``/``End`` window mirroring
   the inline log, returns whether the user has closed the popout.
 """
 
@@ -36,7 +36,7 @@ def render_log(
     """Render ``lines`` as a scrollable, read-only text box.
 
     Uses a read-only ``input_text_multiline`` — the same widget
-    :func:`~myogestic.widgets.panels.log_panel.log_panel` uses — so the log
+    [`log_panel`][myogestic.widgets.panels.log_panel.log_panel] uses — so the log
     text can be **selected and copied** (Ctrl/Cmd+C). The previous renderer
     drew each line with ``imgui.text_unformatted``, which paints static
     glyphs that cannot be selected, so log text could not be copied out.

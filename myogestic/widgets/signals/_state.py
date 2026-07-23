@@ -305,7 +305,7 @@ def resolve_enabled(
 ) -> set[int]:
     """Resolve the enabled channel set from persistent viewer state.
 
-    Must run before :func:`build_signal_frame` so the frame can decimate
+    Must run before [`build_signal_frame`][] so the frame can decimate
     only the enabled columns.
 
     The selection is cached on `v` keyed by `(stream_key, n_channels)`, so
@@ -316,7 +316,7 @@ def resolve_enabled(
     clobbering that stream's other-size selection.
 
     `initial_channels` seeds
-    :func:`~myogestic.widgets.signals._channel_grid.resolve_initial` only
+    `resolve_initial` only
     the very first time this `ViewerState` ever creates a selection —
     i.e. once, for whichever `(stream_key, n_channels)` is active on that
     first call. Every later first-sight of a *different* key (a stream

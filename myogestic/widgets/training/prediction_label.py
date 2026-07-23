@@ -45,7 +45,7 @@ class PredictionLabel:
 
     The class index is looked up in ``pipeline.predictions[class_key]`` and the
     name is taken from ``class_names``. Colour-codes each class with the
-    shared :data:`myogestic.widgets.common.PALETTE` so the same class is
+    shared `PALETTE` so the same class is
     always the same colour (matches the recording / session-manager
     chips).
     """

@@ -179,7 +179,7 @@ def _render_pipeline_panel(
 
 
 class TrainButton:
-    """Train button — calls :meth:`Pipeline.start_training` on click."""
+    """Train button — calls [`Pipeline.start_training`][] on click."""
 
     def __init__(self, pipeline: Pipeline, *, size: tuple[float, float] = (92, 0)) -> None:
         self._pipeline = pipeline
@@ -211,7 +211,7 @@ class TrainingLog:
     """Read-only view of ``pipeline.train_log`` with smart autoscroll.
 
     The autoscroll/popout *toggles* aren't drawn here — they're part of
-    :class:`PipelinePanel`'s control row so they sit next to Train/Predict.
+    [`PipelinePanel`][]'s control row so they sit next to Train/Predict.
     """
 
     def __init__(self, pipeline: Pipeline, *, height: float = 100.0, widget_id: str = "ml") -> None:
@@ -263,8 +263,8 @@ class LoadModelButton:
 class PipelinePanel:
     """Train + Predict + log as a single titled panel.
 
-    Matches the visual style of :class:`RecordingControls`,
-    :class:`SessionManager`, and :class:`PostProcessor`. The log inherits the
+    Matches the visual style of [`RecordingControls`][myogestic.widgets.RecordingControls],
+    [`SessionManager`][myogestic.widgets.SessionManager], and [`PostProcessor`][myogestic.widgets.PostProcessor]. The log inherits the
     same autoscroll + popout UX as the process launcher's log.
     """
 

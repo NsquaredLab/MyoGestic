@@ -104,7 +104,7 @@ class GaussianFilter:
         """Return the Gaussian-weighted mean of the recent vector history.
 
         ``x`` must be a 1-D vector of consistent length; ``timestamp`` is
-        ignored. Raises :class:`ValueError` if ``x`` is not 1-D.
+        ignored. Raises [`ValueError`][] if ``x`` is not 1-D.
         """
         x_arr = np.asarray(x, dtype=np.float64)
         if x_arr.ndim != 1:
@@ -259,7 +259,7 @@ def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
 
 
 class _FilterChain:
-    """Composite :class:`VectorFilter` applying several filters left-to-right."""
+    """Composite [`VectorFilter`][] applying several filters left-to-right."""
 
     def __init__(self, filters: tuple[VectorFilter, ...]) -> None:
         self._filters = filters
@@ -277,7 +277,7 @@ class _FilterChain:
 
 
 def chain(*filters: VectorFilter) -> VectorFilter:
-    """Compose filters into one :class:`VectorFilter`, applied left-to-right.
+    """Compose filters into one [`VectorFilter`][], applied left-to-right.
 
     Lets you present a pipeline of filters as a single filter — e.g. drop
     ``chain(GaussianFilter(...), OneEuroFilter(...))`` into a

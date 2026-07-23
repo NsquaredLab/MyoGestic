@@ -2,7 +2,7 @@
 
 Renders an image asset into the current panel/grid cell as the largest
 aspect-preserving rectangle that fits, centred both ways, with a muted text
-fallback when the asset is missing. :class:`~myogestic.widgets.AppLogo` is a
+fallback when the asset is missing. [`AppLogo`][myogestic.widgets.AppLogo] is a
 thin wrapper over this pinned to the shipped wordmark.
 
 The asset is resolved through HelloImGui's asset system (the folder

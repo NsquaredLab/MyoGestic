@@ -105,10 +105,10 @@ _SELECTED_HOVER = imgui.ImVec4(0.31, 0.61, 0.98, 0.40)
 
 
 def push_selected() -> None:
-    """Tint the next button as the selected / active choice (pair with :func:`pop_selected`).
+    """Tint the next button as the selected / active choice (pair with [`pop_selected`][]).
 
     Instead of a solid accent fill, the selected control gets a translucent
-    accent *tint* plus a 2px accent underline (drawn in :func:`pop_selected`) —
+    accent *tint* plus a 2px accent underline (drawn in [`pop_selected`][]) —
     a calmer "this is on" cue that reads as selection, not a momentary press.
     """
     imgui.push_style_color(imgui.Col_.button, _SELECTED_FILL)
@@ -117,7 +117,7 @@ def push_selected() -> None:
 
 
 def pop_selected() -> None:
-    """Undo the tint pushed by :func:`push_selected` and draw the accent underline."""
+    """Undo the tint pushed by [`push_selected`][] and draw the accent underline."""
     imgui.pop_style_color(3)
     p0 = imgui.get_item_rect_min()
     p1 = imgui.get_item_rect_max()
@@ -208,7 +208,7 @@ def _truncate_to_width(s: str, budget: float) -> str:
 
 
 def panel_header_button(title: str, icon: str | None, button_icon: str, *, tooltip: str = "") -> bool:
-    """Render a :func:`panel_header` with a right-aligned icon-only button.
+    """Render a [`panel_header`][] with a right-aligned icon-only button.
 
     Returns ``True`` on the frame the button is clicked. The button is
     prioritized: when the row can't fit the header icon + button side by side
