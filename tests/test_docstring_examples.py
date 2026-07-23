@@ -14,12 +14,13 @@ import doctest
 
 import pytest
 
-from myogestic import EdgeTrigger, Fr, Grid, Px, TrainingData
+from myogestic import EdgeTrigger, Fr, Grid, Px, StreamInfo, TrainingData
 from myogestic.outputs import filters
 from myogestic.recipes import estimators, features
 
 # Objects whose docstring Examples are deterministic and dependency-free.
 RUNNABLE = [
+    StreamInfo,
     TrainingData,
     Grid,
     Px,
