@@ -124,7 +124,7 @@ _autoscroll: dict[tuple[str, str], bool] = {}
 class ProcessLauncher:
     """Dropdown + Launch/Stop + scrollable log panel.
 
-    Construct once with the process list, then call :meth:`ui` each frame.
+    Construct once with the process list, then call [`ui`][] each frame.
     Multiple launchers can coexist — each gets unique ImGui IDs via
     ``widget_id`` (auto-generated from the process names when empty). The
     live subprocess registry is app-global, so processes are still killed on

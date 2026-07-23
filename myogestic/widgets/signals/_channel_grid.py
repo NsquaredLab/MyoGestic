@@ -1,7 +1,7 @@
 """Pure grid-layout helpers for the spatial channel-selection widget.
 
 Deliberately imgui-free: everything here operates on plain
-:class:`~myogestic.stream.ChannelGrid` values and lists of ints, so it can be
+`ChannelGrid` values and lists of ints, so it can be
 unit tested without a rendering context and reused by any future
 non-imgui frontend.
 """
@@ -57,8 +57,8 @@ def _is_rectangular(cells: list[list[int | None]]) -> bool:
 def _null_invalid_cells(cells: list[list[int | None]], n_channels: int) -> list[list[int | None]]:
     """Copy `cells`, replacing out-of-range / duplicate entries with ``None``.
 
-    Traverses row-major (same order as :attr:`ChannelGrid.columns`) so the
-    "first-seen" column wins ties the same way :func:`_dedupe_in_range` does.
+    Traverses row-major (same order as `ChannelGrid.columns`) so the
+    "first-seen" column wins ties the same way [`_dedupe_in_range`][] does.
     """
     seen: set[int] = set()
     result: list[list[int | None]] = []
@@ -79,7 +79,7 @@ def normalize_layout(channel_grids: list[ChannelGrid] | None, n_channels: int) -
 
     Out-of-range and duplicate column indices are dropped (first-seen wins).
     A grid whose ``cells`` aren't rectangular is re-laid-out with
-    :func:`auto_shape` over its surviving columns; a rectangular grid keeps
+    [`auto_shape`][] over its surviving columns; a rectangular grid keeps
     its shape with invalid entries nulled out instead. Grids left with no
     valid columns are dropped entirely. If nothing survives — `channel_grids`
     is ``None``/empty, or every grid was fully invalid — falls back to a

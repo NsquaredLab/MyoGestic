@@ -62,7 +62,7 @@ class TemplateInspector:
     """Accept/reject + click-to-select table of template rows.
 
     Construct once with a stable ``widget_id`` (+ optional title / height /
-    label colors), then call :meth:`ui` each frame with the current rows.
+    label colors), then call [`ui`][] each frame with the current rows.
     ``ui()`` returns the selected row's key (or ``None``).
 
     Parameters

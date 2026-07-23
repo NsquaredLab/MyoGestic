@@ -1,4 +1,4 @@
-"""The :class:`Bridge` — a managed subprocess for heavy out-of-band data acquisition."""
+"""The [`Bridge`][] — a managed subprocess for heavy out-of-band data acquisition."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ class Bridge:
         self.status = "stopped"
 
     def start(self) -> None:
-        """Spawn the subprocess. Idempotent only if you check :attr:`alive` first."""
+        """Spawn the subprocess. Idempotent only if you check [`alive`][] first."""
         self.process = subprocess.Popen(
             self.command,
             stdout=subprocess.PIPE,

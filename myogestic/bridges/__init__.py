@@ -1,6 +1,6 @@
 """Bridges — supervised companion subprocesses for heavy / out-of-band capture.
 
-A :class:`Bridge` is a subprocess MyoGestic spawns alongside the app and tears
+A [`Bridge`][] is a subprocess MyoGestic spawns alongside the app and tears
 down on exit (a webcam decoder, an ultrasound daemon, a custom capture script).
 It doesn't fit the pull-based ``Source`` model; instead it owns its own buffer
 and feeds data back the same way every source does — by publishing an LSL outlet

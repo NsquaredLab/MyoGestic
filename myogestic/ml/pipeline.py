@@ -56,10 +56,10 @@ _IS_BROWSER = sys.platform == "emscripten"
 
 
 class PipelineState(StrEnum):
-    """ML-side extension of :class:`~myogestic.AppState`.
+    """ML-side extension of [`AppState`][myogestic.AppState].
 
     The core app only knows about ``"idle"`` and ``"recording"``;
-    attaching a :class:`Pipeline` (via ``Pipeline(app)``) adds two more
+    attaching a [`Pipeline`][] (via ``Pipeline(app)``) adds two more
     states for the ML lifecycle. Mutually exclusive with each other and
     with the core states: a Pipeline cannot be predicting and training
     at the same time, by design (the train pause exists so the GPU
@@ -140,7 +140,7 @@ class Pipeline:
     def train(self, fn: Callable) -> Callable:
         """Decorator: register the training callback.
 
-        The wrapped function receives one :class:`TrainingData` and
+        The wrapped function receives one [`TrainingData`][] and
         must return any object — it's stored on ``pipeline.model`` and
         forwarded to every subsequent ``predict()`` call. If
         ``pipeline.save_model`` is set, the **Save Model** button calls
@@ -168,8 +168,8 @@ class Pipeline:
 
         No-op (sets ``ctx.status_message``) unless the state is ``idle``,
         a train callback is registered, and non-empty
-        :attr:`training_data` is set. Flips the state to ``training`` for
-        the duration and stores the returned object on :attr:`model`.
+        `training_data` is set. Flips the state to ``training`` for
+        the duration and stores the returned object on `model`.
         """
         ctx = self.app.ctx
         if ctx.state != "idle":
@@ -220,7 +220,7 @@ class Pipeline:
         """Flip the state to ``predicting`` so the predict thread runs.
 
         No-op (sets ``ctx.status_message``) unless the state is ``idle``
-        and a :attr:`model` is loaded.
+        and a `model` is loaded.
         """
         ctx = self.app.ctx
         if ctx.state != "idle":

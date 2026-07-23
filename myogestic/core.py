@@ -162,7 +162,7 @@ class App:
         Parameters
         ----------
         *streams
-            One or more :class:`Stream` instances.
+            One or more [`Stream`][] instances.
         """
         for s in streams:
             self.ctx.streams[s.name] = s
@@ -173,7 +173,7 @@ class App:
         Bridges run in their own process (webcam, ultrasound, depth
         camera, …) and publish an LSL clock stream the main app
         subscribes to. The cockpit's ``process_launcher`` widget shows
-        their start/stop state. Mirrors :meth:`streams` exactly: each
+        their start/stop state. Mirrors [`streams`][] exactly: each
         bridge is keyed by its ``.name`` into ``ctx.bridges``; calling
         with the same name overwrites the previous registration.
 

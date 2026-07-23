@@ -52,7 +52,7 @@ class FeatureSelector:
         time-preserving features like sliding RMS, but any
         consistent shape works as long as every active feature
         returns the *same* shape (they're concatenated along axis
-        0 by :meth:`__call__`).
+        0 by `__call__`).
     default
         Optional iterable of feature names to start ticked.
         ``None`` (default) ticks every feature; an empty list ticks

@@ -88,7 +88,7 @@ def _safe_label_index(current: int, n_classes: int) -> int:
 class RecordingControls:
     """Record/Stop toggle + per-class label buttons + state pill.
 
-    Construct once with the class names and callbacks, then call :meth:`ui`
+    Construct once with the class names and callbacks, then call [`ui`][]
     with the live ``ctx`` each frame. Pass ``app.start_recording`` /
     ``app.stop_recording`` for ``on_record`` / ``on_stop`` if you're using
     the standard App.

@@ -11,8 +11,8 @@ class CustomBridge(Bridge):
     """Bridge that runs an arbitrary user Python script as a subprocess.
 
     The unstructured escape hatch: when the heavy-data source you want
-    doesn't fit :class:`~myogestic.bridges.webcam.WebCamBridge` and you'd
-    rather write the decoder yourself than subclass :class:`Bridge`. The
+    doesn't fit [`WebCamBridge`][myogestic.bridges.webcam.WebCamBridge] and you'd
+    rather write the decoder yourself than subclass [`Bridge`][]. The
     script runs with the same Python interpreter as the app
     (``sys.executable``); the rest is up to you (publish LSL, write
     Zarr, talk to a custom message bus, ...).

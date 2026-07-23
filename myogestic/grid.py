@@ -2,8 +2,8 @@
 
 Track sizes use CSS-Grid-style units that mean the same thing on both axes:
 
-* :class:`Px(n) <Px>` — exactly ``n`` pixels (fixed-size track).
-* :class:`Fr(n) <Fr>` — ``n`` shares of the *remaining* space after the
+* [`Px(n)`][Px] — exactly ``n`` pixels (fixed-size track).
+* [`Fr(n)`][Fr] — ``n`` shares of the *remaining* space after the
   Px tracks are subtracted (proportional track).
 
 Track entries must be ``Px(...)`` or ``Fr(...)``: bare numbers are
@@ -78,7 +78,7 @@ class Px:
 class Fr:
     """Fractional unit (CSS-grid ``fr``).
 
-    ``Fr(1)`` means "1 share of the space remaining after :class:`Px`
+    ``Fr(1)`` means "1 share of the space remaining after [`Px`][]
     tracks are subtracted". Multiple ``Fr`` entries split the remainder
     proportionally to their values, so ``[Fr(1), Fr(2)]`` splits leftover
     space 1:2.
@@ -97,7 +97,7 @@ Track = Px | Fr
 
 
 def _coerce(spec: object, axis: str, index: int) -> Track:
-    """Coerce a track spec to a :class:`Px` or :class:`Fr` instance.
+    """Coerce a track spec to a [`Px`][] or [`Fr`][] instance.
 
     Track entries must be ``Px(...)`` or ``Fr(...)`` — bare numbers are
     rejected so ``[300, 1, 1]`` can't be silently misread as pixels.

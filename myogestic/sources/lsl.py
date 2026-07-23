@@ -13,7 +13,7 @@ class LSLSource:
     """Pull samples from a Lab Streaming Layer outlet by name.
 
     The default real-time source for MyoGestic: name the outlet you want
-    on your local LSL network, drop the source into a :class:`Stream`,
+    on your local LSL network, drop the source into a [`Stream`][],
     and the framework's acquisition thread handles the rest. Uses
     `mne_lsl` under the hood.
 
@@ -25,7 +25,7 @@ class LSLSource:
         sample rate come from the outlet's own metadata.
     dtype
         Dtype the samples are stored as (one of
-        :data:`~myogestic.stream.SUPPORTED_DTYPES`). Default ``"float32"``.
+        `SUPPORTED_DTYPES`). Default ``"float32"``.
         Incoming samples are cast to this dtype, so a compact choice (e.g.
         ``"int16"``) halves ring-buffer and recording size. ``None`` keeps
         the outlet's **native** wire format (lossless for int amps).
@@ -41,7 +41,7 @@ class LSLSource:
     >>> # keep a 16-bit amp's native format to halve memory / disk:
     >>> raw = LSLSource("TestEMG1", dtype=None)
 
-    The source is non-blocking: :meth:`read` pulls whatever is
+    The source is non-blocking: [`read`][] pulls whatever is
     immediately available from the inlet and returns ``(None, None)``
     when the outlet has produced nothing new since the last call. The
     acquisition thread paces itself by waiting for the inlet to fill,
@@ -59,7 +59,7 @@ class LSLSource:
     def connect(self) -> StreamInfo:
         """Resolve the outlet by name and open an inlet.
 
-        Returns a :class:`StreamInfo` whose channel count and sample rate
+        Returns a [`StreamInfo`][] whose channel count and sample rate
         come from the outlet's metadata. ``dtype`` is the value requested
         at construction (default float32), or the outlet's **native** wire
         format when constructed with ``dtype=None``. Blocks up to 10 s

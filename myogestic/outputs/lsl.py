@@ -11,7 +11,7 @@ from myogestic.outputs.base import Output
 class LSLOutlet(Output):
     """Publish a 1-D vector to a Lab Streaming Layer outlet.
 
-    The dual of :class:`~myogestic.sources.LSLSource` - call ``.push(vec)``
+    The dual of [`LSLSource`][myogestic.sources.LSLSource] - call ``.push(vec)``
     from inside ``@pipeline.predict``, and the framework's daemon output
     thread re-sends the latest pushed vector at the configured ``hz``.
     Channel count is locked at construction time so the LSL metadata
@@ -25,7 +25,7 @@ class LSLOutlet(Output):
         recorder, another MyoGestic app) resolve by.
     n_channels
         Fixed channel count. Push vectors must have this
-        length or :meth:`_send` raises ``ValueError`` instead of
+        length or `_send` raises ``ValueError`` instead of
         silently mis-sending.
     hz
         Send rate of the daemon thread (Hz). Default 50. Push

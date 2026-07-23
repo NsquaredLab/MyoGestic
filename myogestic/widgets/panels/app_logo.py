@@ -2,7 +2,7 @@
 
 Renders the wordmark logo (``assets/myogestic_logo.png`` inside the package)
 fit into the current cell, preserving the original 1.5:1 aspect and centring
-it. A thin wrapper over the generic :class:`~myogestic.widgets.Image` widget,
+it. A thin wrapper over the generic [`Image`][myogestic.widgets.Image] widget,
 pinned to the shipped wordmark asset. The square OS icon
 (``assets/app_settings/icon.png``) is a separate asset wired up in
 ``core.py`` for the dock / taskbar / title bar.
@@ -34,7 +34,7 @@ _LOGO_ASSET = "myogestic_logo.png"
 class AppLogo:
     """Render the MyoGestic wordmark, fit-to-cell, aspect-preserving.
 
-    Thin wrapper over :class:`~myogestic.widgets.Image` pinned to the shipped
+    Thin wrapper over [`Image`][myogestic.widgets.Image] pinned to the shipped
     wordmark. See that widget for the fit/centre behaviour.
     """
 

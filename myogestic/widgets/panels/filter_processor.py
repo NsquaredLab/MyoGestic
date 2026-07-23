@@ -21,7 +21,7 @@ smoothing the model's output before it's sent out::
 
 Register your own filters by passing ``FilterSpec``s to ``FilterProcessor``
 (want a *chain* of filters as one entry? compose them with
-:func:`myogestic.outputs.chain`)::
+[`myogestic.outputs.chain`][])::
 
     from myogestic.outputs import GaussianFilter, chain
     from myogestic.widgets import FilterProcessor, FilterSpec, FilterParam, BUILTIN_FILTERS
@@ -60,7 +60,7 @@ _MIN_SLIDER_W = 90.0
 
 @dataclass(frozen=True, slots=True)
 class FilterParam:
-    """One tunable slider for a :class:`FilterSpec`.
+    """One tunable slider for a [`FilterSpec`][].
 
     Parameters
     ----------
@@ -90,7 +90,7 @@ class FilterParam:
 
 @dataclass(frozen=True, slots=True)
 class FilterSpec:
-    """One selectable filter in a :class:`FilterProcessor` palette.
+    """One selectable filter in a [`FilterProcessor`][] palette.
 
     Parameters
     ----------
@@ -199,16 +199,16 @@ class FilterProcessor:
     """Pick-one-and-tune filter widget over an extensible palette.
 
     Construct once with the filters it offers, call it on a vector inside
-    ``@pipeline.predict``, and render it each frame with :meth:`ui`. The
-    active filter is applied by :meth:`__call__`; parameter values are cached
+    ``@pipeline.predict``, and render it each frame with [`ui`][]. The
+    active filter is applied by `__call__`; parameter values are cached
     per filter across selection changes (switching away and back builds a
     fresh filter — no stale history).
 
     Parameters
     ----------
     filters
-        Ordered palette of :class:`FilterSpec`. Defaults to the three
-        built-ins (:data:`BUILTIN_FILTERS`).
+        Ordered palette of [`FilterSpec`][]. Defaults to the three
+        built-ins (`BUILTIN_FILTERS`).
     hz
         Sample rate forwarded to filters that need it (e.g. one_euro).
     default
@@ -414,11 +414,11 @@ class FilterProcessor:
 
 
 class PostProcessor(FilterProcessor):
-    """Preset :class:`FilterProcessor` for post-prediction output smoothing.
+    """Preset [`FilterProcessor`][] for post-prediction output smoothing.
 
     The three built-in filters, a ``"POST-PROCESSING"`` header, and
     ``one_euro`` selected by default. For a custom palette, use
-    :class:`FilterProcessor` directly.
+    [`FilterProcessor`][] directly.
     """
 
     def __init__(self, hz: float = 50.0, *, widget_id: str = "output_filter") -> None:

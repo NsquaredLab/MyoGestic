@@ -35,5 +35,5 @@ def save_pickle(model: Any, path: str | Path) -> str:
 
 
 def load_pickle(path: str | Path) -> Any:
-    """Inverse of :func:`save_pickle` — load a joblib-saved model."""
+    """Inverse of [`save_pickle`][] — load a joblib-saved model."""
     return joblib.load(str(path))

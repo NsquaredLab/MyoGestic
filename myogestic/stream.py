@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 _IS_BROWSER = sys.platform == "emscripten"
 
 
-#: Dtypes a :class:`Stream` / :class:`Source` may use. Covers every LSL wire
+#: Dtypes a [`Stream`][] / [`Source`][] may use. Covers every LSL wire
 #: format (``int8`` / ``int16`` / ``int32`` / ``int64`` / ``float32`` /
 #: ``float64``) plus ``float16`` as a storage-only cast. Unsigned ints are
 #: excluded: never an LSL wire format and unused for biosignals.
@@ -58,9 +58,9 @@ class ChannelGrid:
 
 @dataclass
 class StreamInfo:
-    """Describes the shape and dtype of a :class:`Source`'s data.
+    """Describes the shape and dtype of a [`Source`][]'s data.
 
-    Returned by :meth:`Source.connect`. The framework uses it to size
+    Returned by [`Source.connect`][]. The framework uses it to size
     the ring buffer, lay out the signal viewer, and decide how to
     serialise the stream when recording.
 
@@ -72,8 +72,8 @@ class StreamInfo:
         Sample rate in Hz. Used to convert ``window_ms`` /
         ``buffer_ms`` into sample counts.
     dtype
-        NumPy dtype of each sample, one of :data:`SUPPORTED_DTYPES`.
-        Defaults to ``float32``. Accepts anything :func:`numpy.dtype`
+        NumPy dtype of each sample, one of `SUPPORTED_DTYPES`.
+        Defaults to ``float32``. Accepts anything [`numpy.dtype`][]
         understands (``"int16"``, ``np.int16``, ``np.dtype("int16")``)
         and normalises it. Picking a compact dtype (e.g. ``int16``)
         keeps the ring buffer and Zarr recording small; the window
@@ -83,7 +83,7 @@ class StreamInfo:
         Optional per-channel labels for the signal viewer
         legend. ``None`` (default) renders as ``ch0``, ``ch1``, ...
     channel_grids
-        Optional list of :class:`ChannelGrid` electrode topologies for
+        Optional list of `ChannelGrid` electrode topologies for
         the signal viewer's spatial channel selector. ``None``
         (default) disables the grid selector. Not validated here — a
         malformed layout must never block acquisition; the viewer
@@ -110,9 +110,9 @@ class Source(Protocol):
     """Protocol every data source must implement.
 
     Three methods, no inheritance: ``connect`` opens the device or file
-    and returns a :class:`StreamInfo` describing the data, ``read``
+    and returns a [`StreamInfo`][] describing the data, ``read``
     polls non-blockingly for the next chunk, ``disconnect`` releases
-    the device. The framework's :class:`Stream` wraps any object
+    the device. The framework's [`Stream`][] wraps any object
     matching this Protocol and runs it on a daemon acquisition thread.
 
     See [Add a custom source](../how-to/add-a-source.md) for worked
@@ -120,7 +120,7 @@ class Source(Protocol):
     """
 
     def connect(self) -> StreamInfo:
-        """Open the device / file / socket. Return a :class:`StreamInfo`."""
+        """Open the device / file / socket. Return a [`StreamInfo`][]."""
         ...
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
@@ -167,7 +167,7 @@ def _unwrap_ring_into(rb: RingBuffer, out: np.ndarray, cap: int) -> int:
 
 
 class Stream:
-    """A named ring-buffered live stream backed by a :class:`Source`.
+    """A named ring-buffered live stream backed by a [`Source`][].
 
     The framework's central data primitive: pair a name (``"emg"``) with
     a source (``LSLSource("TestEMG1")``) and a window duration, register
@@ -182,8 +182,8 @@ class Stream:
       ring buffer, refreshes the display snapshot, and (if a recording
       session is active) appends to the session's Zarr store.
     - Two consumer surfaces are then available concurrently:
-      :meth:`get_window` (channels-first, exact window-seconds long,
-      consumed by ``@pipeline.extract``) and :meth:`get_display`
+      [`get_window`][] (channels-first, exact window-seconds long,
+      consumed by ``@pipeline.extract``) and [`get_display`][]
       (min/max envelope decimated for 60 fps rendering, consumed by
       ``signal_viewer``).
     - The ring buffer holds the last ``buffer_ms`` of samples so
@@ -219,10 +219,10 @@ class Stream:
         name
             Stream label (also used as the recorded zarr stream key).
         source
-            Anything implementing the :class:`Source` protocol.
+            Anything implementing the [`Source`][] protocol.
         window_ms
             Duration in **milliseconds** of the window returned
-            by :meth:`get_window`.
+            by [`get_window`][].
         buffer_ms
             Ring-buffer depth in milliseconds. Defaults to 10000 (10 s).
         """
@@ -369,14 +369,14 @@ class Stream:
     def attach_session(self, session: Session) -> None:
         """Begin recording this stream into ``session``.
 
-        Called by :meth:`App.start_recording`. Set under ``_session_lock``
+        Called by [`App.start_recording`][]. Set under ``_session_lock``
         so the acquire loop sees a fully-attached session atomically.
         """
         with self._session_lock:
             self._session = session
 
     def detach_session(self) -> None:
-        """Stop recording this stream (called by :meth:`App.stop_recording`).
+        """Stop recording this stream (called by [`App.stop_recording`][myogestic.App.stop_recording]).
 
         Holding ``_session_lock`` makes this *wait for* any append currently
         in flight on the acquire thread and guarantees no further append can
@@ -456,7 +456,7 @@ class Stream:
     async def _acquire_loop_async(self) -> None:
         """Run the acquire loop in the browser, paced with ``asyncio.sleep``.
 
-        Same step body as :meth:`_acquire_loop`, but yields to the event
+        Same step body as [`_acquire_loop`][], but yields to the event
         loop so it can hand control back to the frame renderer.
         """
         while self._running:
@@ -516,7 +516,7 @@ class Stream:
     def _update_m4_snapshot(self) -> None:
         """Compute the M4-decimated display snapshot.
 
-        Called lazily from :meth:`get_display` on the render thread (no longer on the
+        Called lazily from [`get_display`][] on the render thread (no longer on the
         acquire hot path), so it snapshots the display buffer under the lock before
         decimating rather than reading it concurrently with the acquire thread.
         """

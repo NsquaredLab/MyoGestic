@@ -77,12 +77,12 @@ def _install_windows_zarr_atomic_write_retry(*, retries: int = 10, delay_s: floa
     the search indexer, or the OS not having released the handle the microsecond
     after ``close()`` returned. It is intermittent (a timing collision, not a
     concurrency bug), but a high-rate multi-stream recording reliably hits it:
-    every :meth:`Session.append` grows the arrays, each trailing-chunk rewrite
+    every [`Session.append`][] grows the arrays, each trailing-chunk rewrite
     is another rename, and losing the race once crashes the whole recording.
 
-    This is the write-path counterpart to :func:`_robust_rmtree`, which already
+    This is the write-path counterpart to [`_robust_rmtree`][], which already
     retries on the same Windows lag during teardown. The retry has to live at
-    the rename itself: :meth:`Session.append` -> ``zarr.Array.append`` cannot be
+    the rename itself: [`Session.append`][] -> ``zarr.Array.append`` cannot be
     retried safely because it resizes (persists the new shape) *before* writing
     the chunks, so a retry after a partial failure would write at the wrong
     offset and corrupt the array.
@@ -135,10 +135,10 @@ class LabelEvent:
     """One entry in a session's label track: "at LSL time T, the user picked class N".
 
     Recorded whenever the user clicks a class button in
-    :func:`~myogestic.widgets.panels.recording.recording_controls`. The label track is
+    [`RecordingControls`][myogestic.widgets.RecordingControls]. The label track is
     a chronological list of these events; the recording-window
-    iterators (:func:`~myogestic.session.iter_labeled_windows`,
-    :func:`~myogestic.session.iter_aligned_windows`) walk the track to
+    iterators ([`iter_labeled_windows`][myogestic.session.iter_labeled_windows],
+    [`iter_aligned_windows`][myogestic.session.iter_aligned_windows]) walk the track to
     decide which sample range gets which class index.
 
     Attributes
@@ -172,7 +172,7 @@ class Session:
     Created when the user clicks **Record**, finalised when they click
     **Stop**. While active, every acquisition thread that has its
     stream registered appends to the session's Zarr stores; UI label
-    clicks emit :class:`LabelEvent` entries onto the label track.
+    clicks emit [`LabelEvent`][] entries onto the label track.
     Closing the session writes ``meta.json`` and ``labels.json``
     alongside the Zarr folders, and optionally packs the whole tree
     into a portable ``.session.zip``.
@@ -188,7 +188,7 @@ class Session:
             meta.json                  # streams_info, app_name, class_names
             labels.json                # the LabelEvent list
 
-    Read sessions back with :func:`~myogestic.session.open_session_store`,
+    Read sessions back with [`open_session_store`][myogestic.session.open_session_store],
     which transparently handles both folders and ``.session.zip``
     archives.
 
@@ -408,7 +408,7 @@ class Session:
     def close(self) -> None:
         """Release file handles held by this session.
 
-        Closes the ``ZipStore`` opened by :func:`open_session_store` for a
+        Closes the ``ZipStore`` opened by [`open_session_store`][] for a
         ``.session.zip`` and drops the array references. Safe to call more than
         once. On Windows an open ``ZipStore`` keeps the archive **locked**, so
         close the session before moving or deleting the ``.session.zip``. Use as

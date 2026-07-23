@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 class SignalViewer:
     """Real-time multi-channel signal viewer.
 
-    Construct once with the stable config, then call :meth:`ui` with the
+    Construct once with the stable config, then call [`ui`][] with the
     live ``ctx`` each frame. Includes decimation, pause, auto/manual Y
     scale, visual-only display filters, channel toggles, stats, stream
     retargeting, and label markers.
@@ -72,7 +72,7 @@ class SignalViewer:
         back to the ``None`` policy. Once a selection exists (here or
         restored from a prior visit), the user's own toggle edits are never
         overwritten. ``None`` (default) falls back to
-        :func:`~myogestic.widgets.signals._channel_grid.resolve_initial`'s
+        `resolve_initial`'s
         policy: every channel when ``n_channels <= 32``, else the first 16.
     """
 
