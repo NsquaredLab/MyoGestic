@@ -53,7 +53,13 @@
   overflow-x: auto !important;
 }
 html, body {
-  overflow-x: hidden;
+  /* `clip` (not `hidden`) guards horizontal overflow WITHOUT turning the body
+     into a scroll container. `overflow-x: hidden` forces `overflow-y: auto`,
+     which makes `body` the scroller and breaks Material's `position: sticky`
+     sidebars (the left nav + right TOC stop following on scroll). `clip` keeps
+     the page from scrolling sideways while leaving the viewport as the scroll
+     root, so the sidebars stay pinned. */
+  overflow-x: clip;
 }
 
 /* Stronger heading hierarchy. Material's default H1/H2/H3 are visually
