@@ -667,34 +667,43 @@ class Stream:
         return self._display_t[:n], self._display_d[:n]
 
     def get_raw_snapshot_stable(
-        self, max_samples: int | None = None
-    ) -> tuple[int, int, np.ndarray, np.ndarray] | None:
+        self, duration_s: float | None = None
+    ) -> tuple[int, int, float, np.ndarray, np.ndarray] | None:
         """Locked *copy* of the (tail of the) display snapshot, tagged with buffer identity.
 
         Like [`get_raw_snapshot`][] but returns arrays the acquire thread cannot overwrite,
-        plus the current ``epoch`` and the absolute sample sequence just past the newest
-        sample. A render-side consumer that carries state across frames (the incremental
-        display notch, [`_state.NotchCache`][]) needs both: the copy so a concurrent in-place
-        buffer refresh can't tear the samples it filters (a torn read would poison the IIR
-        state permanently), and ``(epoch, end_seq)`` so it can tell which samples are new and
-        detect a reallocation.
+        plus the current ``epoch``, the sample rate, and the absolute sample sequence just
+        past the newest sample. A render-side consumer that carries state across frames (the
+        incremental display notch, [`_state.NotchCache`][]) needs these: the copy so a
+        concurrent in-place buffer refresh can't tear the samples it filters (a torn read
+        would poison the IIR state permanently), ``(epoch, end_seq)`` so it can tell which
+        samples are new and detect a reallocation, and ``fs`` so the rate always matches the
+        copied samples — reading ``stream.info.fs`` separately can race a reconnect and pair a
+        new-rate rate with old-rate data.
 
-        ``max_samples`` copies only the newest ``max_samples`` samples (the caller's visible
+        ``duration_s`` copies only the newest ``duration_s`` seconds (the caller's visible
         window + warm-up) instead of the whole buffer — a 60 s buffer at 10 kHz is ~40 MB and
-        copying all of it every frame is pure waste when only a few seconds are drawn.
+        copying all of it every frame is pure waste when only a few seconds are drawn. The
+        trim uses the *locked* ``fs`` so it stays consistent with the returned rate.
         ``end_seq`` stays absolute, so the returned ``data[i]`` still has sequence
         ``end_seq - len(data) + i``.
 
-        Returns ``(epoch, end_seq, ts, data)`` or ``None`` if fewer than 2 samples are buffered.
+        Returns ``(epoch, end_seq, fs, ts, data)`` or ``None`` if fewer than 2 samples are
+        buffered (or the stream is not connected).
         """
         with self._lock:
             n = self._display_n
-            if n < 2:
+            if n < 2 or self.info is None:
                 return None
-            start = 0 if max_samples is None else max(0, n - int(max_samples))
+            fs = self.info.fs
+            if duration_s is None or not np.isfinite(fs) or fs <= 0.0:
+                start = 0
+            else:
+                start = max(0, n - (int(duration_s * fs) + 4))
             return (
                 self.epoch,
                 self._display_seq_end,
+                fs,
                 self._display_t[start:n].copy(),
                 self._display_d[start:n].copy(),
             )

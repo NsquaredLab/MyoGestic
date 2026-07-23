@@ -58,6 +58,7 @@ class NotchCache:
         self._filtered: np.ndarray | None = None  # filtered tail spanning [_start_seq, _next_seq)
         self._start_seq = 0
         self._next_seq = 0
+        self._last_end_t: float | None = None  # newest timestamp last seen (detects clock resets)
 
     def release(self) -> None:
         """Drop the cached filter and tail (notch turned off, or stream abandoned)."""
@@ -89,6 +90,7 @@ class NotchCache:
         warm_idx = int(np.searchsorted(ts_raw, region_start_t - _NOTCH_WARMUP_S, side="left"))
         warm_seq = oldest_seq + warm_idx
         key = (stream_id, epoch, fs, freq, tuple(channel_map) if channel_map is not None else None)
+        end_t = float(ts_raw[-1])
 
         cold = (
             self._key != key
@@ -97,6 +99,9 @@ class NotchCache:
             or self._next_seq > end_seq  # sequence regressed (shouldn't happen within an epoch)
             or self._next_seq < oldest_seq  # cache fell behind the ring (render stalled)
             or self._start_seq > warm_seq  # cached tail no longer reaches the warm-up start
+            # Newest timestamp went backwards: an upstream clock reset (e.g. ReplaySource
+            # looping to t=0) that does NOT bump the epoch. Don't carry IIR state across it.
+            or (self._last_end_t is not None and end_t < self._last_end_t)
         )
         if cold:
             self._key = key
@@ -116,6 +121,7 @@ class NotchCache:
             if drop:
                 self._filtered = self._filtered[drop:]
                 self._start_seq = warm_seq
+        self._last_end_t = end_t
         # _filtered now spans [warm_seq, end_seq); return from the region start.
         return self._filtered[region_start_idx - warm_idx :]
 
@@ -186,9 +192,12 @@ class ViewerState:
     # samples each frame instead of re-notching the whole visible window.
     notch_cache: NotchCache = field(default_factory=NotchCache, repr=False)
     # Buffer identity captured when paused, so the notch cache treats the frozen
-    # window as one unchanging snapshot (no re-filtering while paused).
+    # window as one unchanging snapshot (no re-filtering while paused). `frozen_fs`
+    # is captured with the samples so a reconnect at a new rate can't be applied to
+    # the frozen old-rate data.
     frozen_epoch: int = 0
     frozen_seq: int = 0
+    frozen_fs: float = 0.0
 
 
 @dataclass
@@ -517,30 +526,31 @@ def build_signal_frame(
     if v.paused and v.frozen_data is not None and v.frozen_ts is not None:
         ts_raw = v.frozen_ts
         data_raw = v.frozen_data
-        epoch, end_seq = v.frozen_epoch, v.frozen_seq
+        epoch, end_seq, fs = v.frozen_epoch, v.frozen_seq, v.frozen_fs
     else:
         # Stable (locked-copy) snapshot: the notch cache carries IIR state across
         # frames, so it needs samples the acquire thread can't overwrite mid-filter,
-        # plus (epoch, end_seq) to tell new samples from already-filtered ones.
-        # Copy only the visible window + notch warm-up (+ rms pre-roll), not the whole
-        # 60 s buffer — that copy alone was the dominant per-frame cost at 10 kHz.
-        assert stream.info is not None
-        fs_hint = stream.info.fs
+        # plus (epoch, end_seq) to tell new samples from already-filtered ones and `fs`
+        # captured atomically with the data (a separate stream.info.fs read can race a
+        # reconnect). Copy only the visible window + notch warm-up (+ rms pre-roll), not
+        # the whole 60 s buffer — that copy alone was the dominant per-frame cost at 10 kHz.
+        # Exception: when *entering* pause, take the FULL buffer, because the window / rms
+        # sliders stay live while paused and a trimmed freeze couldn't satisfy a widening.
         margin_s = v.window + _NOTCH_WARMUP_S + 0.25
         if v.display_filter == "rms_env":
             margin_s += max(v.rms_window_ms, 0.0) / 1000.0
-        max_samples = int(margin_s * fs_hint) + 4 if np.isfinite(fs_hint) and fs_hint > 0 else None
-        raw = stream.get_raw_snapshot_stable(max_samples)
+        raw = stream.get_raw_snapshot_stable(None if v.paused else margin_s)
         if raw is None:
             return None
-        epoch, end_seq, ts_raw, data_raw = raw
+        epoch, end_seq, fs, ts_raw, data_raw = raw
         if v.paused:
-            # Freeze the samples AND their identity, so the notch cache sees one
+            # Freeze the samples AND their identity (incl. fs), so the notch cache sees one
             # unchanging snapshot while paused and resumes cleanly on play.
             v.frozen_ts = ts_raw
             v.frozen_data = data_raw
             v.frozen_epoch = epoch
             v.frozen_seq = end_seq
+            v.frozen_fs = fs
 
     n_raw = len(data_raw)
     n_channels = data_raw.shape[1]
@@ -552,9 +562,6 @@ def build_signal_frame(
     # seconds and the trace draws past the right edge of the plot's
     # hard `[0, v.window]` x-axis. Time-based slicing makes the rendered
     # span always equal `min(v.window, data_age)`.
-    # Caller (viewer.py) guards `stream.info is None` before building a frame.
-    assert stream.info is not None
-    fs = stream.info.fs
     if n_raw > 0:
         last_ts = float(ts_raw[-1])
         vis_start_t = last_ts - v.window

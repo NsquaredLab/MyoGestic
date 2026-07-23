@@ -225,3 +225,55 @@ def test_notchcache_reprocesses_new_columns_on_a_channel_selection_change():
     got = cache.notched(1, 1, n, sig, ts, region_idx, ts[region_idx], fs, freq, [1])  # switch to ch1
     expected = apply_mains_notch(sig[warm_idx:, [1]], fs, freq)[region_idx - warm_idx :]
     assert np.max(np.abs(got - expected)) < 1e-9
+
+
+def test_notchcache_matches_reference_with_a_trimmed_scrolling_snapshot():
+    # build_signal_frame copies only the visible window + warm-up (a TRAILING slice), so the
+    # cache sees oldest_seq > 0 that advances every frame. Verify the seq math still lands on
+    # the fixed-history reference as both the window AND the copied tail slide.
+    from myogestic.widgets.signals._state import _NOTCH_WARMUP_S, NotchCache
+
+    fs, freq = FS, 50
+    n = 16000
+    ts = np.arange(n, dtype=np.float64) / fs
+    hum = _tone(50.0, n, amp=4.0)
+    sig = np.stack([hum + _tone(23.0, n, amp=2.0), hum + _tone(31.0, n, amp=1.5)], axis=1)
+
+    win = 1000
+    cap = 3000  # trailing copy length (< n, so the copy slides and oldest_seq > 0)
+    t0 = 2000
+    warm0 = int(np.searchsorted(ts[:t0], ts[t0 - win] - _NOTCH_WARMUP_S, side="left"))
+
+    cache = NotchCache()
+    trimmed = False
+    for t in range(t0, n + 1, 151):
+        start = max(0, t - cap)  # trailing trimmed copy [start:t]
+        trimmed |= start > 0
+        data_c, ts_c = sig[start:t], ts[start:t]
+        region_idx = (t - win) - start  # region index WITHIN the trimmed copy
+        got = cache.notched(1, 1, t, data_c, ts_c, region_idx, ts[t - win], fs, freq, [0, 1])
+        expected = apply_mains_notch(sig[warm0:t], fs, freq)[(t - win) - warm0 :]
+        assert got.shape == expected.shape == (win, 2)
+        assert np.max(np.abs(got - expected)) < 1e-9
+    assert trimmed  # actually exercised the oldest_seq > 0 (trimmed-copy) path
+
+
+def test_notchcache_cold_resets_on_a_backward_timestamp_jump():
+    # A ReplaySource loop re-emits t=0 WITHOUT bumping the epoch (sequence keeps rising). The
+    # cache must not carry IIR state across that value discontinuity — it cold-rebuilds on the
+    # looped data instead of filtering it as a continuation of the pre-loop signal.
+    from myogestic.widgets.signals._state import _NOTCH_WARMUP_S, NotchCache
+
+    fs, freq, n = FS, 50, 4000
+    sig1 = (_tone(50.0, n, amp=4.0) + _tone(23.0, n, amp=2.0))[:, None]
+    sig2 = (_tone(50.0, n, amp=4.0) + _tone(31.0, n, amp=1.5))[:, None]
+    ts1 = 100.0 + np.arange(n, dtype=np.float64) / fs
+    ts2 = np.arange(n, dtype=np.float64) / fs  # looped back to t=0 (newest ts jumps backwards)
+    region_idx = n - 1000
+
+    cache = NotchCache()
+    cache.notched(1, 1, n, sig1, ts1, region_idx, ts1[region_idx], fs, freq, [0])  # pre-loop (t~100)
+    got = cache.notched(1, 1, 2 * n, sig2, ts2, region_idx, ts2[region_idx], fs, freq, [0])  # loop → t~0
+    warm_idx = int(np.searchsorted(ts2, ts2[region_idx] - _NOTCH_WARMUP_S, side="left"))
+    expected = apply_mains_notch(sig2[warm_idx:], fs, freq)[region_idx - warm_idx :]
+    assert np.max(np.abs(got - expected)) < 1e-9  # cold-rebuilt on sig2, not carried from sig1
