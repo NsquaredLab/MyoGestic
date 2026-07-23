@@ -1,36 +1,90 @@
-/* Widget gallery: cards + thumbnail frames.
-   Replaces the earlier blanket width:50% rule. The grid container is
-   provided by Material; we just style the screenshots inside it and
-   tighten the "Other widgets" tail into two columns. */
+/* Widget gallery: responsive card grid + clean thumbnail frames.
 
-/* Uniform thumbnail frame for widget screenshots inside cards.
-   No border / background / shadow on the image itself — the card
-   provides those. We just lock aspect ratio so cards align even when
-   underlying screenshots have different native dimensions. */
-.md-typeset .widget-thumb {
-  width: 100%;
-  max-width: 420px;
-  aspect-ratio: 16 / 10;
-  object-fit: contain;
-  margin: 0.25rem auto 0.5rem;
-  display: block;
+   Gallery-specific rules are scoped with :has(.widget-thumb) so they only
+   affect the gallery — the API landing page shares the .grid.cards class and
+   must keep its own (Material default) card sizing. */
+
+/* Responsive grid — cards ~21rem min, flowing 2–3 per row by width. Replaces
+   the old per-card max-width cap that left single-widget sections half-empty. */
+.md-typeset .grid.cards:has(.widget-thumb) {
+  grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+  gap: 1rem;
 }
 
-/* Cap each card so a section with a single card doesn't stretch to the
-   full content-column width (Material's auto-fill grid makes one card
-   fill its entire row - that's the "huge screenshot" case). 32rem ~
-   512px gives the 420px-capped image room plus the title and caption. */
-.md-typeset .grid.cards > ul > li {
-  max-width: 32rem;
+/* Card: quiet surface, lift on hover — consistent with the API-doc styling. */
+.md-typeset .grid.cards > ul > li:has(.widget-thumb) {
+  margin: 0;
   padding: 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.5rem;
+  background: var(--md-default-bg-color);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
+.md-typeset .grid.cards > ul > li:has(.widget-thumb):hover {
+  border-color: color-mix(in srgb, var(--md-accent-fg-color) 40%, var(--md-default-fg-color--lightest));
+  box-shadow: 0 8px 24px -12px rgba(10, 12, 22, 0.45);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .md-typeset .grid.cards > ul > li:has(.widget-thumb):hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* Card title (the widget name link). */
 .md-typeset .grid.cards > ul > li > p:first-child {
   margin: 0 0 0.5rem;
   font-size: 1.05rem;
 }
 
-/* Two-column compact list for the "Other widgets" tail. */
+/* Thumbnail: the screenshots are now chrome-free widget content, so show them
+   at natural aspect on a surface (no forced 16:10 letterbox), height-capped so
+   card heights stay even. */
+.md-typeset .widget-thumb {
+  width: 100%;
+  height: auto;
+  max-height: 210px;
+  object-fit: contain;
+  display: block;
+  margin: 0.35rem 0 0.75rem;
+  border-radius: 0.375rem;
+  background: var(--md-code-bg-color);
+}
+
+/* Category jump-nav: a pill row at the top (the page hides the sidebar TOC, so
+   this is the only in-page navigation across the ~9 categories). */
+.md-typeset .gallery-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 2.25rem;
+}
+
+/* Markdown wraps the links in a <p>; dissolve it so the links are flex items. */
+.md-typeset .gallery-nav p {
+  display: contents;
+}
+
+.md-typeset .gallery-nav a {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  padding: 0.22rem 0.65rem;
+  border-radius: 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  color: var(--md-default-fg-color--light);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.md-typeset .gallery-nav a:hover {
+  color: var(--md-accent-fg-color);
+  border-color: var(--md-accent-fg-color);
+  background: color-mix(in srgb, var(--md-accent-fg-color) 8%, transparent);
+}
+
+/* "Other widgets" tail: two-column list, collapsing on narrow screens. */
 .md-typeset .other-widgets > ul {
   column-count: 2;
   column-gap: 2rem;
@@ -45,10 +99,4 @@
   .md-typeset .other-widgets > ul {
     column-count: 1;
   }
-}
-
-.md-typeset img[src*="/images/widgets/"]:not(.widget-thumb) {
-  max-width: 420px;
-  display: block;
-  margin: 0.5rem 0;
 }
