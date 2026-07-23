@@ -65,6 +65,66 @@ def apply_mains_notch(data: np.ndarray, fs: float, freq: int) -> np.ndarray:
     return y[:, 0] if was_1d else y
 
 
+class NotchFilter:
+    """Stateful causal mains-notch — the incremental counterpart of :func:`apply_mains_notch`.
+
+    Builds the same [`scipy.signal.iirnotch`][] biquad cascade for ``(fs, freq)`` once and
+    carries each biquad's [`scipy.signal.lfilter`][] state, so successive :meth:`step` calls
+    filter only the *new* samples as if one uninterrupted ``lfilter`` ran over the whole
+    stream. Feeding the same samples through :meth:`step` in *any* chunking yields output
+    identical (within one SciPy build) to :func:`apply_mains_notch` over their concatenation.
+    That equivalence is what lets the signal viewer filter only the newly-arrived samples each
+    frame instead of re-filtering the whole visible window — the notch analog of the M4
+    display-decimation perf fix.
+
+    A non-finite sample would poison the IIR state indefinitely, so a chunk containing any
+    non-finite value **resets the state after processing**: the poisoned output scrolls off and
+    the next clean chunk re-seeds, matching :func:`compute_rms_trace`'s recover-next-window
+    policy rather than corrupting everything downstream.
+    """
+
+    def __init__(self, fs: float, freq: int):
+        self._biquads: list[tuple[np.ndarray, np.ndarray]] = []
+        if freq and np.isfinite(fs) and fs > 0.0:
+            nyquist = fs / 2.0
+            f = float(freq)
+            lines = 0
+            while f < nyquist and lines < _NOTCH_MAX_LINES:  # fundamental + harmonics
+                lines += 1
+                self._biquads.append(iirnotch(f / nyquist, f / _NOTCH_BW_HZ))
+                f += freq
+        self._zf: list[np.ndarray | None] = [None] * len(self._biquads)
+
+    def reset(self) -> None:
+        """Drop the filter state so the next :meth:`step` re-seeds from its first sample."""
+        self._zf = [None] * len(self._biquads)
+
+    def step(self, x: np.ndarray) -> np.ndarray:
+        """Filter new samples through the cascade, carrying state across calls.
+
+        ``x`` is ``(n,)`` or ``(n, n_channels)``; the return has the same shape. The first call
+        (or the first after :meth:`reset`) seeds each biquad from its own first sample, exactly
+        as :func:`apply_mains_notch` does; later calls continue from the retained state.
+        """
+        y = np.ascontiguousarray(x, dtype=np.float64)
+        was_1d = y.ndim == 1
+        if was_1d:
+            y = y[:, None]
+        if not self._biquads or len(y) == 0:
+            return y[:, 0] if was_1d else y
+        clean = bool(np.isfinite(y).all())
+        for i, (b, a) in enumerate(self._biquads):
+            zi = self._zf[i]
+            if zi is None:
+                # Cold: steady-state seed from this stage's first sample (matches
+                # apply_mains_notch's per-channel `lfilter_zi * y[0]` initialization).
+                zi = lfilter_zi(b, a)[:, None] * y[0][None, :]
+            y, self._zf[i] = lfilter(b, a, y, axis=0, zi=zi)
+        if not clean:
+            self.reset()  # a NaN poisoned the state; re-seed on the next clean chunk
+        return y[:, 0] if was_1d else y
+
+
 def apply_display_filter(data: np.ndarray, mode: str, fs: float) -> np.ndarray:
     """Apply visual-only transforms. Recording/model input is unaffected."""
     if mode == "rectify":

@@ -704,3 +704,60 @@ def test_channel_count_change_on_same_stream_is_a_fresh_key():
 
     back = resolve_enabled(v, "emg", 64)
     assert back == {0, 40, 63}
+
+
+class _HumSource:
+    """Source protocol stub: a 50 Hz mains hum plus a 23 Hz signal on every channel."""
+
+    def __init__(self, n_channels: int = 2, fs: float = 2000.0, chunk: int = 100) -> None:
+        self._info = StreamInfo(n_channels=n_channels, fs=fs, dtype=np.dtype("float32"))
+        self._chunk = chunk
+        self._next = 0
+
+    def connect(self) -> StreamInfo:
+        return self._info
+
+    def read(self):
+        n = self._chunk
+        i = np.arange(self._next, self._next + n)
+        self._next += n
+        t = i / self._info.fs
+        sig = (4.0 * np.sin(2 * np.pi * 50 * t) + 2.0 * np.sin(2 * np.pi * 23 * t)).astype(np.float32)
+        data = np.repeat(sig[:, None], self._info.n_channels, axis=1)
+        return data, t.astype(np.float64)
+
+    def disconnect(self) -> None:
+        pass
+
+
+def _rms(a: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.square(a))))
+
+
+def test_build_signal_frame_notch_attenuates_hum_end_to_end():
+    """End-to-end: with the mains notch on, `build_signal_frame`'s drawn trace has the 50 Hz
+    hum scrubbed (and keeps the 23 Hz signal), across a scrolling stream — exercising the
+    stable-snapshot + epoch/sequence + `NotchCache` wiring, not just the cache in isolation."""
+    fs = 2000.0
+    stream = Stream("emg", source=_HumSource(fs=fs, chunk=100), window_ms=100, buffer_ms=5000)
+    stream._acquire_step()  # connect + allocate
+    for _ in range(60):  # ~3 s buffered (>= window + notch warm-up)
+        stream._acquire_step()
+
+    v_off = ViewerState(window=1.0, mains_notch=0)
+    v_on = ViewerState(window=1.0, mains_notch=50)
+    f_off = build_signal_frame(stream, v_off, {0, 1})
+    f_on = build_signal_frame(stream, v_on, {0, 1})
+    assert f_off is not None and f_on is not None
+    assert np.all(np.isfinite(f_on.data))
+    # Drop the far-left settling edge, then the 50 Hz hum should be gone (RMS collapses toward
+    # the 23 Hz component alone: sqrt(2) vs sqrt(10) ~= 0.45).
+    settled = slice(len(f_on.data) // 2, None)
+    assert _rms(f_on.data[settled]) < 0.6 * _rms(f_off.data[settled])
+
+    # Keep scrolling on the SAME cache (the hot path); output stays finite + attenuated.
+    for _ in range(20):
+        stream._acquire_step()
+        f_on = build_signal_frame(stream, v_on, {0, 1})
+    assert f_on is not None and np.all(np.isfinite(f_on.data))
+    assert _rms(f_on.data[len(f_on.data) // 2 :]) < 0.6 * _rms(f_off.data[settled])

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Signal viewer — incremental mains-notch.** The display notch now filters
+  only the newly-arrived samples each frame (persisting the causal IIR state on
+  the viewer) instead of re-filtering the whole visible window, which made the
+  notch "super slow" at 10 kHz. At 10240 Hz × 16 channels this is ~300× less
+  notch computation per frame (~40 ms → ~0.15 ms). The displayed trace is
+  unchanged except for a microscopic improvement at the far-left settling edge:
+  persistent state means an already-drawn sample is never revised as the window
+  scrolls (the old per-frame notch re-seeded a fresh 0.5 s warm-up each frame).
+  `Stream` gained a locked `get_raw_snapshot_stable()` (a copy tagged with an
+  `epoch` + absolute sample sequence) so the stateful filter can tell new
+  samples from seen ones and never tears on a concurrent buffer refresh.
+
 ## [2.3.1] - 2026-07-22
 
 ### Added
