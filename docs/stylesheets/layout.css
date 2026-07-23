@@ -1,9 +1,25 @@
-/* Wider content column on large displays.
-   Material's default .md-grid max-width is ~61rem (976 px) which leaves
-   large empty bands on >1500 px monitors. 1440 px keeps line lengths
-   reasonable for tables and code blocks while filling the viewport. */
+/* Proportional content width on large displays.
+   Material's default .md-grid caps at ~61rem (976 px); on a wide / ultrawide
+   monitor a fixed cap boxes the content into the middle third with big empty
+   gutters. Size the grid to a fraction of the viewport instead (the CSS
+   analogue of the app's Fr layout units), with a ceiling so it stays sane on
+   5K+. Material's sidebars are fixed-width, so the content column absorbs the
+   extra room. Body prose is measure-capped separately below, so only tables,
+   code, and signatures actually use the full width. */
 .md-grid {
-  max-width: 1440px;
+  max-width: min(94vw, 2600px);
+}
+
+/* Readable prose measure. Cap body paragraphs at ~80 characters so long
+   docstring / guide text wraps comfortably (left-aligned) instead of stretching
+   edge-to-edge across the wide column. Table-cell descriptions opt back in to
+   their full column width. */
+.md-typeset p {
+  max-width: 80ch;
+}
+.md-typeset td p,
+.md-typeset th p {
+  max-width: none;
 }
 
 /* Horizontal-overflow guard.
