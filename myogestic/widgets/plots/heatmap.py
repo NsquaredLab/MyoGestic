@@ -32,6 +32,13 @@ class Heatmap:
     widget_id : str | None, optional
         Explicit ImGui id scope. Defaults to ``label`` when omitted, so two
         instances with the same plot label don't collide on ImGui ids.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.widgets import Heatmap
+    >>> heatmap = Heatmap("Confusion", label_fmt="%.2f")
+    >>> heatmap.ui(np.array([[0.9, 0.1], [0.2, 0.8]]))
     """
 
     def __init__(

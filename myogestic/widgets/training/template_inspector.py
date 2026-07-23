@@ -44,6 +44,11 @@ class TemplateInspectorRow:
         Optional scalar shown as a normalised progress bar in
         the energy column. Caller's choice of metric — RMS energy,
         peak amplitude, anything monotonic. ``None`` hides the bar.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import TemplateInspectorRow
+    >>> row = TemplateInspectorRow("session#0", "Fist", accepted=True, energy=0.8)
     """
 
     key: str
@@ -77,6 +82,13 @@ class TemplateInspector:
     label_colors
         Optional ``{label_text: (r, g, b, a)}`` for the colored badge in the
         label column. Unmapped labels render in the default text color.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import TemplateInspector, TemplateInspectorRow
+    >>> rows = [TemplateInspectorRow("session#0", "Fist")]
+    >>> inspector = TemplateInspector("templates")
+    >>> selected = inspector.ui(rows)
     """
 
     def __init__(

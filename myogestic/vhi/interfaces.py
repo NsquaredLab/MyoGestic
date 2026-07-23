@@ -78,6 +78,19 @@ class InterfaceSpec:
     install_root
         The directory we resolved ``process`` from. Carried so the
         "not installed" error can quote it.
+
+    Examples
+    --------
+    >>> from myogestic.vhi.interfaces import InterfaceSpec
+    >>> spec = InterfaceSpec(
+    ...     name="Hand",
+    ...     process=["vhi"],
+    ...     output_stream_name="Pose",
+    ...     n_output_channels=9,
+    ...     output_hz=32.0,
+    ... )
+    >>> spec.launcher()
+    [('Hand', ['vhi'])]
     """
 
     name: str
@@ -310,6 +323,13 @@ def virtual_hand(
     An ``InterfaceSpec`` with the resolved argv, ready to wire into
     ``process_launcher()``. If VHI isn't installed yet, ``launcher()`` raises
     a ``FileNotFoundError`` pointing at ``install_vhi``.
+
+    Examples
+    --------
+    >>> from myogestic.vhi.interfaces import virtual_hand
+    >>> vhi = virtual_hand()
+    >>> vhi.n_output_channels
+    9
     """
     install_root = Path(vhi_path or os.environ.get("VHI_PATH") or _default_install_root())
     launch_mode = launch_mode or os.environ.get("VHI_LAUNCH_MODE", "auto")

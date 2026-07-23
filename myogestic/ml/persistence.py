@@ -27,6 +27,12 @@ def save_pickle(model: Any, path: str | Path) -> str:
     """Persist ``model`` to ``path`` via joblib, creating parent dirs as needed.
 
     Returns the path as a string.
+
+    Examples
+    --------
+    >>> from myogestic.ml import save_pickle
+    >>> save_pickle({"classes": 2}, "models/demo.joblib")
+    'models/demo.joblib'
     """
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -35,5 +41,13 @@ def save_pickle(model: Any, path: str | Path) -> str:
 
 
 def load_pickle(path: str | Path) -> Any:
-    """Inverse of [`save_pickle`][] — load a joblib-saved model."""
+    """Inverse of [`save_pickle`][] — load a joblib-saved model.
+
+    Examples
+    --------
+    >>> from myogestic.ml import load_pickle
+    >>> model = load_pickle("models/demo.joblib")
+    >>> model["classes"]
+    2
+    """
     return joblib.load(str(path))

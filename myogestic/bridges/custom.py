@@ -24,6 +24,13 @@ class CustomBridge(Bridge):
     script
         Path to the Python script to spawn (e.g.
         ``"capture/ultrasound.py"``).
+
+    Examples
+    --------
+    >>> from myogestic.bridges import CustomBridge
+    >>> bridge = CustomBridge("ultrasound", "capture/ultrasound.py")
+    >>> bridge.start()
+    >>> bridge.stop()
     """
 
     def __init__(self, name: str, script: str):

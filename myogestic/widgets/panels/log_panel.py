@@ -22,7 +22,14 @@ if TYPE_CHECKING:
 
 
 class LogPanel:
-    """Render the app log as a scrollable, read-only panel."""
+    """Render the app log as a scrollable, read-only panel.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import LogPanel
+    >>> panel = LogPanel()
+    >>> panel.ui(ctx)
+    """
 
     def __init__(
         self,

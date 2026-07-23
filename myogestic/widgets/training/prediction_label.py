@@ -48,6 +48,12 @@ class PredictionLabel:
     shared `PALETTE` so the same class is
     always the same colour (matches the recording / session-manager
     chips).
+
+    Examples
+    --------
+    >>> from myogestic.widgets import PredictionLabel
+    >>> label = PredictionLabel(pipeline, ["Rest", "Fist"])
+    >>> label.ui()
     """
 
     def __init__(

@@ -41,6 +41,13 @@ class WebCamBridge(Bridge):
         order the OS enumerates them.
     zarr_path
         Where to write the frame array. Created if missing.
+
+    Examples
+    --------
+    >>> from myogestic.bridges import WebCamBridge
+    >>> camera = WebCamBridge("cam", device=0, zarr_path="session/cam.zarr")
+    >>> camera.start()
+    >>> camera.stop()
     """
 
     def __init__(self, name: str, device: int = 0, zarr_path: str = "session/cam.zarr"):

@@ -76,6 +76,11 @@ class FilterParam:
         ImGui display format; a sensible default is used per ``kind``.
     log
         Logarithmic slider (float only) — handy for wide ranges like ``beta``.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import FilterParam
+    >>> parameter = FilterParam("sigma", "sigma", 0.1, 10.0, 1.0)
     """
 
     key: str
@@ -115,6 +120,12 @@ class FilterSpec:
         Optional ``delay(hz, params) -> float`` returning the filter's
         latency estimate in **milliseconds** — shown live in the panel title.
         ``None`` (e.g. a passthrough) shows no delay.
+
+    Examples
+    --------
+    >>> from myogestic.outputs.filters import IdentityFilter
+    >>> from myogestic.widgets import FilterSpec
+    >>> spec = FilterSpec(key="identity", name="Identity", build=lambda **_: IdentityFilter())
     """
 
     key: str
@@ -218,6 +229,12 @@ class FilterProcessor:
     widget_id
         ImGui id scope — give each instance a unique value if you render more
         than one.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import FilterProcessor
+    >>> processor = FilterProcessor(default="identity")
+    >>> processor.ui()
     """
 
     def __init__(
@@ -419,6 +436,12 @@ class PostProcessor(FilterProcessor):
     The three built-in filters, a ``"POST-PROCESSING"`` header, and
     ``one_euro`` selected by default. For a custom palette, use
     [`FilterProcessor`][] directly.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import PostProcessor
+    >>> processor = PostProcessor(hz=20.0)
+    >>> processor.ui()
     """
 
     def __init__(self, hz: float = 50.0, *, widget_id: str = "output_filter") -> None:

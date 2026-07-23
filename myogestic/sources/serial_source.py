@@ -20,6 +20,13 @@ class SerialSource:
     Each frame is n_channels float32 values (little-endian).
     The source self-paces via serial blocking reads; timestamps
     are stamped on arrival with mne_lsl.lsl.local_clock().
+
+    Examples
+    --------
+    >>> from myogestic import Stream
+    >>> from myogestic.sources.serial_source import SerialSource
+    >>> source = SerialSource("/dev/ttyACM0", 115200, 8, 2000.0)
+    >>> stream = Stream("emg", source, window_ms=1000)
     """
 
     def __init__(self, port: str, baud: int, n_channels: int, fs: float):

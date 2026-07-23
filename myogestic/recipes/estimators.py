@@ -47,7 +47,13 @@ def _require(module: str, extra: str, pip_name: str | None = None) -> Any:
 
 
 def catboost_classifier(**kwargs: Any) -> Any:
-    """CatBoostClassifier with quiet defaults."""
+    """CatBoostClassifier with quiet defaults.
+
+    Examples
+    --------
+    >>> from myogestic.recipes.estimators import catboost_classifier
+    >>> model = catboost_classifier(iterations=100)
+    """
     cb = _require("catboost", "examples")
     kwargs.setdefault("verbose", 0)
     kwargs.setdefault("allow_writing_files", False)
@@ -55,7 +61,13 @@ def catboost_classifier(**kwargs: Any) -> Any:
 
 
 def catboost_regressor(**kwargs: Any) -> Any:
-    """CatBoostRegressor with quiet defaults."""
+    """CatBoostRegressor with quiet defaults.
+
+    Examples
+    --------
+    >>> from myogestic.recipes.estimators import catboost_regressor
+    >>> model = catboost_regressor(iterations=200, loss_function="MultiRMSE")
+    """
     cb = _require("catboost", "examples")
     kwargs.setdefault("verbose", 0)
     kwargs.setdefault("allow_writing_files", False)
@@ -66,19 +78,37 @@ def catboost_regressor(**kwargs: Any) -> Any:
 
 
 def sklearn_classifier(**kwargs: Any) -> Any:
-    """RandomForestClassifier (sklearn)."""
+    """RandomForestClassifier (sklearn).
+
+    Examples
+    --------
+    >>> from myogestic.recipes.estimators import sklearn_classifier
+    >>> model = sklearn_classifier(n_estimators=200, random_state=0)
+    """
     skl = _require("sklearn.ensemble", "examples", pip_name="scikit-learn")
     return skl.RandomForestClassifier(**kwargs)
 
 
 def sklearn_regressor(**kwargs: Any) -> Any:
-    """RandomForestRegressor (sklearn)."""
+    """RandomForestRegressor (sklearn).
+
+    Examples
+    --------
+    >>> from myogestic.recipes.estimators import sklearn_regressor
+    >>> model = sklearn_regressor(n_estimators=200, random_state=0)
+    """
     skl = _require("sklearn.ensemble", "examples", pip_name="scikit-learn")
     return skl.RandomForestRegressor(**kwargs)
 
 
 def sklearn_extra_trees_classifier(**kwargs: Any) -> Any:
-    """ExtraTreesClassifier (sklearn). Defaults n_estimators=300, n_jobs=-1."""
+    """ExtraTreesClassifier (sklearn). Defaults n_estimators=300, n_jobs=-1.
+
+    Examples
+    --------
+    >>> from myogestic.recipes.estimators import sklearn_extra_trees_classifier
+    >>> model = sklearn_extra_trees_classifier()
+    """
     skl = _require("sklearn.ensemble", "examples", pip_name="scikit-learn")
     kwargs.setdefault("n_estimators", 300)
     kwargs.setdefault("random_state", 0)
@@ -87,7 +117,13 @@ def sklearn_extra_trees_classifier(**kwargs: Any) -> Any:
 
 
 def sklearn_extra_trees_regressor(**kwargs: Any) -> Any:
-    """ExtraTreesRegressor (sklearn). Same defaults as the classifier."""
+    """ExtraTreesRegressor (sklearn). Same defaults as the classifier.
+
+    Examples
+    --------
+    >>> from myogestic.recipes.estimators import sklearn_extra_trees_regressor
+    >>> model = sklearn_extra_trees_regressor()
+    """
     skl = _require("sklearn.ensemble", "examples", pip_name="scikit-learn")
     kwargs.setdefault("n_estimators", 300)
     kwargs.setdefault("random_state", 0)
@@ -96,7 +132,13 @@ def sklearn_extra_trees_regressor(**kwargs: Any) -> Any:
 
 
 def sklearn_logistic_classifier(**kwargs: Any) -> Any:
-    """Multinomial LogisticRegression (sklearn). max_iter=1000 default."""
+    """Multinomial LogisticRegression (sklearn). max_iter=1000 default.
+
+    Examples
+    --------
+    >>> from myogestic.recipes.estimators import sklearn_logistic_classifier
+    >>> model = sklearn_logistic_classifier()
+    """
     skl = _require("sklearn.linear_model", "examples", pip_name="scikit-learn")
     kwargs.setdefault("max_iter", 1000)
     return skl.LogisticRegression(**kwargs)
@@ -144,10 +186,29 @@ class _MeanRegressor:
 
 
 def constant_classifier(class_index: int = 0) -> _ConstantClassifier:
-    """Estimator that always predicts ``class_index``. No deps."""
+    """Estimator that always predicts ``class_index``. No deps.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.recipes.estimators import constant_classifier
+    >>> model = constant_classifier(1)
+    >>> model.predict(np.zeros((2, 3), dtype=np.float32)).tolist()
+    [1, 1]
+    """
     return _ConstantClassifier(class_index=class_index)
 
 
 def mean_regressor() -> _MeanRegressor:
-    """Estimator that predicts the mean of training targets. No deps."""
+    """Estimator that predicts the mean of training targets. No deps.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.recipes.estimators import mean_regressor
+    >>> model = mean_regressor()
+    >>> _ = model.fit(np.zeros((2, 1), dtype=np.float32), np.array([1.0, 3.0]))
+    >>> model.predict(np.zeros((2, 1), dtype=np.float32)).tolist()
+    [2.0, 2.0]
+    """
     return _MeanRegressor()

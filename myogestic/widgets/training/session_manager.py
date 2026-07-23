@@ -33,6 +33,12 @@ class SessionManager:
         @app.ui
         def ui(ctx):
             pipeline.training_data = sessions.ui()
+
+    Examples
+    --------
+    >>> from myogestic.widgets import SessionManager
+    >>> manager = SessionManager("sessions", class_names=["Rest", "Fist"])
+    >>> training_data = manager.ui()
     """
 
     def __init__(

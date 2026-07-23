@@ -30,6 +30,14 @@ class Bridge:
     command
         argv passed to ``subprocess.Popen``. Stdout and stderr
         are captured to PIPE; nothing reads them by default.
+
+    Examples
+    --------
+    >>> import sys
+    >>> from myogestic.bridges import Bridge
+    >>> bridge = Bridge("capture", [sys.executable, "capture.py"])
+    >>> bridge.start()
+    >>> bridge.stop()
     """
 
     def __init__(self, name: str, command: list[str]):

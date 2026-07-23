@@ -74,6 +74,12 @@ class SignalViewer:
         overwritten. ``None`` (default) falls back to
         `resolve_initial`'s
         policy: every channel when ``n_channels <= 32``, else the first 16.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import SignalViewer
+    >>> viewer = SignalViewer("emg", selectable=True)
+    >>> viewer.ui(ctx)
     """
 
     def __init__(

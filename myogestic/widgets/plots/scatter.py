@@ -27,6 +27,13 @@ class Scatter2D:
     widget_id : str | None, optional
         Explicit ImGui id scope. Defaults to ``label`` when omitted, so two
         instances with the same plot label don't collide on ImGui ids.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.widgets import Scatter2D
+    >>> scatter = Scatter2D("Embedding")
+    >>> scatter.ui(np.array([[0.0, 0.0], [1.0, 1.0]]))
     """
 
     def __init__(
@@ -107,6 +114,13 @@ class Scatter3D:
     widget_id : str | None, optional
         Explicit ImGui id scope. Defaults to ``label`` when omitted, so two
         instances with the same plot label don't collide on ImGui ids.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.widgets import Scatter3D
+    >>> scatter = Scatter3D("Embedding")
+    >>> scatter.ui(np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]))
     """
 
     def __init__(

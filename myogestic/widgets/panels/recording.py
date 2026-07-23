@@ -92,6 +92,16 @@ class RecordingControls:
     with the live ``ctx`` each frame. Pass ``app.start_recording`` /
     ``app.stop_recording`` for ``on_record`` / ``on_stop`` if you're using
     the standard App.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import RecordingControls
+    >>> controls = RecordingControls(
+    ...     ["Rest", "Fist"],
+    ...     on_record=app.start_recording,
+    ...     on_stop=app.stop_recording,
+    ... )
+    >>> controls.ui(ctx)
     """
 
     def __init__(

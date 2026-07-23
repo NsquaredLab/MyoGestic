@@ -24,6 +24,12 @@ class AppState(StrEnum):
     `Context.state` is a bare `str` so extensions can introduce their own states
     without subclassing. Each module validates transitions within its own
     namespace only.
+
+    Examples
+    --------
+    >>> from myogestic import AppState
+    >>> AppState.RECORDING.value
+    'recording'
     """
 
     IDLE = "idle"
@@ -63,6 +69,14 @@ class Context:
 
     Extensions may add own fields dynamically on the owning `App`, but
     `Context` itself is core-only.
+
+    Examples
+    --------
+    >>> from myogestic import Context
+    >>> ctx = Context()
+    >>> ctx.status_message = "Ready"
+    >>> ctx.status_message
+    'Ready'
     """
 
     streams: dict[str, Stream] = field(default_factory=dict)
@@ -128,6 +142,15 @@ class App:
         ``$MYOGESTIC_UI_SCALE`` then ``1.0``. The env var, if set,
         overrides this - a per-machine display fix beats the example's
         value. Clamped to ``[0.5, 2.0]``. Has no effect when ``theme=False``.
+
+    Examples
+    --------
+    >>> from myogestic import App
+    >>> app = App("EMG demo")
+    >>> @app.ui
+    ... def ui(ctx):
+    ...     pass
+    >>> app.run()
     """
 
     def __init__(
