@@ -26,6 +26,14 @@ def iter_labeled_windows(
     interval each label covers (this label's timestamp to next label's
     timestamp), and chops that interval into fixed-size windows. Works
     for folders and ``.session.zip`` sessions.
+
+    Examples
+    --------
+    >>> from myogestic.session import iter_labeled_windows
+    >>> for window, timestamps, class_index in iter_labeled_windows(
+    ...     ["sessions/demo.session.zip"], "emg", 200, 100
+    ... ):
+    ...     print(window.shape, class_index)
     """
     if window_ms <= 0:
         raise ValueError(f"window_ms must be > 0 (got {window_ms})")
@@ -96,6 +104,14 @@ def iter_aligned_windows(
     For each primary window, find the nearest sample in every aligned
     stream at the window midpoint and average ``n_alignment_samples``
     around that index.
+
+    Examples
+    --------
+    >>> from myogestic.session import iter_aligned_windows
+    >>> for window, aligned, timestamps in iter_aligned_windows(
+    ...     ["sessions/demo.session.zip"], "emg", ["vhi_control"], 200, 50
+    ... ):
+    ...     target = aligned["vhi_control"]
     """
     if window_ms <= 0:
         raise ValueError(f"window_ms must be > 0 (got {window_ms})")

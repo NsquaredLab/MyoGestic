@@ -18,6 +18,13 @@ def open_session_store(path: str | Path) -> Session:
     Folder sessions keep the existing layout and use
     `zarr.open_array(str(path / "<stream>.zarr"), mode="r")`. Zip sessions use
     a `zarr.storage.ZipStore` and read the same array paths inside the archive.
+
+    Examples
+    --------
+    >>> from myogestic.session import open_session_store
+    >>> session = open_session_store("sessions/demo.session.zip")
+    >>> info = session.stream_info("emg")
+    >>> session.close()
     """
     p = Path(path)
     zip_store = None

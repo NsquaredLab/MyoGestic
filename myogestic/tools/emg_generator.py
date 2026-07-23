@@ -105,6 +105,13 @@ def control_outlet(name: str = DEFAULT_CONTROL_STREAM) -> StreamOutlet:
 
     Matches the protocol the ``--control`` flag on
     ``python -m myogestic.tools.emg_generator`` listens for.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.tools.emg_generator import control_outlet
+    >>> outlet = control_outlet()
+    >>> outlet.push_sample(np.array([1.0], dtype=np.float32))
     """
     return StreamOutlet(
         sinfo=StreamInfo(

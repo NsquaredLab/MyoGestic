@@ -62,6 +62,13 @@ class FeatureSelector:
     ------
     ValueError
         if a name in ``default`` isn't in ``features``.
+
+    Examples
+    --------
+    >>> from myogestic.recipes.features import rms
+    >>> from myogestic.widgets import FeatureSelector
+    >>> selector = FeatureSelector({"RMS": rms}, default=["RMS"])
+    >>> selector.ui()
     """
 
     def __init__(

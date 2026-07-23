@@ -179,7 +179,14 @@ def _render_pipeline_panel(
 
 
 class TrainButton:
-    """Train button — calls [`Pipeline.start_training`][] on click."""
+    """Train button — calls [`Pipeline.start_training`][] on click.
+
+    Examples
+    --------
+    >>> from myogestic.ml.widgets import TrainButton
+    >>> button = TrainButton(pipeline)
+    >>> button.ui()
+    """
 
     def __init__(self, pipeline: Pipeline, *, size: tuple[float, float] = (92, 0)) -> None:
         self._pipeline = pipeline
@@ -196,6 +203,12 @@ class PredictButton:
     Enabled to start only when the state is ``idle``, a model is loaded, and
     both the extract and predict callbacks are wired; shows a Stop button
     while predicting and is disabled otherwise.
+
+    Examples
+    --------
+    >>> from myogestic.ml.widgets import PredictButton
+    >>> button = PredictButton(pipeline)
+    >>> button.ui()
     """
 
     def __init__(self, pipeline: Pipeline, *, size: tuple[float, float] = (92, 0)) -> None:
@@ -212,6 +225,12 @@ class TrainingLog:
 
     The autoscroll/popout *toggles* aren't drawn here — they're part of
     [`PipelinePanel`][]'s control row so they sit next to Train/Predict.
+
+    Examples
+    --------
+    >>> from myogestic.ml.widgets import TrainingLog
+    >>> log = TrainingLog(pipeline)
+    >>> log.ui()
     """
 
     def __init__(self, pipeline: Pipeline, *, height: float = 100.0, widget_id: str = "ml") -> None:
@@ -228,6 +247,12 @@ class SaveModelButton:
     """Save button — writes the model to ``path`` via ``pipeline.save_model``.
 
     Disabled unless both ``pipeline.save_model`` and ``pipeline.model`` are set.
+
+    Examples
+    --------
+    >>> from myogestic.ml.widgets import SaveModelButton
+    >>> button = SaveModelButton(pipeline, "models/demo.joblib")
+    >>> button.ui()
     """
 
     def __init__(
@@ -246,6 +271,12 @@ class LoadModelButton:
     """Load button — reads a model from ``path`` via ``pipeline.load_model``.
 
     Disabled unless ``pipeline.load_model`` is set.
+
+    Examples
+    --------
+    >>> from myogestic.ml.widgets import LoadModelButton
+    >>> button = LoadModelButton(pipeline, "models/demo.joblib")
+    >>> button.ui()
     """
 
     def __init__(
@@ -266,6 +297,12 @@ class PipelinePanel:
     Matches the visual style of [`RecordingControls`][myogestic.widgets.RecordingControls],
     [`SessionManager`][myogestic.widgets.SessionManager], and [`PostProcessor`][myogestic.widgets.PostProcessor]. The log inherits the
     same autoscroll + popout UX as the process launcher's log.
+
+    Examples
+    --------
+    >>> from myogestic.ml.widgets import PipelinePanel
+    >>> panel = PipelinePanel(pipeline)
+    >>> panel.ui()
     """
 
     def __init__(

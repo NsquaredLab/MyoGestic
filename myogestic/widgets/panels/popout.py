@@ -84,6 +84,11 @@ def popout_panel(
     -----
     When `App(docking=True)` is not active, this just runs `gui_fn()`
     inline so the call site stays the same.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import panel_header, popout_panel
+    >>> popout_panel("Details", lambda: panel_header("Details"))
     """
     from myogestic import core as _core  # late import → no circular
 

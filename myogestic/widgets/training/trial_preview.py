@@ -31,7 +31,15 @@ from myogestic.widgets.signals.transforms import apply_display_filter
 
 
 class TrialPreview:
-    """Render stacked multi-channel waveform with optional band overlay."""
+    """Render stacked multi-channel waveform with optional band overlay.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.widgets import TrialPreview
+    >>> preview = TrialPreview(widget_id="trial")
+    >>> preview.ui(np.zeros((8, 400), dtype=np.float32), fs=2000.0)
+    """
 
     def __init__(
         self,

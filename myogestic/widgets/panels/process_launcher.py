@@ -129,6 +129,13 @@ class ProcessLauncher:
     ``widget_id`` (auto-generated from the process names when empty). The
     live subprocess registry is app-global, so processes are still killed on
     exit (``atexit`` + ``App.run`` cleanup) regardless of instance lifetime.
+
+    Examples
+    --------
+    >>> import sys
+    >>> from myogestic.widgets import ProcessLauncher
+    >>> launcher = ProcessLauncher([("Worker", [sys.executable, "worker.py"])])
+    >>> launcher.ui()
     """
 
     def __init__(

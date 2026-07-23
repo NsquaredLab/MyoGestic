@@ -16,6 +16,13 @@ class ReplaySource:
 
     Accepts either a folder-format session or a `.session.zip` archive —
     delegates to `open_session_store` so both layouts work transparently.
+
+    Examples
+    --------
+    >>> from myogestic import Stream
+    >>> from myogestic.sources import ReplaySource
+    >>> source = ReplaySource("sessions/demo.session.zip", "emg")
+    >>> stream = Stream("emg", source, window_ms=1000)
     """
 
     def __init__(self, session_path: str, stream_name: str, speed: float = 1.0):

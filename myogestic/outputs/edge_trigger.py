@@ -52,6 +52,16 @@ class EdgeTrigger[T]:
     CPython's GIL no lock is needed; a race between the two callers can at worst
     cost one extra suppressed-or-fired callback — harmless for the intended uses
     (RPC dedup, audio-cue gating, robot-movement commands).
+
+    Examples
+    --------
+    >>> from myogestic import EdgeTrigger
+    >>> fired = []
+    >>> trigger = EdgeTrigger(fired.append)
+    >>> [trigger.fire_if_changed(v) for v in ("Rest", "Rest", "Fist")]
+    [True, False, True]
+    >>> fired
+    ['Rest', 'Fist']
     """
 
     __slots__ = ("_callback", "_n_stable_ticks", "_state")

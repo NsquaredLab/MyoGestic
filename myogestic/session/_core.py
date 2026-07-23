@@ -150,6 +150,13 @@ class LabelEvent:
     class_index
         Index into the session's ``class_names`` list.
         ``-1`` is the unlabeled sentinel (the iterators skip it).
+
+    Examples
+    --------
+    >>> from myogestic.session import LabelEvent
+    >>> event = LabelEvent(timestamp=123.0, class_index=1)
+    >>> event.class_index
+    1
     """
 
     timestamp: float
@@ -158,7 +165,18 @@ class LabelEvent:
 
 @dataclass
 class Recording:
-    """A single labeled trial, extracted from a Session."""
+    """A single labeled trial, extracted from a Session.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.session import Recording
+    >>> recording = Recording(
+    ...     1, "Fist", np.zeros((3, 2), dtype=np.float32), np.arange(3, dtype=np.float64)
+    ... )
+    >>> (recording.class_name, recording.data.shape)
+    ('Fist', (3, 2))
+    """
 
     class_index: int
     class_name: str
@@ -198,6 +216,12 @@ class Session:
         Parent directory; the session creates a
         timestamp-named subdirectory inside. Default ``"sessions"``
         (created if missing).
+
+    Examples
+    --------
+    >>> from myogestic.session import Session
+    >>> session = Session("sessions")
+    >>> session.add_label(0, timestamp=123.0)
     """
 
     def __init__(self, base_path: str = "sessions"):

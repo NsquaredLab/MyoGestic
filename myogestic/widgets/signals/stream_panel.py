@@ -47,6 +47,12 @@ class StreamPanel:
         auto-populate available targets as inline connect buttons.
     show_header
         Render a uniform ``panel_header`` above the rows.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import StreamPanel
+    >>> panel = StreamPanel()
+    >>> panel.ui(ctx)
     """
 
     def __init__(self, *, selectable: bool = True, show_header: bool = True) -> None:

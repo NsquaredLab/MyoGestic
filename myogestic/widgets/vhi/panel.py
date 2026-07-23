@@ -31,15 +31,6 @@ if TYPE_CHECKING:
 class VhiMovementPanel:
     """Stateful widget — instantiate once at module level, call ``.ui()`` per frame.
 
-    Example::
-
-        panel = VhiMovementPanel(vhi_client)
-
-        @app.ui
-        def ui(ctx):
-            with grid[8, 0]:
-                panel.ui()
-
     Parameters
     ----------
     client
@@ -54,6 +45,12 @@ class VhiMovementPanel:
         refreshes. Default 1 s.
     title
         Panel header text rendered above the button grid.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import VhiMovementPanel
+    >>> panel = VhiMovementPanel(vhi_client)
+    >>> panel.ui()
     """
 
     __slots__ = ("_cache", "_client", "_on_movement", "_min_interval_s", "_title")

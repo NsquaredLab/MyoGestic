@@ -175,6 +175,11 @@ def panel_header(title: str, icon: str | None = None, *, reserve: float = 0.0) -
     is shown. Pass ``reserve`` to leave that many pixels for controls placed
     after the header on the same row (e.g. a right-aligned button), so the
     *title* collapses instead of pushing those controls off the panel.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import panel_header
+    >>> panel_header("MODEL")
     """
     muted = imgui.get_style().color_(imgui.Col_.text_disabled)
     imgui.push_style_color(imgui.Col_.text, muted)

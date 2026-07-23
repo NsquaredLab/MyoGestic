@@ -36,6 +36,12 @@ class AppLogo:
 
     Thin wrapper over [`Image`][myogestic.widgets.Image] pinned to the shipped
     wordmark. See that widget for the fit/centre behaviour.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import AppLogo
+    >>> logo = AppLogo(max_size=240)
+    >>> logo.ui()
     """
 
     def __init__(

@@ -41,6 +41,12 @@ class RawSignalViewer:
 
     Construct once with the stream name (+ optional size / channel height),
     then call [`ui`][] with the live ``ctx`` each frame.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import RawSignalViewer
+    >>> viewer = RawSignalViewer("emg")
+    >>> viewer.ui(ctx)
     """
 
     def __init__(

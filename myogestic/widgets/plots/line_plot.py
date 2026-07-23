@@ -25,6 +25,13 @@ class LinePlot:
     widget_id : str | None, optional
         Explicit ImGui id scope. Defaults to ``label`` when omitted, so two
         instances with the same plot label don't collide on ImGui ids.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.widgets import LinePlot
+    >>> plot = LinePlot("Channels")
+    >>> plot.ui(np.array([[0.0, 1.0], [1.0, 0.0]]))
     """
 
     def __init__(

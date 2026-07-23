@@ -63,7 +63,14 @@ def _validate_value(value: object, kind: str) -> float:
 
 @dataclass(frozen=True, slots=True)
 class Px:
-    """Fixed pixel size. ``Px(300)`` means "exactly 300 px wide/tall"."""
+    """Fixed pixel size. ``Px(300)`` means "exactly 300 px wide/tall".
+
+    Examples
+    --------
+    >>> from myogestic import Px
+    >>> Px(300)
+    Px(300)
+    """
 
     value: float
 
@@ -82,6 +89,12 @@ class Fr:
     tracks are subtracted". Multiple ``Fr`` entries split the remainder
     proportionally to their values, so ``[Fr(1), Fr(2)]`` splits leftover
     space 1:2.
+
+    Examples
+    --------
+    >>> from myogestic import Fr
+    >>> Fr(2)
+    Fr(2)
     """
 
     value: float
@@ -94,6 +107,13 @@ class Fr:
 
 
 Track = Px | Fr
+"""A single grid track size: either a fixed [`Px`][] or a fractional [`Fr`][].
+
+Examples
+--------
+>>> from myogestic.grid import Px, Track
+>>> track: Track = Px(300)
+"""
 
 
 def _coerce(spec: object, axis: str, index: int) -> Track:
@@ -149,6 +169,13 @@ class Grid:
         if any track value is non-finite or negative.
     TypeError
         if a track entry isn't Px, Fr, or a number.
+
+    Examples
+    --------
+    >>> from myogestic import Fr, Grid, Px
+    >>> grid = Grid(2, 3, row_height=[Px(120), Fr(1)])
+    >>> (grid.rows, grid.cols)
+    (2, 3)
     """
 
     def __init__(

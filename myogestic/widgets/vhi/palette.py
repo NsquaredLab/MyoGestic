@@ -65,7 +65,15 @@ _DOT_BAD = DANGER
 
 @dataclass(frozen=True)
 class VhiStateSnapshot:
-    """An immutable, lock-free view of ``VhiStateCache`` for one UI frame."""
+    """An immutable, lock-free view of ``VhiStateCache`` for one UI frame.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import VhiStateCache, VhiStateSnapshot
+    >>> snapshot: VhiStateSnapshot = VhiStateCache(movements=["Rest"]).snapshot()
+    >>> snapshot.movements
+    ('Rest',)
+    """
 
     movements: tuple[str, ...]
     current_movement: str
@@ -77,7 +85,14 @@ class VhiStateSnapshot:
 
 @dataclass
 class VhiStateCache:
-    """Last-known VHI state, refreshed off-thread. Use ``snapshot()`` to read."""
+    """Last-known VHI state, refreshed off-thread. Use ``snapshot()`` to read.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import VhiStateCache
+    >>> state = VhiStateCache()
+    >>> snapshot = state.snapshot()
+    """
 
     movements: list[str] = field(default_factory=list)
     current_movement: str = ""
@@ -125,6 +140,12 @@ def request_vhi_state_refresh(
     loop.) Once connected it polls every ``min_interval_s`` again. An explicit
     ``force`` refresh ignores the interval and uses the client's full deadline
     (a cold connect can be slower than ``probe_timeout_s``).
+
+    Examples
+    --------
+    >>> from myogestic.widgets import VhiStateCache, request_vhi_state_refresh
+    >>> state = VhiStateCache()
+    >>> request_vhi_state_refresh(vhi_client, state)
     """
     now = time.monotonic()
     with cache.lock:
@@ -185,6 +206,13 @@ def vhi_movement_palette(
 
     The grid uses as many columns as fit the panel width, so it reflows when
     the panel is resized; the button matching ``current_movement`` is highlighted.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import vhi_movement_palette
+    >>> vhi_movement_palette(
+    ...     ["Rest", "Fist"], connected=True, on_movement=vhi_client.set_movement
+    ... )
     """
     panel_header(title, fa.ICON_FA_HAND)
 

@@ -77,6 +77,12 @@ class PipelineState(StrEnum):
         The predict thread is calling ``extract`` +
         ``predict`` each tick at ``predict_hz`` and writing the
         result to ``pipeline.predictions``.
+
+    Examples
+    --------
+    >>> from myogestic.ml import PipelineState
+    >>> PipelineState.PREDICTING.value
+    'predicting'
     """
 
     TRAINING = "training"
@@ -97,6 +103,15 @@ class Pipeline:
     predict_hz
         Maximum predict-loop tick rate. Set to 0 or negative to remove
         the cap (run at full speed).
+
+    Examples
+    --------
+    >>> from myogestic import App
+    >>> from myogestic.ml import Pipeline
+    >>> pipeline = Pipeline(App("EMG demo"), predict_hz=20)
+    >>> @pipeline.extract
+    ... def extract(windows):
+    ...     return windows["emg"].mean(axis=1)
     """
 
     def __init__(self, app: App, predict_hz: float = 50.0):

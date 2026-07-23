@@ -33,7 +33,16 @@ import numpy as np
 
 
 class VectorFilter(Protocol):
-    """Stateful per-vector filter. Call once per output tick."""
+    """Stateful per-vector filter. Call once per output tick.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.outputs.filters import IdentityFilter, VectorFilter
+    >>> filter_: VectorFilter = IdentityFilter()
+    >>> filter_(np.array([0.0, 1.0], dtype=np.float32)).tolist()
+    [0.0, 1.0]
+    """
 
     def reset(self) -> None:
         """Clear internal state (history, previous sample)."""
@@ -61,7 +70,16 @@ class VectorFilter(Protocol):
 
 
 class IdentityFilter:
-    """Passthrough — useful as a baseline or "off" toggle."""
+    """Passthrough — useful as a baseline or "off" toggle.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.outputs.filters import IdentityFilter
+    >>> filter_ = IdentityFilter()
+    >>> filter_(np.array([0.0, 1.0], dtype=np.float32)).tolist()
+    [0.0, 1.0]
+    """
 
     def reset(self) -> None:
         """No-op — the passthrough filter holds no state."""
@@ -81,6 +99,15 @@ class GaussianFilter:
 
     Inputs must be 1-D arrays of consistent length (raises on first
     dimension mismatch).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.outputs.filters import GaussianFilter
+    >>> filter_ = GaussianFilter(n_vectors=2, sigma=1.0)
+    >>> _ = filter_(np.array([0.0], dtype=np.float32))
+    >>> round(float(filter_(np.array([1.0], dtype=np.float32))[0]), 3)
+    0.622
     """
 
     def __init__(self, n_vectors: int = 5, sigma: float = 1.0):
@@ -142,6 +169,15 @@ class OneEuroFilter:
         Velocity-to-cutoff gain. Larger → more responsive on fast moves.
     derivative_cutoff_hz
         Cutoff (Hz) for the velocity smoother.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.outputs.filters import OneEuroFilter
+    >>> filter_ = OneEuroFilter(hz=1.0, min_cutoff_hz=1.0, beta=0.0)
+    >>> _ = filter_(np.array([0.0], dtype=np.float32))
+    >>> round(float(filter_(np.array([1.0], dtype=np.float32))[0]), 3)
+    0.863
     """
 
     def __init__(
@@ -235,6 +271,14 @@ def make_filter(name: str, hz: float = 50.0, **kwargs: Any) -> VectorFilter:
         if the name isn't recognized.
     TypeError
         if a kwarg is unknown for the chosen filter.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.outputs.filters import make_filter
+    >>> filter_ = make_filter("identity")
+    >>> filter_(np.array([0.0, 1.0], dtype=np.float32)).tolist()
+    [0.0, 1.0]
     """
     n = name.lower()
     if n == "identity":
@@ -291,5 +335,13 @@ def chain(*filters: VectorFilter) -> VectorFilter:
     frames (the stateful smoothers stack a history and reject a shape that
     varies over time). For output post-processing keep every filter
     shape-preserving — the sink (e.g. VHI) expects a fixed-size control vector.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from myogestic.outputs.filters import IdentityFilter, chain
+    >>> filter_ = chain(IdentityFilter(), IdentityFilter())
+    >>> filter_(np.array([0.0, 1.0], dtype=np.float32)).tolist()
+    [0.0, 1.0]
     """
     return _FilterChain(filters)

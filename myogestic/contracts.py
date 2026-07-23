@@ -35,6 +35,17 @@ class TrainingData:
     classes
         Active class indices to include. Pass as the ``classes=`` arg
         to ``iter_labeled_windows`` / ``iter_aligned_windows``.
+
+    Examples
+    --------
+    >>> from myogestic import TrainingData
+    >>> data = TrainingData(
+    ...     paths=["sessions/demo.session.zip"],
+    ...     class_names=["Rest"],
+    ...     classes={0},
+    ... )
+    >>> data.is_empty
+    False
     """
 
     paths: list[str] = field(default_factory=list)

@@ -32,6 +32,12 @@ class Image:
     higher-level ``image_from_asset(..., size=...)`` helper, which in this
     version of hello_imgui ignored the explicit size and rendered at the
     natural pixel dimensions of the image.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import Image
+    >>> image = Image("app_settings/icon.png", max_size=256)
+    >>> image.ui()
     """
 
     def __init__(
