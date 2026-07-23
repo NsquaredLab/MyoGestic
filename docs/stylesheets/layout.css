@@ -14,9 +14,12 @@
    docstring / guide text wraps comfortably (left-aligned) instead of stretching
    edge-to-edge across the wide column. Table-cell descriptions opt back in to
    their full column width. */
-.md-typeset p {
+.md-typeset p:not(:has(img, svg)) {
   max-width: 80ch;
 }
+/* Image/SVG-wrapping paragraphs (logo, diagrams, screenshots) size to the media
+   and centre it — the 80ch cap must not shrink them (it would strand a centred
+   image left). Table-cell descriptions also opt back in to full column width. */
 .md-typeset td p,
 .md-typeset th p {
   max-width: none;
