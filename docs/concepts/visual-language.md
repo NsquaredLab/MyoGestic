@@ -1,0 +1,111 @@
+# Visual language
+
+[Design principles](design-principles.md) is the *code* contract — no base classes, one name one
+meaning, a public API that fits on a page. This page is the *visual* one: the small set of tokens
+and rules every widget already follows, so a new control looks like it belongs instead of like a
+stock ImGui default.
+
+Everything here exists in [`myogestic/_theme.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/myogestic/_theme.py)
+and [`myogestic/widgets/common.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/myogestic/widgets/common.py).
+Reach for the helper; don't re-derive the styling inline.
+
+## Type
+
+| Role | Face | Helper |
+| --- | --- | --- |
+| Hero / display text | Instrument Serif | `display_font()` |
+| Console, logs, anything columnar | IBM Plex Mono | `mono_font()` |
+| Everything else | the theme's UI face | — |
+
+Size is never hardcoded against pixels: the global scale resolves
+`$MYOGESTIC_UI_SCALE` → `App(ui_scale=…)` → `1.0` (`set_ui_scale`), so a control sized in
+`imgui.get_frame_height()` units follows the user's display and a control sized in raw pixels
+does not.
+
+## Colour
+
+- **`PALETTE`** — ten categorical colours, for *series identity* (channel 0 vs channel 1). Never
+  use it as a ramp: adjacent entries carry no ordering.
+- **Continuous data gets a perceptually-uniform ramp** — viridis is `Heatmap`'s default precisely
+  because ImPlot's stock "Deep" is categorical and misleads on a heatmap.
+- **Semantic tone comes from the theme**, not literals: `Col_.text_disabled` for muted text,
+  `Col_.child_bg` for cell surfaces. That is what keeps light and dark themes honest.
+
+## Panels
+
+`panel_header(title, icon)` renders the one true panel title: **uppercased, muted
+(`text_disabled`), optional Font-Awesome icon, ellipsis-truncated** when the panel is too narrow
+(icon-only when there is no room at all). Pass `reserve=` to keep space for a right-aligned
+control so the *title* collapses instead of pushing it off.
+
+`panel_header_button(title, icon, button_icon)` is the same header with one right-aligned
+icon-only action, which drops to its own line when the row is too tight.
+
+Never `imgui.text()` a panel title directly — you lose the casing, the muting, the icon and the
+truncation, and the panel stops matching its neighbours.
+
+## State cues
+
+| Cue | Helper | Means |
+| --- | --- | --- |
+| Translucent accent tint + 2 px accent underline | `push_selected()` / `pop_selected()` | "this is on" |
+| Raised chip among flat segments | `segmented()` | one-of-N choice, all options visible |
+| Colour flash decaying over ~0.18 s | `flash_color()` | "this value just updated" |
+
+The selected cue is deliberately a *tint*, not a solid fill: it should read as selection, not as a
+button caught mid-press. **Any control with a sticky on/off state uses it** — the channel grid's
+`Edit…`, the Manual scale-mode button, and the panel chrome toggle all do.
+
+Inline actions that sit in a row of pills (`All` / `None` / `Invert` / `Edit…`) use
+`imgui.small_button` — a full-height `button` sits out of line with them.
+
+## Plots
+
+Call `ensure_implot_style()` at the top of any plot widget. Plots then read as part of the app:
+no chart border (the surface tone frames them), a transparent plot background so the card shows
+through, and a faint grid.
+
+**Comparison needs a shared range.** Any time several plots are meant to be read against each
+other, they must share one scale — `Heatmap.ui(vrange=…)` for colour, a common manual `y_range`
+for traces. With per-instance autoscaling a quiet electrode array and a loud one render
+identically, which silently inverts the conclusion the operator draws.
+
+## Units
+
+Label a control in the unit the operator thinks in, not the one the code stores:
+
+| Quantity | Format | Example |
+| --- | --- | --- |
+| Proportion of a maximum | `%.0f%%` | Detail `100%` |
+| Multiplier | `%.2fx` | Gain `1.00x` |
+| Physical quantity | its own unit | Window `1.0 s`, Artifact `< 20 ms` |
+
+A label states what the control *does*, spelled out — `Artifact < 20 ms`, not `Reject <`.
+Truncated or operator-symbol labels read as jargon to the clinician running the session.
+
+## Space
+
+Two different affordances, two different jobs — don't substitute one for the other:
+
+- **Pop out** (`popout_panel`) — the panel becomes its own dockable, tearable window. For a panel
+  the user wants *bigger*, or on another monitor.
+- **Collapse chrome** (`SignalViewer(show_controls=…)` and its `≡` header toggle) — title,
+  controls, channel bar and footer fold away, leaving the plot. For a panel whose cell is
+  *fixed* — a tile in a `Grid` — where the chrome costs more than it gives.
+
+Layout itself is always [`Grid`](grid-layout.md) with `Px`/`Fr` tracks. Widgets do not position
+themselves.
+
+## Identity
+
+State is keyed by **widget identity**, never by the data it happens to show (rule 8 of the
+[design principles](design-principles.md)). Widgets that can appear more than once take an explicit
+`widget_id`, defaulting to the natural single-instance name:
+
+```python
+Heatmap("IN1", widget_id="grid:IN1")           # defaults to the label
+SignalViewer("emg", widget_id="emg:grid:IN1")  # defaults to the stream name
+```
+
+Without it, two instances share one state and render identically. Prefer a stable, unique string —
+user-facing labels can repeat.

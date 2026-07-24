@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import panel_header_button
+from myogestic.widgets.common import panel_header_button, pop_selected, push_selected
 from myogestic.widgets.signals._controls import (
     render_channel_controls,
     render_controls,
@@ -167,7 +167,12 @@ class SignalViewer:
                 tooltip="Hide title, controls, channel bar and footer",
             )
         else:
+            # Collapsed is the non-default state, so the lone icon carries the app's
+            # "this is on" cue (tint + underline) — otherwise a bare button floating
+            # above a plot reads as an unrelated action rather than a live toggle.
+            push_selected()
             toggled = imgui.small_button(f"{fa.ICON_FA_BARS}##{wid}_show_chrome")
+            pop_selected()
             if imgui.is_item_hovered():
                 imgui.set_tooltip("Show title, controls, channel bar and footer")
         if toggled:
