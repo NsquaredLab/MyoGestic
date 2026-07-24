@@ -35,6 +35,43 @@ INFO = imgui.ImVec4(10 / 255, 132 / 255, 255 / 255, 1.0)  # systemBlue
 IDLE = imgui.ImVec4(142 / 255, 142 / 255, 147 / 255, 1.0)  # systemGray
 
 
+# Surfaces that deliberately keep ONE look in both themes, because they imitate
+# a physical thing rather than the app's own chrome: a terminal stays dark on a
+# light desktop, and a status pill reads as a badge printed on the panel. Fixed
+# on purpose — everything else must come from the theme (see `muted` / `primary`).
+CONSOLE_BG = imgui.ImVec4(0.075, 0.078, 0.086, 1.0)
+CONSOLE_TEXT = imgui.ImVec4(0.88, 0.89, 0.91, 1.0)
+PILL_BG = imgui.ImVec4(0.14, 0.17, 0.21, 1.0)
+ON_PILL_TEXT = imgui.ImVec4(0.93, 0.95, 0.98, 1.0)
+
+
+def primary() -> imgui.ImVec4:
+    """The theme's main text colour — resolved per call, so it follows light/dark.
+
+    Colour must never be hardcoded in a widget: a literal that looks right on
+    the dark theme disappears on the light one. Read the slot instead.
+    """
+    return imgui.get_style().color_(imgui.Col_.text)
+
+
+def muted() -> imgui.ImVec4:
+    """The theme's secondary-text colour — labels, units, footers, separators.
+
+    See [`primary`][] for why this is a call and not a constant.
+    """
+    return imgui.get_style().color_(imgui.Col_.text_disabled)
+
+
+def hairline(alpha: float = 1.0) -> imgui.ImVec4:
+    """The theme's separator/border colour, optionally faded to ``alpha``.
+
+    For draw-list outlines (grid cells, overlays) that must stay visible on
+    both themes.
+    """
+    c = imgui.get_style().color_(imgui.Col_.border)
+    return imgui.ImVec4(c.x, c.y, c.z, c.w * alpha)
+
+
 _flash_state: dict[str, tuple[object, float]] = {}
 
 

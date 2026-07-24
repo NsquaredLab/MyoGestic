@@ -68,6 +68,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a coarser, cheaper trace when many channels tax the frame rate. The `SignalViewer(n_pixels=…)`
   constructor arg is demoted to an optional hard-cap override (default `None` = no cap).
 
+### Fixed
+
+- **Light theme: hardcoded colours now follow the theme.** Nineteen colours were typed as literals
+  across eight widget files and could not respond to the active theme — a near-white session-manager
+  label and the raw viewer's footer were washed out on the light theme, the channel-grid hover
+  outline was white-on-white (invisible), and the prediction readout flashed *toward white*, i.e.
+  into the card. They now read the theme (`muted()` / `primary()` / `hairline()`) or a named token.
+  Colours that are deliberately fixed in both themes (the console surface, the status pill) are now
+  named tokens in `widgets/common.py` rather than inline literals.
+- **`RawSignalViewer` renders in the app's plot style.** It called `implot.begin_plot` without
+  `ensure_implot_style()`, so it drew with stock ImPlot chrome — chart border, opaque background,
+  heavy grid — instead of matching every other plot.
+- **`ProcessLauncher`** used its own red/green rather than the shared `DANGER` / `SUCCESS` status
+  colours, so Stop/Launch didn't match status elsewhere in the app.
+
+### Added
+
+- **`docs/concepts/visual-language.md`** — the visual contract (type, colour, panel headers, state
+  cues, plot styling, units, pop-out vs collapse, widget identity), beside the existing code
+  contract in `design-principles.md`. `tests/test_visual_language.py` enforces the two rules a
+  machine can decide honestly: no colour literals outside the design layer, and every module that
+  opens a plot styles it.
+
 ## [2.3.2] - 2026-07-23
 
 ### Changed

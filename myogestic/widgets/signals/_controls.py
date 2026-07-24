@@ -7,7 +7,14 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import PALETTE, pop_selected, push_selected, segmented
+from myogestic.widgets.common import (
+    PALETTE,
+    hairline,
+    pop_selected,
+    primary,
+    push_selected,
+    segmented,
+)
 from myogestic.widgets.signals._channel_grid import (
     grid_arrangement,
     normalize_layout,
@@ -692,7 +699,7 @@ def render_cell(
     else:
         # Dim + hollow border: an on/off cue beyond brightness alone
         # (colorblind-safe) — a filled dot vs. no dot, not just color.
-        border = imgui.color_convert_float4_to_u32(imgui.ImVec4(0.5, 0.5, 0.5, 0.6))
+        border = imgui.color_convert_float4_to_u32(hairline(0.6))
         dl.add_rect(p_min, p_max, border, rounding=rounding)
 
     _draw_cell_label(dl, p_min, p_max, ch)
@@ -701,7 +708,10 @@ def render_cell(
         hovered_ch = ch
         name = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
         imgui.set_tooltip(f"{grid_label} · col {ch} · {name}")
-        highlight = imgui.color_convert_float4_to_u32(imgui.ImVec4(1.0, 1.0, 1.0, 0.8))
+        # Hover outline from the text slot, not literal white — white on white is
+        # invisible on the light theme.
+        hi = primary()
+        highlight = imgui.color_convert_float4_to_u32(imgui.ImVec4(hi.x, hi.y, hi.z, 0.8))
         dl.add_rect(p_min, p_max, highlight, rounding=rounding, thickness=1.5)
 
     if imgui.is_item_focused() and imgui.is_key_pressed(imgui.Key.space, repeat=False):

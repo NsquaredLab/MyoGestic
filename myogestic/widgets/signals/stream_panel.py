@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import DANGER, SUCCESS, panel_header
+from myogestic.widgets.common import DANGER, SUCCESS, muted, panel_header
 from myogestic.widgets.signals._scan import _scans, _ScanState
 
 if TYPE_CHECKING:
@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 
 _OK = SUCCESS
 _BAD = DANGER
-_MUTED = imgui.ImVec4(0.65, 0.65, 0.65, 1.0)
 
 # Streams we've already auto-discovered once. Forces the auto-scan to fire
 # only on the first frame each stream is observed disconnected — the user's
@@ -65,7 +64,7 @@ class StreamPanel:
             panel_header("Streams", fa.ICON_FA_PLUG)
 
         if not ctx.streams:
-            imgui.text_colored(_MUTED, "(no streams registered)")
+            imgui.text_colored(muted(), "(no streams registered)")
             return
 
         for name, stream in ctx.streams.items():
@@ -89,7 +88,7 @@ def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
     imgui.same_line()
     imgui.text(name)
     imgui.same_line()
-    imgui.text_colored(_MUTED, f"({src_label})")
+    imgui.text_colored(muted(), f"({src_label})")
 
     # Push the action buttons to the right edge of the available content.
     btns_w = 60.0 if has_discover and selectable else 28.0
@@ -126,14 +125,14 @@ def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
         last_ts_age = _last_ts_age(stream)
         age_text = f"last {last_ts_age * 1000:.0f} ms" if last_ts_age is not None else "—"
         imgui.text_colored(
-            _MUTED,
+            muted(),
             f"{info.fs:.0f} Hz · {info.n_channels} ch · window {stream._window:.2f}s · {age_text}",
         )
     else:
         if stream.last_error:
-            imgui.text_colored(_MUTED, stream.last_error)
+            imgui.text_colored(muted(), stream.last_error)
         else:
-            imgui.text_colored(_MUTED, "disconnected — waiting for source")
+            imgui.text_colored(muted(), "disconnected — waiting for source")
 
         # Auto-kick a scan on first disconnect so buttons appear without a click.
         if has_discover and selectable and name not in _auto_scanned:
@@ -177,7 +176,7 @@ def _connect_buttons(name: str, stream: Stream, scan: _ScanState) -> None:
     Wraps when the next button would overflow the available width.
     """
     if scan.busy:
-        imgui.text_colored(_MUTED, "scanning…")
+        imgui.text_colored(muted(), "scanning…")
         return
     if not scan.results:
         return

@@ -23,7 +23,7 @@ from collections import deque
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import IDLE, SUCCESS, panel_header
+from myogestic.widgets.common import DANGER, IDLE, SUCCESS, panel_header
 from myogestic.widgets.panels.log_box import (
     render_log,
     render_log_buttons,
@@ -238,13 +238,13 @@ def _render_process_launcher(
     if inline:
         imgui.same_line()
     if proc is not None and proc.poll() is None:
-        imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.6, 0.15, 0.15, 1.0))
+        imgui.push_style_color(imgui.Col_.button, DANGER)
         if imgui.button(f"Stop##{widget_id}"):
             state.stop()
         imgui.pop_style_color()
         imgui.set_item_tooltip(f"Kill the running '{selected_name}' process (SIGKILL).")
     else:
-        imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.15, 0.4, 0.15, 1.0))
+        imgui.push_style_color(imgui.Col_.button, SUCCESS)
         if imgui.button(f"Launch##{widget_id}"):
             try:
                 state.start()
