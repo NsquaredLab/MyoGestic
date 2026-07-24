@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time as _time
 from typing import TYPE_CHECKING
 
@@ -32,9 +33,17 @@ def render_plot(
     # Scale off the trace that is actually drawn (`frame.data`), not the raw
     # window — so an RMS envelope fills its lane instead of being dwarfed by
     # the raw amplitude, and warm-up/dropout NaNs are ignored.
+    # Ease the auto y-range toward the data BEFORE deriving the lane height / axis limits from it
+    # (no-op unless auto mode is active). `frame.frame_start` is this frame's perf_counter.
+    update_auto_scale(v, frame.data, frame.channel_map, stream_name, frame.frame_start)
     channel_height = resolve_channel_height(frame.data, channel_height, v)
     if v.per_channel_scale:
-        channel_ranges = resolve_channel_ranges(frame.data, frame.channel_map)
+        # Ease each lane's normalisation range (grow-fast/shrink-slow) so amplitudes don't breathe.
+        channel_ranges = update_per_channel_ranges(
+            v, frame.data, frame.channel_map, stream_name, frame.frame_start
+        )
+    else:
+        v.pc_ease_t = 0.0  # snap per-channel ranges when it's next re-enabled
     ensure_specs(v, frame.n_channels)
 
     plot_w, plot_h = size
@@ -105,16 +114,14 @@ def resolve_channel_height(
         # In per-channel mode every channel renormalises into a unit-height
         # lane, so the absolute amplitude no longer drives the layout.
         return 1.0
-    if v is not None and v.scale_mode == "manual":
-        # Manual mode: pin channel height to the user's range so the
-        # lane spacing is perfectly stable, instead of recomputing it
-        # from the visible data each frame (which causes per-frame
-        # min/max ticks to wobble the channels vertically inside the
-        # fixed axis).
+    if v is not None:
+        # Manual AND (eased) auto both pin the lane height to `y_min/y_max` so the
+        # spacing is perfectly stable, instead of recomputing it from the visible
+        # data each frame (which wobbled the channels vertically). In auto,
+        # `update_auto_scale` has already eased `y_min/y_max` toward the data range.
         span = float(v.y_max - v.y_min)
         return span if span > 0 else 1.0
-    # Auto mode: derive from the visible trace so stale spikes in the raw
-    # ring cannot flatten the live trace.
+    # No ViewerState (bare preview): derive from the visible trace.
     if plotted.size == 0:
         return 1.0
     finite = plotted[np.isfinite(plotted)]
@@ -131,17 +138,233 @@ def resolve_channel_ranges(
     """Per-channel `(min, max)` of the drawn trace, keyed by real channel index.
 
     `plotted[:, col]` is channel `channel_map[col]` (the enabled-only compaction
-    used everywhere the plot draws); non-finite values are dropped.
+    used everywhere the plot draws); non-finite values are dropped, and an all-non-finite
+    column is omitted.
+
+    Vectorized (axis-0 reductions, not a Python per-column loop) — this runs every frame in
+    per-channel mode, where the loop cost dominated the frame at high channel counts.
     """
     ranges: dict[int, tuple[float, float]] = {}
     if plotted.size == 0:
         return ranges
+    finite = np.isfinite(plotted)
+    if finite.all():  # common live case: no copy, plain axis-0 min/max
+        lo = plotted.min(axis=0)
+        hi = plotted.max(axis=0)
+    else:  # drop non-finite per element, then nan-aware reduce (all-nan column ⇒ nan ⇒ skipped)
+        masked = np.where(finite, plotted, np.nan)
+        with np.errstate(invalid="ignore"):
+            lo = np.nanmin(masked, axis=0)
+            hi = np.nanmax(masked, axis=0)
+    ok = np.isfinite(lo)
     for col, ch in enumerate(channel_map):
-        finite = plotted[:, col][np.isfinite(plotted[:, col])]
-        if finite.size == 0:
-            continue
-        ranges[ch] = (float(finite.min()), float(finite.max()))
+        if ok[col]:
+            ranges[ch] = (float(lo[col]), float(hi[col]))
     return ranges
+
+
+#: Time-bin width (ms) for the duration-based robust range. Each bin contributes one min and one
+#: max; a transient that fills fewer than the "ignore transients shorter than" budget of these bins
+#: is dropped as an artifact.
+_ROBUST_BIN_MS = 5.0
+
+
+def robust_channel_ranges(
+    data: np.ndarray,
+    channel_map: list[int],
+    transient_ms: float,
+    window_s: float,
+    display_filter: str,
+    rms_window_ms: float,
+    rms_hop_ms: float,
+) -> dict[int, tuple[float, float]]:
+    """Per-channel range that ignores transients shorter than ``transient_ms`` (movement artifacts).
+
+    *Duration*, not amplitude, separates an artifact (a brief spike) from a contraction (a sustained
+    burst) — they look alike by amplitude. The visible window is split into equal-time bins; each
+    bin contributes one min and one max; the ``k`` most extreme bin maxima/minima (``k`` covering
+    the transient budget) are dropped and the next extrema are the robust range. A 10 ms artifact
+    fills ~2 bins (dropped); a 50 ms contraction fills ~11 (kept). Mode-aware: ``rectify`` /
+    ``rms_env`` are one-sided (lower bound pinned to 0, only the top trimmed), and ``rms_env``'s
+    envelope is already time-binned, so its own points are the bins with the RMS smear folded into
+    ``k``. ``transient_ms == 0`` degrades to plain per-channel min/max.
+
+    Cheap enough for the per-frame path: reshape + axis-1 min/max + one axis-0 partition (no
+    full-window percentile). Falls back gracefully to min/max when there are too few bins.
+    """
+    n = len(data)
+    if n == 0 or not channel_map:
+        return {}
+    one_sided = display_filter in ("rectify", "rms_env")
+    if display_filter == "rms_env":
+        highs = np.asarray(data)  # each envelope point ≈ one time bin (keep native dtype)
+        lows = highs
+        k = int(np.ceil((transient_ms + rms_window_ms) / max(rms_hop_ms, 1e-6)))
+    else:
+        bin_n = max(1, round(n * _ROBUST_BIN_MS / (window_s * 1000.0))) if window_s > 0 else 1
+        n_bins = max(1, n // bin_n)
+        head = np.asarray(data[: n_bins * bin_n]).reshape(n_bins, bin_n, -1)  # view, no copy/cast
+        if np.isfinite(head).all():  # common live case: plain (fast) min/max, no nan bookkeeping
+            highs = head.max(axis=1)  # (n_bins, n_ch)
+            lows = head.min(axis=1)
+        else:
+            with np.errstate(invalid="ignore"):
+                highs = np.nanmax(head, axis=1)
+                lows = np.nanmin(head, axis=1)
+        bin_ms = window_s * 1000.0 / n_bins if window_s > 0 else _ROBUST_BIN_MS
+        k = int(np.ceil(transient_ms / max(bin_ms, 1e-6))) + (1 if transient_ms > 0 else 0)
+    # A NaN bin must not corrupt the order statistic: park it at the non-selected end.
+    highs = np.where(np.isfinite(highs), highs, -np.inf)
+    lows = np.where(np.isfinite(lows), lows, np.inf)
+    n_bins = highs.shape[0]
+    k = max(0, min(k, (n_bins - 1) // 2))  # always keep ≥1 bin per side (→ min/max when few bins)
+    hi_idx, lo_idx = n_bins - 1 - k, k
+    hi = np.partition(highs, hi_idx, axis=0)[hi_idx]  # (k+1)-th largest bin-max per channel
+    lo = np.zeros_like(hi) if one_sided else np.partition(lows, lo_idx, axis=0)[lo_idx]
+    ranges: dict[int, tuple[float, float]] = {}
+    for col, ch in enumerate(channel_map):
+        if np.isfinite(hi[col]) and np.isfinite(lo[col]):
+            ranges[ch] = (float(lo[col]), float(hi[col]))
+    return ranges
+
+
+#: Auto-scale CONTRACTION settle time (s) — how long to shrink the range when the signal
+#: quietens (~95% at 3·tau). Slow, so the range never jitters downward. Expansion is INSTANT
+#: (the bound snaps out to contain a new peak), so nothing is ever clipped while it catches up.
+_SCALE_EASE_S = 5.0
+
+
+def update_auto_scale(
+    v: ViewerState,
+    data: np.ndarray,
+    channel_map: list[int],
+    stream_name: str,
+    now: float,
+) -> None:
+    """Ease `v.y_min`/`v.y_max` toward the drawn data's padded range (auto mode only).
+
+    Replaces ImPlot's per-frame `auto_fit` refit — which makes a variable signal zoom in/out
+    constantly — with a **grow-fast / shrink-slow** ease toward the drawn window's gain-scaled
+    global min/max: the range EXPANDS quickly (``_SCALE_EXPAND_S``) so a new peak/contraction is
+    never clipped, and CONTRACTS slowly (``_SCALE_EASE_S``) so it never jitters downward.
+    **Snaps** instead of easing on the first frame
+    and whenever the context ``(active stream, channels, display filter, notch, gain)`` changes,
+    so it never eases across an unrelated scale; a huge ``dt`` (e.g. after a pause) also snaps.
+    No-op unless auto mode is active and per-channel scaling is off.
+    """
+    if v.scale_mode != "auto" or v.per_channel_scale:
+        # Force a snap when auto resumes, so re-entering auto doesn't ease from stale/manual bounds.
+        v.scale_ease_t = 0.0
+        return
+    # Artifact-robust range per channel, then take the UNION for the shared axis — never a global
+    # scan (a contraction on one of many channels would be statistically drowned out). Gain-correct
+    # (`plot_channel` draws `data * v.gain`).
+    g = v.gain
+    robust = robust_channel_ranges(
+        data, channel_map, v.transient_ms, v.window, v.display_filter, v.rms_window_ms, v.rms_hop_ms
+    )
+    if not robust:
+        return  # empty / all-NaN window: hold the current range
+    lo = min(r[0] for r in robust.values()) * g
+    hi = max(r[1] for r in robust.values()) * g
+    if lo > hi:
+        lo, hi = hi, lo
+    span = hi - lo
+    pad = span * 0.1 if span > 0 else 1.0
+    target_lo, target_hi = lo - pad, hi + pad
+
+    # Snap (don't ease) on the first frame or any change that alters the scale: which stream a
+    # selectable viewer shows (`selected_stream`, not the stable widget id), the channel set, the
+    # display filter, the mains notch, or the gain.
+    key = (
+        v.selected_stream or stream_name,
+        tuple(channel_map),
+        v.display_filter,
+        v.mains_notch,
+        g,
+        v.rms_window_ms,
+        v.rms_hop_ms,
+        v.transient_ms,
+    )
+    if key != v.scale_ease_key or v.scale_ease_t <= 0.0:
+        v.y_min, v.y_max = target_lo, target_hi  # snap: first frame / context change
+    else:
+        dt = max(0.0, now - v.scale_ease_t)  # backward clock ⇒ dt 0 ⇒ no move
+        a = 1.0 - math.exp(-dt / (_SCALE_EASE_S / 3.0))  # contraction ease
+        # Grow INSTANTLY (snap the bound out so a new peak never clips), shrink slowly (no jitter).
+        v.y_max = target_hi if target_hi > v.y_max else v.y_max + a * (target_hi - v.y_max)
+        v.y_min = target_lo if target_lo < v.y_min else v.y_min + a * (target_lo - v.y_min)
+    v.scale_ease_key = key
+    v.scale_ease_t = now
+
+
+def update_per_channel_ranges(
+    v: ViewerState,
+    data: np.ndarray,
+    channel_map: list[int],
+    stream_name: str,
+    now: float,
+) -> dict[int, tuple[float, float]]:
+    """Per-channel normalisation ranges (GAINED) for per-channel mode, keyed by real channel.
+
+    `per_channel_scale` is the *basis*; `scale_mode` decides whether it adapts:
+
+    - **Auto**: ease each channel's range grow-fast (snap out so a louder channel never overflows
+      its lane) / shrink-slow (no per-frame breathing), snapping on the first frame / a
+      newly-enabled channel / a context change (stream / channels / filter / notch / gain / rms).
+    - **Manual**: hold the frozen ranges untouched — so a channel weakening, strengthening, or
+      drifting stays visible against its captured reference. Only a *newly-enabled* channel (with
+      no saved range) is initialised from its current data; existing ones never move.
+
+    Ranges are stored **gained** (× `v.gain`): in Auto gain is inert (it cancels in `plot_channel`),
+    but in Manual, changing gain magnifies the trace against the frozen reference. Returns the dict
+    and stores it on `v.pc_ranges` (channels no longer drawn drop out).
+    """
+    g = v.gain
+    args = (v.transient_ms, v.window, v.display_filter, v.rms_window_ms, v.rms_hop_ms)
+    if v.scale_mode != "auto":  # MANUAL: hold frozen ranges; init only a newly-enabled channel
+        need_init = any(ch not in v.pc_ranges for ch in channel_map)
+        raw = robust_channel_ranges(data, channel_map, *args) if need_init else {}
+        held: dict[int, tuple[float, float]] = {}
+        for ch in channel_map:
+            if ch in v.pc_ranges:
+                held[ch] = v.pc_ranges[ch]
+            elif ch in raw:
+                lo, hi = raw[ch]
+                held[ch] = (lo * g, hi * g)
+        v.pc_ranges = held
+        v.pc_ease_t = 0.0  # snap once when Auto resumes
+        return held
+
+    targets = robust_channel_ranges(data, channel_map, *args)
+    key = (
+        v.selected_stream or stream_name,
+        tuple(channel_map),
+        v.display_filter,
+        v.mains_notch,
+        g,
+        v.rms_window_ms,
+        v.rms_hop_ms,
+        v.transient_ms,
+    )
+    snap = key != v.pc_ease_key or v.pc_ease_t <= 0.0
+    dt = max(0.0, now - v.pc_ease_t)
+    a = 1.0 - math.exp(-dt / (_SCALE_EASE_S / 3.0))  # contraction ease; expansion snaps instantly
+    eased: dict[int, tuple[float, float]] = {}
+    for ch, (r_lo, r_hi) in targets.items():
+        t_lo, t_hi = r_lo * g, r_hi * g  # gained target
+        prev = v.pc_ranges.get(ch)
+        if snap or prev is None:  # first frame / context change / newly-enabled channel
+            eased[ch] = (t_lo, t_hi)
+        else:
+            lo, hi = prev
+            hi = t_hi if t_hi > hi else hi + a * (t_hi - hi)  # grow instantly, shrink slow
+            lo = t_lo if t_lo < lo else lo + a * (t_lo - lo)
+            eased[ch] = (lo, hi)
+    v.pc_ranges = eased
+    v.pc_ease_key = key
+    v.pc_ease_t = now
+    return eased
 
 
 def ensure_specs(v: ViewerState, n_channels: int) -> None:
@@ -171,9 +394,22 @@ def setup_axes(
         implot.Cond_.always,  # type: ignore[attr-defined]
     )
 
-    if v.scale_mode == "auto":
-        implot.setup_axis(implot.ImAxis_.y1, flags=implot.AxisFlags_.auto_fit)
+    if v.per_channel_scale:
+        # Pin to the fixed unit-lane geometry (each lane fills ±0.4 around baselines stacked by
+        # `channel_height` == 1.0). NOT `auto_fit`: while a channel's eased range contracts its
+        # trace occupies less than its lane, and auto_fit would zoom to that and cancel the ease.
+        implot.setup_axis(implot.ImAxis_.y1)
+        n_enabled = max(1, len(enabled))
+        implot.setup_axis_limits(
+            implot.ImAxis_.y1,
+            -0.5 - (n_enabled - 1) * channel_height,
+            0.5,
+            implot.Cond_.always,  # type: ignore[attr-defined]
+        )
     else:
+        # Auto AND manual apply the same fixed limits every frame; only the values differ —
+        # auto's `y_min/y_max` are eased toward the data by `update_auto_scale`, manual's are held.
+        # Pinning them each frame (instead of `auto_fit`) is what stops the per-frame zoom jitter.
         implot.setup_axis(implot.ImAxis_.y1)
         y_min, y_max = v.y_min, v.y_max
         n_enabled = max(1, len(enabled))
@@ -230,7 +466,9 @@ def plot_channel(
 
     offset = -col_idx * channel_height
     if v.per_channel_scale:
-        ch_data = np.asarray(col_ch, dtype=np.float64)
+        # `ch_data` and the ranges are both GAINED. In Auto gain cancels here (range is eased in the
+        # same gained units); in Manual the range is frozen, so gain magnifies against it.
+        ch_data = np.asarray(col_ch, dtype=np.float64) * v.gain
         if channel_ranges is not None and ch in channel_ranges:
             ch_min, ch_max = channel_ranges[ch]
         elif ch_data.size:
