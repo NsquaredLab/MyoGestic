@@ -59,6 +59,27 @@ button caught mid-press. **Any control with a sticky on/off state uses it** — 
 Inline actions that sit in a row of pills (`All` / `None` / `Invert` / `Edit…`) use
 `imgui.small_button` — a full-height `button` sits out of line with them.
 
+## Icons
+
+One glyph per meaning, and the glyph **shows what clicking will do**, not what the state currently
+is. A toggle therefore swaps its icon: `PLAY`↔`PAUSE` on transport, `ANGLES_DOWN`↔`ARROW_DOWN` on
+log autoscroll, the expand↔collapse arrows on pop-out, `ANGLES_UP`↔`BARS` on panel chrome. A button
+whose icon never changes reads as a one-shot action.
+
+Established meanings — reuse them rather than picking a near-synonym:
+
+| Glyph | Means |
+| --- | --- |
+| `ARROWS_ROTATE` | re-fetch live state: rescan, reconnect, refresh |
+| `ROTATE_LEFT` | reset back to defaults |
+| `BROOM` | clear accumulated content (a log) |
+| `UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER` / its inverse | pop out to a window / dock back |
+| `BARS` | reveal a hidden menu |
+| `TERMINAL` | program output |
+
+Icon plus label is `f"{icon}  Label"` — two spaces, so the glyph doesn't crowd the text. Header
+actions (`panel_header_button`) are icon-only.
+
 ## Plots
 
 Call `ensure_implot_style()` at the top of any plot widget. Plots then read as part of the app:

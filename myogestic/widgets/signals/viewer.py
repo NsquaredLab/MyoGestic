@@ -163,7 +163,7 @@ class SignalViewer:
             toggled = panel_header_button(
                 self._title or f"SIGNAL · {active_stream}",
                 fa.ICON_FA_CHART_LINE,
-                fa.ICON_FA_BARS,
+                fa.ICON_FA_ANGLES_UP,  # fold away; ≡ below brings the menu back
                 tooltip="Hide title, controls, channel bar and footer",
             )
         else:
