@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import DANGER
+from myogestic.widgets.common import DANGER, muted
 
 
 @dataclass
@@ -93,7 +93,7 @@ def _disconnected_ui(stream_name: str, stream: object) -> None:
     imgui.text_colored(DANGER, f"{stream_name}: disconnected")
     if stream.last_error:
         imgui.same_line()
-        imgui.text_colored(imgui.ImVec4(0.6, 0.6, 0.6, 1.0), f"({stream.last_error})")
+        imgui.text_colored(muted(), f"({stream.last_error})")
 
     if imgui.button(f"Reconnect##{stream_name}"):
         import sys as _sys

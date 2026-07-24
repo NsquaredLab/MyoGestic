@@ -8,7 +8,7 @@ import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui, implot
 
-from myogestic.widgets.common import PALETTE, ensure_implot_style
+from myogestic.widgets.common import PALETTE, ensure_implot_style, muted
 from myogestic.widgets.signals._state import minmax_grid_all_shared_x, resolve_decimation_target
 
 if TYPE_CHECKING:
@@ -515,7 +515,8 @@ def render_markers(
             by_class.setdefault(ev.class_index, []).append(float(ev.timestamp - t0))
     for ci, xs_list in by_class.items():
         if ci < 0:
-            color = imgui.ImVec4(0.7, 0.7, 0.7, 0.6)
+            m = muted()  # unlabeled markers ride the theme's secondary tone
+            color = imgui.ImVec4(m.x, m.y, m.z, 0.6)
         else:
             c = PALETTE[ci % len(PALETTE)]
             color = imgui.ImVec4(c[0], c[1], c[2], 0.7)
@@ -634,7 +635,7 @@ def render_footer(
             pts_str = f"{raw_len:,} pts/ch (raw)"
 
     imgui.text_colored(
-        imgui.ImVec4(0.5, 0.5, 0.5, 1.0),
+        muted(),
         f"{ui_fps:.0f} fps ({avg_ms:.1f} ms viewer) | "
         f"fs={stream.info.fs:.0f} Hz | "
         f"{frame.n_channels} ch | "
@@ -670,6 +671,6 @@ def render_footer(
     for i, ch in enumerate(valid_channels):
         name = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
         imgui.text_colored(
-            imgui.ImVec4(0.55, 0.58, 0.62, 1.0),
+            muted(),
             f"  {name}: rms {rms_all[i]:.3f}  pp {pp_all[i]:.3f}  mean {mean_all[i]:+.3f}",
         )
