@@ -36,6 +36,8 @@ import pytest
 
 from myogestic.stream import Stream, StreamInfo
 from myogestic.widgets.signals._state import (
+    _DECIMATE_FALLBACK_POINTS,
+    _DECIMATE_MIN_POINTS,
     ViewerState,
     build_signal_frame,
     minmax_grid_all_shared_x,
@@ -248,8 +250,9 @@ def test_minmax_grid_all_shared_x_bounds_total_draw_points_by_channel_count():
     window_samples = int(window_s * fs)
     assert raw_len >= window_samples * 0.9
 
-    # A plausible plot pixel width; the default n_pixels=2000 cap binds
-    # here (matches the reported 64 ch -> 128k-point example: 64 * 2000).
+    # A plausible plot pixel width; the explicit n_pixels=2000 cap binds
+    # here (800 * 3.0 detail = 2400, clamped to 2000; matches the reported
+    # 64 ch -> 128k-point example: 64 * 2000).
     n_out = resolve_decimation_target(plot_width_px=800.0, v=v)
     assert n_out == 2000
 
@@ -633,6 +636,50 @@ def test_resolve_decimation_target_falls_back_to_n_pixels_when_width_unknown():
     target = resolve_decimation_target(plot_width_px=0.0, v=v)
 
     assert target == 800
+
+
+def test_detail_factor_sets_draw_density_relative_to_plot_width():
+    """With no cap (default `n_pixels=None`), the drawn point count is
+    `plot_width_px * detail_factor` (rounded down to a multiple of 4), so the
+    "Detail" slider scales density directly instead of hitting a fixed cap."""
+    width = 600.0
+
+    full = resolve_decimation_target(width, ViewerState(detail_factor=3.0))
+    half = resolve_decimation_target(width, ViewerState(detail_factor=1.0))
+    coarse = resolve_decimation_target(width, ViewerState(detail_factor=0.5))
+
+    assert full == 1800  # 600 * 3.0
+    assert half == 600  # 600 * 1.0
+    assert coarse == 300  # 600 * 0.5
+    assert full > half > coarse
+
+
+def test_default_has_no_cap_so_wide_plots_are_not_clamped():
+    """The old default (`n_pixels=2000`) clamped wide plots below the
+    width-relative target — the dead zone. The new default (`None`) removes
+    it: a wide plot draws the full `width * 3` with no ceiling."""
+    v = ViewerState()  # detail_factor=3.0, n_pixels=None
+    assert v.n_pixels is None
+
+    wide = resolve_decimation_target(plot_width_px=1600.0, v=v)
+
+    assert wide == 4800  # 1600 * 3.0, NOT clamped to 2000
+
+
+def test_tiny_plot_width_is_floored_not_collapsed():
+    """A narrow (or barely laid-out) plot still keeps at least the floor of
+    points so decimation never collapses the trace to near nothing."""
+    target = resolve_decimation_target(plot_width_px=5.0, v=ViewerState(detail_factor=0.5))
+
+    assert target >= _DECIMATE_MIN_POINTS
+
+
+def test_width_unknown_falls_back_to_default_when_no_explicit_cap():
+    """First frame (width reported `<= 0`) with no explicit `n_pixels` cap
+    uses the module fallback, then self-corrects once the plot has a size."""
+    target = resolve_decimation_target(plot_width_px=0.0, v=ViewerState())
+
+    assert target == _DECIMATE_FALLBACK_POINTS
 
 
 def test_initial_channels_seeds_first_open_only():

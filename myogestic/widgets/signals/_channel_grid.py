@@ -33,6 +33,18 @@ def auto_shape(columns: list[int]) -> list[list[int | None]]:
     return cells
 
 
+def grid_arrangement(n_grids: int) -> int:
+    """Number of columns to tile ``n_grids`` grid blocks into, near-square.
+
+    ``ceil(sqrt(n))`` columns, so multiple grids are shown side by side in a
+    compact block instead of one tall vertical stack — e.g. 6 grids lay out as
+    3 columns × 2 rows, 4 as 2 × 2. Always at least 1.
+    """
+    if n_grids <= 1:
+        return 1
+    return ceil(sqrt(n_grids))
+
+
 def _dedupe_in_range(columns: list[int], n_channels: int) -> list[int]:
     """First-seen columns within ``[0, n_channels)``, deduplicated, order preserved."""
     seen: set[int] = set()
