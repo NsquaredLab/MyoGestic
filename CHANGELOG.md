@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and locks; **Gain** is live in per-channel Manual (magnifies each trace against its frozen
   range) and inert in per-channel Auto.
 - **Signal viewer — artifact-robust y-scale.** Fitting the range (Auto, per-channel, and Rescale)
-  now ignores transients shorter than a configurable budget (**"Reject <" control, default 20 ms**),
+  now ignores transients shorter than a configurable budget (**"Artifact" control, default 20 ms**),
   so a brief movement-artifact spike no longer blows up the scale and dwarfs the real EMG. It works
   by *duration*, not amplitude — the visible window is split into equal-time bins and the few most
   extreme bin-maxima/minima that a sub-budget transient could occupy are dropped — because a 10 ms

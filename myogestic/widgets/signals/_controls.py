@@ -279,10 +279,13 @@ def render_resolution_controls(
         imgui.end_disabled()
 
     imgui.table_next_column()
-    imgui.text("Reject <")
+    imgui.text("Artifact")
     imgui.same_line()
     imgui.set_next_item_width(-1)
-    changed_t, new_t = imgui.slider_float(f"##{stream_name}_transient", v.transient_ms, 0.0, 40.0, "%.0f ms")
+    # Reads as "Artifact < 20 ms" — the label states what it does, spelled out.
+    changed_t, new_t = imgui.slider_float(
+        f"##{stream_name}_transient", v.transient_ms, 0.0, 40.0, "< %.0f ms"
+    )
     if changed_t:
         v.transient_ms = new_t
     if imgui.is_item_hovered():

@@ -13,3 +13,4 @@ Drill in:
 - [Widgets](widgets.md) - the stateless-function contract, ImGui immediate mode, `Grid` layout.
 - [Threading](threading.md) - daemon threads, GIL release, the GPU contention rule.
 - [Design principles](design-principles.md) - the eight rules the codebase keeps to.
+- [Visual language](visual-language.md) - the type, colour, panel and state-cue tokens every widget uses.
