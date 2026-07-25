@@ -26,7 +26,15 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.core import AppState
-from myogestic.widgets.common import DANGER, IDLE, panel_header, pop_selected, push_selected
+from myogestic.widgets.common import (
+    DANGER,
+    IDLE,
+    ON_PILL_TEXT,
+    PILL_BG,
+    panel_header,
+    pop_selected,
+    push_selected,
+)
 
 if TYPE_CHECKING:
     from myogestic.core import Context
@@ -50,7 +58,7 @@ def _status_pill(label: str, color: imgui.ImVec4) -> None:
     p0, p1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
     draw = imgui.get_window_draw_list()
     draw.add_rect_filled(
-        p0, p1, imgui.get_color_u32(imgui.ImVec4(0.14, 0.17, 0.21, 1.0)), size.y * 0.5
+        p0, p1, imgui.get_color_u32(PILL_BG), size.y * 0.5
     )
     y = (p0.y + p1.y) * 0.5
     draw.add_rect_filled(
@@ -61,7 +69,7 @@ def _status_pill(label: str, color: imgui.ImVec4) -> None:
     )
     draw.add_text(
         imgui.ImVec2(p0.x + pad_x + 10, p0.y + pad_y),
-        imgui.get_color_u32(imgui.ImVec4(0.93, 0.95, 0.98, 1.0)),
+        imgui.get_color_u32(ON_PILL_TEXT),
         label,
     )
 

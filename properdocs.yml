@@ -160,6 +160,7 @@ nav:
       - Edge trigger: concepts/edge-trigger.md
       - Threading: concepts/threading.md
       - Design principles: concepts/design-principles.md
+      - Visual language: concepts/visual-language.md
   - Widget gallery: widget-gallery.md
   - Troubleshooting: troubleshooting.md
   - Reference:

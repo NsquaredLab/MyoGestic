@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 from imgui_bundle import imgui, implot
 
-from myogestic.widgets.common import PALETTE
+from myogestic.widgets.common import PALETTE, ensure_implot_style, muted
 from myogestic.widgets.signals._scan import _disconnected_ui
 
 if TYPE_CHECKING:
@@ -126,7 +126,10 @@ class RawSignalViewer:
                     imgui.Col_.button, imgui.ImVec4(color[0], color[1], color[2], 0.7)
                 )
             else:
-                imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0.3, 0.3, 0.3, 0.5))
+                # Off channels take the theme's own control fill, dimmed — a fixed
+                # grey read as "disabled" on dark and as a smudge on light.
+                off = imgui.get_style().color_(imgui.Col_.button)
+                imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(off.x, off.y, off.z, 0.5))
             label = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
             if imgui.button(f"{label}##{stream_name}_rawtog{ch}"):
                 if is_on:
@@ -163,6 +166,7 @@ class RawSignalViewer:
             data_range = d_max - d_min
             channel_height = data_range * 1.2 if data_range > 0 else 1.0
 
+        ensure_implot_style()  # without it this plot renders as stock ImPlot, not the app
         if len(r.specs) < n_channels:
             r.specs = []
             for ch in range(n_channels):
@@ -195,7 +199,7 @@ class RawSignalViewer:
         avg_ms = np.mean(r.fps) * 1000
         fps = 1000.0 / avg_ms if avg_ms > 0 else 0
         imgui.text_colored(
-            imgui.ImVec4(0.5, 0.5, 0.5, 1.0),
+            muted(),
             f"{fps:.0f} fps ({avg_ms:.1f} ms) | "
             f"fs={stream.info.fs:.0f} Hz | "
             f"{len(enabled)}/{n_channels} ch | "

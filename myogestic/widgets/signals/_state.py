@@ -130,7 +130,8 @@ class NotchCache:
 class ViewerState:
     """Per-widget-id viewer state."""
 
-    n_pixels: int = 2000
+    n_pixels: int | None = None  # optional hard cap on drawn points; None/0 = no cap
+    detail_factor: float = 3.0  # draw density (points per plot pixel); the "Detail" slider drives it
     window: float = 1.0
     gain: float = 1.0
     channels: set[int] = field(default_factory=set)
@@ -153,7 +154,26 @@ class ViewerState:
     y_min: float = -1.0
     y_max: float = 1.0
     per_channel_scale: bool = False
-    rescale_pending: bool = False
+    # Pending "Rescale/Fit & lock" click, remembering which BASIS it applies to ("shared" fits the
+    # one shared y-range; "per_channel" fits each channel's lane) so a same-frame Per-Ch toggle
+    # can't misapply it. `None` = no request. Consumed once in `viewer.py`.
+    rescale_pending: str | None = None
+    # Auto-scale easing state (see `_plot.update_auto_scale`): in auto mode `y_min/y_max` are
+    # eased toward the data range each frame instead of ImPlot refitting instantly. `scale_ease_t`
+    # is the last frame's `perf_counter` (dt source); `scale_ease_key` is the (stream, channels,
+    # display_filter) context — a change snaps rather than eases across an unrelated scale.
+    scale_ease_key: tuple | None = None
+    scale_ease_t: float = 0.0
+    # Per-channel-mode easing (see `_plot.update_per_channel_ranges`): the same grow-fast/
+    # shrink-slow ease, but over each channel's normalisation `(min, max)` so unit-lane amplitudes
+    # don't breathe every frame. `pc_ranges` is the eased range per real channel index.
+    pc_ranges: dict[int, tuple[float, float]] = field(default_factory=dict, repr=False)
+    pc_ease_key: tuple | None = None
+    pc_ease_t: float = 0.0
+    # Artifact-robust scaling: ignore transients shorter than this (ms) when fitting the y-range,
+    # so a brief movement-artifact spike doesn't define the scale. 0 = plain min/max. See
+    # `_plot.robust_channel_ranges`.
+    transient_ms: float = 20.0
     paused: bool = False
     frozen_ts: np.ndarray | None = None
     frozen_data: np.ndarray | None = None
@@ -170,6 +190,7 @@ class ViewerState:
     rms_hop_ms: float = 20.0
     show_markers: bool = True
     show_retarget: bool = False
+    show_controls: bool = True  # top control menu; toggled from the panel header for plot/grid room
     # Decimation output-size target used by the *last* `render_plot` call
     # (sized to the live plot's pixel width there — see
     # `resolve_decimation_target`). `render_footer` reads it back to report
@@ -353,13 +374,17 @@ def minmax_grid_all_shared_x(
     return xs, ys
 
 
-#: Oversampling factor applied to the plot's pixel width when sizing the
-#: MinMax decimation target — a few points per pixel keeps sharp features
-#: visible without materially increasing draw cost.
-_DECIMATE_PIXEL_FACTOR = 3.0
+#: Draw-density bounds for the "Detail" control, in points per plot pixel.
+#: `_DETAIL_FULL` (a few points/pixel) keeps sharp features / MinMax peaks
+#: crisp; `_DETAIL_MIN` is the coarsest, cheapest trace.
+_DETAIL_MIN = 0.5
+_DETAIL_FULL = 3.0
 #: Floor on the width-derived target so a very narrow (or not-yet-laid-out)
 #: plot never collapses decimation down to near nothing.
 _DECIMATE_MIN_POINTS = 64
+#: Target used only on the first frame, before the plot has a real pixel
+#: width and no explicit `n_pixels` cap is set. Self-corrects next frame.
+_DECIMATE_FALLBACK_POINTS = 2000
 
 
 def resolve_decimation_target(plot_width_px: float, v: ViewerState) -> int:
@@ -367,34 +392,44 @@ def resolve_decimation_target(plot_width_px: float, v: ViewerState) -> int:
 
     `plot_width_px` should come from the live plot (e.g.
     ``implot.get_plot_size().x``, only valid between `begin_plot` /
-    `end_plot`). `v.n_pixels` (the "Resolution" control) is the ceiling on
-    the result — it also doubles as the fallback when `plot_width_px` isn't
-    available yet (e.g. the very first frame, reported as `<= 0`) — so the
-    control still has an effect once the plot has a real size, instead of
-    being the primary driver the way the old fixed `n_pixels * 4` budget
-    was.
+    `end_plot`). The drawn point count per channel is
+    ``plot_width_px * v.detail_factor`` — the "Detail" control sets the
+    density directly, so full detail always tracks the plot width instead of
+    fighting a fixed absolute cap. `v.n_pixels` is an *optional* hard cap
+    (an escape hatch, `None`/`0` = no cap) and the fallback when
+    `plot_width_px` isn't available yet (the very first frame, reported as
+    `<= 0`).
     """
-    cap = max(4, int(v.n_pixels))
     if plot_width_px <= 0:
-        target = cap
+        target = v.n_pixels or _DECIMATE_FALLBACK_POINTS
     else:
-        width_target = max(_DECIMATE_MIN_POINTS, int(plot_width_px * _DECIMATE_PIXEL_FACTOR))
-        target = min(cap, width_target)
+        target = max(_DECIMATE_MIN_POINTS, int(plot_width_px * v.detail_factor))
+        if v.n_pixels:
+            target = min(target, v.n_pixels)
     return max(4, (target // 4) * 4)
 
 
 def get_viewer_state(
     ctx: Context,
-    stream_name: str,
-    n_pixels: int,
+    widget_id: str,
+    n_pixels: int | None,
     scale_mode: str,
     y_range: tuple[float, float],
     show_markers: bool,
     window_s: float | None = None,
+    stream_name: str | None = None,
+    show_controls: bool = True,
 ) -> ViewerState:
-    v = _viewers.get(stream_name)
+    """Per-widget viewer state, created on first use.
+
+    Keyed by ``widget_id`` — NOT by the stream — so several viewers can show
+    the same stream (e.g. one panel per electrode grid) without sharing one
+    another's channels, scale, pause or filter. ``stream_name`` defaults to
+    ``widget_id`` and is only used to pick the initial window from the stream.
+    """
+    v = _viewers.get(widget_id)
     if v is None:
-        s0 = ctx.streams.get(stream_name)
+        s0 = ctx.streams.get(stream_name or widget_id)
         # Caller override wins; fall back to the stream's processing window
         # (typically tiny — 0.2 s for classification — which is fine for the
         # model but unreadable on screen).
@@ -410,8 +445,9 @@ def get_viewer_state(
             y_min=y_range[0],
             y_max=y_range[1],
             show_markers=show_markers,
+            show_controls=show_controls,
         )
-        _viewers[stream_name] = v
+        _viewers[widget_id] = v
     return v
 
 

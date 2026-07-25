@@ -65,6 +65,7 @@ class Heatmap:
         data: np.ndarray,
         x_tick_labels: list[str] | None = None,
         y_tick_labels: list[str] | None = None,
+        vrange: tuple[float, float] | None = None,
     ) -> None:
         """Render the heatmap for the given frame.
 
@@ -76,6 +77,12 @@ class Heatmap:
             Per-column / per-row axis labels (e.g. class names for a confusion
             matrix). When omitted, columns/rows are labelled by index. Extra
             labels beyond the grid size are ignored.
+        vrange : tuple[float, float], optional
+            Explicit ``(min, max)`` for the colour mapping. ``None`` (default)
+            maps this frame's own ``data.min()``/``.max()``. Pass a **shared**
+            range whenever several heatmaps are meant to be compared — with
+            per-instance autoscaling a quiet grid and a loud one render
+            identically — or a fixed one to stop colours drifting frame to frame.
         """
         imgui.push_id(self._widget_id or self._label)
         try:
@@ -115,11 +122,18 @@ class Heatmap:
                     implot.setup_axis_ticks(
                         implot.ImAxis_.y1, [rows - i - 0.5 for i in range(rows)], y_labels[:rows]
                     )
+                    lo, hi = (
+                        (float(values.min()), float(values.max()))
+                        if vrange is None
+                        else (float(vrange[0]), float(vrange[1]))
+                    )
+                    if not hi > lo:  # degenerate (flat data / empty range): keep implot sane
+                        hi = lo + 1e-12
                     implot.plot_heatmap(
                         "##heatmap",
                         values,
-                        scale_min=float(values.min()),
-                        scale_max=float(values.max()),
+                        scale_min=lo,
+                        scale_max=hi,
                         label_fmt=self._label_fmt,
                         bounds_min=implot.Point(0.0, 0.0),
                         bounds_max=implot.Point(float(cols), float(rows)),

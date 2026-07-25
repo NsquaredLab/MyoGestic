@@ -1,18 +1,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import ceil
 from typing import TYPE_CHECKING
 
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import PALETTE, pop_selected, push_selected, segmented
+from myogestic.widgets.common import (
+    PALETTE,
+    hairline,
+    pop_selected,
+    primary,
+    push_selected,
+    segmented,
+)
 from myogestic.widgets.signals._channel_grid import (
+    grid_arrangement,
     normalize_layout,
     rect_to_channels,
     reduce_selection,
 )
 from myogestic.widgets.signals._scan import _scan_panel
+from myogestic.widgets.signals._state import _DETAIL_FULL, _DETAIL_MIN
 
 if TYPE_CHECKING:
     from myogestic.core import Context
@@ -155,46 +165,51 @@ def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None
 
     # Row break: the y-scaling group drops to its own line below source /
     # transport / View, instead of crowding them all onto one row.
-    # Y-scaling group kept together: Auto/Manual + Rescale + Per-Ch. When Per-Ch
-    # normalizes each channel into its own unit-height lane, the shared scale
-    # (Auto/Manual/Rescale, manual bounds, and Gain) is inert, so those controls
-    # grey out to make the active mode unambiguous.
+    # Y-scaling group kept together: Auto/Manual + Rescale + Per-Ch. `Per-Ch` is the scaling BASIS
+    # (shared axis vs one lane per channel); `Auto`/`Manual` is the adaptation policy and applies to
+    # either basis. Only the shared numeric min/max fields (and Gain in per-channel Auto, where
+    # normalization cancels it) are context-specific.
     per_ch = v.per_channel_scale
     if v.scale_mode not in ("auto", "manual"):
         v.scale_mode = "auto"
 
-    if per_ch:
-        imgui.begin_disabled()
-    # Segmented Auto/Manual instead of a cycle button — both modes visible, the
-    # active one raised.
+    # Per-Ch is the scaling BASIS; Auto/Manual decides whether that basis adapts — so both apply in
+    # per-channel mode too (they used to grey out). Segmented so both modes are visible.
     scale_i = segmented(f"{stream_name}_scale", ["Auto", "Manual"], 1 if v.scale_mode == "manual" else 0)
     v.scale_mode = "manual" if scale_i == 1 else "auto"
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Y-axis scale: Auto = per-frame fit · Manual = fixed y_min/y_max.")
+        imgui.set_tooltip(
+            "Y-axis scale — Auto: eases to the signal range (~5 s). Manual: holds it.\n"
+            "Per-Ch on: applied to each channel's own lane instead of one shared range."
+        )
 
-    # One-shot "rescale now" — captures the current visible window's
-    # y-range into Manual mode. Useful when the user wants to lock in a
-    # good range once and then leave it alone (cheaper visually than
-    # Auto and steadier than continuous auto-fit).
+    # One-shot "Fit & lock": fit the current visible data (per basis) and switch to Manual, so it
+    # stays put. Remember the basis on the click so a same-frame Per-Ch toggle can't misapply it.
     imgui.same_line()
     if imgui.button(f"Rescale##{stream_name}_rescale"):
-        v.rescale_pending = True
+        v.rescale_pending = "per_channel" if per_ch else "shared"
     if imgui.is_item_hovered():
         imgui.set_tooltip(
-            "Capture the current y-range into Manual mode.\n"
-            "Click again any time the trace goes off-scale."
+            ("Fit each channel to its own visible range" if per_ch else "Fit one shared range")
+            + " and lock to Manual.\nClick again any time the trace goes off-scale."
         )
-    if per_ch:
-        imgui.end_disabled()
 
     imgui.same_line()
     ch_pc, pc = imgui.checkbox(f"Per-Ch##{stream_name}_perch", v.per_channel_scale)
     if ch_pc:
         v.per_channel_scale = pc
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Normalize each enabled channel into its own unit-height lane.")
+        imgui.set_tooltip(
+            "Normalize each enabled channel into its own lane.\n"
+            "Trace heights are then NOT comparable between channels."
+        )
 
-    if per_ch or v.scale_mode != "manual":
+    if per_ch:
+        if v.scale_mode == "manual":  # no 16-field editor — just a small locked-count status
+            imgui.same_line()
+            imgui.text_disabled(f"{len(v.pc_ranges)} locked")
+        return
+    if v.scale_mode != "manual":
         return
 
     imgui.same_line()
@@ -219,21 +234,30 @@ def render_resolution_controls(
     # and the widths track the panel width / DPI instead of hand-computed pixels.
     max_window = stream._buffer_seconds if hasattr(stream, "_buffer_seconds") else 60.0
     per_ch = v.per_channel_scale
-    if not imgui.begin_table(f"{stream_name}_scope_row", 3, imgui.TableFlags_.sizing_stretch_same):
+    if not imgui.begin_table(f"{stream_name}_scope_row", 4, imgui.TableFlags_.sizing_stretch_same):
         return
     imgui.table_next_row()
 
     imgui.table_next_column()
-    imgui.text("Point cap")
+    imgui.text("Detail")
     imgui.same_line()
     imgui.set_next_item_width(-1)
-    changed_r, new_r = imgui.slider_int(f"##{stream_name}_res", v.n_pixels, 100, 10000, "%d pts")
+    # `detail_factor` is points-per-pixel internally; show it to the user as a
+    # percentage of full detail (100% = the crispest _DETAIL_FULL density), so
+    # the control reads as "how much detail" and tops out at 100% rather than a
+    # confusing ">1x".
+    pct = v.detail_factor / _DETAIL_FULL * 100.0
+    changed_r, new_pct = imgui.slider_float(
+        f"##{stream_name}_detail", pct, _DETAIL_MIN / _DETAIL_FULL * 100.0, 100.0, "%.0f%%"
+    )
     if changed_r:
-        v.n_pixels = new_r
+        v.detail_factor = new_pct / 100.0 * _DETAIL_FULL
     if imgui.is_item_hovered():
         imgui.set_tooltip(
-            "Ceiling on the points drawn per channel — the plot-width target is\n"
-            "capped here. Lower = coarser MinMax decimation, cheaper to draw."
+            "Display density only — recording and analysis are unchanged.\n"
+            "100% draws a few points per pixel (crispest); drag left for a\n"
+            "coarser, cheaper trace when many channels tax the frame rate.\n"
+            "MinMax keeps peak height, but fine shape and timing coarsen."
         )
 
     imgui.table_next_column()
@@ -247,7 +271,10 @@ def render_resolution_controls(
     imgui.table_next_column()
     imgui.text("Gain")
     imgui.same_line()
-    if per_ch:
+    # Gain is inert in per-channel AUTO (normalization cancels it), so grey it there; in per-channel
+    # MANUAL it magnifies each trace against its frozen range, so keep it live.
+    gain_inert = per_ch and v.scale_mode == "auto"
+    if gain_inert:
         imgui.begin_disabled()
     imgui.set_next_item_width(-1)
     changed_g, new_g = imgui.slider_float(
@@ -255,8 +282,25 @@ def render_resolution_controls(
     )
     if changed_g:
         v.gain = new_g
-    if per_ch:
+    if gain_inert:
         imgui.end_disabled()
+
+    imgui.table_next_column()
+    imgui.text("Artifact")
+    imgui.same_line()
+    imgui.set_next_item_width(-1)
+    # Reads as "Artifact < 20 ms" — the label states what it does, spelled out.
+    changed_t, new_t = imgui.slider_float(
+        f"##{stream_name}_transient", v.transient_ms, 0.0, 40.0, "< %.0f ms"
+    )
+    if changed_t:
+        v.transient_ms = new_t
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(
+            "Ignore transients shorter than this when fitting the y-scale, so a brief movement\n"
+            "artifact doesn't blow up the range. 0 = plain min/max. Keep it below your shortest\n"
+            "real contraction."
+        )
 
     imgui.end_table()
 
@@ -418,18 +462,30 @@ def render_grid_window(
         imgui.set_next_window_pos(
             imgui.ImVec2(mv.pos.x + 100.0, mv.pos.y + 100.0), imgui.Cond_.first_use_ever
         )
-    imgui.set_next_window_size(imgui.ImVec2(520.0, 420.0), imgui.Cond_.first_use_ever)
+    cell = _grid_cell_size()
+    n_cols = grid_arrangement(len(layout))
+    imgui.set_next_window_size(
+        _grid_window_size(layout, cell, n_cols), imgui.Cond_.first_use_ever
+    )
     visible, still_open = imgui.begin(
         f"Channel selection — {stream_name}##{stream_name}_grid_window", True
     )
     hovered_ch = -1
     try:
         if visible:
-            cell = _grid_cell_size()
+            # Tile the grids near-square (n_cols per row) instead of one tall
+            # vertical stack: each grid is a `begin_group`ed block so `same_line`
+            # places the next column to its right, wrapping onto a new row every
+            # n_cols. `render_grid` reads its own absolute cursor origin, so its
+            # drag hit-testing keeps working wherever the block lands.
             for grid_idx, grid in enumerate(layout):
+                if grid_idx % n_cols != 0:
+                    imgui.same_line(0.0, cell)  # one-cell gap between grid columns
+                imgui.begin_group()
                 hovered_ch = render_grid(
                     stream_name, grid_idx, grid, enabled, ch_names, ui, cell, hovered_ch
                 )
+                imgui.end_group()
     finally:
         imgui.end()
 
@@ -446,6 +502,30 @@ def _grid_cell_size() -> float:
     vertical budget now that they live in their own resizable window.
     """
     return imgui.get_frame_height() * 1.6
+
+
+def _grid_window_size(layout: list[ChannelGrid], cell: float, n_cols: int) -> imgui.ImVec2:
+    """First-open size for the grid window, fit to the tiled grid blocks.
+
+    Sized so an ``n_cols``-wide near-square tiling of the grids opens fully
+    visible (capped so it never exceeds a reasonable on-screen size); the
+    window stays freely resizable afterwards.
+    """
+    n = len(layout)
+    if n == 0:
+        return imgui.ImVec2(520.0, 420.0)
+    n_rows = ceil(n / n_cols)
+    style = imgui.get_style()
+    step_x = cell + style.item_spacing.x
+    step_y = cell + style.item_spacing.y
+    header = imgui.get_frame_height() * 1.4  # per-grid label + All/None row
+    w_cells = max((len(g.cells[0]) for g in layout if g.cells and g.cells[0]), default=1)
+    h_cells = max((len(g.cells) for g in layout if g.cells), default=1)
+    grid_w = w_cells * step_x
+    grid_h = h_cells * step_y + header
+    win_w = n_cols * grid_w + (n_cols - 1) * cell + style.window_padding.x * 2 + 20.0
+    win_h = n_rows * grid_h + (n_rows - 1) * step_y + style.window_padding.y * 2 + 20.0
+    return imgui.ImVec2(min(win_w, 1500.0), min(win_h, 950.0))
 
 
 def render_grid(
@@ -619,7 +699,7 @@ def render_cell(
     else:
         # Dim + hollow border: an on/off cue beyond brightness alone
         # (colorblind-safe) — a filled dot vs. no dot, not just color.
-        border = imgui.color_convert_float4_to_u32(imgui.ImVec4(0.5, 0.5, 0.5, 0.6))
+        border = imgui.color_convert_float4_to_u32(hairline(0.6))
         dl.add_rect(p_min, p_max, border, rounding=rounding)
 
     _draw_cell_label(dl, p_min, p_max, ch)
@@ -628,7 +708,10 @@ def render_cell(
         hovered_ch = ch
         name = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
         imgui.set_tooltip(f"{grid_label} · col {ch} · {name}")
-        highlight = imgui.color_convert_float4_to_u32(imgui.ImVec4(1.0, 1.0, 1.0, 0.8))
+        # Hover outline from the text slot, not literal white — white on white is
+        # invisible on the light theme.
+        hi = primary()
+        highlight = imgui.color_convert_float4_to_u32(imgui.ImVec4(hi.x, hi.y, hi.z, 0.8))
         dl.add_rect(p_min, p_max, highlight, rounding=rounding, thickness=1.5)
 
     if imgui.is_item_focused() and imgui.is_key_pressed(imgui.Key.space, repeat=False):
