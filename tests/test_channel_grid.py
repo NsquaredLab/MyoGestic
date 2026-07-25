@@ -8,6 +8,7 @@ from imgui_bundle import imgui
 from myogestic.stream import ChannelGrid, StreamInfo
 from myogestic.widgets.signals._channel_grid import (
     auto_shape,
+    grid_arrangement,
     normalize_layout,
     rect_to_channels,
     reduce_selection,
@@ -23,6 +24,22 @@ from myogestic.widgets.signals._controls import (
     render_grid,
 )
 from myogestic.widgets.signals._state import ViewerState
+
+
+def test_grid_arrangement_is_near_square_columns():
+    # 6 grids tile 3 columns x 2 rows (the multi-adapter case); a lone grid
+    # stays single-column; other counts stay near-square.
+    assert grid_arrangement(6) == 3
+    assert grid_arrangement(1) == 1
+    assert grid_arrangement(0) == 1
+    assert grid_arrangement(4) == 2
+    assert grid_arrangement(9) == 3
+    # Never wider than the grid count, and near-square: rows = ceil(n / n_cols)
+    # never exceeds n_cols (since n_cols = ceil(sqrt(n)) => n_cols**2 >= n).
+    for n in range(1, 40):
+        cols = grid_arrangement(n)
+        assert 1 <= cols <= n
+        assert (n + cols - 1) // cols <= cols
 
 
 def test_channel_grid_columns_and_streaminfo_field():

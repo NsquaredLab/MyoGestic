@@ -19,11 +19,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic._theme import mono_font
-
-# A sunken dark "console" surface with light mono text — reads as program
-# output in both light and dark themes (terminals stay dark on a light UI).
-_CONSOLE_BG = imgui.ImVec4(0.075, 0.078, 0.086, 1.0)
-_CONSOLE_TEXT = imgui.ImVec4(0.88, 0.89, 0.91, 1.0)
+from myogestic.widgets.common import CONSOLE_BG, CONSOLE_TEXT
 
 
 def render_log(
@@ -63,8 +59,8 @@ def render_log(
     h = height if height > 0 else -1.0
     # Console styling on the selectable read-only box: a sunken dark surface
     # (its frame bg) + light monospace text, in both themes.
-    imgui.push_style_color(imgui.Col_.frame_bg, _CONSOLE_BG)
-    imgui.push_style_color(imgui.Col_.text, _CONSOLE_TEXT)
+    imgui.push_style_color(imgui.Col_.frame_bg, CONSOLE_BG)
+    imgui.push_style_color(imgui.Col_.text, CONSOLE_TEXT)
     font = mono_font()
     if font is not None:
         imgui.push_font(font, imgui.get_font_size())

@@ -64,6 +64,77 @@ def test_heatmap_renders_with_per_cell_ticks(implot_frame):
     implot_frame(lambda: hm.ui(np.arange(6.0).reshape(2, 3)))
 
 
+def test_heatmap_shared_vrange_renders(implot_frame):
+    """A shared `vrange` renders for grids whose own ranges differ wildly.
+
+    Without it every instance maps its own min/max, so a quiet electrode array
+    and a loud one render identically — the failure mode when several arrays
+    are meant to be compared side by side. Also covers degenerate ranges.
+    """
+    quiet = np.full((2, 2), 0.01)
+    loud = np.array([[5.0, 9.0], [1.0, 7.0]])
+    shared = (0.0, 9.0)
+    hm = Heatmap("Array")
+    implot_frame(lambda: hm.ui(quiet, vrange=shared))
+    implot_frame(lambda: hm.ui(loud, vrange=shared))
+    implot_frame(lambda: hm.ui(quiet, vrange=(0.0, 0.0)))  # degenerate: lo == hi
+    implot_frame(lambda: hm.ui(np.zeros((2, 2))))  # flat data, no vrange
+
+
+def test_widget_id_gives_each_viewer_its_own_state():
+    """Several viewers on ONE stream must not share state.
+
+    Without a distinct `widget_id` every `SignalViewer("emg")` resolves to the
+    same ViewerState, so a per-electrode-grid panel layout would render five
+    identical tiles. Default (no widget_id) still keys by stream name.
+    """
+    from types import SimpleNamespace
+
+    from myogestic.widgets.signals._state import get_viewer_state
+
+    ctx = SimpleNamespace(streams={})
+    kw = dict(
+        n_pixels=None,
+        scale_mode="auto",
+        y_range=(-1.0, 1.0),
+        show_markers=False,
+        window_s=1.0,
+        stream_name="emg",
+    )
+    a = get_viewer_state(ctx, "tviz_IN1", **kw)
+    b = get_viewer_state(ctx, "tviz_IN2", **kw)
+    assert a is not b  # distinct ids -> independent state
+    assert a is get_viewer_state(ctx, "tviz_IN1", **kw)  # same id -> same state
+
+    a.channels = {1, 2}
+    b.channels = {7}
+    a.paused = True
+    assert b.channels == {7} and not b.paused  # no cross-talk
+
+    # Defaulting widget_id to the stream name keeps the single-viewer behaviour.
+    solo = get_viewer_state(ctx, "tviz_emg", **{**kw, "stream_name": None})
+    assert solo is get_viewer_state(ctx, "tviz_emg", **kw)
+
+
+def test_show_controls_seeds_from_constructor_arg():
+    """`show_controls=False` opens a tiled panel with the menu collapsed."""
+    from types import SimpleNamespace
+
+    from myogestic.widgets.signals._state import get_viewer_state
+
+    ctx = SimpleNamespace(streams={})
+    kw = dict(
+        n_pixels=None,
+        scale_mode="auto",
+        y_range=(-1.0, 1.0),
+        show_markers=False,
+        window_s=1.0,
+        stream_name="emg",
+    )
+    assert get_viewer_state(ctx, "tviz_hidden", show_controls=False, **kw).show_controls is False
+    assert get_viewer_state(ctx, "tviz_shown", **kw).show_controls is True
+
+
 def test_log_panel_renders_with_horizontal_scroll(imgui_frame):
     """The log panel renders long (non-wrapping) lines, the empty state, the
     narrow header (Clear button drops below), and the header-less variant."""

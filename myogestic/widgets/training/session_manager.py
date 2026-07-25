@@ -7,7 +7,14 @@ from imgui_bundle import imgui
 from imgui_bundle import portable_file_dialogs as pfd
 
 from myogestic.contracts import TrainingData
-from myogestic.widgets.common import PALETTE, panel_header, pop_selected, push_selected
+from myogestic.widgets.common import (
+    PALETTE,
+    muted,
+    panel_header,
+    pop_selected,
+    primary,
+    push_selected,
+)
 from myogestic.widgets.training._session_state import (
     SessionWidgetState,
     add_recorded_session,
@@ -169,7 +176,7 @@ def render_session_rows(
             row["selected"] = checked
         imgui.same_line()
         imgui.text_colored(
-            imgui.ImVec4(0.93, 0.95, 0.98, 1.0),
+            primary(),
             f"{row.get('date_str', row['name'])}  ·  {row.get('streams_str', '')}",
         )
         render_label_counts(row, class_names)
@@ -183,7 +190,7 @@ def render_label_counts(row: dict, class_names: list[str] | None) -> None:
     )
     if named_counts:
         imgui.same_line()
-        imgui.text_colored(imgui.ImVec4(0.55, 0.58, 0.62, 1.0), "·")
+        imgui.text_colored(muted(), "·")
         sess_names = row.get("class_names") or class_names
         for ci, n in named_counts:
             imgui.same_line()
@@ -199,6 +206,6 @@ def render_label_counts(row: dict, class_names: list[str] | None) -> None:
     if unlabeled:
         imgui.same_line()
         imgui.text_colored(
-            imgui.ImVec4(0.55, 0.58, 0.62, 1.0),
+            muted(),
             f"·  unlabeled:{unlabeled}",
         )

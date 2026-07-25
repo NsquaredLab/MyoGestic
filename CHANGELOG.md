@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Signal viewer — several viewers can share one stream.** New `SignalViewer(widget_id=…,
+  title=…, show_controls=…)`. State and ImGui ids now key off `widget_id` (defaulting to
+  `stream_name`) instead of the stream, so N viewers can show one stream through N panels — e.g.
+  **one viewer per electrode grid**, tiled with the existing `Grid` layout — each keeping its own
+  channels, scale, filter and pause. Previously every `SignalViewer("emg")` resolved to the same
+  state and rendered identically. `title` names each panel and `show_controls=False` opens a tile
+  with the control menu collapsed. Note the panels do **not** share a y-scale: give them a common
+  manual range before comparing amplitudes across tiles.
+- **Heatmap — shared colour range.** `Heatmap.ui(..., vrange=(lo, hi))` maps colours to an explicit
+  range instead of each frame's own min/max. Needed whenever several heatmaps are compared (with
+  per-instance autoscaling a quiet electrode array and a loud one render identically); also stops a
+  single heatmap's colours drifting frame to frame.
+- **Signal viewer — multi-grid selector tiles near-square.** The channel-grid window (`[Edit…]`)
+  now lays several grids out **side by side** in a near-square block (`ceil(sqrt(n))` columns — e.g.
+  6 grids as **3 × 2**) instead of one tall vertical stack, and opens sized to fit the tiling. Makes
+  a multi-adapter layout (e.g. Quattrocento `IN1…IN6`) usable without endless scrolling; per-grid
+  spatial click/drag is unchanged.
+- **Signal viewer — hide the panel chrome.** A `≡` button on the `SIGNAL` header collapses
+  *everything* around the plot — title, control menu (scale / filter / detail / window), channel bar
+  and footer — so a small tiled panel is nearly all trace. Collapsed, the button shrinks to a bare
+  icon so there is always a way back. `SignalViewer(show_controls=False)` opens collapsed.
+
+- **Signal viewer — eased auto y-scale.** Auto scale mode no longer hands the y-axis to ImPlot's
+  per-frame `auto_fit`, which made a variable signal in a small window zoom in/out constantly. It
+  now **grows fast, shrinks slow**: the range **snaps out instantly** to contain a new peak (never
+  clipped) but contracts over ~5 s (so it never jitters downward). Switching the shown stream /
+  channels / display-filter / notch / gain / RMS window snaps once, then settles. Manual mode and
+  the Rescale button (snap-and-hold) are unchanged (and Rescale is now gain-correct).
+  **Per-channel** mode gets the same treatment: each channel's normalisation range is eased
+  (snap-out / slow-shrink) and the axis is pinned to the lane geometry, instead of recomputed
+  every frame, so per-lane amplitudes no longer breathe. The underlying per-channel range scan is
+  now vectorized (a single NaN-aware axis-0 reduction), cutting per-frame cost ~15× at 256
+  channels so per-channel mode stays smooth on high-density grids.
+- **Signal viewer — per-channel Auto/Manual.** Per-Ch no longer greys out Auto/Manual/Rescale: it
+  is the scaling *basis* (shared vs one lane per channel) and Auto/Manual is the adaptation policy
+  applied to either. Per-channel **Manual** freezes each lane's current range, so a channel
+  weakening / strengthening / drifting stays visible against its captured reference (instead of
+  always being re-normalised to fill its lane); **Rescale** ("Fit & lock") re-fits every channel
+  and locks; **Gain** is live in per-channel Manual (magnifies each trace against its frozen
+  range) and inert in per-channel Auto.
+- **Signal viewer — artifact-robust y-scale.** Fitting the range (Auto, per-channel, and Rescale)
+  now ignores transients shorter than a configurable budget (**"Artifact" control, default 20 ms**),
+  so a brief movement-artifact spike no longer blows up the scale and dwarfs the real EMG. It works
+  by *duration*, not amplitude — the visible window is split into equal-time bins and the few most
+  extreme bin-maxima/minima that a sub-budget transient could occupy are dropped — because a 10 ms
+  artifact and a 10 ms real event are indistinguishable by amplitude alone. Mode-aware
+  (rectify/rms_env pin the lower bound to 0), per-channel then unioned for the shared axis (never a
+  flattened percentile that would drown out a contraction on one of many channels), and cheap
+  enough for the per-frame path (~11 ms at 256 ch). `0 ms` restores plain min/max.
+- **Signal viewer — width-relative "Detail" control.** The fixed **"Point cap"** slider (100–10000
+  points) is replaced by a **"Detail"** slider (shown as a percentage of full, default 100%) that
+  sets draw density *relative to the plot width* (full = a few points per pixel). The old cap fought
+  the width-derived target
+  (`min(n_pixels, plot_width × 3)`), so on a typical plot the top half of its range was a dead zone
+  (raising it past `plot_width × 3` did nothing) and the default under-resolved wide plots; the new
+  control is meaningful end-to-end — full detail always tracks the plot, and you only turn it *down*
+  for a coarser, cheaper trace when many channels tax the frame rate. The `SignalViewer(n_pixels=…)`
+  constructor arg is demoted to an optional hard-cap override (default `None` = no cap).
+
+### Fixed
+
+- **Light theme: hardcoded colours now follow the theme.** Nineteen colours were typed as literals
+  across eight widget files and could not respond to the active theme — a near-white session-manager
+  label and the raw viewer's footer were washed out on the light theme, the channel-grid hover
+  outline was white-on-white (invisible), and the prediction readout flashed *toward white*, i.e.
+  into the card. They now read the theme (`muted()` / `primary()` / `hairline()`) or a named token.
+  Colours that are deliberately fixed in both themes (the console surface, the status pill) are now
+  named tokens in `widgets/common.py` rather than inline literals.
+- **`RawSignalViewer` renders in the app's plot style.** It called `implot.begin_plot` without
+  `ensure_implot_style()`, so it drew with stock ImPlot chrome — chart border, opaque background,
+  heavy grid — instead of matching every other plot.
+- **`ProcessLauncher`** used its own red/green rather than the shared `DANGER` / `SUCCESS` status
+  colours, so Stop/Launch didn't match status elsewhere in the app.
+
+### Added
+
+- **`docs/concepts/visual-language.md`** — the visual contract (type, colour, panel headers, state
+  cues, plot styling, units, pop-out vs collapse, widget identity), beside the existing code
+  contract in `design-principles.md`. `tests/test_visual_language.py` enforces the two rules a
+  machine can decide honestly: no colour literals outside the design layer, and every module that
+  opens a plot styles it.
+
 ## [2.3.2] - 2026-07-23
 
 ### Changed
