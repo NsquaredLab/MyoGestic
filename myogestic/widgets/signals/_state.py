@@ -142,7 +142,7 @@ class ViewerState:
     # `resolve_enabled`. `None` until the first resolve. Also read by
     # `_controls.py` to reset the toggle-grid's shift-click anchor on a
     # stream/channel-count change.
-    active_channels_key: tuple[str, int] | None = None
+    active_channels_key: tuple[str, int, tuple[int, ...] | None] | None = None
     # Per-`(stream_key, n_channels)` selection cache so a `selectable`
     # viewer that flips between streams restores each stream's own
     # selection instead of sharing/resetting a single one. Populated by
@@ -456,6 +456,7 @@ def resolve_enabled(
     stream_key: str,
     n_channels: int,
     initial_channels: Iterable[int] | None = None,
+    scope: list[int] | None = None,
 ) -> set[int]:
     """Resolve the enabled channel set from persistent viewer state.
 
@@ -481,9 +482,24 @@ def resolve_enabled(
     one-shot hint. Returns the live `v.channels` set; safe because
     nothing reads it again until the *next* frame, after which only
     `render_channel_controls` mutates it.
+
+    `scope` (from `resolve_scope`) is the hard
+    restriction — the columns this viewer may *ever* show. It bounds the seed,
+    any restored selection, and the live set on **every** path, and it forms
+    part of the cache key so a differently-scoped viewer sharing a
+    ``widget_id`` never inherits another's selection. ``None`` is unrestricted.
     """
-    key = (stream_key, n_channels)
+    # The scope fingerprint is part of the identity: state is keyed by `widget_id`,
+    # not by Python instance, so a re-created (or same-id, differently-scoped)
+    # viewer must not inherit a selection resolved under a different scope.
+    key = (stream_key, n_channels, None if scope is None else tuple(scope))
+    scope_set = None if scope is None else set(scope)
     if v.channels_initialized and v.active_channels_key == key:
+        if scope_set is not None:
+            # Enforce on the fast path too: this returns before any of the seeding
+            # below, so intersecting only on restore would let anything that
+            # mutated `v.channels` in between escape the scope.
+            v.channels.intersection_update(scope_set)
         return v.channels
 
     first_ever = not v.channels_initialized
@@ -492,9 +508,11 @@ def resolve_enabled(
 
     cached = v._channels_by_key.get(key)
     if cached is not None:
-        v.channels = set(cached)
+        v.channels = set(cached) if scope_set is None else set(cached) & scope_set
     else:
-        v.channels = resolve_initial(initial_channels if first_ever else None, n_channels, [])
+        v.channels = resolve_initial(
+            initial_channels if first_ever else None, n_channels, [], scope=scope
+        )
 
     v.specs = []
     v.channels_initialized = True
