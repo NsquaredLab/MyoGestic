@@ -355,6 +355,7 @@ def render_channel_controls(
     stream: Stream,
     v: ViewerState,
     n_channels: int,
+    scope: list[int] | None = None,
 ) -> tuple[set[int], list[str] | None, int]:
     """Render the compact channel bar, and mutate `v.channels` from user input.
 
@@ -370,13 +371,19 @@ def render_channel_controls(
     enabled = v.channels
     ch_names = stream.info.channel_names if stream.info else None
     channel_grids = stream.info.channel_grids if stream.info else None
-    layout = normalize_layout(channel_grids, n_channels)
+    if scope is None:
+        scope = list(range(n_channels))
+    layout = normalize_layout(channel_grids, n_channels, scope)
     ui = _grid_ui.setdefault(stream_name, _GridUIState())
     if ui.last_key != v.active_channels_key:
         ui.last_clicked = -1
+        # Disarm any in-flight drag too: its snapshot and origin cell belong to
+        # the *previous* stream/scope, so finishing it here would apply a stale
+        # selection (or ch0) to the new one.
+        ui.drag = _DragSession()
         ui.last_key = v.active_channels_key
 
-    render_channel_bar(stream_name, ui, enabled, n_channels)
+    render_channel_bar(stream_name, ui, enabled, scope)
 
     hovered_ch = -1
     if ui.show_grid:
@@ -394,25 +401,32 @@ def render_channel_bar(
     stream_name: str,
     ui: _GridUIState,
     enabled: set[int],
-    n_channels: int,
+    scope: list[int],
 ) -> None:
     """Render the always-inline, one-line channel bar.
 
     `Channels {enabled}/{total}` + the global All/None/Invert ops (what the
     full-grid footer did before) + `[Edit…]`, which toggles the floating
     grid window (`ui.show_grid`) — the grid itself never renders inline.
+
+    Every op is bounded by `scope` — the columns this viewer may show — so the
+    total, All and Invert describe the panel's own channels rather than the
+    whole stream's. An unscoped viewer passes every channel.
     """
-    imgui.text(f"Channels {len(enabled)}/{n_channels}")
+    imgui.text(f"Channels {len(enabled)}/{len(scope)}")
     imgui.same_line()
     if imgui.small_button(f"All##{stream_name}_bar_all"):
         enabled.clear()
-        enabled.update(range(n_channels))
+        enabled.update(scope)
     imgui.same_line()
     if imgui.small_button(f"None##{stream_name}_bar_none"):
         enabled.clear()
     imgui.same_line()
     if imgui.small_button(f"Invert##{stream_name}_bar_invert"):
-        new_enabled = reduce_selection(enabled, "invert", range(n_channels))
+        # Complement *within the scope*, not `reduce_selection`'s XOR: XOR keeps
+        # any out-of-scope member of `enabled` (it isn't in the target set), so
+        # inverting could smuggle a foreign channel back in.
+        new_enabled = set(scope) - enabled
         enabled.clear()
         enabled.update(new_enabled)
     imgui.same_line()
@@ -471,6 +485,10 @@ def render_grid_window(
         f"Channel selection — {stream_name}##{stream_name}_grid_window", True
     )
     hovered_ch = -1
+    # The layout is already scope-restricted by `normalize_layout`, so its own
+    # columns are exactly what may be selected — the bound a shift-click range
+    # has to respect.
+    allowed = {c for g in layout for c in g.columns}
     try:
         if visible:
             # Tile the grids near-square (n_cols per row) instead of one tall
@@ -483,7 +501,7 @@ def render_grid_window(
                     imgui.same_line(0.0, cell)  # one-cell gap between grid columns
                 imgui.begin_group()
                 hovered_ch = render_grid(
-                    stream_name, grid_idx, grid, enabled, ch_names, ui, cell, hovered_ch
+                    stream_name, grid_idx, grid, enabled, ch_names, ui, cell, hovered_ch, allowed
                 )
                 imgui.end_group()
     finally:
@@ -537,8 +555,13 @@ def render_grid(
     ui: _GridUIState,
     cell: float,
     hovered_ch: int,
+    allowed: set[int] | None = None,
 ) -> int:
-    """Render one grid's header + cells; returns the updated `hovered_ch`."""
+    """Render one grid's header + cells; returns the updated `hovered_ch`.
+
+    `allowed` is forwarded to `render_cell` so a shift-click range cannot
+    escape this viewer's scope (``None`` = unrestricted).
+    """
     columns = grid.columns
     total = len(columns)
     sel = sum(1 for c in columns if c in enabled)
@@ -577,6 +600,7 @@ def render_grid(
                 ui,
                 cell,
                 hovered_ch,
+                allowed,
             )
 
     # Live rectangle update: recompute from the mouse-down snapshot every
@@ -679,8 +703,13 @@ def render_cell(
     ui: _GridUIState,
     cell: float,
     hovered_ch: int,
+    allowed: set[int] | None = None,
 ) -> int:
-    """Render one channel cell; returns the updated `hovered_ch`."""
+    """Render one channel cell; returns the updated `hovered_ch`.
+
+    `allowed` bounds a shift-click range selection to the columns this viewer
+    may show (``None`` = unrestricted).
+    """
     imgui.invisible_button(f"##{stream_name}_g{grid_idx}_cell_{ch}", imgui.ImVec2(cell, cell))
 
     is_on = ch in enabled
@@ -724,7 +753,11 @@ def render_cell(
         io = imgui.get_io()
         if io.key_shift and ui.last_clicked >= 0:
             lo, hi = sorted((ui.last_clicked, ch))
-            new_enabled = reduce_selection(enabled, "add", range(lo, hi + 1))
+            # The span is numeric, but the selection must not be: a sparse scope
+            # (or a grid with holes) would otherwise pick up channels between the
+            # endpoints that this viewer may not show at all.
+            span = range(lo, hi + 1) if allowed is None else [c for c in range(lo, hi + 1) if c in allowed]
+            new_enabled = reduce_selection(enabled, "add", span)
             enabled.clear()
             enabled.update(new_enabled)
             ui.drag.armed = False

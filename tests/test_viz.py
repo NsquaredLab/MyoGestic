@@ -284,3 +284,16 @@ def test_session_manager_dedups_same_session_across_path_spellings(tmp_path):
     # the dialog returns the same file via a non-canonical spelling
     load_session_files(st, [str(tmp_path / "real" / ".." / "real" / "s.session.zip")])
     assert len(st.sessions) == 1  # deduped, not doubled
+
+
+def test_channel_scope_is_frozen_at_construction():
+    """`Iterable[int]` admits a generator, and the scope is re-read every frame
+    — a lazy one would be exhausted after the first, silently emptying the
+    panel. It must be snapshotted (and keep its order, which the default
+    selection takes a prefix of)."""
+    gen = (c for c in [5, 1, 5, 3])
+    viewer = SignalViewer("emg", channel_scope=gen)
+
+    assert viewer._channel_scope == (5, 1, 5, 3)  # materialised, order kept
+    assert viewer._channel_scope == (5, 1, 5, 3)  # still there on the next frame
+    assert SignalViewer("emg")._channel_scope is None  # unrestricted default
