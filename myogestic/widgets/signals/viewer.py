@@ -22,6 +22,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.widgets.common import panel_header_button, pop_selected, push_selected
+from myogestic.widgets.signals._channel_grid import resolve_scope
 from myogestic.widgets.signals._controls import (
     render_channel_controls,
     render_controls,
@@ -61,8 +62,20 @@ class SignalViewer:
         Explicit state / ImGui id scope. Defaults to ``stream_name``. Give each
         viewer its OWN id to show one stream through several panels (e.g. one
         per electrode grid) — otherwise they share a single state and render
-        identically. Pair with ``initial_channels`` to open each on its own
-        channels, and prefer a stable, unique string (grid labels can repeat).
+        identically. Pair with ``channel_scope`` to give each its own channels,
+        and prefer a stable, unique string (grid labels can repeat).
+    channel_scope
+        The columns this viewer may **ever** show — a hard restriction, unlike
+        ``initial_channels`` (which only seeds the opening selection). All /
+        None / Invert, the ``N/total`` count, the ``[Edit…]`` grid and
+        shift-click ranges are all bounded by it, so a per-electrode-grid panel
+        stays its own array however the user clicks. ``None`` (default) is
+        unrestricted; an explicit scope that matches no valid column renders
+        "no channels in scope" rather than quietly widening back to the whole
+        stream. Positional, so with ``selectable=True`` it is re-applied
+        (clamped) to whichever stream is shown. Note it also drives the default
+        selection: a 64-channel scope opens on its first 16 unless you pass
+        ``initial_channels`` too.
     title
         Panel header text. Defaults to ``"SIGNAL · <stream>"`` — set it per
         panel when several viewers share a stream, or every tile reads alike.
@@ -118,8 +131,13 @@ class SignalViewer:
         widget_id: str | None = None,
         title: str | None = None,
         show_controls: bool = True,
+        channel_scope: Iterable[int] | None = None,
     ) -> None:
         self._stream_name = stream_name
+        # Snapshot the scope: `Iterable` admits a generator, and this is re-read
+        # every frame — a lazy one would be exhausted after the first. Order is
+        # kept because the default selection takes a prefix of it.
+        self._channel_scope = None if channel_scope is None else tuple(channel_scope)
         self._widget_id = widget_id
         self._title = title
         self._show_controls = show_controls
@@ -191,7 +209,16 @@ class SignalViewer:
         # building the frame, so the frame's column slice and the plot loop's
         # per-channel decimation only ever touch those columns.
         n_channels = stream.info.n_channels
-        enabled = resolve_enabled(v, active_stream, n_channels, self._initial_channels)
+        # The scope is positional (column indices), so it applies to whichever
+        # stream is shown, clamped to that stream's width — never silently
+        # relaxed, which would break the "may ever show" contract.
+        scope = resolve_scope(self._channel_scope, n_channels)
+        if not scope:
+            imgui.text_disabled(
+                f"{active_stream}: no channels in scope (stream has {n_channels})"
+            )
+            return
+        enabled = resolve_enabled(v, active_stream, n_channels, self._initial_channels, scope)
 
         # Channel bar at the top, above the plot. It reads/mutates `v.channels`
         # (the same set `enabled` points at) and reports grid-hover — all
@@ -200,7 +227,7 @@ class SignalViewer:
         # chrome; nothing can be hovered then, so the highlight resets to -1.
         hovered_ch = -1
         if v.show_controls:
-            _, _, hovered_ch = render_channel_controls(wid, stream, v, n_channels)
+            _, _, hovered_ch = render_channel_controls(wid, stream, v, n_channels, scope)
         v.last_hovered = hovered_ch
 
         frame = build_signal_frame(stream, v, enabled)

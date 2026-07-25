@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Signal viewer — `channel_scope` restricts a panel to its own channels.** `initial_channels`
+  only ever *seeded* a selection, so a per-electrode-grid panel stayed scoped only until the user
+  touched it: **All** enabled every channel in the stream, `[Edit…]` listed every grid, and the
+  count read `N/320` instead of `N/64`. `SignalViewer(channel_scope=…)` is the hard restriction —
+  the columns a panel may *ever* show. It bounds the seed, All/None/Invert, the count, the grid
+  selector, shift-click ranges and rubber-band drags, and forms part of the selection cache key.
+  `None` (default) is unrestricted; an explicit scope matching no valid column renders
+  "no channels in scope" rather than silently widening back to the whole stream. Note it also
+  drives the default selection, so a 64-channel scope opens on its first 16 unless
+  `initial_channels` is passed too.
 - **Signal viewer — several viewers can share one stream.** New `SignalViewer(widget_id=…,
   title=…, show_controls=…)`. State and ImGui ids now key off `widget_id` (defaulting to
   `stream_name`) instead of the stream, so N viewers can show one stream through N panels — e.g.

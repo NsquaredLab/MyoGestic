@@ -808,3 +808,56 @@ def test_build_signal_frame_notch_attenuates_hum_end_to_end():
         f_on = build_signal_frame(stream, v_on, {0, 1})
     assert f_on is not None and np.all(np.isfinite(f_on.data))
     assert _rms(f_on.data[len(f_on.data) // 2 :]) < 0.6 * _rms(f_off.data[settled])
+
+
+# --- channel_scope enforcement in resolve_enabled --------------------------------
+
+
+def test_scope_bounds_the_seed_and_survives_the_fast_path():
+    """Scope must hold on EVERY path.
+
+    `resolve_enabled` returns early when the key is unchanged, so enforcing the
+    scope only while seeding/restoring would let anything that mutated
+    `v.channels` in between (a click, a stale set) escape it.
+    """
+    v = ViewerState()
+    scope = list(range(256, 320))  # electrode grid IN5 of a 320-ch stream
+
+    enabled = resolve_enabled(v, "emg", 320, scope=scope)
+    assert enabled  # NOT empty: the policy runs inside the scope
+    assert enabled <= set(scope)
+
+    # Simulate something slipping a foreign channel in, then re-resolve on the
+    # unchanged key — the fast path must still clamp it.
+    v.channels.add(0)
+    again = resolve_enabled(v, "emg", 320, scope=scope)
+    assert 0 not in again
+    assert again <= set(scope)
+
+
+def test_scope_is_part_of_the_selection_cache_key():
+    """State is keyed by widget_id, not by Python instance, so a differently
+    scoped viewer reusing an id must not inherit the other's selection."""
+    v = ViewerState()
+    a = set(resolve_enabled(v, "emg", 320, scope=list(range(0, 64))))
+    b = set(resolve_enabled(v, "emg", 320, scope=list(range(256, 320))))
+
+    assert a <= set(range(0, 64))
+    assert b <= set(range(256, 320))
+    assert not (b & a)
+
+
+def test_explicit_initial_channels_are_clamped_to_scope():
+    v = ViewerState()
+    enabled = resolve_enabled(
+        v, "emg", 320, initial_channels=[0, 257, 300], scope=list(range(256, 320))
+    )
+    assert enabled == {257, 300}  # 0 is outside the scope
+
+
+def test_unscoped_resolve_enabled_is_unchanged():
+    """Regression guard: `scope=None` must behave exactly as before."""
+    a = resolve_enabled(ViewerState(), "emg", 8)
+    b = resolve_enabled(ViewerState(), "emg", 8, scope=None)
+    assert a == b == set(range(8))
+    assert resolve_enabled(ViewerState(), "emg", 320) == set(range(16))

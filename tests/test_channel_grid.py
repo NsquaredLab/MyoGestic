@@ -13,6 +13,7 @@ from myogestic.widgets.signals._channel_grid import (
     rect_to_channels,
     reduce_selection,
     resolve_initial,
+    resolve_scope,
 )
 from myogestic.widgets.signals._controls import (
     _finalize_drag,
@@ -377,3 +378,60 @@ def test_grid_drag_rectangle_works_when_nested_inside_another_window(imgui_ctx):
     _draw_nested_grid_frame(grid, enabled, ui, cell, stream_id)
     _finalize_drag(ui, enabled)
     assert enabled == {0, 1, 3, 4}
+
+
+# --- channel_scope: a viewer's hard restriction -----------------------------------
+
+
+def test_resolve_scope_none_is_unrestricted_explicit_is_honoured():
+    assert resolve_scope(None, 4) == [0, 1, 2, 3]
+    assert resolve_scope([2, 0, 2, 9], 4) == [2, 0]  # clamped, deduped, ORDER kept
+    # An explicit scope that matches nothing stays empty — it must NOT quietly
+    # widen back to the whole stream, which would defeat scoping a panel.
+    assert resolve_scope([99, -1], 4) == []
+    assert resolve_scope([], 4) == []
+
+
+def test_resolve_initial_policy_runs_inside_the_scope():
+    """The high-offset trap: an unscoped policy picks 'first 16 of 320' = 0..15,
+    which for a 256..319 scope intersects to NOTHING — a dead panel."""
+    scope = list(range(256, 320))  # e.g. electrode grid IN5 of a 320-ch stream
+    assert resolve_initial(None, 320, [], scope=scope) == set(range(256, 272))
+
+    small = list(range(256, 276))  # <= 32 columns -> all of them
+    assert resolve_initial(None, 320, [], scope=small) == set(small)
+
+    # An explicit selection is clamped to the scope, not merely to the stream.
+    assert resolve_initial([256, 300, 5], 320, [], scope=scope) == {256, 300}
+    # Unscoped behaviour is unchanged.
+    assert resolve_initial(None, 320, []) == set(range(16))
+
+
+def test_normalize_layout_scope_nulls_cells_and_keeps_shape():
+    """Out-of-scope cells are NULLED, not dropped: a rectangular grid keeps its
+    physical shape, and `rect_to_channels` skips None, so a rubber-band drag
+    physically cannot select an out-of-scope channel."""
+    grid = ChannelGrid("g", [[0, 1], [2, 3]])
+    layout = normalize_layout([grid], 4, scope=[0, 3])
+
+    assert layout[0].cells == [[0, None], [None, 3]]  # shape preserved
+    assert sorted(layout[0].columns) == [0, 3]
+    # A drag over the whole grid can only ever reach in-scope channels.
+    assert rect_to_channels(layout[0], 0, 0, 1, 1) == {0, 3}
+
+
+def test_normalize_layout_scope_drops_empty_grids_and_collects_the_remainder():
+    grids = [ChannelGrid("A", [[0, 1]]), ChannelGrid("B", [[2, 3]])]
+    layout = normalize_layout(grids, 8, scope=[0, 1, 7])
+
+    labels = [g.label for g in layout]
+    assert "B" in labels or "B" not in labels  # B has no in-scope column -> dropped
+    assert labels == ["A", "other"]
+    # Channel 7 is in scope but covered by no grid; without the "other" grid it
+    # would be selectable via All yet impossible to toggle individually.
+    assert sorted(c for g in layout for c in g.columns) == [0, 1, 7]
+
+
+def test_normalize_layout_unscoped_is_unchanged():
+    grid = ChannelGrid("g", [[0, 1], [2, 3]])
+    assert normalize_layout([grid], 4) == normalize_layout([grid], 4, scope=None)
