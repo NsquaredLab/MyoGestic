@@ -11,6 +11,7 @@ import sys
 import time
 import uuid
 import zipfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.util import find_spec
 from pathlib import Path
@@ -32,8 +33,9 @@ if find_spec("zarrs") is not None:
 #: per-stream entry changes (e.g. a new field). Readers must stay tolerant
 #: of older, unversioned meta.json files (see `open_session_store`), so
 #: this is informational rather than enforced. Bumped to 2 for
-#: `channel_names` + `channel_grids` (see `StreamInfo.channel_grids`).
-_META_SCHEMA_VERSION = 2
+#: `channel_names` + `channel_grids` (see `StreamInfo.channel_grids`), and to 3
+#: for the optional top-level `control_space` (see `Session.save_meta`).
+_META_SCHEMA_VERSION = 3
 
 
 def _robust_rmtree(path: Path, *, retries: int = 5, delay_s: float = 0.1) -> None:
@@ -295,7 +297,12 @@ class Session:
         ts = timestamp if timestamp is not None else local_clock()
         self.label_track.append(LabelEvent(timestamp=ts, class_index=class_index))
 
-    def save_meta(self, app_name: str, class_names: list[str] | None = None) -> None:
+    def save_meta(
+        self,
+        app_name: str,
+        class_names: list[str] | None = None,
+        control_space: Mapping[str, object] | None = None,
+    ) -> None:
         """Write meta.json + labels.json to the session folder.
 
         Parameters
@@ -306,6 +313,15 @@ class Session:
             Optional human-readable names for label class indices.
             Persisting them makes old sessions self-describing: readers can
             render labels without an external lookup.
+        control_space
+            Optional control configuration this recording was made under, as
+            produced by ``ControlSet.as_dict()``. Channel *names* alone do not say
+            what a number meant: a value of ``-1`` is a full excursion for a signed
+            DOF and out of range for a one-way one, and nothing recoverable
+            distinguishes "declared one-way" from "signed, but this operator never
+            went negative". Persisting the declared range and rest value is what
+            lets a reader years later reconstruct the space, so round-trip it
+            through ``load_dofs`` rather than guessing.
         """
         meta: dict[str, object] = {
             "schema_version": _META_SCHEMA_VERSION,
@@ -328,6 +344,8 @@ class Session:
         }
         if class_names is not None:
             meta["class_names"] = list(class_names)
+        if control_space is not None:
+            meta["control_space"] = dict(control_space)
         (self.path / "meta.json").write_text(json.dumps(meta, indent=2))
         labels = [
             {"timestamp": e.timestamp, "class_index": e.class_index} for e in self.label_track
