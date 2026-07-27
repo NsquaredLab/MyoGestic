@@ -24,6 +24,7 @@ import numpy as np
 import pytest
 
 from myogestic.session import open_session_store
+from myogestic.vhi.legacy import LEGACY_POSE_DOFS, decode_pose, encode_pose
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 MOVED = FIXTURES / "vhi_pose_moved.session.zip"
@@ -111,3 +112,95 @@ def test_channels_six_to_eight_are_dead():
 def test_rest_archive_is_all_zero():
     """A rest frame is zeros, which is what makes 0.0 the canonical neutral value."""
     assert np.count_nonzero(_pose(RESTED)) == 0
+
+
+# --- the bridge, read against the recordings above ----------------------------
+
+
+def test_decode_names_only_the_channels_vhi_consumed():
+    """Six DOFs, not nine: channels 6-8 are read by no VHI consumer."""
+    decoded = decode_pose(_pose(MOVED))
+    assert tuple(decoded) == LEGACY_POSE_DOFS
+    assert len(decoded) == 6
+
+
+def test_decode_is_a_single_negation():
+    """Not a rescale: rescaling would invent an extension half and move rest."""
+    pose = _pose(MOVED)
+    decoded = decode_pose(pose)
+    for i, name in enumerate(LEGACY_POSE_DOFS):
+        assert decoded[name] == pytest.approx(-pose[:, i], abs=1e-6)
+
+
+def test_decoded_values_stay_inside_the_canonical_domain():
+    decoded = decode_pose(_pose(MOVED))
+    for values in decoded.values():
+        assert values.min() >= -1.0
+        assert values.max() <= 1.0
+
+
+def test_the_recorded_corpus_only_reaches_the_positive_half():
+    """The operator only flexed, so canonical values never go negative.
+
+    A property of the corpus, not of the target: VHI multiplies with no clamp, so
+    the extension half renders fine. Nothing may read this as a limit.
+
+    Note the archive itself is a sustained fist — every one of its samples has
+    channels 0-5 at full flexion, so the ``0.0`` that ``pose.max()`` reports comes
+    from the three dead channels rather than from any rest frame.
+    """
+    stacked = np.stack(list(decode_pose(_pose(MOVED)).values()))
+    assert stacked.min() >= 0.0, "a negative value would mean recorded extension"
+    assert stacked.max() == pytest.approx(1.0, abs=1e-6)
+
+
+def test_thumb_abduction_decodes_to_full_scale_in_a_fist():
+    """Channel 1 is exactly -1.0 recorded, so it decodes to exactly +1.0."""
+    pose = _pose(MOVED)
+    decoded = decode_pose(pose[int(np.argmin(pose[:, 0]))])
+    assert float(decoded["thumb.abduction"]) == 1.0
+
+
+def test_all_six_dofs_are_identical_because_the_corpus_is_rank_one():
+    pose = _pose(MOVED)
+    decoded = decode_pose(pose[pose[:, 0] < -0.5])
+    reference = decoded["thumb.flexion"]
+    for name, values in decoded.items():
+        assert values == pytest.approx(reference, abs=1e-6), name
+
+
+def test_rest_frames_decode_to_canonical_rest():
+    for values in decode_pose(_pose(RESTED)).values():
+        assert np.count_nonzero(values) == 0
+
+
+def test_encode_is_the_inverse_of_decode():
+    """One declaration serves both directions, so train and serve cannot drift."""
+    pose = _pose(MOVED)
+    frame = pose[int(np.argmin(pose[:, 0]))]
+    decoded = {k: float(v) for k, v in decode_pose(frame).items()}
+    assert encode_pose(decoded) == pytest.approx(frame, abs=1e-6)
+
+
+def test_encode_handles_the_extension_half_symmetrically():
+    """A signed canonical value must survive both directions, not just the recorded one."""
+    for v in (-1.0, -0.25, 0.0, 0.5, 1.0):
+        frame = encode_pose({"index.flexion": v})
+        assert float(decode_pose(frame)["index.flexion"]) == pytest.approx(v)
+
+
+def test_encode_rests_the_names_it_was_not_given():
+    frame = encode_pose({"index.flexion": 1.0})
+    assert frame.tolist() == [0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+
+def test_encode_always_zeroes_the_dead_channels():
+    frame = encode_pose(dict.fromkeys(LEGACY_POSE_DOFS, 1.0))
+    assert frame[6:].tolist() == [0.0, 0.0, 0.0]
+
+
+@pytest.mark.parametrize("width", [1, 5, 6, 8, 10])
+def test_a_frame_of_the_wrong_width_is_refused(width):
+    """Guessing which channels are missing would be worse than refusing."""
+    with pytest.raises(ValueError, match="9 channels wide"):
+        decode_pose(np.zeros(width, dtype=np.float32))
