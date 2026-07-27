@@ -30,9 +30,20 @@ _DOF_KEYS = frozenset({"kind", "range", "rest", "states", "debounce_s", "label"}
 _KINDS = ("continuous", "discrete")
 
 
-def check_name(name: str, errs: list[str]) -> bool:
-    """Append a fault unless ``name`` matches the canonical grammar."""
-    if _NAME_RE.match(name):
+def check_name(name: Any, errs: list[str]) -> bool:
+    r"""Append a fault unless ``name`` matches the canonical grammar.
+
+    Uses ``fullmatch``: with ``match``, a trailing ``\n`` slips past the ``$``
+    anchor, and ``"index.flexion\n"`` alongside ``"index.flexion"`` would declare
+    two DOFs with visually identical channel labels.
+    """
+    if not isinstance(name, str):
+        errs.append(
+            f"[dofs] key {name!r}: DOF names must be strings. Quote it, e.g. "
+            f'"index.flexion" = "continuous".'
+        )
+        return False
+    if _NAME_RE.fullmatch(name):
         return True
     errs.append(
         f"[dofs] {name!r}: not a canonical control name. Use dotted lowercase "
@@ -74,6 +85,17 @@ def normalise_value(name: str, value: Any, errs: list[str]) -> dict[str, Any] | 
                 f"{{ kind = \"continuous\", range = [lo, hi] }}."
             )
             return None
+        # Hazard 3, and only here: in the array form element 0 is *implicitly* the
+        # neutral state, so a list naming `rest` later reads backwards. The
+        # escalated form states `rest` outright and is free to order states as it
+        # likes, so this check must not run there.
+        if "rest" in value[1:]:
+            errs.append(
+                f"[dofs] {name!r}: 'rest' appears at index {value.index('rest')}, but "
+                f"the array form makes the first state the neutral one. Put 'rest' "
+                f"first, or use the table form with an explicit rest = \"...\"."
+            )
+            return None
         return {"kind": "discrete", "states": value}
 
     if isinstance(value, Mapping):
@@ -81,7 +103,10 @@ def normalise_value(name: str, value: Any, errs: list[str]) -> dict[str, Any] | 
         # a nested table, which is structurally identical to the escalation form —
         # and it coexists with a quoted `"hand.grip"` without a duplicate-key
         # error, so one of the two DOFs would vanish silently.
-        if not (set(value) & _DOF_KEYS):
+        # `kind` specifically, not "any known key": with a looser test, an unquoted
+        # `wrist.rest = 0.0` or `hand.label = "..."` line reads as an escalated DOF
+        # and silently inserts a phantom entry, shifting every wire index after it.
+        if "kind" not in value:
             errs.append(
                 f"[dofs] {name!r}: looks like an unquoted dotted key. Quote the "
                 f'name — `"{name}.<something>" = "continuous"` — or, if this is an '
@@ -125,6 +150,17 @@ def check_range(name: str, lo: float, hi: float, errs: list[str]) -> bool:
             f"Use a signed range [-h, h], or a one-way range [0, h] / [-h, 0]."
         )
         return False
+    # Canonical continuous DOFs are *normalized*; `range` narrows the domain, it
+    # does not carry a unit. A wide range would put an un-representable magnitude
+    # on the wire (float32 overflows to inf past ~3.4e38) and there would be no
+    # honest place to record what the number means.
+    if max(abs(lo), abs(hi)) > 1.0:
+        errs.append(
+            f"[dofs] {name!r}: range [{lo}, {hi}] leaves the normalized domain. "
+            f"Continuous DOFs are normalized to [-1, 1]; give the target the gain "
+            f"(e.g. pixels per second belongs to the cursor target, not here)."
+        )
+        return False
     return True
 
 
@@ -141,15 +177,6 @@ def check_states(name: str, states: Any, errs: list[str]) -> tuple[str, ...] | N
         return None
     if len(set(states)) != len(states):
         errs.append(f"[dofs] {name!r}: duplicate states in {list(states)}.")
-        return None
-    # Hazard 3: the array form silently makes element 0 the rest state, so a list
-    # that names `rest` later on means the opposite of what it reads like.
-    if "rest" in states[1:]:
-        errs.append(
-            f"[dofs] {name!r}: 'rest' appears at index {states.index('rest')}, but the "
-            f"first state is the neutral one. Put 'rest' first, or name the neutral "
-            f"state explicitly with rest = \"...\"."
-        )
         return None
     return tuple(states)
 
@@ -173,6 +200,20 @@ def check_simultaneous(
         return {}
     out: dict[str, tuple[str, ...]] = {}
     for control, names in block.items():
+        if not isinstance(control, str):
+            errs.append(
+                f"[simultaneous] key {control!r}: control names must be strings, e.g. "
+                f'proportional = ["index.flexion"].'
+            )
+            continue
+        if isinstance(names, (list, tuple)) and any(not isinstance(n, str) for n in names):
+            # Guard before the membership test below: an unhashable member (a nested
+            # list) would raise TypeError and escape the accumulate-once contract.
+            errs.append(
+                f"[simultaneous] {control!r}: every entry must be a DOF name string "
+                f"(got {list(names)!r})."
+            )
+            continue
         if isinstance(names, str) or not isinstance(names, (list, tuple)):
             errs.append(
                 f"[simultaneous] {control!r}: must be a list of DOF names, e.g. "
