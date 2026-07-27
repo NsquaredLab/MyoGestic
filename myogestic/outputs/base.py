@@ -157,6 +157,21 @@ class Output:
         """
         raise NotImplementedError
 
+    def flush(self) -> None:
+        """Send the latest pushed value **now**, instead of on the next tick.
+
+        The send loop is paced, so a value pushed immediately before teardown is
+        normally never sent at all: the thread is mid-sleep, and [`stop`][] ends the
+        loop before it wakes. For the neutral "release everything" frame that a
+        target delivers on shutdown, that is the difference between a hand returning
+        to rest and one frozen in the last commanded pose - so anything guaranteeing
+        rest-on-stop must flush rather than push.
+
+        Errors are swallowed and logged exactly as on a normal tick, and a flush
+        before the first [`push`][] does nothing.
+        """
+        self._send_step()
+
     def stop(self) -> None:
         """Stop the send thread.
 
