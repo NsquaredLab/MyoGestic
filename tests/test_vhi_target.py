@@ -334,3 +334,29 @@ def test_two_targets_receive_the_same_frame():
     bus = ControlBus(_controls(), targets=[VhiTarget(a), VhiTarget(b)])
     bus.push({"middle.flexion": 0.5})
     assert a.last.tolist() == b.last.tolist()
+
+
+# --- the outlet the target is normally handed -----------------------------------
+
+
+def test_the_vhi_outlet_advertises_a_stable_source_id():
+    """Without one, a consumer that resolved the old outlet keeps a dead inlet.
+
+    Measured against the real binary: VHI warns about the missing source ID on
+    connect, and its own re-resolve only runs while it holds no inlet at all — so
+    after a MyoGestic restart it stayed deaf until VHI itself was restarted. LSL can
+    only recover the pairing if the outlet identifies itself the same way twice.
+    """
+    from myogestic.vhi import virtual_hand
+
+    spec = virtual_hand()
+    first, second = spec.outlet(), spec.outlet()
+    try:
+        a = first._outlet.get_sinfo().source_id
+        b = second._outlet.get_sinfo().source_id
+        assert a, "an empty source_id is what makes the stream unrecoverable"
+        assert a == b, "the id must be stable across restarts, not per-instance"
+        assert spec.output_stream_name in a
+    finally:
+        first.stop()
+        second.stop()
