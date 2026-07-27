@@ -1,0 +1,140 @@
+from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import message as _message
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+
+DESCRIPTOR: _descriptor.FileDescriptor
+
+class Kind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    KIND_UNSPECIFIED: _ClassVar[Kind]
+    CONTINUOUS: _ClassVar[Kind]
+    DISCRETE: _ClassVar[Kind]
+KIND_UNSPECIFIED: Kind
+CONTINUOUS: Kind
+DISCRETE: Kind
+
+class DofDeclaration(_message.Message):
+    __slots__ = ("name", "kind", "lo", "hi", "rest", "states", "rest_state")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    LO_FIELD_NUMBER: _ClassVar[int]
+    HI_FIELD_NUMBER: _ClassVar[int]
+    REST_FIELD_NUMBER: _ClassVar[int]
+    STATES_FIELD_NUMBER: _ClassVar[int]
+    REST_STATE_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    kind: Kind
+    lo: float
+    hi: float
+    rest: float
+    states: _containers.RepeatedScalarFieldContainer[str]
+    rest_state: str
+    def __init__(self, name: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ...) -> None: ...
+
+class DeclareRequest(_message.Message):
+    __slots__ = ("standard_version", "dofs", "client_name")
+    STANDARD_VERSION_FIELD_NUMBER: _ClassVar[int]
+    DOFS_FIELD_NUMBER: _ClassVar[int]
+    CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
+    standard_version: str
+    dofs: _containers.RepeatedCompositeFieldContainer[DofDeclaration]
+    client_name: str
+    def __init__(self, standard_version: _Optional[str] = ..., dofs: _Optional[_Iterable[_Union[DofDeclaration, _Mapping]]] = ..., client_name: _Optional[str] = ...) -> None: ...
+
+class DofVerdict(_message.Message):
+    __slots__ = ("name", "renderable", "message", "renders_as")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    RENDERABLE_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    RENDERS_AS_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    renderable: bool
+    message: str
+    renders_as: str
+    def __init__(self, name: _Optional[str] = ..., renderable: bool = ..., message: _Optional[str] = ..., renders_as: _Optional[str] = ...) -> None: ...
+
+class DeclareReply(_message.Message):
+    __slots__ = ("accepted", "verdicts", "standard_version", "continuous_stream_name", "continuous_channel_order")
+    ACCEPTED_FIELD_NUMBER: _ClassVar[int]
+    VERDICTS_FIELD_NUMBER: _ClassVar[int]
+    STANDARD_VERSION_FIELD_NUMBER: _ClassVar[int]
+    CONTINUOUS_STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
+    CONTINUOUS_CHANNEL_ORDER_FIELD_NUMBER: _ClassVar[int]
+    accepted: bool
+    verdicts: _containers.RepeatedCompositeFieldContainer[DofVerdict]
+    standard_version: str
+    continuous_stream_name: str
+    continuous_channel_order: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, accepted: bool = ..., verdicts: _Optional[_Iterable[_Union[DofVerdict, _Mapping]]] = ..., standard_version: _Optional[str] = ..., continuous_stream_name: _Optional[str] = ..., continuous_channel_order: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class SetControlRequest(_message.Message):
+    __slots__ = ("continuous", "discrete")
+    class ContinuousEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: float
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[float] = ...) -> None: ...
+    class DiscreteEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+    CONTINUOUS_FIELD_NUMBER: _ClassVar[int]
+    DISCRETE_FIELD_NUMBER: _ClassVar[int]
+    continuous: _containers.ScalarMap[str, float]
+    discrete: _containers.ScalarMap[str, str]
+    def __init__(self, continuous: _Optional[_Mapping[str, float]] = ..., discrete: _Optional[_Mapping[str, str]] = ...) -> None: ...
+
+class ControlAck(_message.Message):
+    __slots__ = ("applied", "rejected")
+    class RejectedEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+    APPLIED_FIELD_NUMBER: _ClassVar[int]
+    REJECTED_FIELD_NUMBER: _ClassVar[int]
+    applied: bool
+    rejected: _containers.ScalarMap[str, str]
+    def __init__(self, applied: bool = ..., rejected: _Optional[_Mapping[str, str]] = ...) -> None: ...
+
+class SweepControlRequest(_message.Message):
+    __slots__ = ("name", "duration_s", "both_directions")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    DURATION_S_FIELD_NUMBER: _ClassVar[int]
+    BOTH_DIRECTIONS_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    duration_s: float
+    both_directions: bool
+    def __init__(self, name: _Optional[str] = ..., duration_s: _Optional[float] = ..., both_directions: bool = ...) -> None: ...
+
+class SweepObservation(_message.Message):
+    __slots__ = ("element", "degrees_at_hi", "degrees_at_lo")
+    ELEMENT_FIELD_NUMBER: _ClassVar[int]
+    DEGREES_AT_HI_FIELD_NUMBER: _ClassVar[int]
+    DEGREES_AT_LO_FIELD_NUMBER: _ClassVar[int]
+    element: str
+    degrees_at_hi: float
+    degrees_at_lo: float
+    def __init__(self, element: _Optional[str] = ..., degrees_at_hi: _Optional[float] = ..., degrees_at_lo: _Optional[float] = ...) -> None: ...
+
+class SweepControlReply(_message.Message):
+    __slots__ = ("completed", "message", "observed", "matched_expectation")
+    COMPLETED_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    OBSERVED_FIELD_NUMBER: _ClassVar[int]
+    MATCHED_EXPECTATION_FIELD_NUMBER: _ClassVar[int]
+    completed: bool
+    message: str
+    observed: _containers.RepeatedCompositeFieldContainer[SweepObservation]
+    matched_expectation: bool
+    def __init__(self, completed: bool = ..., message: _Optional[str] = ..., observed: _Optional[_Iterable[_Union[SweepObservation, _Mapping]]] = ..., matched_expectation: bool = ...) -> None: ...
