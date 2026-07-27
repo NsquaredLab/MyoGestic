@@ -17,16 +17,40 @@ work without the example needing custom save/load code.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import joblib
 
+if TYPE_CHECKING:
+    from myogestic.controls import ControlSet
 
-def save_pickle(model: Any, path: str | Path) -> str:
+
+def _sidecar(path: str | Path) -> Path:
+    """Where a model's control-space provenance lives, beside the model itself."""
+    return Path(str(path) + ".controls.json")
+
+
+def save_pickle(model: Any, path: str | Path, *, controls: ControlSet | None = None) -> str:
     """Persist ``model`` to ``path`` via joblib, creating parent dirs as needed.
 
     Returns the path as a string.
+
+    Parameters
+    ----------
+    model
+        Any picklable object.
+    path
+        Destination file.
+    controls
+        Optional `myogestic.controls.ControlSet` the model was trained against,
+        written to a ``<path>.controls.json`` sidecar. A model is only meaningful
+        in the output space it was fitted for: loading one trained on a one-way
+        ``[0, 1]`` DOF against a signed ``[-1, 1]`` configuration produces motion
+        in a direction the model never learned, and nothing in the artifact itself
+        would say so. A sidecar keeps `load_pickle`'s signature and leaves older
+        artifacts loadable.
 
     Examples
     --------
@@ -37,11 +61,41 @@ def save_pickle(model: Any, path: str | Path) -> str:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, str(p))
+    if controls is not None:
+        _sidecar(p).write_text(json.dumps(controls.as_dict(), indent=2))
     return str(p)
 
 
-def load_pickle(path: str | Path) -> Any:
+def load_pickle(
+    path: str | Path,
+    *,
+    controls: ControlSet | None = None,
+    allow_unverified: bool = False,
+) -> Any:
     """Inverse of [`save_pickle`][] — load a joblib-saved model.
+
+    Parameters
+    ----------
+    path
+        The model file.
+    controls
+        Optional `myogestic.controls.ControlSet` to check the model against. When
+        given, the model's sidecar must describe the same control space, or this
+        raises rather than driving a target through a space the model never saw.
+        Wire it in one line::
+
+            pipeline.load_model = partial(load_pickle, controls=CONTROLS)
+    allow_unverified
+        Permit loading a model that carries no sidecar even though ``controls``
+        was supplied. Off by default: an artifact saved before provenance existed
+        cannot be distinguished from one trained in a different space, and
+        silently accepting it is how a polarity change ships.
+
+    Raises
+    ------
+    ValueError
+        If the sidecar disagrees with ``controls``, or is absent without
+        ``allow_unverified``.
 
     Examples
     --------
@@ -50,4 +104,24 @@ def load_pickle(path: str | Path) -> Any:
     >>> model["classes"]
     2
     """
+    if controls is not None:
+        from myogestic.controls import load_dofs
+
+        side = _sidecar(path)
+        if not side.exists():
+            if not allow_unverified:
+                raise ValueError(
+                    f"{path} has no control-space sidecar ({side.name}), so it cannot be "
+                    f"checked against the current configuration. Retrain with "
+                    f"save_pickle(..., controls=...), or pass allow_unverified=True to "
+                    f"load it anyway."
+                )
+        else:
+            recorded = load_dofs(json.loads(side.read_text()))
+            if recorded != controls:
+                raise ValueError(
+                    f"{path} was trained for {list(recorded.dofs)} but the current "
+                    f"configuration declares {list(controls.dofs)}. Restore that "
+                    f"configuration, or retrain."
+                )
     return joblib.load(str(path))
