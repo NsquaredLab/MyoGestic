@@ -358,6 +358,160 @@ def test_empty_control_set_is_usable():
     assert empty.n_concurrent == 0
 
 
+# --- regressions found by adversarial review ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        np.float32(0.5),   # the library's own prediction dtype — NOT a subclass of float
+        np.float64(0.5),
+        np.float16(0.5),
+        np.int32(1),
+        np.array(0.5),     # 0-d array
+        1,                 # plain int
+        0.5,               # plain float
+    ],
+)
+def test_every_numeric_type_survives_the_transforms(value):
+    """`np.float32` is not a `float` subclass, and predictions arrive as float32.
+
+    An `isinstance(v, float)` guard silently substituted rest for every real
+    prediction — the whole trace would have gone flat with nothing logged.
+    """
+    controls = load_dofs({"dofs": {"a.flexion": "continuous"}})
+    expected = float(value)
+    assert substitute_rest(controls, {"a.flexion": value})["a.flexion"] == pytest.approx(
+        expected, abs=1e-6
+    )
+    frame, clipped = clip(controls, {"a.flexion": value})
+    assert frame["a.flexion"] == pytest.approx(expected, abs=1e-6)
+    assert clipped == ()
+    assert encode(controls, {"a.flexion": value})[0] == pytest.approx(expected, abs=1e-6)
+
+
+class _ExplodingFloat:
+    """A value whose ``__float__`` raises — must never reach the predict thread."""
+
+    def __float__(self) -> float:
+        raise RuntimeError("boom")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [10**400, _ExplodingFloat(), b"1.5", bytearray(b"1.5"), "1e5", [1.0], {"a": 1}],
+)
+def test_hostile_values_become_rest_without_raising(value):
+    """Nothing on the predict thread may raise, and no string is parsed into motion."""
+    controls = load_dofs({"dofs": {"a.flexion": "continuous"}})
+    assert substitute_rest(controls, {"a.flexion": value})["a.flexion"] == 0.0
+    frame, clipped = clip(controls, {"a.flexion": value})
+    assert frame["a.flexion"] == 0.0
+    assert clipped == ("a.flexion",)  # a substitution is reported, not silent
+    assert encode(controls, {"a.flexion": value})[0] == 0.0
+
+
+def test_bool_means_the_same_thing_everywhere():
+    """`True` is an int in Python; the transforms must not disagree about it."""
+    controls = load_dofs({"dofs": {"a.flexion": "continuous"}})
+    assert substitute_rest(controls, {"a.flexion": True})["a.flexion"] == 1.0
+    assert clip(controls, {"a.flexion": True})[0]["a.flexion"] == 1.0
+
+
+def test_explicit_rest_may_order_states_freely():
+    """The rest-position guard belongs to the array form only.
+
+    The table form says which state is neutral, so it may list them in any order —
+    rejecting it told the author to do exactly what they had already done.
+    """
+    controls = load_dofs(
+        {"dofs": {"hand.grasp": {"kind": "discrete", "states": ["fist", "rest"],
+                                 "rest": "rest"}}}
+    )
+    assert controls.dofs["hand.grasp"].rest == "rest"
+    assert load_dofs(controls.as_dict()) == controls
+
+
+@pytest.mark.parametrize("key", ["rest", "label", "debounce_s", "range", "states"])
+def test_an_unquoted_dotted_key_cannot_insert_a_phantom_dof(key):
+    """A phantom DOF would shift every wire channel after it."""
+    with pytest.raises(ValueError):
+        load_dofs({"dofs": {"a.flexion": "continuous", "hand": {key: 0.0}}})
+
+
+@pytest.mark.parametrize("rng", [[-1e39, 1e39], [0.0, 100.0], [-2.0, 2.0]])
+def test_ranges_outside_the_normalized_domain_are_rejected(rng):
+    """Continuous DOFs are normalized; a target owns its own units and gain.
+
+    A wide range also puts an unrepresentable magnitude on a float32 wire.
+    """
+    with pytest.raises(ValueError, match="leaves the normalized domain"):
+        load_dofs({"dofs": {"j.torque": {"kind": "continuous", "range": rng}}})
+
+
+def test_encode_cannot_overflow_a_float32_wire():
+    controls = load_dofs({"dofs": {"j.torque": "continuous"}})
+    old = np.seterr(all="raise")
+    try:
+        assert encode(controls, {"j.torque": 1.0}).tolist() == [1.0]
+    finally:
+        np.seterr(**old)
+
+
+def test_a_trailing_newline_cannot_forge_a_second_dof():
+    """With `match` instead of `fullmatch`, two identical-looking labels slipped in."""
+    with pytest.raises(ValueError, match="not a canonical control name"):
+        load_dofs({"dofs": {"index.flexion\n": "continuous", "index.flexion": "continuous"}})
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"dofs": {1: "continuous"}},
+        {"dofs": {"a.b": "continuous"}, "simultaneous": {"g": [["a.b"]]}},
+        {"dofs": {"a.b": "continuous"}, "simultaneous": {1: ["a.b"]}},
+    ],
+)
+def test_bad_key_types_raise_value_error_not_type_error(config):
+    """Faults must flow through accumulate-once, not escape as a TypeError."""
+    with pytest.raises(ValueError):
+        load_dofs(config)
+
+
+def test_declared_list_names_what_the_author_wrote():
+    """A DOF that failed its own check must not also read as 'not declared'."""
+    with pytest.raises(ValueError) as exc:
+        load_dofs({"dofs": {"bad name": "continuous"}, "simultaneous": {"g": ["bad name"]}})
+    assert "Declared: []" not in str(exc.value)
+
+
+def test_decode_is_the_exact_inverse_of_encode():
+    """A wider frame is a legacy/target concern, never a canonical one."""
+    controls = load_dofs({"dofs": {"a.flexion": "continuous"}})
+    with pytest.raises(ValueError, match="exact inverse"):
+        decode(controls, [0.0, 0.0])
+
+
+@pytest.mark.parametrize(
+    ("config", "match"),
+    [
+        ({"kind": "continuous", "label": ["x"]}, "label must be a string"),
+        ({"kind": "continuous", "debounce_s": 0.1}, "debounce_s belongs to a discrete"),
+    ],
+)
+def test_cross_kind_keys_are_refused_not_ignored(config, match):
+    with pytest.raises(ValueError, match=match):
+        load_dofs({"dofs": {"a.flexion": config}})
+
+
+def test_range_on_a_discrete_dof_is_refused():
+    with pytest.raises(ValueError, match="range belongs to a continuous"):
+        load_dofs(
+            {"dofs": {"h.grasp": {"kind": "discrete", "states": ["a", "b"],
+                                  "range": [0.0, 1.0]}}}
+        )
+
+
 def test_continuous_and_discrete_are_frozen():
     with pytest.raises(FrozenInstanceError):
         Continuous("a.flexion").lo = 5.0  # type: ignore[misc]

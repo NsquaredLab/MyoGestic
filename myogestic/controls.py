@@ -157,6 +157,10 @@ class ControlSet:
         Control name -> the DOFs it commands. Empty means no declared controls.
     standard_version
         The vocabulary-format version this configuration was written against.
+        Recorded verbatim and **not** validated: refusing an unfamiliar version here
+        would reject a configuration this library can in fact load. Deciding what a
+        version means is a negotiation with a target, so it is settled by the target
+        handshake rather than by the loader.
 
     Examples
     --------
@@ -225,9 +229,18 @@ class ControlSet:
 def _build_dof(name: str, kw: Mapping[str, Any], errs: list[str]) -> Dof | None:
     """Turn one normalised DOF mapping into a typed DOF, or record why not."""
     kind = kw.get("kind", "continuous")
-    label = str(kw.get("label", ""))
+    label = kw.get("label", "")
+    if not isinstance(label, str):
+        errs.append(f"[dofs] {name!r}: label must be a string (got {label!r}).")
+        return None
 
     if kind == "discrete":
+        if "range" in kw:
+            errs.append(
+                f"[dofs] {name!r}: range belongs to a continuous DOF. A discrete DOF's "
+                f"domain is its states."
+            )
+            return None
         states = check_states(name, kw.get("states"), errs)
         if states is None:
             return None
@@ -257,6 +270,14 @@ def _build_dof(name: str, kw: Mapping[str, Any], errs: list[str]) -> Dof | None:
             f'kind = "discrete", or remove states.'
         )
         return None
+    if "debounce_s" in kw:
+        # Silently ignoring a key the author clearly meant is worse than refusing it.
+        # Continuous DOFs are not debounced; they are smoothed by the bus instead.
+        errs.append(
+            f"[dofs] {name!r}: debounce_s belongs to a discrete DOF. A continuous DOF "
+            f"is smoothed rather than debounced — pass a filter to the control bus."
+        )
+        return None
 
     rng = kw.get("range", [-1.0, 1.0])
     if not (isinstance(rng, (list, tuple)) and len(rng) == 2 and all(_num(v) for v in rng)):
@@ -281,8 +302,33 @@ def _build_dof(name: str, kw: Mapping[str, Any], errs: list[str]) -> Dof | None:
 
 
 def _num(v: Any) -> bool:
-    """True for a real number that is not a bool."""
+    """True for a real number that is not a bool. Configuration-time only."""
     return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _as_float(v: Any, rest: float) -> tuple[float, bool]:
+    """Coerce a runtime value to a finite float, falling back to ``rest``.
+
+    The single coercion every runtime transform uses, so they cannot disagree about
+    what a value means. It accepts anything numpy hands over — ``np.float32`` is
+    **not** a subclass of `float`, and it is this library's prediction dtype, so an
+    ``isinstance(v, float)`` test would silently zero every real prediction.
+
+    Strings and bytes are rejected rather than parsed: a sanitiser that turns
+    ``b"1.5"`` into a joint angle is not sanitising.
+
+    Returns
+    -------
+    tuple[float, bool]
+        The value, and whether ``rest`` was substituted.
+    """
+    if v is None or isinstance(v, (str, bytes, bytearray)):
+        return rest, True
+    try:
+        f = float(v)
+    except Exception:  # noqa: BLE001 - a __float__ that raises must not reach the caller
+        return rest, True
+    return (f, False) if math.isfinite(f) else (rest, True)
 
 
 def load_dofs(config: Mapping[str, Any]) -> ControlSet:
@@ -354,7 +400,10 @@ def load_dofs(config: Mapping[str, Any]) -> ControlSet:
         if dof is not None:
             dofs[name] = dof
 
-    simultaneous = check_simultaneous(config.get("simultaneous"), frozenset(dofs), errs)
+    # Every name the author *wrote*, not only those that validated: a DOF that
+    # failed its own check must not also produce a false "not declared" fault.
+    declared = frozenset(n for n in raw if isinstance(n, str))
+    simultaneous = check_simultaneous(config.get("simultaneous"), declared, errs)
 
     if errs:
         raise ValueError("\n".join(errs))
@@ -385,16 +434,8 @@ def substitute_rest(controls: ControlSet, values: Mapping[str, Any]) -> dict[str
         v = values.get(name)
         if isinstance(dof, Discrete):
             out[name] = v if isinstance(v, str) and v in dof.states else dof.rest
-            continue
-        if v is None or isinstance(v, str):
-            out[name] = dof.rest
-            continue
-        try:
-            f = float(v)
-        except (TypeError, ValueError):
-            out[name] = dof.rest
-            continue
-        out[name] = f if math.isfinite(f) else dof.rest
+        else:
+            out[name] = _as_float(v, dof.rest)[0]
     return out
 
 
@@ -429,11 +470,9 @@ def clip(
                 out[name] = dof.rest
                 clipped.append(name)
             continue
-        f = float(v) if _num(v) else dof.rest
-        if not math.isfinite(f):
-            f = dof.rest
+        f, substituted = _as_float(v, dof.rest)
         bounded = min(dof.hi, max(dof.lo, f))
-        if bounded != f:
+        if substituted or bounded != f:
             clipped.append(name)
         out[name] = bounded
     return out, tuple(clipped)
@@ -457,7 +496,7 @@ def encode(controls: ControlSet, values: Mapping[str, Any]) -> np.ndarray:
     vec = np.empty(len(cont), dtype=np.float32)
     for i, dof in enumerate(cont):
         v = values.get(dof.name)
-        vec[i] = float(v) if _num(v) else dof.rest
+        vec[i] = _as_float(v, dof.rest)[0]
     return vec
 
 
@@ -480,9 +519,10 @@ def decode(controls: ControlSet, frame: Sequence[float]) -> dict[str, float]:
     {'a.flexion': 0.75}
     """
     cont = controls.continuous
-    if len(frame) < len(cont):
+    if len(frame) != len(cont):
         raise ValueError(
             f"frame has {len(frame)} channels but {len(cont)} continuous DOFs are "
-            f"declared ({[d.name for d in cont]})."
+            f"declared ({[d.name for d in cont]}). `decode` is the exact inverse "
+f"of `encode`; a wider legacy frame is a target concern, not a canonical one."
         )
     return {dof.name: float(frame[i]) for i, dof in enumerate(cont)}
