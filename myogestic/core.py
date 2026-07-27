@@ -84,6 +84,10 @@ class Context:
     state: str = AppState.IDLE
     session: Session | None = None
     class_names: list[str] = field(default_factory=list)
+    #: Optional `myogestic.controls.ControlSet` this app commands. Set it once at
+    #: setup (``app.ctx.control_space = CONTROLS``) and every recording records the
+    #: space it was made under — channel names alone do not say what a number meant.
+    control_space: Any = None
     current_label: int = -1
     status_message: str = ""
     logs: list[str] = field(default_factory=list)
@@ -303,7 +307,12 @@ class App:
             stream.detach_session()
         if self.ctx.session is not None:
             session = self.ctx.session
-            session.save_meta(self.name, class_names=self.ctx.class_names or None)
+            controls = self.ctx.control_space
+            session.save_meta(
+                self.name,
+                class_names=self.ctx.class_names or None,
+                control_space=controls.as_dict() if controls is not None else None,
+            )
             n = len(session.label_track)
             self.ctx.status_message = f"Saved {n} labels - finalizing…"
 

@@ -158,3 +158,43 @@ def test_lsl_outlet_roundtrip():
 
     inlet.close_stream()
     out.stop()
+
+
+def test_flush_sends_immediately():
+    """The paced loop would not have sent this for another 100 seconds."""
+    out = RecordingOutput(hz=0.01)
+    out.push(np.array([1.0, 2.0]))
+    before = len(out.sent)
+    out.flush()
+    assert len(out.sent) == before + 1
+    out.stop()
+
+
+def test_flush_before_any_push_does_nothing():
+    out = RecordingOutput(hz=0.01)
+    out.flush()
+    assert out.sent == []
+    out.stop()
+
+
+def test_flush_after_stop_still_sends():
+    """Teardown order must not decide whether a neutral frame reaches the wire."""
+    out = RecordingOutput(hz=0.01)
+    out.push(np.array([0.0, 0.0]))
+    before = len(out.sent)
+    out.stop()
+    out.flush()
+    assert len(out.sent) == before + 1
+
+
+def test_flush_survives_a_dead_transport():
+    """A flush runs from a cleanup hook, where a raise would mask the real exit."""
+
+    class Broken(Output):
+        def _send(self, data: np.ndarray) -> None:
+            raise OSError("transport closed")
+
+    out = Broken(hz=0.01)
+    out.push(np.array([1.0]))
+    out.flush()  # logged once, not raised
+    out.stop()

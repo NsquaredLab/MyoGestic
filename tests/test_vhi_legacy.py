@@ -23,8 +23,10 @@ import pathlib
 import numpy as np
 import pytest
 
+from myogestic.controls import ControlBus, load_dofs
 from myogestic.session import open_session_store
 from myogestic.vhi.legacy import LEGACY_POSE_DOFS, decode_pose, encode_pose
+from myogestic.vhi.target import VhiTarget
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 MOVED = FIXTURES / "vhi_pose_moved.session.zip"
@@ -204,3 +206,52 @@ def test_a_frame_of_the_wrong_width_is_refused(width):
     """Guessing which channels are missing would be worse than refusing."""
     with pytest.raises(ValueError, match="9 channels wide"):
         decode_pose(np.zeros(width, dtype=np.float32))
+
+
+# --- the whole loop, as the converted example runs it --------------------------
+
+
+def test_a_recorded_pose_survives_train_then_serve():
+    """The claim the example conversion makes: one space for target and command.
+
+    A recorded VHI frame is decoded into a training target, then commanded back
+    through a real `ControlBus` and `VhiTarget`, and must arrive at the wire values
+    it was read from. If the two directions ever disagreed, a model would be trained
+    in one space and served in another — which shows up as a hand moving the wrong
+    amount, never as an error.
+
+    Only the five DOFs the example declares are checked. Thumb abduction is recorded
+    at ``-1`` here but deliberately not commanded, so its channel goes out neutral.
+    """
+    names = (
+        "thumb.flexion",
+        "index.flexion",
+        "middle.flexion",
+        "ring.flexion",
+        "little.flexion",
+    )
+    pose = _pose(MOVED)
+    frame = pose[int(np.argmin(pose[:, 0]))]
+    decoded = decode_pose(frame)
+    target = [float(decoded[name]) for name in names]
+
+    sent: list[np.ndarray] = []
+
+    class Sink:
+        def push(self, data: np.ndarray) -> None:
+            sent.append(np.asarray(data))
+
+        def flush(self) -> None:
+            pass
+
+    bus = ControlBus(
+        load_dofs({"dofs": dict.fromkeys(names, "continuous")}),
+        targets=[VhiTarget(Sink())],
+    )
+    bus.push(dict(zip(names, target, strict=True)))
+
+    for name, value in zip(names, target, strict=True):
+        channel = LEGACY_POSE_DOFS.index(name)
+        assert sent[-1][channel] == pytest.approx(frame[channel], abs=1e-6), name
+        assert value == pytest.approx(1.0, abs=1e-6), f"{name} should read as full flexion"
+    assert sent[-1][LEGACY_POSE_DOFS.index("thumb.abduction")] == 0.0

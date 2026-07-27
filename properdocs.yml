@@ -168,6 +168,7 @@ nav:
       - API reference:
           - api/index.md
           - Core: api/core.md
+          - Control standard: api/controls.md
           - Sources: api/sources.md
           - Outputs: api/outputs.md
           - Bridges: api/bridges.md

@@ -14,6 +14,16 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 
     [:octicons-arrow-right-24: Core API](core.md)
 
+-   :material-tune-variant:{ .lg .middle } __Control standard__
+
+    ---
+
+    Declare what an app controls by name; targets render it.
+
+    [`load_dofs`][myogestic.controls.load_dofs] · [`ControlBus`][myogestic.controls.ControlBus]
+
+    [:octicons-arrow-right-24: Control standard](controls.md)
+
 -   :material-access-point:{ .lg .middle } __Sources__
 
     ---
