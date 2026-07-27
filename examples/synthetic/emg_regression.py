@@ -19,13 +19,15 @@ import torch
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic.controls import ControlBus, load_dofs
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_regressor
 from myogestic.session import iter_aligned_windows, iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi.legacy import decode_pose
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
@@ -45,16 +47,33 @@ vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 vhi_client = vhi.control_client()
 
-# Output-side smoothing applied to the 9-DOF hand vector before pushing
-# to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
+# Output-side smoothing, applied by the control bus to the canonical vector.
+# Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
-# Mosaic-2.0 registry indices; selecting these from VHI_Control during
-# training gives a 5-DOF target (WristRot + 4 fingers) instead of the full
-# 9-DOF vector, which keeps the regressor manageable for a fake-EMG demo.
+# The canonical control space this app commands. Five signed, normalized DOFs:
+# +1 is the direction the name says (full flexion), -1 the opposite, 0 rest.
+# Thumb abduction is left out to keep the regressor manageable on fake EMG.
+#
+# No VHI channel number appears here, and none should: `VhiTarget` owns the
+# translation to whatever the hand happens to want on the wire.
 # --8<-- [start:dofs]
-VHI_DOF_INDICES = [0, 2, 3, 4, 5]
-N_DOF = len(VHI_DOF_INDICES)
+CONTROLS = load_dofs(
+    {
+        "dofs": dict.fromkeys(
+            [
+                "thumb.flexion",
+                "index.flexion",
+                "middle.flexion",
+                "ring.flexion",
+                "little.flexion",
+            ],
+            "continuous",
+        )
+    }
+)
+DOF_NAMES = CONTROLS.channel_labels()
+N_DOF = len(DOF_NAMES)
 # --8<-- [end:dofs]
 
 # MyoVerse transforms — preferred over hand-rolled numpy here so the feature
@@ -85,7 +104,17 @@ PROCESSES = [
     *vhi.launcher(),
 ]
 
+# --8<-- [start:bus]
+# One bus owns the whole output path: substitute rest -> clip -> smooth ->
+# clip again -> hand it to every target. `VhiTarget` is what turns canonical
+# names into the pose VHI renders.
+bus = ControlBus(CONTROLS, targets=[VhiTarget(vhi_outlet)], smoothing=output_filter, hz=32)
+# --8<-- [end:bus]
+
 app = App("EMG Regression", ui_scale=0.85)
+# Recordings then carry the space they were made under: a bare -1 does not say
+# whether it was a full excursion or out of range.
+app.ctx.control_space = CONTROLS
 app.streams(
     Stream("emg", source=LSLSource("TestEMG1"), window_ms=1000, buffer_ms=60000),
     Stream(
@@ -163,7 +192,12 @@ def train(data: TrainingData):
         HOP_MS,
         n_alignment_samples=10,
     ):
-        kin = np.abs(aligned["vhi_control"][VHI_DOF_INDICES])
+        # decode_pose reads VHI's recorded pose as canonical values, so the
+        # training target is in exactly the space `predict` commands. It is a
+        # signed negation, not the old `abs()` - which folded any extension the
+        # operator did into flexion of the same magnitude.
+        pose = decode_pose(aligned["vhi_control"])
+        kin = np.array([pose[name] for name in DOF_NAMES], dtype=np.float64)
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
     # --8<-- [end:kin_loop]
@@ -182,7 +216,9 @@ def train(data: TrainingData):
         HOP_MS,
         classes=data.classes if data.classes else None,
     ):
-        kin = np.ones(5, dtype=np.float64) if ci == 1 else np.zeros(5, dtype=np.float64)
+        # +1 is flexion under the canonical standard, so a Fist target is all 1s
+        # and Rest is all 0s - the same numbers as before, now for a stated reason.
+        kin = np.ones(N_DOF, dtype=np.float64) if ci == 1 else np.zeros(N_DOF, dtype=np.float64)
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
     # --8<-- [end:label_loop]
@@ -209,20 +245,12 @@ def train(data: TrainingData):
 # --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
-    """Regress 5-DOF → expand to 9-DOF → smooth → push to VHI."""
-    pred_5dof = model.predict(features.reshape(1, -1))[0]
-    pred_5dof = np.clip(pred_5dof, 0, 1)
-
-    # Expand to 9-DOF and negate for VHI
-    # --8<-- [start:expand]
-    pred_9dof = np.zeros(9, dtype=np.float32)
-    for i, vhi_idx in enumerate(VHI_DOF_INDICES):
-        pred_9dof[vhi_idx] = -pred_5dof[i]
-    # --8<-- [end:expand]
-
-    pred_9dof = output_filter(pred_9dof).astype(np.float32)
-    vhi_outlet.push(pred_9dof)
-    return {"dof": pred_5dof, "hand": pred_9dof}
+    """Regress the five canonical DOFs and hand them to the bus."""
+    pred = model.predict(features.reshape(1, -1))[0]
+    # The bus sanitises, smooths and renders. No clip here: each DOF's declared
+    # range is the authority, and clipping before the smoother would let the
+    # filter overshoot straight back out of it.
+    return {"dof": bus.push(dict(zip(DOF_NAMES, pred, strict=True)))}
 
 
 # --8<-- [end:predict]
@@ -313,6 +341,10 @@ def main() -> None:
     try:
         app.run()
     finally:
+        # Rest the hand first, and make that frame land: the outlet sends on a
+        # paced thread, so a pose pushed at exit would otherwise never go out
+        # and the hand would hold its last commanded position.
+        bus.stop()
         vhi_client.stop()
 
 
