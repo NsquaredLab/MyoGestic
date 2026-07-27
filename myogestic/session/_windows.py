@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -97,13 +98,22 @@ def iter_aligned_windows(
     window_ms: float,
     hop_ms: float,
     n_alignment_samples: int = 1,
-) -> Iterator[tuple[np.ndarray, dict[str, np.ndarray], np.ndarray]]:
+    *,
+    with_names: bool = False,
+) -> Iterator[tuple[np.ndarray, dict[str, Any], np.ndarray]]:
     """Yield ``(primary_window, aligned, ts)`` for regression training.
 
     ``primary_window`` is channels-first ``(n_channels, n_samples)``.
     For each primary window, find the nearest sample in every aligned
     stream at the window midpoint and average ``n_alignment_samples``
     around that index.
+
+    With ``with_names=True`` each aligned stream's value is a
+    ``dict[channel_name, float]`` instead of a bare vector, so a training script
+    selects a target by name rather than by wire position. That is the difference
+    between a script that keeps working when a configuration is reordered and one
+    that silently trains on the wrong channel. Requires the recording to carry
+    channel names; it raises naming the stream if it does not.
 
     Examples
     --------
@@ -159,6 +169,29 @@ def iter_aligned_windows(
             }
             aligned_ts = {name: np.array(sess.ts_stores[name]) for name in aligned_stream_names}
 
+            # Resolve names once per file, before any window is produced, so a
+            # recording that cannot support name-keyed targets says so up front
+            # rather than part-way through a training run.
+            aligned_names: dict[str, list[str]] = {}
+            if with_names:
+                for name in aligned_stream_names:
+                    labels = sess.stream_info(name).channel_names
+                    width = aligned_data[name].shape[1] if aligned_data[name].ndim > 1 else 1
+                    if not labels:
+                        raise ValueError(
+                            f"{path}: stream {name!r} has no channel names, so "
+                            f"with_names=True cannot key its values. Record it from a "
+                            f"source that publishes names (see LSLOutlet's "
+                            f"channel_names), or read it positionally."
+                        )
+                    if len(labels) != width:
+                        raise ValueError(
+                            f"{path}: stream {name!r} has {len(labels)} channel names "
+                            f"but {width} channels. The recording's metadata does not "
+                            f"describe its data."
+                        )
+                    aligned_names[name] = list(labels)
+
             if (
                 len(primary_data) == 0
                 or len(primary_ts) == 0
@@ -188,6 +221,13 @@ def iter_aligned_windows(
                     aligned_vals[name] = np.mean(a_data[lo:hi], axis=0)
                 if not ok:
                     continue
-                yield primary_data[start:stop].T, aligned_vals, primary_ts[start:stop]
+                if with_names:
+                    keyed: dict[str, Any] = {
+                        name: dict(zip(aligned_names[name], vec.tolist(), strict=True))
+                        for name, vec in aligned_vals.items()
+                    }
+                    yield primary_data[start:stop].T, keyed, primary_ts[start:stop]
+                else:
+                    yield primary_data[start:stop].T, aligned_vals, primary_ts[start:stop]
         finally:
             sess.close()
