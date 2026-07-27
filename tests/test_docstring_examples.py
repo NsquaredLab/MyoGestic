@@ -18,9 +18,12 @@ from myogestic import EdgeTrigger, Fr, Grid, Px, StreamInfo, TrainingData
 from myogestic import controls as _controls
 from myogestic.outputs import filters
 from myogestic.recipes import estimators, features
+from myogestic.vhi import legacy as _legacy
 
 # Objects whose docstring Examples are deterministic and dependency-free.
 RUNNABLE = [
+    _legacy.decode_pose,
+    _legacy.encode_pose,
     _controls.Continuous,
     _controls.Discrete,
     _controls.ControlSet,
