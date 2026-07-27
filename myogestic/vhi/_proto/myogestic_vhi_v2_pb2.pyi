@@ -12,9 +12,18 @@ class Kind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     KIND_UNSPECIFIED: _ClassVar[Kind]
     CONTINUOUS: _ClassVar[Kind]
     DISCRETE: _ClassVar[Kind]
+
+class ContinuousEncoding(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ENCODING_UNSPECIFIED: _ClassVar[ContinuousEncoding]
+    CANONICAL: _ClassVar[ContinuousEncoding]
+    LEGACY_NEGATED: _ClassVar[ContinuousEncoding]
 KIND_UNSPECIFIED: Kind
 CONTINUOUS: Kind
 DISCRETE: Kind
+ENCODING_UNSPECIFIED: ContinuousEncoding
+CANONICAL: ContinuousEncoding
+LEGACY_NEGATED: ContinuousEncoding
 
 class DofDeclaration(_message.Message):
     __slots__ = ("name", "kind", "lo", "hi", "rest", "states", "rest_state")
@@ -57,18 +66,20 @@ class DofVerdict(_message.Message):
     def __init__(self, name: _Optional[str] = ..., renderable: bool = ..., message: _Optional[str] = ..., renders_as: _Optional[str] = ...) -> None: ...
 
 class DeclareReply(_message.Message):
-    __slots__ = ("accepted", "verdicts", "standard_version", "continuous_stream_name", "continuous_channel_order")
+    __slots__ = ("accepted", "verdicts", "standard_version", "continuous_encoding", "continuous_stream_name", "continuous_channel_order")
     ACCEPTED_FIELD_NUMBER: _ClassVar[int]
     VERDICTS_FIELD_NUMBER: _ClassVar[int]
     STANDARD_VERSION_FIELD_NUMBER: _ClassVar[int]
+    CONTINUOUS_ENCODING_FIELD_NUMBER: _ClassVar[int]
     CONTINUOUS_STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
     CONTINUOUS_CHANNEL_ORDER_FIELD_NUMBER: _ClassVar[int]
     accepted: bool
     verdicts: _containers.RepeatedCompositeFieldContainer[DofVerdict]
     standard_version: str
+    continuous_encoding: ContinuousEncoding
     continuous_stream_name: str
     continuous_channel_order: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, accepted: bool = ..., verdicts: _Optional[_Iterable[_Union[DofVerdict, _Mapping]]] = ..., standard_version: _Optional[str] = ..., continuous_stream_name: _Optional[str] = ..., continuous_channel_order: _Optional[_Iterable[str]] = ...) -> None: ...
+    def __init__(self, accepted: bool = ..., verdicts: _Optional[_Iterable[_Union[DofVerdict, _Mapping]]] = ..., standard_version: _Optional[str] = ..., continuous_encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., continuous_stream_name: _Optional[str] = ..., continuous_channel_order: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class SetControlRequest(_message.Message):
     __slots__ = ("continuous", "discrete")

@@ -13,6 +13,8 @@ themselves are pinned against real recordings in `test_vhi_legacy.py`.
 
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -360,3 +362,262 @@ def test_the_vhi_outlet_advertises_a_stable_source_id():
     finally:
         first.stop()
         second.stop()
+
+
+# --- v2 probing and the fallback ------------------------------------------------
+#
+# The reply is duck-typed rather than a real protobuf message: VhiTarget reads four
+# fields off it, and pinning those four keeps these tests free of the grpc extra.
+# `test_declare_request_maps_the_control_set` covers the real message separately.
+
+
+@dataclasses.dataclass
+class FakeVerdict:
+    name: str
+    renderable: bool = True
+    message: str = ""
+
+
+#: The v2 `ContinuousEncoding` values.
+UNSPECIFIED, CANONICAL, LEGACY_NEGATED = 0, 1, 2
+
+
+@dataclasses.dataclass
+class FakeReply:
+    accepted: bool = True
+    continuous_channel_order: tuple[str, ...] = ()
+    verdicts: tuple[FakeVerdict, ...] = ()
+    standard_version: str = "1"
+    continuous_encoding: int = CANONICAL
+
+
+class FakeClient:
+    """A `VhiCanonicalClient` stand-in recording what the target asked of it."""
+
+    def __init__(self, reply=None) -> None:
+        self.reply = reply
+        self.declared: list[object] = []
+        self.sent: list[tuple[dict | None, dict | None]] = []
+
+    def declare(self, controls, client_name=""):
+        self.declared.append(controls)
+        return self.reply
+
+    def set_control(self, continuous=None, discrete=None):
+        self.sent.append((continuous, discrete))
+
+
+NINE = (
+    "thumb.flexion",
+    "thumb.abduction",
+    "index.flexion",
+    "middle.flexion",
+    "ring.flexion",
+    "little.flexion",
+    "wrist.flexion",
+    "wrist.abduction",
+    "wrist.rotation",
+)
+
+
+def test_without_a_client_the_legacy_path_is_used():
+    target, _ = _bound()
+    assert target.negotiated is False
+
+
+def test_an_older_vhi_answers_nothing_and_the_legacy_path_is_used():
+    """`declare` returning None means "does not speak v2" — an answer, not a failure."""
+    client = FakeClient(reply=None)
+    target = VhiTarget(FakeOutlet(), client=client)
+    target.bind(_controls())
+    assert client.declared, "the handshake must at least be attempted"
+    assert target.negotiated is False
+
+
+def test_a_negotiated_binding_uses_the_declared_order():
+    outlet = FakeOutlet()
+    target = VhiTarget(outlet, client=FakeClient(FakeReply(continuous_channel_order=NINE)))
+    target.bind(_controls(*NINE))
+    assert target.negotiated is True
+    target.send({**dict.fromkeys(NINE, 0.0), "wrist.rotation": 1.0}, {})
+    assert outlet.last[8] == pytest.approx(1.0)
+
+
+def test_a_negotiated_binding_does_not_negate():
+    """The sign flip was a property of the old wire, never of the standard."""
+    outlet = FakeOutlet()
+    target = VhiTarget(outlet, client=FakeClient(FakeReply(continuous_channel_order=NINE)))
+    target.bind(_controls(*NINE))
+    target.send({**dict.fromkeys(NINE, 0.0), "index.flexion": 1.0}, {})
+    assert outlet.last[2] == pytest.approx(+1.0)
+
+
+def test_negotiation_lifts_the_legacy_refusals():
+    """A wrist is renderable once VHI says so — the limit was the wire's, not ours."""
+    target = VhiTarget(FakeOutlet(), client=FakeClient(FakeReply(continuous_channel_order=NINE)))
+    target.bind(_controls(*NINE))  # would raise "no legacy channel" without v2
+    assert target.negotiated is True
+
+
+def test_a_partial_acceptance_falls_all_the_way_back():
+    """Rendering only the accepted DOFs would hide the refused ones as held joints."""
+    client = FakeClient(
+        FakeReply(
+            accepted=False,
+            continuous_channel_order=NINE,
+            verdicts=(FakeVerdict("wrist.rotation", renderable=False, message="no wrist"),),
+        )
+    )
+    target = VhiTarget(FakeOutlet(), client=client)
+    with pytest.raises(ValueError, match="no legacy channel"):
+        target.bind(_controls(*NINE))
+    assert target.negotiated is False
+
+
+def test_a_channel_order_that_disagrees_falls_back():
+    """Guessing a mapping is exactly what the standard exists to stop."""
+    client = FakeClient(FakeReply(continuous_channel_order=("something.else",) * 9))
+    target = VhiTarget(FakeOutlet(), client=client)
+    with pytest.raises(ValueError, match="no legacy channel"):
+        target.bind(_controls(*NINE))
+    assert target.negotiated is False
+
+
+def test_a_width_the_outlet_cannot_carry_falls_back():
+    """The outlet's channel count is fixed at construction; a wider frame cannot fit."""
+    order = (*NINE, "extra.dof")
+    client = FakeClient(FakeReply(continuous_channel_order=order))
+    target = VhiTarget(FakeOutlet(), client=client)
+    with pytest.raises(ValueError, match="no legacy channel"):
+        target.bind(_controls(*order))
+    assert target.negotiated is False
+
+
+def test_discrete_edges_go_over_grpc_when_negotiated():
+    """v2 lifts v1's pose/movement exclusivity, so both travel at once."""
+    client = FakeClient(FakeReply(continuous_channel_order=NINE))
+    target = VhiTarget(FakeOutlet(), client=client)
+    target.bind(_controls(*NINE))
+    target.send(dict.fromkeys(NINE, 0.0), {"hand.grasp": "fist"})
+    assert client.sent == [(None, {"hand.grasp": "fist"})]
+
+
+def test_no_edge_means_no_rpc():
+    """A pose is re-sent every tick; a state change is not."""
+    client = FakeClient(FakeReply(continuous_channel_order=NINE))
+    target = VhiTarget(FakeOutlet(), client=client)
+    target.bind(_controls(*NINE))
+    for _ in range(5):
+        target.send(dict.fromkeys(NINE, 0.0), {})
+    assert client.sent == []
+
+
+def test_stop_rests_in_the_negotiated_order_and_flushes():
+    outlet = FakeOutlet()
+    target = VhiTarget(outlet, client=FakeClient(FakeReply(continuous_channel_order=NINE)))
+    target.bind(_controls(*NINE))
+    target.send(dict.fromkeys(NINE, 1.0), {})
+    target.stop()
+    assert outlet.last.tolist() == [0.0] * 9
+    assert outlet.flushes == 1
+
+
+def test_rebinding_re_negotiates_rather_than_keeping_the_old_verdict():
+    """A reconnect can land on a different VHI; a stale mode would encode wrongly."""
+    client = FakeClient(FakeReply(continuous_channel_order=NINE))
+    target = VhiTarget(FakeOutlet(), client=client)
+    target.bind(_controls(*NINE))
+    assert target.negotiated is True
+    client.reply = None
+    target.bind(_controls())
+    assert target.negotiated is False
+
+
+def test_declare_request_maps_the_control_set():
+    """The real protobuf message, including declaration order and both kinds."""
+    pytest.importorskip("grpc")
+    from myogestic.vhi._client_v2 import declare_request
+
+    controls = load_dofs(
+        {
+            "dofs": {
+                "index.flexion": "continuous",
+                "grip.force": {"kind": "continuous", "range": [0.0, 1.0]},
+                "hand.grasp": ["rest", "fist"],
+            }
+        }
+    )
+    request = declare_request(controls, "probe")
+    assert request.client_name == "probe"
+    assert [d.name for d in request.dofs] == ["index.flexion", "grip.force", "hand.grasp"]
+    index, grip, grasp = request.dofs
+    assert (index.lo, index.hi, index.rest) == (-1.0, 1.0, 0.0)
+    assert (grip.lo, grip.hi) == (0.0, 1.0)
+    assert list(grasp.states) == ["rest", "fist"]
+    assert grasp.rest_state == "rest"
+
+
+def test_a_reply_that_does_not_state_its_encoding_falls_back():
+    """The bug the field exists for: guessing a sign convention inverts every joint.
+
+    The first end-to-end v2 run agreed on channel names while VHI still decoded legacy
+    units, so a canonical +1 arrived as legacy +1 and the hand extended when it was
+    told to flex. A server that will not say gets no benefit of the doubt.
+    """
+    client = FakeClient(
+        FakeReply(continuous_channel_order=NINE, continuous_encoding=UNSPECIFIED)
+    )
+    target = VhiTarget(FakeOutlet(), client=client)
+    with pytest.raises(ValueError, match="no legacy channel"):
+        target.bind(_controls(*NINE))
+    assert target.negotiated is False
+
+
+def test_a_legacy_negated_wire_is_negated():
+    """VHI reports this while its continuous path is still the pre-v2 decoder."""
+    outlet = FakeOutlet()
+    target = VhiTarget(
+        outlet,
+        client=FakeClient(
+            FakeReply(continuous_channel_order=NINE, continuous_encoding=LEGACY_NEGATED)
+        ),
+    )
+    target.bind(_controls(*NINE))
+    assert target.negotiated is True
+    target.send({**dict.fromkeys(NINE, 0.0), "index.flexion": 1.0}, {})
+    assert outlet.last[2] == pytest.approx(-1.0)
+
+
+def test_a_canonical_wire_is_not_negated():
+    outlet = FakeOutlet()
+    target = VhiTarget(
+        outlet,
+        client=FakeClient(
+            FakeReply(continuous_channel_order=NINE, continuous_encoding=CANONICAL)
+        ),
+    )
+    target.bind(_controls(*NINE))
+    target.send({**dict.fromkeys(NINE, 0.0), "index.flexion": 1.0}, {})
+    assert outlet.last[2] == pytest.approx(+1.0)
+
+
+def test_a_negotiated_order_shorter_than_the_wire_pads_the_tail():
+    """VHI names six channels on a nine-float transport; the tail stays at rest.
+
+    It will not name a channel it does not read — naming dead channels is how the four
+    wrong pose tables came to exist — so a short order is normal, not a mismatch.
+    """
+    six = LEGACY_POSE_DOFS
+    outlet = FakeOutlet()
+    target = VhiTarget(
+        outlet,
+        client=FakeClient(
+            FakeReply(continuous_channel_order=six, continuous_encoding=LEGACY_NEGATED)
+        ),
+    )
+    target.bind(_controls(*six))
+    assert target.negotiated is True
+    target.send({**dict.fromkeys(six, 0.0), "little.flexion": 1.0}, {})
+    assert outlet.last.shape == (LEGACY_POSE_WIDTH,)
+    assert outlet.last[5] == pytest.approx(-1.0)
+    assert outlet.last[6:].tolist() == [0.0, 0.0, 0.0]

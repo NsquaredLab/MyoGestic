@@ -92,12 +92,35 @@ message DofVerdict {
   string renders_as = 4;
 }
 
+// How values on the negotiated continuous stream are to be interpreted.
+//
+// This exists because the first end-to-end run of v2 got it wrong: the handshake
+// agreed on channel *names* while VHI's LSL consumer still decoded legacy units, so
+// a canonical +1 arrived as legacy +1 and the hand extended when it should have
+// flexed. Nothing on the wire said which convention was in force. A negotiation that
+// settles identity but leaves units implicit is not a negotiation.
+enum ContinuousEncoding {
+  // The server did not say. A client MUST NOT guess — treat it as "cannot
+  // negotiate" and fall back, because guessing wrong inverts every joint.
+  ENCODING_UNSPECIFIED = 0;
+  // Canonical: the value means what the standard says, +1 being the direction the
+  // DOF name denotes. No transformation.
+  CANONICAL = 1;
+  // The legacy convention: the renderer multiplies by a negative per-bone gain, so
+  // a canonical value must be negated before it goes on the wire. Reported while
+  // VHI's continuous path is still the pre-v2 decoder.
+  LEGACY_NEGATED = 2;
+}
+
 message DeclareReply {
   // true only if every declared DOF is renderable.
   bool accepted = 1;
   repeated DofVerdict verdicts = 2;
   // VHI's own standard version.
   string standard_version = 3;
+  // How to encode values on continuous_stream_name. Not optional in practice: an
+  // ENCODING_UNSPECIFIED reply must be treated as a failed negotiation.
+  ContinuousEncoding continuous_encoding = 6;
   // The LSL stream VHI will read continuous values from, and the channel order
   // it expects on it. Order is authoritative: index i of this list is channel i.
   // Clients should publish these as LSL channel labels so a reordering renames
