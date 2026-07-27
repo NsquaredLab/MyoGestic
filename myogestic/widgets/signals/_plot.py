@@ -379,6 +379,36 @@ def ensure_specs(v: ViewerState, n_channels: int) -> None:
         v.specs.append(s)
 
 
+def _nice_step(raw: float) -> float:
+    """Round a raw tick spacing up to a ``1 / 2 / 2.5 / 5 × 10^k`` "nice" number."""
+    if raw <= 0:
+        return 1.0
+    mag = 10.0 ** math.floor(math.log10(raw))
+    for m in (1.0, 2.0, 2.5, 5.0):
+        if raw <= m * mag:
+            return m * mag
+    return 10.0 * mag
+
+
+def _time_ticks(window: float) -> tuple[list[float], list[str]]:
+    """X-axis ticks over ``[0, window]``, with the centre tick relabelled ``Time (s)``.
+
+    Putting the unit on the middle tick lets us drop the dedicated axis-title row
+    (``setup_axis(x1, "Time (s)")``), which reclaims that vertical space for the
+    trace. ~10 intervals at a nice step keeps the familiar 0 / 0.5 / 1 … look.
+    """
+    if window <= 0:
+        return [0.0], ["Time (s)"]
+    step = _nice_step(window / 10.0)
+    n = int(round(window / step))
+    positions = [round(i * step, 6) for i in range(n + 1)]
+    labels = [f"{p:g}" for p in positions]
+    center = window / 2.0
+    ci = min(range(len(positions)), key=lambda i: abs(positions[i] - center))
+    labels[ci] = "Time (s)"
+    return positions, labels
+
+
 def setup_axes(
     v: ViewerState,
     enabled: set[int],
@@ -386,13 +416,17 @@ def setup_axes(
     channel_map: list[int],
     ch_names: list[str] | None,
 ) -> None:
-    implot.setup_axis(implot.ImAxis_.x1, "Time (s)")
+    # No axis title — the "Time (s)" unit rides on the centre tick instead (see
+    # `_time_ticks`), reclaiming the vertical row the title used to occupy.
+    implot.setup_axis(implot.ImAxis_.x1)
     implot.setup_axis_limits(
         implot.ImAxis_.x1,
         0,
         v.window,
         implot.Cond_.always,  # type: ignore[attr-defined]
     )
+    x_positions, x_labels = _time_ticks(v.window)
+    implot.setup_axis_ticks(implot.ImAxis_.x1, x_positions, x_labels)
 
     if v.per_channel_scale:
         # Pin to the fixed unit-lane geometry (each lane fills ±0.4 around baselines stacked by
