@@ -20,14 +20,17 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROTO_DIR = REPO_ROOT / "myogestic" / "vhi" / "_proto"
-PROTO_FILE = PROTO_DIR / "myogestic_vhi.proto"
 
 
 def main() -> int:
-    if not PROTO_FILE.exists():
-        print(f"proto not found: {PROTO_FILE}", file=sys.stderr)
+    protos = sorted(PROTO_DIR.glob("*.proto"))
+    if not protos:
+        print(f"no .proto files in {PROTO_DIR}", file=sys.stderr)
         return 1
 
+    # Generate every vendored contract in one protoc invocation: v1 and v2 are
+    # separate services in separate packages, both served at once during the
+    # migration, so both sets of stubs have to exist side by side.
     cmd = [
         sys.executable,
         "-m",
@@ -36,7 +39,7 @@ def main() -> int:
         f"--python_out={PROTO_DIR}",
         f"--pyi_out={PROTO_DIR}",
         f"--grpc_python_out={PROTO_DIR}",
-        str(PROTO_FILE),
+        *[str(p) for p in protos],
     ]
     print(" ".join(cmd))
     result = subprocess.run(cmd)
@@ -44,20 +47,25 @@ def main() -> int:
         print("protoc failed", file=sys.stderr)
         return result.returncode
 
-    # grpc_tools emits a flat `import myogestic_vhi_pb2` in the _pb2_grpc file;
-    # rewrite it to a package-relative import so the stubs work as
-    # `myogestic.vhi._proto.*`.
-    grpc_file = PROTO_DIR / "myogestic_vhi_pb2_grpc.py"
-    text = grpc_file.read_text()
-    patched = text.replace(
-        "import myogestic_vhi_pb2 as myogestic__vhi__pb2",
-        "from . import myogestic_vhi_pb2 as myogestic__vhi__pb2",
-    )
-    if patched != text:
-        grpc_file.write_text(patched)
-        print(f"patched relative import in {grpc_file.name}")
-    else:
-        print(f"WARNING: expected import line not found in {grpc_file.name}", file=sys.stderr)
+    # grpc_tools emits a flat `import <stem>_pb2` in each _pb2_grpc file; rewrite
+    # it to a package-relative import so the stubs work as `myogestic.vhi._proto.*`.
+    for proto in protos:
+        stem = proto.stem
+        grpc_file = PROTO_DIR / f"{stem}_pb2_grpc.py"
+        if not grpc_file.exists():
+            print(f"WARNING: {grpc_file.name} was not generated", file=sys.stderr)
+            continue
+        alias = stem.replace("_", "__")
+        text = grpc_file.read_text()
+        patched = text.replace(
+            f"import {stem}_pb2 as {alias}__pb2",
+            f"from . import {stem}_pb2 as {alias}__pb2",
+        )
+        if patched != text:
+            grpc_file.write_text(patched)
+            print(f"patched relative import in {grpc_file.name}")
+        else:
+            print(f"WARNING: expected import line not found in {grpc_file.name}", file=sys.stderr)
 
     print("done")
     return 0
