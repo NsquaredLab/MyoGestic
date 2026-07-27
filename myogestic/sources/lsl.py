@@ -2,11 +2,36 @@
 
 from __future__ import annotations
 
+import contextlib
+
 import numpy as np
 import numpy.typing as npt
 from mne_lsl.lsl import StreamInlet, resolve_streams
 
 from myogestic.stream import StreamInfo
+
+
+def _published_names(inlet: object) -> list[str] | None:
+    """Channel labels the outlet published, or ``None`` when it published none.
+
+    Read from the **inlet**, not from the resolved stream: ``resolve_streams``
+    returns the stream header only, and per-channel labels live in the description
+    XML, which is fetched on demand once a connection exists.
+
+    LSL always answers ``get_channel_names``, filling unset labels with the channel
+    index as a string (``["0", "1", ...]``) or with ``None``. Those are placeholders,
+    not names — returning them would make a positional stream look self-describing
+    and let a caller resolve ``"0"`` as if it meant something.
+    """
+    try:
+        names = inlet.get_sinfo().get_channel_names()  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001 - a stream without a description is normal
+        return None
+    if not names or any(not n for n in names):
+        return None
+    if all(str(n).lstrip("-").isdigit() for n in names):
+        return None
+    return [str(n) for n in names]
 
 
 class LSLSource:
@@ -81,10 +106,24 @@ class LSLSource:
             )
         info = streams[0]
         self._inlet = StreamInlet(info, max_buffered=10)
+        # Open now so the per-channel labels can be read: LSL serves the stream
+        # description only over an established connection. Failure is tolerated —
+        # the inlet opens itself on the first pull either way, so a slow outlet
+        # costs the channel names, never the connection.
+        with contextlib.suppress(Exception):
+            self._inlet.open_stream(timeout=2.0)
         # mne_lsl exposes the outlet's native wire dtype as info.dtype.
         native = np.dtype(info.dtype)
         self._dtype = self._requested_dtype if self._requested_dtype is not None else native
-        return StreamInfo(n_channels=info.n_channels, fs=info.sfreq, dtype=self._dtype)
+        return StreamInfo(
+            n_channels=info.n_channels,
+            fs=info.sfreq,
+            dtype=self._dtype,
+            # Names come from the *inlet*, not from `info`: resolution returns only
+            # the stream header, while per-channel labels live in the description
+            # XML, which is fetched on demand once a connection exists.
+            channel_names=_published_names(self._inlet),
+        )
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
         """Pull whatever samples are immediately available.
