@@ -108,11 +108,20 @@ class InterfaceSpec:
     install_root: Path | None = None
 
     def outlet(self) -> LSLOutlet:
-        """Construct an LSLOutlet matching this interface's output stream."""
+        """Construct an LSLOutlet matching this interface's output stream.
+
+        Carries a stable ``source_id`` so the consumer can *recover* this stream
+        after a restart instead of going deaf. Without one, LSL cannot tell a
+        restarted outlet from a new stream, and a consumer that resolved the old
+        one keeps a dead inlet — VHI warns about exactly this on connect, and its
+        own re-resolve only runs while it has no inlet at all, so the pairing has
+        to be recoverable from this side.
+        """
         return LSLOutlet(
             name=self.output_stream_name,
             n_channels=self.n_output_channels,
             hz=self.output_hz,
+            source_id=f"myogestic:{self.name}:{self.output_stream_name}",
         )
 
     def control_client(self) -> VhiControlClient:
@@ -139,6 +148,7 @@ class InterfaceSpec:
             name=self.control_pose_stream_name,
             n_channels=self.n_control_pose_channels or self.n_output_channels,
             hz=self.control_pose_hz or self.output_hz,
+            source_id=f"myogestic:{self.name}:{self.control_pose_stream_name}",
         )
 
     def launcher(self) -> list[tuple[str, list[str]]]:
