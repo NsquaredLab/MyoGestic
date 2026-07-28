@@ -26,8 +26,8 @@ a held state delivered on change is not the same thing as a number.
 
 ## Declaring a control space
 
-`load_dofs` takes a plain mapping, so the library never reads a file itself: parse
-your TOML (or JSON, or a dict literal) and hand it over.
+Write a TOML file. A ready-to-copy one ships at
+[`examples/controls/hand.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/hand.toml):
 
 ```toml
 [dofs]
@@ -35,6 +35,28 @@ your TOML (or JSON, or a dict literal) and hand it over.
 "hand.grasp"    = ["rest", "fist", "pinch"]                    # array => discrete
 "grip.force"    = { kind = "continuous", range = [0.0, 1.0] }  # one-way
 ```
+
+Load it in two lines:
+
+```python
+import tomllib
+from myogestic.controls import load_dofs
+
+with open("hand.toml", "rb") as f:          # "rb" — tomllib requires binary
+    controls = load_dofs(tomllib.load(f))
+```
+
+**Mapping-first**: the *shape* of each value is the discriminator. A bare string is a
+continuous DOF at its defaults, a bare array is a discrete DOF's states, and a table is
+the explicit form for a one-way range, a non-zero rest, a label, or a `debounce_s`
+stability gate.
+
+!!! note "`load_dofs` takes a Mapping, not a path"
+    That is deliberate, and it is why the snippet above opens the file itself. The
+    library reads no configuration files — a design rule, not an oversight — so the same
+    call accepts JSON, a dict literal, a row from a database, or a config system you
+    already have. TOML is what a *human* wants to edit, which is why the shipped example
+    is TOML.
 
 ::: myogestic.controls.load_dofs
 

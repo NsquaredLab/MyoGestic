@@ -183,3 +183,49 @@ def test_doc_page_runs(path, doc_session):
             exec(compile(code, f"{path}:{ln}", "exec"), ns)  # noqa: S102
         except Exception as e:  # noqa: BLE001
             pytest.fail(f"{path.relative_to(ROOT)}:{ln} doc block raised {type(e).__name__}: {e}")
+
+
+# --- Layer 3: every ```toml block that declares DOFs must actually load ----------
+#
+# The docs now tell users to write a TOML file, so a snippet that does not parse — or
+# parses but is rejected by `load_dofs` — teaches a shape that cannot work. Layer 1
+# gives python blocks that guarantee; this extends it to the declarations.
+
+_TOML_BLOCK = re.compile(r"```toml\n(.*?)\n[ \t]*```", re.DOTALL)
+
+
+def _toml_blocks(path: Path):
+    """Yield ``(code, line_number)`` for each toml block in a file."""
+    text = path.read_text(encoding="utf-8")
+    for match in _TOML_BLOCK.finditer(text):
+        yield textwrap.dedent(match.group(1)), text[: match.start()].count("\n") + 1
+
+
+@pytest.mark.parametrize("path", MD_FILES, ids=lambda p: str(p.relative_to(ROOT)))
+def test_doc_toml_blocks_parse_and_load(path):
+    """A TOML snippet must parse, and a `[dofs]` one must survive `load_dofs`."""
+    import tomllib
+
+    from myogestic.controls import load_dofs
+
+    for code, line in _toml_blocks(path):
+        where = f"{path.relative_to(ROOT)}:{line}"
+        try:
+            raw = tomllib.loads(code)
+        except tomllib.TOMLDecodeError as exc:
+            pytest.fail(f"{where}: invalid TOML — {exc}")
+
+        # A fragment showing one key (no [dofs] header) is still a real declaration;
+        # wrap it so it is checked rather than skipped, since those fragments are
+        # exactly what a reader copies into their own [dofs] table.
+        if "dofs" in raw:
+            candidate = raw
+        elif raw and all(isinstance(k, str) and "." in k for k in raw):
+            candidate = {"dofs": raw}
+        else:
+            continue  # not a control declaration (e.g. a pyproject or config sample)
+
+        try:
+            load_dofs(candidate)
+        except ValueError as exc:
+            pytest.fail(f"{where}: TOML parses but load_dofs rejects it — {exc}")

@@ -134,6 +134,12 @@ class ControlSet:
     dofs: Mapping[str, Dof] = field(default_factory=dict)
     simultaneous: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     standard_version: str = STANDARD_VERSION
+    #: Alias -> the target control addresses its value is routed to, with per-target
+    #: weights. Populated by `myogestic.controls.resolve`; empty for a configuration
+    #: built without a target manifest. A `Dof` describes what the *alias* accepts, and
+    #: this says where it goes — the two are separate because the alias name is the
+    #: user's and the address is the target's.
+    routes: Mapping[str, tuple[Any, ...]] = field(default_factory=dict)
 
     @property
     def continuous(self) -> tuple[Continuous, ...]:

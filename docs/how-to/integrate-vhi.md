@@ -21,6 +21,48 @@ puts continuous values on LSL, and sends discrete states over gRPC.
     path end to end and prints what reaches the wire. It needs no Virtual Hand, and
     tells you which contract yours speaks if you have one running.
 
+## Start with a control file
+
+Declare what your application controls in a TOML file. Copy
+[`examples/controls/hand.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/hand.toml)
+and edit it:
+
+```toml
+[dofs]
+"index.flexion" = "continuous"                 # signed: +1 flexes, -1 extends, 0 rest
+"middle.flexion" = "continuous"
+"hand.grasp"    = ["rest", "fist", "pinch"]    # a held state, not a number
+
+# The explicit form, when a default is not what you mean:
+"grip.force"    = { kind = "continuous", range = [0.0, 1.0] }
+"hand.gesture"  = { kind = "discrete", states = ["rest", "fist"], debounce_s = 0.1 }
+```
+
+Load it, and hand the result to a bus with a `VhiTarget`:
+
+```python
+import tomllib
+
+from myogestic.controls import ControlBus, load_dofs
+from myogestic.vhi import VhiTarget, virtual_hand
+
+vhi = virtual_hand()
+with open("hand.toml", "rb") as f:            # "rb" — tomllib requires binary
+    CONTROLS = load_dofs(tomllib.load(f))
+
+target = VhiTarget(vhi.outlet(), client=vhi.canonical_client())
+bus = ControlBus(CONTROLS, targets=[target], hz=32)
+```
+
+That is the whole setup. `bus.push({"index.flexion": 0.8})` from inside
+`@pipeline.predict` and the target negotiates the wire, encodes, and sends.
+
+!!! note "The file is yours; the library never reads it"
+    `load_dofs` takes a **Mapping**, not a path — so MyoGestic reads no configuration
+    files, and your declaration can equally live in JSON, a dict literal, or a config
+    system you already run. TOML is what a human wants to edit, which is why the shipped
+    example is TOML and why the snippet above opens it itself.
+
 !!! tip "Declare DOFs, don't push channels"
     The rest of this page shows the transport underneath, which is worth
     understanding when something misbehaves. But application code should not
@@ -159,23 +201,15 @@ For classifier output the right primitive isn't "push a pose every tick" — it'
 "hold state X, and change it only when the class has actually settled". That is a
 **canonical discrete DOF**, and the bus owns the gating:
 
+Declare it in the file — `debounce_s` is the gate, in seconds:
+
+```toml
+"hand.gesture" = { kind = "discrete", states = ["rest", "fist", "pinch", "point"], debounce_s = 0.1 }
+```
+
+Then command it by name, using the `bus` built above:
+
 ```python
-from myogestic.controls import ControlBus, load_dofs
-from myogestic.vhi import VhiTarget
-
-CONTROLS = load_dofs({
-    "dofs": {
-        "hand.gesture": {
-            "kind": "discrete",
-            "states": ["rest", "fist", "pinch", "point"],
-            "rest": "rest",
-            "debounce_s": 0.1,       # hold a state this long before it counts
-        }
-    }
-})
-target = VhiTarget(vhi.outlet(), client=vhi_canonical)
-bus = ControlBus(CONTROLS, targets=[target], hz=32)
-
 @pipeline.predict
 def predict(model, features):
     class_idx = int(np.argmax(model.predict_proba(features)))

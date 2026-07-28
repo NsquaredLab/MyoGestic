@@ -78,6 +78,11 @@ class VhiCanonicalControlStub(object):
                 request_serializer=myogestic__vhi__v2__pb2.SetPresentationRequest.SerializeToString,
                 response_deserializer=myogestic__vhi__v2__pb2.ControlAck.FromString,
                 _registered_method=True)
+        self.GetControlManifest = channel.unary_unary(
+                '/myogestic.vhi.v2.VhiCanonicalControl/GetControlManifest',
+                request_serializer=myogestic__vhi__v2__pb2.GetControlManifestRequest.SerializeToString,
+                response_deserializer=myogestic__vhi__v2__pb2.ControlManifest.FromString,
+                _registered_method=True)
 
 
 class VhiCanonicalControlServicer(object):
@@ -141,6 +146,14 @@ class VhiCanonicalControlServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetControlManifest(self, request, context):
+        """What can this target be told to do? Returns every control VHI exports, with the
+        semantics VHI itself declares for each. Call it before Declare.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_VhiCanonicalControlServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -163,6 +176,11 @@ def add_VhiCanonicalControlServicer_to_server(servicer, server):
                     servicer.SetPresentation,
                     request_deserializer=myogestic__vhi__v2__pb2.SetPresentationRequest.FromString,
                     response_serializer=myogestic__vhi__v2__pb2.ControlAck.SerializeToString,
+            ),
+            'GetControlManifest': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetControlManifest,
+                    request_deserializer=myogestic__vhi__v2__pb2.GetControlManifestRequest.FromString,
+                    response_serializer=myogestic__vhi__v2__pb2.ControlManifest.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -297,6 +315,33 @@ class VhiCanonicalControl(object):
             '/myogestic.vhi.v2.VhiCanonicalControl/SetPresentation',
             myogestic__vhi__v2__pb2.SetPresentationRequest.SerializeToString,
             myogestic__vhi__v2__pb2.ControlAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetControlManifest(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/myogestic.vhi.v2.VhiCanonicalControl/GetControlManifest',
+            myogestic__vhi__v2__pb2.GetControlManifestRequest.SerializeToString,
+            myogestic__vhi__v2__pb2.ControlManifest.FromString,
             options,
             channel_credentials,
             insecure,

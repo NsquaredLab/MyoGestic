@@ -44,6 +44,69 @@ service VhiCanonicalControl {
   // Configure how the renderer *presents* transitions between commanded values.
   // Appearance only — see SetPresentationRequest.
   rpc SetPresentation (SetPresentationRequest) returns (ControlAck);
+
+  // What can this target be told to do? Returns every control VHI exports, with the
+  // semantics VHI itself declares for each. Call it before Declare.
+  rpc GetControlManifest (GetControlManifestRequest) returns (ControlManifest);
+}
+
+// Empty — proto3 needs a message type even with no parameters.
+message GetControlManifestRequest {}
+
+// One control this target exports, addressed by a stable dotted name.
+//
+// The address is **owned by the target**. A client maps its own arbitrary
+// model-output name onto one of these; it does not invent addresses and it does not
+// hard-code their semantics. Everything a client needs in order to send values
+// correctly is declared right here, by the side that renders them:
+//
+//   - whether it is a number or a held state, and
+//   - for a number: its domain and its neutral value, and
+//   - for a state: the states it accepts and which one is neutral.
+//
+// That is the whole point of shipping a manifest rather than a naming convention. A
+// convention has to be kept in sync by hand on both sides; a manifest is read.
+message ControlCapability {
+  // Stable dotted address, e.g. "vhi.prediction.index.flexion". Namespaced by target
+  // so addresses from different targets cannot collide in one client configuration.
+  string address = 1;
+
+  // Whether this control takes a number or a held state.
+  Kind kind = 2;
+
+  // CONTINUOUS only: the domain and the value meaning "no command".
+  float lo = 3;
+  float hi = 4;
+  float rest = 5;
+
+  // DISCRETE only: the states this control accepts, and the neutral one.
+  repeated string states = 6;
+  string rest_state = 7;
+
+  // How a value on this control must be encoded when it travels over LSL rather than
+  // over SetControl. Per-capability because the two inlets do not share a convention.
+  ContinuousEncoding encoding = 8;
+
+  // Human-readable: what moves, and any target-local behaviour worth knowing. For a
+  // log or a UI — clients must not parse it.
+  string description = 9;
+
+  // The LSL stream this control is read from, when it is streamed rather than sent
+  // over SetControl. Empty means SetControl only.
+  string stream_name = 10;
+}
+
+message ControlManifest {
+  // Which target this is, for a client that talks to more than one.
+  string target_name = 1;
+
+  // The vocabulary's own version. Bumped when addresses are added or their declared
+  // semantics change, so a client can notice rather than silently mis-send.
+  string vocabulary_version = 2;
+
+  // Every control this build exports. A client validates its configuration against
+  // this list and reports an unknown address by name — with these as the alternatives.
+  repeated ControlCapability capabilities = 3;
 }
 
 // How the renderer blends between the values it is given.

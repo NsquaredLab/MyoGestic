@@ -17,6 +17,23 @@ uv sync --extra examples --extra grpc # adds the gRPC-control examples
 uv run python examples/synthetic/<name>.py
 ```
 
+## The control file
+
+All six examples declare what they control by *name*. A ready-to-copy TOML declaration
+ships at
+[`examples/controls/hand.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/hand.toml)
+— signed continuous DOFs, a discrete grasp state, a one-way range, and a `debounce_s`
+stability gate, with the mapping-first short forms alongside the explicit table form.
+
+To watch it load and drive a hand end to end:
+
+```bash
+uv run --extra grpc python tools/inspect_canonical_control.py
+```
+
+That runs safely with no Virtual Hand at all, and prints a different section for a v2
+build, a pre-v2 build, and nothing running.
+
 ## The six examples
 
 ### `emg_classification.py` - start here
