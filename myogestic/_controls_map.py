@@ -265,7 +265,22 @@ def _parse_binding(alias: Any, value: Any, errs: list[str]) -> Binding | None:
     debounce_s = 0.0
     label = ""
 
-    if isinstance(value, dict) and ("targets" in value or "target" in value):
+    if isinstance(value, dict) and not ({"target", "targets"} & set(value)):
+        # TOML turns an unquoted dotted key into a NESTED TABLE, so `my.thumb = "..."`
+        # arrives here as alias "my" with value {"thumb": "..."} — a binding nobody
+        # wrote, which would otherwise be reported as a mysterious unknown key. The
+        # discriminator is the absence of target/targets, and it matters: the old parser
+        # had the same trap and a phantom entry there shifted every wire index after it.
+        nested = [k for k, v in value.items() if isinstance(v, (str, list, dict))]
+        errs.append(
+            f"[dofs] {alias!r}: this is a table, not a mapping — TOML read "
+            f"{'.'.join([alias, *nested[:1]])} as a nested key. Quote the whole alias if "
+            f'it contains a dot: "{".".join([alias, *nested[:1]])}" = "some.target.address". '
+            f"Otherwise give it a target, e.g. {alias} = \"vhi.prediction.index\"."
+        )
+        return None
+
+    if isinstance(value, dict):
         unknown = sorted(set(value) - _BINDING_KEYS)
         if unknown:
             errs.append(

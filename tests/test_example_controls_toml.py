@@ -1,13 +1,13 @@
-"""The shipped TOML config must load, and must keep demonstrating what it claims to.
+"""The shipped mapping file must load, and must keep demonstrating what it claims to.
 
-`examples/controls/hand.toml` is a user-facing file: people copy it, edit it, and expect
-it to work. It is also what `tools/inspect_canonical_control.py` loads, so a syntax error
-or a rename would break the walkthrough silently — a doc example that is never executed
-rots, which is why this exists rather than a prose promise that the file is valid.
+`examples/controls/hand.toml` is user-facing: people copy it, edit it, and expect it to
+work. It is also what `tools/inspect_canonical_control.py` loads, so a syntax error or a
+rename would break the walkthrough silently.
 
-These assert the *properties the file is meant to teach*, not merely that it parses:
-the mapping-first short forms, a signed continuous DOF, a one-way DOF, and a discrete
-state with a stability gate.
+These assert the properties the file is meant to *teach* — arbitrary aliases, a 1:1
+mapping, a fan-out, a weighted fan-out, a target-declared discrete state — not merely
+that it parses. Resolution runs against a stand-in for VHI's manifest so the file is
+checked without a Virtual Hand; `tests/test_v2_contract.py` covers the live manifest.
 """
 
 from __future__ import annotations
@@ -17,74 +17,103 @@ import tomllib
 
 import pytest
 
-from myogestic.controls import Continuous, ControlBus, Discrete, load_dofs
+from myogestic.controls import Capability, ControlBus, load_control_map, resolve
 
 CONFIG = pathlib.Path(__file__).resolve().parent.parent / "examples" / "controls" / "hand.toml"
 
+FINGERS = ("thumb", "index", "middle", "ring", "little")
+
+#: What VHI's GetControlManifest declares, mirrored. Kept in step by
+#: tests/test_v2_contract.py, which asserts the same set against a live build.
+VHI_MANIFEST = [
+    *(
+        Capability(address, "continuous", lo=-1.0, hi=1.0, rest=0.0)
+        for digit in FINGERS
+        for address in (f"vhi.prediction.{digit}", f"vhi.prediction.{digit}.flexion")
+    ),
+    Capability("vhi.prediction.thumb.abduction", "continuous", lo=-1.0, hi=1.0, rest=0.0),
+    Capability(
+        "vhi.control.gesture",
+        "discrete",
+        states=("Rest", "Fist", "Pointing"),
+        rest_state="Rest",
+    ),
+]
+
 
 @pytest.fixture(scope="module")
-def controls():
+def control_map():
     """The shipped file, loaded exactly as the docs tell a user to load it."""
     with CONFIG.open("rb") as handle:  # "rb" — tomllib requires binary
-        return load_dofs(tomllib.load(handle))
+        return load_control_map(tomllib.load(handle))
+
+
+@pytest.fixture(scope="module")
+def resolved(control_map):
+    """...and resolved against what the target says it exports."""
+    return resolve(control_map, VHI_MANIFEST)
 
 
 def test_the_file_exists_where_the_docs_say_it_does():
-    """A moved file breaks the walkthrough and every doc snippet pointing at it."""
     assert CONFIG.is_file(), CONFIG
 
 
-def test_it_loads_through_the_documented_two_liner(controls):
-    assert controls.dofs, "an empty control space would parse but teach nothing"
+def test_it_loads_through_the_documented_two_liner(control_map):
+    assert control_map.bindings, "an empty map would parse but teach nothing"
 
 
-def test_the_mapping_first_short_forms_are_demonstrated(controls):
-    """A bare string is continuous; a bare array is discrete. The smallest syntax."""
-    raw = tomllib.loads(CONFIG.read_text())["dofs"]
-    assert any(isinstance(v, str) for v in raw.values()), "no short-form continuous DOF"
-    assert any(isinstance(v, list) for v in raw.values()), "no short-form discrete DOF"
-    assert any(isinstance(v, dict) for v in raw.values()), "no explicit table form"
+def test_the_aliases_are_the_users_own(control_map):
+    """None of them may look like a target address — that is the whole distinction."""
+    for alias in control_map.bindings:
+        assert not alias.startswith("vhi."), f"{alias!r} reads as a target address"
 
 
-def test_a_signed_continuous_dof_is_demonstrated(controls):
-    """The canonical domain is signed: +1 is the direction the name denotes."""
-    signed = [d for d in controls.continuous if d.lo < 0 < d.hi]
-    assert signed, "the file must show a signed DOF — that is the canonical default"
-    for dof in signed:
-        assert dof.rest == 0.0, f"{dof.name}: rest must be 0 for a signed DOF"
+def test_every_address_is_exported_by_the_target(resolved, control_map):
+    """The file must not reference a control VHI does not actually declare."""
+    exported = {cap.address for cap in VHI_MANIFEST}
+    for address in control_map.addresses():
+        assert address in exported, address
 
 
-def test_a_one_way_dof_is_demonstrated(controls):
-    """Declaring [0, 1] is how a model is prevented from commanding a direction."""
-    one_way = [d for d in controls.continuous if d.lo == 0.0]
-    assert one_way, "the file must show a one-way range"
-    for dof in one_way:
-        assert dof.lo <= dof.rest <= dof.hi
+def test_a_one_to_one_mapping_is_demonstrated(resolved):
+    single = [a for a, refs in resolved.routes.items() if len(refs) == 1]
+    assert single, "the file must show the common 1:1 case"
 
 
-def test_a_grasp_state_is_demonstrated(controls):
-    """The product requirement: a discrete grasp/fist state, declared in the file."""
-    discrete = controls.discrete
-    assert discrete, "the file must declare a discrete DOF"
-    states = {s.lower() for dof in discrete for s in dof.states}
-    assert "fist" in states, f"expected a fist state, got {sorted(states)}"
-    assert "rest" in states, "a discrete DOF needs a neutral state"
+def test_a_fan_out_is_demonstrated(resolved):
+    """One user output reaching several target controls, no whole-hand capability."""
+    fanned = {a: refs for a, refs in resolved.routes.items() if len(refs) > 1}
+    assert fanned, "the file must show a fan-out"
+    equal = [a for a, refs in fanned.items() if all(r.weight == 1.0 for r in refs)]
+    assert equal, "and the simple equal-weight broadcast form"
+
+
+def test_a_weighted_fan_out_is_demonstrated(resolved):
+    weighted = [
+        a for a, refs in resolved.routes.items() if any(r.weight != 1.0 for r in refs)
+    ]
+    assert weighted, "the file must show a per-target weight"
+    for alias in weighted:
+        for ref in resolved.routes[alias]:
+            assert 0.0 < abs(ref.weight) <= 1.0, (alias, ref)
+
+
+def test_a_target_declared_discrete_state_is_demonstrated(resolved):
+    """The kind is the target's declaration, and the file must exercise that path."""
+    discrete = [d for d in resolved.dofs.values() if hasattr(d, "states")]
+    assert discrete, "the file must map something onto a discrete control"
     for dof in discrete:
+        assert dof.states, "states come from the manifest"
         assert dof.rest in dof.states
 
 
-def test_a_stability_gate_is_demonstrated(controls):
-    """`debounce_s` on the DOF is what protects a classifier from its own chatter."""
-    gated = [d for d in controls.discrete if d.debounce_s > 0]
-    assert gated, "the file must show a debounce — it is the discrete protection"
+def test_a_stability_gate_is_demonstrated(resolved):
+    """`debounce_s` is declared on this side — it belongs to the control loop."""
+    gated = [d for d in resolved.dofs.values() if getattr(d, "debounce_s", 0) > 0]
+    assert gated, "the file must show a debounce"
 
 
-def test_every_dof_is_the_kind_its_shape_implies(controls):
-    for dof in controls.dofs.values():
-        assert isinstance(dof, (Continuous, Discrete)), dof
-
-
-def test_the_loaded_space_actually_drives_a_bus(controls):
+def test_the_resolved_space_actually_drives_a_bus(resolved):
     """Parsing is not enough — the file has to produce a usable control space."""
     seen: list[dict] = []
 
@@ -96,14 +125,14 @@ def test_the_loaded_space_actually_drives_a_bus(controls):
 
         def stop(self) -> None: ...
 
-    bus = ControlBus(controls, targets=[Recorder()], hz=50)
-    delivered = bus.push({d.name: d.hi for d in controls.continuous})
+    continuous = [d for d in resolved.dofs.values() if hasattr(d, "lo")]
+    bus = ControlBus(resolved, targets=[Recorder()], hz=50)
+    delivered = bus.push({d.name: d.hi for d in continuous})
     assert seen, "the bus delivered nothing"
-    for dof in controls.continuous:
+    for dof in continuous:
         assert delivered[dof.name] == pytest.approx(dof.hi)
     bus.stop()
-    # stop() must leave every DOF at its declared rest, from the file's own values.
-    assert seen[-1] == {d.name: d.rest for d in controls.dofs.values()}
+    assert seen[-1] == {d.name: d.rest for d in resolved.dofs.values()}
 
 
 def test_the_walkthrough_points_at_this_file():

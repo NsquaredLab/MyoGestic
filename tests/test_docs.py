@@ -206,7 +206,7 @@ def test_doc_toml_blocks_parse_and_load(path):
     """A TOML snippet must parse, and a `[dofs]` one must survive `load_dofs`."""
     import tomllib
 
-    from myogestic.controls import load_dofs
+    from myogestic.controls import load_control_map, load_dofs
 
     for code, line in _toml_blocks(path):
         where = f"{path.relative_to(ROOT)}:{line}"
@@ -225,7 +225,17 @@ def test_doc_toml_blocks_parse_and_load(path):
         else:
             continue  # not a control declaration (e.g. a pyproject or config sample)
 
-        try:
-            load_dofs(candidate)
-        except ValueError as exc:
-            pytest.fail(f"{where}: TOML parses but load_dofs rejects it — {exc}")
+        # Two shapes are live during the migration to target-owned addresses: the new
+        # alias -> address mapping, and the older canonical-name declaration that the
+        # not-yet-migrated pages still show. A block is valid if EITHER parser accepts
+        # it; a block both reject is broken whichever scheme it meant to use.
+        faults = []
+        for parse in (load_control_map, load_dofs):
+            try:
+                parse(candidate)
+                break
+            except ValueError as exc:
+                faults.append(f"{parse.__name__}: {exc}")
+        else:
+            joined = "\n      ".join(faults)
+            pytest.fail(f"{where}: TOML parses but no control parser accepts it —\n      {joined}")
