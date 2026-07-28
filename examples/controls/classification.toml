@@ -8,19 +8,19 @@
 
 # CLASSIFIER -> the same grouped mapping a regressor uses.
 #
-# `threshold` says this input is an activation, not a joint value: the classifier's
-# probability is gated to exactly 0 or 1 here, then fanned out and weighted like any
-# other control value. So VHI receives continuous per-control values — the same ones a
+# `threshold_fraction` is the probability cutoff: below 0.5 the classifier's output
+# becomes 0, at or above it 1. That activation is then fanned out and weighted like any
+# other control value, so VHI receives continuous per-control values — the same ones a
 # regressor would send — and there is no separate "fist" state command.
 #
-# Drop `threshold` and the identical mapping serves a regressor emitting 0..1 directly.
+# Drop it and the identical mapping serves a regressor emitting 0..1 directly.
 fist = { targets = [
   { target = "vhi.prediction.thumb", weight = 0.6 },
   { target = "vhi.prediction.index" },
   { target = "vhi.prediction.middle" },
   { target = "vhi.prediction.ring" },
   { target = "vhi.prediction.little" },
-], threshold = 0.5 }
+], threshold_fraction = 0.5 }
 
 # Same idea, one target: an activation gated to 0/1, not a joint value.
-thumb_spread = { target = "vhi.prediction.thumb.abduction", threshold = 0.5 }
+thumb_spread = { target = "vhi.prediction.thumb.abduction", threshold_fraction = 0.5 }

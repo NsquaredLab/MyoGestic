@@ -50,8 +50,8 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
 
 # Classification reaches the hand the *same way regression does*. The classifier gives an
-# activation, not a pose: both aliases below declare a `threshold` in the file, so a
-# probability is gated to exactly 0 or 1 and from there is an ordinary control value —
+# activation, not a pose: both aliases below declare a `threshold_fraction` in the file,
+# so a probability is gated to exactly 0 or 1 and from there is an ordinary control value —
 # fanned out and weighted like a regressor's. `fist` reaches all five digits and
 # `thumb_spread` abducts the thumb, so a whole-hand pose is these two numbers rather than
 # a channel vector, and VHI receives continuous per-control values either way.
@@ -190,7 +190,7 @@ def predict(model, features):
     """Classify → gate to an activation → smooth → push to VHI.
 
     Three separate things happen to the number, in this order, and each is worth
-    telling apart. The declared threshold decides *whether* the hand is closed, giving
+    telling apart. `threshold_fraction` decides *whether* the hand is closed, giving
     a 0 or a 1. The fan-out weights decide *how much of that* each digit gets. The
     filter then decides *how fast* the change is allowed to look. Class probabilities
     themselves flow through untouched, for the UI.

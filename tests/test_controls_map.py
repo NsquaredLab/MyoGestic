@@ -294,7 +294,7 @@ def test_routes_are_kept_beside_the_dofs_not_baked_into_names():
 
 
 class TestClassificationReachesTheTargetAsRegressionDoes:
-    """`threshold` on a *continuous* binding, the unified classification path.
+    """`threshold_fraction` on a *continuous* binding, the unified classification path.
 
     The user-facing claim is that a binary classifier drives a hand through the same
     weighted fan-out a regressor drives — so the target sees continuous per-control
@@ -309,14 +309,14 @@ class TestClassificationReachesTheTargetAsRegressionDoes:
                     {"target": "vhi.prediction.thumb", "weight": 0.6},
                     {"target": "vhi.prediction.index"},
                 ],
-                "threshold": 0.6,
+                "threshold_fraction": 0.6,
             }
         }
     }
 
-    def test_the_threshold_lands_on_the_resolved_control(self):
+    def test_the_fraction_lands_on_the_resolved_control(self):
         resolved = resolve(load_control_map(self.SPEC), VHI)
-        assert resolved.dofs["fist"].threshold == 0.6
+        assert resolved.dofs["fist"].threshold_fraction == 0.6
 
     def test_it_stays_continuous_and_keeps_its_weights(self):
         """The whole point: still one number fanning out, not a state."""
@@ -329,15 +329,71 @@ class TestClassificationReachesTheTargetAsRegressionDoes:
         resolved = resolve(load_control_map(self.SPEC), VHI)
         assert (resolved.dofs["fist"].lo, resolved.dofs["fist"].hi) == (0.0, 1.0)
 
-    def test_without_a_threshold_the_same_mapping_serves_a_regressor(self):
+    def test_without_a_fraction_the_same_mapping_serves_a_regressor(self):
         spec = {"dofs": {"fist": {"targets": self.SPEC["dofs"]["fist"]["targets"]}}}
         resolved = resolve(load_control_map(spec), VHI)
-        assert resolved.dofs["fist"].threshold is None
+        assert resolved.dofs["fist"].threshold_fraction is None
         assert resolved.dofs["fist"].lo == -1.0, "signed targets, so a signed control"
 
-    def test_debounce_on_a_thresholded_continuous_control_is_refused(self):
+    def test_debounce_on_a_gated_continuous_control_is_refused(self):
         """The bus gates stability for discrete DOFs only, so accepting it here would
         silently do nothing — worse than saying so."""
         spec = {"dofs": {"fist": {**self.SPEC["dofs"]["fist"], "debounce_s": 0.2}}}
         with pytest.raises(ValueError, match="debounce_s is not applied"):
             resolve(load_control_map(spec), VHI)
+
+
+class TestTheProbabilityCutoffIsValidatedAsAFraction:
+    """`threshold_fraction` is compared against a probability, so `[0, 1]` is its domain.
+
+    The name carries that: a *target* may also declare a threshold
+    (`Capability.activation_threshold`, what its own states cost), and the two are not
+    interchangeable. A number outside `[0, 1]` here is almost always someone reaching for
+    a control value.
+    """
+
+    @staticmethod
+    def _spec(fraction):
+        return {"dofs": {"fist": {"target": "vhi.prediction.index", "threshold_fraction": fraction}}}
+
+    @pytest.mark.parametrize("fraction", [0.0, 0.001, 0.5, 0.999, 1.0, 0, 1])
+    def test_the_whole_closed_unit_interval_is_accepted(self, fraction):
+        binding = load_control_map(self._spec(fraction)).bindings["fist"]
+        assert binding.threshold_fraction == float(fraction)
+
+    @pytest.mark.parametrize("fraction", [-0.1, 1.1, 50, -1, float("nan"), float("inf")])
+    def test_anything_outside_it_is_refused_as_a_fraction(self, fraction):
+        with pytest.raises(ValueError, match=r"threshold_fraction must be in \[0, 1\]"):
+            load_control_map(self._spec(fraction))
+
+    @pytest.mark.parametrize("fraction", ["0.5", True, None])
+    def test_a_non_number_is_refused(self, fraction):
+        with pytest.raises(ValueError, match="threshold_fraction must be a number"):
+            load_control_map(self._spec(fraction))
+
+    def test_the_old_generic_name_is_not_silently_accepted(self):
+        """A file written against the earlier key must fail loudly, not lose its gate."""
+        spec = {"dofs": {"fist": {"target": "vhi.prediction.index", "threshold": 0.5}}}
+        with pytest.raises(ValueError, match="unknown key"):
+            load_control_map(spec)
+
+    @pytest.mark.parametrize(
+        ("fraction", "probability", "expected"),
+        [
+            (0.5, 0.49, 0.0),
+            (0.5, 0.5, 1.0),  # at the cutoff, active
+            (0.0, 0.0, 1.0),  # a cutoff of 0 is always active, by the same rule
+            (1.0, 0.999, 0.0),  # ...and 1 needs certainty
+            (1.0, 1.0, 1.0),
+        ],
+    )
+    def test_the_documented_rule_holds_at_both_ends(self, fraction, probability, expected):
+        from myogestic.controls import substitute_rest
+
+        resolved = resolve(load_control_map(self._spec(fraction)), VHI)
+        assert substitute_rest(resolved, {"fist": probability})["fist"] == expected
+
+    def test_it_round_trips_under_its_new_name(self):
+        once = load_control_map(self._spec(0.25))
+        assert once.as_dict()["dofs"]["fist"]["threshold_fraction"] == 0.25
+        assert load_control_map(once.as_dict()).as_dict() == once.as_dict()

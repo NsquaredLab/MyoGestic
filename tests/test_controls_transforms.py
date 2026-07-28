@@ -185,7 +185,9 @@ class TestAClassifierActivationIsGatedNotStreamed:
     one grouped mapping serve a regressor and a classifier alike.
     """
 
-    GATED = ControlSet(dofs={"fist": Continuous("fist", lo=0.0, hi=1.0, threshold=0.6)})
+    GATED = ControlSet(
+        dofs={"fist": Continuous("fist", lo=0.0, hi=1.0, threshold_fraction=0.6)}
+    )
 
     @pytest.mark.parametrize(
         ("probability", "expected"),
@@ -194,11 +196,11 @@ class TestAClassifierActivationIsGatedNotStreamed:
     def test_a_probability_becomes_an_activation(self, probability, expected):
         assert substitute_rest(self.GATED, {"fist": probability})["fist"] == expected
 
-    def test_the_threshold_is_inclusive(self):
+    def test_the_fraction_is_inclusive(self):
         """Declaring 0.6 and reading exactly 0.6 must activate, not sit at the edge."""
         assert substitute_rest(self.GATED, {"fist": 0.6})["fist"] == 1.0
 
-    def test_no_threshold_leaves_the_value_alone(self):
+    def test_no_fraction_leaves_the_value_alone(self):
         """The regression path is untouched: a regressed 0.73 is a real position."""
         plain = ControlSet(dofs={"fist": Continuous("fist", lo=0.0, hi=1.0)})
         assert substitute_rest(plain, {"fist": 0.73})["fist"] == 0.73

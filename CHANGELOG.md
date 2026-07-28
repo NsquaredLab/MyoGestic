@@ -24,15 +24,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `weight` applied *before* that target's own range conversion, so a gain scales a value
   but cannot push one past what the target accepts. Negative weights are permitted only on
   a target that declares signed motion.
-- **Classification reaches a target the same way regression does.** A classifier produces an
-  *activation*, not a position, so a `threshold` on a continuous binding gates the model's
-  probability to exactly `0.0` or `1.0` before anything else sees it — before the weights,
-  before the wire, before the recording. From there it is an ordinary control value: `0` to
-  every listed control when inactive, `1 × weight` when active. Drop the `threshold` and the
-  identical mapping serves a regressor. The gate exists because a continuous address is a
-  *position*: streaming a raw `0.73` into one says the finger is 73% curled, which is not
-  what a 73%-confident classifier meant. Map onto a target-declared **discrete** address
-  instead when the thing genuinely is a state rather than an amount.
+- **Classification reaches a target the same way regression does.** A classifier produces a
+  *probability*, not a position, so `threshold_fraction` on a continuous binding declares the
+  cutoff: below it the value becomes `0.0`, at or above it `1.0`, gated before anything else
+  sees it — before the weights, before the wire, before the recording. From there it is an
+  ordinary control value: `0` to every listed control when inactive, `1 × weight` when
+  active. Drop the `threshold_fraction` and the identical mapping serves a regressor. The
+  gate exists because a continuous address is a *position*: streaming a raw `0.73` into one
+  says the finger is 73% curled, which is not what a 73%-confident classifier meant. Map onto
+  a target-declared **discrete** address instead when the thing genuinely is a state rather
+  than an amount.
+
+  The name says what it is compared against — a probability fraction, validated to `[0, 1]` —
+  and is deliberately not `threshold`, because a *target* declares its own
+  (`Capability.activation_threshold`: what its states cost, e.g. a prosthesis that takes a
+  second to close wants a higher bar than a cursor click). The two answer different questions
+  and must not be confused for one another.
 - **`ControlBus` owns the one ordering that must not be re-derived per application:**
   substitute rest → clip → dead zone → smooth → substitute rest → clip again → deliver.
   Rest substitution comes first because `min(hi, max(lo, nan))` is `lo`, so a NaN
