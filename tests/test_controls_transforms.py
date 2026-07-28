@@ -212,3 +212,30 @@ class TestAClassifierActivationIsGatedNotStreamed:
     def test_unusable_input_rests_rather_than_gating_garbage(self):
         """rest, not `"" >= 0.6`."""
         assert substitute_rest(self.GATED, {"fist": "closed"})["fist"] == 0.0
+
+
+class TestAnUnusableInputNeverActivates:
+    """Rest must survive the gate, and at a fraction of `0.0` that is not automatic.
+
+    `substitute_rest` gates only when the input parsed (`not bad`). At any fraction above
+    rest that guard looks redundant — rest is below the fraction, so an unparseable value
+    lands on `0.0` either way. At `threshold_fraction = 0.0` it is the only thing standing
+    between a dropped, NaN or non-numeric prediction and `rest >= 0.0` being **true**,
+    which would fan a full activation out to every target in the binding: a hand snapping
+    shut on a frame the model never produced.
+
+    `0.0` is an accepted fraction, so this is reachable from a mapping file.
+    """
+
+    ALWAYS = ControlSet(
+        dofs={"fist": Continuous("fist", lo=0.0, hi=1.0, threshold_fraction=0.0)}
+    )
+
+    @pytest.mark.parametrize("unusable", [None, "closed", float("nan"), [1.0], {}])
+    def test_it_rests_instead_of_activating(self, unusable):
+        raw = {} if unusable == {} else {"fist": unusable}
+        assert substitute_rest(self.ALWAYS, raw)["fist"] == 0.0
+
+    def test_a_real_zero_still_activates_at_this_fraction(self):
+        """The contrast that makes the test above meaningful rather than incidental."""
+        assert substitute_rest(self.ALWAYS, {"fist": 0.0})["fist"] == 1.0

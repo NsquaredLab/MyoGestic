@@ -46,7 +46,7 @@ ctrl_outlet = control_outlet()
 --8<-- "examples/synthetic/emg_classification.py:poses"
 ```
 
-The example declares its own outputs in `examples/controls/classification.toml` and hand-defines the two target poses (rest and full fist) in *those* names. The model just chooses between them; the target decides what each name renders.
+The example declares its own outputs in `examples/controls/classification.toml`. Both entries carry a `threshold_fraction`, which says their input is a **classifier probability** rather than a position: below the fraction the value becomes `0`, at or above it `1`. There are no pose vectors here — `fist` fans out to all five digits and `thumb_spread` abducts the thumb, so a whole-hand pose is two numbers and the target decides what each one renders.
 
 ### 2. The output filter
 
@@ -54,7 +54,7 @@ The example declares its own outputs in `examples/controls/classification.toml` 
 --8<-- "examples/synthetic/emg_classification.py:filter"
 ```
 
-[`PostProcessor`][myogestic.widgets.PostProcessor] is the post-processing widget - exposes a UI panel and is callable. We'll wire the call inside `predict()` and the panel inside `@app.ui`.
+[`PostProcessor`][myogestic.widgets.PostProcessor] is the post-processing widget - exposes a UI panel and is callable. We hand it to the bus as `ControlBus(..., smoothing=output_filter)` so it runs once per frame before any target sees it, and render its panel inside `@app.ui`.
 
 See [Post-process predictions](../how-to/post-process-output.md) for tuning.
 
@@ -92,16 +92,16 @@ The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s o
 
 The validation up front (`is_empty`, `len(data.classes) < 2`) gives the user actionable error messages - the framework's design principle "errors tell you what to write." If you forget to tick a session in [`SessionManager`][myogestic.widgets.SessionManager], you'll see "No sessions selected. Load some and tick the checkboxes." in the status panel.
 
-### 7. `predict` - classify, look up pose, smooth, push
+### 7. `predict` - classify, gate to an activation, smooth, push
 
 ```python
 --8<-- "examples/synthetic/emg_classification.py:predict"
 ```
 
-The pose lookup is a hardcoded `if/else` - small enough not to need a class table. Smoothing happens *after* pose lookup so the user sees smooth blends between rest and fist as the classifier flips. The dict return goes to `pipeline.predictions` for any widgets that want to display class probabilities.
+There is no pose lookup. `predict` pushes the *probability* of "Fist" and the bus gates it, so three separate decisions happen in a fixed order: `threshold_fraction` decides **whether** the hand is closed (0 or 1), the fan-out weights decide **how much of that** each digit gets, and the filter decides **how fast** the change is allowed to look. VHI receives continuous per-control values — the same ones a regressor would send — so a classifier and a regressor reach the hand the same way. The dict return goes to `pipeline.predictions` for any widgets that want to display class probabilities.
 
-!!! tip "Why filter the pose, not the class index?"
-    OneEuro expects a continuous vector. Class indices are integers, smoothing them is meaningless. Smoothing the pose vector lets the hand fade between `HAND_REST` and `HAND_FIST` cleanly even if the classifier flips on the boundary.
+!!! tip "Why filter the activation, not the class index?"
+    OneEuro expects a continuous vector. Class indices are integers, so smoothing them is meaningless. Smoothing the gated activation lets the hand fade open and shut cleanly even when the classifier flips on the boundary — and because the gate runs *first*, the filter only ever ramps between 0 and 1, never through some intermediate confidence the model never asserted.
 
 ### 8. Layout
 
@@ -130,7 +130,7 @@ Tune the **One Euro** sliders in the filter panel while predicting to feel the l
 
 ## Variations
 
-- **More classes**: bump `CLASSES`, `CTRL_VALUES`, `--classes`, and add new `HAND_*` poses. The `predict` `if/else` becomes a dict lookup.
+- **More classes**: bump `CLASSES`, `CTRL_VALUES` and `--classes`, add an alias per output to the TOML, and push each class's probability under its own alias. Nothing in `predict` needs a branch.
 - **Different feature set**: swap RMS/MAV for whatever your domain needs. Keep `extract()`'s return shape consistent across training and live.
 - **Different model**: replace `catboost_classifier` with sklearn / XGBoost / PyTorch. See [Add a custom model](../how-to/add-a-model.md) for the patterns.
 - **Real hardware**: replace `LSLSource("TestEMG1")` with a real source - see [Add a custom source](../how-to/add-a-source.md).

@@ -83,7 +83,7 @@ def step_2_ask_the_target(client):
         print("   - An application that launches its own renderer therefore resolves")
         print("     *after* startup, not at import. Every shipped example does exactly")
         print("     that — see _ensure_vhi() in examples/synthetic/*.py.")
-        print("\n  Launch a Virtual Hand and run this again to see steps 3 and 4.")
+        print("\n  Launch a Virtual Hand and run this again to see steps 3 to 5.")
         return None
 
     print(f"  This target exports {len(capabilities)} controls, and describes each:\n")
