@@ -100,7 +100,9 @@ class VhiTarget:
     >>> _ = bus.push({"index.flexion": 0.8})    # 0.8 flexed, sanitised on the way
     """
 
-    __slots__ = ("_client", "_dofs", "_negate", "_order", "_outlet", "_width")
+    __slots__ = (
+        "_client", "_dofs", "_negate", "_negotiated", "_order", "_outlet", "_slots", "_width",
+    )
 
     def __init__(self, outlet: PoseSink, *, client: Any = None) -> None:
         self._outlet = outlet
@@ -110,12 +112,19 @@ class VhiTarget:
         self._order: tuple[str, ...] = ()
         #: Whether the negotiated wire wants canonical values negated.
         self._negate = False
+        #: Declared DOFs paired with the channel VHI put them on.
+        self._slots: tuple[tuple[int, Continuous], ...] = ()
+        #: Tracked explicitly rather than inferred from `_order`: a configuration of
+        #: only discrete DOFs negotiates fine and has an empty channel order, and
+        #: inferring from the order would leave it believing it was on the legacy path
+        #: — where it would render nothing at all.
+        self._negotiated = False
         self._width = LEGACY_POSE_WIDTH
 
     @property
     def negotiated(self) -> bool:
         """Whether `bind` settled on the v2 contract rather than the legacy pose."""
-        return bool(self._order)
+        return self._negotiated
 
     def bind(self, controls: ControlSet) -> None:
         """Negotiate with VHI if possible, else accept a legacy pose-only config.
@@ -129,7 +138,9 @@ class VhiTarget:
             what it can render.
         """
         self._order = ()
+        self._slots = ()
         self._negate = False
+        self._negotiated = False
         if self._client is not None and self._negotiate(controls):
             return
         self._bind_legacy(controls)
@@ -149,13 +160,18 @@ class VhiTarget:
             )
             return False
         order = tuple(reply.continuous_channel_order)
-        expected = controls.channel_labels()
-        if set(order) != set(expected):
+        declared = controls.channel_labels()
+        # The negotiated order is VHI's channel *map*, not a demand that the client
+        # command every channel on it: a configuration may declare a subset and leave
+        # the rest at rest, exactly as the legacy path allows. What must not happen is
+        # a declared DOF that has no channel — that one would silently never render.
+        missing = [name for name in declared if name not in order]
+        if missing:
             log.warning(
-                "VHI negotiated channels %s but the configuration declares %s — "
+                "VHI accepted %s but its channel order %s has no place for them — "
                 "falling back to the legacy pose rather than guessing the mapping.",
+                missing,
                 list(order),
-                list(expected),
             )
             return False
         if len(order) > self._width:
@@ -182,7 +198,11 @@ class VhiTarget:
             return False
         self._dofs = controls.continuous
         self._order = order
+        # Resolve each declared DOF to its negotiated channel once, here, rather than
+        # looking names up per tick on the predict thread.
+        self._slots = tuple((order.index(d.name), d) for d in controls.continuous)
         self._negate = encoding == _ENCODING_LEGACY_NEGATED
+        self._negotiated = True
         log.info(
             "VHI negotiated the canonical contract: %s (%s)",
             list(order),
@@ -249,8 +269,8 @@ class VhiTarget:
         # because the frame width is what the outlet validates against.
         sign = -1.0 if self._negate else 1.0
         frame = np.zeros(self._width, dtype=np.float32)
-        for i, name in enumerate(self._order):
-            frame[i] = sign * each[name]
+        for channel, dof in self._slots:
+            frame[channel] = sign * each[dof.name]
         return frame
 
     def stop(self) -> None:
