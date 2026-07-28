@@ -38,8 +38,8 @@ sklearn-shaped classifier.
 ### `emg_classification_grpc.py` - add the gRPC control plane
 
 Same classifier, plus the `VhiControlClient` gRPC plane: each predicted
-class change fires `SetMovement(name)` via an
-[`EdgeTrigger`](../concepts/edge-trigger.md), and a `VhiMovementPanel`
+class change commands a canonical **discrete DOF**, whose declared
+`debounce_s` gates the tick-to-tick argmax flicker, and a `VhiMovementPanel`
 in the UI lets the user click movements directly. Demonstrates the
 dual-plane idiom (continuous LSL pose + discrete gRPC events) on a single
 script.
@@ -48,14 +48,14 @@ script.
 uv run python examples/synthetic/emg_classification_grpc.py
 ```
 
-**What to tweak:** wrap `vhi_client.set_movement` in a custom callback
-to layer a session-label snap; swap the `EdgeTrigger` value from class
+**What to tweak:** wrap `bus.select` in a custom callback
+to layer a session-label snap; swap the commanded state from class
 name to `(class_name, intensity_bin)` for hysteresis on multiple fields.
 
 ### `emg_regression.py` - continuous-target regression
 
 CatBoost regressor maps EMG features to a 5-DoF kinematic target.
-Recorded with `cycle=False` so VHI snaps to and *holds* each movement's
+Recorded with a discrete DOF — a held state — so VHI snaps to and *holds* each movement's
 end pose - regression needs the trainee to physically reach and hold the
 target, not sweep through a cycle. RMS + MAV + waveform length features.
 

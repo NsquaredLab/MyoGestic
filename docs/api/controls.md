@@ -10,6 +10,20 @@ Continuous DOFs are **signed and normalized**: the domain is `[-1, 1]`, `+1` is 
 direction the name denotes, and rest is `0`. Discrete DOFs are separate on purpose —
 a held state delivered on change is not the same thing as a number.
 
+!!! tip "See it work before reading further"
+    There is a narrated walkthrough that runs the whole path — declaration, the two
+    kinds of control, the wire frame, and the negotiation against whatever Virtual Hand
+    you have:
+
+    ```bash
+    uv run --extra grpc python tools/inspect_canonical_control.py
+    ```
+
+    It is safe to run with no Virtual Hand at all: it still walks the first three steps
+    and then shows what a target does when its renderer is absent. Launch a VHI and run
+    it again to see the handshake — it prints a different step 4 for a v2 build, a v1
+    build, and nothing at all.
+
 ## Declaring a control space
 
 `load_dofs` takes a plain mapping, so the library never reads a file itself: parse

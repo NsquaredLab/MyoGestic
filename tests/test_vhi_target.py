@@ -947,3 +947,102 @@ def test_declare_request_carries_the_control_pose_encoding():
     )
     with pytest.raises(ValueError, match="control_pose must be one of"):
         declare_request(controls, control_pose="nonsense")
+
+
+# --- deferral must not commit to a convention while VHI is silent -----------------
+
+
+class Silent:
+    """A client whose renderer never answers — 'old build' and 'not up' look the same."""
+
+    def declare(self, controls, client_name="", control_pose=""):
+        return None
+
+    def set_control(self, continuous=None, discrete=None):
+        raise AssertionError("must not be called before a handshake")
+
+
+def test_a_continuous_only_config_keeps_retrying_while_vhi_is_silent():
+    """The defect this pins: it used to commit to the legacy encoding forever.
+
+    A continuous-only configuration bound while VHI was down never set `_pending`, so
+    `negotiate()` reported success and never re-declared — and against a v2 build every
+    joint then rendered inverted, because the target had settled on the legacy sign.
+    Continuous-only is the common case, so this was the common case.
+    """
+    target = VhiTarget(FakeOutlet(), client=Silent())
+    target.bind(_controls("index.flexion"))
+    assert target.negotiated is False
+    assert target.negotiate() is False, "unsettled: VHI has not answered"
+    assert target.negotiated is False, "and it must not claim to have negotiated"
+    assert target._pending is not None, "and it must still be willing to retry"
+
+
+def test_a_silent_renderer_does_not_fail_a_v2_only_configuration():
+    """Refusing at construction would reject a configuration v2 can render.
+
+    Two shapes used to raise out of ControlBus(): a discrete DOF with no legacy_client,
+    and a DOF the legacy wire has no channel for. Both are fine on v2, and "VHI has not
+    answered" is not evidence that it never will.
+    """
+    for controls in (
+        load_dofs({"dofs": {"hand.gesture": ["rest", "fist"]}}),
+        _controls("wrist.rotation"),
+    ):
+        target = VhiTarget(FakeOutlet(), client=Silent())
+        target.bind(controls)  # must not raise
+        assert target._pending is not None
+
+
+def test_the_legacy_refusals_still_apply_with_no_client():
+    """The guarantee the deferral must not erode: with no way to ask, refuse loudly."""
+    with pytest.raises(ValueError, match="no legacy channel"):
+        VhiTarget(FakeOutlet()).bind(_controls("wrist.rotation"))
+    with pytest.raises(ValueError, match="carries a pose and nothing else"):
+        VhiTarget(FakeOutlet()).bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
+
+
+def test_a_renderer_that_answers_and_declines_settles_on_legacy():
+    """'Refused' is an answer. Retrying it forever would be pointless chatter."""
+    client = FakeClient(
+        FakeReply(
+            accepted=False,
+            continuous_channel_order=LEGACY_POSE_DOFS,
+            verdicts=(FakeVerdict("index.flexion", renderable=False, message="no"),),
+        )
+    )
+    target = VhiTarget(FakeOutlet(), client=client)
+    target.bind(_controls("index.flexion"))
+    assert target.negotiated is False
+    assert target.negotiate() is True
+    assert target._pending is None, "an answered refusal must stop the retries"
+
+
+def test_a_silent_renderer_that_appears_later_gets_negotiated():
+    """The whole point of deferring: the app launches VHI after the bus is built."""
+    client = FakeClient(reply=None)
+    target = VhiTarget(FakeOutlet(), client=client)
+    target.bind(_controls("index.flexion"))
+    assert target.negotiated is False
+
+    client.reply = FakeReply(
+        continuous_channel_order=LEGACY_POSE_DOFS, continuous_encoding=CANONICAL
+    )
+    assert target.negotiate() is True
+    assert target.negotiated is True
+    assert target._pending is None
+
+
+def test_force_re_declares_after_a_settled_handshake():
+    """A renderer restart loses VHI's side of the contract; force is the remedy."""
+    client = FakeClient(
+        FakeReply(continuous_channel_order=LEGACY_POSE_DOFS, continuous_encoding=CANONICAL)
+    )
+    target = VhiTarget(FakeOutlet(), client=client)
+    target.bind(_controls("index.flexion"))
+    assert target.negotiated is True
+    before = len(client.declared)
+    assert target.negotiate() is True
+    assert len(client.declared) == before, "settled means no further RPC"
+    assert target.negotiate(force=True) is True
+    assert len(client.declared) == before + 1, "force must re-declare"

@@ -14,10 +14,11 @@ to learn after `emg_classification.py`:
   hand's *kinematic value at the end of each movement*, not a class
   index. That changes both the recorder setup and the training-data
   iterator.
-* **The dual-plane idiom is unavoidable.** The example uses gRPC
-  (`SetMovement`, `SetSessionActive`) to drive the control hand to
-  static end poses *and* LSL to read the resulting kinematics *and* LSL
-  to push the predicted pose back. Three streams, three roles.
+* **The dual-plane idiom is unavoidable.** The example commands a
+  *canonical discrete DOF* over gRPC to drive the control hand to static
+  end poses, uses the *recording aid* to gate the session, reads the
+  resulting kinematics over LSL, and pushes the predicted pose back over
+  LSL. Three streams, three roles.
 
 If you haven't yet, read
 [Integrate the Virtual Hand](../how-to/integrate-vhi.md) first - that
@@ -42,17 +43,23 @@ button click.** The flow:
 
 1. Click **Launch** on EMG Generator and VHI Hand.
 2. Click a gesture button (Rest / Fist). Two things happen:
-   * `vhi_client.set_movement(name, cycle=False)` - VHI animates the
-     control hand to the *end pose* of that movement and **holds it**.
-     The `cycle=False` is load-bearing: regression needs the hand to
-     reach and hold the target, not sweep through an open/close cycle.
+   * `bus.select("hand.gesture", name)` - the gesture is a canonical
+     **discrete DOF**, a *held state*: the control hand snaps to that
+     pose and stays there. That it holds rather than sweeps is
+     load-bearing here — regression needs the hand to reach and hold the
+     target, so `VHI_Control` settles to a static kinematic value the
+     regressor can map back from EMG amplitude. (If you *want* a swept
+     trajectory instead, that is `training_aid.start_program(...)`, a
+     recording aid rather than a control command.)
    * `ctrl_outlet.push_sample([CTRL_VALUES[i]])` - the EMG generator
      switches to the corresponding amplitude pattern.
-3. Click **Record**. `vhi_client.set_session_active(True)` disables
+3. Click **Record**. `training_aid.set_recording_session(True)` disables
    VHI's local keyboard so the *only* movement source for this session
    is your gesture buttons. The session captures EMG samples
    *and* the `VHI_Control` 9-channel kinematics stream side by side.
-4. Click **Stop Rec**. The session ends; `set_session_active(False)`
+   It returns `False` if this VHI has no recording aid, which the example
+   surfaces — an ungated recording can pick up stray keyboard movements.
+4. Click **Stop Rec**. The session ends; `set_recording_session(False)`
    restores VHI's local control.
 
 That's the loop. Repeat for every gesture you want the model to
