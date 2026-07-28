@@ -1,38 +1,19 @@
-# Driving the VHI **control hand** — the operator's hand, not the model's.
-#
-# Two namespaces, because they are two different hands doing two different jobs:
-#
-#   vhi.prediction.*    the model-driven hand. What your classifier or regressor moves.
-#                       Streamed at prediction rate on MyoGestic_Output.
-#
-#   vhi.control.pose.*  the control hand. What an operator or a setup script poses, and
-#                       what a recording captures as ground truth. Streamed on
-#                       MyoGestic_ControlPose.
-#
-#   vhi.control.gesture the control hand's movement preset, commanded over gRPC as a held
-#                       state rather than streamed.
-#
-# Keeping them apart matters: routing model output into the control hand would drive the
-# very thing that hand is supposed to be the ground truth *for*. A target reads one stream,
-# so mixing namespaces in one mapping is refused with the reason.
-#
-# Load it exactly like any other mapping, but hand it to a control-pose target:
-#
-#     target = VhiTarget(vhi.control_outlet(), client=client, stream="control_pose")
-#
-# Streaming to the control hand also needs it in Stream mode, which you request by
-# declaring the stream in the handshake:
-#
-#     client.declare(control_map, control_pose="canonical")
+# Map your model's outputs to VHI's controls.
+#   left  = your name, anything you like
+#   right = a control VHI declares (it owns the kind, range and states)
+# See what a running VHI exports:  uv run --extra grpc python tools/inspect_canonical_control.py
+# Full reference: docs/api/controls.md
 
 [dofs]
 
-# Pose the control hand digit by digit — for a calibration script, or to drive it to a
-# known posture before recording.
+# The OPERATOR's hand (vhi.control.pose.*), not the model's
+# (vhi.prediction.*). Separate stream, so use
+#   VhiTarget(vhi.control_outlet(), client=client, stream="control_pose")
+# and declare it:  client.declare(controls, control_pose="canonical")
 setup_thumb = "vhi.control.pose.thumb"
 setup_index = "vhi.control.pose.index"
 
-# One output closing the operator's hand, thumb weighted as usual.
+# One output closing the operator's hand.
 setup_close = [
   { target = "vhi.control.pose.middle", weight = 1.0 },
   { target = "vhi.control.pose.ring" },
