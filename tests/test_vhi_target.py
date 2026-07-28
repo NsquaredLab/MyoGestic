@@ -19,10 +19,12 @@ import types
 import numpy as np
 import pytest
 
-from myogestic.controls import ControlBus, ControlSet, load_dofs
+from myogestic.controls import ControlBus, ControlSet
 from myogestic.outputs.filters import GaussianFilter
 from myogestic.vhi.legacy import LEGACY_POSE_DOFS, LEGACY_POSE_WIDTH, decode_pose
 from myogestic.vhi.target import VhiTarget
+
+from .conftest import build_controls
 
 
 class FakeOutlet:
@@ -48,7 +50,7 @@ def _controls(*names: str, **entries: object):
     """A pose configuration — all six legacy DOFs when no names are given."""
     dofs: dict[str, object] = dict.fromkeys(names or LEGACY_POSE_DOFS, "continuous")
     dofs.update(entries)
-    return load_dofs({"dofs": dofs})
+    return build_controls(dofs)
 
 
 def _bound(*names: str, **entries: object) -> tuple[VhiTarget, FakeOutlet]:
@@ -78,17 +80,17 @@ def test_bind_refuses_discrete_dofs_with_no_way_to_render_them():
     """The legacy wire carries a pose and nothing else — so say so, don't drop them."""
     with pytest.raises(ValueError, match="carries a pose and nothing else"):
         VhiTarget(FakeOutlet()).bind(
-            load_dofs({"dofs": {"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]}})
+            build_controls({"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]})
         )
 
 
 def test_bind_refuses_a_discrete_only_configuration_with_no_renderer():
     with pytest.raises(ValueError, match="carries a pose and nothing else"):
-        VhiTarget(FakeOutlet()).bind(load_dofs({"dofs": {"hand.grasp": ["rest", "fist"]}}))
+        VhiTarget(FakeOutlet()).bind(build_controls({"hand.grasp": ["rest", "fist"]}))
 
 
 def test_bind_refuses_an_empty_configuration():
-    """`ControlSet()` directly, because `load_dofs` refuses an empty table first."""
+    """`ControlSet()` directly, because there is no parser to refuse it first."""
     with pytest.raises(ValueError, match="no DOFs at all"):
         VhiTarget(FakeOutlet()).bind(ControlSet())
 
@@ -542,13 +544,11 @@ def test_declare_request_maps_the_control_set():
     pytest.importorskip("grpc")
     from myogestic.vhi._client_v2 import declare_request
 
-    controls = load_dofs(
+    controls = build_controls(
         {
-            "dofs": {
-                "index.flexion": "continuous",
-                "grip.force": {"kind": "continuous", "range": [0.0, 1.0]},
-                "hand.grasp": ["rest", "fist"],
-            }
+            "index.flexion": "continuous",
+            "grip.force": {"range": [0.0, 1.0]},
+            "hand.grasp": ["rest", "fist"],
         }
     )
     request = declare_request(controls, "probe")
@@ -643,7 +643,7 @@ def test_a_discrete_only_configuration_negotiates_and_delivers():
     )
     outlet = FakeOutlet()
     target = VhiTarget(outlet, client=client)
-    target.bind(load_dofs({"dofs": {"hand.grasp": ["rest", "fist"]}}))
+    target.bind(build_controls({"hand.grasp": ["rest", "fist"]}))
     assert target.negotiated is True
     target.send({"hand.grasp": "fist"}, {"hand.grasp": "fist"})
     assert client.sent == [(None, {"hand.grasp": "fist"})]
@@ -660,7 +660,7 @@ def test_a_mixed_configuration_negotiates_both_kinds():
     outlet = FakeOutlet()
     target = VhiTarget(outlet, client=client)
     target.bind(
-        load_dofs({"dofs": {"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]}})
+        build_controls({"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]})
     )
     assert target.negotiated is True
     target.send({"index.flexion": 1.0, "hand.grasp": "fist"}, {"hand.grasp": "fist"})
@@ -767,7 +767,7 @@ def test_the_legacy_path_renders_discrete_through_v1_movements():
     legacy = FakeLegacyClient()
     outlet = FakeOutlet()
     target = VhiTarget(outlet, legacy_client=legacy)
-    target.bind(load_dofs({"dofs": {"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]}}))
+    target.bind(build_controls({"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]}))
     assert target.negotiated is False
     target.send({"index.flexion": 0.0, "hand.grasp": "fist"}, {"hand.grasp": "fist"})
     assert legacy.commanded == [("Fist", False)]
@@ -777,7 +777,7 @@ def test_the_legacy_bridge_resolves_states_case_insensitively():
     """v1 SetMovement matches exactly, so "fist" has to become "Fist" somewhere."""
     legacy = FakeLegacyClient()
     target = VhiTarget(FakeOutlet(), legacy_client=legacy)
-    target.bind(load_dofs({"dofs": {"g": ["rest", "twofingerpinch"]}}))
+    target.bind(build_controls({"g": ["rest", "twofingerpinch"]}))
     target.send({"g": "twofingerpinch"}, {"g": "twofingerpinch"})
     assert legacy.commanded == [("TwoFingerPinch", False)]
 
@@ -786,7 +786,7 @@ def test_the_legacy_bridge_never_cycles():
     """A discrete DOF is a held state; cycling would render a trajectory."""
     legacy = FakeLegacyClient()
     target = VhiTarget(FakeOutlet(), legacy_client=legacy)
-    target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
+    target.bind(build_controls({"g": ["rest", "fist"]}))
     target.send({"g": "fist"}, {"g": "fist"})
     assert legacy.commanded[0][1] is False
 
@@ -795,7 +795,7 @@ def test_the_legacy_bridge_refuses_an_unresolvable_state():
     legacy = FakeLegacyClient()
     target = VhiTarget(FakeOutlet(), legacy_client=legacy)
     with pytest.raises(ValueError, match="no movement for the states"):
-        target.bind(load_dofs({"dofs": {"g": ["rest", "not-a-movement"]}}))
+        target.bind(build_controls({"g": ["rest", "not-a-movement"]}))
 
 
 def test_an_unreachable_vhi_defers_instead_of_failing_the_configuration():
@@ -806,7 +806,7 @@ def test_an_unreachable_vhi_defers_instead_of_failing_the_configuration():
     """
     legacy = FakeLegacyClient(reachable=False)
     target = VhiTarget(FakeOutlet(), legacy_client=legacy)
-    target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))   # must not raise
+    target.bind(build_controls({"g": ["rest", "fist"]}))   # must not raise
     assert target.negotiated is False
 
 
@@ -814,7 +814,7 @@ def test_a_deferred_edge_is_dropped_loudly_rather_than_raising():
     """`send` runs on the predict thread, where a raise would log every tick."""
     legacy = FakeLegacyClient(reachable=False)
     target = VhiTarget(FakeOutlet(), legacy_client=legacy)
-    target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
+    target.bind(build_controls({"g": ["rest", "fist"]}))
     target.send({"g": "fist"}, {"g": "fist"})   # must not raise
     assert legacy.commanded == []
 
@@ -822,7 +822,7 @@ def test_a_deferred_edge_is_dropped_loudly_rather_than_raising():
 def test_negotiate_settles_once_vhi_appears():
     legacy = FakeLegacyClient(reachable=False)
     target = VhiTarget(FakeOutlet(), legacy_client=legacy)
-    target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
+    target.bind(build_controls({"g": ["rest", "fist"]}))
     assert target.negotiate() is False
     legacy.reachable = True
     assert target.negotiate() is True
@@ -835,7 +835,7 @@ def test_negotiate_prefers_v2_once_it_is_reachable():
     legacy = FakeLegacyClient(reachable=False)
     client = FakeClient(reply=None)
     target = VhiTarget(FakeOutlet(), client=client, legacy_client=legacy)
-    target.bind(load_dofs({"dofs": {"index.flexion": "continuous", "g": ["rest", "fist"]}}))
+    target.bind(build_controls({"index.flexion": "continuous", "g": ["rest", "fist"]}))
     assert target.negotiated is False
     client.reply = FakeReply(
         continuous_channel_order=("index.flexion",), continuous_encoding=LEGACY_NEGATED
@@ -850,7 +850,7 @@ def test_negotiate_prefers_v2_once_it_is_reachable():
 def test_negotiate_is_idempotent_when_already_settled():
     legacy = FakeLegacyClient()
     target = VhiTarget(FakeOutlet(), legacy_client=legacy)
-    target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
+    target.bind(build_controls({"g": ["rest", "fist"]}))
     assert target.negotiate() is True
     assert target.negotiate() is True
 
@@ -938,7 +938,7 @@ def test_declare_request_carries_the_control_pose_encoding():
     pytest.importorskip("grpc")
     from myogestic.vhi._client_v2 import declare_request
 
-    controls = load_dofs({"dofs": {"index.flexion": "continuous"}})
+    controls = build_controls({"index.flexion": "continuous"})
     assert declare_request(controls).control_pose_encoding == UNSPECIFIED
     assert declare_request(controls, control_pose="canonical").control_pose_encoding == CANONICAL
     assert (
@@ -986,7 +986,7 @@ def test_a_silent_renderer_does_not_fail_a_v2_only_configuration():
     answered" is not evidence that it never will.
     """
     for controls in (
-        load_dofs({"dofs": {"hand.gesture": ["rest", "fist"]}}),
+        build_controls({"hand.gesture": ["rest", "fist"]}),
         _controls("wrist.rotation"),
     ):
         target = VhiTarget(FakeOutlet(), client=Silent())
@@ -999,7 +999,7 @@ def test_the_legacy_refusals_still_apply_with_no_client():
     with pytest.raises(ValueError, match="no legacy channel"):
         VhiTarget(FakeOutlet()).bind(_controls("wrist.rotation"))
     with pytest.raises(ValueError, match="carries a pose and nothing else"):
-        VhiTarget(FakeOutlet()).bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
+        VhiTarget(FakeOutlet()).bind(build_controls({"g": ["rest", "fist"]}))
 
 
 def test_a_renderer_that_answers_and_declines_settles_on_legacy():

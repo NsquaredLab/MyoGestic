@@ -1,0 +1,46 @@
+# Control map for examples/synthetic/emg_classification.py — a two-class model
+# (Rest / Fist) whose classes are whole-hand poses.
+#
+# Two vocabularies meet here, and keeping them apart is the point:
+#
+#   LEFT  — yours. `fist` and `thumb_spread` are this script's names for its own
+#           outputs, and HAND_REST / HAND_FIST in the example are keyed by exactly
+#           these. Rename them and the example follows; MyoGestic prescribes nothing
+#           about them and reads no meaning out of them.
+#
+#   RIGHT — the target's. `vhi.prediction.index` is a name VHI declares in its own
+#           manifest, along with everything needed to send it correctly: number or held
+#           state, its range, its neutral value. Ask a running VHI what it exports:
+#               uv run --extra grpc python tools/inspect_canonical_control.py
+#
+# The map is parsed at startup but resolved only once VHI is up, because the semantics
+# are VHI's to declare. An address this build does not export is then reported by name —
+# with the near misses and the full list — rather than silently dropped.
+
+[dofs]
+
+# --- one output, many controls, with a per-target gain ------------------------------
+#
+# `fist` is a single scalar: the classifier sets it to 1.0 for the Fist class and 0.0
+# for Rest, and it reaches all five digits. Each target applies its own declared range
+# and direction, so closing the whole hand needs no whole-hand control on VHI's side.
+#
+# The thumb's 0.6 is why weights exist. At full flexion the thumb drives through the
+# fingers; 60% of what they get reads as a hand. A weight defaults to 1.0 and is applied
+# *before* the target's own range conversion, so VHI still clamps whatever arrives.
+fist = [
+  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.index" },
+  { target = "vhi.prediction.middle" },
+  { target = "vhi.prediction.ring" },
+  { target = "vhi.prediction.little" },
+]
+
+
+# --- one output, one control -------------------------------------------------------
+#
+# The explicit axis form, used here because the short one is not specific enough: the
+# thumb has two axes, so `vhi.prediction.thumb` above means flexion, and abduction is
+# addressed on its own. The fist pose drives this to full excursion, which is what
+# recorded VHI sessions show a real fist doing.
+thumb_spread = "vhi.prediction.thumb.abduction"

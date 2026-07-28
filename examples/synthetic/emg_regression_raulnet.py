@@ -7,6 +7,10 @@ regressing the 5-DOF kinematics target — but the model is RaulNet V17
 CatBoost. Use this to compare a neural-net regressor against the
 tree-based one on the same data.
 
+The control space is declared in :file:`examples/controls/regression_raulnet.toml` — your
+aliases on the left, VHI's addresses on the right — and resolves against a *running* VHI,
+so nothing here hard-codes what a control means.
+
 Run with:
     uv run --extra examples --extra grpc python examples/synthetic/emg_regression_raulnet.py
 
@@ -27,6 +31,7 @@ Requirements:
 from __future__ import annotations
 
 import sys
+import tomllib
 from pathlib import Path
 
 import lightning as L
@@ -36,7 +41,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint, StochasticWeightAveragi
 from myoverse.models.raul_net.v17 import RaulNetV17
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, load_dofs
+from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.session import iter_aligned_windows, iter_labeled_windows, open_session_store
@@ -126,37 +131,34 @@ training_aid = vhi.training_client()
 vhi_canonical = vhi.canonical_client()
 vhi_legacy = vhi.control_client()
 
-# Five signed, normalized DOFs plus the gesture as a canonical held state. The old
-# comment here claimed indices [0, 2, 3, 4, 5] were "wrist rotation + four fingers";
-# there is no wrist on that wire at all — channel 0 is thumb flexion.
-CONTROLS = load_dofs(
-    {
-        "dofs": {
-            **dict.fromkeys(
-                [
-                    "thumb.flexion",
-                    "index.flexion",
-                    "middle.flexion",
-                    "ring.flexion",
-                    "little.flexion",
-                ],
-                "continuous",
-            ),
-            "hand.gesture": [c.lower() for c in CLASSES],
-        }
-    }
-)
-DOF_NAMES = CONTROLS.channel_labels()
+# Which control each of the network's five outputs drives. The aliases on the left are
+# ours and must match regression_raulnet.toml; the names on the right are what
+# `decode_pose` calls the channels of a recorded VHI_Control frame, i.e. the training
+# target. There is no wrist on that wire at all — channel 0 is thumb flexion.
+DOF_TARGETS: dict[str, str] = {
+    "thumb": "thumb.flexion",
+    "index": "index.flexion",
+    "middle": "middle.flexion",
+    "ring": "ring.flexion",
+    "little": "little.flexion",
+}
+DOF_NAMES = tuple(DOF_TARGETS)
 N_DOF = len(DOF_NAMES)
+GESTURE = "gesture"  # the alias the Rest / Fist buttons command
+
+CONTROL_FILE = Path(__file__).resolve().parent.parent / "controls" / "regression_raulnet.toml"
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
 
 # Output-side smoothing, applied by the control bus to the canonical vector.
 # Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
-# One bus owns the output path: substitute rest -> clip -> smooth -> clip again ->
-# deliver. VhiTarget negotiates v2 when this VHI speaks it, else the legacy pose.
-vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
-bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
+# The bus is built lazily, in `_ensure_vhi`. Every semantic the map needs — whether an
+# address takes a number or a held state, its range, its states — is VHI's to declare, and
+# VHI does not exist yet: this app launches it from its own ProcessLauncher.
+vhi_target = None
+bus = None
 
 PROCESSES = [
     (
@@ -266,7 +268,7 @@ def train(data: TrainingData) -> L.LightningModule:
         # target is in exactly the space `predict` commands. A signed negation, not
         # the old abs() — which folded extension into flexion of equal magnitude.
         pose = decode_pose(aligned["vhi_control"])
-        y_list.append(np.array([pose[name] for name in DOF_NAMES], dtype=np.float64))
+        y_list.append(np.array([pose[DOF_TARGETS[n]] for n in DOF_NAMES], dtype=np.float64))
     if kin_paths:
         log.append(f"  kinematics: {len(X_list)} windows from {len(kin_paths)} sessions")
 
@@ -368,6 +370,8 @@ def predict(model: L.LightningModule, features: np.ndarray) -> dict:
         x = torch.from_numpy(features).float().to(model.device)
         x = x.unsqueeze(0).unsqueeze(0)  # (1, 1, n_ch, INPUT_LENGTH)
         out = model(x).cpu().numpy()[0]  # (5,)
+    if bus is None:
+        return {}  # nothing resolved yet; nothing to command
     # No clip: each DOF's declared range is the authority, and clipping before the
     # smoother lets the filter overshoot straight back out of it.
     return {"dof": bus.push(dict(zip(DOF_NAMES, out, strict=True)))}
@@ -384,9 +388,32 @@ grid = Grid(
 
 
 def _ensure_vhi() -> None:
-    """Settle the target's contract once VHI is up — bind ran before it existed."""
-    if not vhi_target.negotiate():
-        app.ctx.log("VHI not reachable yet — gestures will not render until it is")
+    """Resolve the control map once VHI is up and can say what it exports."""
+    global bus, vhi_target
+    if bus is not None:
+        return
+    capabilities = vhi_canonical.capabilities()
+    if capabilities is None:
+        app.ctx.log("VHI not reachable yet — controls stay unresolved")
+        return
+    controls = resolve(CONTROL_MAP, capabilities)
+    unknown = [name for name in (*DOF_NAMES, GESTURE) if name not in controls.dofs]
+    if unknown:
+        # Caught here rather than as a hand that quietly holds rest: the bus substitutes
+        # rest for an alias it does not know, so a renamed alias would look like a model
+        # predicting nothing.
+        raise ValueError(
+            f"{CONTROL_FILE.name} does not declare {unknown}, but this example pushes "
+            f"those aliases. It declares: {sorted(controls.dofs)}."
+        )
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
+    # One bus owns the output path: substitute rest -> clip -> smooth -> clip again ->
+    # deliver. VhiTarget negotiates v2 when this VHI speaks it, else the legacy pose.
+    bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
+    # Recordings then carry the space they were made under: a bare -1 does not say
+    # whether it was a full excursion or out of range.
+    app.ctx.control_space = CONTROL_MAP
+    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
 
 
 def _on_gesture(i: int) -> None:
@@ -395,7 +422,9 @@ def _on_gesture(i: int) -> None:
     # kinematic value the regressor can map back from EMG amplitude.
     _ensure_vhi()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
-    bus.select("hand.gesture", CLASSES[i].lower())
+    if bus is not None:
+        # The states are VHI's own movement names, so "Fist" is not lowercased here.
+        bus.select(GESTURE, CLASSES[i])
 
 
 def _on_record() -> None:
@@ -453,7 +482,8 @@ def main() -> None:
     try:
         app.run()
     finally:
-        bus.stop()
+        if bus is not None:
+            bus.stop()
         training_aid.stop_program()
         training_aid.set_recording_session(False)
         training_aid.stop()

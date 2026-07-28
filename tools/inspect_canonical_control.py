@@ -1,13 +1,13 @@
-"""A narrated walk through the canonical control standard, end to end.
+"""A narrated walk through the control standard, end to end.
 
 Run it to *see* the system work rather than read about it:
 
     uv run --extra grpc python tools/inspect_canonical_control.py
 
-Safe anywhere. It needs no Virtual Hand: with none running it still walks steps 1-3 and
-then shows you exactly how a target behaves when its renderer is absent. Launch a VHI
-first and the same script negotiates with it and reads back what was rendered — against
-a v2 build *or* a v1 build, which is step 4's whole point.
+Safe anywhere. With no Virtual Hand running it still loads the real config file and shows
+what a mapping is *before* a target has answered — which is the design, not a degraded
+mode. Launch a VHI first and the same script asks what it exports, resolves the mapping
+against that, and drives a weighted fan-out onto the hand.
 
 It creates one transient LSL outlet and, if a VHI is up, moves its hand. It writes no
 files, changes no configuration, and leaves the hand at rest.
@@ -21,19 +21,13 @@ import tomllib
 
 import numpy as np
 
-from myogestic.controls import ControlBus, load_dofs
-from myogestic.outputs.filters import OneEuroFilter
+from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.vhi import VhiTarget, virtual_hand
-from myogestic.vhi.legacy import LEGACY_POSE_DOFS, decode_pose
 
-# --- 1. The declaration -------------------------------------------------------
-#
-# A real file, not a string in this script: `examples/controls/hand.toml` is what a user
-# copies and edits. Mapping-first, so the *shape* of each value says what kind of DOF it
-# is — a string is a continuous DOF at its defaults, an array is a discrete DOF's
-# states, and a table is the explicit form for when you need to say more.
-
-DECLARATION = pathlib.Path(__file__).resolve().parent.parent / "examples" / "controls" / "hand.toml"
+#: The real file a user copies and edits.
+CONTROL_FILE = (
+    pathlib.Path(__file__).resolve().parent.parent / "examples" / "controls" / "hand.toml"
+)
 
 RULE = "─" * 78
 
@@ -43,246 +37,126 @@ def heading(n: int, text: str) -> None:
     print(f"\n{RULE}\n{n}. {text}\n{RULE}")
 
 
-def step_1_declare():
-    """Load the TOML file. The library never reads a file itself."""
-    heading(1, f"The declaration — {DECLARATION.relative_to(DECLARATION.parents[2])}")
+def step_1_the_file():
+    """Load the TOML. Two vocabularies meet, and neither owns the other."""
+    heading(1, f"The declaration — {CONTROL_FILE.relative_to(CONTROL_FILE.parents[2])}")
     print("  The file, minus its comments:\n")
-    for line in DECLARATION.read_text().splitlines():
+    for line in CONTROL_FILE.read_text().splitlines():
         stripped = line.strip()
         if stripped and not stripped.startswith("#"):
             print("   " + line)
 
-    # tomllib lives here, in the application, not in the library: `load_dofs` takes a
-    # Mapping, so MyoGestic reads no config files and stays format-agnostic. TOML is
-    # what a human wants to edit, which is why the example ships one.
-    with DECLARATION.open("rb") as handle:          # "rb" — tomllib requires binary
-        raw = tomllib.load(handle)
-    controls = load_dofs(raw)
+    # tomllib lives here, in the application, not in the library: load_control_map takes a
+    # Mapping, so MyoGestic reads no configuration files. TOML is what a human wants to
+    # edit, which is why the shipped example is TOML.
+    with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+        control_map = load_control_map(tomllib.load(handle))
 
-    print("\n  load_dofs(tomllib.load(f)) ->")
-    continuous = {d.name for d in controls.continuous}
-    for dof in controls.dofs.values():
-        if dof.name in continuous:
+    print("\n  load_control_map(tomllib.load(f)) ->")
+    for alias, binding in control_map.bindings.items():
+        routes = ", ".join(
+            ref.address + (f" x{ref.weight}" if ref.weight != 1.0 else "")
+            for ref in binding.targets
+        )
+        gate = f"   debounce={binding.debounce_s}s" if binding.debounce_s else ""
+        print(f"    {alias:14s} -> {routes}{gate}")
+
+    print("\n  LEFT is yours: these aliases are your model's output names. Nothing")
+    print("  prescribes them and nothing reads meaning out of them.")
+    print("  RIGHT belongs to the target. Note what is absent: no channel numbers, and no")
+    print("  kinds or ranges — whether an address takes a number or a held state is the")
+    print("  target's to declare, so a mapping alone cannot say.")
+    return control_map
+
+
+def step_2_ask_the_target(client):
+    """The manifest: what this target exports, in its own words."""
+    heading(2, "Ask the target what it exports")
+    capabilities = client.capabilities()
+    if capabilities is None:
+        print("  No target answered.")
+        print("   - So the mapping stays UNRESOLVED, and that is correct rather than a")
+        print("     failure: nothing here may invent what an address means.")
+        print("   - An application that launches its own renderer therefore resolves")
+        print("     *after* startup, not at import. Every shipped example does exactly")
+        print("     that — see _ensure_vhi() in examples/synthetic/*.py.")
+        print("\n  Launch a Virtual Hand and run this again to see steps 3 and 4.")
+        return None
+
+    print(f"  This target exports {len(capabilities)} controls, and describes each:\n")
+    for cap in capabilities:
+        if cap.kind == "continuous":
+            where = f"channel {cap.channel}" if cap.channel >= 0 else "not streamed"
+            print(f"    {cap.address:34s} number [{cap.lo:+.1f},{cap.hi:+.1f}]  {where}")
+        else:
+            print(f"    {cap.address:34s} held state, {len(cap.states)} of them")
+    print("\n  Every semantic fact above came from the target. MyoGestic hard-codes none")
+    print("  of it, so a build that grows a control needs no change on this side.")
+    return capabilities
+
+
+def step_3_resolve(control_map, capabilities):
+    """Meaning arrives — from the target, not from here."""
+    heading(3, "Resolve the mapping against it")
+    controls = resolve(control_map, capabilities)
+    for alias, dof in controls.dofs.items():
+        if hasattr(dof, "states"):
             print(
-                f"    {dof.name:16s} continuous  range=[{dof.lo:+.1f}, {dof.hi:+.1f}]  "
-                f"rest={dof.rest:+.1f}"
+                f"    {alias:14s} HELD STATE  {list(dof.states)[:3]}... "
+                f"rest={dof.rest!r} debounce={dof.debounce_s}s"
             )
         else:
-            print(
-                f"    {dof.name:16s} discrete    states={list(dof.states)}  "
-                f"rest={dof.rest!r}  debounce={dof.debounce_s}s"
-            )
-    print(f"\n  wire order (continuous only): {list(controls.channel_labels())}")
-    print("  +1 always means the direction the DOF's name denotes. No channel numbers.")
-    if controls.simultaneous:
-        print(f"  declared simultaneous controls: {dict(controls.simultaneous)}")
+            routes = [(r.address.split(".")[-1], r.weight) for r in controls.routes[alias]]
+            print(f"    {alias:14s} NUMBER  [{dof.lo:+.1f},{dof.hi:+.1f}] -> {routes}")
+    print("\n  `gesture` became a held state because the target said its address is")
+    print("  discrete. `fist` became one number reaching several controls. Neither of")
+    print("  those facts is written in the file.")
+
+    print("\n  An address this target does not export is refused by name:")
+    try:
+        resolve(
+            load_control_map({"dofs": {"my_wrist": "vhi.prediction.wrist"}}), capabilities
+        )
+    except ValueError as exc:
+        for line in str(exc).splitlines()[:2]:
+            print("    " + line[:140])
     return controls
 
 
-class Watch:
-    """A `Target` that records only the discrete edges it was handed."""
+def step_4_drive(controls, client):
+    """A weighted fan-out on a real hand."""
+    heading(4, "Drive it")
+    fanned = [a for a, refs in controls.routes.items() if len(refs) > 1]
+    weighted = [a for a in fanned if any(r.weight != 1.0 for r in controls.routes[a])]
+    alias = (weighted or fanned or list(controls.routes))[0]
+    print(f"  {alias!r} is one output reaching {len(controls.routes[alias])} controls:")
+    for ref in controls.routes[alias]:
+        print(f"    {ref.address:34s} weight {ref.weight}")
 
-    def __init__(self) -> None:
-        self.edges: list[dict] = []
-
-    def bind(self, controls) -> None:
-        """Accept anything — this target renders nothing."""
-
-    def send(self, values, changed) -> None:
-        """Note an edge, ignore the continuous values."""
-        if changed:
-            self.edges.append(dict(changed))
-
-    def stop(self) -> None:
-        """Nothing to release."""
-
-
-class Wire:
-    """A stand-in for an LSL outlet that records what it was handed."""
-
-    def __init__(self) -> None:
-        self.frames: list[np.ndarray] = []
-
-    def push(self, data: np.ndarray) -> None:
-        """Record a frame instead of sending it."""
-        self.frames.append(np.asarray(data).copy())
-
-    def flush(self) -> None:
-        """Nothing to flush — there is no send thread here."""
-
-
-def step_2_kinds(controls):
-    """Continuous values are filtered; discrete states are gated. Never the reverse."""
-    heading(2, "Two kinds of control, two kinds of protection")
-    print("  (using the DOFs just loaded from the file)\n")
-
-    seen_widths: list[int] = []
-    smoother = OneEuroFilter()
-
-    def spy(vec):
-        seen_widths.append(len(vec))
-        return smoother(vec)
-
-    n_continuous = len(controls.continuous)
-    bus = ControlBus(controls, targets=[Watch()], smoothing=spy, hz=50)
-
-    print("  a) A continuous step arrives as a ramp (layer 1: ControlBus smoothing)")
-    for _ in range(4):
-        bus.push({"index.flexion": 0.0})
-    ramp = []
-    for _ in range(6):
-        ramp.append(round(float(bus.push({"index.flexion": 1.0})["index.flexion"]), 3))
-    print(f"     commanded 1.0 six times -> {ramp}")
-    print("     Smoothing runs BEFORE any target sees the frame, so every target agrees")
-    print("     on what was commanded.")
-
-    print("\n  b) A chattering classifier produces no transition (layer 2: debounce)")
-    # The file declares two discrete DOFs with different gates, which is the clearest
-    # possible contrast: one fires on every change, the other waits for a state to hold.
-    gates = {d.name: d.debounce_s for d in controls.discrete}
-    print(f"     the file declares: {gates}")
-    watcher = Watch()
-    gated = ControlBus(controls, targets=[watcher], hz=50)
-    for i in range(10):
-        state = "fist" if i % 2 else "rest"
-        gated.push({name: state for name in gates})
-    fired = [k for edge in watcher.edges for k in edge]
-    for name, seconds in gates.items():
-        n = fired.count(name)
-        verdict = "gated the chatter" if n <= 1 else f"fired {n}x — no gate"
-        print(f"     {name:16s} debounce={seconds}s -> {verdict}")
-    print("     A discrete DOF is a HELD STATE. It is never numerically filtered:")
-    print("     averaging 'rest' and 'fist' would interpolate through a state nobody")
-    print(f"     selected. The filter only ever saw {seen_widths[0]}-wide vectors — the")
-    print(f"     {n_continuous} continuous channels — so the discrete ones are excluded by")
-    print("     construction, not by convention.")
-    print("     `debounce_s = 0` is a deliberate choice too: it means 'deliver every")
-    print("     change', which is right for a deliberate click and wrong for a classifier.")
-
-
-def step_3_wire():
-    """What a legacy-encoding target puts on the wire."""
-    heading(3, "What reaches the wire")
-    # A pose-only configuration, because an un-negotiated target renders the legacy
-    # 9-float pose and that wire carries no discrete state at all — it says so rather
-    # than dropping one.
-    pose = load_dofs(
-        {"dofs": dict.fromkeys(["index.flexion", "middle.flexion"], "continuous")}
-    )
-    wire = Wire()
-    bus = ControlBus(pose, targets=[VhiTarget(wire)], hz=50)
-    bus.push({"index.flexion": 1.0, "middle.flexion": 0.5})
-    frame = wire.frames[-1]
-    print(f"  last frame: {np.array2string(frame, precision=2)}")
-    print("\n  Nine floats, because that is what the transport carries. Note:")
-    print("   - channels 6-8 are always 0 — no consumer reads them, there is no wrist;")
-    print("   - the sign is the *renderer's*, not the standard's. This target has not")
-    print("     negotiated, so it used the legacy encoding where -1 means flexion.")
-    print("\n  decode_pose reads such a frame back as canonical values:")
-    decoded = decode_pose(frame.astype(np.float32))
-    for name in LEGACY_POSE_DOFS[:3]:
-        print(f"    {name:16s} -> {float(decoded[name]):+.3f}")
-    print("\n  That is also how archived recordings are read, permanently: VHI's outlets")
-    print("  stay in renderer units so old sessions keep their meaning.")
-
-
-def step_4_live():
-    """Negotiate with whatever VHI is actually there — v2, v1, or none."""
-    heading(4, "Against a real Virtual Hand")
-
-    # Deliberately a configuration BOTH a v1 and a v2 build can render, so the same
-    # declaration demonstrates the negotiated path and the fallback.
-    controls = load_dofs(
-        {
-            "dofs": {
-                "index.flexion": "continuous",
-                "middle.flexion": "continuous",
-                "hand.gesture": {
-                    "kind": "discrete",
-                    "states": ["rest", "fist"],
-                    "rest": "rest",
-                    "debounce_s": 0.1,
-                },
-            }
-        }
-    )
-    print(f"  declaring {list(controls.dofs)}\n")
-    vhi = virtual_hand()
-    canonical = vhi.canonical_client()
-    legacy = vhi.control_client()
-    outlet = vhi.outlet()
-    target = VhiTarget(outlet, client=canonical, legacy_client=legacy)
+    outlet = virtual_hand().outlet()
+    target = VhiTarget(outlet, client=client)
     bus = ControlBus(controls, targets=[target], hz=32)
-
-    reply = canonical.declare(controls)
     settled = target.negotiate()
+    channels = sorted({channel for channel, *_ in target._routed})
+    print(f"\n  negotiate() -> {settled}    routed onto channels {channels}")
 
-    if reply is None and not settled:
-        print("  No VHI is reachable.")
-        print("   - Declare returned None, which means 'this build does not speak v2'")
-        print("     OR 'nothing is listening'. Those are indistinguishable, so bind()")
-        print("     DEFERS instead of deciding — an application that launches VHI from")
-        print("     its own UI necessarily binds before VHI exists.")
-        print("   - negotiate() returned False and will settle it once VHI appears.")
-        print("   - A discrete edge in the meantime is dropped with a warning, never")
-        print("     silently, and never by raising on the predict thread.")
-        print("\n  Launch a VHI and run this again to see steps 4b/4c.")
-    elif reply is None:
-        print("  A v1-only VHI is running — the COMPATIBILITY FALLBACK.")
-        print("   - Declare returned None, so the target fell back on its own.")
-        print(f"   - negotiated={target.negotiated} (False = legacy path)")
-        print("   - Continuous DOFs go out as the legacy pose; the discrete DOF is")
-        print("     rendered through v1 SetMovement, resolved case-insensitively")
-        print("     against the movement names VHI reports it has.")
-        bus.push({"index.flexion": 1.0})
-        bus.select("hand.gesture", "fist")
-        time.sleep(2.0)
-        state = legacy.get_state(timeout=3.0)
-        if state is not None:
-            print(f"   - VHI's current movement is now {state.current_movement!r}")
-        print("\n  Nothing in the application changed to make this work. That is the")
-        print("  point of the fallback, and it stays until a VHI 2.0 release ships.")
+    rendered = _observe(bus, alias)
+    if rendered is None:
+        print("\n  (VHI_Predict was not readable, so nothing to show)")
     else:
-        names = {0: "UNSPECIFIED", 1: "CANONICAL", 2: "LEGACY_NEGATED"}
-        print("  A v2 VHI is running — NEGOTIATED.")
-        print(f"   - accepted={reply.accepted}  standard={reply.standard_version!r}")
-        print(f"   - continuous stream : {reply.continuous_stream_name!r}")
-        print(f"   - channel order     : {list(reply.continuous_channel_order)}")
-        print(f"   - encoding          : {names.get(reply.continuous_encoding, '?')}")
-        for verdict in reply.verdicts:
-            mark = "renders as" if verdict.renderable else "REFUSED:"
-            detail = verdict.renders_as if verdict.renderable else verdict.message
-            print(f"   - {verdict.name:16s} {mark} {detail}")
-        print("\n   VHI answered which DOFs it can render, on which channels, and in")
-        print("   which convention. A reply that would not state the encoding is")
-        print("   treated as 'cannot negotiate' — guessing a sign inverts a limb.")
-
-        rendered = _observe(bus, target)
-        if rendered is not None:
-            print(f"\n   commanded index.flexion=+1  ->  VHI rendered {rendered:+.2f}")
-            print("   (rig units, where -1 is flexion: the hand flexed)")
-
-        print("\n   And a stable discrete state:")
-        for _ in range(10):
-            bus.push({"hand.gesture": "fist"})
-            time.sleep(0.02)
-        time.sleep(1.5)
-        aid = vhi.training_client()
-        state = aid.state()
-        if state is not None:
-            print(f"   held 'fist' for 10 ticks -> VHI movement {state.current_movement!r}")
-        aid.stop()
-
+        print(f"\n  commanded {alias}=1.0  ->  the hand rendered:")
+        for channel, value in rendered:
+            print(f"    channel {channel}: {value:+.2f}")
+        print("  Each member got its own weight, then the target's own range. A weight")
+        print("  scales a value; it cannot push one past what the target accepts.")
     bus.stop()
     print("\n  bus.stop() delivered rest and flushed it, so the hand released rather")
     print("  than freezing in its last pose.")
     outlet.stop()
-    canonical.stop()
-    legacy.stop()
 
 
-def _observe(bus, target) -> float | None:
-    """Command a flexion and read back what VHI rendered, or None if unreadable."""
+def _observe(bus, alias) -> list[tuple[int, float]] | None:
+    """Command the alias and read back what the hand actually rendered."""
     from mne_lsl.lsl import StreamInlet, resolve_streams
 
     inlet = None
@@ -293,11 +167,7 @@ def _observe(bus, target) -> float | None:
     if inlet is None:
         return None
 
-    # Channel 2 is where the negotiation put index.flexion. Watch *that* channel
-    # specifically: waiting for "any channel moved" would report whatever pose the hand
-    # happened to be holding.
-    channel = LEGACY_POSE_DOFS.index("index.flexion")
-    bus.push({"index.flexion": 1.0})
+    bus.push({alias: 1.0})
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         inlet.flush()
@@ -305,8 +175,8 @@ def _observe(bus, target) -> float | None:
         data, stamps = inlet.pull_chunk(timeout=0.5)
         if len(stamps):
             frame = np.asarray(data)[-1]
-            if abs(frame[channel]) > 0.8:
-                return float(frame[channel])
+            if abs(frame[:6]).max() > 0.5:
+                return [(i, float(v)) for i, v in enumerate(frame[:6]) if abs(v) > 0.05]
     return None
 
 
@@ -316,35 +186,41 @@ def step_5_commands():
     print("""  This walkthrough, with no Virtual Hand (safe anywhere):
       uv run --extra grpc python tools/inspect_canonical_control.py
 
-  Then launch a Virtual Hand and run it again to see the negotiation:
+  Then launch a Virtual Hand and run it again to see the handshake:
       python -m myogestic.tools.install_vhi        # if you have not installed it
       # start VHI from any example's Launch button, or run the binary directly
       uv run --extra grpc python tools/inspect_canonical_control.py
 
-  Confirm what the hand actually renders, per DOF, in signed degrees:
+  Confirm what the hand actually renders, per control, in signed degrees:
       uv run python tools/check_vhi_bridge.py
 
   A full application using all of this:
       uv run --extra examples --extra grpc python examples/synthetic/emg_regression.py
 
-  The control file this walkthrough loaded (copy and edit it):
-      examples/controls/hand.toml
+  The control files — copy and edit one:
+      examples/controls/*.toml
 
   The contracts themselves:
-      myogestic/controls.py                      the standard
-      myogestic/vhi/target.py                    negotiation + fallback
+      myogestic/controls.py                        the standard
+      myogestic/_controls_map.py                   aliases, addresses, resolution
       myogestic/vhi/_proto/myogestic_vhi_v2.proto  the wire contract""")
 
 
 def main() -> None:
     """Walk all five steps."""
     print(RULE)
-    print("The canonical control standard, end to end")
+    print("The control standard, end to end")
     print(RULE)
-    controls = step_1_declare()
-    step_2_kinds(controls)
-    step_3_wire()
-    step_4_live()
+    control_map = step_1_the_file()
+
+    client = virtual_hand().canonical_client()
+    try:
+        capabilities = step_2_ask_the_target(client)
+        if capabilities is not None:
+            controls = step_3_resolve(control_map, capabilities)
+            step_4_drive(controls, client)
+    finally:
+        client.stop()
     step_5_commands()
     print()
 

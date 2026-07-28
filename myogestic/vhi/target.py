@@ -118,13 +118,13 @@ class VhiTarget:
 
     Examples
     --------
-    >>> from myogestic.controls import ControlBus, load_dofs
+    >>> from myogestic.controls import ControlBus, Continuous, ControlSet
     >>> from myogestic.vhi import VhiTarget, virtual_hand
     >>>
-    >>> controls = load_dofs({"dofs": {"index.flexion": "continuous"}})
+    >>> controls = ControlSet(dofs={"my_index": Continuous("my_index")})
     >>> outlet = virtual_hand().outlet()
     >>> bus = ControlBus(controls, targets=[VhiTarget(outlet)])
-    >>> _ = bus.push({"index.flexion": 0.8})    # 0.8 flexed, sanitised on the way
+    >>> _ = bus.push({"my_index": 0.8})        # sanitised on the way to the wire
     """
 
     __slots__ = (

@@ -11,13 +11,11 @@ from __future__ import annotations
 
 import pytest
 
-from myogestic.controls import load_dofs
+from myogestic.controls import load_control_map
 from myogestic.ml import load_pickle, save_pickle
 
-SIGNED = load_dofs({"dofs": {"index.flexion": "continuous"}})
-ONE_WAY = load_dofs(
-    {"dofs": {"index.flexion": {"kind": "continuous", "range": [0.0, 1.0]}}}
-)
+SIGNED = load_control_map({"dofs": {"my_index": "vhi.prediction.index"}})
+ONE_WAY = load_control_map({"dofs": {"my_index": "vhi.grip.force"}})
 
 
 def test_a_model_saved_without_controls_has_no_sidecar(tmp_path):
@@ -34,14 +32,14 @@ def test_provenance_round_trips(tmp_path):
 
 
 def test_a_mismatched_control_space_is_refused(tmp_path):
-    """Same DOF name, different declared range — the case a name cannot catch."""
+    """Same alias, different target address — the case an alias alone cannot catch."""
     path = save_pickle({"weights": 1}, tmp_path / "m.joblib", controls=ONE_WAY)
     with pytest.raises(ValueError, match="was trained for"):
         load_pickle(path, controls=SIGNED)
 
 
 def test_a_different_dof_set_is_refused(tmp_path):
-    other = load_dofs({"dofs": {"thumb.flexion": "continuous"}})
+    other = load_control_map({"dofs": {"my_thumb": "vhi.prediction.thumb"}})
     path = save_pickle({"weights": 1}, tmp_path / "m.joblib", controls=SIGNED)
     with pytest.raises(ValueError, match="was trained for"):
         load_pickle(path, controls=other)

@@ -117,10 +117,10 @@ class VhiCanonicalClient:
 
     Examples
     --------
-    >>> from myogestic.controls import load_dofs
+    >>> from myogestic.controls import Continuous, ControlSet
     >>> from myogestic.vhi._client_v2 import VhiCanonicalClient
     >>> client = VhiCanonicalClient()
-    >>> reply = client.declare(load_dofs({"dofs": {"index.flexion": "continuous"}}))
+    >>> reply = client.declare(ControlSet(dofs={"my_index": Continuous("my_index")}))
     >>> reply is None      # None means this VHI does not speak v2
     True
     """

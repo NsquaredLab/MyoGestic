@@ -29,13 +29,23 @@ and edit it:
 
 ```toml
 [dofs]
-"index.flexion" = "continuous"                 # signed: +1 flexes, -1 extends, 0 rest
-"middle.flexion" = "continuous"
-"hand.grasp"    = ["rest", "fist", "pinch"]    # a held state, not a number
+# Left side: your model's output names. Right side: controls VHI declares.
+my_index = "vhi.prediction.index"
+my_middle = "vhi.prediction.middle"
 
-# The explicit form, when a default is not what you mean:
-"grip.force"    = { kind = "continuous", range = [0.0, 1.0] }
-"hand.gesture"  = { kind = "discrete", states = ["rest", "fist"], debounce_s = 0.1 }
+fist = [                                       # one output, fanned out
+  "vhi.prediction.index",
+  "vhi.prediction.middle",
+  "vhi.prediction.ring",
+  "vhi.prediction.little",
+]
+
+pinch = [                                      # ...with a per-target gain
+  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.index" },
+]
+
+gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
 ```
 
 Load it, and hand the result to a bus with a `VhiTarget`:
@@ -43,22 +53,41 @@ Load it, and hand the result to a bus with a `VhiTarget`:
 ```python
 import tomllib
 
-from myogestic.controls import ControlBus, load_dofs
+from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.vhi import VhiTarget, virtual_hand
 
 vhi = virtual_hand()
-with open("hand.toml", "rb") as f:            # "rb" — tomllib requires binary
-    CONTROLS = load_dofs(tomllib.load(f))
+vhi_canonical = vhi.canonical_client()
 
-target = VhiTarget(vhi.outlet(), client=vhi.canonical_client())
-bus = ControlBus(CONTROLS, targets=[target], hz=32)
+with open("hand.toml", "rb") as f:            # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(f))
+
+bus = None            # built once VHI can say what it exports
+
+
+def ensure_vhi() -> None:
+    """Resolve the map once VHI is up. Call from a button handler, never from predict."""
+    global bus
+    if bus is not None:
+        return
+    capabilities = vhi_canonical.capabilities()
+    if capabilities is None:
+        return                                # not reachable yet; try again later
+    controls = resolve(CONTROL_MAP, capabilities)
+    target = VhiTarget(vhi.outlet(), client=vhi_canonical)
+    bus = ControlBus(controls, targets=[target], hz=32)
 ```
+
+The bus is built **lazily** because resolution needs a live target: VHI declares whether
+each address is a number or a held state, and an app that launches VHI from its own UI
+necessarily starts before it exists. `capabilities()` blocks on an RPC, so call
+`ensure_vhi()` from a UI handler and let `predict` no-op while `bus is None`.
 
 That is the whole setup. `bus.push({"index.flexion": 0.8})` from inside
 `@pipeline.predict` and the target negotiates the wire, encodes, and sends.
 
 !!! note "The file is yours; the library never reads it"
-    `load_dofs` takes a **Mapping**, not a path — so MyoGestic reads no configuration
+    `load_control_map` takes a **Mapping**, not a path — so MyoGestic reads no configuration
     files, and your declaration can equally live in JSON, a dict literal, or a config
     system you already run. TOML is what a human wants to edit, which is why the shipped
     example is TOML and why the snippet above opens it itself.
@@ -204,8 +233,12 @@ For classifier output the right primitive isn't "push a pose every tick" — it'
 Declare it in the file — `debounce_s` is the gate, in seconds:
 
 ```toml
-"hand.gesture" = { kind = "discrete", states = ["rest", "fist", "pinch", "point"], debounce_s = 0.1 }
+gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
 ```
+
+VHI declares `vhi.control.gesture` discrete and supplies its states, so you do not write
+them. `debounce_s` *is* yours to write: it is a property of your control loop, not of the
+hand.
 
 Then command it by name, using the `bus` built above:
 

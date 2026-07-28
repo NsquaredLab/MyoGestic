@@ -14,15 +14,15 @@ import math
 import numpy as np
 import pytest
 
-from myogestic.controls import ControlBus, load_dofs
+from myogestic.controls import Continuous, ControlBus, ControlSet, Discrete
 
-MIXED = load_dofs(
-    {
-        "dofs": {
-            "a.flexion": "continuous",                                     # [-1, 1]
-            "g.force": {"kind": "continuous", "range": [0.0, 1.0]},        # one-way
-            "hand.grasp": ["rest", "fist"],
-        }
+#: Aliases with the three shapes that exercise every branch. Built directly: a resolved
+#: set is what the bus operates on, and its keys are the user's own names.
+MIXED = ControlSet(
+    dofs={
+        "a": Continuous("a"),                              # signed [-1, 1]
+        "g": Continuous("g", lo=0.0, hi=1.0),              # one-way
+        "hand.grasp": Discrete("hand.grasp", ("rest", "fist"), "rest"),
     }
 )
 
@@ -80,26 +80,26 @@ def test_bind_may_raise_at_construction():
 def test_push_delivers_sanitised_values():
     rec = Recorder()
     bus = ControlBus(MIXED, targets=[rec])
-    out = bus.push({"a.flexion": -0.5, "g.force": 0.25, "hand.grasp": "fist"})
-    assert out["a.flexion"] == pytest.approx(-0.5)
+    out = bus.push({"a": -0.5, "g": 0.25, "hand.grasp": "fist"})
+    assert out["a"] == pytest.approx(-0.5)
     values, _changed = rec.frames[-1]
-    assert values["a.flexion"] == pytest.approx(-0.5)
+    assert values["a"] == pytest.approx(-0.5)
 
 
 def test_nan_never_becomes_full_deflection():
     """`min(hi, max(lo, nan))` is `lo`; rest substitution must come first."""
     rec = Recorder()
     bus = ControlBus(MIXED, targets=[rec])
-    out = bus.push({"a.flexion": math.nan, "g.force": math.nan})
-    assert out["a.flexion"] == 0.0
-    assert out["g.force"] == 0.0
+    out = bus.push({"a": math.nan, "g": math.nan})
+    assert out["a"] == 0.0
+    assert out["g"] == 0.0
 
 
 def test_values_cannot_leave_their_declared_range():
     bus = ControlBus(MIXED, targets=[])
-    out = bus.push({"a.flexion": 9.0, "g.force": -9.0})
-    assert out["a.flexion"] == 1.0
-    assert out["g.force"] == 0.0  # NOT -1.0 — this DOF declares [0, 1]
+    out = bus.push({"a": 9.0, "g": -9.0})
+    assert out["a"] == 1.0
+    assert out["g"] == 0.0  # NOT -1.0 — this DOF declares [0, 1]
 
 
 def test_discrete_edges_only_appear_when_they_change():
@@ -115,9 +115,8 @@ def test_discrete_edges_only_appear_when_they_change():
 
 def test_debounce_seconds_become_ticks_at_the_declared_rate():
     """0.1 s at 50 Hz is five calls: four are silent, the fifth fires."""
-    controls = load_dofs(
-        {"dofs": {"h.grasp": {"kind": "discrete", "states": ["rest", "fist"],
-                              "debounce_s": 0.1}}}
+    controls = ControlSet(
+        dofs={"h.grasp": Discrete("h.grasp", ("rest", "fist"), "rest", debounce_s=0.1)}
     )
     rec = Recorder()
     bus = ControlBus(controls, targets=[rec], hz=50.0)
@@ -135,9 +134,9 @@ def test_smoothing_output_is_re_sanitised_and_clipped_per_channel():
         return np.asarray(x, dtype=np.float32) * 5.0 - 2.0
 
     bus = ControlBus(MIXED, targets=[], smoothing=overshooting)
-    out = bus.push({"a.flexion": 1.0, "g.force": 1.0})
-    assert -1.0 <= out["a.flexion"] <= 1.0
-    assert 0.0 <= out["g.force"] <= 1.0, "a one-way DOF must not be driven negative"
+    out = bus.push({"a": 1.0, "g": 1.0})
+    assert -1.0 <= out["a"] <= 1.0
+    assert 0.0 <= out["g"] <= 1.0, "a one-way DOF must not be driven negative"
 
 
 def test_a_filter_emitting_nan_does_not_reach_a_target():
@@ -145,9 +144,9 @@ def test_a_filter_emitting_nan_does_not_reach_a_target():
         return np.full_like(np.asarray(x, dtype=np.float32), np.nan)
 
     bus = ControlBus(MIXED, targets=[], smoothing=poisoned)
-    out = bus.push({"a.flexion": 0.5, "g.force": 0.5})
-    assert math.isfinite(out["a.flexion"])
-    assert math.isfinite(out["g.force"])
+    out = bus.push({"a": 0.5, "g": 0.5})
+    assert math.isfinite(out["a"])
+    assert math.isfinite(out["g"])
 
 
 def test_push_never_raises_and_falls_back_to_rest():
@@ -158,7 +157,7 @@ def test_push_never_raises_and_falls_back_to_rest():
 
     rec = Recorder()
     bus = ControlBus(MIXED, targets=[rec], smoothing=hostile)
-    out = bus.push({"a.flexion": 0.9})
+    out = bus.push({"a": 0.9})
     assert out == MIXED.rest_values()
     assert rec.frames[-1][0] == MIXED.rest_values()
 
@@ -166,7 +165,7 @@ def test_push_never_raises_and_falls_back_to_rest():
 def test_one_failing_target_does_not_stop_the_others():
     rec = Recorder()
     bus = ControlBus(MIXED, targets=[Exploding(), rec])
-    bus.push({"a.flexion": 0.5})
+    bus.push({"a": 0.5})
     assert rec.frames, "the healthy target must still receive the frame"
 
 
@@ -174,7 +173,7 @@ def test_stop_delivers_rest_before_stopping_targets():
     """A target torn down mid-command leaves the application holding that value."""
     rec = Recorder()
     bus = ControlBus(MIXED, targets=[rec])
-    bus.push({"a.flexion": 1.0, "hand.grasp": "fist"})
+    bus.push({"a": 1.0, "hand.grasp": "fist"})
     bus.stop()
     assert rec.frames[-1][0] == MIXED.rest_values()
     assert rec.stopped == 1
@@ -188,9 +187,8 @@ def test_stop_survives_a_target_that_raises():
 
 
 def test_select_bypasses_debounce_and_rebases():
-    controls = load_dofs(
-        {"dofs": {"h.grasp": {"kind": "discrete", "states": ["rest", "fist"],
-                              "debounce_s": 1.0}}}
+    controls = ControlSet(
+        dofs={"h.grasp": Discrete("h.grasp", ("rest", "fist"), "rest", debounce_s=1.0)}
     )
     rec = Recorder()
     bus = ControlBus(controls, targets=[rec], hz=50.0)
@@ -206,7 +204,7 @@ def test_select_refuses_an_unknown_dof_or_state():
     bus = ControlBus(MIXED, targets=[])
     assert bus.select("nope", "fist") is False
     assert bus.select("hand.grasp", "nope") is False
-    assert bus.select("a.flexion", "fist") is False  # continuous is not selectable
+    assert bus.select("a", "fist") is False  # continuous is not selectable
 
 
 def test_rebase_does_not_deliver():
@@ -224,28 +222,28 @@ def test_rebase_does_not_deliver():
 def test_dead_zone_and_hysteresis_are_off_by_default():
     """No universal constant is shipped; both must be measured before use."""
     bus = ControlBus(MIXED, targets=[])
-    out = bus.push({"a.flexion": 0.02})
-    assert out["a.flexion"] == pytest.approx(0.02), "a default dead zone would eat this"
+    out = bus.push({"a": 0.02})
+    assert out["a"] == pytest.approx(0.02), "a default dead zone would eat this"
 
 
 def test_dead_zone_suppresses_small_values_and_rescales():
     bus = ControlBus(MIXED, targets=[], dead_zone=0.1)
-    assert bus.push({"a.flexion": 0.05})["a.flexion"] == 0.0
+    assert bus.push({"a": 0.05})["a"] == 0.0
     # Just outside the zone starts from 0, not from a 0.1 jump.
-    assert bus.push({"a.flexion": 0.1000001})["a.flexion"] == pytest.approx(0.0, abs=1e-5)
+    assert bus.push({"a": 0.1000001})["a"] == pytest.approx(0.0, abs=1e-5)
     # Full scale still reaches full scale.
-    assert bus.push({"a.flexion": 1.0})["a.flexion"] == pytest.approx(1.0)
-    assert bus.push({"a.flexion": -1.0})["a.flexion"] == pytest.approx(-1.0)
+    assert bus.push({"a": 1.0})["a"] == pytest.approx(1.0)
+    assert bus.push({"a": -1.0})["a"] == pytest.approx(-1.0)
 
 
 def test_hysteresis_blocks_chatter_across_rest():
     """Rest is interior for a signed DOF, so noise around 0 would reverse direction."""
     bus = ControlBus(MIXED, targets=[], hysteresis=0.3)
-    assert bus.push({"a.flexion": 0.8})["a.flexion"] == pytest.approx(0.8)
+    assert bus.push({"a": 0.8})["a"] == pytest.approx(0.8)
     # A small excursion the other way is held at rest rather than reversing.
-    assert bus.push({"a.flexion": -0.1})["a.flexion"] == 0.0
+    assert bus.push({"a": -0.1})["a"] == 0.0
     # A decisive move the other way is allowed through.
-    assert bus.push({"a.flexion": -0.9})["a.flexion"] == pytest.approx(-0.9)
+    assert bus.push({"a": -0.9})["a"] == pytest.approx(-0.9)
 
 
 @pytest.mark.parametrize(
@@ -267,9 +265,9 @@ def test_a_clip_is_reported_once_not_every_tick():
     warnings: list[str] = []
     bus = ControlBus(MIXED, targets=[], on_warn=warnings.append)
     for _ in range(5):
-        bus.push({"a.flexion": 9.0})
+        bus.push({"a": 9.0})
     assert len(warnings) == 1, "a per-tick warning erases the log that explains it"
-    assert "a.flexion" in warnings[0]
+    assert "a" in warnings[0]
 
 
 # --- the three layers, and the boundaries between them --------------------------
@@ -291,12 +289,12 @@ def test_layer_1_continuous_smoothing_actually_ramps():
     rec = Recorder()
     bus = ControlBus(MIXED, targets=[rec], smoothing=OneEuroFilter(), hz=50)
     for _ in range(4):
-        bus.push({"a.flexion": 0.0, "hand.grasp": "rest"})
+        bus.push({"a": 0.0, "hand.grasp": "rest"})
     settled = len(rec.frames)
 
     for _ in range(6):
-        bus.push({"a.flexion": 1.0, "hand.grasp": "rest"})
-    ramp = [f[0]["a.flexion"] for f in rec.frames[settled:]]
+        bus.push({"a": 1.0, "hand.grasp": "rest"})
+    ramp = [f[0]["a"] for f in rec.frames[settled:]]
     assert ramp[0] < 1.0, f"the step must lag rather than jump: {ramp}"
     assert ramp == sorted(ramp), f"a step should approach monotonically, got {ramp}"
     assert ramp[-1] > ramp[0], "and it must actually be approaching"
@@ -309,8 +307,8 @@ def test_layer_1_smoothing_is_applied_before_the_target_sees_anything():
     a, b = Recorder(), Recorder()
     bus = ControlBus(MIXED, targets=[a, b], smoothing=OneEuroFilter(), hz=50)
     for _ in range(4):
-        bus.push({"a.flexion": 1.0})
-    assert [f[0]["a.flexion"] for f in a.frames] == [f[0]["a.flexion"] for f in b.frames]
+        bus.push({"a": 1.0})
+    assert [f[0]["a"] for f in a.frames] == [f[0]["a"] for f in b.frames]
 
 
 def test_layer_2_a_discrete_dof_is_never_numerically_filtered():
@@ -325,7 +323,7 @@ def test_layer_2_a_discrete_dof_is_never_numerically_filtered():
     rec = Recorder()
     bus = ControlBus(MIXED, targets=[rec], smoothing=OneEuroFilter(), hz=50)
     for state in ("rest", "fist", "rest", "fist", "fist", "rest"):
-        bus.push({"a.flexion": 0.5, "hand.grasp": state})
+        bus.push({"a": 0.5, "hand.grasp": state})
     delivered = [f[0]["hand.grasp"] for f in rec.frames]
     assert set(delivered) <= {"rest", "fist"}, delivered
     for value in delivered:
@@ -341,7 +339,7 @@ def test_layer_2_the_filter_only_ever_sees_continuous_channels():
         return vec
 
     ControlBus(MIXED, targets=[Recorder()], smoothing=spy, hz=50).push(
-        {"a.flexion": 0.2, "g.force": 0.4, "hand.grasp": "fist"}
+        {"a": 0.2, "g": 0.4, "hand.grasp": "fist"}
     )
     # Two continuous DOFs in MIXED; the discrete one is not in the vector at all.
     assert widths == [2]
@@ -353,16 +351,10 @@ def test_layer_2_debounce_gates_a_chattering_classifier():
     A classifier flickering between states tick to tick must produce *no* transition
     until one state holds — not an averaged in-between, and not a stream of edges.
     """
-    controls = load_dofs(
-        {
-            "dofs": {
-                "hand.grasp": {
-                    "kind": "discrete",
-                    "states": ["rest", "fist"],
-                    "rest": "rest",
-                    "debounce_s": 0.06,  # 3 ticks at 50 Hz
-                }
-            }
+    controls = ControlSet(
+        dofs={
+            # 0.06 s at 50 Hz is 3 ticks.
+            "hand.grasp": Discrete("hand.grasp", ("rest", "fist"), "rest", debounce_s=0.06)
         }
     )
     rec = Recorder()
@@ -390,25 +382,18 @@ def test_the_two_gates_are_independent():
     """Debounce must not delay a continuous value, nor smoothing delay a transition."""
     from myogestic.outputs.filters import OneEuroFilter
 
-    controls = load_dofs(
-        {
-            "dofs": {
-                "a.flexion": "continuous",
-                "hand.grasp": {
-                    "kind": "discrete",
-                    "states": ["rest", "fist"],
-                    "rest": "rest",
-                    "debounce_s": 0.1,
-                },
-            }
+    controls = ControlSet(
+        dofs={
+            "a": Continuous("a"),
+            "hand.grasp": Discrete("hand.grasp", ("rest", "fist"), "rest", debounce_s=0.1),
         }
     )
     rec = Recorder()
     bus = ControlBus(controls, targets=[rec], smoothing=OneEuroFilter(), hz=50)
-    bus.push({"a.flexion": 1.0, "hand.grasp": "fist"})
+    bus.push({"a": 1.0, "hand.grasp": "fist"})
     # The continuous channel is delivered on the very first tick even though the
     # discrete one is still inside its debounce window.
-    assert rec.frames[0][0]["a.flexion"] != 0.0
+    assert rec.frames[0][0]["a"] != 0.0
     assert rec.frames[0][1] == {}
 
 

@@ -17,38 +17,21 @@ extension at ``-1``. One-way controls declare ``range = [0.0, 1.0]``; that is th
 exceptional case, not the default. A target owns its own units: pixels per second
 belongs to a cursor target, degrees to a renderer, never here.
 
-`load_dofs` takes a plain `Mapping`, never a path, so ``tomllib`` stays out of the
-library and a configuration is just a dict of experiment parameters whose
-provenance is the caller's business::
+Declare your control space in a **file**, and load it in two lines::
 
     import tomllib
-    from pathlib import Path
-    from myogestic.controls import load_dofs
+    from myogestic.controls import load_control_map, resolve
 
-    controls = load_dofs(tomllib.loads(Path("controls.toml").read_text()))
+    with open("hand.toml", "rb") as f:          # "rb" — tomllib requires binary
+        control_map = load_control_map(tomllib.load(f))
 
-The matching TOML is one line per DOF::
+    controls = resolve(control_map, target.capabilities())
 
-    [dofs]
-    "index.flexion" = "continuous"                                 # [-1, 1], rest 0
-    "hand.grasp"    = ["rest", "fist", "pinch"]                    # array => discrete
-    "grip.force"    = { kind = "continuous", range = [0.0, 1.0] }  # one-way
+`load_control_map` takes a plain `Mapping`, never a path, so ``tomllib`` stays out of the
+library and the same call accepts JSON, a dict literal, or a config system you already
+run. `resolve` is where meaning arrives: the *target* declares whether each address is a
+number or a held state, its range, and its states — nothing here decides that.
 
-    [simultaneous]
-    proportional = ["index.flexion"]
-
-Then drive targets through a `ControlBus`, which owns the sanitise ordering::
-
-    bus = ControlBus(controls, targets=[my_target], hz=pipeline.predict_hz)
-    app.cleanup_hooks.append(lambda _app: bus.stop())
-
-    @pipeline.predict
-    def predict(model, features):
-        return bus.push({"index.flexion": float(model.predict(features)[0])})
-
-This module is the public entry point; the implementation lives in
-``_controls_core`` (model, loader, transforms) and ``_controls_bus`` (the bus),
-split so neither imports its own aggregator.
 """
 
 from __future__ import annotations
@@ -63,7 +46,6 @@ from myogestic._controls_core import (
     clip,
     decode,
     encode,
-    load_dofs,
     substitute_rest,
 )
 from myogestic._controls_map import (
@@ -95,7 +77,6 @@ __all__ = [
     "encode",
     "load_control_map",
     "read_control_space",
-    "load_dofs",
     "resolve",
     "substitute_rest",
 ]

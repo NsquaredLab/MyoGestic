@@ -186,10 +186,8 @@ def test_doc_page_runs(path, doc_session):
 
 
 # --- Layer 3: every ```toml block that declares DOFs must actually load ----------
-#
-# The docs now tell users to write a TOML file, so a snippet that does not parse — or
-# parses but is rejected by `load_dofs` — teaches a shape that cannot work. Layer 1
-# gives python blocks that guarantee; this extends it to the declarations.
+# parses but is rejected by `load_control_map` — teaches a shape that cannot work.
+# Layer 1 gives python blocks that guarantee; this extends it to the declarations.
 
 _TOML_BLOCK = re.compile(r"```toml\n(.*?)\n[ \t]*```", re.DOTALL)
 
@@ -203,10 +201,10 @@ def _toml_blocks(path: Path):
 
 @pytest.mark.parametrize("path", MD_FILES, ids=lambda p: str(p.relative_to(ROOT)))
 def test_doc_toml_blocks_parse_and_load(path):
-    """A TOML snippet must parse, and a `[dofs]` one must survive `load_dofs`."""
+    """A TOML snippet must parse, and a mapping must survive `load_control_map`."""
     import tomllib
 
-    from myogestic.controls import load_control_map, load_dofs
+    from myogestic.controls import load_control_map
 
     for code, line in _toml_blocks(path):
         where = f"{path.relative_to(ROOT)}:{line}"
@@ -215,27 +213,17 @@ def test_doc_toml_blocks_parse_and_load(path):
         except tomllib.TOMLDecodeError as exc:
             pytest.fail(f"{where}: invalid TOML — {exc}")
 
-        # A fragment showing one key (no [dofs] header) is still a real declaration;
-        # wrap it so it is checked rather than skipped, since those fragments are
-        # exactly what a reader copies into their own [dofs] table.
+        # A fragment showing one mapping (no [dofs] header) is still a real declaration:
+        # it is exactly what a reader copies into their own [dofs] table, so wrap it and
+        # check it rather than skip it.
         if "dofs" in raw:
             candidate = raw
-        elif raw and all(isinstance(k, str) and "." in k for k in raw):
+        elif raw and all(isinstance(v, (str, list, dict)) for v in raw.values()):
             candidate = {"dofs": raw}
         else:
-            continue  # not a control declaration (e.g. a pyproject or config sample)
+            continue  # not a control declaration (e.g. a pyproject sample)
 
-        # Two shapes are live during the migration to target-owned addresses: the new
-        # alias -> address mapping, and the older canonical-name declaration that the
-        # not-yet-migrated pages still show. A block is valid if EITHER parser accepts
-        # it; a block both reject is broken whichever scheme it meant to use.
-        faults = []
-        for parse in (load_control_map, load_dofs):
-            try:
-                parse(candidate)
-                break
-            except ValueError as exc:
-                faults.append(f"{parse.__name__}: {exc}")
-        else:
-            joined = "\n      ".join(faults)
-            pytest.fail(f"{where}: TOML parses but no control parser accepts it —\n      {joined}")
+        try:
+            load_control_map(candidate)
+        except ValueError as exc:
+            pytest.fail(f"{where}: TOML parses but load_control_map rejects it — {exc}")

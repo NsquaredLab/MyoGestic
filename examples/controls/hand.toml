@@ -26,59 +26,56 @@
 
 [dofs]
 
-# --- one output, one control ------------------------------------------------------
-#
-# The common case. `my_thumb` is your name; the right side is VHI's.
-my_thumb = "vhi.prediction.thumb"
-my_index = "vhi.prediction.index"
-my_middle = "vhi.prediction.middle"
-
-# The explicit axis form, when the short one is not specific enough. The thumb has two
-# axes, so its short address means flexion and abduction is addressed on its own.
-thumb_spread = "vhi.prediction.thumb.abduction"
-
-
-# --- one output, many controls (fan-out) ------------------------------------------
+# --- one output, many controls (a weighted fan-out) --------------------------------
 #
 # `fist` is a single model output — one scalar — broadcast to every listed control. Each
 # applies its own declared range and direction, so you do not need a whole-hand
 # capability just to close the hand.
-fist = [
-  "vhi.prediction.index",
-  "vhi.prediction.middle",
-  "vhi.prediction.ring",
-  "vhi.prediction.little",
-]
-
-# ...and with a per-target gain, when one member should move less than the rest. Weight
-# defaults to 1.0 and is applied *before* each target's own range conversion, so a
-# target still clamps whatever it receives.
 #
-# A negative weight is only accepted when the resolved control declares signed motion —
+# The thumb carries a weight because at full flexion it drives through the fingers.
+# Weight defaults to 1.0 and is applied *before* each target's own range conversion, so a
+# target still clamps whatever it receives — a gain scales a value, it cannot smuggle one
+# past what the target accepts.
+#
+# A negative weight is accepted only when the resolved control declares signed motion;
 # otherwise there is no opposite direction to send, and saying so beats clamping it away.
-pinch = [
+fist = [
   { target = "vhi.prediction.thumb", weight = 0.6 },
   { target = "vhi.prediction.index" },
+  { target = "vhi.prediction.middle" },
+  { target = "vhi.prediction.ring" },
+  { target = "vhi.prediction.little" },
 ]
+
+
+# --- one output, one control ------------------------------------------------------
+#
+# The common case. `thumb_spread` is your name; the right side is VHI's. The explicit
+# axis form is used here because the short `vhi.prediction.thumb` is declared to mean
+# flexion — the thumb has two axes, so VHI does not guess which one you meant.
+thumb_spread = "vhi.prediction.thumb.abduction"
 
 
 # --- a held state ------------------------------------------------------------------
 #
-# Whether an output is a number or a held state is the *target's* declaration, not
-# yours: `vhi.control.gesture` is discrete, so `gesture` resolves to a state machine
-# whose states are whatever movements this VHI offers.
+# Whether an output is a number or a held state is the *target's* declaration, not yours:
+# `vhi.control.gesture` is discrete, so `gesture` resolves to a state machine whose states
+# are whatever movements this VHI offers.
 #
-# `debounce_s` is the one thing declared on this side, because it is a property of your
-# control loop rather than of the target: how long a state must hold before it counts as
-# a transition. It is what stops a chattering classifier from flapping the hand.
+# `debounce_s` is the one thing declared on this side, because it belongs to your control
+# loop rather than to the target: how long a state must hold before it counts as a
+# transition. It is what stops a chattering classifier from flapping the hand.
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
 
 
 # --- another target, same shape ----------------------------------------------------
 #
-# Nothing above is VHI-specific except the addresses. A keyboard or cursor target
-# exports its own vocabulary the same way, and the same alias can point at a different
-# target tomorrow without touching your model:
+# Nothing above is VHI-specific except the addresses. A keyboard or cursor target exports
+# its own vocabulary the same way, and the same alias can point somewhere else tomorrow
+# without touching your model:
 #
 #   clicker = "keyboard.space"
 #   drive_x = "cursor.x_velocity"
+#
+# Note that two aliases may not target the SAME control: one control cannot take two
+# outputs, so that is refused at resolution rather than letting whichever wrote last win.

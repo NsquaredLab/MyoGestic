@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 import joblib
 
 if TYPE_CHECKING:
-    from myogestic.controls import ControlSet
+    from myogestic.controls import ControlMap
 
 
 def _sidecar(path: str | Path) -> Path:
@@ -32,7 +32,7 @@ def _sidecar(path: str | Path) -> Path:
     return Path(str(path) + ".controls.json")
 
 
-def save_pickle(model: Any, path: str | Path, *, controls: ControlSet | None = None) -> str:
+def save_pickle(model: Any, path: str | Path, *, controls: ControlMap | None = None) -> str:
     """Persist ``model`` to ``path`` via joblib, creating parent dirs as needed.
 
     Returns the path as a string.
@@ -44,7 +44,7 @@ def save_pickle(model: Any, path: str | Path, *, controls: ControlSet | None = N
     path
         Destination file.
     controls
-        Optional `myogestic.controls.ControlSet` the model was trained against,
+        Optional `myogestic.controls.ControlMap` the model was trained against,
         written to a ``<path>.controls.json`` sidecar. A model is only meaningful
         in the output space it was fitted for: loading one trained on a one-way
         ``[0, 1]`` DOF against a signed ``[-1, 1]`` configuration produces motion
@@ -69,7 +69,7 @@ def save_pickle(model: Any, path: str | Path, *, controls: ControlSet | None = N
 def load_pickle(
     path: str | Path,
     *,
-    controls: ControlSet | None = None,
+    controls: ControlMap | None = None,
     allow_unverified: bool = False,
 ) -> Any:
     """Inverse of [`save_pickle`][] — load a joblib-saved model.
@@ -79,7 +79,7 @@ def load_pickle(
     path
         The model file.
     controls
-        Optional `myogestic.controls.ControlSet` to check the model against. When
+        Optional `myogestic.controls.ControlMap` to check the model against. When
         given, the model's sidecar must describe the same control space, or this
         raises rather than driving a target through a space the model never saw.
         Wire it in one line::
@@ -105,7 +105,7 @@ def load_pickle(
     2
     """
     if controls is not None:
-        from myogestic.controls import load_dofs
+        from myogestic.controls import read_control_space
 
         side = _sidecar(path)
         if not side.exists():
@@ -117,11 +117,11 @@ def load_pickle(
                     f"load it anyway."
                 )
         else:
-            recorded = load_dofs(json.loads(side.read_text()))
+            recorded = read_control_space(json.loads(side.read_text()))
             if recorded != controls:
                 raise ValueError(
-                    f"{path} was trained for {list(recorded.dofs)} but the current "
-                    f"configuration declares {list(controls.dofs)}. Restore that "
+                    f"{path} was trained for {list(recorded.bindings)} but the current "
+                    f"configuration declares {list(controls.bindings)}. Restore that "
                     f"configuration, or retrain."
                 )
     return joblib.load(str(path))

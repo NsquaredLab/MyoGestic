@@ -15,17 +15,20 @@ import json
 import numpy as np
 import pytest
 
-from myogestic.controls import load_dofs
+from myogestic.controls import load_control_map, read_control_space
 from myogestic.session import Session, iter_aligned_windows, open_session_store
 from myogestic.stream import StreamInfo
 
-CONTROLS = load_dofs(
+#: What a recording is made under: the user's aliases and the target controls they drove.
+CONTROL_MAP = load_control_map(
     {
         "dofs": {
-            "index.flexion": "continuous",
-            "grip.force": {"kind": "continuous", "range": [0.0, 1.0]},
-        },
-        "simultaneous": {"hand": ["index.flexion", "grip.force"]},
+            "my_index": "vhi.prediction.index",
+            "fist": [
+                {"target": "vhi.prediction.thumb", "weight": 0.6},
+                "vhi.prediction.middle",
+            ],
+        }
     }
 )
 
@@ -47,23 +50,38 @@ def _record(tmp_path, *, names, control_space=None, n=40):
     return session.path
 
 
-def test_control_space_round_trips_through_load_dofs(tmp_path):
-    """What was recorded must rebuild the exact space it was recorded under."""
-    path = _record(tmp_path, names=list(CONTROLS.channel_labels()),
-                   control_space=CONTROLS.as_dict())
+def test_control_space_round_trips(tmp_path):
+    """What was recorded must rebuild the exact mapping it was recorded under."""
+    path = _record(tmp_path, names=["my_index", "fist"],
+                   control_space=CONTROL_MAP.as_dict())
     meta = json.loads((path / "meta.json").read_text())
     assert meta["schema_version"] == 3
-    assert load_dofs(meta["control_space"]) == CONTROLS
+    rebuilt = read_control_space(meta["control_space"])
+    assert rebuilt.as_dict() == CONTROL_MAP.as_dict()
 
 
-def test_control_space_preserves_range_and_rest(tmp_path):
-    """The distinction a channel name cannot carry."""
-    path = _record(tmp_path, names=list(CONTROLS.channel_labels()),
-                   control_space=CONTROLS.as_dict())
-    rebuilt = load_dofs(json.loads((path / "meta.json").read_text())["control_space"])
-    assert (rebuilt.dofs["index.flexion"].lo, rebuilt.dofs["index.flexion"].hi) == (-1.0, 1.0)
-    assert (rebuilt.dofs["grip.force"].lo, rebuilt.dofs["grip.force"].hi) == (0.0, 1.0)
-    assert rebuilt.dofs["grip.force"].rest == 0.0
+def test_control_space_preserves_the_routing_and_its_weights(tmp_path):
+    """What a channel name alone cannot carry: which target control it drove, and how hard.
+
+    An archived number is meaningless without this. `fist` at 1.0 meant full flexion on
+    middle *and* 0.6 on the thumb — recoverable only because the mapping was persisted.
+    """
+    path = _record(tmp_path, names=["my_index", "fist"],
+                   control_space=CONTROL_MAP.as_dict())
+    rebuilt = read_control_space(json.loads((path / "meta.json").read_text())["control_space"])
+    refs = {r.address: r.weight for r in rebuilt.bindings["fist"].targets}
+    assert refs == {"vhi.prediction.thumb": 0.6, "vhi.prediction.middle": 1.0}
+    assert rebuilt.bindings["my_index"].targets[0].address == "vhi.prediction.index"
+
+
+def test_a_recording_says_which_control_space_format_it_used(tmp_path):
+    """Legible rather than inferred — the reason the format is tagged."""
+    from myogestic.controls import CONTROL_SPACE_FORMAT
+
+    path = _record(tmp_path, names=["my_index", "fist"],
+                   control_space=CONTROL_MAP.as_dict())
+    meta = json.loads((path / "meta.json").read_text())
+    assert meta["control_space"]["format"] == CONTROL_SPACE_FORMAT
 
 
 def test_control_space_is_optional(tmp_path):
@@ -90,20 +108,20 @@ def test_older_archives_without_a_schema_version_still_load():
 
 def test_aligned_windows_can_be_keyed_by_channel_name(tmp_path):
     """The index-free training path: select a target by name, not by position."""
-    path = _record(tmp_path, names=list(CONTROLS.channel_labels()))
+    path = _record(tmp_path, names=["my_index", "fist"])
     windows = list(
         iter_aligned_windows([path], "emg", ["control"], 100, 100, with_names=True)
     )
     assert windows, "expected at least one window"
     _primary, aligned, _ts = windows[0]
-    assert set(aligned["control"]) == {"index.flexion", "grip.force"}
-    assert aligned["control"]["index.flexion"] == pytest.approx(-0.5)
-    assert aligned["control"]["grip.force"] == pytest.approx(0.25)
+    assert set(aligned["control"]) == {"my_index", "fist"}
+    assert aligned["control"]["my_index"] == pytest.approx(-0.5)
+    assert aligned["control"]["fist"] == pytest.approx(0.25)
 
 
 def test_positional_aligned_windows_are_unchanged(tmp_path):
     """Default stays byte-for-byte what every current caller receives."""
-    path = _record(tmp_path, names=list(CONTROLS.channel_labels()))
+    path = _record(tmp_path, names=["my_index", "fist"])
     windows = list(iter_aligned_windows([path], "emg", ["control"], 100, 100))
     _primary, aligned, _ts = windows[0]
     assert isinstance(aligned["control"], np.ndarray)

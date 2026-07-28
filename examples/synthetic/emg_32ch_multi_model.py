@@ -15,11 +15,15 @@ Workflow:
 
 Mirrors `emg_classification.py` but expands to 32 channels and 4 classes, and lets
 you compare classifiers side-by-side without editing the file.
+
+Which hand controls the poses drive is declared in `examples/controls/multi_model.toml`
+— our own alias on the left, the address VHI exports on the right.
 """
 
 import re
 import sys
 import time as _time
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -32,7 +36,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, load_dofs
+from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
@@ -46,7 +50,6 @@ from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import VhiTarget, virtual_hand
-from myogestic.vhi.legacy import LEGACY_POSE_DOFS
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
@@ -73,32 +76,44 @@ vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 output_filter = PostProcessor(hz=32)
 
-# The bus + target own the wire. That matters more than it looks: VHI's continuous
-# inlet now takes *canonical* values, and a build that predates that still wants the
-# old convention. `VhiTarget` asks which one this VHI speaks and encodes accordingly,
-# so pushing a frame built by hand would be right on exactly one of them.
-CONTROLS = load_dofs({"dofs": dict.fromkeys(LEGACY_POSE_DOFS, "continuous")})
-vhi_canonical = vhi.canonical_client()
-vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
-bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
+# Which of this example's outputs drive which of VHI's controls. The left side of the
+# file is ours and the right side is VHI's, so nothing below hard-codes what a control
+# means — the addresses are resolved against a live VHI in `_ensure_vhi`.
+CONTROL_FILE = Path(__file__).resolve().parent.parent / "controls" / "multi_model.toml"
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
 
-# Per-class hand poses, in canonical DOF values: +1 is the direction the name
-# says, 0 is rest. The target turns them into whatever this VHI's wire wants,
-# so no channel index or sign flip appears here.
+#: Our aliases in file order. Poses that move everything (Fist, Open) are built from
+#: this rather than from a second list that could drift out of step with the TOML.
+POSE_ALIASES = tuple(CONTROL_MAP.bindings)
+
+# Both stay None until `_ensure_vhi` — see its docstring. The bus + target own the wire
+# once built, and that matters more than it looks: VHI's continuous inlet now takes
+# *canonical* values, and a build that predates that still wants the old convention.
+# `VhiTarget` asks which one this VHI speaks and encodes accordingly, so pushing a frame
+# built by hand would be right on exactly one of them.
+vhi_canonical = vhi.canonical_client()
+vhi_target = None
+bus = None
+
+# Per-class hand poses, in canonical values keyed by *our* aliases: +1 is the
+# direction the alias names, 0 is rest, and an alias left out of a pose rests.
+# The target turns them into whatever this VHI's wire wants, so no channel index
+# or sign flip appears here.
 #
-# Channel 1 (thumb abduction) used to be written as 0 in a fist. Recorded VHI
-# sessions have it at exactly -1.0 on the wire — full abduction — so a fist
-# abducts the thumb rather than leaving it neutral.
+# `thumb_spread` used to be written as 0 in a fist. Recorded VHI sessions have it
+# at exactly -1.0 on the wire — full abduction — so a fist abducts the thumb
+# rather than leaving it neutral.
 HAND_POSES: dict[int, dict[str, float]] = {
-    0: {},  # Rest — every DOF at 0
-    1: dict.fromkeys(LEGACY_POSE_DOFS, 1.0),  # Fist: everything flexed, thumb abducted
+    0: {},  # Rest — every alias at 0
+    1: dict.fromkeys(POSE_ALIASES, 1.0),  # Fist: everything flexed, thumb abducted
     2: {  # Pinch
-        "thumb.flexion": 0.7,
-        "thumb.abduction": 0.6,
-        "index.flexion": 0.8,
-        "middle.flexion": 0.6,
+        "thumb_curl": 0.7,
+        "thumb_spread": 0.6,
+        "index_curl": 0.8,
+        "middle_curl": 0.6,
     },
-    3: dict.fromkeys(LEGACY_POSE_DOFS, -0.5),  # Open: extended past rest
+    3: dict.fromkeys(POSE_ALIASES, -0.5),  # Open: extended past rest
 }
 
 rms_transform = RMS(window_size=32)
@@ -372,10 +387,12 @@ def predict(model, features):
         proba = None
         class_idx = int(model.predict(x)[0])
 
-    # Canonical values in; the bus sanitises and smooths, and the target encodes for
-    # whichever convention this VHI negotiated.
-    pose = HAND_POSES.get(class_idx, HAND_POSES[0])
-    values = bus.push({**dict.fromkeys(LEGACY_POSE_DOFS, 0.0), **pose})
+    if bus is None:
+        return {"class": class_idx, "proba": proba}  # nothing resolved yet, nothing to command
+
+    # Canonical values in; the bus rests every alias the pose omits, sanitises and
+    # smooths, and the target encodes for whichever convention this VHI negotiated.
+    values = bus.push(HAND_POSES.get(class_idx, HAND_POSES[0]))
     return {"class": class_idx, "proba": proba, "hand": values}
 
 
@@ -390,15 +407,24 @@ grid = Grid(
 
 
 def _ensure_vhi() -> None:
-    """Settle the target's contract, once VHI is actually up.
+    """Resolve the control map once VHI is up and can say what it exports.
 
-    `bind` ran when the bus was constructed — at import, before the user clicks Launch —
-    so VHI did not exist yet and "no answer" could not be read as "old build". Without
-    this the target would keep encoding for the legacy wire, which a v2 VHI renders
-    inverted. Cheap and idempotent once settled.
+    The map cannot be resolved at import: the semantics of every address — number or
+    held state, range, neutral value — come from VHI's manifest, and this app launches
+    VHI itself, so at import there is nobody to ask. Idempotent once resolved.
     """
-    if not vhi_target.negotiate():
-        app.ctx.log("VHI not reachable yet — poses use the legacy encoding until it is")
+    global bus, vhi_target
+    if bus is not None:
+        return
+    capabilities = vhi_canonical.capabilities()
+    if capabilities is None:
+        app.ctx.log("VHI not reachable yet — controls stay unresolved")
+        return
+    controls = resolve(CONTROL_MAP, capabilities)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+    bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
+    app.ctx.control_space = CONTROL_MAP  # recordings record what they were made under
+    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
 
 
 def _on_gesture(i: int) -> None:
@@ -464,7 +490,8 @@ def main() -> None:
         app.run()
     finally:
         # Rest the hand and make that frame land before the outlet's thread dies.
-        bus.stop()
+        if bus is not None:
+            bus.stop()
         vhi_canonical.stop()
 
 
