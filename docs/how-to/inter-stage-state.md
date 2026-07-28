@@ -113,7 +113,7 @@ You often want a side-effect (RPC, audio cue, serial write) to fire only when th
 ```python
 from myogestic.outputs import EdgeTrigger
 
-trigger = EdgeTrigger(callback=vhi_client.set_movement)
+trigger = EdgeTrigger(callback=send_gesture_to_device)
 
 @pipeline.predict
 def predict(model, features):

@@ -16,6 +16,11 @@ you control and hand it to a
 [`ControlBus`](../api/controls.md) with a `VhiTarget`. The target negotiates,
 puts continuous values on LSL, and sends discrete states over gRPC.
 
+!!! tip "Watch it happen first"
+    `uv run --extra grpc python tools/inspect_canonical_control.py` walks the whole
+    path end to end and prints what reaches the wire. It needs no Virtual Hand, and
+    tells you which contract yours speaks if you have one running.
+
 !!! tip "Declare DOFs, don't push channels"
     The rest of this page shows the transport underneath, which is worth
     understanding when something misbehaves. But application code should not

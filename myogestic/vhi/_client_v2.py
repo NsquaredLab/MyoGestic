@@ -123,6 +123,10 @@ class VhiCanonicalClient:
         self._commands: queue.Queue[pb2.SetControlRequest | None] = queue.Queue()
         self._seen_errors: set[tuple[str, str]] = set()
         self.connected = False
+        #: True once a server has answered `Declare` with ``UNIMPLEMENTED``, i.e. it is
+        #: reachable but predates v2. Distinguishing that from "nothing is listening"
+        #: lets a caller stop retrying a build that will never answer differently.
+        self.unimplemented = False
 
         self._running = True
         self._thread = threading.Thread(
@@ -166,9 +170,15 @@ class VhiCanonicalClient:
             )
         except Exception as e:  # noqa: BLE001 - absence is an answer here
             self.connected = False
+            # UNIMPLEMENTED means a server *is* there and does not serve v2 — a settled
+            # fact. Anything else (UNAVAILABLE, a deadline) means we simply have not
+            # reached it yet, which is not settled and worth retrying.
+            code = e.code().name if isinstance(e, grpc.Call) else ""
+            self.unimplemented = code == "UNIMPLEMENTED"
             self._log_failure("declare", e, level=logging.DEBUG)
             return None
         self.connected = True
+        self.unimplemented = False
         self._seen_errors.clear()
         return reply
 
