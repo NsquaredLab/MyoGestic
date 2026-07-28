@@ -37,6 +37,7 @@ from myogestic.outputs import LSLOutlet
 
 if TYPE_CHECKING:
     from myogestic.vhi._client import VhiControlClient
+    from myogestic.vhi._client_v2 import VhiCanonicalClient
 
 
 @dataclass
@@ -133,6 +134,34 @@ class InterfaceSpec:
         from myogestic.vhi._client import VhiControlClient
 
         return VhiControlClient(host=self.grpc_host, port=self.grpc_port)
+
+    def canonical_client(self) -> VhiCanonicalClient:
+        """Construct a client for this interface's **v2** canonical control service.
+
+        Hand it to `myogestic.vhi.VhiTarget` and the target negotiates instead of
+        assuming: it asks VHI which named DOFs it renders, and falls back to the
+        legacy pose when the answer is "I do not speak v2". Without one, the target
+        is legacy-only — correct, but limited to the six DOFs the old wire had and
+        unable to carry discrete state at all.
+
+        Imported lazily for the same reason as `control_client`: a plain install has
+        no ``[grpc]`` extra, and `outlet` / `launcher` must keep working without it.
+
+        Examples
+        --------
+        >>> from myogestic.controls import ControlBus, load_dofs
+        >>> from myogestic.vhi import VhiTarget, virtual_hand
+        >>>
+        >>> vhi = virtual_hand()
+        >>> controls = load_dofs({"dofs": {"index.flexion": "continuous"}})
+        >>> target = VhiTarget(vhi.outlet(), client=vhi.canonical_client())
+        >>> bus = ControlBus(controls, targets=[target])
+        >>> target.negotiated          # True against a v2 VHI, False against an older one
+        False
+        """
+        from myogestic.vhi._client_v2 import VhiCanonicalClient
+
+        return VhiCanonicalClient(host=self.grpc_host, port=self.grpc_port)
 
     def control_outlet(self) -> LSLOutlet:
         """Construct an [`LSLOutlet`][] for streaming a continuous pose to the control hand.

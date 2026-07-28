@@ -107,8 +107,14 @@ PROCESSES = [
 # --8<-- [start:bus]
 # One bus owns the whole output path: substitute rest -> clip -> smooth ->
 # clip again -> hand it to every target. `VhiTarget` is what turns canonical
-# names into the pose VHI renders.
-bus = ControlBus(CONTROLS, targets=[VhiTarget(vhi_outlet)], smoothing=output_filter, hz=32)
+# names into whatever this VHI renders.
+#
+# Passing a canonical client makes the target *ask* rather than assume: against a
+# v2 VHI it negotiates the channel layout by name, and against an older one it
+# falls back to the legacy pose on its own. Nothing below changes either way.
+vhi_canonical = vhi.canonical_client()
+vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
 # --8<-- [end:bus]
 
 app = App("EMG Regression", ui_scale=0.85)
@@ -346,6 +352,7 @@ def main() -> None:
         # and the hand would hold its last commanded position.
         bus.stop()
         vhi_client.stop()
+        vhi_canonical.stop()
 
 
 if __name__ == "__main__":
