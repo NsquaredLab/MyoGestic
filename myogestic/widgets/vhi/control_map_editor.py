@@ -47,12 +47,38 @@ if TYPE_CHECKING:
 #: What a new alias is called before the user renames it. Numbered on collision.
 _NEW_ALIAS = "my_control"
 
+# Layout. Every item here is sized explicitly, because ImGui's default item width is a
+# fraction of the *window* — put two defaults on one line with `same_line` and the row is
+# wider than the window, and widening the window makes the overflow worse rather than
+# better. So: fixed budgets for the small controls, and whatever is left for the one that
+# should grow.
+#: Below this much room for a row, controls stack instead of sitting side by side.
+_STACK_BELOW = 420.0
+#: Item spacing allowance between two controls on one line.
+_GAP = 12.0
+#: Enough room for a weight slider to be draggable rather than a nub.
+_WEIGHT_W = 130.0
+#: The little remove-target button.
+_DROP_W = 26.0
+#: A name field wide enough for a real alias, but never more than half a wide row.
+_NAME_MAX_W = 240.0
+#: A picker wide enough for the longest address there is. Capped, because a control that
+#: grows without limit is not "responsive" — on a 1800 px window it became a 1000 px
+#: dropdown holding a 20-character name, which reads as a layout mistake and puts the
+#: weight beside it a screen away from the control it belongs to.
+_PICKER_MAX_W = 380.0
+
 _HEADER = (
     "Written by MyoGestic's control-map editor.\n"
     "This file is the source of truth — edit it here or by hand, whichever suits.\n"
     "  left  = your name for a model output, anything you like\n"
     "  right = a control the target declares (it owns the kind, range and states)"
 )
+
+
+def _label_w(label: str) -> float:
+    """How much room a widget's trailing label needs, including its spacing."""
+    return imgui.calc_text_size(label).x + _GAP
 
 
 class ControlMapEditor:
@@ -270,36 +296,51 @@ class ControlMapEditor:
         panel_header(self._title)
         saved = False
 
-        if imgui.button("Connect"):
-            self._connect()
-        imgui.same_line()
+        # The four actions, wrapped rather than truncated: on a narrow panel they run
+        # onto a second line instead of the last one falling off the edge. These are the
+        # controls a user cannot do without, so they come first and they always fit.
         can_save = not self.problems()
-        imgui.begin_disabled(not can_save)
-        if imgui.button("Save"):
-            saved = self.save()
-        imgui.end_disabled()
-        imgui.same_line()
-        if imgui.button("Reload"):
-            self.load()
-        imgui.same_line()
-        if imgui.button("Add control"):
-            self.add_control()
+        for index, (label, handler, disabled) in enumerate(
+            (
+                ("Connect", self._connect, False),
+                ("Save", None, not can_save),
+                ("Reload", self.load, False),
+                ("Add control", self.add_control, False),
+            )
+        ):
+            if index and self._room_for(imgui.calc_text_size(label).x + 24.0):
+                imgui.same_line()
+            imgui.begin_disabled(disabled)
+            if imgui.button(label):
+                if label == "Save":
+                    saved = self.save()
+                else:
+                    handler()
+            imgui.end_disabled()
 
-        imgui.text_colored(muted(), str(self._path))
+        # `text_wrapped` throughout: a path or a refusal is as long as it is, and on a
+        # narrow panel an unwrapped line is simply cut off mid-word.
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.text_wrapped(str(self._path))
+        imgui.pop_style_color()
         if self._capabilities:
-            imgui.text_colored(
-                SUCCESS, f"{len(self._capabilities)} controls available from the target"
+            colour, note = SUCCESS, (
+                f"{len(self._capabilities)} controls available from the target"
             )
         else:
-            imgui.text_colored(
-                WARNING,
+            colour, note = WARNING, (
                 "Not connected — press Connect to list what the target exports. "
-                "Until then a control has to be typed and cannot be checked.",
+                "Until then a control has to be typed and cannot be checked."
             )
-        if self._error:
-            imgui.text_colored(DANGER, self._error)
-        elif self._message:
-            imgui.text_colored(muted(), self._message)
+        imgui.push_style_color(imgui.Col_.text, colour)
+        imgui.text_wrapped(note)
+        imgui.pop_style_color()
+        if self._error or self._message:
+            imgui.push_style_color(
+                imgui.Col_.text, DANGER if self._error else muted()
+            )
+            imgui.text_wrapped(self._error or self._message)
+            imgui.pop_style_color()
 
         imgui.separator()
         for index, entry in enumerate(list(self._draft)):
@@ -310,7 +351,8 @@ class ControlMapEditor:
             imgui.separator()
             imgui.text_colored(DANGER, "Cannot save yet:")
             for problem in problems:
-                imgui.bullet_text(problem)
+                imgui.bullet()
+                imgui.text_wrapped(problem)
         return saved
 
     def _connect(self) -> None:
@@ -327,50 +369,108 @@ class ControlMapEditor:
     def _entry_ui(self, index: int, entry: dict[str, Any]) -> None:
         """One control: its name, its targets, its gates."""
         imgui.push_id(f"dof{index}")
+        avail = imgui.get_content_region_avail().x
+        stacked = avail < _STACK_BELOW
+
+        buttons = (
+            _label_w("Add target") + _label_w("Remove") + 24.0 if not stacked else 0.0
+        )
+        imgui.set_next_item_width(
+            min(_NAME_MAX_W, max(90.0, avail - _label_w("name") - buttons))
+        )
         changed, alias = imgui.input_text("name", entry["alias"])
         if changed:
             entry["alias"] = alias
+        if not stacked:
+            imgui.same_line()
+        if imgui.button("Add target"):
+            entry["targets"].append(["", 1.0])
         imgui.same_line()
         if imgui.button("Remove"):
             self._draft.remove(entry)
             imgui.pop_id()
             return
-        imgui.same_line()
-        if imgui.button("Add target"):
-            entry["targets"].append(["", 1.0])
 
+        dropped = None
         for slot, pair in enumerate(list(entry["targets"])):
             imgui.push_id(f"t{slot}")
             imgui.indent()
-            self._picker(pair)
-            imgui.same_line()
-            # -1..1 rather than 0..1: a signed target can take a negative weight, and a
-            # slider that cannot reach one would make a valid file unsavable.
-            changed, weight = imgui.slider_float("weight", pair[1], -1.0, 1.0)
-            if changed:
-                pair[1] = round(weight, 2)
-            imgui.same_line()
-            if imgui.button("x") and len(entry["targets"]) > 1:
-                entry["targets"].remove(pair)
-            elif slot > 0 and imgui.is_item_hovered():
-                imgui.set_tooltip("Remove this target")
+            if self._target_ui(pair, drop=len(entry["targets"]) > 1):
+                dropped = pair
             imgui.unindent()
             imgui.pop_id()
+        if dropped is not None:
+            # Removed after the loop, never during it: mutating the list mid-iteration
+            # shifts every later row's ImGui id, which moves keyboard focus and can
+            # discard a half-typed name.
+            entry["targets"].remove(dropped)
 
         self._gates_ui(entry)
         imgui.separator()
         imgui.pop_id()
 
-    def _picker(self, pair: list[Any]) -> None:
+    @staticmethod
+    def _room_for(needed: float) -> bool:
+        """Whether `needed` more pixels fit on the current line."""
+        return imgui.get_content_region_avail().x >= needed
+
+    def _target_ui(self, pair: list[Any], *, drop: bool) -> bool:
+        """One route: which control, at what weight, and a way to remove it.
+
+        Wide enough and it is one line, with the picker taking the slack. Narrow and the
+        weight moves below it — a row that would not fit is reflowed rather than clipped,
+        because a weight slider pushed off the edge cannot be dragged at all.
+
+        Returns whether this target should be removed.
+        """
+        avail = imgui.get_content_region_avail().x
+        stacked = avail < _STACK_BELOW
+        # A label is drawn *after* its widget and is not part of `set_next_item_width`, so
+        # every label on the row has to be reserved too. Forgetting them is what left this
+        # overflowing by a constant ~80 px at every width once the widgets themselves fit.
+        # -1..1 rather than 0..1: a signed target can take a negative weight, and a
+        # slider that cannot reach one would make a valid file unsavable.
+        reserved = (
+            0.0
+            if stacked
+            else (
+                _WEIGHT_W
+                + _label_w("weight")
+                + (_DROP_W + _GAP if drop else 0.0)
+                + _GAP * 2
+            )
+        )
+        self._picker(
+            pair,
+            width=min(_PICKER_MAX_W, max(120.0, avail - reserved - _label_w("control"))),
+        )
+
+        if not stacked:
+            imgui.same_line()
+        imgui.set_next_item_width(_WEIGHT_W)
+        changed, weight = imgui.slider_float("weight", pair[1], -1.0, 1.0)
+        if changed:
+            pair[1] = round(weight, 2)
+        if not drop:
+            return False
+        imgui.same_line()
+        clicked = imgui.button("x")
+        if not clicked and imgui.is_item_hovered():
+            imgui.set_tooltip("Remove this target")
+        return clicked
+
+    def _picker(self, pair: list[Any], *, width: float) -> None:
         """Choose a control from what the target exports, or type one when offline."""
         address = pair[0]
+        imgui.set_next_item_width(width)
         if not self._capabilities:
             changed, typed = imgui.input_text("control", address)
             if changed:
                 pair[0] = typed
             return
-        label = address or "choose a control..."
+        label = self._short(address) if address else "choose a control..."
         if imgui.begin_combo("control", label):
+            imgui.set_next_item_width(-1)
             changed, self._filter = imgui.input_text("search", self._filter)
             for cap in self._capabilities:
                 if self._filter and self._filter.lower() not in cap.address.lower():
@@ -379,17 +479,22 @@ class ControlMapEditor:
                 if selected:
                     pair[0] = cap.address
             imgui.end_combo()
+        # The full address and what the target declared about it: a tooltip rather than
+        # a trailing label, so a long address cannot widen the row it sits in. An
+        # advanced reader still gets it; a first-time one is not made to read it.
         cap = next((c for c in self._capabilities if c.address == address), None)
-        if cap is not None:
-            imgui.same_line()
-            imgui.text_colored(muted(), self._summary(cap))
+        if cap is not None and imgui.is_item_hovered():
+            imgui.set_tooltip(f"{cap.address}\n{self._summary(cap)}")
+
+    @staticmethod
+    def _short(address: str) -> str:
+        """The last two segments, which read like a name ("index.flexion")."""
+        return ".".join(address.split(".")[-2:])
 
     @staticmethod
     def _describe(cap: Capability) -> str:
         """A capability as a line someone can choose from without knowing gRPC."""
-        # The last two segments read like a name ("index.flexion"); the full address is
-        # still there for anyone who wants it.
-        short = ".".join(cap.address.split(".")[-2:])
+        short = ControlMapEditor._short(cap.address)
         if cap.kind == "continuous":
             return f"{short}   [{cap.lo:+.0f}..{cap.hi:+.0f}]   {cap.address}"
         return f"{short}   {len(cap.states)} states   {cap.address}"
@@ -408,7 +513,9 @@ class ControlMapEditor:
         """`threshold_fraction` and `debounce_s`, in plain words."""
         imgui.indent()
         gated = entry["threshold_fraction"] is not None
-        changed, gated = imgui.checkbox("this output is a classifier probability", gated)
+        # A short label, with the explanation in the tooltip: a long checkbox label is
+        # the one thing in ImGui that cannot wrap.
+        changed, gated = imgui.checkbox("classifier probability", gated)
         if changed:
             entry["threshold_fraction"] = 0.5 if gated else None
         if imgui.is_item_hovered():
@@ -418,12 +525,14 @@ class ControlMapEditor:
                 "then travels the same weighted path a regressor's value does."
             )
         if entry["threshold_fraction"] is not None:
+            imgui.set_next_item_width(_WEIGHT_W)
             changed, fraction = imgui.slider_float(
                 "on at or above", float(entry["threshold_fraction"]), 0.0, 1.0
             )
             if changed:
                 entry["threshold_fraction"] = round(fraction, 2)
 
+        imgui.set_next_item_width(_WEIGHT_W)
         changed, debounce = imgui.slider_float("hold for (s)", entry["debounce_s"], 0.0, 1.0)
         if changed:
             entry["debounce_s"] = round(debounce, 2)

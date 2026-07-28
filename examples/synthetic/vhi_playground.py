@@ -56,11 +56,38 @@ logo = AppLogo()
 
 LOGO_CELL_W = 260
 WORDMARK_ASPECT = 800 / 540
-grid = Grid(
+LOGO_H = Px(LOGO_CELL_W / WORDMARK_ASPECT)
+
+# Two layouts, picked per frame from the window's actual width. A Grid's Fr tracks already
+# stretch, but the *number* of columns and their proportions are fixed at construction —
+# and a 50/50 split is the wrong answer at both ends: at 700 px each half is too narrow
+# for the editor's rows, and at 2000 px the sliders get a thousand pixels they have no use
+# for. So: stacked below the breakpoint, and a fixed-width control column beside a
+# stretching editor above it.
+#
+# `Px` for the control column rather than `Fr` is the point — the sliders need a usable
+# width, not a proportional one, so every pixel the window gains goes to the editor, which
+# is the part that can use it.
+STACK_BELOW = 900.0
+CONTROLS_W = 420.0
+
+WIDE = Grid(
     3,
     2,
-    row_height=[Px(LOGO_CELL_W / WORDMARK_ASPECT), Px(90), Fr(1)],
-    col_width=[Fr(1), Fr(1)],
+    row_height=[LOGO_H, Px(90), Fr(1)],
+    col_width=[Px(CONTROLS_W), Fr(1)],
+)
+NARROW = Grid(
+    4,
+    1,
+    # A shorter wordmark than the wide layout gets: on a narrow window the logo, the
+    # launcher and an unconnected slider panel filled better than half the height before
+    # any content appeared, and the logo is the only one of the three that is decoration.
+    # The editor gets twice the leftover height, because it is the part that has rows to
+    # show: an even split left it cut off mid-row while the slider panel above it — often
+    # empty, since it has nothing to show until Connect — sat on half the window.
+    row_height=[Px(90), Px(90), Fr(1), Fr(2)],
+    col_width=[Fr(1)],
 )
 
 
@@ -103,7 +130,11 @@ def _connect() -> None:
 
 @app.ui
 def playground_ui(ctx):
-    """Sliders on the left, the editor on the right."""
+    """Sliders and the editor: side by side when there is room, stacked when not."""
+    wide = imgui.get_content_region_avail().x >= STACK_BELOW
+    grid = WIDE if wide else NARROW
+    editor_cell = grid[0:3, 1] if wide else grid[3, 0]
+
     with grid[0, 0]:
         logo.ui()
 
@@ -114,35 +145,65 @@ def playground_ui(ctx):
         panel_header("DRIVE THE HAND")
         if imgui.button("Connect / Reload"):
             _connect()
-        imgui.same_line()
-        imgui.text_colored(muted(), str(CONTROL_FILE.name))
+        if imgui.get_content_region_avail().x >= 160.0:
+            imgui.same_line()
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.text_wrapped(CONTROL_FILE.name)
+        imgui.pop_style_color()
 
         if failure:
             imgui.text_colored(DANGER, "Refused:")
             imgui.text_wrapped(failure)
         else:
-            imgui.text_colored(SUCCESS if bus is not None else muted(), status)
+            imgui.push_style_color(
+                imgui.Col_.text, SUCCESS if bus is not None else muted()
+            )
+            imgui.text_wrapped(status)
+            imgui.pop_style_color()
 
-        if bus is None:
-            return
-        changed = False
-        for alias in levels:
-            edited, levels[alias] = imgui.slider_float(alias, levels[alias], -1.0, 1.0)
-            changed = changed or edited
-        if imgui.button("Rest"):
-            levels.update(dict.fromkeys(levels, 0.0))
-            changed = True
-        if changed:
-            bus.push(levels)
+        if bus is not None:
+            _sliders_ui()
 
-    with grid[0:3, 1]:
+    with editor_cell:
         # The editor writes the same file the sliders were built from, so a save is a
         # reason to rebuild them.
         if editor.ui():
             _connect()
         imgui.separator()
         panel_header("WHAT VHI WOULD MAKE OF IT")
+        # Wrapped at the cell edge: a fan-out summary is a long line, and unwrapped it
+        # would be the one thing that still overflowed a narrow column.
+        imgui.push_text_wrap_pos(0.0)
         imgui.text_unformatted(editor.resolved_summary())
+        imgui.pop_text_wrap_pos()
+
+
+def _sliders_ui() -> None:
+    """One slider per control in the file, sized to the column it is in.
+
+    A slider is the one control here that must not be squeezed: a 60-pixel one cannot be
+    dragged to a useful value. So the label goes *above* it on a narrow column rather
+    than beside it, which buys back the label's width for the track itself.
+    """
+    assert bus is not None
+    avail = imgui.get_content_region_avail().x
+    inline = avail >= 260.0
+    changed = False
+    for alias in levels:
+        if not inline:
+            imgui.text_unformatted(alias)
+        imgui.set_next_item_width(
+            avail - (imgui.calc_text_size(alias).x + 12.0 if inline else 0.0)
+        )
+        edited, levels[alias] = imgui.slider_float(
+            alias if inline else f"##{alias}", levels[alias], -1.0, 1.0
+        )
+        changed = changed or edited
+    if imgui.button("Rest"):
+        levels.update(dict.fromkeys(levels, 0.0))
+        changed = True
+    if changed:
+        bus.push(levels)
 
 
 def main() -> None:
