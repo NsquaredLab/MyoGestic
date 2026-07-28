@@ -19,12 +19,24 @@ uv run python examples/synthetic/<name>.py
 
 ### From VS Code
 
-`.vscode/launch.json` is committed, so **Run and Debug** lists every example on this
-page, the walkthrough, and the VHI prerequisites by name — with the extras synced by a
-`preLaunchTask` first, so a fresh clone works on the first press of F5. The entries say
-which need a display, which need a running Virtual Hand, and which need someone watching
-the hand. Read the comments at the top of the file for the one thing worth knowing in
-advance: the installed VHI release is pre-v2, so a v2 manifest needs source-mode.
+`.vscode/launch.json` is committed, so **Run and Debug** works without setting anything
+up. It is written for **your own files first**:
+
+* Open your app's `.py` and pick **Run current MyoGestic app** — or **Debug current
+  MyoGestic app** to stop on breakpoints.
+* Open your control map's `.toml` and pick **Inspect a TOML control map** — it validates
+  the file, resolves it against a running target if there is one, and prints every alias,
+  group member, weight and gate.
+
+Your files do not have to live in this repository. The interpreter comes from this
+checkout's `.venv`; the working directory follows your file, so a control map beside your
+app resolves the way it does when you run it by hand. The only requirement is that this
+folder is the one open in VS Code, since that is where VS Code reads a `launch.json`
+from.
+
+The entries below those are conveniences for this repository's own examples, the
+walkthrough and the VHI prerequisites. Each name says what it needs — a display, a
+running Virtual Hand, or someone watching the hand.
 
 ## The control file
 

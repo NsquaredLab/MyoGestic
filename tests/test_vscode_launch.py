@@ -77,12 +77,20 @@ def _configs(launch) -> list[dict]:
     return launch["configurations"]
 
 
-def test_every_program_path_exists(launch):
-    """The failure a rename causes, caught here instead of at F5."""
+VARIABLE = re.compile(r"\$\{(file|fileDirname|input:[A-Za-z]+)\}")
+
+
+def test_every_fixed_program_path_exists(launch):
+    """The failure a rename causes, caught here instead of at F5.
+
+    `${file}` entries are exempt by design — they launch whatever the user has open,
+    which is the whole point of them.
+    """
     for config in _configs(launch):
-        if "program" not in config:
+        program = config.get("program")
+        if program is None or VARIABLE.search(program):
             continue
-        target = _resolve(config["program"])
+        target = _resolve(program)
         assert target.is_file(), f"{config['name']}: {target} does not exist"
 
 
@@ -119,14 +127,40 @@ def test_every_referenced_task_exists(launch, tasks):
 
 
 def test_every_configuration_uses_the_projects_interpreter(launch):
-    """`uv run` cannot host a debugger, so the venv interpreter is the contract."""
-    expected = "${workspaceFolder}/.venv/bin/python"
+    """`uv run` cannot host a debugger, so the venv interpreter is the contract.
+
+    It must be *this* project's venv even for a user's own file kept elsewhere: that is
+    what makes `${file}` work against this checkout without the user installing anything.
+    """
+    posix = "${workspaceFolder}/.venv/bin/python"
+    windows = "${workspaceFolder}\\.venv\\Scripts\\python.exe"
     for config in _configs(launch):
-        assert config.get("python") == expected, f"{config['name']}: wrong interpreter"
-        assert config.get("cwd") == "${workspaceFolder}", (
-            f"{config['name']}: needs an explicit cwd — examples create `sessions/` "
-            f"relative to it, so a different cwd scatters recordings"
+        assert config.get("python") == posix, f"{config['name']}: wrong interpreter"
+        # A committed file is used on Windows too, where that path does not exist.
+        assert config.get("windows", {}).get("python") == windows, (
+            f"{config['name']}: no Windows interpreter override"
         )
+
+
+def test_a_cwd_is_always_set_and_follows_the_right_thing(launch):
+    """Never inherited: relative paths inside an app depend on it.
+
+    A user's own file gets `${fileDirname}`, so a control map beside it resolves the way
+    it does when they run it by hand. A repository entry gets the workspace, because the
+    examples create `sessions/` relative to cwd.
+    """
+    for config in _configs(launch):
+        cwd = config.get("cwd")
+        assert cwd in {"${workspaceFolder}", "${fileDirname}"}, (
+            f"{config['name']}: cwd is {cwd!r}"
+        )
+        program = config.get("program", "")
+        if "${file}" in program or "inspect_control_map" in program:
+            assert cwd == "${fileDirname}", (
+                f"{config['name']}: a generic entry must follow the user's file"
+            )
+        elif "/examples/" in program:
+            assert cwd == "${workspaceFolder}", f"{config['name']}: wrong cwd"
 
 
 def test_the_sync_tasks_install_without_pruning(tasks):
@@ -161,7 +195,7 @@ def test_every_control_file_is_reachable_from_a_configuration(launch):
     sources = "\n".join(
         _resolve(config["program"]).read_text()
         for config in _configs(launch)
-        if "program" in config
+        if "program" in config and not VARIABLE.search(config["program"])
     )
     for control_file in sorted((ROOT / "examples" / "controls").glob("*.toml")):
         assert control_file.name in sources, (
@@ -232,3 +266,78 @@ class TestTheWalkthroughSaysWhichVhiProblemItHit:
         out = self._run(False, capsys)
         assert "No target answered" in out
         assert "pre-v2" not in out
+
+
+class TestTheGenericEntriesComeFirstAndWork:
+    """The primary workflow is a user's *own* file, not this repository's examples.
+
+    That is a product decision, so it is pinned: the entries that launch `${file}` must
+    exist, must be first in the picker, and must not be crowded out by example entries
+    that only demonstrate something.
+    """
+
+    @pytest.fixture(scope="class")
+    def configs(self) -> list[dict]:
+        return _read_jsonc(LAUNCH)["configurations"]
+
+    def test_a_run_and_a_debug_entry_both_launch_the_open_file(self, configs):
+        generic = [c for c in configs if c.get("program") == "${file}"]
+        names = [c["name"] for c in generic]
+        assert len(generic) == 2, f"expected a Run and a Debug entry, got {names}"
+        assert any(c.get("noDebug") for c in generic), "one must run without debugging"
+        assert any(not c.get("noDebug") for c in generic), "one must run under it"
+
+    def test_the_debug_entry_steps_into_myogestic(self, configs):
+        debug = next(
+            c for c in configs if c.get("program") == "${file}" and not c.get("noDebug")
+        )
+        assert debug.get("justMyCode") is False, (
+            "resolving a control map happens inside the library; stepping has to reach it"
+        )
+
+    def test_the_generic_entries_are_the_first_thing_in_the_picker(self, configs):
+        """VS Code orders by presentation group, so the group prefix is the ordering."""
+        groups = [c.get("presentation", {}).get("group", "") for c in configs]
+        assert all(groups), "every entry needs a presentation group or ordering is a toss-up"
+        first = min(groups)
+        for config, group in zip(configs, groups, strict=True):
+            if group == first:
+                assert "${file}" in str(config.get("program", "")) or "inspect_control_map" in str(
+                    config.get("program", "")
+                ), f"{config['name']} is in the first group but is not for the user's own files"
+
+    def test_the_examples_are_marked_as_the_optional_ones(self, configs):
+        """A name is what a user reads in the picker; 'Example:' says what it is."""
+        for config in configs:
+            program = config.get("program", "")
+            if "/examples/" in program:
+                assert config["name"].startswith("Example:"), config["name"]
+
+    def test_every_input_reference_is_declared(self):
+        """An undeclared ${input:...} fails the launch with a variable-resolution error."""
+        launch = _read_jsonc(LAUNCH)
+        declared = {entry["id"] for entry in launch.get("inputs", [])}
+        referenced = set(re.findall(r"\$\{input:([A-Za-z0-9_]+)\}", LAUNCH.read_text()))
+        assert referenced, "the prompt entry is gone"
+        assert referenced <= declared, f"undeclared inputs: {referenced - declared}"
+
+    def test_no_input_default_relies_on_an_unexpanded_variable(self):
+        """VS Code does not substitute into an input's default, so `${file}` there would
+        be offered to the user literally."""
+        for entry in _read_jsonc(LAUNCH).get("inputs", []):
+            assert "${" not in entry.get("default", ""), entry["id"]
+
+    def test_the_inspector_the_entries_point_at_takes_a_path(self):
+        """The generic inspector must accept an arbitrary path, or the entries lie."""
+        import subprocess  # noqa: PLC0415
+
+        tool = ROOT / "tools" / "inspect_control_map.py"
+        assert tool.is_file()
+        result = subprocess.run(
+            [str(ROOT / ".venv" / "bin" / "python"), str(tool), "--help"],
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "path" in result.stdout, "no positional path argument"

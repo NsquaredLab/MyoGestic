@@ -1,38 +1,128 @@
 {
-  // Run and Debug entries for the control standard: the walkthrough, every example
-  // backed by a file in examples/controls/, and the VHI prerequisites they need.
+  // Run and Debug for MyoGestic.
   //
-  // Each entry runs `.venv/bin/python` after a `uv sync` preLaunchTask, so the extras
-  // are present without anyone reconstructing a command line. See .vscode/tasks.json.
+  // START HERE — the first three entries are for *your* files, not this repository's:
   //
-  // Which entries need what:
-  //   - the six EMG examples open a window and launch VHI + the EMG generator from
-  //     their own buttons, so they need a display but no prerequisite configuration;
-  //   - "Walkthrough" and "Rig check" have no UI, so start "Prerequisite: Virtual
-  //     Hand" first (the walkthrough also runs without it, and says so);
-  //   - "Rig check" additionally needs a person watching the hand and answering.
+  //   1. Open your MyoGestic app .py and pick "Run current MyoGestic app" (or
+  //      "Debug current MyoGestic app" to stop on breakpoints).
+  //   2. Open — or name — your control map .toml and pick "Inspect a TOML control map".
   //
-  // Which VHI you get, and why it matters. The prerequisite launches whatever
-  // `install_vhi` fetched — currently a 1.x release, which exports no control manifest.
-  // Against that build an application still works (VhiTarget falls back to the legacy
-  // pose, all-or-nothing), but there is no vocabulary to resolve against, so the
-  // walkthrough stops after step 2 and says so. For steps 3 to 5, and for anything
-  // reading `vhi.prediction.*` / `vhi.control.*` by address, run a v2 build from source:
-  // set VHI_PATH and GODOT_BIN in the prerequisite's env block below.
+  // Your file does not have to live in this repository. The interpreter comes from
+  // ${workspaceFolder}/.venv (MyoGestic's), while the working directory follows your
+  // file, so an app kept anywhere on disk runs against this checkout. The one
+  // requirement is that MyoGestic is the folder open in VS Code — a launch.json is only
+  // read from the open workspace. If your project has its own folder open instead, add
+  // this checkout to the workspace, or copy these three entries into your own
+  // .vscode/launch.json and change ${workspaceFolder} to point here.
+  //
+  // Everything below the first three is an optional convenience: this repository's own
+  // examples and the prerequisites they need. They are handy for seeing a working
+  // reference, and irrelevant to running your own code.
+  //
+  // What needs what: the example apps open a window and launch VHI + the EMG generator
+  // from their own buttons. "Walkthrough" and "Rig check" have no UI, so start
+  // "Prerequisite: Virtual Hand" first; the rig check additionally needs a person
+  // watching the hand. Both control-map inspectors run fine with nothing else up and
+  // say what they could not check.
+  //
+  // Which VHI you get: the prerequisite launches whatever `install_vhi` fetched —
+  // currently a 1.x release, which exports no control manifest. Against that build an
+  // application still works (VhiTarget falls back to the legacy pose, all-or-nothing),
+  // but there is no vocabulary to resolve against, so anything that resolves an address
+  // needs a v2 build: set VHI_PATH and GODOT_BIN in the prerequisite's env block.
   "version": "0.2.0",
+  "inputs": [
+    {
+      // Deliberately no default: VS Code does not expand ${file} inside an input, so a
+      // default of "${file}" would be offered literally. Use the sibling entry, which
+      // passes the open file directly, when that is what you want.
+      "id": "controlMapPath",
+      "type": "promptString",
+      "description": "Path to a TOML control map (absolute, or relative to the open file)"
+    }
+  ],
   "configurations": [
     {
-      "name": "Walkthrough: inspect the control standard",
+      "name": "Run current MyoGestic app",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
+      // Your file's own directory, so relative paths in your app — a control map beside
+      // it, a sessions/ folder, a model on disk — mean what they do when you run it by
+      // hand from there.
+      "cwd": "${fileDirname}",
+      "console": "integratedTerminal",
+      "noDebug": true,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "1-your-code", "order": 1 }
+    },
+    {
+      "name": "Debug current MyoGestic app",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
+      "cwd": "${fileDirname}",
+      "console": "integratedTerminal",
+      // Step into MyoGestic itself, not only your own frames — where a control map is
+      // resolved and a frame is encoded is usually what you want to watch.
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "1-your-code", "order": 2 }
+    },
+    {
+      // The TOML you have open. Validates it, then resolves it against a target's
+      // manifest if one is reachable, and says what it could not check if not.
+      "name": "Inspect a TOML control map",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/inspect_control_map.py",
+      "args": ["${file}"],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
+      "cwd": "${fileDirname}",
+      "console": "integratedTerminal",
+      "noDebug": true,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "1-your-code", "order": 3 }
+    },
+    {
+      // The same, for a file you are not looking at. Relative paths resolve against the
+      // directory of the open file, so an absolute path is the unambiguous choice.
+      "name": "Inspect a TOML control map (type a path)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/inspect_control_map.py",
+      "args": ["${input:controlMapPath}"],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
+      "cwd": "${fileDirname}",
+      "console": "integratedTerminal",
+      "noDebug": true,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "1-your-code", "order": 4 }
+    },
+
+    {
+      "name": "Reference: walkthrough of the control standard",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/tools/inspect_canonical_control.py",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (grpc only)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "1-walkthrough", "order": 1 }
+      "presentation": { "group": "2-reference", "order": 1 }
     },
 
     {
@@ -41,12 +131,13 @@
       "request": "launch",
       "program": "${workspaceFolder}/examples/synthetic/emg_regression.py",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (examples + grpc)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "2-examples", "order": 1 }
+      "presentation": { "group": "3-examples", "order": 1 }
     },
     {
       "name": "Example: EMG regression, RaulNet → VHI",
@@ -54,12 +145,13 @@
       "request": "launch",
       "program": "${workspaceFolder}/examples/synthetic/emg_regression_raulnet.py",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (examples + grpc)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "2-examples", "order": 2 }
+      "presentation": { "group": "3-examples", "order": 2 }
     },
     {
       "name": "Example: EMG classification → VHI",
@@ -67,12 +159,13 @@
       "request": "launch",
       "program": "${workspaceFolder}/examples/synthetic/emg_classification.py",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (examples + grpc)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "2-examples", "order": 3 }
+      "presentation": { "group": "3-examples", "order": 3 }
     },
     {
       "name": "Example: EMG classification, discrete over gRPC → VHI",
@@ -80,12 +173,13 @@
       "request": "launch",
       "program": "${workspaceFolder}/examples/synthetic/emg_classification_grpc.py",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (examples + grpc)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "2-examples", "order": 4 }
+      "presentation": { "group": "3-examples", "order": 4 }
     },
     {
       "name": "Example: 32-channel multi-model → VHI",
@@ -93,12 +187,13 @@
       "request": "launch",
       "program": "${workspaceFolder}/examples/synthetic/emg_32ch_multi_model.py",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (examples + grpc)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "2-examples", "order": 5 }
+      "presentation": { "group": "3-examples", "order": 5 }
     },
     {
       "name": "Example: pop-out layout → VHI",
@@ -106,12 +201,13 @@
       "request": "launch",
       "program": "${workspaceFolder}/examples/synthetic/emg_popout_layout.py",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (examples + grpc)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "2-examples", "order": 6 }
+      "presentation": { "group": "3-examples", "order": 6 }
     },
     {
       "name": "Example: control hand, operator pose → VHI",
@@ -119,12 +215,13 @@
       "request": "launch",
       "program": "${workspaceFolder}/examples/synthetic/vhi_control_hand.py",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (grpc only)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "2-examples", "order": 7 }
+      "presentation": { "group": "3-examples", "order": 7 }
     },
 
     {
@@ -133,6 +230,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/tools/launch_vhi.py",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
@@ -144,7 +242,7 @@
         // "VHI_PATH": "${workspaceFolder}/../Virtual-Hand-Interface",
         // "GODOT_BIN": "/Applications/Godot.app/Contents/MacOS/Godot"
       },
-      "presentation": { "group": "3-prerequisites", "order": 1 }
+      "presentation": { "group": "4-prerequisites", "order": 1 }
     },
     {
       "name": "Prerequisite: install the Virtual Hand (one-time)",
@@ -152,12 +250,13 @@
       "request": "launch",
       "module": "myogestic.tools.install_vhi",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (grpc only)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "3-prerequisites", "order": 2 }
+      "presentation": { "group": "4-prerequisites", "order": 2 }
     },
     {
       "name": "Prerequisite: synthetic EMG generator (leave running)",
@@ -175,12 +274,13 @@
         "EMG_Control"
       ],
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (grpc only)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "3-prerequisites", "order": 3 }
+      "presentation": { "group": "4-prerequisites", "order": 3 }
     },
 
     {
@@ -189,12 +289,13 @@
       "request": "launch",
       "program": "${workspaceFolder}/tools/check_vhi_bridge.py",
       "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false,
       "preLaunchTask": "uv: sync (grpc only)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "4-checks", "order": 1 }
+      "presentation": { "group": "5-checks", "order": 1 }
     }
   ],
   "compounds": [
@@ -204,13 +305,13 @@
       // walkthrough reports that no target answered, run it again from its own entry;
       // and the manifest needs a v2 build, so configure source-mode above or the
       // walkthrough will stop at step 2 and tell you why.
-      "name": "Virtual Hand + walkthrough",
+      "name": "Reference: Virtual Hand + walkthrough",
       "configurations": [
         "Prerequisite: Virtual Hand (leave running)",
-        "Walkthrough: inspect the control standard"
+        "Reference: walkthrough of the control standard"
       ],
       "stopAll": true,
-      "presentation": { "group": "5-compounds", "order": 1 }
+      "presentation": { "group": "6-compounds", "order": 1 }
     }
   ]
 }
