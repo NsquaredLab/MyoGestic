@@ -6,9 +6,13 @@ right asset for the host OS/arch, downloads it, unpacks it into the location
 ``virtual_hand()`` looks at, and drops a ``vhi-version.txt`` marker so a
 later install knows what's already there.
 
+MyoGestic 2.x drives VHI over the **v2 control contract** and has no fallback: it asks
+the renderer what it exports and refuses to guess. A pre-2.0 release cannot answer that,
+so this refuses to install one — see `MIN_VHI_TAG`.
+
 Usage:
     python -m myogestic.tools.install_vhi                # latest, default dest
-    python -m myogestic.tools.install_vhi --tag v1.0.0   # pinned version
+    python -m myogestic.tools.install_vhi --tag v2.0.0   # pinned version
     python -m myogestic.tools.install_vhi --dest /custom/path
     python -m myogestic.tools.install_vhi --force        # reinstall over existing
 
@@ -40,6 +44,12 @@ from typing import Annotated
 import typer
 
 REPO = "NsquaredLab/MyoGestic-VHI"
+
+#: The oldest VHI this MyoGestic can drive. Below it there is no control manifest to
+#: negotiate against, and the v1 bridge that used to paper over that is gone — so an
+#: older install is not "degraded", it does not work at all. Installing one would put a
+#: binary on disk that every launch then refuses, which is a worse failure than this one.
+MIN_VHI_TAG = "v2.0.0"
 
 # (system, machine) → release asset. Darwin/x86_64 is deliberately absent:
 # only an arm64 macOS build is shipped, and Rosetta translates x86_64 → arm64,
@@ -97,6 +107,67 @@ def _download_url(tag: str, asset: str) -> str:
     if tag == "latest":
         return f"https://github.com/{REPO}/releases/latest/download/{asset}"
     return f"https://github.com/{REPO}/releases/download/{tag}/{asset}"
+
+
+def _version_of(tag: str) -> tuple[int, ...] | None:
+    """The numeric part of a release tag, or None if it is not a version at all."""
+    cleaned = tag.lstrip("vV").split("-")[0].split("+")[0]
+    parts = cleaned.split(".")
+    if not parts or not all(part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)
+
+
+def _resolve_latest_tag() -> str | None:
+    """Ask GitHub which release ``latest`` currently points at."""
+    url = f"https://api.github.com/repos/{REPO}/releases/latest"
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+    try:
+        with urllib.request.urlopen(req) as response:
+            return json.load(response).get("tag_name") or None
+    except (urllib.error.URLError, json.JSONDecodeError):
+        return None
+
+
+def _check_supported(tag: str) -> str:
+    """Refuse a release too old to speak v2. Returns the resolved tag.
+
+    Checked *before* the download, because the failure this prevents is silent: an old
+    binary installs perfectly happily and then every `VhiTarget` refuses it at bind
+    time, far from the command that put it there.
+    """
+    resolved = _resolve_latest_tag() if tag == "latest" else tag
+    if resolved is None:
+        print(
+            f"  WARNING: could not resolve which release 'latest' points at. "
+            f"MyoGestic 2.x needs VHI {MIN_VHI_TAG} or newer; if this installs an "
+            f"older one, every launch will refuse it.",
+            file=sys.stderr,
+        )
+        return tag
+    version = _version_of(resolved)
+    minimum = _version_of(MIN_VHI_TAG)
+    if version is None:
+        # A tag that is not a version at all — a branch build, say. Not ours to judge.
+        return resolved
+    if version < minimum:
+        print(
+            f"VHI {resolved} is too old for this MyoGestic.\n"
+            f"  MyoGestic 2.x drives VHI over the v2 control contract — it asks the\n"
+            f"  renderer which controls it exports and refuses to guess. {resolved} has\n"
+            f"  no manifest to answer with, and the v1 bridge that used to cover for\n"
+            f"  that is gone, so the install would be unusable rather than limited.\n"
+            f"\n"
+            f"  Install {MIN_VHI_TAG} or newer:\n"
+            f"    python -m myogestic.tools.install_vhi --tag {MIN_VHI_TAG}\n"
+            f"\n"
+            f"  Or run a VHI checkout from source, which needs no release at all:\n"
+            f"    export VHI_PATH=/path/to/Virtual-Hand-Interface\n"
+            f"    export GODOT_BIN=/path/to/godot            # Godot 4.x with .NET\n",
+            file=sys.stderr,
+        )
+        raise typer.Exit(1)
+    return resolved
 
 
 def _fetch_release_digest(tag: str, asset: str) -> str | None:
@@ -282,8 +353,8 @@ def _install(
     tag: Annotated[
         str,
         typer.Option(
-            help="Release tag, e.g. 'v1.0.0' (default: 'latest'). Pin in "
-            "production for reproducible installs."
+            help="Release tag, e.g. 'v2.0.0' (default: 'latest'). Pin in "
+            f"production for reproducible installs. Must be {MIN_VHI_TAG} or newer."
         ),
     ] = "latest",
     dest: Annotated[
@@ -314,9 +385,11 @@ def _install(
     """Install a MyoGestic-VHI release binary for this platform."""
     dest = dest or _default_dest()
     asset = _resolve_asset()
+    resolved = _check_supported(tag)
     url = _download_url(tag, asset)
 
-    print(f"Installing VHI {tag} → {dest}")
+    label = tag if resolved == tag else f"{tag} ({resolved})"
+    print(f"Installing VHI {label} → {dest}")
 
     if dest.exists() and any(dest.iterdir()):
         looks_like_previous_install = any((dest / m).exists() for m in INSTALL_MARKERS)

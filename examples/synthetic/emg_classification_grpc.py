@@ -56,11 +56,9 @@ ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
-# The v2 recording aid (session gate) and the canonical client. `vhi_legacy` renders
-# the discrete gesture only on a pre-v2 VHI; it goes away with v1.
+# The recording aid (session gate) and the control client.
 training_aid = vhi.training_client()
 vhi_canonical = vhi.canonical_client()
-vhi_legacy = vhi.control_client()
 
 # Where this example's two outputs go. The left side of that file is ours (`fist` and
 # `gesture`), the right side is VHI's — read it, it is commented. Parsing is all that
@@ -223,7 +221,7 @@ def _ensure_vhi() -> None:
         app.ctx.log("VHI not reachable yet — controls stay unresolved")
         return
     controls = resolve(CONTROL_MAP, capabilities)
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
     bus = ControlBus(
         controls,
         targets=[vhi_target],
@@ -331,7 +329,6 @@ def main() -> None:
         training_aid.set_recording_session(False)
         training_aid.stop()
         vhi_canonical.stop()
-        vhi_legacy.stop()
 
 
 if __name__ == "__main__":

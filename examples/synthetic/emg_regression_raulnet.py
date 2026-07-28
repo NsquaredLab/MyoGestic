@@ -124,12 +124,9 @@ ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
-# The v2 recording aid (session gate, training programs) and the canonical client.
-# `vhi_legacy` renders the discrete gesture only when this VHI predates v2; it goes
-# away with v1.
+# The recording aid (session gate, training programs) and the control client.
 training_aid = vhi.training_client()
 vhi_canonical = vhi.canonical_client()
-vhi_legacy = vhi.control_client()
 
 # Which control each of the network's five outputs drives. The aliases on the left are
 # ours and must match regression_raulnet.toml; the names on the right are what
@@ -406,7 +403,7 @@ def _ensure_vhi() -> None:
             f"{CONTROL_FILE.name} does not declare {unknown}, but this example pushes "
             f"those aliases. It declares: {sorted(controls.dofs)}."
         )
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
     # One bus owns the output path: substitute rest -> clip -> smooth -> clip again ->
     # deliver. VhiTarget negotiates v2 when this VHI speaks it, else the legacy pose.
     bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
@@ -488,7 +485,6 @@ def main() -> None:
         training_aid.set_recording_session(False)
         training_aid.stop()
         vhi_canonical.stop()
-        vhi_legacy.stop()
 
 
 if __name__ == "__main__":

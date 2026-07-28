@@ -397,3 +397,92 @@ class TestTheProbabilityCutoffIsValidatedAsAFraction:
         once = load_control_map(self._spec(0.25))
         assert once.as_dict()["dofs"]["fist"]["threshold_fraction"] == 0.25
         assert load_control_map(once.as_dict()).as_dict() == once.as_dict()
+
+
+class TestTheFileCanBeWrittenBackOut:
+    """`dump_control_map` — because a UI that edits a map must not become a second store.
+
+    The TOML file is the portable source of truth. An editor that kept its own state and
+    wrote some approximation of it would be a second configuration store with no name, so
+    the round trip is the contract: whatever a tool produces has to come back as the same
+    bindings.
+    """
+
+    SHAPES = [
+        pytest.param({"my_index": "vhi.prediction.index"}, id="one-to-one"),
+        pytest.param(
+            {"fist": ["vhi.prediction.index", "vhi.prediction.middle"]}, id="fan-out"
+        ),
+        pytest.param(
+            {
+                "fist": {
+                    "targets": [
+                        {"target": "vhi.prediction.thumb", "weight": 0.6},
+                        {"target": "vhi.prediction.index"},
+                    ],
+                    "threshold_fraction": 0.5,
+                }
+            },
+            id="weighted-and-gated",
+        ),
+        pytest.param(
+            {"gesture": {"target": "vhi.control.gesture", "debounce_s": 0.1}},
+            id="debounced",
+        ),
+        pytest.param(
+            {"grip": {"target": "vhi.prediction.index", "label": "Power grip"}},
+            id="labelled",
+        ),
+        # The aliases are the user's, so the writer has to survive whatever they chose.
+        pytest.param({"My Wrist": "vhi.prediction.index"}, id="alias-with-a-space"),
+        pytest.param({"x-2": "vhi.prediction.index"}, id="alias-with-a-dash"),
+        pytest.param({"Ψ": "vhi.prediction.index"}, id="alias-not-ascii"),
+        pytest.param({"a.b": "vhi.prediction.index"}, id="alias-with-a-dot"),
+        pytest.param({'quote"d': "vhi.prediction.index"}, id="alias-with-a-quote"),
+    ]
+
+    @pytest.mark.parametrize("spec", SHAPES)
+    def test_it_round_trips(self, spec):
+        import tomllib  # noqa: PLC0415
+
+        from myogestic.controls import dump_control_map  # noqa: PLC0415
+
+        original = load_control_map({"dofs": spec})
+        reloaded = load_control_map(tomllib.loads(dump_control_map(original)))
+        assert reloaded.as_dict() == original.as_dict()
+
+    def test_a_dotted_alias_is_quoted_so_it_does_not_become_a_nested_table(self):
+        """The one trap in the format: unquoted `a.b` reads back as a table."""
+        from myogestic.controls import dump_control_map  # noqa: PLC0415
+
+        text = dump_control_map(load_control_map({"dofs": {"a.b": "vhi.prediction.index"}}))
+        assert '"a.b"' in text
+
+    def test_declaration_order_survives(self):
+        """Order is what a reader sees, and channel order is not it — but a file the user
+        arranged should come back arranged."""
+        import tomllib  # noqa: PLC0415
+
+        from myogestic.controls import dump_control_map  # noqa: PLC0415
+
+        spec = {name: f"vhi.prediction.{d}" for name, d in
+                zip("zyx", ("index", "middle", "ring"), strict=True)}
+        text = dump_control_map(load_control_map({"dofs": spec}))
+        assert list(load_control_map(tomllib.loads(text)).bindings) == list(spec)
+
+    def test_a_header_comment_is_written_as_comments(self):
+        from myogestic.controls import dump_control_map  # noqa: PLC0415
+
+        text = dump_control_map(
+            load_control_map({"dofs": {"a": "vhi.prediction.index"}}),
+            header="Written by the editor.\nEdit freely.",
+        )
+        assert text.startswith("# Written by the editor.\n# Edit freely.\n")
+
+    def test_the_simple_form_stays_simple(self):
+        """A tool must not rewrite a one-liner as a table; the file stays hand-editable."""
+        from myogestic.controls import dump_control_map  # noqa: PLC0415
+
+        text = dump_control_map(load_control_map({"dofs": {"a": "vhi.prediction.index"}}))
+        assert text.strip().endswith('a = "vhi.prediction.index"')
+        assert "{" not in text

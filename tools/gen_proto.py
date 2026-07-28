@@ -2,12 +2,12 @@
 """Regenerate the VHI gRPC Python stubs from the vendored .proto.
 
 The canonical contract lives in the Virtual-Hand-Interface repo
-(``proto/myogestic_vhi.proto``); ``myogestic/vhi/_proto/myogestic_vhi.proto`` is a
+(``proto/myogestic_vhi_v2.proto``); ``myogestic/vhi/_proto/myogestic_vhi_v2.proto`` is a
 vendored copy. After updating the vendored copy, run:
 
     uv run --extra grpc python tools/gen_proto.py
 
-This writes ``myogestic/vhi/_proto/myogestic_vhi_pb2.py``, ``..._pb2.pyi`` (type
+This writes ``myogestic/vhi/_proto/myogestic_vhi_v2_pb2.py``, ``..._pb2.pyi`` (type
 stubs so checkers see the generated message classes), and ``..._pb2_grpc.py`` —
 all committed so a plain install needs only grpcio at runtime (not grpcio-tools).
 """
@@ -28,9 +28,7 @@ def main() -> int:
         print(f"no .proto files in {PROTO_DIR}", file=sys.stderr)
         return 1
 
-    # Generate every vendored contract in one protoc invocation: v1 and v2 are
-    # separate services in separate packages, both served at once during the
-    # migration, so both sets of stubs have to exist side by side.
+    # Globbed rather than named, so adding or removing a contract needs no edit here.
     cmd = [
         sys.executable,
         "-m",
