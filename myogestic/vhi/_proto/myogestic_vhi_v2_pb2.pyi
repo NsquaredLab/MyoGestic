@@ -25,6 +25,14 @@ ENCODING_UNSPECIFIED: ContinuousEncoding
 CANONICAL: ContinuousEncoding
 LEGACY_NEGATED: ContinuousEncoding
 
+class SetPresentationRequest(_message.Message):
+    __slots__ = ("blend", "blend_speed")
+    BLEND_FIELD_NUMBER: _ClassVar[int]
+    BLEND_SPEED_FIELD_NUMBER: _ClassVar[int]
+    blend: bool
+    blend_speed: float
+    def __init__(self, blend: bool = ..., blend_speed: _Optional[float] = ...) -> None: ...
+
 class DofDeclaration(_message.Message):
     __slots__ = ("name", "kind", "lo", "hi", "rest", "states", "rest_state")
     NAME_FIELD_NUMBER: _ClassVar[int]
@@ -66,20 +74,22 @@ class DofVerdict(_message.Message):
     def __init__(self, name: _Optional[str] = ..., renderable: bool = ..., message: _Optional[str] = ..., renders_as: _Optional[str] = ...) -> None: ...
 
 class DeclareReply(_message.Message):
-    __slots__ = ("accepted", "verdicts", "standard_version", "continuous_encoding", "continuous_stream_name", "continuous_channel_order")
+    __slots__ = ("accepted", "verdicts", "standard_version", "continuous_encoding", "continuous_stream_name", "continuous_channel_order", "blends_presentation")
     ACCEPTED_FIELD_NUMBER: _ClassVar[int]
     VERDICTS_FIELD_NUMBER: _ClassVar[int]
     STANDARD_VERSION_FIELD_NUMBER: _ClassVar[int]
     CONTINUOUS_ENCODING_FIELD_NUMBER: _ClassVar[int]
     CONTINUOUS_STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
     CONTINUOUS_CHANNEL_ORDER_FIELD_NUMBER: _ClassVar[int]
+    BLENDS_PRESENTATION_FIELD_NUMBER: _ClassVar[int]
     accepted: bool
     verdicts: _containers.RepeatedCompositeFieldContainer[DofVerdict]
     standard_version: str
     continuous_encoding: ContinuousEncoding
     continuous_stream_name: str
     continuous_channel_order: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, accepted: bool = ..., verdicts: _Optional[_Iterable[_Union[DofVerdict, _Mapping]]] = ..., standard_version: _Optional[str] = ..., continuous_encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., continuous_stream_name: _Optional[str] = ..., continuous_channel_order: _Optional[_Iterable[str]] = ...) -> None: ...
+    blends_presentation: bool
+    def __init__(self, accepted: bool = ..., verdicts: _Optional[_Iterable[_Union[DofVerdict, _Mapping]]] = ..., standard_version: _Optional[str] = ..., continuous_encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., continuous_stream_name: _Optional[str] = ..., continuous_channel_order: _Optional[_Iterable[str]] = ..., blends_presentation: bool = ...) -> None: ...
 
 class SetControlRequest(_message.Message):
     __slots__ = ("continuous", "discrete")
@@ -185,15 +195,17 @@ class TrainingAck(_message.Message):
     def __init__(self, applied: bool = ..., message: _Optional[str] = ...) -> None: ...
 
 class TrainingState(_message.Message):
-    __slots__ = ("recording_session_active", "program_running", "program_movement", "animation_state", "available_movements")
+    __slots__ = ("recording_session_active", "program_running", "program_movement", "animation_state", "available_movements", "current_movement")
     RECORDING_SESSION_ACTIVE_FIELD_NUMBER: _ClassVar[int]
     PROGRAM_RUNNING_FIELD_NUMBER: _ClassVar[int]
     PROGRAM_MOVEMENT_FIELD_NUMBER: _ClassVar[int]
     ANIMATION_STATE_FIELD_NUMBER: _ClassVar[int]
     AVAILABLE_MOVEMENTS_FIELD_NUMBER: _ClassVar[int]
+    CURRENT_MOVEMENT_FIELD_NUMBER: _ClassVar[int]
     recording_session_active: bool
     program_running: bool
     program_movement: str
     animation_state: str
     available_movements: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, recording_session_active: bool = ..., program_running: bool = ..., program_movement: _Optional[str] = ..., animation_state: _Optional[str] = ..., available_movements: _Optional[_Iterable[str]] = ...) -> None: ...
+    current_movement: str
+    def __init__(self, recording_session_active: bool = ..., program_running: bool = ..., program_movement: _Optional[str] = ..., animation_state: _Optional[str] = ..., available_movements: _Optional[_Iterable[str]] = ..., current_movement: _Optional[str] = ...) -> None: ...

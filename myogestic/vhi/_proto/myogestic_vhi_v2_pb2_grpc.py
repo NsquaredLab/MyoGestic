@@ -73,6 +73,11 @@ class VhiCanonicalControlStub(object):
                 request_serializer=myogestic__vhi__v2__pb2.SweepControlRequest.SerializeToString,
                 response_deserializer=myogestic__vhi__v2__pb2.SweepControlReply.FromString,
                 _registered_method=True)
+        self.SetPresentation = channel.unary_unary(
+                '/myogestic.vhi.v2.VhiCanonicalControl/SetPresentation',
+                request_serializer=myogestic__vhi__v2__pb2.SetPresentationRequest.SerializeToString,
+                response_deserializer=myogestic__vhi__v2__pb2.ControlAck.FromString,
+                _registered_method=True)
 
 
 class VhiCanonicalControlServicer(object):
@@ -128,6 +133,14 @@ class VhiCanonicalControlServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SetPresentation(self, request, context):
+        """Configure how the renderer *presents* transitions between commanded values.
+        Appearance only — see SetPresentationRequest.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_VhiCanonicalControlServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -145,6 +158,11 @@ def add_VhiCanonicalControlServicer_to_server(servicer, server):
                     servicer.SweepControl,
                     request_deserializer=myogestic__vhi__v2__pb2.SweepControlRequest.FromString,
                     response_serializer=myogestic__vhi__v2__pb2.SweepControlReply.SerializeToString,
+            ),
+            'SetPresentation': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetPresentation,
+                    request_deserializer=myogestic__vhi__v2__pb2.SetPresentationRequest.FromString,
+                    response_serializer=myogestic__vhi__v2__pb2.ControlAck.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -252,6 +270,33 @@ class VhiCanonicalControl(object):
             '/myogestic.vhi.v2.VhiCanonicalControl/SweepControl',
             myogestic__vhi__v2__pb2.SweepControlRequest.SerializeToString,
             myogestic__vhi__v2__pb2.SweepControlReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetPresentation(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/myogestic.vhi.v2.VhiCanonicalControl/SetPresentation',
+            myogestic__vhi__v2__pb2.SetPresentationRequest.SerializeToString,
+            myogestic__vhi__v2__pb2.ControlAck.FromString,
             options,
             channel_credentials,
             insecure,

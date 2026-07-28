@@ -81,6 +81,8 @@ class VhiStateSnapshot:
     mode: str
     connected: bool
     message: str
+    program_running: bool = False
+    program_movement: str = ""
 
 
 @dataclass
@@ -98,6 +100,8 @@ class VhiStateCache:
     current_movement: str = ""
     current_state: str = ""
     mode: str = ""
+    program_running: bool = False
+    program_movement: str = ""
     connected: bool = False
     refreshing: bool = False
     message: str = "Launch VHI, then refresh."
@@ -114,6 +118,8 @@ class VhiStateCache:
                 mode=self.mode,
                 connected=self.connected,
                 message=self.message,
+                program_running=self.program_running,
+                program_movement=self.program_movement,
             )
 
 
@@ -124,7 +130,7 @@ def request_vhi_state_refresh(
     force: bool = False,
     min_interval_s: float = 1.0,
     disconnected_interval_s: float = 5.0,
-    probe_timeout_s: float = 0.5,
+    probe_timeout_s: float = 0.5,  # noqa: ARG001 - kept for API compatibility
 ) -> None:
     """Start at most one throttled background ``GetState`` refresh.
 
@@ -133,7 +139,7 @@ def request_vhi_state_refresh(
     runs on a daemon thread; the result lands in ``cache`` under its lock.
 
     While VHI is **unreachable** the poll backs off to ``disconnected_interval_s``
-    and uses a short ``probe_timeout_s`` deadline — so a down server is probed
+    and (historically) used a short ``probe_timeout_s`` deadline — so a down server is probed
     only occasionally with a fast-failing call, never a 2 s blocking RPC that is
     ~always in flight. (A continuously in-flight failing ``GetState`` keeps the
     gRPC channel in connect/reconnect churn, which stutters the 60 fps render
@@ -157,12 +163,10 @@ def request_vhi_state_refresh(
         cache.refreshing = True
         cache.last_attempt_s = now
 
-    # Auto-poll: short deadline so a down server fails fast. Explicit refresh:
-    # full deadline (None -> client default) since a cold connect may need it.
-    timeout = None if force else probe_timeout_s
-
     def _worker() -> None:
-        reply = client.get_state(timeout=timeout)
+        # Reads the v2 recording aid, not the v1 control service: this palette is a
+        # control-hand *aid*, so its state comes from the aid that owns that hand.
+        reply = client.state()
         with cache.lock:
             cache.refreshing = False
             if reply is None:
@@ -172,8 +176,10 @@ def request_vhi_state_refresh(
             try:
                 cache.movements = list(reply.available_movements)
                 cache.current_movement = reply.current_movement
-                cache.current_state = reply.current_state
-                cache.mode = reply.mode
+                cache.current_state = reply.animation_state
+                cache.program_running = reply.program_running
+                cache.program_movement = reply.program_movement
+                cache.mode = "training" if reply.program_running else "movement"
             except AttributeError as e:
                 # A malformed reply (e.g. an incomplete stub) must not take down
                 # this daemon thread — surface it instead.
@@ -181,7 +187,10 @@ def request_vhi_state_refresh(
                 cache.message = f"VHI reply malformed: {e}"
                 return
             cache.connected = True
-            cache.message = f"{reply.mode} mode · {len(cache.movements)} movements"
+            if reply.program_running:
+                cache.message = f"training program: {reply.program_movement}"
+            else:
+                cache.message = f"{len(cache.movements)} movements"
 
     threading.Thread(target=_worker, daemon=True, name="vhi-state-refresh").start()
 

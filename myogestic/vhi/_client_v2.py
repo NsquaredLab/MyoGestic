@@ -154,6 +154,41 @@ class VhiCanonicalClient:
             )
         )
 
+    # --- presentation --------------------------------------------------------
+
+    def set_presentation(self, *, blend: bool, blend_speed: float = 0.0) -> bool:
+        """Configure how the renderer *looks* while reaching a commanded value.
+
+        The third of three separate layers, and the one it is easiest to misuse:
+
+        1. **Continuous smoothing** — `myogestic.controls.ControlBus`'s ``smoothing``,
+           applied here in MyoGestic before any target sees a frame. Authoritative: it
+           decides what value is actually *commanded*.
+        2. **Discrete debounce and hysteresis** — declared on the DOF
+           (`myogestic.controls.Discrete.debounce_s`) and applied by the same bus. A
+           classifier's state is gated for stability before it becomes a transition. A
+           discrete control is never numerically low-pass filtered like an axis; that
+           would interpolate through states nobody selected.
+        3. **This** — purely visual interpolation inside the renderer, so the hand does
+           not snap jarringly between poses.
+
+        Layer 3 is not a substitute for layer 2. It changes only how a commanded value
+        looks on the way to being reached; it cannot make an unstable prediction
+        stable, and a renderer with blending on but no debounce still jumps between
+        states — just smoothly.
+
+        Returns whether VHI applied it (``False`` when it does not speak v2).
+        """
+        try:
+            ack = self._stub.SetPresentation(
+                pb2.SetPresentationRequest(blend=blend, blend_speed=blend_speed),
+                timeout=_RPC_TIMEOUT_S,
+            )
+        except Exception as e:  # noqa: BLE001 - absence is an answer during migration
+            self._log_failure("set_presentation", e, level=logging.DEBUG)
+            return False
+        return ack.applied
+
     # --- verification --------------------------------------------------------
 
     def sweep(

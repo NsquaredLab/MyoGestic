@@ -36,12 +36,14 @@ from lightning.pytorch.callbacks import ModelCheckpoint, StochasticWeightAveragi
 from myoverse.models.raul_net.v17 import RaulNetV17
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic.controls import ControlBus, load_dofs
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.session import iter_aligned_windows, iter_labeled_windows, open_session_store
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi.legacy import decode_pose
 from myogestic.widgets import (
     AppLogo,
     PostProcessor,
@@ -73,10 +75,6 @@ if RMS_WINDOW_SAMPLES >= N_WINDOW_SAMPLES:
         f"RMS_WINDOW_MS={RMS_WINDOW_MS} must be < WINDOW_MS={WINDOW_MS}: "
         "the RMS kernel slides inside the analysis window."
     )
-
-# 5 VHI DOFs (mosaic-2.0 registry): wrist rotation + index/middle/ring/pinky.
-VHI_DOF_INDICES = [0, 2, 3, 4, 5]
-N_DOF = len(VHI_DOF_INDICES)
 
 CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
@@ -121,11 +119,44 @@ ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
-vhi_client = vhi.control_client()
+# The v2 recording aid (session gate, training programs) and the canonical client.
+# `vhi_legacy` renders the discrete gesture only when this VHI predates v2; it goes
+# away with v1.
+training_aid = vhi.training_client()
+vhi_canonical = vhi.canonical_client()
+vhi_legacy = vhi.control_client()
 
-# Output-side smoothing applied to the 9-DOF hand vector before pushing
-# to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
+# Five signed, normalized DOFs plus the gesture as a canonical held state. The old
+# comment here claimed indices [0, 2, 3, 4, 5] were "wrist rotation + four fingers";
+# there is no wrist on that wire at all — channel 0 is thumb flexion.
+CONTROLS = load_dofs(
+    {
+        "dofs": {
+            **dict.fromkeys(
+                [
+                    "thumb.flexion",
+                    "index.flexion",
+                    "middle.flexion",
+                    "ring.flexion",
+                    "little.flexion",
+                ],
+                "continuous",
+            ),
+            "hand.gesture": [c.lower() for c in CLASSES],
+        }
+    }
+)
+DOF_NAMES = CONTROLS.channel_labels()
+N_DOF = len(DOF_NAMES)
+
+# Output-side smoothing, applied by the control bus to the canonical vector.
+# Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
+
+# One bus owns the output path: substitute rest -> clip -> smooth -> clip again ->
+# deliver. VhiTarget negotiates v2 when this VHI speaks it, else the legacy pose.
+vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
+bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
 
 PROCESSES = [
     (
@@ -231,7 +262,11 @@ def train(data: TrainingData) -> L.LightningModule:
         n_alignment_samples=10,
     ):
         X_list.append(sliding_rms(emg_window))
-        y_list.append(np.abs(aligned["vhi_control"][VHI_DOF_INDICES]))
+        # decode_pose reads the recorded pose as canonical values, so the training
+        # target is in exactly the space `predict` commands. A signed negation, not
+        # the old abs() — which folded extension into flexion of equal magnitude.
+        pose = decode_pose(aligned["vhi_control"])
+        y_list.append(np.array([pose[name] for name in DOF_NAMES], dtype=np.float64))
     if kin_paths:
         log.append(f"  kinematics: {len(X_list)} windows from {len(kin_paths)} sessions")
 
@@ -328,20 +363,14 @@ def train(data: TrainingData) -> L.LightningModule:
 
 @pipeline.predict
 def predict(model: L.LightningModule, features: np.ndarray) -> dict:
-    """Regress 5-DOF → expand to 9-DOF (negated) → smooth → push to VHI."""
+    """Regress the five canonical DOFs and hand them to the bus."""
     with torch.inference_mode():
         x = torch.from_numpy(features).float().to(model.device)
         x = x.unsqueeze(0).unsqueeze(0)  # (1, 1, n_ch, INPUT_LENGTH)
         out = model(x).cpu().numpy()[0]  # (5,)
-    pred_5dof = np.clip(out, 0, 1)
-
-    pred_9dof = np.zeros(9, dtype=np.float32)
-    for i, vhi_idx in enumerate(VHI_DOF_INDICES):
-        pred_9dof[vhi_idx] = -pred_5dof[i]
-
-    pred_9dof = output_filter(pred_9dof).astype(np.float32)
-    vhi_outlet.push(pred_9dof)
-    return {"dof": pred_5dof, "hand": pred_9dof}
+    # No clip: each DOF's declared range is the authority, and clipping before the
+    # smoother lets the filter overshoot straight back out of it.
+    return {"dof": bus.push(dict(zip(DOF_NAMES, out, strict=True)))}
 
 
 LOGO_CELL_W = 300
@@ -354,24 +383,33 @@ grid = Grid(
 )
 
 
+def _ensure_vhi() -> None:
+    """Settle the target's contract once VHI is up — bind ran before it existed."""
+    if not vhi_target.negotiate():
+        app.ctx.log("VHI not reachable yet — gestures will not render until it is")
+
+
 def _on_gesture(i: int) -> None:
-    # cycle=False: snap to the movement's end pose and hold it. VHI_Control
-    # settles to a static kinematic value per gesture, which the regressor
-    # learns to map back from the corresponding EMG amplitude.
+    # A canonical held state through the same bus the continuous DOFs use. The
+    # control hand snaps to the pose and holds it, so VHI_Control settles to a static
+    # kinematic value the regressor can map back from EMG amplitude.
+    _ensure_vhi()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
-    vhi_client.set_movement(CLASSES[i], cycle=False)
+    bus.select("hand.gesture", CLASSES[i].lower())
 
 
 def _on_record() -> None:
-    # While recording, VHI ignores its local keyboard so MyoGestic's gesture
-    # buttons are the sole movement source for the session.
+    # The recording aid, not a control command: it gates VHI's local keyboard so the
+    # gesture buttons are this session's only movement source.
+    _ensure_vhi()
     app.start_recording()
-    vhi_client.set_session_active(True)
+    if not training_aid.set_recording_session(True):
+        app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
 
 
 def _on_stop() -> None:
     app.stop_recording()
-    vhi_client.set_session_active(False)
+    training_aid.set_recording_session(False)
 
 
 viewer = SignalViewer("emg")
@@ -415,7 +453,12 @@ def main() -> None:
     try:
         app.run()
     finally:
-        vhi_client.stop()
+        bus.stop()
+        training_aid.stop_program()
+        training_aid.set_recording_session(False)
+        training_aid.stop()
+        vhi_canonical.stop()
+        vhi_legacy.stop()
 
 
 if __name__ == "__main__":
