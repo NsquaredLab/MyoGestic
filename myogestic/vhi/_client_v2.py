@@ -42,16 +42,37 @@ _RPC_TIMEOUT_S = 2.0
 _SWEEP_SLACK_S = 5.0
 
 
-def declare_request(controls: ControlSet, client_name: str = "") -> pb2.DeclareRequest:
+def declare_request(
+    controls: ControlSet, client_name: str = "", *, control_pose: str = ""
+) -> pb2.DeclareRequest:
     """A `DeclareRequest` describing ``controls``, in declaration order.
 
     Order is preserved because it is the canonical wire order: it is what VHI echoes
     back as the channel layout it expects, and a reordered configuration must rename
     channels rather than silently remap them.
+
+    Parameters
+    ----------
+    control_pose
+        Opt in to driving the renderer's *second* pose stream, and say which convention
+        you will send on it: ``"canonical"`` or ``"legacy"``. Empty (the default) does
+        not declare that stream at all, which leaves an existing renderer-unit producer
+        working exactly as before — the whole point of negotiating it rather than
+        flipping it.
     """
+    encodings = {
+        "": pb2.ENCODING_UNSPECIFIED,
+        "canonical": pb2.CANONICAL,
+        "legacy": pb2.LEGACY_NEGATED,
+    }
+    if control_pose not in encodings:
+        raise ValueError(
+            f"control_pose must be one of {sorted(encodings)!r}, got {control_pose!r}"
+        )
     request = pb2.DeclareRequest(
         standard_version=controls.standard_version,
         client_name=client_name,
+        control_pose_encoding=encodings[control_pose],
     )
     for dof in controls.dofs.values():
         if isinstance(dof, Continuous):
@@ -111,7 +132,13 @@ class VhiCanonicalClient:
 
     # --- the handshake -------------------------------------------------------
 
-    def declare(self, controls: ControlSet, *, client_name: str = "") -> pb2.DeclareReply | None:
+    def declare(
+        self,
+        controls: ControlSet,
+        *,
+        client_name: str = "",
+        control_pose: str = "",
+    ) -> pb2.DeclareReply | None:
         """Negotiate ``controls`` with VHI, or return ``None`` if it cannot.
 
         Returns
@@ -125,10 +152,17 @@ class VhiCanonicalClient:
             A reply with ``accepted == False`` is **not** ``None``: VHI answered,
             and its per-DOF verdicts say what it refused and why. That is worth
             surfacing rather than flattening into a fallback.
+
+        Other Parameters
+        ----------------
+        control_pose
+            Declare the renderer's second pose stream too — see `declare_request`.
+            Omitted by default, so this negotiates exactly what it did before.
         """
         try:
             reply = self._stub.Declare(
-                declare_request(controls, client_name), timeout=_RPC_TIMEOUT_S
+                declare_request(controls, client_name, control_pose=control_pose),
+                timeout=_RPC_TIMEOUT_S,
             )
         except Exception as e:  # noqa: BLE001 - absence is an answer here
             self.connected = False

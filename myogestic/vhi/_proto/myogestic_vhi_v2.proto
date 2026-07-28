@@ -109,6 +109,26 @@ message DeclareRequest {
   repeated DofDeclaration dofs = 2;
   // Optional client identifier for VHI's log — an app name, not an identity.
   string client_name = 3;
+
+  // Opt in to driving the *control* hand from a streamed pose, and say which
+  // convention you will send on MyoGestic_ControlPose.
+  //
+  // ENCODING_UNSPECIFIED (the default, and what every existing client sends by
+  // omission) means "I am not declaring that stream": VHI leaves the control hand
+  // and that inlet exactly as they were, decoding renderer units. That is what keeps
+  // this additive — a producer written before this field keeps working unchanged.
+  //
+  // CANONICAL asks VHI to read the stream as canonical values (+1 is the direction
+  // the channel's name denotes) and to put the control hand into Stream mode so the
+  // inlet is actually consumed. LEGACY_NEGATED asks for the same mode switch while
+  // keeping renderer units, which is the migration path for an existing producer that
+  // wants the handshake without changing its numbers yet.
+  //
+  // Declaring this alongside a discrete DOF is refused: a discrete DOF renders as a
+  // control-hand *movement*, and a streamed pose drives the same bones. Two drivers
+  // for one hand is what v1's ControlMode existed to arbitrate, and refusing the
+  // combination up front is better than arbitrating it per command.
+  ContinuousEncoding control_pose_encoding = 4;
 }
 
 // What VHI can do with one declared DOF.
@@ -169,6 +189,15 @@ message DeclareReply {
   // SetPresentationRequest). Reported so a client can *see* that visual smoothing is
   // on — never so it can treat that as a substitute for its own debounce.
   bool blends_presentation = 7;
+
+  // The control-hand pose stream, populated only when the request declared a
+  // control_pose_encoding. Same contract as the continuous fields above: the order is
+  // authoritative, and the encoding is what VHI will actually apply — which may differ
+  // from what was asked for if VHI could not honour it, so read it rather than
+  // assuming the request was accepted.
+  string control_pose_stream_name = 8;
+  repeated string control_pose_channel_order = 9;
+  ContinuousEncoding control_pose_encoding = 10;
 }
 
 message SetControlRequest {

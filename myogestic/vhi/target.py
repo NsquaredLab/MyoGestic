@@ -66,6 +66,12 @@ class VhiTarget:
         exactly like any `myogestic.outputs.Output`: construct it yourself and
         register its ``stop`` with ``app.cleanup_hooks``. Only `PoseSink.push` and
         `PoseSink.flush` are called on it.
+    stream
+        Which of the renderer's pose streams this target drives: ``"output"`` (the
+        default — the predicted hand) or ``"control_pose"`` (the control hand). It
+        decides which channel order *and which encoding* the target reads out of the
+        handshake. The two streams do not share a convention, so a target that guessed
+        would be right on one and inverted on the other.
     client
         Optional `myogestic.vhi._client_v2.VhiCanonicalClient`. When given, `bind`
         negotiates the control space over it; without one this target is legacy-only.
@@ -109,10 +115,22 @@ class VhiTarget:
 
     __slots__ = (
         "_client", "_dofs", "_legacy", "_legacy_states", "_negate", "_negotiated",
-        "_order", "_outlet", "_pending", "_slots", "_width",
+        "_order", "_outlet", "_pending", "_slots", "_stream", "_width",
     )
 
-    def __init__(self, outlet: PoseSink, *, client: Any = None, legacy_client: Any = None) -> None:
+    def __init__(
+        self,
+        outlet: PoseSink,
+        *,
+        client: Any = None,
+        legacy_client: Any = None,
+        stream: str = "output",
+    ) -> None:
+        if stream not in ("output", "control_pose"):
+            raise ValueError(
+                f"stream must be 'output' or 'control_pose', got {stream!r}"
+            )
+        self._stream = stream
         self._outlet = outlet
         self._client = client
         self._legacy = legacy_client
@@ -193,7 +211,8 @@ class VhiTarget:
 
     def _negotiate(self, controls: ControlSet) -> bool:
         """Try the v2 handshake. False means "use the legacy path", never an error."""
-        reply = self._client.declare(controls, client_name="myogestic")
+        pose = "canonical" if self._stream == "control_pose" else ""
+        reply = self._client.declare(controls, client_name="myogestic", control_pose=pose)
         if reply is None:
             return False
         if not reply.accepted:
@@ -205,7 +224,16 @@ class VhiTarget:
                 refused,
             )
             return False
-        order = tuple(reply.continuous_channel_order)
+        # Each stream carries its own order and its own encoding. Reading the wrong
+        # pair is how a frame ends up correct on one stream and inverted on another —
+        # the two conventions coexist by design, so the target must know which stream
+        # it drives rather than assume there is one answer.
+        if self._stream == "control_pose":
+            order = tuple(reply.control_pose_channel_order)
+            encoding = getattr(reply, "control_pose_encoding", _ENCODING_UNSPECIFIED)
+        else:
+            order = tuple(reply.continuous_channel_order)
+            encoding = getattr(reply, "continuous_encoding", _ENCODING_UNSPECIFIED)
         declared = controls.channel_labels()
         # The negotiated order is VHI's channel *map*, not a demand that the client
         # command every channel on it: a configuration may declare a subset and leave
@@ -233,7 +261,6 @@ class VhiTarget:
         # say gets no benefit of the doubt: guessing wrong inverts every joint, which
         # is exactly how the first end-to-end v2 run made a hand extend when it was
         # told to flex.
-        encoding = getattr(reply, "continuous_encoding", _ENCODING_UNSPECIFIED)
         if encoding not in (_ENCODING_CANONICAL, _ENCODING_LEGACY_NEGATED):
             log.warning(
                 "VHI negotiated channel names but did not say how to encode them "

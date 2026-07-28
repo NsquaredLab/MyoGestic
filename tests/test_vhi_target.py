@@ -390,6 +390,9 @@ class FakeReply:
     verdicts: tuple[FakeVerdict, ...] = ()
     standard_version: str = "1"
     continuous_encoding: int = CANONICAL
+    control_pose_stream_name: str = ""
+    control_pose_channel_order: tuple[str, ...] = ()
+    control_pose_encoding: int = UNSPECIFIED
 
 
 class FakeClient:
@@ -400,8 +403,8 @@ class FakeClient:
         self.declared: list[object] = []
         self.sent: list[tuple[dict | None, dict | None]] = []
 
-    def declare(self, controls, client_name=""):
-        self.declared.append(controls)
+    def declare(self, controls, client_name="", control_pose=""):
+        self.declared.append((controls, control_pose))
         return self.reply
 
     def set_control(self, continuous=None, discrete=None):
@@ -850,3 +853,97 @@ def test_negotiate_is_idempotent_when_already_settled():
     target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
     assert target.negotiate() is True
     assert target.negotiate() is True
+
+
+# --- the control-pose stream: a second stream, its own convention ----------------
+
+
+def test_the_control_pose_stream_reads_its_own_order_and_encoding():
+    """Two streams, two conventions. Reading the wrong pair inverts every joint."""
+    outlet = FakeOutlet()
+    client = FakeClient(
+        FakeReply(
+            continuous_channel_order=LEGACY_POSE_DOFS,
+            continuous_encoding=CANONICAL,
+            control_pose_stream_name="MyoGestic_ControlPose",
+            control_pose_channel_order=LEGACY_POSE_DOFS,
+            control_pose_encoding=LEGACY_NEGATED,
+        )
+    )
+    target = VhiTarget(outlet, client=client, stream="control_pose")
+    target.bind(_controls("index.flexion"))
+    assert target.negotiated is True
+    target.send({"index.flexion": 1.0}, {})
+    # LEGACY_NEGATED on *this* stream, even though the other stream is CANONICAL.
+    assert outlet.last[2] == pytest.approx(-1.0)
+
+
+def test_the_output_stream_is_unaffected_by_the_control_pose_encoding():
+    outlet = FakeOutlet()
+    client = FakeClient(
+        FakeReply(
+            continuous_channel_order=LEGACY_POSE_DOFS,
+            continuous_encoding=CANONICAL,
+            control_pose_channel_order=LEGACY_POSE_DOFS,
+            control_pose_encoding=LEGACY_NEGATED,
+        )
+    )
+    target = VhiTarget(outlet, client=client)  # default stream="output"
+    target.bind(_controls("index.flexion"))
+    target.send({"index.flexion": 1.0}, {})
+    assert outlet.last[2] == pytest.approx(+1.0)
+
+
+def test_declaring_the_control_pose_stream_is_opt_in():
+    """Default must not declare it — that is what keeps existing producers working."""
+    client = FakeClient(FakeReply(continuous_channel_order=LEGACY_POSE_DOFS))
+    VhiTarget(FakeOutlet(), client=client).bind(_controls("index.flexion"))
+    assert client.declared[-1][1] == "", "the output target must not declare a control pose"
+
+    client2 = FakeClient(
+        FakeReply(
+            control_pose_channel_order=LEGACY_POSE_DOFS,
+            control_pose_encoding=CANONICAL,
+        )
+    )
+    VhiTarget(FakeOutlet(), client=client2, stream="control_pose").bind(
+        _controls("index.flexion")
+    )
+    assert client2.declared[-1][1] == "canonical"
+
+
+def test_a_control_pose_reply_with_no_encoding_falls_back():
+    """An unnegotiated second stream must not be guessed at either."""
+    client = FakeClient(
+        FakeReply(
+            continuous_channel_order=LEGACY_POSE_DOFS,
+            continuous_encoding=CANONICAL,
+            control_pose_channel_order=LEGACY_POSE_DOFS,
+            control_pose_encoding=UNSPECIFIED,
+        )
+    )
+    target = VhiTarget(FakeOutlet(), client=client, stream="control_pose")
+    target.bind(_controls("index.flexion"))
+    assert target.negotiated is False
+
+
+@pytest.mark.parametrize("bad", ["", "predicted", "Output", "control-pose"])
+def test_an_unknown_stream_name_is_refused_at_construction(bad):
+    """A typo here would silently drive the wrong hand with the wrong convention."""
+    with pytest.raises(ValueError, match="stream must be"):
+        VhiTarget(FakeOutlet(), stream=bad)
+
+
+def test_declare_request_carries_the_control_pose_encoding():
+    pytest.importorskip("grpc")
+    from myogestic.vhi._client_v2 import declare_request
+
+    controls = load_dofs({"dofs": {"index.flexion": "continuous"}})
+    assert declare_request(controls).control_pose_encoding == UNSPECIFIED
+    assert declare_request(controls, control_pose="canonical").control_pose_encoding == CANONICAL
+    assert (
+        declare_request(controls, control_pose="legacy").control_pose_encoding
+        == LEGACY_NEGATED
+    )
+    with pytest.raises(ValueError, match="control_pose must be one of"):
+        declare_request(controls, control_pose="nonsense")

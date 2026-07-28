@@ -52,14 +52,16 @@ class DofDeclaration(_message.Message):
     def __init__(self, name: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ...) -> None: ...
 
 class DeclareRequest(_message.Message):
-    __slots__ = ("standard_version", "dofs", "client_name")
+    __slots__ = ("standard_version", "dofs", "client_name", "control_pose_encoding")
     STANDARD_VERSION_FIELD_NUMBER: _ClassVar[int]
     DOFS_FIELD_NUMBER: _ClassVar[int]
     CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_POSE_ENCODING_FIELD_NUMBER: _ClassVar[int]
     standard_version: str
     dofs: _containers.RepeatedCompositeFieldContainer[DofDeclaration]
     client_name: str
-    def __init__(self, standard_version: _Optional[str] = ..., dofs: _Optional[_Iterable[_Union[DofDeclaration, _Mapping]]] = ..., client_name: _Optional[str] = ...) -> None: ...
+    control_pose_encoding: ContinuousEncoding
+    def __init__(self, standard_version: _Optional[str] = ..., dofs: _Optional[_Iterable[_Union[DofDeclaration, _Mapping]]] = ..., client_name: _Optional[str] = ..., control_pose_encoding: _Optional[_Union[ContinuousEncoding, str]] = ...) -> None: ...
 
 class DofVerdict(_message.Message):
     __slots__ = ("name", "renderable", "message", "renders_as")
@@ -74,7 +76,7 @@ class DofVerdict(_message.Message):
     def __init__(self, name: _Optional[str] = ..., renderable: bool = ..., message: _Optional[str] = ..., renders_as: _Optional[str] = ...) -> None: ...
 
 class DeclareReply(_message.Message):
-    __slots__ = ("accepted", "verdicts", "standard_version", "continuous_encoding", "continuous_stream_name", "continuous_channel_order", "blends_presentation")
+    __slots__ = ("accepted", "verdicts", "standard_version", "continuous_encoding", "continuous_stream_name", "continuous_channel_order", "blends_presentation", "control_pose_stream_name", "control_pose_channel_order", "control_pose_encoding")
     ACCEPTED_FIELD_NUMBER: _ClassVar[int]
     VERDICTS_FIELD_NUMBER: _ClassVar[int]
     STANDARD_VERSION_FIELD_NUMBER: _ClassVar[int]
@@ -82,6 +84,9 @@ class DeclareReply(_message.Message):
     CONTINUOUS_STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
     CONTINUOUS_CHANNEL_ORDER_FIELD_NUMBER: _ClassVar[int]
     BLENDS_PRESENTATION_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_POSE_STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_POSE_CHANNEL_ORDER_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_POSE_ENCODING_FIELD_NUMBER: _ClassVar[int]
     accepted: bool
     verdicts: _containers.RepeatedCompositeFieldContainer[DofVerdict]
     standard_version: str
@@ -89,7 +94,10 @@ class DeclareReply(_message.Message):
     continuous_stream_name: str
     continuous_channel_order: _containers.RepeatedScalarFieldContainer[str]
     blends_presentation: bool
-    def __init__(self, accepted: bool = ..., verdicts: _Optional[_Iterable[_Union[DofVerdict, _Mapping]]] = ..., standard_version: _Optional[str] = ..., continuous_encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., continuous_stream_name: _Optional[str] = ..., continuous_channel_order: _Optional[_Iterable[str]] = ..., blends_presentation: bool = ...) -> None: ...
+    control_pose_stream_name: str
+    control_pose_channel_order: _containers.RepeatedScalarFieldContainer[str]
+    control_pose_encoding: ContinuousEncoding
+    def __init__(self, accepted: bool = ..., verdicts: _Optional[_Iterable[_Union[DofVerdict, _Mapping]]] = ..., standard_version: _Optional[str] = ..., continuous_encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., continuous_stream_name: _Optional[str] = ..., continuous_channel_order: _Optional[_Iterable[str]] = ..., blends_presentation: bool = ..., control_pose_stream_name: _Optional[str] = ..., control_pose_channel_order: _Optional[_Iterable[str]] = ..., control_pose_encoding: _Optional[_Union[ContinuousEncoding, str]] = ...) -> None: ...
 
 class SetControlRequest(_message.Message):
     __slots__ = ("continuous", "discrete")
