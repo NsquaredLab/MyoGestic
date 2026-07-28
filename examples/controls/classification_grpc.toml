@@ -16,5 +16,7 @@ fist = [
   "vhi.prediction.little",
 ]
 
-# Discrete, per VHI. `debounce_s` gates classifier chatter.
+# The other kind. VHI declares this address discrete, so it takes a named state, not a
+# number — the right shape for a genuine event (a preset, a keypress), and the wrong one
+# for a joint. `debounce_s` is yours: how long a state must hold before it counts.
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }

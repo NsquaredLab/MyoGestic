@@ -1,14 +1,15 @@
 # Control standard
 
-MyoGestic defines **one** canonical, application-independent control vocabulary. An
-app declares *what it controls* — `index.flexion`, `wrist.rotation`, `hand.grasp` —
-and a [`Target`][myogestic.controls.Target] renders those names in whatever a
-specific application wants on its wire. The Virtual Hand, a keyboard, a cursor and a
-prosthesis are all adapters; none of them gets to define the vocabulary.
+A control space is a **mapping**, in a file: your name for a model output on the left, a
+control the target declares on the right. The left side is yours and arbitrary — nothing
+here reads meaning out of it. The right side belongs to the target, which also declares
+what the control *is*: a number or a held state, its range, its states. MyoGestic hard-codes
+none of that, so a Virtual Hand, a keyboard, a cursor and a prosthesis each keep their own
+vocabulary and a build that grows a control needs no change on this side.
 
-Continuous DOFs are **signed and normalized**: the domain is `[-1, 1]`, `+1` is the
-direction the name denotes, and rest is `0`. Discrete DOFs are separate on purpose —
-a held state delivered on change is not the same thing as a number.
+Continuous controls are **normalized**: `+1` is the direction the control denotes, rest is
+`0`, and the range is signed when the target says the control is. Discrete controls are
+separate on purpose — a held state delivered on change is not the same thing as a number.
 
 !!! tip "See it work before reading further"
     There is a narrated walkthrough that runs the whole path — declaration, the two
@@ -31,23 +32,24 @@ Write a TOML file. A ready-to-copy one ships at
 
 ```toml
 [dofs]
-my_index = "vhi.prediction.index"            # your name = the target's control
+# Left side: your model's output names. Right side: controls VHI declares.
+my_thumb_spread = "vhi.prediction.thumb.abduction"
 
-fist = [                                     # one output, fanned out
-  "vhi.prediction.index",
-  "vhi.prediction.middle",
-]
-
-pinch = [                                    # ...with a per-target gain
-  { target = "vhi.prediction.thumb", weight = 0.6 },
+fist = [                                       # one output, fanned out
+  { target = "vhi.prediction.thumb", weight = 0.6 },   # ...with a per-target gain
   { target = "vhi.prediction.index" },
+  { target = "vhi.prediction.middle" },
+  { target = "vhi.prediction.ring" },
+  { target = "vhi.prediction.little" },
 ]
 
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
 ```
 
-**The left side is yours.** `my_index`, `fist`, `pinch` — whatever your model calls its
-outputs. Nothing prescribes these names or reads meaning out of them.
+**The left side is yours.** `my_thumb_spread`, `fist`, `gesture` — whatever your model
+calls its outputs. Nothing prescribes these names or reads meaning out of them. A control
+may take only *one* output, though, so no two entries may name the same address; that is
+what a fan-out is for.
 
 **The right side belongs to the target.** `vhi.prediction.index` is a name VHI declares
 in its own manifest, along with everything needed to send it: whether it takes a number
@@ -87,6 +89,34 @@ the target declares that.
     a number or a held state, because that is the target's to declare. So an application
     that launches its own target resolves *after* startup, not at import — see the
     examples, which all build their bus lazily for exactly this reason.
+
+### Classification uses the same mapping
+
+A classifier produces an **activation** — open or closed — not a position, and an
+activation is just a control value. So it travels the mapping a regressor travels. Add a
+`threshold` to say the input is an activation:
+
+```toml
+fist = { targets = [
+  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.index" },
+], threshold = 0.5 }
+```
+
+Push the model's probability and the bus gates it to exactly `0.0` or `1.0` before
+anything else sees it — before the weights, before the wire, before the recording. From
+there it is an ordinary value: `0` to every listed control when inactive, `1 × weight`
+when active. The target receives continuous per-control values either way, and no
+separate state command exists.
+
+Drop the `threshold` and the identical mapping serves a regressor emitting `0..1`
+directly. That is the point of gating here rather than in a separate discrete path: a
+continuous address is a *position*, and streaming a raw `0.73` into one says the finger
+is 73% curled, which is not what a 73%-confident classifier meant.
+
+Map onto a **discrete** address instead when the thing genuinely is a state rather than
+an amount — a preset, a keypress, a mode. `examples/controls/classification.toml` shows
+the activation form and `examples/controls/classification_grpc.toml` the discrete one.
 
 ::: myogestic.controls.load_control_map
 

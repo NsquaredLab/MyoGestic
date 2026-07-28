@@ -30,22 +30,20 @@ and edit it:
 ```toml
 [dofs]
 # Left side: your model's output names. Right side: controls VHI declares.
-my_index = "vhi.prediction.index"
-my_middle = "vhi.prediction.middle"
+my_thumb_spread = "vhi.prediction.thumb.abduction"
 
 fist = [                                       # one output, fanned out
-  "vhi.prediction.index",
-  "vhi.prediction.middle",
-  "vhi.prediction.ring",
-  "vhi.prediction.little",
-]
-
-pinch = [                                      # ...with a per-target gain
-  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.thumb", weight = 0.6 },   # ...with a per-target gain
   { target = "vhi.prediction.index" },
+  { target = "vhi.prediction.middle" },
+  { target = "vhi.prediction.ring" },
+  { target = "vhi.prediction.little" },
 ]
 
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
+
+# Equal weights need no tables:  grip = ["vhi.prediction.ring", "vhi.prediction.little"]
+# One control may take only one output, so no two entries may name the same address.
 ```
 
 Load it, and hand the result to a bus with a `VhiTarget`:
@@ -83,8 +81,9 @@ each address is a number or a held state, and an app that launches VHI from its 
 necessarily starts before it exists. `capabilities()` blocks on an RPC, so call
 `ensure_vhi()` from a UI handler and let `predict` no-op while `bus is None`.
 
-That is the whole setup. `bus.push({"index.flexion": 0.8})` from inside
-`@pipeline.predict` and the target negotiates the wire, encodes, and sends.
+That is the whole setup. `bus.push({"fist": 0.8})` from inside `@pipeline.predict` —
+using *your* alias, the left side of the file — and the target negotiates the wire,
+encodes, and sends.
 
 !!! note "The file is yours; the library never reads it"
     `load_control_map` takes a **Mapping**, not a path — so MyoGestic reads no configuration
@@ -224,11 +223,49 @@ def ui(ctx):
 
 See [Post-process predictions](post-process-output.md) for filter tuning.
 
+## Classification: the same mapping a regressor uses
+
+A classifier does not need its own path to the hand. It produces an **activation** —
+open or closed — and an activation is just a control value, so it travels the mapping
+you already have. Add a `threshold` to say the input is an activation rather than a
+position:
+
+```toml
+fist = { targets = [
+  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.index" },
+  { target = "vhi.prediction.middle" },
+], threshold = 0.5 }
+```
+
+Push the probability and the bus gates it before anything else sees it:
+
+```python
+@pipeline.predict
+def predict(model, features):
+    proba = model.predict_proba(features.reshape(1, -1))[0]
+    bus.push({"fist": float(proba[1])})
+    return {"class": int(np.argmax(proba))}
+```
+
+Three separate decisions happen, in this order. The threshold decides **whether** the
+hand is closed, giving a 0 or a 1. The weights decide **how much of that** each digit
+gets — the thumb 0.6, the fingers all of it. `ControlBus(smoothing=...)` then decides
+**how fast** the change is allowed to look. So VHI receives continuous per-control
+values, the same ones a regressor would send, and drop the `threshold` and the identical
+mapping serves a regressor emitting 0..1 directly.
+
+The gate matters because a continuous address is a *position*. Streaming a raw `0.73`
+into one says the finger is 73% curled, which is not what a 73%-confident classifier
+meant. `examples/synthetic/emg_classification.py` with
+`examples/controls/classification.toml` is this end to end.
+
 ## Plane 2 - discrete state and negotiation over gRPC
 
-For classifier output the right primitive isn't "push a pose every tick" — it's
-"hold state X, and change it only when the class has actually settled". That is a
-**canonical discrete DOF**, and the bus owns the gating:
+Some controls are genuinely discrete: a preset, a keypress, a mode — things that *are* a
+state rather than an amount. VHI declares those addresses discrete, and then the right
+primitive is "hold state X, and change it only when the class has actually settled".
+Reach for this for events, not for fingers; a hand closing is the activation above.
 
 Declare it in the file — `debounce_s` is the gate, in seconds:
 
@@ -246,10 +283,11 @@ Then command it by name, using the `bus` built above:
 @pipeline.predict
 def predict(model, features):
     class_idx = int(np.argmax(model.predict_proba(features)))
-    bus.push({"hand.gesture": CLASSES[class_idx].lower()})
+    bus.push({"gesture": CLASSES[class_idx]})
     return {"class": class_idx}
 ```
 
+The states come from the manifest, so push one of *those* names, not a name of your own.
 `debounce_s` is declared on the DOF rather than wrapped around the client, because
 it is a property of the control: a classifier flickering tick-to-tick must produce
 *no* transition until one state holds. Use `bus.select(...)` for a deliberate click
@@ -310,7 +348,7 @@ from myogestic.widgets.vhi.panel import VhiMovementPanel
 
 panel = VhiMovementPanel(
     training_aid,
-    lambda state: bus.select("hand.gesture", state.lower()),
+    lambda state: bus.select("gesture", state),
 )
 
 @app.ui
@@ -325,7 +363,7 @@ a fake generator, whatever the experiment needs:
 ```python
 def _on_movement_click(name: str) -> None:
     ctrl_outlet.push_sample(...)                    # e.g. drive the EMG generator
-    bus.select("hand.gesture", name.lower())        # deliver + rebase the debounce
+    bus.select("gesture", name)                     # deliver + rebase the debounce
 ```
 
 `bus.select` is the important part: it delivers the state immediately *and* rebases

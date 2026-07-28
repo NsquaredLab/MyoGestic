@@ -30,7 +30,7 @@ class GetControlManifestRequest(_message.Message):
     def __init__(self) -> None: ...
 
 class ControlCapability(_message.Message):
-    __slots__ = ("address", "kind", "lo", "hi", "rest", "states", "rest_state", "encoding", "description", "stream_name", "channel")
+    __slots__ = ("address", "kind", "lo", "hi", "rest", "states", "rest_state", "encoding", "description", "stream_name", "activation_threshold", "channel")
     ADDRESS_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     LO_FIELD_NUMBER: _ClassVar[int]
@@ -41,6 +41,7 @@ class ControlCapability(_message.Message):
     ENCODING_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
     STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
+    ACTIVATION_THRESHOLD_FIELD_NUMBER: _ClassVar[int]
     CHANNEL_FIELD_NUMBER: _ClassVar[int]
     address: str
     kind: Kind
@@ -52,8 +53,9 @@ class ControlCapability(_message.Message):
     encoding: ContinuousEncoding
     description: str
     stream_name: str
+    activation_threshold: float
     channel: int
-    def __init__(self, address: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., description: _Optional[str] = ..., stream_name: _Optional[str] = ..., channel: _Optional[int] = ...) -> None: ...
+    def __init__(self, address: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., description: _Optional[str] = ..., stream_name: _Optional[str] = ..., activation_threshold: _Optional[float] = ..., channel: _Optional[int] = ...) -> None: ...
 
 class ControlManifest(_message.Message):
     __slots__ = ("target_name", "vocabulary_version", "capabilities")
