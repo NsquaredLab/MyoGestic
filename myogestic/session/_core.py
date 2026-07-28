@@ -314,14 +314,12 @@ class Session:
             Persisting them makes old sessions self-describing: readers can
             render labels without an external lookup.
         control_space
-            Optional control configuration this recording was made under, as
-            produced by ``ControlSet.as_dict()``. Channel *names* alone do not say
-            what a number meant: a value of ``-1`` is a full excursion for a signed
-            DOF and out of range for a one-way one, and nothing recoverable
-            distinguishes "declared one-way" from "signed, but this operator never
-            went negative". Persisting the declared range and rest value is what
-            lets a reader years later reconstruct the space, so round-trip it
-            through ``load_dofs`` rather than guessing.
+            Optional control configuration this recording was made under, as produced by
+            ``ControlMap.as_dict()``. Persisting it is what lets a reader years later say
+            what a recorded number *meant*: the alias it came from and the target control
+            it drove. It carries a ``format`` tag so the form is legible rather than
+            inferred — read it back with `myogestic.controls.read_control_space`, which
+            refuses a pre-alias control space by name instead of reinterpreting it.
         """
         meta: dict[str, object] = {
             "schema_version": _META_SCHEMA_VERSION,

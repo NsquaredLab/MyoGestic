@@ -19,12 +19,26 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
-from myogestic.vhi.legacy import LEGACY_POSE_DOFS, LEGACY_POSE_WIDTH, encode_pose
+# Imported at runtime, not just for typing: the routed path needs isinstance checks to
+# tell a streamed continuous alias from a discrete one. _controls_core has no dependency
+# back on this module, so this cannot re-create the import cycle the core/bus split fixed.
+from myogestic._controls_core import Continuous
+from myogestic.vhi.legacy import (
+    LEGACY_ADDRESS_CHANNELS,
+    LEGACY_POSE_DOFS,
+    LEGACY_POSE_WIDTH,
+    encode_pose,
+)
+
+
+def _encoding_of(capability: Any) -> int:
+    """A capability's declared wire encoding, defaulting to canonical."""
+    return int(getattr(capability, "encoding", _ENCODING_CANONICAL) or _ENCODING_CANONICAL)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from myogestic._controls_core import Continuous, ControlSet
+    from myogestic._controls_core import ControlSet
 
 log = logging.getLogger("myogestic.vhi_target")
 
@@ -115,7 +129,8 @@ class VhiTarget:
 
     __slots__ = (
         "_answered", "_client", "_dofs", "_legacy", "_legacy_states", "_negate",
-        "_negotiated", "_order", "_outlet", "_pending", "_slots", "_stream", "_width",
+        "_negotiated", "_order", "_outlet", "_pending", "_routed", "_slots", "_stream",
+        "_width",
     )
 
     def __init__(
@@ -149,6 +164,10 @@ class VhiTarget:
         self._negate = False
         #: Declared DOFs paired with the channel VHI put them on.
         self._slots: tuple[tuple[int, Continuous], ...] = ()
+        #: Address-routed slots: (channel, alias, weight, sign, lo, hi). Non-empty only
+        #: when the configuration was resolved against a target manifest, which is what
+        #: distinguishes an alias-mapped set from a name-declared one.
+        self._routed: tuple[tuple[int, str, float, float, float, float], ...] = ()
         #: Tracked explicitly rather than inferred from `_order`: a configuration of
         #: only discrete DOFs negotiates fine and has an empty channel order, and
         #: inferring from the order would leave it believing it was on the legacy path
@@ -174,6 +193,7 @@ class VhiTarget:
         """
         self._order = ()
         self._slots = ()
+        self._routed = ()
         self._legacy_states = {}
         self._pending = None
         self._negate = False
@@ -275,6 +295,85 @@ class VhiTarget:
         # legacy path is already encoding frames in the meantime.
         return False
 
+    def _negotiate_routed(self, controls: ControlSet, routes: Mapping, pose: str) -> bool:
+        """Resolve alias -> address -> channel through the target's own manifest.
+
+        The addresses come from the configuration, the channels and ranges come from the
+        target. Nothing here decides where a control lives; it asks, and refuses rather
+        than guessing when the answer does not cover what was configured.
+        """
+        fetch = getattr(self._client, "capabilities", None)
+        capabilities = fetch() if callable(fetch) else None
+        self._answered = capabilities is not None or getattr(
+            self._client, "unimplemented", False
+        )
+        if capabilities is None:
+            return False
+        by_address = {cap.address: cap for cap in capabilities}
+
+        reply = self._client.declare(controls, client_name="myogestic", control_pose=pose)
+        if reply is None:
+            return False
+        if not reply.accepted:
+            refused = {v.name: v.message for v in reply.verdicts if not v.renderable}
+            raise ValueError(
+                f"this target declined part of the control space: {refused}. Rendering "
+                f"only what it accepted would leave the rest looking like controls that "
+                f"work and hold still."
+            )
+
+        slots: list[tuple[int, str, float, float, float, float]] = []
+        taken: dict[int, str] = {}
+        for alias, refs in routes.items():
+            if alias not in controls.dofs or not isinstance(controls.dofs[alias], Continuous):
+                continue  # discrete aliases travel over gRPC, not the stream
+            for ref in refs:
+                cap = by_address.get(ref.address)
+                if cap is None or getattr(cap, "kind", "") != "continuous":
+                    raise ValueError(
+                        f"{alias!r} -> {ref.address!r} is not a streamed continuous "
+                        f"control on this target, so it has no channel to occupy."
+                    )
+                channel = getattr(cap, "channel", -1)
+                if channel < 0:
+                    raise ValueError(
+                        f"{alias!r} -> {ref.address!r} is not carried on a stream "
+                        f"(the target reports no channel for it). Command it with "
+                        f"SetControl instead of routing it onto the outlet."
+                    )
+                if channel >= self._width:
+                    raise ValueError(
+                        f"{alias!r} -> {ref.address!r} is on channel {channel}, but this "
+                        f"outlet carries {self._width}. Construct the outlet at least "
+                        f"{channel + 1} channels wide."
+                    )
+                if channel in taken and taken[channel] != alias:
+                    # Two of the user's outputs aiming at one control: whichever wrote
+                    # last would win silently, and the other would look like a control
+                    # that stopped working.
+                    raise ValueError(
+                        f"{taken[channel]!r} and {alias!r} both map to {ref.address!r}. "
+                        f"One control cannot take two outputs — remove one, or fan a "
+                        f"single output out to several controls instead."
+                    )
+                taken[channel] = alias
+                sign = -1.0 if _encoding_of(cap) == _ENCODING_LEGACY_NEGATED else 1.0
+                slots.append(
+                    (channel, alias, float(ref.weight), sign, float(cap.lo), float(cap.hi))
+                )
+
+        self._dofs = controls.continuous
+        self._routed = tuple(slots)
+        self._order = tuple(reply.continuous_channel_order)
+        self._negate = False  # per-capability sign lives in each slot
+        self._negotiated = True
+        log.info(
+            "VHI routed %d alias-address pairs onto channels %s",
+            len(slots),
+            sorted({c for c, *_ in slots}),
+        )
+        return True
+
     def _rebound(self) -> ControlSet | None:
         """The configuration currently bound, for a forced re-declaration."""
         from myogestic._controls_core import ControlSet
@@ -287,6 +386,11 @@ class VhiTarget:
     def _negotiate(self, controls: ControlSet) -> bool:
         """Try the v2 handshake. False means "use the legacy path", never an error."""
         pose = "canonical" if self._stream == "control_pose" else ""
+        routes = getattr(controls, "routes", None) or {}
+        if routes and not self._negotiate_routed(controls, routes, pose):
+            return False
+        if routes:
+            return True
         reply = self._client.declare(controls, client_name="myogestic", control_pose=pose)
         # "Answered" includes an explicit UNIMPLEMENTED: that server is reachable and
         # will never speak v2, so the legacy path is settled rather than provisional.
@@ -364,6 +468,10 @@ class VhiTarget:
 
     def _bind_legacy(self, controls: ControlSet) -> None:
         """The pre-v2 path: a six-DOF pose on a nine-channel wire, or a refusal."""
+        routes = getattr(controls, "routes", None) or {}
+        if routes:
+            self._bind_legacy_routed(controls, routes)
+            return
         if controls.discrete:
             self._legacy_states = self._resolve_legacy_states(controls)
             if not self._legacy_states:
@@ -387,6 +495,47 @@ class VhiTarget:
                 f"is working and holding still."
             )
         self._dofs = pose
+
+    def _bind_legacy_routed(self, controls: ControlSet, routes: Mapping) -> None:
+        """An address-mapped configuration, driving an unmodified pre-v2 build.
+
+        A pre-v2 VHI cannot be asked what it exports, so the address-to-channel map is
+        stated once in `myogestic.vhi.legacy` rather than discovered. That keeps a
+        configuration written against v2 addresses working against the old binary — which
+        is the whole point of the compatibility path — and it dies with v1.
+        """
+        slots: list[tuple[int, str, float, float, float, float]] = []
+        unknown: list[str] = []
+        taken: dict[int, str] = {}
+        for alias, refs in routes.items():
+            dof = controls.dofs.get(alias)
+            if not isinstance(dof, Continuous):
+                continue
+            for ref in refs:
+                channel = LEGACY_ADDRESS_CHANNELS.get(ref.address)
+                if channel is None:
+                    unknown.append(ref.address)
+                    continue
+                if channel in taken and taken[channel] != alias:
+                    raise ValueError(
+                        f"{taken[channel]!r} and {alias!r} both map to {ref.address!r}. "
+                        f"One control cannot take two outputs — remove one, or fan a "
+                        f"single output out to several controls instead."
+                    )
+                taken[channel] = alias
+                # Legacy units: flexion is negative there, so a canonical value negates.
+                slots.append((channel, alias, float(ref.weight), -1.0, -1.0, 1.0))
+        if unknown:
+            raise ValueError(
+                f"VhiTarget has no legacy channel for {sorted(set(unknown))}. An "
+                f"unmodified VHI renders only "
+                f"{sorted(set(LEGACY_ADDRESS_CHANNELS))} — and dropping them silently "
+                f"would render as a joint that is working and holding still."
+            )
+        if controls.discrete:
+            self._legacy_states = self._resolve_legacy_states(controls)
+        self._dofs = controls.continuous
+        self._routed = tuple(slots)
 
     def _resolve_legacy_states(self, controls: ControlSet) -> dict[str, str]:
         """Map each declared discrete state onto a v1 movement name, or refuse.
@@ -467,6 +616,14 @@ class VhiTarget:
     def _frame(self, values: Mapping[str, float | str]) -> np.ndarray:
         """The wire frame for this binding — negotiated order, or the legacy pose."""
         each = {d.name: float(values.get(d.name, d.rest)) for d in self._dofs}
+        if self._routed:
+            frame = np.zeros(self._width, dtype=np.float32)
+            for channel, alias, weight, sign, lo, hi in self._routed:
+                # Weight first, then the target's own range — a gain must not be able to
+                # push a value past what the target said it accepts.
+                value = weight * each.get(alias, 0.0)
+                frame[channel] = sign * min(hi, max(lo, value))
+            return frame
         if not self.negotiated:
             return encode_pose(each)
         # Negotiated: VHI told us the order, and canonical values go out unnegated.
