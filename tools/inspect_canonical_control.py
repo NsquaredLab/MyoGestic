@@ -21,13 +21,16 @@ import tomllib
 
 import numpy as np
 
-from myogestic.controls import ControlBus, load_control_map, resolve
+from myogestic.controls import ControlBus, load_control_map, resolve, substitute_rest
 from myogestic.vhi import VhiTarget, virtual_hand
 
 #: The real file a user copies and edits.
 CONTROL_FILE = (
     pathlib.Path(__file__).resolve().parent.parent / "examples" / "controls" / "hand.toml"
 )
+
+#: The same form, driven by a classifier rather than a regressor.
+CLASSIFIER_FILE = CONTROL_FILE.with_name("classification.toml")
 
 RULE = "─" * 78
 
@@ -180,9 +183,35 @@ def _observe(bus, alias) -> list[tuple[int, float]] | None:
     return None
 
 
-def step_5_commands():
+def step_5_classification(capabilities):
+    """A classifier reaching the same controls through the same mapping."""
+    heading(5, f"Classification — {CLASSIFIER_FILE.name}")
+    with CLASSIFIER_FILE.open("rb") as handle:
+        controls = resolve(load_control_map(tomllib.load(handle)), capabilities)
+
+    alias = next(a for a, d in controls.dofs.items() if d.threshold_fraction is not None)
+    dof = controls.dofs[alias]
+    print(f"  {alias!r} declares threshold_fraction = {dof.threshold_fraction}, so its input is")
+    print("  read as a classifier's probability rather than a position:\n")
+    for probability in (0.0, 0.49, 0.5, 0.73, 1.0):
+        gated = substitute_rest(controls, {alias: probability})[alias]
+        sent = ", ".join(
+            f"{ref.address.split('.')[-1]}={ref.weight * gated:+.2f}"
+            for ref in controls.routes[alias]
+        )
+        print(f"    p={probability:<5} -> activation {gated:.0f}  ->  {sent}")
+
+    print("\n  Below the fraction the value is 0, at or above it 1. Nothing downstream ever")
+    print("  sees the probability itself — a continuous address is a *position*, and 0.73")
+    print("  there would claim the finger is 73% curled.")
+    print("  From the gate on, it is an ordinary control value: the same weighted fan-out a")
+    print("  regressor's output travels. Drop the threshold_fraction and this identical")
+    print("  mapping serves a regressor emitting 0..1 directly.")
+
+
+def step_6_commands():
     """Print the commands a reader can run themselves."""
-    heading(5, "Commands you can run")
+    heading(6, "Commands you can run")
     print("""  This walkthrough, with no Virtual Hand (safe anywhere):
       uv run --extra grpc python tools/inspect_canonical_control.py
 
@@ -198,7 +227,8 @@ def step_5_commands():
       uv run --extra examples --extra grpc python examples/synthetic/emg_regression.py
 
   The control files — copy and edit one:
-      examples/controls/*.toml
+      examples/controls/hand.toml                   a regressor
+      examples/controls/classification.toml         a classifier, same mapping form
 
   The contracts themselves:
       myogestic/controls.py                        the standard
@@ -207,7 +237,7 @@ def step_5_commands():
 
 
 def main() -> None:
-    """Walk all five steps."""
+    """Walk all six steps."""
     print(RULE)
     print("The control standard, end to end")
     print(RULE)
@@ -219,9 +249,10 @@ def main() -> None:
         if capabilities is not None:
             controls = step_3_resolve(control_map, capabilities)
             step_4_drive(controls, client)
+            step_5_classification(capabilities)
     finally:
         client.stop()
-    step_5_commands()
+    step_6_commands()
     print()
 
 

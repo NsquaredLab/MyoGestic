@@ -190,3 +190,41 @@ class TestTheClassificationFileTeachesTheUnifiedPath:
         text = app.read_text()
         assert "classification.toml" in text
         assert "proba[" in text.split("def predict")[1], "it must push the probability"
+
+
+class TestTheWalkthroughDemonstratesTheClassifierPath:
+    """`tools/inspect_canonical_control.py` is the one runnable artifact for this design.
+
+    It is what the docs tell a reader to run, so terminology that never appears there is
+    terminology they will not meet. `threshold_fraction` was absent from it for exactly
+    that reason once already — the rename touched the library, the files and the prose,
+    and left the demonstration behind.
+    """
+
+    WALKTHROUGH = CONFIG.parents[2] / "tools" / "inspect_canonical_control.py"
+
+    @pytest.fixture(scope="class")
+    def source(self):
+        return self.WALKTHROUGH.read_text()
+
+    def test_it_loads_the_classifier_mapping_file(self, source):
+        assert "classification.toml" in source
+
+    def test_it_names_the_cutoff_by_its_real_name(self, source):
+        assert "threshold_fraction" in source
+        assert ".threshold" not in source.replace(".threshold_fraction", "")
+
+    def test_it_shows_both_sides_of_the_cutoff(self, source):
+        """A demonstration that only ever shows the active side proves nothing."""
+        assert "substitute_rest" in source, "it must gate real values, not describe gating"
+        step = source.split("def step_5_classification")[1].split("\ndef ")[0]
+        probabilities = [
+            float(p)
+            for p in __import__("re").findall(r"\b0\.\d+|\b[01]\.0\b", step)
+        ]
+        assert any(p < 0.5 for p in probabilities), "no inactive case shown"
+        assert any(p >= 0.5 for p in probabilities), "no active case shown"
+
+    def test_the_step_it_lives_in_is_actually_called(self, source):
+        """A step defined but never reached would pass every check above."""
+        assert "step_5_classification(capabilities)" in source
