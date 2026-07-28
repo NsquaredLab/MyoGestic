@@ -30,7 +30,7 @@ class GetControlManifestRequest(_message.Message):
     def __init__(self) -> None: ...
 
 class ControlCapability(_message.Message):
-    __slots__ = ("address", "kind", "lo", "hi", "rest", "states", "rest_state", "encoding", "description", "stream_name")
+    __slots__ = ("address", "kind", "lo", "hi", "rest", "states", "rest_state", "encoding", "description", "stream_name", "channel")
     ADDRESS_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     LO_FIELD_NUMBER: _ClassVar[int]
@@ -41,6 +41,7 @@ class ControlCapability(_message.Message):
     ENCODING_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
     STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
+    CHANNEL_FIELD_NUMBER: _ClassVar[int]
     address: str
     kind: Kind
     lo: float
@@ -51,7 +52,8 @@ class ControlCapability(_message.Message):
     encoding: ContinuousEncoding
     description: str
     stream_name: str
-    def __init__(self, address: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., description: _Optional[str] = ..., stream_name: _Optional[str] = ...) -> None: ...
+    channel: int
+    def __init__(self, address: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., description: _Optional[str] = ..., stream_name: _Optional[str] = ..., channel: _Optional[int] = ...) -> None: ...
 
 class ControlManifest(_message.Message):
     __slots__ = ("target_name", "vocabulary_version", "capabilities")
@@ -72,7 +74,7 @@ class SetPresentationRequest(_message.Message):
     def __init__(self, blend: bool = ..., blend_speed: _Optional[float] = ...) -> None: ...
 
 class DofDeclaration(_message.Message):
-    __slots__ = ("name", "kind", "lo", "hi", "rest", "states", "rest_state")
+    __slots__ = ("name", "kind", "lo", "hi", "rest", "states", "rest_state", "address", "weight")
     NAME_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     LO_FIELD_NUMBER: _ClassVar[int]
@@ -80,6 +82,8 @@ class DofDeclaration(_message.Message):
     REST_FIELD_NUMBER: _ClassVar[int]
     STATES_FIELD_NUMBER: _ClassVar[int]
     REST_STATE_FIELD_NUMBER: _ClassVar[int]
+    ADDRESS_FIELD_NUMBER: _ClassVar[int]
+    WEIGHT_FIELD_NUMBER: _ClassVar[int]
     name: str
     kind: Kind
     lo: float
@@ -87,7 +91,9 @@ class DofDeclaration(_message.Message):
     rest: float
     states: _containers.RepeatedScalarFieldContainer[str]
     rest_state: str
-    def __init__(self, name: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ...) -> None: ...
+    address: str
+    weight: float
+    def __init__(self, name: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., address: _Optional[str] = ..., weight: _Optional[float] = ...) -> None: ...
 
 class DeclareRequest(_message.Message):
     __slots__ = ("standard_version", "dofs", "client_name", "control_pose_encoding")
@@ -102,16 +108,18 @@ class DeclareRequest(_message.Message):
     def __init__(self, standard_version: _Optional[str] = ..., dofs: _Optional[_Iterable[_Union[DofDeclaration, _Mapping]]] = ..., client_name: _Optional[str] = ..., control_pose_encoding: _Optional[_Union[ContinuousEncoding, str]] = ...) -> None: ...
 
 class DofVerdict(_message.Message):
-    __slots__ = ("name", "renderable", "message", "renders_as")
+    __slots__ = ("name", "address", "renderable", "message", "renders_as")
     NAME_FIELD_NUMBER: _ClassVar[int]
+    ADDRESS_FIELD_NUMBER: _ClassVar[int]
     RENDERABLE_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     RENDERS_AS_FIELD_NUMBER: _ClassVar[int]
     name: str
+    address: str
     renderable: bool
     message: str
     renders_as: str
-    def __init__(self, name: _Optional[str] = ..., renderable: bool = ..., message: _Optional[str] = ..., renders_as: _Optional[str] = ...) -> None: ...
+    def __init__(self, name: _Optional[str] = ..., address: _Optional[str] = ..., renderable: bool = ..., message: _Optional[str] = ..., renders_as: _Optional[str] = ...) -> None: ...
 
 class DeclareReply(_message.Message):
     __slots__ = ("accepted", "verdicts", "standard_version", "continuous_encoding", "continuous_stream_name", "continuous_channel_order", "blends_presentation", "control_pose_stream_name", "control_pose_channel_order", "control_pose_encoding")

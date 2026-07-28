@@ -74,22 +74,35 @@ def declare_request(
         client_name=client_name,
         control_pose_encoding=encodings[control_pose],
     )
+    routes = getattr(controls, "routes", {}) or {}
     for dof in controls.dofs.values():
-        if isinstance(dof, Continuous):
-            request.dofs.add(
-                name=dof.name,
-                kind=pb2.CONTINUOUS,
-                lo=dof.lo,
-                hi=dof.hi,
-                rest=dof.rest,
-            )
-        elif isinstance(dof, Discrete):
-            request.dofs.add(
-                name=dof.name,
-                kind=pb2.DISCRETE,
-                states=list(dof.states),
-                rest_state=dof.rest,
-            )
+        # One declaration per (alias, address) pair: a grouped mapping fans out, so it
+        # declares each of its addresses separately with that address's own weight. An
+        # unresolved set has no routes and sends the alias as the address, which is what
+        # a pre-manifest client did.
+        refs = routes.get(dof.name) or [None]
+        for ref in refs:
+            address = getattr(ref, "address", "") if ref is not None else ""
+            weight = getattr(ref, "weight", 1.0) if ref is not None else 1.0
+            if isinstance(dof, Continuous):
+                request.dofs.add(
+                    name=dof.name,
+                    kind=pb2.CONTINUOUS,
+                    lo=dof.lo,
+                    hi=dof.hi,
+                    rest=dof.rest,
+                    address=address,
+                    weight=weight,
+                )
+            elif isinstance(dof, Discrete):
+                request.dofs.add(
+                    name=dof.name,
+                    kind=pb2.DISCRETE,
+                    states=list(dof.states),
+                    rest_state=dof.rest,
+                    address=address,
+                    weight=weight,
+                )
     return request
 
 
@@ -241,6 +254,8 @@ class VhiCanonicalClient:
                 rest=cap.rest,
                 states=tuple(cap.states),
                 rest_state=cap.rest_state,
+                channel=cap.channel,
+                encoding=int(cap.encoding),
                 description=cap.description,
             )
             for cap in manifest.capabilities

@@ -67,15 +67,18 @@ from myogestic._controls_core import (
     substitute_rest,
 )
 from myogestic._controls_map import (
+    CONTROL_SPACE_FORMAT,
     Binding,
     Capability,
     ControlMap,
     TargetRef,
     load_control_map,
+    read_control_space,
     resolve,
 )
 
 __all__ = [
+    "CONTROL_SPACE_FORMAT",
     "STANDARD_VERSION",
     "Binding",
     "Capability",
@@ -91,6 +94,7 @@ __all__ = [
     "decode",
     "encode",
     "load_control_map",
+    "read_control_space",
     "load_dofs",
     "resolve",
     "substitute_rest",

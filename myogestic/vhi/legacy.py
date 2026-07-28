@@ -47,6 +47,26 @@ LEGACY_POSE_DOFS: tuple[str, ...] = (
     "little.flexion",
 )
 
+#: Target address -> the legacy pose channel that renders it.
+#:
+#: The legacy wire predates the manifest, so a pre-v2 VHI cannot be *asked* what it
+#: exports — this is the same mapping, stated once, so a configuration written against
+#: v2 addresses still drives an unmodified build. Both the short and explicit axis forms
+#: appear because a configuration may use either.
+LEGACY_ADDRESS_CHANNELS: dict[str, int] = {
+    "vhi.prediction.thumb": 0,
+    "vhi.prediction.thumb.flexion": 0,
+    "vhi.prediction.thumb.abduction": 1,
+    "vhi.prediction.index": 2,
+    "vhi.prediction.index.flexion": 2,
+    "vhi.prediction.middle": 3,
+    "vhi.prediction.middle.flexion": 3,
+    "vhi.prediction.ring": 4,
+    "vhi.prediction.ring.flexion": 4,
+    "vhi.prediction.little": 5,
+    "vhi.prediction.little.flexion": 5,
+}
+
 #: Width of a legacy pose frame on the wire, including the three dead channels.
 LEGACY_POSE_WIDTH = 9
 

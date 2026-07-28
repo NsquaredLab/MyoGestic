@@ -94,6 +94,14 @@ message ControlCapability {
   // The LSL stream this control is read from, when it is streamed rather than sent
   // over SetControl. Empty means SetControl only.
   string stream_name = 10;
+
+  // Which channel of stream_name carries this control. -1 when it is not streamed.
+  //
+  // This is the address-to-channel map, published per capability rather than inferred
+  // from a list, because two addresses may legitimately name the same channel: a short
+  // form and its explicit axis form are the same control. A client resolves its own
+  // alias to an address and the address to a channel, and never has to guess an index.
+  int32 channel = 11;
 }
 
 message ControlManifest {
@@ -149,8 +157,9 @@ enum Kind {
 
 // One DOF the client intends to command.
 message DofDeclaration {
-  // Canonical dotted name, e.g. "index.flexion". The only identifier that
-  // crosses the wire — never a channel index.
+  // The client's own name for this output — an alias it owns, e.g. "my_index" or
+  // "fist". Echoed back in the verdict so a client can match answers to its own
+  // configuration. VHI does not interpret it and must never require a shape for it.
   string name = 1;
   Kind kind = 2;
   // CONTINUOUS only. Defaults to [-1, 1] when both are zero.
@@ -162,6 +171,21 @@ message DofDeclaration {
   repeated string states = 6;
   // DISCRETE only: the neutral state; must appear in states.
   string rest_state = 7;
+
+  // The target-owned control address this alias maps to, from GetControlManifest —
+  // e.g. "vhi.prediction.index". This is what VHI resolves; `name` is the client's
+  // label for it.
+  //
+  // When empty, VHI falls back to treating `name` as the address, which is what a
+  // client written before the manifest existed sends. That fallback is why this field
+  // is additive rather than breaking.
+  string address = 8;
+
+  // For a grouped mapping: the gain this alias applies to THIS address before VHI's own
+  // range conversion. Defaults to 1.0 when zero-or-unset, so a client that sends no
+  // weight is unchanged. One alias fanning out to several addresses sends one
+  // declaration per address, each with its own weight.
+  float weight = 9;
 }
 
 message DeclareRequest {
@@ -196,7 +220,10 @@ message DeclareRequest {
 
 // What VHI can do with one declared DOF.
 message DofVerdict {
+  // The client's alias, echoed verbatim.
   string name = 1;
+  // The address it resolved to, so a client can see what VHI actually matched.
+  string address = 5;
   // true: VHI will render this DOF. false: it will not, and says why. A DOF that
   // is declared but not renderable must never be silently ignored — an ignored
   // joint looks exactly like a joint that is working and holding still.

@@ -142,7 +142,11 @@ class ControlMap:
         return tuple(seen)
 
     def as_dict(self) -> dict[str, Any]:
-        """A plain mapping that round-trips through `load_control_map`."""
+        """A plain mapping that round-trips through `load_control_map`.
+
+        Tagged with `CONTROL_SPACE_FORMAT` so anything that persists it stays legible:
+        a reader can name the format it found rather than guessing from the shape.
+        """
         dofs: dict[str, Any] = {}
         for binding in self.bindings.values():
             plain = all(ref.weight == 1.0 for ref in binding.targets)
@@ -161,7 +165,7 @@ class ControlMap:
                 if binding.label:
                     entry["label"] = binding.label
                 dofs[binding.alias] = entry
-        return {"dofs": dofs}
+        return {"format": CONTROL_SPACE_FORMAT, "dofs": dofs}
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +186,14 @@ class Capability:
         Continuous only: the domain and the neutral value.
     states, rest_state
         Discrete only: the accepted states and the neutral one.
+    channel
+        Which channel of the target's stream carries this control, or ``-1`` when it is
+        not streamed. Published per capability rather than inferred from a list, because
+        two addresses may legitimately name one control — a short form and its explicit
+        axis form.
+    encoding
+        How a value must be encoded on that stream: ``1`` canonical, ``2``
+        legacy-negated, ``0`` unstated. A client that reads ``0`` must not guess.
     description
         Human-readable. For a log or an error message; never parsed.
 
@@ -199,6 +211,8 @@ class Capability:
     rest: float = 0.0
     states: tuple[str, ...] = ()
     rest_state: str = ""
+    channel: int = -1
+    encoding: int = 0
     description: str = ""
 
     @property
@@ -538,7 +552,69 @@ def resolve(
     return ControlSet(dofs=dofs, routes=routes)
 
 
+#: The value of ``control_space["format"]`` in a recording written by this version.
+CONTROL_SPACE_FORMAT = "alias-address/1"
+
+
+def read_control_space(raw: Mapping[str, Any]) -> ControlMap:
+    """A recording's persisted control space, as a `ControlMap`.
+
+    New recordings store the alias-to-address mapping and tag it with
+    `CONTROL_SPACE_FORMAT`. That tag is what makes the format **legible**: a reader can
+    say which form a recording used instead of inferring it from the shape.
+
+    Parameters
+    ----------
+    raw
+        The ``control_space`` object out of a session's ``meta.json`` or a model's
+        ``.controls.json`` sidecar.
+
+    Returns
+    -------
+    ControlMap
+        Still unresolved — an archived mapping means nothing until a target declares
+        what its addresses do, exactly like a freshly parsed file.
+
+    Raises
+    ------
+    ValueError
+        For a control space written in the pre-alias format, naming the format it found.
+        It is **not** normalised on the way in: that older shape declared its own kinds
+        and ranges, which the target now owns, so silently reinterpreting it would put
+        made-up semantics on archived data and call them recorded fact. Re-record, or
+        read the archive with the version that wrote it.
+
+    Examples
+    --------
+    >>> from myogestic.controls import read_control_space
+    >>> read_control_space(
+    ...     {"format": "alias-address/1", "dofs": {"my_index": "vhi.prediction.index"}}
+    ... ).addresses()
+    ('vhi.prediction.index',)
+    """
+    fmt = raw.get("format")
+    if fmt == CONTROL_SPACE_FORMAT:
+        return load_control_map(raw)
+    if fmt is None:
+        # The pre-alias shape is recognisable without a tag: its values are kinds
+        # ("continuous"), state lists, or tables carrying `kind` — never addresses.
+        raise ValueError(
+            f"this control space predates the alias/address format "
+            f"({CONTROL_SPACE_FORMAT!r}) and is not supported. It declared its own kinds "
+            f"and ranges, which the target now owns, so there is no faithful way to read "
+            f"it forward — reinterpreting it would put invented semantics on archived "
+            f"data. Re-record with this version, or read the archive with the version "
+            f"that wrote it."
+        )
+    raise ValueError(
+        f"unknown control-space format {fmt!r}; this version writes and reads "
+        f"{CONTROL_SPACE_FORMAT!r}."
+    )
+
+
 __all__ = [
+    "CONTROL_SPACE_FORMAT",
+    "read_control_space",
     "Binding",
     "Capability",
     "ControlMap",

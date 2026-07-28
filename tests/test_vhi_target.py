@@ -1046,3 +1046,174 @@ def test_force_re_declares_after_a_settled_handshake():
     assert len(client.declared) == before, "settled means no further RPC"
     assert target.negotiate(force=True) is True
     assert len(client.declared) == before + 1, "force must re-declare"
+
+
+# --- address routing: alias -> address -> channel ---------------------------------
+#
+# The routed path is what makes a user-owned alias drive a target-owned control. It is
+# keyed on what the *target* published, so these fakes carry a manifest.
+
+CANONICAL_ENC, LEGACY_ENC = 1, 2
+
+
+def _cap(address, channel, *, lo=-1.0, hi=1.0, kind="continuous", enc=CANONICAL_ENC, states=()):
+    from myogestic.controls import Capability
+
+    return Capability(
+        address=address,
+        kind=kind,
+        lo=lo,
+        hi=hi,
+        rest=0.0,
+        states=tuple(states),
+        rest_state=states[0] if states else "",
+        channel=channel,
+        encoding=enc,
+    )
+
+
+MANIFEST = [
+    _cap("vhi.prediction.thumb", 0),
+    _cap("vhi.prediction.index", 2),
+    _cap("vhi.prediction.middle", 3),
+    _cap("vhi.grip.force", 4, lo=0.0, hi=1.0),
+    _cap("vhi.control.gesture", -1, kind="discrete", states=("Rest", "Fist")),
+]
+
+
+class ManifestClient(FakeClient):
+    """A client that also answers the capability manifest."""
+
+    def __init__(self, reply=None, manifest=MANIFEST):
+        super().__init__(reply)
+        self.manifest = manifest
+
+    def capabilities(self):
+        return self.manifest
+
+
+def _routed_target(dofs, *, manifest=MANIFEST, order=()):
+    """A bound target for an alias/address configuration."""
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(load_control_map({"dofs": dofs}), manifest)
+    outlet = FakeOutlet()
+    client = ManifestClient(FakeReply(continuous_channel_order=order or ()), manifest)
+    target = VhiTarget(outlet, client=client)
+    target.bind(controls)
+    return target, outlet, controls
+
+
+def test_an_alias_lands_on_the_channel_the_target_published():
+    """Not on its position in the declaration — on the channel the manifest names."""
+    target, outlet, _ = _routed_target({"my_index": "vhi.prediction.index"})
+    assert target.negotiated is True
+    target.send({"my_index": 1.0}, {})
+    assert outlet.last[2] == pytest.approx(1.0), "channel 2, per the manifest"
+    assert outlet.last[0] == 0.0
+
+
+def test_a_fan_out_reaches_every_listed_channel():
+    target, outlet, _ = _routed_target(
+        {"fist": ["vhi.prediction.index", "vhi.prediction.middle"]}
+    )
+    target.send({"fist": 1.0}, {})
+    assert outlet.last[2] == pytest.approx(1.0)
+    assert outlet.last[3] == pytest.approx(1.0)
+
+
+def test_a_weight_scales_one_member_of_a_fan_out():
+    target, outlet, _ = _routed_target(
+        {
+            "fist": [
+                {"target": "vhi.prediction.thumb", "weight": 0.6},
+                "vhi.prediction.index",
+            ]
+        }
+    )
+    target.send({"fist": 1.0}, {})
+    assert outlet.last[0] == pytest.approx(0.6), "thumb gets 0.6x"
+    assert outlet.last[2] == pytest.approx(1.0), "index gets the full value"
+
+
+def test_a_weight_cannot_push_a_value_past_the_targets_range():
+    """Weight applies first, then the target's own range — the gain is not an escape."""
+    target, outlet, _ = _routed_target(
+        {"a": [{"target": "vhi.grip.force", "weight": 1.0}]}
+    )
+    target.send({"a": 5.0}, {})
+    assert outlet.last[4] == pytest.approx(1.0), "clamped to the declared hi"
+
+
+def test_the_declared_encoding_decides_the_sign():
+    """Per capability, because two streams on one target need not share a convention."""
+    legacy = [_cap("vhi.prediction.index", 2, enc=LEGACY_ENC)]
+    target, outlet, _ = _routed_target({"a": "vhi.prediction.index"}, manifest=legacy)
+    target.send({"a": 1.0}, {})
+    assert outlet.last[2] == pytest.approx(-1.0), "legacy-negated wire"
+
+
+def test_two_aliases_on_one_channel_fall_back_rather_than_racing():
+    """Whichever wrote last would win silently, and the other would look broken."""
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(
+        load_control_map(
+            {"a": "x", "b": "y"}
+            if False
+            else {"dofs": {"a": "vhi.prediction.index", "b": "vhi.prediction.index"}}
+        ),
+        MANIFEST,
+    )
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply()))
+    with pytest.raises(ValueError, match="both map to"):
+        target.bind(controls)
+
+
+def test_an_unstreamed_capability_falls_back():
+    """A control with no channel cannot be driven over the stream — say so."""
+    from myogestic.controls import load_control_map, resolve
+
+    off_stream = [_cap("vhi.prediction.index", -1)]
+    controls = resolve(
+        load_control_map({"dofs": {"a": "vhi.prediction.index"}}), off_stream
+    )
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), off_stream))
+    with pytest.raises(ValueError, match="not carried on a stream"):
+        target.bind(controls)
+
+
+def test_a_discrete_alias_is_not_routed_onto_the_stream():
+    """Held states travel over gRPC; only continuous aliases occupy channels."""
+    target, outlet, _ = _routed_target(
+        {"g": {"target": "vhi.control.gesture", "debounce_s": 0.1}}
+    )
+    assert target._routed == (), "a discrete alias claims no channel"
+
+
+def test_stop_rests_every_routed_channel():
+    target, outlet, _ = _routed_target(
+        {"fist": ["vhi.prediction.index", "vhi.prediction.middle"]}
+    )
+    target.send({"fist": 1.0}, {})
+    target.stop()
+    assert outlet.last.tolist() == [0.0] * LEGACY_POSE_WIDTH
+    assert outlet.flushes == 1
+
+
+def test_an_address_configuration_still_drives_a_pre_v2_build():
+    """The compatibility path: no manifest to ask, so the address map is stated once."""
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(
+        load_control_map({"dofs": {"fist": ["vhi.prediction.index", "vhi.prediction.middle"]}}),
+        MANIFEST,
+    )
+    outlet = FakeOutlet()
+    target = VhiTarget(outlet, client=FakeClient(reply=None), legacy_client=FakeLegacyClient())
+    target.bind(controls)
+    assert target.negotiated is False, "no v2 answer, so the legacy path"
+    target.send({"fist": 1.0}, {})
+    # Legacy units: flexion is negative there.
+    assert outlet.last[2] == pytest.approx(-1.0)
+    assert outlet.last[3] == pytest.approx(-1.0)
