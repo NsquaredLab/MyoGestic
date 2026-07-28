@@ -621,3 +621,83 @@ def test_a_negotiated_order_shorter_than_the_wire_pads_the_tail():
     assert outlet.last.shape == (LEGACY_POSE_WIDTH,)
     assert outlet.last[5] == pytest.approx(-1.0)
     assert outlet.last[6:].tolist() == [0.0, 0.0, 0.0]
+
+
+def test_a_discrete_only_configuration_negotiates_and_delivers():
+    """The bug tracking negotiation explicitly fixes.
+
+    A discrete-only config has an empty continuous channel order, so inferring
+    "negotiated" from that order left the target believing it was on the legacy path
+    — which refuses discrete DOFs and would have rendered nothing at all.
+    """
+    client = FakeClient(
+        FakeReply(
+            continuous_channel_order=(),
+            continuous_encoding=LEGACY_NEGATED,
+            verdicts=(FakeVerdict("hand.grasp"),),
+        )
+    )
+    outlet = FakeOutlet()
+    target = VhiTarget(outlet, client=client)
+    target.bind(load_dofs({"dofs": {"hand.grasp": ["rest", "fist"]}}))
+    assert target.negotiated is True
+    target.send({"hand.grasp": "fist"}, {"hand.grasp": "fist"})
+    assert client.sent == [(None, {"hand.grasp": "fist"})]
+
+
+def test_a_mixed_configuration_negotiates_both_kinds():
+    """v2 lifts v1's exclusivity: a pose and a held state travel together."""
+    client = FakeClient(
+        FakeReply(
+            continuous_channel_order=("index.flexion",),
+            continuous_encoding=LEGACY_NEGATED,
+        )
+    )
+    outlet = FakeOutlet()
+    target = VhiTarget(outlet, client=client)
+    target.bind(
+        load_dofs({"dofs": {"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]}})
+    )
+    assert target.negotiated is True
+    target.send({"index.flexion": 1.0, "hand.grasp": "fist"}, {"hand.grasp": "fist"})
+    assert outlet.last[0] == pytest.approx(-1.0)
+    assert client.sent == [(None, {"hand.grasp": "fist"})]
+
+
+def test_a_subset_of_the_negotiated_channels_is_legal():
+    """VHI reports its whole channel map; a client may command part of it.
+
+    Requiring an exact set match made every subset configuration fall back, even
+    though Declare had accepted it — and the negotiated order is a channel map, not a
+    demand that the client drive every channel on it.
+    """
+    outlet = FakeOutlet()
+    target = VhiTarget(
+        outlet,
+        client=FakeClient(
+            FakeReply(
+                continuous_channel_order=LEGACY_POSE_DOFS,
+                continuous_encoding=LEGACY_NEGATED,
+            )
+        ),
+    )
+    target.bind(_controls("index.flexion"))
+    assert target.negotiated is True
+    target.send({"index.flexion": 1.0}, {})
+    # Placed at the channel VHI named, not at position 0 of the declaration.
+    assert outlet.last[2] == pytest.approx(-1.0)
+    assert outlet.last[0] == 0.0
+
+
+def test_a_declared_dof_with_no_negotiated_channel_falls_back():
+    """The case that must still fail: a DOF with nowhere to go renders nothing."""
+    client = FakeClient(
+        FakeReply(
+            continuous_channel_order=("index.flexion",),
+            continuous_encoding=LEGACY_NEGATED,
+        )
+    )
+    target = VhiTarget(FakeOutlet(), client=client)
+    with pytest.raises(ValueError, match="no legacy channel"):
+        target.bind(_controls("index.flexion", **{"wrist.rotation": "continuous"}))
+    assert target.negotiated is False

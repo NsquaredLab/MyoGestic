@@ -41,7 +41,9 @@ class VhiCanonicalControlStub(object):
     hand-written tables in MyoGestic documented channel 1 wrongly.
     2. Pose and movements were mutually exclusive (see v1 ControlMode), so an app
     that wanted a continuous grip and a discrete grasp state needed two modes
-    it could not hold at once.
+    it could not hold at once. v2 dissolves that rather than working around it:
+    continuous DOFs drive the predicted hand and discrete DOFs drive the control
+    hand's movements, so the two never contend for one driver.
     3. Nothing could confirm a DOF actually renders the way its name claims.
     Verifying that VHI curls the *index* finger, in the *flexion* direction,
     required a human watching the screen. SweepControl closes that.
@@ -89,7 +91,9 @@ class VhiCanonicalControlServicer(object):
     hand-written tables in MyoGestic documented channel 1 wrongly.
     2. Pose and movements were mutually exclusive (see v1 ControlMode), so an app
     that wanted a continuous grip and a discrete grasp state needed two modes
-    it could not hold at once.
+    it could not hold at once. v2 dissolves that rather than working around it:
+    continuous DOFs drive the predicted hand and discrete DOFs drive the control
+    hand's movements, so the two never contend for one driver.
     3. Nothing could confirm a DOF actually renders the way its name claims.
     Verifying that VHI curls the *index* finger, in the *flexion* direction,
     required a human watching the screen. SweepControl closes that.
@@ -166,7 +170,9 @@ class VhiCanonicalControl(object):
     hand-written tables in MyoGestic documented channel 1 wrongly.
     2. Pose and movements were mutually exclusive (see v1 ControlMode), so an app
     that wanted a continuous grip and a discrete grasp state needed two modes
-    it could not hold at once.
+    it could not hold at once. v2 dissolves that rather than working around it:
+    continuous DOFs drive the predicted hand and discrete DOFs drive the control
+    hand's movements, so the two never contend for one driver.
     3. Nothing could confirm a DOF actually renders the way its name claims.
     Verifying that VHI curls the *index* finger, in the *flexion* direction,
     required a human watching the screen. SweepControl closes that.

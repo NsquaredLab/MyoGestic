@@ -17,7 +17,9 @@ package myogestic.vhi.v2;
 //      hand-written tables in MyoGestic documented channel 1 wrongly.
 //   2. Pose and movements were mutually exclusive (see v1 ControlMode), so an app
 //      that wanted a continuous grip and a discrete grasp state needed two modes
-//      it could not hold at once.
+//      it could not hold at once. v2 dissolves that rather than working around it:
+//      continuous DOFs drive the predicted hand and discrete DOFs drive the control
+//      hand's movements, so the two never contend for one driver.
 //   3. Nothing could confirm a DOF actually renders the way its name claims.
 //      Verifying that VHI curls the *index* finger, in the *flexion* direction,
 //      required a human watching the screen. SweepControl closes that.
@@ -122,9 +124,14 @@ message DeclareReply {
   // ENCODING_UNSPECIFIED reply must be treated as a failed negotiation.
   ContinuousEncoding continuous_encoding = 6;
   // The LSL stream VHI will read continuous values from, and the channel order
-  // it expects on it. Order is authoritative: index i of this list is channel i.
-  // Clients should publish these as LSL channel labels so a reordering renames
-  // channels instead of silently remapping them.
+  // it expects on it. Order is authoritative: index i of this list is channel i,
+  // and a client is expected to build its frame *from* this list rather than from
+  // its own configuration — which is what makes the two unable to disagree.
+  //
+  // Publishing these as LSL channel labels is good practice, but note that VHI does
+  // not read them back today: since the frame layout is derived from this reply, a
+  // label check could not fail. It becomes worth adding if a client ever lays out
+  // its frame independently of the negotiation.
   string continuous_stream_name = 4;
   repeated string continuous_channel_order = 5;
 }
@@ -136,6 +143,11 @@ message SetControlRequest {
   // Discrete DOF states by canonical name. Each must be one of that DOF's
   // declared states. Kept separate from continuous on purpose: a held state and
   // a number are not the same kind of command.
+  //
+  // A state is resolved against the renderer's own vocabulary — for VHI, the
+  // movement names it currently offers, matched case-insensitively. Declare reports
+  // the resolution up front (see DofVerdict.renders_as) so a client never has to
+  // guess whether "fist" means anything here.
   map<string, string> discrete = 2;
 }
 
