@@ -60,6 +60,17 @@ def declare_request(
         working exactly as before — the whole point of negotiating it rather than
         flipping it.
     """
+    if not hasattr(controls, "dofs"):
+        # A ControlMap is the *unresolved* form and cannot be declared: a declaration
+        # carries each control's kind and range, and only the target can supply those.
+        # Raised rather than swallowed — returning None here would report a programming
+        # error as "this target does not speak v2", which is a different and misleading
+        # conclusion the caller would then act on.
+        raise TypeError(
+            f"declare() needs a resolved ControlSet, got {type(controls).__name__}. "
+            f"Resolve first: resolve(control_map, client.capabilities())."
+        )
+
     encodings = {
         "": pb2.ENCODING_UNSPECIFIED,
         "canonical": pb2.CANONICAL,
@@ -176,11 +187,9 @@ class VhiCanonicalClient:
             Declare the renderer's second pose stream too — see `declare_request`.
             Omitted by default, so this negotiates exactly what it did before.
         """
+        request = declare_request(controls, client_name, control_pose=control_pose)
         try:
-            reply = self._stub.Declare(
-                declare_request(controls, client_name, control_pose=control_pose),
-                timeout=_RPC_TIMEOUT_S,
-            )
+            reply = self._stub.Declare(request, timeout=_RPC_TIMEOUT_S)
         except Exception as e:  # noqa: BLE001 - absence is an answer here
             self.connected = False
             # UNIMPLEMENTED means a server *is* there and does not serve v2 — a settled
@@ -255,6 +264,7 @@ class VhiCanonicalClient:
                 states=tuple(cap.states),
                 rest_state=cap.rest_state,
                 channel=cap.channel,
+                stream_name=cap.stream_name,
                 encoding=int(cap.encoding),
                 description=cap.description,
             )

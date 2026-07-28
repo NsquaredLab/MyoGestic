@@ -1217,3 +1217,90 @@ def test_an_address_configuration_still_drives_a_pre_v2_build():
     # Legacy units: flexion is negative there.
     assert outlet.last[2] == pytest.approx(-1.0)
     assert outlet.last[3] == pytest.approx(-1.0)
+
+
+# --- two namespaces, two streams -------------------------------------------------
+#
+# vhi.prediction.* is the model-driven hand on MyoGestic_Output; vhi.control.pose.* is the
+# operator's hand on MyoGestic_ControlPose. They share channel numbers, so a target that
+# ignored stream_name would put a value on the wrong hand.
+
+TWO_STREAM_MANIFEST = [
+    _cap("vhi.prediction.index", 2),
+    _cap("vhi.control.pose.index", 2),
+]
+
+
+def _cap_on(address, channel, stream, **kw):
+    from myogestic.controls import Capability
+
+    return Capability(
+        address=address, kind="continuous", lo=-1.0, hi=1.0, rest=0.0,
+        channel=channel, encoding=CANONICAL_ENC, stream_name=stream, **kw
+    )
+
+
+TWO_STREAMS = [
+    _cap_on("vhi.prediction.index", 2, "MyoGestic_Output"),
+    _cap_on("vhi.prediction.middle", 3, "MyoGestic_Output"),
+    _cap_on("vhi.control.pose.index", 2, "MyoGestic_ControlPose"),
+    _cap_on("vhi.control.pose.middle", 3, "MyoGestic_ControlPose"),
+]
+
+
+def test_an_output_target_ignores_control_pose_addresses():
+    """Channel 2 of one stream is not channel 2 of the other."""
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(
+        load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
+    )
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS))
+    with pytest.raises(ValueError, match="not a streamed continuous control"):
+        target.bind(controls)
+
+
+def test_a_control_pose_target_ignores_prediction_addresses():
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(
+        load_control_map({"dofs": {"a": "vhi.prediction.index"}}), TWO_STREAMS
+    )
+    target = VhiTarget(
+        FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS), stream="control_pose"
+    )
+    with pytest.raises(ValueError, match="not a streamed continuous control"):
+        target.bind(controls)
+
+
+def test_the_refusal_names_both_namespaces():
+    """A namespace mix-up is the likely mistake, so the error should say which is which."""
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(
+        load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
+    )
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS))
+    with pytest.raises(ValueError) as excinfo:
+        target.bind(controls)
+    message = str(excinfo.value)
+    assert "vhi.prediction" in message and "vhi.control.pose" in message
+
+
+def test_each_target_routes_its_own_stream():
+    """The same alias name, two targets, two hands — each lands on its own stream."""
+    from myogestic.controls import load_control_map, resolve
+
+    for stream, address in (
+        ("output", "vhi.prediction.middle"),
+        ("control_pose", "vhi.control.pose.middle"),
+    ):
+        controls = resolve(load_control_map({"dofs": {"a": address}}), TWO_STREAMS)
+        outlet = FakeOutlet()
+        target = VhiTarget(
+            outlet, client=ManifestClient(FakeReply(), TWO_STREAMS), stream=stream
+        )
+        target.bind(controls)
+        assert target.negotiated is True, stream
+        target.send({"a": 1.0}, {})
+        assert outlet.last[3] == pytest.approx(1.0), stream

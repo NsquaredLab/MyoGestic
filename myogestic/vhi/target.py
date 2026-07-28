@@ -309,7 +309,17 @@ class VhiTarget:
         )
         if capabilities is None:
             return False
-        by_address = {cap.address: cap for cap in capabilities}
+        # Only this stream's controls. A target may publish several, and a channel index
+        # means nothing across them — routing an address from the wrong stream would put a
+        # value on a same-numbered channel of a different hand.
+        wanted = (
+            "MyoGestic_ControlPose" if self._stream == "control_pose" else "MyoGestic_Output"
+        )
+        by_address = {
+            cap.address: cap
+            for cap in capabilities
+            if not getattr(cap, "stream_name", "") or cap.stream_name == wanted
+        }
 
         reply = self._client.declare(controls, client_name="myogestic", control_pose=pose)
         if reply is None:
@@ -331,8 +341,10 @@ class VhiTarget:
                 cap = by_address.get(ref.address)
                 if cap is None or getattr(cap, "kind", "") != "continuous":
                     raise ValueError(
-                        f"{alias!r} -> {ref.address!r} is not a streamed continuous "
-                        f"control on this target, so it has no channel to occupy."
+                        f"{alias!r} -> {ref.address!r} is not a streamed continuous control "
+                        f"on {wanted!r}. Check the namespace: vhi.prediction.* is the "
+                        f"model-driven hand and vhi.control.pose.* is the operator's — a "
+                        f"target drives one stream, not both."
                     )
                 channel = getattr(cap, "channel", -1)
                 if channel < 0:

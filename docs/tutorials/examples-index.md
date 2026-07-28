@@ -39,7 +39,7 @@ build, a pre-v2 build, and nothing running.
 ### `emg_classification.py` - start here
 
 The simplest end-to-end loop: 8-channel synthetic EMG → MyoVerse RMS+MAV
-features → CatBoost binary classifier → smoothed 9-vec to the VHI
+features → CatBoost binary classifier → smoothed control values to the VHI
 predicted hand via the `MyoGestic_Output` LSL outlet. No gRPC. This is
 the canonical first read, and its line-by-line companion is the
 [EMG classification tutorial](emg-classification.md).
