@@ -195,3 +195,84 @@ message SweepControlReply {
   // `observed` rather than trusting a single bool.
   bool matched_expectation = 4;
 }
+
+// ---------------------------------------------------------------------------
+// Recording / label-acquisition aid.
+//
+// Deliberately a SEPARATE service, not extra RPCs on VhiCanonicalControl, because
+// the distinction is the whole point: this is not a control plane and nothing here
+// is a canonical DOF.
+//
+// A canonical discrete DOF is a *held state* — an application asks for "grip" and
+// the hand holds a grip. That semantics must not bend to accommodate data
+// collection. But collecting regression training data needs the opposite: a
+// deliberately moving control hand, so the recorded VHI_Control stream sweeps a
+// continuous kinematic range for EMG windows to be aligned against.
+//
+// Both live here because both are properties of a *recording session* rather than of
+// the thing being controlled:
+//
+//   - the session gate, which stops VHI's local keyboard from competing with
+//     MyoGestic as a movement source while a session is being recorded;
+//   - the training program, which cycles the control hand to generate a trajectory.
+//
+// A program names a VHI movement, and that is intentional: a recording aid is
+// allowed to be application-specific, precisely so the canonical vocabulary does not
+// have to grow a concept ("sweep me for training") that no application controls.
+// ---------------------------------------------------------------------------
+service VhiTrainingAid {
+  // Mark a MyoGestic recording session active or finished. While active, VHI ignores
+  // its local keyboard so the recording has a single movement source.
+  rpc SetRecordingSession (SetRecordingSessionRequest) returns (TrainingAck);
+
+  // Start cycling the control hand through a movement, producing a continuous
+  // trajectory on VHI_Control. Refused if a program is already running.
+  rpc StartTrainingProgram (StartTrainingProgramRequest) returns (TrainingAck);
+
+  // Stop the program and return the control hand to rest.
+  rpc StopTrainingProgram (StopTrainingProgramRequest) returns (TrainingAck);
+
+  // Query the aid's state. Also carries the movement names a program may use, so a
+  // client can discover them without the v1 control service.
+  rpc GetTrainingState (GetTrainingStateRequest) returns (TrainingState);
+}
+
+message SetRecordingSessionRequest {
+  // true while a recording session is in progress.
+  bool active = 1;
+}
+
+message StartTrainingProgramRequest {
+  // A VHI movement name, from TrainingState.available_movements. Application-specific
+  // by design — see the note above this service.
+  string movement = 1;
+  // Movement cycles per second. Non-positive leaves VHI's current timing alone.
+  float frequency_hz = 2;
+  // Seconds held at full excursion in each cycle. Negative leaves it alone.
+  float hold_time_s = 3;
+  // Seconds held at rest in each cycle. Negative leaves it alone.
+  float rest_time_s = 4;
+}
+
+// Empty — proto3 needs a message type even with no parameters.
+message StopTrainingProgramRequest {}
+message GetTrainingStateRequest {}
+
+message TrainingAck {
+  bool applied = 1;
+  // Human-readable reason when applied == false.
+  string message = 2;
+}
+
+message TrainingState {
+  // Whether a recording session is currently marked active.
+  bool recording_session_active = 1;
+  // Whether a training program is cycling the control hand right now.
+  bool program_running = 2;
+  // The movement a running program is cycling; empty when none is running.
+  string program_movement = 3;
+  // The control hand's animation state, e.g. "waiting" | "closing" | "holding".
+  string animation_state = 4;
+  // Movement names a program may name. Discover, don't hard-code.
+  repeated string available_movements = 5;
+}

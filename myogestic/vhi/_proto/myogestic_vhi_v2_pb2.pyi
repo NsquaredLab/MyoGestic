@@ -149,3 +149,51 @@ class SweepControlReply(_message.Message):
     observed: _containers.RepeatedCompositeFieldContainer[SweepObservation]
     matched_expectation: bool
     def __init__(self, completed: bool = ..., message: _Optional[str] = ..., observed: _Optional[_Iterable[_Union[SweepObservation, _Mapping]]] = ..., matched_expectation: bool = ...) -> None: ...
+
+class SetRecordingSessionRequest(_message.Message):
+    __slots__ = ("active",)
+    ACTIVE_FIELD_NUMBER: _ClassVar[int]
+    active: bool
+    def __init__(self, active: bool = ...) -> None: ...
+
+class StartTrainingProgramRequest(_message.Message):
+    __slots__ = ("movement", "frequency_hz", "hold_time_s", "rest_time_s")
+    MOVEMENT_FIELD_NUMBER: _ClassVar[int]
+    FREQUENCY_HZ_FIELD_NUMBER: _ClassVar[int]
+    HOLD_TIME_S_FIELD_NUMBER: _ClassVar[int]
+    REST_TIME_S_FIELD_NUMBER: _ClassVar[int]
+    movement: str
+    frequency_hz: float
+    hold_time_s: float
+    rest_time_s: float
+    def __init__(self, movement: _Optional[str] = ..., frequency_hz: _Optional[float] = ..., hold_time_s: _Optional[float] = ..., rest_time_s: _Optional[float] = ...) -> None: ...
+
+class StopTrainingProgramRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class GetTrainingStateRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class TrainingAck(_message.Message):
+    __slots__ = ("applied", "message")
+    APPLIED_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    applied: bool
+    message: str
+    def __init__(self, applied: bool = ..., message: _Optional[str] = ...) -> None: ...
+
+class TrainingState(_message.Message):
+    __slots__ = ("recording_session_active", "program_running", "program_movement", "animation_state", "available_movements")
+    RECORDING_SESSION_ACTIVE_FIELD_NUMBER: _ClassVar[int]
+    PROGRAM_RUNNING_FIELD_NUMBER: _ClassVar[int]
+    PROGRAM_MOVEMENT_FIELD_NUMBER: _ClassVar[int]
+    ANIMATION_STATE_FIELD_NUMBER: _ClassVar[int]
+    AVAILABLE_MOVEMENTS_FIELD_NUMBER: _ClassVar[int]
+    recording_session_active: bool
+    program_running: bool
+    program_movement: str
+    animation_state: str
+    available_movements: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, recording_session_active: bool = ..., program_running: bool = ..., program_movement: _Optional[str] = ..., animation_state: _Optional[str] = ..., available_movements: _Optional[_Iterable[str]] = ...) -> None: ...

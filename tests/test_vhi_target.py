@@ -14,6 +14,7 @@ themselves are pinned against real recordings in `test_vhi_legacy.py`.
 from __future__ import annotations
 
 import dataclasses
+import types
 
 import numpy as np
 import pytest
@@ -73,22 +74,22 @@ def test_bind_accepts_a_subset():
     assert outlet.frames == []
 
 
-def test_bind_refuses_discrete_dofs():
-    """Legacy ControlMode makes streamed pose and named movements exclusive."""
-    with pytest.raises(ValueError, match="ControlMode"):
+def test_bind_refuses_discrete_dofs_with_no_way_to_render_them():
+    """The legacy wire carries a pose and nothing else — so say so, don't drop them."""
+    with pytest.raises(ValueError, match="carries a pose and nothing else"):
         VhiTarget(FakeOutlet()).bind(
             load_dofs({"dofs": {"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]}})
         )
 
 
-def test_bind_refuses_a_discrete_only_configuration():
-    with pytest.raises(ValueError, match="cannot render discrete"):
+def test_bind_refuses_a_discrete_only_configuration_with_no_renderer():
+    with pytest.raises(ValueError, match="carries a pose and nothing else"):
         VhiTarget(FakeOutlet()).bind(load_dofs({"dofs": {"hand.grasp": ["rest", "fist"]}}))
 
 
 def test_bind_refuses_an_empty_configuration():
     """`ControlSet()` directly, because `load_dofs` refuses an empty table first."""
-    with pytest.raises(ValueError, match="no continuous DOFs"):
+    with pytest.raises(ValueError, match="no DOFs at all"):
         VhiTarget(FakeOutlet()).bind(ControlSet())
 
 
@@ -736,3 +737,116 @@ def test_importing_the_vhi_package_does_not_require_grpc():
     )
     assert result.returncode == 0, result.stderr
     assert "ok" in result.stdout
+
+
+# --- the legacy bridge for discrete DOFs, and deferred negotiation --------------
+
+
+class FakeLegacyClient:
+    """A `VhiControlClient` stand-in: reports movements and records commands."""
+
+    def __init__(self, movements=("Rest", "Fist", "TwoFingerPinch"), reachable=True):
+        self._movements = list(movements)
+        self.reachable = reachable
+        self.commanded: list[tuple[str, bool]] = []
+
+    def get_state(self, timeout=None):
+        if not self.reachable:
+            return None
+        return types.SimpleNamespace(available_movements=list(self._movements))
+
+    def set_movement(self, name, cycle=False):
+        self.commanded.append((name, cycle))
+
+
+def test_the_legacy_path_renders_discrete_through_v1_movements():
+    """An application may declare a discrete DOF and still run on an unmodified VHI."""
+    legacy = FakeLegacyClient()
+    outlet = FakeOutlet()
+    target = VhiTarget(outlet, legacy_client=legacy)
+    target.bind(load_dofs({"dofs": {"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]}}))
+    assert target.negotiated is False
+    target.send({"index.flexion": 0.0, "hand.grasp": "fist"}, {"hand.grasp": "fist"})
+    assert legacy.commanded == [("Fist", False)]
+
+
+def test_the_legacy_bridge_resolves_states_case_insensitively():
+    """v1 SetMovement matches exactly, so "fist" has to become "Fist" somewhere."""
+    legacy = FakeLegacyClient()
+    target = VhiTarget(FakeOutlet(), legacy_client=legacy)
+    target.bind(load_dofs({"dofs": {"g": ["rest", "twofingerpinch"]}}))
+    target.send({"g": "twofingerpinch"}, {"g": "twofingerpinch"})
+    assert legacy.commanded == [("TwoFingerPinch", False)]
+
+
+def test_the_legacy_bridge_never_cycles():
+    """A discrete DOF is a held state; cycling would render a trajectory."""
+    legacy = FakeLegacyClient()
+    target = VhiTarget(FakeOutlet(), legacy_client=legacy)
+    target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
+    target.send({"g": "fist"}, {"g": "fist"})
+    assert legacy.commanded[0][1] is False
+
+
+def test_the_legacy_bridge_refuses_an_unresolvable_state():
+    legacy = FakeLegacyClient()
+    target = VhiTarget(FakeOutlet(), legacy_client=legacy)
+    with pytest.raises(ValueError, match="no movement for the states"):
+        target.bind(load_dofs({"dofs": {"g": ["rest", "not-a-movement"]}}))
+
+
+def test_an_unreachable_vhi_defers_instead_of_failing_the_configuration():
+    """The app launches its own renderer, so bind necessarily runs before VHI exists.
+
+    "No answer" cannot be read as "bad configuration" at that point — an older build
+    and a build that is not up yet are indistinguishable.
+    """
+    legacy = FakeLegacyClient(reachable=False)
+    target = VhiTarget(FakeOutlet(), legacy_client=legacy)
+    target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))   # must not raise
+    assert target.negotiated is False
+
+
+def test_a_deferred_edge_is_dropped_loudly_rather_than_raising():
+    """`send` runs on the predict thread, where a raise would log every tick."""
+    legacy = FakeLegacyClient(reachable=False)
+    target = VhiTarget(FakeOutlet(), legacy_client=legacy)
+    target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
+    target.send({"g": "fist"}, {"g": "fist"})   # must not raise
+    assert legacy.commanded == []
+
+
+def test_negotiate_settles_once_vhi_appears():
+    legacy = FakeLegacyClient(reachable=False)
+    target = VhiTarget(FakeOutlet(), legacy_client=legacy)
+    target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
+    assert target.negotiate() is False
+    legacy.reachable = True
+    assert target.negotiate() is True
+    target.send({"g": "fist"}, {"g": "fist"})
+    assert legacy.commanded == [("Fist", False)]
+
+
+def test_negotiate_prefers_v2_once_it_is_reachable():
+    """A deferred binding must still end up on v2 when VHI turns out to speak it."""
+    legacy = FakeLegacyClient(reachable=False)
+    client = FakeClient(reply=None)
+    target = VhiTarget(FakeOutlet(), client=client, legacy_client=legacy)
+    target.bind(load_dofs({"dofs": {"index.flexion": "continuous", "g": ["rest", "fist"]}}))
+    assert target.negotiated is False
+    client.reply = FakeReply(
+        continuous_channel_order=("index.flexion",), continuous_encoding=LEGACY_NEGATED
+    )
+    assert target.negotiate() is True
+    assert target.negotiated is True
+    target.send({"index.flexion": 1.0, "g": "fist"}, {"g": "fist"})
+    assert client.sent == [(None, {"g": "fist"})]
+    assert legacy.commanded == [], "v2 must own discrete once negotiated"
+
+
+def test_negotiate_is_idempotent_when_already_settled():
+    legacy = FakeLegacyClient()
+    target = VhiTarget(FakeOutlet(), legacy_client=legacy)
+    target.bind(load_dofs({"dofs": {"g": ["rest", "fist"]}}))
+    assert target.negotiate() is True
+    assert target.negotiate() is True

@@ -261,3 +261,283 @@ class VhiCanonicalControl(object):
             timeout,
             metadata,
             _registered_method=True)
+
+
+class VhiTrainingAidStub(object):
+    """---------------------------------------------------------------------------
+    Recording / label-acquisition aid.
+
+    Deliberately a SEPARATE service, not extra RPCs on VhiCanonicalControl, because
+    the distinction is the whole point: this is not a control plane and nothing here
+    is a canonical DOF.
+
+    A canonical discrete DOF is a *held state* — an application asks for "grip" and
+    the hand holds a grip. That semantics must not bend to accommodate data
+    collection. But collecting regression training data needs the opposite: a
+    deliberately moving control hand, so the recorded VHI_Control stream sweeps a
+    continuous kinematic range for EMG windows to be aligned against.
+
+    Both live here because both are properties of a *recording session* rather than of
+    the thing being controlled:
+
+    - the session gate, which stops VHI's local keyboard from competing with
+    MyoGestic as a movement source while a session is being recorded;
+    - the training program, which cycles the control hand to generate a trajectory.
+
+    A program names a VHI movement, and that is intentional: a recording aid is
+    allowed to be application-specific, precisely so the canonical vocabulary does not
+    have to grow a concept ("sweep me for training") that no application controls.
+    ---------------------------------------------------------------------------
+    """
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.SetRecordingSession = channel.unary_unary(
+                '/myogestic.vhi.v2.VhiTrainingAid/SetRecordingSession',
+                request_serializer=myogestic__vhi__v2__pb2.SetRecordingSessionRequest.SerializeToString,
+                response_deserializer=myogestic__vhi__v2__pb2.TrainingAck.FromString,
+                _registered_method=True)
+        self.StartTrainingProgram = channel.unary_unary(
+                '/myogestic.vhi.v2.VhiTrainingAid/StartTrainingProgram',
+                request_serializer=myogestic__vhi__v2__pb2.StartTrainingProgramRequest.SerializeToString,
+                response_deserializer=myogestic__vhi__v2__pb2.TrainingAck.FromString,
+                _registered_method=True)
+        self.StopTrainingProgram = channel.unary_unary(
+                '/myogestic.vhi.v2.VhiTrainingAid/StopTrainingProgram',
+                request_serializer=myogestic__vhi__v2__pb2.StopTrainingProgramRequest.SerializeToString,
+                response_deserializer=myogestic__vhi__v2__pb2.TrainingAck.FromString,
+                _registered_method=True)
+        self.GetTrainingState = channel.unary_unary(
+                '/myogestic.vhi.v2.VhiTrainingAid/GetTrainingState',
+                request_serializer=myogestic__vhi__v2__pb2.GetTrainingStateRequest.SerializeToString,
+                response_deserializer=myogestic__vhi__v2__pb2.TrainingState.FromString,
+                _registered_method=True)
+
+
+class VhiTrainingAidServicer(object):
+    """---------------------------------------------------------------------------
+    Recording / label-acquisition aid.
+
+    Deliberately a SEPARATE service, not extra RPCs on VhiCanonicalControl, because
+    the distinction is the whole point: this is not a control plane and nothing here
+    is a canonical DOF.
+
+    A canonical discrete DOF is a *held state* — an application asks for "grip" and
+    the hand holds a grip. That semantics must not bend to accommodate data
+    collection. But collecting regression training data needs the opposite: a
+    deliberately moving control hand, so the recorded VHI_Control stream sweeps a
+    continuous kinematic range for EMG windows to be aligned against.
+
+    Both live here because both are properties of a *recording session* rather than of
+    the thing being controlled:
+
+    - the session gate, which stops VHI's local keyboard from competing with
+    MyoGestic as a movement source while a session is being recorded;
+    - the training program, which cycles the control hand to generate a trajectory.
+
+    A program names a VHI movement, and that is intentional: a recording aid is
+    allowed to be application-specific, precisely so the canonical vocabulary does not
+    have to grow a concept ("sweep me for training") that no application controls.
+    ---------------------------------------------------------------------------
+    """
+
+    def SetRecordingSession(self, request, context):
+        """Mark a MyoGestic recording session active or finished. While active, VHI ignores
+        its local keyboard so the recording has a single movement source.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def StartTrainingProgram(self, request, context):
+        """Start cycling the control hand through a movement, producing a continuous
+        trajectory on VHI_Control. Refused if a program is already running.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def StopTrainingProgram(self, request, context):
+        """Stop the program and return the control hand to rest.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetTrainingState(self, request, context):
+        """Query the aid's state. Also carries the movement names a program may use, so a
+        client can discover them without the v1 control service.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_VhiTrainingAidServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'SetRecordingSession': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetRecordingSession,
+                    request_deserializer=myogestic__vhi__v2__pb2.SetRecordingSessionRequest.FromString,
+                    response_serializer=myogestic__vhi__v2__pb2.TrainingAck.SerializeToString,
+            ),
+            'StartTrainingProgram': grpc.unary_unary_rpc_method_handler(
+                    servicer.StartTrainingProgram,
+                    request_deserializer=myogestic__vhi__v2__pb2.StartTrainingProgramRequest.FromString,
+                    response_serializer=myogestic__vhi__v2__pb2.TrainingAck.SerializeToString,
+            ),
+            'StopTrainingProgram': grpc.unary_unary_rpc_method_handler(
+                    servicer.StopTrainingProgram,
+                    request_deserializer=myogestic__vhi__v2__pb2.StopTrainingProgramRequest.FromString,
+                    response_serializer=myogestic__vhi__v2__pb2.TrainingAck.SerializeToString,
+            ),
+            'GetTrainingState': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTrainingState,
+                    request_deserializer=myogestic__vhi__v2__pb2.GetTrainingStateRequest.FromString,
+                    response_serializer=myogestic__vhi__v2__pb2.TrainingState.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'myogestic.vhi.v2.VhiTrainingAid', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('myogestic.vhi.v2.VhiTrainingAid', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class VhiTrainingAid(object):
+    """---------------------------------------------------------------------------
+    Recording / label-acquisition aid.
+
+    Deliberately a SEPARATE service, not extra RPCs on VhiCanonicalControl, because
+    the distinction is the whole point: this is not a control plane and nothing here
+    is a canonical DOF.
+
+    A canonical discrete DOF is a *held state* — an application asks for "grip" and
+    the hand holds a grip. That semantics must not bend to accommodate data
+    collection. But collecting regression training data needs the opposite: a
+    deliberately moving control hand, so the recorded VHI_Control stream sweeps a
+    continuous kinematic range for EMG windows to be aligned against.
+
+    Both live here because both are properties of a *recording session* rather than of
+    the thing being controlled:
+
+    - the session gate, which stops VHI's local keyboard from competing with
+    MyoGestic as a movement source while a session is being recorded;
+    - the training program, which cycles the control hand to generate a trajectory.
+
+    A program names a VHI movement, and that is intentional: a recording aid is
+    allowed to be application-specific, precisely so the canonical vocabulary does not
+    have to grow a concept ("sweep me for training") that no application controls.
+    ---------------------------------------------------------------------------
+    """
+
+    @staticmethod
+    def SetRecordingSession(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/myogestic.vhi.v2.VhiTrainingAid/SetRecordingSession',
+            myogestic__vhi__v2__pb2.SetRecordingSessionRequest.SerializeToString,
+            myogestic__vhi__v2__pb2.TrainingAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StartTrainingProgram(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/myogestic.vhi.v2.VhiTrainingAid/StartTrainingProgram',
+            myogestic__vhi__v2__pb2.StartTrainingProgramRequest.SerializeToString,
+            myogestic__vhi__v2__pb2.TrainingAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StopTrainingProgram(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/myogestic.vhi.v2.VhiTrainingAid/StopTrainingProgram',
+            myogestic__vhi__v2__pb2.StopTrainingProgramRequest.SerializeToString,
+            myogestic__vhi__v2__pb2.TrainingAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetTrainingState(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/myogestic.vhi.v2.VhiTrainingAid/GetTrainingState',
+            myogestic__vhi__v2__pb2.GetTrainingStateRequest.SerializeToString,
+            myogestic__vhi__v2__pb2.TrainingState.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)

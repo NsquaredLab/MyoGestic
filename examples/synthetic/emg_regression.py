@@ -45,7 +45,13 @@ CTRL_VALUES = [0.0, 1.0]
 
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
-vhi_client = vhi.control_client()
+# The v2 recording aid — the session gate and, if you want a swept trajectory
+# instead of held poses, training programs. Not a control plane; see
+# `training_client` for why that separation matters.
+training_aid = vhi.training_client()
+# v1 client, kept for exactly one job: rendering the discrete gesture when this VHI
+# is too old to negotiate v2. It goes away with v1 — see VhiTarget's legacy_client.
+vhi_legacy = vhi.control_client()
 
 # Output-side smoothing, applied by the control bus to the canonical vector.
 # Live-tunable via the PostProcessor widget rendered in the UI.
@@ -60,16 +66,23 @@ output_filter = PostProcessor(hz=32)
 # --8<-- [start:dofs]
 CONTROLS = load_dofs(
     {
-        "dofs": dict.fromkeys(
-            [
-                "thumb.flexion",
-                "index.flexion",
-                "middle.flexion",
-                "ring.flexion",
-                "little.flexion",
-            ],
-            "continuous",
-        )
+        "dofs": {
+            **dict.fromkeys(
+                [
+                    "thumb.flexion",
+                    "index.flexion",
+                    "middle.flexion",
+                    "ring.flexion",
+                    "little.flexion",
+                ],
+                "continuous",
+            ),
+            # The gesture the operator commands while recording, as a canonical
+            # discrete DOF: a *held state*, snapped to and held. Its states are the
+            # class names, lowercased, which is what the target resolves against
+            # whatever the renderer calls them.
+            "hand.gesture": [c.lower() for c in CLASSES],
+        }
     }
 )
 DOF_NAMES = CONTROLS.channel_labels()
@@ -113,7 +126,7 @@ PROCESSES = [
 # v2 VHI it negotiates the channel layout by name, and against an older one it
 # falls back to the legacy pose on its own. Nothing below changes either way.
 vhi_canonical = vhi.canonical_client()
-vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
 bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
 # --8<-- [end:bus]
 
@@ -276,26 +289,54 @@ grid = Grid(
 # --8<-- [end:grid]
 
 
+# --8<-- [start:negotiate]
+def _ensure_vhi() -> None:
+    """Settle the target's contract, once VHI is actually up.
+
+    `bind` ran when the bus was constructed — which is before the user clicks Launch,
+    so VHI did not exist yet and "no answer" could not be read as "old build". This
+    resolves it the first time it matters. Cheap and idempotent once settled.
+    """
+    if not vhi_target.negotiate():
+        app.ctx.log("VHI not reachable yet — gestures will not render until it is")
+    elif vhi_target.negotiated:
+        app.ctx.log("VHI negotiated the canonical contract (v2)")
+    else:
+        app.ctx.log("VHI is pre-v2 — using the legacy pose and v1 movements")
+# --8<-- [end:negotiate]
+
+
+# --8<-- [start:gesture]
 def _on_gesture(i: int) -> None:
-    # cycle=False: snap to the movement's end pose and hold it. VHI_Control
-    # settles to a static kinematic value per gesture (e.g. all-flexed for
-    # Fist, all-zero for Rest), which the regressor learns to map back from
-    # the corresponding EMG amplitude. CLASSES names are sent verbatim to
-    # VHI; unknown names are rejected harmlessly (client logs the ack).
+    # A held state, commanded by name through the same bus the continuous DOFs go
+    # through. The control hand snaps to that pose and holds it, so VHI_Control
+    # settles to a static kinematic value per gesture, which the regressor learns to
+    # map back from the corresponding EMG amplitude.
+    #
+    # `bus.select` bypasses the debounce because this is a deliberate click, not a
+    # noisy prediction, and rebases the trigger so the next push does not re-fire it.
+    _ensure_vhi()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
-    vhi_client.set_movement(CLASSES[i], cycle=False)
+    bus.select("hand.gesture", CLASSES[i].lower())
+# --8<-- [end:gesture]
 
 
+# --8<-- [start:record]
 def _on_record() -> None:
-    # While recording, VHI ignores its local keyboard so MyoGestic's gesture
-    # buttons are the sole movement source for the session.
+    # The recording aid, not a control command: it gates VHI's local keyboard so the
+    # gesture buttons are the session's only movement source. Returns False if this
+    # VHI has no v2 aid, which is worth surfacing — an ungated recording can pick up
+    # stray keyboard movements and nothing downstream could tell.
+    _ensure_vhi()
     app.start_recording()
-    vhi_client.set_session_active(True)
+    if not training_aid.set_recording_session(True):
+        app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
 
 
 def _on_stop() -> None:
     app.stop_recording()
-    vhi_client.set_session_active(False)
+    training_aid.set_recording_session(False)
+# --8<-- [end:record]
 
 
 viewer = SignalViewer("emg", selectable=True)
@@ -351,8 +392,11 @@ def main() -> None:
         # paced thread, so a pose pushed at exit would otherwise never go out
         # and the hand would hold its last commanded position.
         bus.stop()
-        vhi_client.stop()
+        training_aid.stop_program()      # no-op unless a program was started
+        training_aid.set_recording_session(False)
+        training_aid.stop()
         vhi_canonical.stop()
+        vhi_legacy.stop()
 
 
 if __name__ == "__main__":

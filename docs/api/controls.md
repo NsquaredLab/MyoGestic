@@ -71,6 +71,23 @@ not state its wire encoding all fall the whole way back.
 
 ::: myogestic.vhi.interfaces.InterfaceSpec.canonical_client
 
+### Recording is not control
+
+A canonical discrete DOF is a **held state**: ask for a grip, hold a grip. Collecting
+regression training data wants the opposite — a control hand that keeps *moving*, so
+the recorded kinematics sweep a continuous range for EMG windows to align against.
+
+Those are different jobs, so they have different vocabularies. The sweep lives in the
+**recording aid**, never in the control standard, because bending a held state to
+accommodate data collection would make `hand.grip` mean "grip, unless someone is
+recording".
+
+While a training program runs it owns the control hand, and discrete DOFs are refused
+with a reason rather than silently interrupting the trajectory a recording is aligned
+against. Continuous DOFs are unaffected.
+
+::: myogestic.vhi.interfaces.InterfaceSpec.training_client
+
 ## Encoding helpers
 
 Wire-level helpers, for a target that needs a vector rather than a mapping.
