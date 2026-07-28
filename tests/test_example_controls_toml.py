@@ -168,8 +168,8 @@ class TestTheClassificationFileTeachesTheUnifiedPath:
         assert not any(hasattr(dof, "states") for dof in resolved.dofs.values())
 
     def test_the_activation_is_gated_and_weighted(self, resolved):
-        gated = [d for d in resolved.dofs.values() if d.threshold is not None]
-        assert gated, "the file must show a thresholded activation"
+        gated = [d for d in resolved.dofs.values() if d.threshold_fraction is not None]
+        assert gated, "the file must show a probability cutoff"
         assert any(
             any(ref.weight != 1.0 for ref in resolved.routes[d.name]) for d in gated
         ), "and one that still fans out with weights, as a regressor's would"

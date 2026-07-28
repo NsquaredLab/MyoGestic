@@ -94,13 +94,14 @@ the target declares that.
 
 A classifier produces an **activation** — open or closed — not a position, and an
 activation is just a control value. So it travels the mapping a regressor travels. Add a
-`threshold` to say the input is an activation:
+`threshold_fraction` — the probability cutoff — to say the input is a classifier's
+confidence:
 
 ```toml
 fist = { targets = [
   { target = "vhi.prediction.thumb", weight = 0.6 },
   { target = "vhi.prediction.index" },
-], threshold = 0.5 }
+], threshold_fraction = 0.5 }
 ```
 
 Push the model's probability and the bus gates it to exactly `0.0` or `1.0` before
@@ -109,7 +110,7 @@ there it is an ordinary value: `0` to every listed control when inactive, `1 × 
 when active. The target receives continuous per-control values either way, and no
 separate state command exists.
 
-Drop the `threshold` and the identical mapping serves a regressor emitting `0..1`
+Drop the `threshold_fraction` and the identical mapping serves a regressor emitting `0..1`
 directly. That is the point of gating here rather than in a separate discrete path: a
 continuous address is a *position*, and streaming a raw `0.73` into one says the finger
 is 73% curled, which is not what a 73%-confident classifier meant.

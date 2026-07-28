@@ -227,15 +227,15 @@ See [Post-process predictions](post-process-output.md) for filter tuning.
 
 A classifier does not need its own path to the hand. It produces an **activation** —
 open or closed — and an activation is just a control value, so it travels the mapping
-you already have. Add a `threshold` to say the input is an activation rather than a
-position:
+you already have. Add a `threshold_fraction` — the probability cutoff — to say the input
+is a classifier's confidence rather than a position:
 
 ```toml
 fist = { targets = [
   { target = "vhi.prediction.thumb", weight = 0.6 },
   { target = "vhi.prediction.index" },
   { target = "vhi.prediction.middle" },
-], threshold = 0.5 }
+], threshold_fraction = 0.5 }
 ```
 
 Push the probability and the bus gates it before anything else sees it:
@@ -248,11 +248,13 @@ def predict(model, features):
     return {"class": int(np.argmax(proba))}
 ```
 
-Three separate decisions happen, in this order. The threshold decides **whether** the
+Three separate decisions happen, in this order. `threshold_fraction` decides **whether**
+the
 hand is closed, giving a 0 or a 1. The weights decide **how much of that** each digit
 gets — the thumb 0.6, the fingers all of it. `ControlBus(smoothing=...)` then decides
 **how fast** the change is allowed to look. So VHI receives continuous per-control
-values, the same ones a regressor would send, and drop the `threshold` and the identical
+values, the same ones a regressor would send, and drop the `threshold_fraction` and the
+identical
 mapping serves a regressor emitting 0..1 directly.
 
 The gate matters because a continuous address is a *position*. Streaming a raw `0.73`

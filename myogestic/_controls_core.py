@@ -39,10 +39,16 @@ class Continuous:
         The value meaning "no command". Must lie inside the domain.
     label
         Optional display label; the name is used when empty.
-    threshold
+    threshold_fraction
         Set when this control is driven by a **classifier** rather than a regressor: the
-        input is an activation in ``[0, 1]``, gated to exactly ``0.0`` or ``1.0`` at this
-        level before anything else sees it.
+        input is a probability in ``[0, 1]``, and this is the fraction at which it counts
+        as active. Below it the value becomes ``0.0``; at or above it, ``1.0``. Gated here,
+        before anything else sees the number.
+
+        Named for what it is compared against — a probability fraction — and deliberately
+        not "threshold": a *target* may also declare a threshold
+        (`Capability.activation_threshold`), and the two answer different questions. This
+        one is about the model's confidence.
 
         This is what lets a binary classifier drive the same grouped mapping a regressor
         drives. The gated 0/1 is just a control value — fanned out and weighted like any
@@ -61,7 +67,7 @@ class Continuous:
     hi: float = 1.0
     rest: float = 0.0
     label: str = ""
-    threshold: float | None = None
+    threshold_fraction: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,15 +89,16 @@ class Discrete:
         Seconds a new state must hold before it is delivered. ``0.0`` delivers
         every change immediately.
     activates
-        The state a **numeric** activation selects once it reaches `threshold`. Set when
+        The state a **numeric** activation selects once it reaches `threshold_fraction`.
+        Set when
         the target declares exactly two states, so a binary classifier emitting a
         probability in ``[0, 1]`` needs no thresholding of its own. Empty when a scalar
         cannot pick a state — with three or more states a number is ambiguous, and
         guessing which one it meant is worse than refusing the input.
-    threshold
-        The activation level at which `activates` is selected. Taken from the target when
-        it declares one, because the target knows what its states cost; overridable per
-        binding.
+    threshold_fraction
+        The probability fraction at which `activates` is selected. Taken from the target
+        when it declares one (`Capability.activation_threshold`), because the target knows
+        what its states cost; overridable per binding.
     label
         Optional display label; the name is used when empty.
 
@@ -108,7 +115,7 @@ class Discrete:
     debounce_s: float = 0.0
     label: str = ""
     activates: str = ""
-    threshold: float = 0.5
+    threshold_fraction: float = 0.5
 
 
 Dof = Continuous | Discrete
@@ -266,18 +273,18 @@ def substitute_rest(controls: ControlSet, values: Mapping[str, Any]) -> dict[str
                 # discrete control is a state, not a small number.
                 level, bad = _as_float(v, float("nan"))
                 out[name] = (
-                    dof.rest if bad or level < dof.threshold else dof.activates
+                    dof.rest if bad or level < dof.threshold_fraction else dof.activates
                 )
             else:
                 out[name] = dof.rest
         else:
             level, bad = _as_float(v, dof.rest)
-            if not bad and dof.threshold is not None:
+            if not bad and dof.threshold_fraction is not None:
                 # A classifier's output is an activation, not a joint value. Gate it here
                 # so everything downstream — the weights, the wire, the recording — sees
                 # the 0/1 that was actually decided, never a bare 0.73 standing in for a
                 # position.
-                level = 1.0 if level >= dof.threshold else 0.0
+                level = 1.0 if level >= dof.threshold_fraction else 0.0
             out[name] = level
     return out
 

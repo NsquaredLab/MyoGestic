@@ -59,7 +59,7 @@ _TARGET_KEYS = frozenset({"target", "weight"})
 
 #: Keys accepted in a binding's inline table (the 1:1-with-metadata form).
 _BINDING_KEYS = frozenset(
-    {"target", "targets", "weight", "debounce_s", "label", "threshold"}
+    {"target", "targets", "weight", "debounce_s", "label", "threshold_fraction"}
 )
 
 
@@ -107,10 +107,14 @@ class Binding:
         For a binding that resolves to a discrete control: how long a state must hold
         before it counts as a transition. Declared here because it is a property of
         *this* control loop, not of the target.
-    threshold
-        For a discrete control driven by a probability: the level at which the non-rest
-        state is selected. ``None`` takes the target's declared threshold, which is the
-        usual case — override it only when your model's calibration differs.
+    threshold_fraction
+        For a **classifier** input: the probability fraction at which it counts as active.
+        Below it the value is ``0.0``; at or above it, ``1.0``. On a continuous binding
+        that gated 0/1 then travels the ordinary weighted fan-out; on a discrete one it
+        selects the non-rest state. ``None`` leaves a continuous value as given and takes
+        a discrete control's threshold from the target — override only when your model's
+        calibration differs. Named for what it is compared against, and kept distinct from
+        the *target*-declared `Capability.activation_threshold`.
     label
         Optional display label; the alias is used when empty.
     """
@@ -119,7 +123,7 @@ class Binding:
     targets: tuple[TargetRef, ...]
     debounce_s: float = 0.0
     label: str = ""
-    threshold: float | None = None
+    threshold_fraction: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,7 +161,7 @@ class ControlMap:
         dofs: dict[str, Any] = {}
         for binding in self.bindings.values():
             plain = all(ref.weight == 1.0 for ref in binding.targets) and (
-                binding.threshold is None
+                binding.threshold_fraction is None
             )
             if plain and len(binding.targets) == 1 and not binding.debounce_s and not binding.label:
                 dofs[binding.alias] = binding.targets[0].address
@@ -171,8 +175,8 @@ class ControlMap:
                 }
                 if binding.debounce_s:
                     entry["debounce_s"] = binding.debounce_s
-                if binding.threshold is not None:
-                    entry["threshold"] = binding.threshold
+                if binding.threshold_fraction is not None:
+                    entry["threshold_fraction"] = binding.threshold_fraction
                 if binding.label:
                     entry["label"] = binding.label
                 dofs[binding.alias] = entry
@@ -298,7 +302,7 @@ def _parse_binding(alias: Any, value: Any, errs: list[str]) -> Binding | None:
 
     debounce_s = 0.0
     label = ""
-    threshold: float | None = None
+    threshold_fraction: float | None = None
 
     if isinstance(value, dict) and not ({"target", "targets"} & set(value)):
         # TOML turns an unquoted dotted key into a NESTED TABLE, so `my.thumb = "..."`
@@ -324,18 +328,19 @@ def _parse_binding(alias: Any, value: Any, errs: list[str]) -> Binding | None:
             )
             return None
         raw_targets = value.get("targets", value.get("target"))
-        if "threshold" in value:
-            got = value["threshold"]
+        if "threshold_fraction" in value:
+            got = value["threshold_fraction"]
             if isinstance(got, bool) or not isinstance(got, (int, float)):
-                errs.append(f"[dofs] {alias!r}: threshold must be a number.")
+                errs.append(f"[dofs] {alias!r}: threshold_fraction must be a number.")
                 return None
-            if not math.isfinite(got) or not 0.0 < got <= 1.0:
+            if not math.isfinite(got) or not 0.0 <= got <= 1.0:
                 errs.append(
-                    f"[dofs] {alias!r}: threshold must be in (0, 1] — it is compared "
-                    f"against an activation, not a signed value."
+                    f"[dofs] {alias!r}: threshold_fraction must be in [0, 1] — it is a "
+                    f"fraction, compared against a classifier probability rather than "
+                    f"against a signed control value."
                 )
                 return None
-            threshold = float(got)
+            threshold_fraction = float(got)
         for key, dest in (("debounce_s", "debounce_s"), ("label", "label")):
             if key not in value:
                 continue
@@ -384,7 +389,7 @@ def _parse_binding(alias: Any, value: Any, errs: list[str]) -> Binding | None:
         targets=tuple(refs),
         debounce_s=debounce_s,
         label=label,
-        threshold=threshold,
+        threshold_fraction=threshold_fraction,
     )
 
 
@@ -572,15 +577,15 @@ def resolve(
             # inventing an ordering over states nobody declared would be worse.
             others = [s for s in states if s != rest_state]
             activates = others[0] if len(others) == 1 else ""
-            threshold = binding.threshold
-            if threshold is None:
+            fraction = binding.threshold_fraction
+            if fraction is None:
                 declared = getattr(cap, "activation_threshold", 0.0) or 0.0
-                threshold = declared if declared > 0 else 0.5
-            if binding.threshold is not None and not activates:
+                fraction = declared if declared > 0 else 0.5
+            if binding.threshold_fraction is not None and not activates:
                 errs.append(
-                    f"[dofs] {alias!r}: a threshold only means something for a two-state "
-                    f"control, and {cap.address!r} declares {len(states)} states "
-                    f"({list(states)[:4]}...). Emit the state name instead."
+                    f"[dofs] {alias!r}: threshold_fraction only means something for a "
+                    f"two-state control, and {cap.address!r} declares {len(states)} "
+                    f"states ({list(states)[:4]}...). Emit the state name instead."
                 )
             dofs[alias] = Discrete(
                 name=alias,
@@ -589,26 +594,26 @@ def resolve(
                 debounce_s=binding.debounce_s,
                 label=binding.label,
                 activates=activates,
-                threshold=threshold,
+                threshold_fraction=fraction,
             )
         else:
             # The alias is signed only if *every* target can render both directions —
             # otherwise a negative prediction would be silently clamped away on one of
             # them, which reads as a control that works and then stops working.
             signed = all(cap.signed for _, cap in resolved)
-            # A `threshold` on a continuous binding says the input is a CLASSIFIER's
-            # activation rather than a regressed value: gate it to 0/1, then let the
-            # ordinary weighted fan-out carry it. That is the whole unification —
+            # A `threshold_fraction` on a continuous binding says the input is a
+            # CLASSIFIER's probability rather than a regressed value: gate it to 0/1, then
+            # let the ordinary weighted fan-out carry it. That is the whole unification —
             # classification and regression reach the target the same way, and the target
             # receives continuous per-control values either way.
-            gated = binding.threshold is not None
+            gated = binding.threshold_fraction is not None
             dofs[alias] = Continuous(
                 name=alias,
                 lo=0.0 if gated else (-1.0 if signed else 0.0),
                 hi=1.0,
                 rest=0.0,
                 label=binding.label,
-                threshold=binding.threshold,
+                threshold_fraction=binding.threshold_fraction,
             )
             if gated and binding.debounce_s:
                 # Stability gating for a classifier belongs to the control loop, and the
@@ -616,9 +621,9 @@ def resolve(
                 # activation needs bus support that does not exist yet, so refuse rather
                 # than accept a debounce that would silently do nothing.
                 errs.append(
-                    f"[dofs] {alias!r}: debounce_s is not applied to a thresholded "
-                    f"continuous control yet. Threshold it here and gate upstream of "
-                    f"bus.push, or drop debounce_s."
+                    f"[dofs] {alias!r}: debounce_s is not applied to a continuous "
+                    f"control with a threshold_fraction yet. Gate upstream of bus.push, "
+                    f"or drop debounce_s."
                 )
         routes[alias] = tuple(ref for ref, _ in resolved)
 
