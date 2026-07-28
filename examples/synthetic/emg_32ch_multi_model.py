@@ -32,6 +32,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic.controls import ControlBus, load_dofs
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
@@ -44,8 +45,8 @@ from myogestic.recipes.estimators import (
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
-from myogestic.vhi.legacy import LEGACY_POSE_DOFS, encode_pose
+from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi.legacy import LEGACY_POSE_DOFS
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
@@ -72,8 +73,17 @@ vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 output_filter = PostProcessor(hz=32)
 
+# The bus + target own the wire. That matters more than it looks: VHI's continuous
+# inlet now takes *canonical* values, and a build that predates that still wants the
+# old convention. `VhiTarget` asks which one this VHI speaks and encodes accordingly,
+# so pushing a frame built by hand would be right on exactly one of them.
+CONTROLS = load_dofs({"dofs": dict.fromkeys(LEGACY_POSE_DOFS, "continuous")})
+vhi_canonical = vhi.canonical_client()
+vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
+
 # Per-class hand poses, in canonical DOF values: +1 is the direction the name
-# says, 0 is rest. `encode_pose` turns them into whatever the legacy wire wants,
+# says, 0 is rest. The target turns them into whatever this VHI's wire wants,
 # so no channel index or sign flip appears here.
 #
 # Channel 1 (thumb abduction) used to be written as 0 in a fist. Recorded VHI
@@ -362,12 +372,11 @@ def predict(model, features):
         proba = None
         class_idx = int(model.predict(x)[0])
 
-    # Canonical values in, legacy frame out — `encode_pose` owns the channel layout
-    # and the sign, so this example never has to know either.
+    # Canonical values in; the bus sanitises and smooths, and the target encodes for
+    # whichever convention this VHI negotiated.
     pose = HAND_POSES.get(class_idx, HAND_POSES[0])
-    hand = output_filter(encode_pose(pose)).astype(np.float32)
-    vhi_outlet.push(hand)
-    return {"class": class_idx, "proba": proba, "hand": hand}
+    values = bus.push({**dict.fromkeys(LEGACY_POSE_DOFS, 0.0), **pose})
+    return {"class": class_idx, "proba": proba, "hand": values}
 
 
 LOGO_CELL_W = 300
@@ -433,7 +442,12 @@ def demo_ui(ctx):
 
 
 def main() -> None:
-    app.run()
+    try:
+        app.run()
+    finally:
+        # Rest the hand and make that frame land before the outlet's thread dies.
+        bus.stop()
+        vhi_canonical.stop()
 
 
 if __name__ == "__main__":
