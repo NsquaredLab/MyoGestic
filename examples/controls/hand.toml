@@ -1,0 +1,84 @@
+# Map your model's outputs onto a target's controls.
+#
+#     import tomllib
+#     from myogestic.controls import load_control_map, resolve
+#     from myogestic.vhi import virtual_hand
+#
+#     with open("hand.toml", "rb") as f:          # "rb" — tomllib requires binary
+#         control_map = load_control_map(tomllib.load(f))
+#
+#     client = virtual_hand().canonical_client()
+#     controls = resolve(control_map, client.capabilities())
+#
+# Two vocabularies, and the split is the whole point:
+#
+#   LEFT  — yours. Whatever your model calls its outputs. MyoGestic never prescribes
+#           these names, never reads meaning out of them, and never requires them to look
+#           a particular way. Rename them freely; point them somewhere else tomorrow.
+#
+#   RIGHT — the target's. `vhi.prediction.index` is a name VHI declares in its own
+#           manifest, along with everything needed to send it: number or held state, its
+#           range, its neutral value, its states. Ask a running VHI what it exports:
+#               uv run --extra grpc python tools/inspect_canonical_control.py
+#
+# An address this VHI does not export is reported by name at startup, with the near
+# misses and the full list — never accepted and silently ignored.
+
+[dofs]
+
+# --- one output, one control ------------------------------------------------------
+#
+# The common case. `my_thumb` is your name; the right side is VHI's.
+my_thumb = "vhi.prediction.thumb"
+my_index = "vhi.prediction.index"
+my_middle = "vhi.prediction.middle"
+
+# The explicit axis form, when the short one is not specific enough. The thumb has two
+# axes, so its short address means flexion and abduction is addressed on its own.
+thumb_spread = "vhi.prediction.thumb.abduction"
+
+
+# --- one output, many controls (fan-out) ------------------------------------------
+#
+# `fist` is a single model output — one scalar — broadcast to every listed control. Each
+# applies its own declared range and direction, so you do not need a whole-hand
+# capability just to close the hand.
+fist = [
+  "vhi.prediction.index",
+  "vhi.prediction.middle",
+  "vhi.prediction.ring",
+  "vhi.prediction.little",
+]
+
+# ...and with a per-target gain, when one member should move less than the rest. Weight
+# defaults to 1.0 and is applied *before* each target's own range conversion, so a
+# target still clamps whatever it receives.
+#
+# A negative weight is only accepted when the resolved control declares signed motion —
+# otherwise there is no opposite direction to send, and saying so beats clamping it away.
+pinch = [
+  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.index" },
+]
+
+
+# --- a held state ------------------------------------------------------------------
+#
+# Whether an output is a number or a held state is the *target's* declaration, not
+# yours: `vhi.control.gesture` is discrete, so `gesture` resolves to a state machine
+# whose states are whatever movements this VHI offers.
+#
+# `debounce_s` is the one thing declared on this side, because it is a property of your
+# control loop rather than of the target: how long a state must hold before it counts as
+# a transition. It is what stops a chattering classifier from flapping the hand.
+gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
+
+
+# --- another target, same shape ----------------------------------------------------
+#
+# Nothing above is VHI-specific except the addresses. A keyboard or cursor target
+# exports its own vocabulary the same way, and the same alias can point at a different
+# target tomorrow without touching your model:
+#
+#   clicker = "keyboard.space"
+#   drive_x = "cursor.x_velocity"

@@ -15,6 +15,7 @@ files, changes no configuration, and leaves the hand at rest.
 
 from __future__ import annotations
 
+import pathlib
 import time
 import tomllib
 
@@ -27,24 +28,12 @@ from myogestic.vhi.legacy import LEGACY_POSE_DOFS, decode_pose
 
 # --- 1. The declaration -------------------------------------------------------
 #
-# Mapping-first: the *shape* of each value says what kind of DOF it is. A string is a
-# continuous DOF at its defaults, an array is a discrete DOF's states, and a table is the
-# explicit form for when you need to say more.
+# A real file, not a string in this script: `examples/controls/hand.toml` is what a user
+# copies and edits. Mapping-first, so the *shape* of each value says what kind of DOF it
+# is — a string is a continuous DOF at its defaults, an array is a discrete DOF's
+# states, and a table is the explicit form for when you need to say more.
 
-DECLARATION = """
-[dofs]
-"index.flexion" = "continuous"
-"hand.gesture"  = ["rest", "fist"]
-"""
-
-# The same declaration, with the two things this walkthrough wants to show: a one-way
-# range, and a stability gate on the discrete DOF.
-DECLARATION_FULL = """
-[dofs]
-"index.flexion" = "continuous"
-"grip.force"    = { kind = "continuous", range = [0.0, 1.0] }
-"hand.gesture"  = { kind = "discrete", states = ["rest", "fist"], rest = "rest", debounce_s = 0.1 }
-"""
+DECLARATION = pathlib.Path(__file__).resolve().parent.parent / "examples" / "controls" / "hand.toml"
 
 RULE = "─" * 78
 
@@ -55,21 +44,25 @@ def heading(n: int, text: str) -> None:
 
 
 def step_1_declare():
-    """Parse TOML and load it. The library never reads the file itself."""
-    heading(1, "The declaration — mapping-first TOML")
-    print(DECLARATION.strip())
-    print("\n  The value's shape is the discriminator: a string is continuous, an array")
-    print("  is a discrete DOF's states. That is the smallest form that works.\n")
-    print("  With the details spelled out:")
-    print("\n".join("   " + line for line in DECLARATION_FULL.strip().splitlines()))
+    """Load the TOML file. The library never reads a file itself."""
+    heading(1, f"The declaration — {DECLARATION.relative_to(DECLARATION.parents[2])}")
+    print("  The file, minus its comments:\n")
+    for line in DECLARATION.read_text().splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            print("   " + line)
 
-    # tomllib lives in the application, not the library: `load_dofs` takes a Mapping, so
-    # MyoGestic reads no config files. Use JSON, a dict literal, or a database if you like.
-    controls = load_dofs(tomllib.loads(DECLARATION_FULL))
+    # tomllib lives here, in the application, not in the library: `load_dofs` takes a
+    # Mapping, so MyoGestic reads no config files and stays format-agnostic. TOML is
+    # what a human wants to edit, which is why the example ships one.
+    with DECLARATION.open("rb") as handle:          # "rb" — tomllib requires binary
+        raw = tomllib.load(handle)
+    controls = load_dofs(raw)
 
-    print("\n  load_dofs(tomllib.loads(...)) ->")
+    print("\n  load_dofs(tomllib.load(f)) ->")
+    continuous = {d.name for d in controls.continuous}
     for dof in controls.dofs.values():
-        if dof.name in {d.name for d in controls.continuous}:
+        if dof.name in continuous:
             print(
                 f"    {dof.name:16s} continuous  range=[{dof.lo:+.1f}, {dof.hi:+.1f}]  "
                 f"rest={dof.rest:+.1f}"
@@ -81,6 +74,8 @@ def step_1_declare():
             )
     print(f"\n  wire order (continuous only): {list(controls.channel_labels())}")
     print("  +1 always means the direction the DOF's name denotes. No channel numbers.")
+    if controls.simultaneous:
+        print(f"  declared simultaneous controls: {dict(controls.simultaneous)}")
     return controls
 
 
@@ -119,6 +114,7 @@ class Wire:
 def step_2_kinds(controls):
     """Continuous values are filtered; discrete states are gated. Never the reverse."""
     heading(2, "Two kinds of control, two kinds of protection")
+    print("  (using the DOFs just loaded from the file)\n")
 
     seen_widths: list[int] = []
     smoother = OneEuroFilter()
@@ -127,11 +123,12 @@ def step_2_kinds(controls):
         seen_widths.append(len(vec))
         return smoother(vec)
 
+    n_continuous = len(controls.continuous)
     bus = ControlBus(controls, targets=[Watch()], smoothing=spy, hz=50)
 
     print("  a) A continuous step arrives as a ramp (layer 1: ControlBus smoothing)")
     for _ in range(4):
-        bus.push({"index.flexion": 0.0, "hand.gesture": "rest"})
+        bus.push({"index.flexion": 0.0})
     ramp = []
     for _ in range(6):
         ramp.append(round(float(bus.push({"index.flexion": 1.0})["index.flexion"]), 3))
@@ -140,19 +137,27 @@ def step_2_kinds(controls):
     print("     on what was commanded.")
 
     print("\n  b) A chattering classifier produces no transition (layer 2: debounce)")
+    # The file declares two discrete DOFs with different gates, which is the clearest
+    # possible contrast: one fires on every change, the other waits for a state to hold.
+    gates = {d.name: d.debounce_s for d in controls.discrete}
+    print(f"     the file declares: {gates}")
     watcher = Watch()
     gated = ControlBus(controls, targets=[watcher], hz=50)
-    edges = watcher.edges
     for i in range(10):
-        gated.push({"hand.gesture": "fist" if i % 2 else "rest"})
-    print(f"     10 alternating ticks -> edges delivered: {edges}")
-    for _ in range(8):
-        gated.push({"hand.gesture": "fist"})
-    print(f"     then 8 ticks holding 'fist' -> edges delivered: {edges}")
+        state = "fist" if i % 2 else "rest"
+        gated.push({name: state for name in gates})
+    fired = [k for edge in watcher.edges for k in edge]
+    for name, seconds in gates.items():
+        n = fired.count(name)
+        verdict = "gated the chatter" if n <= 1 else f"fired {n}x — no gate"
+        print(f"     {name:16s} debounce={seconds}s -> {verdict}")
     print("     A discrete DOF is a HELD STATE. It is never numerically filtered:")
     print("     averaging 'rest' and 'fist' would interpolate through a state nobody")
     print(f"     selected. The filter only ever saw {seen_widths[0]}-wide vectors — the")
-    print("     continuous channels — so the discrete one is excluded by construction.")
+    print(f"     {n_continuous} continuous channels — so the discrete ones are excluded by")
+    print("     construction, not by convention.")
+    print("     `debounce_s = 0` is a deliberate choice too: it means 'deliver every")
+    print("     change', which is right for a deliberate click and wrong for a classifier.")
 
 
 def step_3_wire():
@@ -321,6 +326,9 @@ def step_5_commands():
 
   A full application using all of this:
       uv run --extra examples --extra grpc python examples/synthetic/emg_regression.py
+
+  The control file this walkthrough loaded (copy and edit it):
+      examples/controls/hand.toml
 
   The contracts themselves:
       myogestic/controls.py                      the standard

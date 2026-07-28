@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import queue
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import grpc
 
@@ -197,6 +197,54 @@ class VhiCanonicalClient:
                 continuous=dict(continuous or {}), discrete=dict(discrete or {})
             )
         )
+
+    # --- the target's own vocabulary -----------------------------------------
+
+    def capabilities(self) -> list[Any] | None:
+        """Every control this VHI exports, as `myogestic.controls.Capability` values.
+
+        The target-owned half of the contract: a configuration maps *your* aliases onto
+        these addresses, and their semantics — number or held state, domain, states —
+        come from here rather than from anything hard-coded in MyoGestic. A build that
+        grows a control needs no change on this side.
+
+        Returns
+        -------
+        list[Capability] or None
+            ``None`` when VHI is unreachable or predates the manifest. That is an
+            answer, not an error: a caller falls back rather than guessing a vocabulary.
+        """
+        from myogestic.controls import Capability
+
+        try:
+            manifest = self._stub.GetControlManifest(
+                pb2.GetControlManifestRequest(), timeout=_RPC_TIMEOUT_S
+            )
+        except Exception as e:  # noqa: BLE001 - absence is an answer during migration
+            self.connected = False
+            self._log_failure("capabilities", e, level=logging.DEBUG)
+            return None
+        self.connected = True
+        self._seen_errors.clear()
+        log.info(
+            "VHI %s exports %d controls (vocabulary %s)",
+            manifest.target_name,
+            len(manifest.capabilities),
+            manifest.vocabulary_version,
+        )
+        return [
+            Capability(
+                address=cap.address,
+                kind="discrete" if cap.kind == pb2.DISCRETE else "continuous",
+                lo=cap.lo,
+                hi=cap.hi,
+                rest=cap.rest,
+                states=tuple(cap.states),
+                rest_state=cap.rest_state,
+                description=cap.description,
+            )
+            for cap in manifest.capabilities
+        ]
 
     # --- presentation --------------------------------------------------------
 

@@ -66,18 +66,32 @@ from myogestic._controls_core import (
     load_dofs,
     substitute_rest,
 )
+from myogestic._controls_map import (
+    Binding,
+    Capability,
+    ControlMap,
+    TargetRef,
+    load_control_map,
+    resolve,
+)
 
 __all__ = [
     "STANDARD_VERSION",
+    "Binding",
+    "Capability",
     "Continuous",
+    "ControlMap",
     "ControlBus",
     "ControlSet",
     "Discrete",
     "Dof",
     "Target",
+    "TargetRef",
     "clip",
     "decode",
     "encode",
+    "load_control_map",
     "load_dofs",
+    "resolve",
     "substitute_rest",
 ]
