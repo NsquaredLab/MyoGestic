@@ -20,12 +20,12 @@ Workflow:
        hand (gRPC)
 """
 
-import math
 import sys
 
 import numpy as np
 
-from myogestic import App, EdgeTrigger, Fr, Grid, Px, Stream, TrainingData
+from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic.controls import ControlBus, load_dofs
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
@@ -33,7 +33,8 @@ from myogestic.recipes.features import mav, rms, var, wl
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi.legacy import LEGACY_POSE_DOFS
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -50,10 +51,17 @@ ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
-vhi_client = vhi.control_client()
+# The v2 recording aid (session gate) and the canonical client. `vhi_legacy` renders
+# the discrete gesture only on a pre-v2 VHI; it goes away with v1.
+training_aid = vhi.training_client()
+vhi_canonical = vhi.canonical_client()
+vhi_legacy = vhi.control_client()
 
-HAND_REST = np.zeros(9, dtype=np.float32)
-HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
+# Per-class poses in canonical DOF values: +1 is the direction the name says, 0 is
+# rest. The fist abducts the thumb — channel 1 used to be written as 0 here, but
+# recorded VHI sessions have it at full excursion.
+HAND_REST: dict[str, float] = {}
+HAND_FIST = dict.fromkeys(LEGACY_POSE_DOFS, 1.0)
 
 # Output-side smoothing applied to the hand pose vector before pushing
 # to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
@@ -147,17 +155,34 @@ def train(data: TrainingData):
     return clf
 
 
-# SetMovement re-triggers VHI's animation, so only command VHI when the class
-# actually changes *and has settled*. EdgeTrigger's n_stable_ticks debounce
-# swallows the tick-to-tick argmax flicker during the ~0.2 s sliding-window
-# transition after a gesture (Fist EMG → Rest EMG) — without it the control hand
-# visibly jumps between poses before settling. The manual gesture button (below)
-# rebases the trigger so a click doesn't re-fire on the next predict ticks.
-# Expressed as a duration (robust to predict_hz); converted to ticks here.
+# Commanding a movement re-triggers VHI's animation, so it must happen only when the
+# class actually changes *and has settled*: the tick-to-tick argmax flickers during
+# the ~0.2 s sliding-window transition after a gesture, and without a debounce the
+# control hand visibly jumps between poses before settling.
+#
+# That debounce is a property of the DOF, so it is declared on the DOF rather than
+# hand-rolled around the client — the bus owns the edge detection, the dedupe, and
+# the rebase-on-manual-click that used to live in this file.
 STABLE_SECONDS = 0.1
-movement_trigger: EdgeTrigger[str] = EdgeTrigger(
-    vhi_client.set_movement,
-    n_stable_ticks=max(1, math.ceil(STABLE_SECONDS * pipeline.predict_hz)),
+CONTROLS = load_dofs(
+    {
+        "dofs": {
+            **dict.fromkeys(LEGACY_POSE_DOFS, "continuous"),
+            "hand.gesture": {
+                "kind": "discrete",
+                "states": [c.lower() for c in CLASSES],
+                "rest": CLASSES[0].lower(),
+                "debounce_s": STABLE_SECONDS,
+            },
+        }
+    }
+)
+vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
+bus = ControlBus(
+    CONTROLS,
+    targets=[vhi_target],
+    smoothing=output_filter,
+    hz=pipeline.predict_hz,
 )
 
 
@@ -169,15 +194,13 @@ def predict(model, features):
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
 
-    hand = HAND_FIST.copy() if class_idx == 1 else HAND_REST.copy()
-    hand = output_filter(hand).astype(np.float32)
-    vhi_outlet.push(hand)
+    # One frame carries both outputs: the pose streams to the predicted hand, and
+    # the gesture is delivered to the control hand only when it has settled. The bus
+    # does the debounce declared on the DOF, so there is no trigger to drive here.
+    pose = HAND_FIST if class_idx == 1 else HAND_REST
+    values = bus.push({**pose, "hand.gesture": CLASSES[class_idx].lower()})
 
-    # Debounced inside EdgeTrigger (n_stable_ticks): fires only once the class has
-    # settled, then dedupes repeats.
-    movement_trigger.fire_if_changed(CLASSES[class_idx])
-
-    return {"class": class_idx, "proba": proba, "hand": hand}
+    return {"class": class_idx, "proba": proba, "hand": values}
 
 
 # Branding cell is FIXED-pixel in both axes so it stays sized to the
@@ -196,29 +219,43 @@ grid = Grid(
 )
 
 
+def _ensure_vhi() -> None:
+    """Settle the target's contract once VHI is up — bind ran before it existed."""
+    if not vhi_target.negotiate():
+        app.ctx.log("VHI not reachable yet — gestures will not render until it is")
+
+
 def _on_gesture(i: int) -> None:
     """Manual class button: drive the fake generator and the VHI control hand."""
+    _ensure_vhi()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
-    vhi_client.set_movement(CLASSES[i])
-    # The click already commanded this class; rebase so the next predict ticks
-    # (still on the old ~0.2 s window) don't re-fire / jump.
-    movement_trigger.rebase(CLASSES[i])
+    # `select` delivers immediately and rebases the DOF's trigger, so the next
+    # predict ticks — still on the old ~0.2 s window — do not re-fire or jump.
+    bus.select("hand.gesture", CLASSES[i].lower())
 
 
 def _on_record() -> None:
-    """While recording, VHI ignores its local keyboard — MyoGestic is sole authority."""
+    """The recording aid gates VHI's keyboard so MyoGestic is the sole authority."""
+    _ensure_vhi()
     app.start_recording()
-    vhi_client.set_session_active(True)
+    if not training_aid.set_recording_session(True):
+        app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
 
 
 def _on_stop() -> None:
     app.stop_recording()
-    vhi_client.set_session_active(False)
+    training_aid.set_recording_session(False)
 
 
 # VhiMovementPanel owns its own state cache and the throttled background
 # get_state() refresh, so the @app.ui body stays free of plumbing.
-vhi_panel = VhiMovementPanel(vhi_client)
+vhi_panel = VhiMovementPanel(
+    training_aid,
+    # Clicks go through the canonical DOF, not straight at the renderer: `select`
+    # delivers immediately and rebases the DOF's debounce so the next predict ticks
+    # do not re-fire.
+    lambda state: bus.select("hand.gesture", state.lower()),
+)
 
 viewer = SignalViewer("emg")
 logo = AppLogo()
@@ -275,7 +312,11 @@ def main() -> None:
     try:
         app.run()
     finally:
-        vhi_client.stop()
+        bus.stop()
+        training_aid.set_recording_session(False)
+        training_aid.stop()
+        vhi_canonical.stop()
+        vhi_legacy.stop()
 
 
 if __name__ == "__main__":

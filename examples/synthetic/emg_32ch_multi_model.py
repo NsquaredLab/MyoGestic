@@ -45,6 +45,7 @@ from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi.legacy import LEGACY_POSE_DOFS, encode_pose
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
@@ -71,13 +72,23 @@ vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 output_filter = PostProcessor(hz=32)
 
-# Per-class 9-DOF hand poses. Library only ships the rest pose conceptually;
-# anything richer is experiment-specific and lives here.
-HAND_POSES: dict[int, np.ndarray] = {
-    0: np.zeros(9, dtype=np.float32),  # Rest
-    1: np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32),  # Fist
-    2: np.array([-0.7, 0, -0.8, -0.6, 0, 0, 0, 0, 0], dtype=np.float32),  # Pinch
-    3: np.array([0.5, 0, 0.5, 0.5, 0.5, 0.5, 0, 0, 0], dtype=np.float32),  # Open
+# Per-class hand poses, in canonical DOF values: +1 is the direction the name
+# says, 0 is rest. `encode_pose` turns them into whatever the legacy wire wants,
+# so no channel index or sign flip appears here.
+#
+# Channel 1 (thumb abduction) used to be written as 0 in a fist. Recorded VHI
+# sessions have it at exactly -1.0 on the wire — full abduction — so a fist
+# abducts the thumb rather than leaving it neutral.
+HAND_POSES: dict[int, dict[str, float]] = {
+    0: {},  # Rest — every DOF at 0
+    1: dict.fromkeys(LEGACY_POSE_DOFS, 1.0),  # Fist: everything flexed, thumb abducted
+    2: {  # Pinch
+        "thumb.flexion": 0.7,
+        "thumb.abduction": 0.6,
+        "index.flexion": 0.8,
+        "middle.flexion": 0.6,
+    },
+    3: dict.fromkeys(LEGACY_POSE_DOFS, -0.5),  # Open: extended past rest
 }
 
 rms_transform = RMS(window_size=32)
@@ -351,8 +362,10 @@ def predict(model, features):
         proba = None
         class_idx = int(model.predict(x)[0])
 
-    hand = HAND_POSES.get(class_idx, HAND_POSES[0]).copy()
-    hand = output_filter(hand).astype(np.float32)
+    # Canonical values in, legacy frame out — `encode_pose` owns the channel layout
+    # and the sign, so this example never has to know either.
+    pose = HAND_POSES.get(class_idx, HAND_POSES[0])
+    hand = output_filter(encode_pose(pose)).astype(np.float32)
     vhi_outlet.push(hand)
     return {"class": class_idx, "proba": proba, "hand": hand}
 

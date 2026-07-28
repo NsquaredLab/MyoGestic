@@ -77,22 +77,37 @@ except FileNotFoundError as e:
 
 ## Plane 1 - continuous pose over LSL
 
-VHI subscribes to a 9-channel float32 outlet. Channels are interpreted in
-`[-1, 1]`:
+!!! tip "Prefer the canonical control standard"
+    Everything below describes the **legacy** wire, kept for builds that predate
+    the v2 contract. New work should declare DOFs by name and let
+    [`VhiTarget`](../api/controls.md) negotiate — then none of these channel
+    numbers appear in your code at all.
 
-| Index | Joint              |
-|-------|--------------------|
-| 0     | Thumb rotation     |
-| 1     | Thumb flexion      |
-| 2     | Index flexion      |
-| 3     | Middle flexion     |
-| 4     | Ring flexion       |
-| 5     | Little flexion     |
-| 6-8   | Wrist (3 axes)     |
+VHI subscribes to a 9-channel float32 outlet, interpreted in `[-1, 1]`. The
+mapping below was read out of VHI's own consumer (`PredictedHandSkeleton`) and
+confirmed against recorded sessions:
 
-`0` is rest, `-1` and `+1` are the joint extremes. Push every predict
-tick - `vhi_outlet` runs its own send thread at `hz`, so only the latest
-push is sent.
+| Index | Joint            | Notes                                    |
+|-------|------------------|------------------------------------------|
+| 0     | Thumb flexion    | bones 1/2/3, X axis                      |
+| 1     | Thumb abduction  | bones 1/2/3, Z axis                      |
+| 2     | Index flexion    |                                          |
+| 3     | Middle flexion   |                                          |
+| 4     | Ring flexion     |                                          |
+| 5     | Little flexion   |                                          |
+| 6-8   | **unused**       | read by no consumer; always `0`          |
+
+Two corrections to what this page used to say, both verified rather than assumed:
+
+* Channel 0 is thumb **flexion**, not thumb rotation, and channel 1 is thumb
+  **abduction**, not thumb flexion. A recorded fist has channel 1 at exactly
+  `-1.0`, which is what settled it.
+* There are **no wrist channels**. Channels 6-8 are dead on both ends — nothing
+  in VHI reads them, which is why they are `0` in every reference recording.
+
+`0` is rest and `-1` is full flexion on this wire — the sign is the renderer's,
+not the standard's. Push every predict tick: `vhi_outlet` runs its own send
+thread at `hz`, so only the latest push is sent.
 
 ```python
 @pipeline.predict

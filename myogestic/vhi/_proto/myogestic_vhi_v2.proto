@@ -40,6 +40,37 @@ service VhiCanonicalControl {
   // The verification primitive: it answers "does this name render as its name
   // claims, in the direction its name claims" without a human watching.
   rpc SweepControl (SweepControlRequest) returns (SweepControlReply);
+
+  // Configure how the renderer *presents* transitions between commanded values.
+  // Appearance only — see SetPresentationRequest.
+  rpc SetPresentation (SetPresentationRequest) returns (ControlAck);
+}
+
+// How the renderer blends between the values it is given.
+//
+// This is the third and last of three distinct layers, and confusing them is the
+// mistake it exists to prevent:
+//
+//   1. Continuous smoothing, on the MyoGestic side, inside ControlBus and before any
+//      target sees a frame. Authoritative: it decides what value is *commanded*.
+//   2. Discrete debounce and hysteresis, also MyoGestic-side, declared on the DOF. A
+//      classifier's state must be gated for stability before it becomes a
+//      transition. A discrete control is never numerically low-pass filtered as
+//      though it were an axis — that would interpolate through states nobody
+//      selected.
+//   3. This: purely visual interpolation in the renderer, so a hand does not snap
+//      jarringly between poses.
+//
+// Layer 3 must never be relied on as protection against classifier chatter. It
+// changes only how a commanded value *looks* on its way to being reached; it does not
+// change the value, and it cannot make an unstable prediction stable. A build with
+// blending on and no debounce still jumps between states — it just does so smoothly.
+message SetPresentationRequest {
+  // Interpolate toward each newly commanded pose instead of snapping to it.
+  bool blend = 1;
+  // Interpolation speed when blend is true; higher is snappier. Non-positive leaves
+  // the renderer's current speed alone.
+  float blend_speed = 2;
 }
 
 // What a canonical DOF is. Mirrors the standard rather than VHI's rig: a
@@ -134,6 +165,10 @@ message DeclareReply {
   // its frame independently of the negotiation.
   string continuous_stream_name = 4;
   repeated string continuous_channel_order = 5;
+  // Whether the renderer currently blends between commanded values (layer 3, see
+  // SetPresentationRequest). Reported so a client can *see* that visual smoothing is
+  // on — never so it can treat that as a substitute for its own debounce.
+  bool blends_presentation = 7;
 }
 
 message SetControlRequest {
@@ -275,4 +310,7 @@ message TrainingState {
   string animation_state = 4;
   // Movement names a program may name. Discover, don't hard-code.
   repeated string available_movements = 5;
+  // The control hand's currently selected movement, whatever selected it. Lets a UI
+  // highlight it without the v1 control service.
+  string current_movement = 6;
 }

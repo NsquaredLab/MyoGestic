@@ -71,6 +71,32 @@ not state its wire encoding all fall the whole way back.
 
 ::: myogestic.vhi.interfaces.InterfaceSpec.canonical_client
 
+### Three layers of smoothing, and why they are not interchangeable
+
+Smoothing is not one thing. Three separate mechanisms exist, at three different
+places, and collapsing any two of them is a bug:
+
+| Layer | Where | Applies to | Authoritative? |
+|---|---|---|---|
+| **1. Continuous smoothing** | `ControlBus(smoothing=...)`, MyoGestic | continuous DOFs | **Yes** — it decides the value that is commanded |
+| **2. Debounce + hysteresis** | `Discrete.debounce_s`, `ControlBus(hysteresis=...)`, MyoGestic | discrete DOFs | **Yes** — it decides *when* a state transition happens |
+| **3. Presentation blending** | the renderer (`canonical_client().set_presentation`) | how a commanded value looks | **No** — appearance only |
+
+Layer 1 runs before any target sees a frame, which is what makes it authoritative:
+smoothing after delivery would mean different targets acted on different values.
+
+Layer 2 is the one people reach for layer 1 to solve, and must not. A discrete control
+is **never** numerically low-pass filtered as though it were an axis — averaging
+"rest" and "fist" interpolates through states nobody selected. What a noisy classifier
+needs is a *stability gate*: hold the new state for `debounce_s` before it counts, with
+optional hysteresis so a value hovering near a boundary does not oscillate. That is why
+`debounce_s` is declared on the DOF rather than configured on the filter.
+
+Layer 3 is real and worth having — a hand that snaps between poses looks wrong — but it
+is only cosmetic. It cannot make an unstable prediction stable. A renderer with
+blending on and no debounce still jumps between states; it just does so smoothly, which
+is arguably worse because it *looks* deliberate.
+
 ### Recording is not control
 
 A canonical discrete DOF is a **held state**: ask for a grip, hold a grip. Collecting
