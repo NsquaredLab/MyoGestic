@@ -9,4 +9,18 @@ with, kept apart because its upgrade path is deletion.
 from myogestic.vhi.interfaces import InterfaceSpec, virtual_hand
 from myogestic.vhi.target import PoseSink, VhiTarget
 
-__all__ = ["InterfaceSpec", "PoseSink", "VhiTarget", "virtual_hand"]
+#: `VhiCanonicalClient` is listed here but resolved lazily by ``__getattr__`` below.
+__all__ = ["InterfaceSpec", "PoseSink", "VhiCanonicalClient", "VhiTarget", "virtual_hand"]
+
+
+def __getattr__(name: str):
+    """Expose `VhiCanonicalClient` without importing grpc on a plain install.
+
+    A module-level import would pull in ``grpc`` for everyone, including installs
+    with no ``[grpc]`` extra that only ever call `virtual_hand().outlet()`.
+    """
+    if name == "VhiCanonicalClient":
+        from myogestic.vhi._client_v2 import VhiCanonicalClient
+
+        return VhiCanonicalClient
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

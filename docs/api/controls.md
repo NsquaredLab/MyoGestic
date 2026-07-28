@@ -47,6 +47,30 @@ an ordering that is easy to get subtly wrong per-application.
 
 ::: myogestic.vhi.PoseSink
 
+### Negotiating with the target
+
+A target does not have to guess what an application can render. Hand `VhiTarget` a
+canonical client and it **asks** at bind time, then encodes according to the answer:
+
+```python
+vhi = virtual_hand()
+target = VhiTarget(vhi.outlet(), client=vhi.canonical_client())
+bus = ControlBus(controls, targets=[target])
+```
+
+Against a Virtual Hand that speaks the v2 contract this negotiates the channel layout
+by name and lets discrete DOFs through as well. Against an older build the handshake
+comes back empty and the target falls back to the legacy pose on its own — nothing
+downstream changes either way, which is the point.
+
+The fallback is **all-or-nothing**. A partly-understood negotiation is worse than
+none: it would leave some DOFs believed rendered and others quietly dropped, and a
+dropped joint is indistinguishable from a joint that is working and holding still. So
+a refused DOF, a channel order with no place for a declared name, or a reply that will
+not state its wire encoding all fall the whole way back.
+
+::: myogestic.vhi.interfaces.InterfaceSpec.canonical_client
+
 ## Encoding helpers
 
 Wire-level helpers, for a target that needs a vector rather than a mapping.

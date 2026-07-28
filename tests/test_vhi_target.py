@@ -701,3 +701,38 @@ def test_a_declared_dof_with_no_negotiated_channel_falls_back():
     with pytest.raises(ValueError, match="no legacy channel"):
         target.bind(_controls("index.flexion", **{"wrist.rotation": "continuous"}))
     assert target.negotiated is False
+
+
+def test_the_canonical_client_is_publicly_importable():
+    """Nobody should have to reach into a private module to negotiate."""
+    pytest.importorskip("grpc")
+    import myogestic.vhi as vhi_pkg
+
+    assert "VhiCanonicalClient" in vhi_pkg.__all__
+    assert vhi_pkg.VhiCanonicalClient.__name__ == "VhiCanonicalClient"
+
+
+def test_the_vhi_package_still_rejects_unknown_attributes():
+    """The lazy __getattr__ must not turn every typo into an import error."""
+    import myogestic.vhi as vhi_pkg
+
+    with pytest.raises(AttributeError, match="no attribute"):
+        _ = vhi_pkg.NoSuchThing
+
+
+def test_importing_the_vhi_package_does_not_require_grpc():
+    """A plain install calls virtual_hand().outlet() and must not pay for grpc."""
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable, "-c",
+            "import sys; import myogestic.vhi; "
+            "assert 'grpc' not in sys.modules, 'importing myogestic.vhi pulled in grpc'; "
+            "print('ok')",
+        ],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "ok" in result.stdout
