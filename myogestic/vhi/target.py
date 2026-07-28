@@ -69,7 +69,14 @@ class VhiTarget:
     client
         Optional `myogestic.vhi._client_v2.VhiCanonicalClient`. When given, `bind`
         negotiates the control space over it; without one this target is legacy-only.
-        Also carries discrete state, which the legacy wire cannot express at all.
+        Also carries discrete state, which the legacy *wire* cannot express at all.
+    legacy_client
+        Optional `myogestic.vhi._client.VhiControlClient`, used **only** on the legacy
+        path and only for discrete DOFs — the pre-v2 way to render a held state was
+        v1's ``SetMovement``. Supplying one lets an application declare a discrete DOF
+        and still run against an unmodified VHI; without one the legacy path refuses
+        discrete DOFs outright, because a silently dropped state is worse than a
+        refusal. This parameter exists to be deleted with v1.
 
     Notes
     -----
@@ -101,12 +108,19 @@ class VhiTarget:
     """
 
     __slots__ = (
-        "_client", "_dofs", "_negate", "_negotiated", "_order", "_outlet", "_slots", "_width",
+        "_client", "_dofs", "_legacy", "_legacy_states", "_negate", "_negotiated",
+        "_order", "_outlet", "_pending", "_slots", "_width",
     )
 
-    def __init__(self, outlet: PoseSink, *, client: Any = None) -> None:
+    def __init__(self, outlet: PoseSink, *, client: Any = None, legacy_client: Any = None) -> None:
         self._outlet = outlet
         self._client = client
+        self._legacy = legacy_client
+        #: Canonical discrete state -> the v1 movement name that renders it. Only
+        #: populated on the legacy path; empty once v2 is negotiated.
+        self._legacy_states: dict[str, str] = {}
+        #: The configuration still awaiting a reachable VHI, or None once settled.
+        self._pending: ControlSet | None = None
         self._dofs: tuple[Continuous, ...] = ()
         #: Negotiated channel order in v2 mode; empty means the legacy path.
         self._order: tuple[str, ...] = ()
@@ -139,11 +153,43 @@ class VhiTarget:
         """
         self._order = ()
         self._slots = ()
+        self._legacy_states = {}
+        self._pending = None
         self._negate = False
         self._negotiated = False
         if self._client is not None and self._negotiate(controls):
             return
         self._bind_legacy(controls)
+
+    def negotiate(self) -> bool:
+        """Retry the handshake now — for an application that launches its own renderer.
+
+        `bind` runs when the `myogestic.controls.ControlBus` is constructed, which for
+        an app that spawns VHI from its own UI is necessarily *before* VHI exists. That
+        makes "no answer" ambiguous at bind time: an older build and a build that is
+        not up yet look identical. `bind` therefore defers rather than deciding, and
+        this settles it once the renderer is actually there.
+
+        Cheap and idempotent when already settled, so it is fine to call from a button
+        handler. Never call it from the predict thread — it blocks on an RPC.
+
+        Returns
+        -------
+        bool
+            Whether this target now has a working contract, v2 or legacy.
+        """
+        controls = self._pending
+        if controls is None:
+            return self._negotiated or bool(self._dofs) or bool(self._legacy_states)
+        if self._client is not None and self._negotiate(controls):
+            self._pending = None
+            return True
+        if controls.discrete:
+            self._legacy_states = self._resolve_legacy_states(controls)
+            if not self._legacy_states:
+                return False
+        self._pending = None
+        return True
 
     def _negotiate(self, controls: ControlSet) -> bool:
         """Try the v2 handshake. False means "use the legacy path", never an error."""
@@ -213,19 +259,17 @@ class VhiTarget:
     def _bind_legacy(self, controls: ControlSet) -> None:
         """The pre-v2 path: a six-DOF pose on a nine-channel wire, or a refusal."""
         if controls.discrete:
-            names = [d.name for d in controls.discrete]
-            raise ValueError(
-                f"VhiTarget cannot render discrete DOFs {names}: legacy VHI's "
-                f"ControlMode makes streamed pose and named movements mutually "
-                f"exclusive, so one target cannot serve both. Command movements "
-                f"through virtual_hand().control_client() for now — the v2 interface "
-                f"removes the exclusivity and this restriction goes with it."
-            )
+            self._legacy_states = self._resolve_legacy_states(controls)
+            if not self._legacy_states:
+                # VHI is not up yet. Not a configuration error — this application
+                # launches its own renderer, so bind runs first by construction.
+                # Resolution is retried by `negotiate`.
+                self._pending = controls
         pose = controls.continuous
-        if not pose:
+        if not pose and not controls.discrete:
             raise ValueError(
-                "VhiTarget has nothing to render: the configuration declares no "
-                "continuous DOFs. A hand pose is continuous by nature."
+                "VhiTarget has nothing to render: the configuration declares no DOFs "
+                "at all."
             )
         unknown = [d.name for d in pose if d.name not in LEGACY_POSE_DOFS]
         if unknown:
@@ -237,6 +281,45 @@ class VhiTarget:
                 f"is working and holding still."
             )
         self._dofs = pose
+
+    def _resolve_legacy_states(self, controls: ControlSet) -> dict[str, str]:
+        """Map each declared discrete state onto a v1 movement name, or refuse.
+
+        The pre-v2 renderer for a held state is v1's ``SetMovement``, which matches
+        movement names exactly — so the states are resolved case-insensitively against
+        what VHI reports it has, the same way the v2 service does it server-side.
+        Resolution happens once, at bind, so a click never pays for a query.
+        """
+        names = [d.name for d in controls.discrete]
+        if self._legacy is None:
+            raise ValueError(
+                f"VhiTarget cannot render discrete DOFs {names} on the legacy path: the "
+                f"old wire carries a pose and nothing else. Pass legacy_client="
+                f"virtual_hand().control_client() to render them through v1 SetMovement, "
+                f"or client=virtual_hand().canonical_client() to negotiate v2."
+            )
+        state = self._legacy.get_state()
+        available = list(state.available_movements) if state is not None else []
+        if not available:
+            # Absent, not wrong. Signalled by an empty result so `bind` can defer.
+            return {}
+        lookup = {movement.lower(): movement for movement in available}
+        resolved: dict[str, str] = {}
+        unresolved: list[str] = []
+        for dof in controls.discrete:
+            for value in dof.states:
+                movement = lookup.get(value.lower())
+                if movement is None:
+                    unresolved.append(value)
+                else:
+                    resolved[value] = movement
+        if unresolved:
+            raise ValueError(
+                f"VhiTarget has no movement for the states {sorted(set(unresolved))}. This "
+                f"VHI offers {available}. Rename the states, or drop them — rendering only "
+                f"the ones that resolve would make the rest look like a state that applied."
+            )
+        return resolved
 
     def send(self, values: Mapping[str, float | str], changed: Mapping[str, str]) -> None:
         """Encode one canonical frame for whichever contract `bind` settled on.
@@ -251,8 +334,24 @@ class VhiTarget:
         as re-sending a number.
         """
         self._outlet.push(self._frame(values))
-        if changed and self._client is not None and self.negotiated:
+        if not changed:
+            return
+        if self.negotiated and self._client is not None:
             self._client.set_control(discrete=dict(changed))
+        elif self._pending is not None:
+            log.warning(
+                "discrete edge %s dropped: VHI has not been reached yet, so its states "
+                "are unresolved. Call VhiTarget.negotiate() once VHI is running.",
+                dict(changed),
+            )
+        elif self._legacy_states:
+            # The legacy path renders a held state through v1 SetMovement, one edge at
+            # a time. cycle=False: a discrete DOF is a held state, so it snaps to the
+            # pose and stays — cycling would render a trajectory nobody asked for.
+            for state in changed.values():
+                movement = self._legacy_states.get(state)
+                if movement is not None:
+                    self._legacy.set_movement(movement, cycle=False)
 
     def _frame(self, values: Mapping[str, float | str]) -> np.ndarray:
         """The wire frame for this binding — negotiated order, or the legacy pose."""

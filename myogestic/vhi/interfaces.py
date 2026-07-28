@@ -38,6 +38,7 @@ from myogestic.outputs import LSLOutlet
 if TYPE_CHECKING:
     from myogestic.vhi._client import VhiControlClient
     from myogestic.vhi._client_v2 import VhiCanonicalClient
+    from myogestic.vhi._training import VhiTrainingAidClient
 
 
 @dataclass
@@ -162,6 +163,33 @@ class InterfaceSpec:
         from myogestic.vhi._client_v2 import VhiCanonicalClient
 
         return VhiCanonicalClient(host=self.grpc_host, port=self.grpc_port)
+
+    def training_client(self) -> VhiTrainingAidClient:
+        """Construct a client for this interface's **v2 recording aid**.
+
+        The aid is not a control plane and nothing it does is a canonical DOF. It
+        carries the two things a *recording session* needs: the gate that stops VHI's
+        local keyboard competing as a movement source, and training programs that
+        deliberately cycle the control hand so the recorded kinematics sweep a
+        continuous range.
+
+        Kept apart from `canonical_client` so the boundary is visible at the call
+        site: a discrete DOF means "hold this state", and collecting training data
+        must not quietly redefine that.
+
+        Imported lazily, like the other gRPC clients, so a plain install without the
+        ``[grpc]`` extra can still use `outlet` / `launcher`.
+
+        Examples
+        --------
+        >>> from myogestic.vhi import virtual_hand
+        >>> aid = virtual_hand().training_client()
+        >>> aid.set_recording_session(True)     # False when VHI has no v2 aid
+        False
+        """
+        from myogestic.vhi._training import VhiTrainingAidClient
+
+        return VhiTrainingAidClient(host=self.grpc_host, port=self.grpc_port)
 
     def control_outlet(self) -> LSLOutlet:
         """Construct an [`LSLOutlet`][] for streaming a continuous pose to the control hand.
