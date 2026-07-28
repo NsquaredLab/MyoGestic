@@ -291,3 +291,53 @@ def test_routes_are_kept_beside_the_dofs_not_baked_into_names():
     resolved = resolve(load_control_map({"dofs": {"a": "vhi.prediction.index"}}), VHI)
     assert resolved.dofs["a"].name == "a", "the Dof keeps the user's name"
     assert resolved.routes["a"][0].address == "vhi.prediction.index"
+
+
+class TestClassificationReachesTheTargetAsRegressionDoes:
+    """`threshold` on a *continuous* binding, the unified classification path.
+
+    The user-facing claim is that a binary classifier drives a hand through the same
+    weighted fan-out a regressor drives — so the target sees continuous per-control
+    values in both cases and no separate state command exists. These pin the parts of
+    that claim which live in resolution.
+    """
+
+    SPEC = {
+        "dofs": {
+            "fist": {
+                "targets": [
+                    {"target": "vhi.prediction.thumb", "weight": 0.6},
+                    {"target": "vhi.prediction.index"},
+                ],
+                "threshold": 0.6,
+            }
+        }
+    }
+
+    def test_the_threshold_lands_on_the_resolved_control(self):
+        resolved = resolve(load_control_map(self.SPEC), VHI)
+        assert resolved.dofs["fist"].threshold == 0.6
+
+    def test_it_stays_continuous_and_keeps_its_weights(self):
+        """The whole point: still one number fanning out, not a state."""
+        resolved = resolve(load_control_map(self.SPEC), VHI)
+        assert not hasattr(resolved.dofs["fist"], "states")
+        assert [ref.weight for ref in resolved.routes["fist"]] == [0.6, 1.0]
+
+    def test_an_activation_is_unsigned_even_on_signed_targets(self):
+        """An activation is on or off. Half of a signed range would be unreachable."""
+        resolved = resolve(load_control_map(self.SPEC), VHI)
+        assert (resolved.dofs["fist"].lo, resolved.dofs["fist"].hi) == (0.0, 1.0)
+
+    def test_without_a_threshold_the_same_mapping_serves_a_regressor(self):
+        spec = {"dofs": {"fist": {"targets": self.SPEC["dofs"]["fist"]["targets"]}}}
+        resolved = resolve(load_control_map(spec), VHI)
+        assert resolved.dofs["fist"].threshold is None
+        assert resolved.dofs["fist"].lo == -1.0, "signed targets, so a signed control"
+
+    def test_debounce_on_a_thresholded_continuous_control_is_refused(self):
+        """The bus gates stability for discrete DOFs only, so accepting it here would
+        silently do nothing — worse than saying so."""
+        spec = {"dofs": {"fist": {**self.SPEC["dofs"]["fist"], "debounce_s": 0.2}}}
+        with pytest.raises(ValueError, match="debounce_s is not applied"):
+            resolve(load_control_map(spec), VHI)

@@ -3,7 +3,8 @@
 This is a **VHI training / control-hand aid**, not a control surface for an
 application's own DOFs. It reads the v2 recording aid for state and dispatches clicks
 through a caller-supplied handler, which is expected to command a *canonical discrete
-DOF* — normally ``bus.select("hand.gesture", state)``. It does not speak v1
+DOF* — normally ``bus.select("gesture", state)``, under whatever alias your
+mapping file gave that control. It does not speak v1
 ``SetMovement``, and the movement names it shows are the renderer's own vocabulary.
 
 Wraps the three-piece pattern most examples use verbatim:
@@ -44,7 +45,8 @@ class VhiMovementPanel:
         (available movements, the current one, whether a training program is running).
     on_movement
         Click handler for a movement button — **required**. Wire it to a canonical
-        discrete DOF, e.g. ``lambda s: bus.select("hand.gesture", s.lower())``. There
+        discrete DOF, e.g. ``lambda s: bus.select("gesture", s)`` — the states come
+        from the target's manifest, so pass one of those names through. There
         is deliberately no default: dispatching straight to a renderer would bypass
         the DOF's debounce, which is the only thing protecting a classifier-driven
         session from state chatter.
@@ -59,7 +61,7 @@ class VhiMovementPanel:
     >>> from myogestic.widgets import VhiMovementPanel
     >>> panel = VhiMovementPanel(
     ...     vhi.training_client(),
-    ...     lambda state: bus.select("hand.gesture", state.lower()),
+    ...     lambda state: bus.select("gesture", state),
     ... )
     >>> panel.ui()
     """

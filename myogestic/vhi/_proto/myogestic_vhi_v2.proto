@@ -7,7 +7,7 @@ package myogestic.vhi.v2;
 // v1 (myogestic_vhi.proto) is untouched and still served: it speaks in *movement
 // names* and in a 9-float pose whose channel meaning lives nowhere. This service
 // speaks the canonical control standard instead — an application declares what it
-// controls by name ("index.flexion", "hand.grasp"), and VHI answers with what it
+// controls by address ("vhi.prediction.index"), and VHI answers with what it
 // can render. Neither side hard-codes a channel index.
 //
 // Three things v1 could not express, and the reason this file exists:
@@ -94,6 +94,14 @@ message ControlCapability {
   // The LSL stream this control is read from, when it is streamed rather than sent
   // over SetControl. Empty means SetControl only.
   string stream_name = 10;
+
+  // DISCRETE only: the activation level at which a client should select the non-rest
+  // state, when its model emits a probability rather than a state name. 0 means the
+  // target has no opinion and the client's own default applies.
+  //
+  // Declared here because the target knows what its states cost: a prosthesis that takes
+  // a second to close wants a higher bar than a cursor click.
+  float activation_threshold = 12;
 
   // Which channel of stream_name carries this control. -1 when it is not streamed.
   //

@@ -31,7 +31,7 @@ class VhiCanonicalControlStub(object):
     v1 (myogestic_vhi.proto) is untouched and still served: it speaks in *movement
     names* and in a 9-float pose whose channel meaning lives nowhere. This service
     speaks the canonical control standard instead — an application declares what it
-    controls by name ("index.flexion", "hand.grasp"), and VHI answers with what it
+    controls by address ("vhi.prediction.index"), and VHI answers with what it
     can render. Neither side hard-codes a channel index.
 
     Three things v1 could not express, and the reason this file exists:
@@ -91,7 +91,7 @@ class VhiCanonicalControlServicer(object):
     v1 (myogestic_vhi.proto) is untouched and still served: it speaks in *movement
     names* and in a 9-float pose whose channel meaning lives nowhere. This service
     speaks the canonical control standard instead — an application declares what it
-    controls by name ("index.flexion", "hand.grasp"), and VHI answers with what it
+    controls by address ("vhi.prediction.index"), and VHI answers with what it
     can render. Neither side hard-codes a channel index.
 
     Three things v1 could not express, and the reason this file exists:
@@ -196,7 +196,7 @@ class VhiCanonicalControl(object):
     v1 (myogestic_vhi.proto) is untouched and still served: it speaks in *movement
     names* and in a 9-float pose whose channel meaning lives nowhere. This service
     speaks the canonical control standard instead — an application declares what it
-    controls by name ("index.flexion", "hand.grasp"), and VHI answers with what it
+    controls by address ("vhi.prediction.index"), and VHI answers with what it
     can render. Neither side hard-codes a channel index.
 
     Three things v1 could not express, and the reason this file exists:

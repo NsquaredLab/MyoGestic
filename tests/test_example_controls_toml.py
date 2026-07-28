@@ -145,3 +145,48 @@ def test_the_walkthrough_points_at_this_file():
     walkthrough = CONFIG.parents[2] / "tools" / "inspect_canonical_control.py"
     text = walkthrough.read_text()
     assert '"examples"' in text and '"controls"' in text and '"hand.toml"' in text
+
+
+class TestTheClassificationFileTeachesTheUnifiedPath:
+    """`examples/controls/classification.toml` — a classifier through the same mapping.
+
+    The claim the file makes is that classification and regression are the *same*
+    connection to the target: the classifier's output is gated to an activation and then
+    fanned out and weighted exactly as a regressed value would be, so VHI receives
+    continuous per-control values and no separate state command. If that ever regressed
+    into a discrete path, the file would still parse and would teach the wrong thing.
+    """
+
+    CONFIG = CONFIG.parent / "classification.toml"
+
+    @pytest.fixture(scope="class")
+    def resolved(self):
+        with self.CONFIG.open("rb") as handle:
+            return resolve(load_control_map(tomllib.load(handle)), VHI_MANIFEST)
+
+    def test_the_classifier_drives_continuous_controls_not_a_state(self, resolved):
+        assert not any(hasattr(dof, "states") for dof in resolved.dofs.values())
+
+    def test_the_activation_is_gated_and_weighted(self, resolved):
+        gated = [d for d in resolved.dofs.values() if d.threshold is not None]
+        assert gated, "the file must show a thresholded activation"
+        assert any(
+            any(ref.weight != 1.0 for ref in resolved.routes[d.name]) for d in gated
+        ), "and one that still fans out with weights, as a regressor's would"
+
+    @pytest.mark.parametrize(("probability", "sent"), [(0.2, 0.0), (0.9, 1.0)])
+    def test_a_probability_never_reaches_a_target_as_itself(
+        self, resolved, probability, sent
+    ):
+        """The headline behaviour: 0 to every listed control, or 1 x each weight."""
+        bus = ControlBus(resolved, targets=[], hz=50)
+        delivered = bus.push({name: probability for name in resolved.dofs})
+        assert set(delivered.values()) == {sent}
+        bus.stop()
+
+    def test_the_example_pushes_the_probability_it_documents(self):
+        """The file and the app that loads it have to agree about who gates."""
+        app = self.CONFIG.parents[1] / "synthetic" / "emg_classification.py"
+        text = app.read_text()
+        assert "classification.toml" in text
+        assert "proba[" in text.split("def predict")[1], "it must push the probability"

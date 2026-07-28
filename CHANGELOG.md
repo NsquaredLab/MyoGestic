@@ -9,12 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **A canonical control standard — `myogestic.controls`.** An application declares what it
-  *controls* by name (`index.flexion`, `hand.grasp`) and a `Target` renders those names on
-  whatever it drives. Continuous DOFs are signed and normalized: the domain is `[-1, 1]`,
-  `+1` is the direction the name denotes, rest is `0`. Discrete DOFs are a separate kind —
-  a held state delivered on change, never a number. `load_dofs` takes a plain mapping, so
-  the library still reads no config files.
+- **A control standard — `myogestic.controls`.** A control space is a *mapping*, written in
+  a file: your name for a model output on the left, an address the target declares on the
+  right (`my_index = "vhi.prediction.index"`). The left side is yours and arbitrary. The
+  right side belongs to the target, which also declares what the control **is** — number or
+  held state, its range, its states — so MyoGestic hard-codes no vocabulary and a target
+  that grows a control needs no change here. Continuous controls are normalized: `+1` is
+  the direction the control denotes, rest is `0`, signed when the target says so. Discrete
+  controls are a separate kind — a held state delivered on change, never a number.
+  `load_control_map` takes a plain mapping, so the library still reads no config files;
+  `resolve` needs a live target, because the target is what declares the semantics.
+- **Grouped and weighted fan-out.** One output may reach several controls —
+  `fist = ["vhi.prediction.index", "vhi.prediction.middle"]` — with an optional per-target
+  `weight` applied *before* that target's own range conversion, so a gain scales a value
+  but cannot push one past what the target accepts. Negative weights are permitted only on
+  a target that declares signed motion.
+- **Classification reaches a target the same way regression does.** A classifier produces an
+  *activation*, not a position, so a `threshold` on a continuous binding gates the model's
+  probability to exactly `0.0` or `1.0` before anything else sees it — before the weights,
+  before the wire, before the recording. From there it is an ordinary control value: `0` to
+  every listed control when inactive, `1 × weight` when active. Drop the `threshold` and the
+  identical mapping serves a regressor. The gate exists because a continuous address is a
+  *position*: streaming a raw `0.73` into one says the finger is 73% curled, which is not
+  what a 73%-confident classifier meant. Map onto a target-declared **discrete** address
+  instead when the thing genuinely is a state rather than an amount.
 - **`ControlBus` owns the one ordering that must not be re-derived per application:**
   substitute rest → clip → dead zone → smooth → substitute rest → clip again → deliver.
   Rest substitution comes first because `min(hi, max(lo, nan))` is `lo`, so a NaN
@@ -54,6 +72,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`myogestic.vhi.legacy`** — reads legacy VHI pose recordings as canonical values. It
   outlives the migration: VHI's outlets stay in the renderer's units, so archived sessions
   are permanently in that convention and `decode_pose` remains their reader.
+
+### Changed (breaking)
+
+- **`load_dofs` and its kind/range/state grammar are gone.** A control space is declared by
+  mapping your alias onto a target-owned address; `load_control_map` + `resolve` replace it.
+  The old grammar let a *mapping* claim a control was signed, or discrete, or ranged — facts
+  only the target can know, and which went silently wrong when it disagreed.
+- **The recorded control-space format changed** and is tagged `alias-address/1`. Recordings
+  and model sidecars written before it are refused with a message naming the format, rather
+  than being reinterpreted under a grammar whose meaning has moved.
 
 ### Changed
 

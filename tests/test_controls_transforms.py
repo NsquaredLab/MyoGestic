@@ -174,3 +174,39 @@ def test_the_transforms_treat_the_alias_as_opaque(alias):
     assert clip(controls, {alias: 5.0})[0][alias] == 1.0
     assert encode(controls, {alias: 0.25}).tolist() == [0.25]
     assert decode(controls, [0.25])[alias] == pytest.approx(0.25)
+
+
+class TestAClassifierActivationIsGatedNotStreamed:
+    """A classifier's probability must reach a target as 0 or 1, never as itself.
+
+    The reason is that a continuous target address is a *position*. Sending 0.73 into
+    one says the finger is 73% curled, which is not what a 73%-confident classifier
+    meant. Gating it here, before the fan-out weights and before the wire, is what lets
+    one grouped mapping serve a regressor and a classifier alike.
+    """
+
+    GATED = ControlSet(dofs={"fist": Continuous("fist", lo=0.0, hi=1.0, threshold=0.6)})
+
+    @pytest.mark.parametrize(
+        ("probability", "expected"),
+        [(0.0, 0.0), (0.42, 0.0), (0.599, 0.0), (0.6, 1.0), (0.73, 1.0), (1.0, 1.0)],
+    )
+    def test_a_probability_becomes_an_activation(self, probability, expected):
+        assert substitute_rest(self.GATED, {"fist": probability})["fist"] == expected
+
+    def test_the_threshold_is_inclusive(self):
+        """Declaring 0.6 and reading exactly 0.6 must activate, not sit at the edge."""
+        assert substitute_rest(self.GATED, {"fist": 0.6})["fist"] == 1.0
+
+    def test_no_threshold_leaves_the_value_alone(self):
+        """The regression path is untouched: a regressed 0.73 is a real position."""
+        plain = ControlSet(dofs={"fist": Continuous("fist", lo=0.0, hi=1.0)})
+        assert substitute_rest(plain, {"fist": 0.73})["fist"] == 0.73
+
+    def test_a_missing_activation_still_rests(self):
+        """Gating must not turn an absent value into a spurious activation."""
+        assert substitute_rest(self.GATED, {})["fist"] == 0.0
+
+    def test_unusable_input_rests_rather_than_gating_garbage(self):
+        """rest, not `"" >= 0.6`."""
+        assert substitute_rest(self.GATED, {"fist": "closed"})["fist"] == 0.0

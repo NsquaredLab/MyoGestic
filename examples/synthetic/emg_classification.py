@@ -49,12 +49,13 @@ CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "cl
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
 
-# Per-class poses, keyed by *our* aliases: +1 is the direction the alias means, 0 is rest.
-# `fist` fans out to all five digits, so a whole-hand pose is two numbers rather than a
-# channel vector. The fist also abducts the thumb — this used to write channel 1 as 0, but
-# recorded VHI sessions have it at full excursion.
-HAND_REST: dict[str, float] = {"fist": 0.0, "thumb_spread": 0.0}
-HAND_FIST: dict[str, float] = {"fist": 1.0, "thumb_spread": 1.0}
+# Classification reaches the hand the *same way regression does*. The classifier gives an
+# activation, not a pose: both aliases below declare a `threshold` in the file, so a
+# probability is gated to exactly 0 or 1 and from there is an ordinary control value —
+# fanned out and weighted like a regressor's. `fist` reaches all five digits and
+# `thumb_spread` abducts the thumb, so a whole-hand pose is these two numbers rather than
+# a channel vector, and VHI receives continuous per-control values either way.
+FIST_ALIASES = ("fist", "thumb_spread")
 
 # --8<-- [end:poses]
 
@@ -186,16 +187,22 @@ def train(data: TrainingData):
 # --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
-    """Classify → map to hand pose → smooth → push to VHI.
+    """Classify → gate to an activation → smooth → push to VHI.
 
-    Filter applies only to the physical-control vector; class probabilities
-    flow through unchanged for the UI / debug overlay.
+    Three separate things happen to the number, in this order, and each is worth
+    telling apart. The declared threshold decides *whether* the hand is closed, giving
+    a 0 or a 1. The fan-out weights decide *how much of that* each digit gets. The
+    filter then decides *how fast* the change is allowed to look. Class probabilities
+    themselves flow through untouched, for the UI.
     """
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
     if bus is None:
         return {"class": class_idx, "proba": proba}  # unresolved; nothing to command
-    hand = bus.push(HAND_FIST if class_idx == 1 else HAND_REST)
+    # The probability of "Fist", pushed as-is. The bus gates it before anything else
+    # sees it, so VHI is never handed a bare 0.73 standing in for a finger position.
+    activation = float(proba[CLASSES.index("Fist")])
+    hand = bus.push(dict.fromkeys(FIST_ALIASES, activation))
     return {"class": class_idx, "proba": proba, "hand": hand}
 
 

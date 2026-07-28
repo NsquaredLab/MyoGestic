@@ -265,6 +265,7 @@ class VhiCanonicalClient:
                 rest_state=cap.rest_state,
                 channel=cap.channel,
                 stream_name=cap.stream_name,
+                activation_threshold=cap.activation_threshold,
                 encoding=int(cap.encoding),
                 description=cap.description,
             )

@@ -43,7 +43,7 @@ button click.** The flow:
 
 1. Click **Launch** on EMG Generator and VHI Hand.
 2. Click a gesture button (Rest / Fist). Two things happen:
-   * `bus.select("hand.gesture", name)` - the gesture is a canonical
+   * `bus.select("gesture", name)` - the gesture is a canonical
      **discrete DOF**, a *held state*: the control hand snaps to that
      pose and stays there. That it holds rather than sweeps is
      load-bearing here — regression needs the hand to reach and hold the
