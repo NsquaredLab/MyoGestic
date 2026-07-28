@@ -389,8 +389,26 @@ grid = Grid(
 )
 
 
+def _ensure_vhi() -> None:
+    """Settle the target's contract, once VHI is actually up.
+
+    `bind` ran when the bus was constructed — at import, before the user clicks Launch —
+    so VHI did not exist yet and "no answer" could not be read as "old build". Without
+    this the target would keep encoding for the legacy wire, which a v2 VHI renders
+    inverted. Cheap and idempotent once settled.
+    """
+    if not vhi_target.negotiate():
+        app.ctx.log("VHI not reachable yet — poses use the legacy encoding until it is")
+
+
 def _on_gesture(i: int) -> None:
+    _ensure_vhi()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
+
+
+def _on_record() -> None:
+    _ensure_vhi()
+    app.start_recording()
 
 
 viewer = SignalViewer("emg", selectable=True)
@@ -400,7 +418,7 @@ logo = AppLogo()
 processes = ProcessLauncher(PROCESSES)
 recording = RecordingControls(
     CLASSES,
-    on_record=app.start_recording,
+    on_record=_on_record,
     on_stop=app.stop_recording,
     on_gesture=_on_gesture,
 )
