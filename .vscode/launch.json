@@ -1,0 +1,216 @@
+{
+  // Run and Debug entries for the control standard: the walkthrough, every example
+  // backed by a file in examples/controls/, and the VHI prerequisites they need.
+  //
+  // Each entry runs `.venv/bin/python` after a `uv sync` preLaunchTask, so the extras
+  // are present without anyone reconstructing a command line. See .vscode/tasks.json.
+  //
+  // Which entries need what:
+  //   - the six EMG examples open a window and launch VHI + the EMG generator from
+  //     their own buttons, so they need a display but no prerequisite configuration;
+  //   - "Walkthrough" and "Rig check" have no UI, so start "Prerequisite: Virtual
+  //     Hand" first (the walkthrough also runs without it, and says so);
+  //   - "Rig check" additionally needs a person watching the hand and answering.
+  //
+  // Which VHI you get, and why it matters. The prerequisite launches whatever
+  // `install_vhi` fetched — currently a 1.x release, which exports no control manifest.
+  // Against that build an application still works (VhiTarget falls back to the legacy
+  // pose, all-or-nothing), but there is no vocabulary to resolve against, so the
+  // walkthrough stops after step 2 and says so. For steps 3 to 5, and for anything
+  // reading `vhi.prediction.*` / `vhi.control.*` by address, run a v2 build from source:
+  // set VHI_PATH and GODOT_BIN in the prerequisite's env block below.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Walkthrough: inspect the control standard",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/inspect_canonical_control.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "1-walkthrough", "order": 1 }
+    },
+
+    {
+      "name": "Example: EMG regression → VHI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/synthetic/emg_regression.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (examples + grpc)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "2-examples", "order": 1 }
+    },
+    {
+      "name": "Example: EMG regression, RaulNet → VHI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/synthetic/emg_regression_raulnet.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (examples + grpc)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "2-examples", "order": 2 }
+    },
+    {
+      "name": "Example: EMG classification → VHI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/synthetic/emg_classification.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (examples + grpc)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "2-examples", "order": 3 }
+    },
+    {
+      "name": "Example: EMG classification, discrete over gRPC → VHI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/synthetic/emg_classification_grpc.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (examples + grpc)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "2-examples", "order": 4 }
+    },
+    {
+      "name": "Example: 32-channel multi-model → VHI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/synthetic/emg_32ch_multi_model.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (examples + grpc)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "2-examples", "order": 5 }
+    },
+    {
+      "name": "Example: pop-out layout → VHI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/synthetic/emg_popout_layout.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (examples + grpc)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "2-examples", "order": 6 }
+    },
+    {
+      "name": "Example: control hand, operator pose → VHI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/synthetic/vhi_control_hand.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "2-examples", "order": 7 }
+    },
+
+    {
+      "name": "Prerequisite: Virtual Hand (leave running)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/launch_vhi.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+        // Source-mode: uncomment and point these at a VHI checkout and a Godot 4.x
+        // binary. Required for the v2 control manifest — see the note at the top.
+        // "VHI_PATH": "${workspaceFolder}/../Virtual-Hand-Interface",
+        // "GODOT_BIN": "/Applications/Godot.app/Contents/MacOS/Godot"
+      },
+      "presentation": { "group": "3-prerequisites", "order": 1 }
+    },
+    {
+      "name": "Prerequisite: install the Virtual Hand (one-time)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "myogestic.tools.install_vhi",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "3-prerequisites", "order": 2 }
+    },
+    {
+      "name": "Prerequisite: synthetic EMG generator (leave running)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "myogestic.tools.emg_generator",
+      "args": [
+        "--name",
+        "TestEMG1",
+        "--channels",
+        "8",
+        "--fs",
+        "2048",
+        "--control",
+        "EMG_Control"
+      ],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "3-prerequisites", "order": 3 }
+    },
+
+    {
+      "name": "Rig check: what the hand actually renders (needs a watcher)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/check_vhi_bridge.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "4-checks", "order": 1 }
+    }
+  ],
+  "compounds": [
+    {
+      // Steps 3 to 5 need a manifest to resolve against, so this starts the renderer
+      // alongside the walkthrough. Two caveats: VHI takes a moment to come up, so if the
+      // walkthrough reports that no target answered, run it again from its own entry;
+      // and the manifest needs a v2 build, so configure source-mode above or the
+      // walkthrough will stop at step 2 and tell you why.
+      "name": "Virtual Hand + walkthrough",
+      "configurations": [
+        "Prerequisite: Virtual Hand (leave running)",
+        "Walkthrough: inspect the control standard"
+      ],
+      "stopAll": true,
+      "presentation": { "group": "5-compounds", "order": 1 }
+    }
+  ]
+}
