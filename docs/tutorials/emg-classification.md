@@ -46,7 +46,7 @@ ctrl_outlet = control_outlet()
 --8<-- "examples/synthetic/emg_classification.py:poses"
 ```
 
-VHI consumes a 9-vec pose; we hand-define the two target poses (rest and full fist). The model just chooses between them.
+The example declares its own outputs in `examples/controls/classification.toml` and hand-defines the two target poses (rest and full fist) in *those* names. The model just chooses between them; the target decides what each name renders.
 
 ### 2. The output filter
 

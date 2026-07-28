@@ -194,6 +194,9 @@ class Capability:
     encoding
         How a value must be encoded on that stream: ``1`` canonical, ``2``
         legacy-negated, ``0`` unstated. A client that reads ``0`` must not guess.
+    stream_name
+        Which stream carries it. A channel number is meaningless without this: a target
+        may publish two streams, and channel 2 of one is not channel 2 of the other.
     description
         Human-readable. For a log or an error message; never parsed.
 
@@ -213,6 +216,7 @@ class Capability:
     rest_state: str = ""
     channel: int = -1
     encoding: int = 0
+    stream_name: str = ""
     description: str = ""
 
     @property
