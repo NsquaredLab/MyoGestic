@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A canonical control standard — `myogestic.controls`.** An application declares what it
+  *controls* by name (`index.flexion`, `hand.grasp`) and a `Target` renders those names on
+  whatever it drives. Continuous DOFs are signed and normalized: the domain is `[-1, 1]`,
+  `+1` is the direction the name denotes, rest is `0`. Discrete DOFs are a separate kind —
+  a held state delivered on change, never a number. `load_dofs` takes a plain mapping, so
+  the library still reads no config files.
+- **`ControlBus` owns the one ordering that must not be re-derived per application:**
+  substitute rest → clip → dead zone → smooth → substitute rest → clip again → deliver.
+  Rest substitution comes first because `min(hi, max(lo, nan))` is `lo`, so a NaN
+  prediction would otherwise arrive as full-scale deflection; the second clip exists
+  because a smoother undershoots on a falling edge. `push` never raises — it runs on the
+  predict thread, where an exception would bury the log that explains it.
+- **Three smoothing layers, kept distinct.** Continuous smoothing (`ControlBus(smoothing=…)`,
+  authoritative, before any target sees a frame), discrete debounce and hysteresis
+  (declared on the DOF), and optional renderer blending
+  (`canonical_client().set_presentation(…)`, appearance only). A discrete control is
+  **never** numerically low-pass filtered — averaging "rest" and "fist" interpolates
+  through a state nobody selected — and that is enforced structurally: the filter only
+  ever receives the continuous vector.
+- **`myogestic.vhi.VhiTarget` — renders canonical DOFs on a Virtual Hand.** It *asks* which
+  contract the hand speaks rather than assuming, and falls back to the legacy pose when the
+  answer is "I don't speak v2". The fallback is all-or-nothing on purpose: a
+  partly-understood negotiation would leave some DOFs believed rendered and others quietly
+  dropped, and a dropped joint is indistinguishable from a joint that is working and
+  holding still.
+- **`InterfaceSpec.canonical_client()` / `training_client()`** for VHI's v2 control service
+  and its recording aid. Exported lazily, so a plain install without the `[grpc]` extra
+  still uses `outlet()` / `launcher()` without importing grpc.
+- **`Output.flush()`** — send the latest pushed value now instead of on the next tick. The
+  send loop is paced, so a neutral frame pushed at teardown was never sent at all: the
+  thread was mid-sleep and `stop` ended the loop before it woke. Measured against a real
+  Virtual Hand, that was the difference between a hand releasing and a hand frozen in a
+  fist.
+- **Recordings describe the space they were made under.** `ctx.control_space` is persisted
+  into `meta.json` (schema 3). Channel names alone do not say what a number meant: `-1` is
+  a full excursion for a signed DOF and out of range for a one-way one, and nothing
+  recoverable distinguishes "declared one-way" from "signed, but this operator never went
+  negative".
+- **Model provenance.** `save_pickle(..., controls=…)` writes a `<path>.controls.json`
+  sidecar and `load_pickle(..., controls=…)` refuses a mismatch. A model is only meaningful
+  in the space it was fitted for; loading one trained on a one-way `[0, 1]` DOF against a
+  signed configuration produces motion in a direction it never learned.
+- **`myogestic.vhi.legacy`** — reads legacy VHI pose recordings as canonical values. It
+  outlives the migration: VHI's outlets stay in the renderer's units, so archived sessions
+  are permanently in that convention and `decode_pose` remains their reader.
+
+### Changed
+
+- **LSL outlets carry per-channel labels and a stable `source_id`.** Without an id, LSL
+  cannot tell a restarted outlet from a new stream, so a consumer that resolved the old one
+  keeps a dead inlet — measured against VHI, which then stayed deaf until *it* was
+  restarted.
+- **The VHI examples declare DOFs instead of building frames.** `emg_regression`,
+  `emg_regression_raulnet`, `emg_classification_grpc` and `emg_32ch_multi_model` no longer
+  contain a channel index or a sign flip. `emg_classification_grpc` also lost its
+  hand-rolled `EdgeTrigger`: that debounce is a property of the DOF, so it is `debounce_s`
+  and the bus owns the edge detection, dedupe and rebase-on-click.
+- **`VhiMovementPanel` is a control-hand aid.** It reads VHI's recording aid for state and
+  takes its click handler explicitly — there is no default, because dispatching straight at
+  a renderer would bypass the DOF's debounce, the only thing protecting a classifier-driven
+  session from state chatter.
+
+### Fixed
+
+- **Four pose tables documented channel 1 as `0` in a fist; recorded VHI sessions have it at
+  exactly `-1.0`.** The integration guide also described channel 0 as thumb *rotation* and
+  channels 6-8 as a wrist. Channel 0 is thumb flexion, channel 1 thumb abduction, and 6-8
+  are read by no consumer. All four tables are gone — the examples declare canonical values,
+  so there is nothing left to be wrong.
+- **`emg_regression` clipped predictions *before* smoothing**, letting the filter overshoot
+  back out of the range just enforced. The bus clips, smooths, and clips again.
+- **The regression training target used `np.abs()`**, folding any extension the operator did
+  into flexion of equal magnitude. `decode_pose` is a signed negation, so target space and
+  command space are now one declaration.
+
+
 ## [2.4.0] - 2026-07-25
 
 ### Changed
