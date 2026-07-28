@@ -111,6 +111,39 @@
     },
 
     {
+      // The one to reach for first when trying VHI 2: a slider per control in the TOML,
+      // straight to the hand, plus an editor for the file. Needs a VHI 2.x build — see
+      // the source-mode note above, since the installed release is pre-v2.
+      "name": "Playground: drive VHI 2 from a TOML control map",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/synthetic/vhi_playground.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "2-reference", "order": 1 }
+    },
+    {
+      // The editor alone, against a canned manifest — no renderer needed.
+      "name": "Playground: control-map editor only (no VHI needed)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/panels/control_map_editor.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (grpc only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "2-reference", "order": 2 }
+    },
+
+    {
       "name": "Reference: walkthrough of the control standard",
       "type": "debugpy",
       "request": "launch",
@@ -122,7 +155,7 @@
       "justMyCode": false,
       "preLaunchTask": "uv: sync (grpc only)",
       "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "2-reference", "order": 1 }
+      "presentation": { "group": "2-reference", "order": 3 }
     },
 
     {

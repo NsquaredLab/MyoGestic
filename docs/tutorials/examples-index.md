@@ -54,7 +54,41 @@ uv run --extra grpc python tools/inspect_canonical_control.py
 ```
 
 That runs safely with no Virtual Hand at all, and prints a different section for a v2
-build, a pre-v2 build, and nothing running.
+build and nothing running — and it needs VHI 2.0 or newer, since a pre-2.0 renderer
+has no manifest to resolve against.
+
+## Start here: the playground
+
+The shortest path from a control map to a hand that moves — no model, no EMG, no
+training. One slider per name in
+[`examples/controls/playground.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/playground.toml),
+straight through a `VhiTarget` to VHI's predicted hand, next to an editor for the file
+itself.
+
+```bash
+uv run --extra grpc python examples/synthetic/vhi_playground.py
+```
+
+Launch VHI, press **Connect**, drag a slider. Then change the thumb's `weight` in the
+file and press **Reload** — or use the editor panel, which lists what VHI exports so a
+control can be picked rather than typed, and refuses a map the renderer would not accept
+before it can be saved. The TOML stays the source of truth either way.
+
+The editor is a widget, so it works in your own app too:
+
+```python
+from myogestic.widgets import ControlMapEditor
+
+editor = ControlMapEditor(pathlib.Path("my_controls.toml"), client=vhi.canonical_client())
+
+@app.ui
+def ui(ctx):
+    if editor.ui():          # True on the frame a save lands
+        rebuild_my_bus()
+```
+
+To see it with no renderer at all:
+`uv run python examples/panels/control_map_editor.py`.
 
 ## The examples
 

@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controls are a separate kind — a held state delivered on change, never a number.
   `load_control_map` takes a plain mapping, so the library still reads no config files;
   `resolve` needs a live target, because the target is what declares the semantics.
+- **A playground and a control-map editor.** `examples/synthetic/vhi_playground.py` is
+  the shortest path from a mapping file to a hand that moves: a slider per name in
+  `examples/controls/playground.toml`, straight to VHI's predicted hand, with no model
+  and no EMG. Beside it, `myogestic.widgets.ControlMapEditor` — a reusable panel that
+  asks the renderer what it exports and lets a control be *picked* rather than typed,
+  with weights, fan-out, and `threshold_fraction` in plain words. It refuses a map the
+  renderer would reject before it can be saved, including two aliases that would land on
+  one channel under two different addresses. The TOML stays the source of truth: the
+  editor reads and writes that file through `dump_control_map` and keeps no state of its
+  own.
+- **`dump_control_map`** — render a `ControlMap` back to TOML that `load_control_map`
+  reads. Anything that edits a control map writes through it rather than inventing its
+  own formatting.
 - **Grouped and weighted fan-out.** One output may reach several controls —
   `fist = ["vhi.prediction.index", "vhi.prediction.middle"]` — with an optional per-target
   `weight` applied *before* that target's own range conversion, so a gain scales a value
@@ -79,6 +92,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`myogestic.vhi.legacy`** — reads legacy VHI pose recordings as canonical values. It
   outlives the migration: VHI's outlets stay in the renderer's units, so archived sessions
   are permanently in that convention and `decode_pose` remains their reader.
+
+### Removed (breaking)
+
+- **The VHI 1.x bridge is gone. MyoGestic now requires VHI 2.0 or newer.** The v1 gRPC
+  client, the vendored v1 `.proto` and its stubs, `InterfaceSpec.control_client()`, and
+  every fallback branch in `VhiTarget` — the legacy pose path, the address-to-channel
+  table it routed through, and v1 `SetMovement` for held states.
+
+  The substantive part is what replaces the fallback: **a refusal**. `bind` used to warn
+  and encode a legacy pose when a handshake came back partial, disagreeing, or without a
+  stated encoding; each of those now raises. The alternative to a fallback is not a guess.
+  A *silent* renderer still defers, because an application that launches VHI from its own
+  button binds before VHI exists — but one that answers and does not speak v2 is a settled
+  fact and raises with the upgrade command.
+
+  `install_vhi` resolves what `latest` actually points at before downloading and refuses
+  anything below 2.0, and `launcher()` refuses to start a pre-2.0 install it finds on
+  disk. Both fail where the cause is, rather than letting an unusable binary install
+  cleanly and surface at bind time. Neither refuses without a version marker, since a
+  source-mode checkout has none.
+
+  `myogestic.vhi.legacy` **stays**, and is not part of the bridge: it reads VHI's
+  *recorded* pose, which is 9 floats in the renderer's own units. The outlets are still
+  in those units and past sessions cannot be re-recorded, so `decode_pose` remains how a
+  model gets targets in the space they were captured in.
 
 ### Changed (breaking)
 

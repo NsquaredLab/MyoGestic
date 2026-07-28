@@ -247,10 +247,14 @@ def dump_control_map(control_map: ControlMap, *, header: str = "") -> str:
                 lines.append(f"  {_toml_string(ref.address)},")
             lines.append("]")
         elif len(binding.targets) == 1:
-            inner = ", ".join(
-                [f"target = {_toml_string(binding.targets[0].address)}", *extras]
-            )
-            lines.append(f"{key} = {{ {inner} }}")
+            ref = binding.targets[0]
+            parts = [f"target = {_toml_string(ref.address)}"]
+            if ref.weight != 1.0:
+                # Easy to forget, because a lone target reads like it needs no weight —
+                # but a weight scales it just the same, and dropping it here silently
+                # changed the value on every round trip through a tool.
+                parts.append(f"weight = {_toml_number(ref.weight)}")
+            lines.append(f"{key} = {{ {', '.join([*parts, *extras])} }}")
         else:
             lines.append(f"{key} = {{ targets = [")
             for ref in binding.targets:

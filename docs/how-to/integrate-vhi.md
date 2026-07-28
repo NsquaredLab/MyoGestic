@@ -313,12 +313,13 @@ re-fire.
 
 ### The clients
 
-Both gRPC clients are constructed from the interface spec, and both degrade rather
-than raise when VHI is older or absent:
+Both gRPC clients are constructed from the interface spec. Absence is reported rather
+than raised — a call returns `None` when VHI is not up — so a UI stays responsive while
+the renderer starts:
 
 | Call | Effect |
 |---|---|
-| `canonical_client().declare(controls)` | Negotiate. Returns `None` when VHI does not speak v2 — `VhiTarget` then falls back on its own. |
+| `canonical_client().declare(controls)` | Negotiate. Returns `None` when VHI has not answered; `VhiTarget` defers and retries. A build that answers without the v2 service is refused. |
 | `canonical_client().set_control(...)` | Command a frame. Fire-and-forget; safe from the predict thread. |
 | `canonical_client().sweep(name)` | Drive one DOF across its range and report which bones moved, in signed degrees. Verification only — it animates a joint. |
 | `canonical_client().set_presentation(blend=...)` | Renderer blending. Appearance only. |
@@ -425,10 +426,10 @@ when VHI is running - the proto is at
 See the full **[Troubleshooting](../troubleshooting.md)** index for
 symptom-organised debugging.
 
-* **Building the wire frame by hand.** Declare DOFs and let `VhiTarget` encode. A
-  hand-built frame is correct for exactly one wire convention, and VHI's continuous
-  inlet now takes canonical values while older builds want the negated legacy pose —
-  so a hand-built frame is silently inverted on one of them.
+* **Building the wire frame by hand.** Map your names onto addresses and let
+  `VhiTarget` encode. A hand-built frame hard-codes a channel number and a sign, and
+  both are the renderer's to declare — the two pose streams do not even share a
+  convention, so one hand-built frame is silently inverted on one of them.
 * **Numerically filtering a discrete control.** It interpolates through states nobody
   selected. Declare `debounce_s` on the DOF instead; see the smoothing table above.
 * **Relying on renderer blending to steady a classifier.** It cannot. Blending changes

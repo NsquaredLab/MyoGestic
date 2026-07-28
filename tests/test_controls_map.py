@@ -433,6 +433,26 @@ class TestTheFileCanBeWrittenBackOut:
             {"grip": {"target": "vhi.prediction.index", "label": "Power grip"}},
             id="labelled",
         ),
+        # A lone target reads like it needs no weight, which is exactly why the writer
+        # dropped it once — silently changing the value on every pass through a tool.
+        pytest.param(
+            {"grip": {"target": "vhi.prediction.index", "weight": 0.5}},
+            id="single-target-with-a-weight",
+        ),
+        pytest.param(
+            {"grip": {"target": "vhi.prediction.index", "weight": -0.5}},
+            id="single-target-with-a-negative-weight",
+        ),
+        pytest.param(
+            {
+                "grip": {
+                    "target": "vhi.prediction.index",
+                    "weight": 0.5,
+                    "threshold_fraction": 0.4,
+                }
+            },
+            id="single-target-weighted-and-gated",
+        ),
         # The aliases are the user's, so the writer has to survive whatever they chose.
         pytest.param({"My Wrist": "vhi.prediction.index"}, id="alias-with-a-space"),
         pytest.param({"x-2": "vhi.prediction.index"}, id="alias-with-a-dash"),
