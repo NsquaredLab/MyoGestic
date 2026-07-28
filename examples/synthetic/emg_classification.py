@@ -15,6 +15,7 @@ import sys
 import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic.controls import ControlBus, load_dofs
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
@@ -22,7 +23,8 @@ from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi.legacy import LEGACY_POSE_DOFS
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -39,8 +41,13 @@ ctrl_outlet = control_outlet()
 # --8<-- [start:poses]
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
-HAND_REST = np.zeros(9, dtype=np.float32)
-HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
+
+# Per-class poses in canonical DOF values: +1 is the direction the name says, 0 is rest.
+# The fist abducts the thumb — this used to write channel 1 as 0, but recorded VHI
+# sessions have it at full excursion.
+HAND_REST: dict[str, float] = {}
+HAND_FIST = dict.fromkeys(LEGACY_POSE_DOFS, 1.0)
+
 # --8<-- [end:poses]
 
 # Output-side smoothing applied to the hand pose vector before pushing
@@ -48,6 +55,15 @@ HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
 # --8<-- [start:filter]
 output_filter = PostProcessor(hz=32)
 # --8<-- [end:filter]
+
+# The bus + target own the wire. VHI's continuous inlet takes *canonical* values as of
+# 2.0 while older builds want the negated legacy pose, so a hand-built frame is correct
+# on exactly one of them. `VhiTarget` asks which and encodes accordingly.
+CONTROLS = load_dofs({"dofs": dict.fromkeys(LEGACY_POSE_DOFS, "continuous")})
+vhi_canonical = vhi.canonical_client()
+vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
+
 
 # Reference RMS / MAV / WL / VAR / ZC live in myogestic.recipes.features; mix
 # with your own callables here — feature engineering is user code, this is
@@ -168,9 +184,8 @@ def predict(model, features):
     """
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
-    hand = HAND_FIST.copy() if class_idx == 1 else HAND_REST.copy()
-    hand = output_filter(hand).astype(np.float32)
-    vhi_outlet.push(hand)
+    pose = HAND_FIST if class_idx == 1 else HAND_REST
+    hand = bus.push({**dict.fromkeys(LEGACY_POSE_DOFS, 0.0), **pose})
     return {"class": class_idx, "proba": proba, "hand": hand}
 
 
@@ -195,7 +210,14 @@ grid = Grid(
 )
 
 
+def _ensure_vhi() -> None:
+    """Settle the target's contract once VHI is up — bind ran before it existed."""
+    if not vhi_target.negotiate():
+        app.ctx.log("VHI not reachable yet — poses use the legacy encoding until it is")
+
+
 def _on_gesture(i: int) -> None:
+    _ensure_vhi()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
@@ -251,7 +273,12 @@ def demo_ui(ctx):
 
 
 def main() -> None:
-    app.run()
+    try:
+        app.run()
+    finally:
+        # Rest the hand and make that frame land before the outlet's thread dies.
+        bus.stop()
+        vhi_canonical.stop()
 
 
 if __name__ == "__main__":

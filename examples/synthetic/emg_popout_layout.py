@@ -31,6 +31,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Stream, TrainingData
+from myogestic.controls import ControlBus, load_dofs
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
@@ -43,7 +44,8 @@ from myogestic.recipes.estimators import (
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi.legacy import LEGACY_POSE_DOFS
 from myogestic.widgets import (
     LogPanel,
     PostProcessor,
@@ -69,12 +71,28 @@ vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 output_filter = PostProcessor(hz=32)
 
-HAND_POSES: dict[int, np.ndarray] = {
-    0: np.zeros(9, dtype=np.float32),
-    1: np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32),
-    2: np.array([-0.7, 0, -0.8, -0.6, 0, 0, 0, 0, 0], dtype=np.float32),
-    3: np.array([0.5, 0, 0.5, 0.5, 0.5, 0.5, 0, 0, 0], dtype=np.float32),
+# Canonical DOF values: +1 is the direction the name says, 0 is rest. The fist abducts
+# the thumb — this used to write channel 1 as 0, but recorded VHI sessions have it at
+# full excursion.
+HAND_POSES: dict[int, dict[str, float]] = {
+    0: {},  # Rest
+    1: dict.fromkeys(LEGACY_POSE_DOFS, 1.0),  # Fist
+    2: {  # Pinch
+        "thumb.flexion": 0.7,
+        "thumb.abduction": 0.6,
+        "index.flexion": 0.8,
+        "middle.flexion": 0.6,
+    },
+    3: dict.fromkeys(LEGACY_POSE_DOFS, -0.5),  # Open: extended past rest
 }
+
+# The bus + target own the wire. VHI's continuous inlet takes *canonical* values as of
+# 2.0 while older builds want the negated legacy pose, so a hand-built frame is correct
+# on exactly one of them. `VhiTarget` asks which and encodes accordingly.
+CONTROLS = load_dofs({"dofs": dict.fromkeys(LEGACY_POSE_DOFS, "continuous")})
+vhi_canonical = vhi.canonical_client()
+vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
 
 rms_transform = RMS(window_size=32)
 mav_transform = MAV(window_size=32)
@@ -199,13 +217,19 @@ def predict(model, features):
     else:
         proba = None
         class_idx = int(model.predict(x)[0])
-    hand = HAND_POSES.get(class_idx, HAND_POSES[0]).copy()
-    hand = output_filter(hand).astype(np.float32)
-    vhi_outlet.push(hand)
+    pose = HAND_POSES.get(class_idx, HAND_POSES[0])
+    hand = bus.push({**dict.fromkeys(LEGACY_POSE_DOFS, 0.0), **pose})
     return {"class": class_idx, "proba": proba, "hand": hand}
 
 
+def _ensure_vhi() -> None:
+    """Settle the target's contract once VHI is up — bind ran before it existed."""
+    if not vhi_target.negotiate():
+        app.ctx.log("VHI not reachable yet — poses use the legacy encoding until it is")
+
+
 def _on_gesture(i: int) -> None:
+    _ensure_vhi()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
@@ -358,7 +382,12 @@ _panel("Prediction", _prediction_block)
 
 
 def main() -> None:
-    app.run()
+    try:
+        app.run()
+    finally:
+        # Rest the hand and make that frame land before the outlet's thread dies.
+        bus.stop()
+        vhi_canonical.stop()
 
 
 if __name__ == "__main__":
