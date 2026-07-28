@@ -183,6 +183,108 @@ class ControlMap:
         return {"format": CONTROL_SPACE_FORMAT, "dofs": dofs}
 
 
+def dump_control_map(control_map: ControlMap, *, header: str = "") -> str:
+    """Render a `ControlMap` back to TOML text that `load_control_map` reads.
+
+    The file is the portable source of truth, so anything that edits a control map —
+    a UI, a script, a migration — writes through here rather than inventing its own
+    formatting. Round-trips: ``load_control_map(tomllib.loads(dump_control_map(m)))``
+    has the same bindings as ``m``.
+
+    Written by hand rather than with a TOML library because the shape is narrow — a
+    table of strings, arrays and inline tables — and the alternative is a dependency
+    for thirty lines. Aliases are quoted only when they have to be, since an unquoted
+    dotted key would come back as a nested table rather than the alias it looks like.
+
+    Parameters
+    ----------
+    control_map
+        What to write. Its declaration order is preserved.
+    header
+        Optional comment block for the top of the file, without the ``#`` markers.
+        Line breaks are kept.
+
+    Returns
+    -------
+    str
+        TOML text, ending in a newline.
+
+    Examples
+    --------
+    >>> from myogestic.controls import dump_control_map, load_control_map
+    >>> m = load_control_map({"dofs": {"my_index": "vhi.prediction.index"}})
+    >>> print(dump_control_map(m), end="")
+    [dofs]
+    my_index = "vhi.prediction.index"
+    """
+    lines: list[str] = []
+    for line in header.splitlines():
+        lines.append(f"# {line}".rstrip())
+    if header:
+        lines.append("")
+    lines.append("[dofs]")
+
+    for binding in control_map.bindings.values():
+        key = _toml_key(binding.alias)
+        extras = []
+        if binding.debounce_s:
+            extras.append(f"debounce_s = {_toml_number(binding.debounce_s)}")
+        if binding.threshold_fraction is not None:
+            extras.append(
+                f"threshold_fraction = {_toml_number(binding.threshold_fraction)}"
+            )
+        if binding.label:
+            extras.append(f"label = {_toml_string(binding.label)}")
+        weighted = any(ref.weight != 1.0 for ref in binding.targets)
+
+        # The simplest form that still says everything, so a hand-written file stays
+        # hand-readable after a tool has been through it.
+        if len(binding.targets) == 1 and not extras and not weighted:
+            lines.append(f"{key} = {_toml_string(binding.targets[0].address)}")
+        elif not extras and not weighted:
+            lines.append(f"{key} = [")
+            for ref in binding.targets:
+                lines.append(f"  {_toml_string(ref.address)},")
+            lines.append("]")
+        elif len(binding.targets) == 1:
+            inner = ", ".join(
+                [f"target = {_toml_string(binding.targets[0].address)}", *extras]
+            )
+            lines.append(f"{key} = {{ {inner} }}")
+        else:
+            lines.append(f"{key} = {{ targets = [")
+            for ref in binding.targets:
+                weight = (
+                    f", weight = {_toml_number(ref.weight)}" if ref.weight != 1.0 else ""
+                )
+                lines.append(f"  {{ target = {_toml_string(ref.address)}{weight} }},")
+            lines.append(f"], {', '.join(extras)} }}" if extras else "] }")
+    return "\n".join(lines) + "\n"
+
+
+def _toml_key(alias: str) -> str:
+    """Quote an alias unless it is a bare key.
+
+    An unquoted dotted key is a *nested table* in TOML, which is the one trap in this
+    file format — `load_control_map` diagnoses it, and this makes sure nothing written
+    here walks into it.
+    """
+    bare = alias and all(c.isalnum() or c in "_-" for c in alias) and alias.isascii()
+    return alias if bare else _toml_string(alias)
+
+
+def _toml_string(value: str) -> str:
+    """A basic TOML string, escaping what the spec requires."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _toml_number(value: float) -> str:
+    """Write a float without a trailing `.0` fringe, but never as an int-looking hazard."""
+    text = repr(float(value))
+    return text
+
+
 @dataclass(frozen=True, slots=True)
 class Capability:
     """One control a **target** exports, with the semantics the target declares.

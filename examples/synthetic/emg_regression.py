@@ -56,9 +56,6 @@ vhi_outlet = vhi.outlet()
 # instead of held poses, training programs. Not a control plane; see
 # `training_client` for why that separation matters.
 training_aid = vhi.training_client()
-# v1 client, kept for exactly one job: rendering the discrete gesture when this VHI
-# is too old to negotiate v2. It goes away with v1 — see VhiTarget's legacy_client.
-vhi_legacy = vhi.control_client()
 
 # Output-side smoothing, applied by the control bus to the canonical vector.
 # Live-tunable via the PostProcessor widget rendered in the UI.
@@ -316,10 +313,7 @@ def _ensure_vhi() -> None:
         return
     # Refuses an address this build does not export, naming the near misses.
     controls = resolve(CONTROL_MAP, capabilities)
-    # `legacy_client` stays for the one case a manifest cannot cover: a VHI that answers
-    # the manifest but not the v2 control-space negotiation still renders a held state
-    # through v1 `SetMovement`. It goes away with v1.
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
     bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
     # Recordings then carry the space they were made under: a bare -1 does not say
     # whether it was a full excursion or out of range.
@@ -424,7 +418,6 @@ def main() -> None:
         training_aid.set_recording_session(False)
         training_aid.stop()
         vhi_canonical.stop()
-        vhi_legacy.stop()
 
 
 if __name__ == "__main__":

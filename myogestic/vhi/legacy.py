@@ -1,9 +1,14 @@
-"""Read legacy VHI pose recordings as canonical control values.
+"""Read VHI's recorded pose as control values.
 
-The legacy Virtual Hand Interface consumed a 9-float pose vector whose meaning
-lived nowhere: the gRPC contract carries no channel semantics, and MyoGestic's own
-docs and examples disagreed about several channels. The mapping below was read out
-of the VHI source, where the two consumers
+Not the v1 bridge — that is gone. This is the reader for VHI's **pose transport**,
+which is a 9-float vector in the renderer's own units and is what a recorded session
+contains. It survived the v2 cutover because it has to: the LSL outlets are the
+renderer's, past sessions cannot be re-recorded, and a model trained on archived
+kinematics needs its targets in the space they were captured in.
+
+The channel meaning lives nowhere on the wire — the gRPC contract carries no channel
+semantics, and MyoGestic's own docs and examples once disagreed about several
+channels. The mapping below was read out of the VHI source, where the two consumers
 (``PredictedHandSkeleton``/``ControlHandSkeleton``) index the sample they receive:
 
 ===  ====================================================  ======================
@@ -28,8 +33,12 @@ Two consequences worth stating, because both contradict what the old docs implie
   reference recordings because the operator never extended, **not** because VHI
   cannot render it. Nothing here may treat its absence as a limit.
 
-This module exists for migration only. It is deliberately a reader: the canonical
-standard does not know these channels exist, and nothing in it should learn.
+It is deliberately a *reader*. The control standard does not know these channels
+exist and nothing in it should learn: a live target is asked where its controls are
+(`myogestic.vhi.VhiTarget` does exactly that), and only recorded data needs a table.
+
+The module keeps its historical name so archived code and published references still
+resolve; ``LEGACY_`` here means "the renderer's units", not "the removed v1 service".
 """
 
 from __future__ import annotations

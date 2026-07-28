@@ -10,7 +10,7 @@ boilerplate behind a single call:
     vhi = virtual_hand()
     vhi_outlet = vhi.outlet()           # 9-ch LSLOutlet @ 32 Hz
     process_launcher(vhi.launcher())    # the packaged binary or `godot --path`
-    client = vhi.control_client()       # gRPC fire-and-forget control client
+    client = vhi.canonical_client()     # gRPC control plane: declare, command, discover
 
 The example still owns *what* to push through the outlet — DOF mapping,
 sign flips, smoothing — only the wiring moves into the registry.
@@ -36,9 +36,22 @@ from typing import TYPE_CHECKING
 from myogestic.outputs import LSLOutlet
 
 if TYPE_CHECKING:
-    from myogestic.vhi._client import VhiControlClient
     from myogestic.vhi._client_v2 import VhiCanonicalClient
     from myogestic.vhi._training import VhiTrainingAidClient
+
+#: Kept in step with `myogestic.tools.install_vhi.MIN_VHI_TAG`, and asserted equal by
+#: tests/test_install_vhi_version_gate.py — duplicated rather than imported because the
+#: installer pulls in typer, which launching a process should not require.
+MIN_VHI_TAG = "v2.0.0"
+
+
+def _version_of(tag: str) -> tuple[int, ...] | None:
+    """The numeric part of a release tag, or None if it is not a version at all."""
+    cleaned = tag.lstrip("vV").split("-")[0].split("+")[0]
+    parts = cleaned.split(".")
+    if not parts or not all(part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)
 
 
 @dataclass
@@ -126,16 +139,6 @@ class InterfaceSpec:
             source_id=f"myogestic:{self.name}:{self.output_stream_name}",
         )
 
-    def control_client(self) -> VhiControlClient:
-        """Construct a gRPC control client for this interface.
-
-        Imported lazily so a plain install (no ``[grpc]`` extra) can still use
-        ``outlet()`` / ``launcher()`` without grpcio present.
-        """
-        from myogestic.vhi._client import VhiControlClient
-
-        return VhiControlClient(host=self.grpc_host, port=self.grpc_port)
-
     def canonical_client(self) -> VhiCanonicalClient:
         """Construct a client for this interface's **v2** canonical control service.
 
@@ -145,7 +148,7 @@ class InterfaceSpec:
         is legacy-only — correct, but limited to the six DOFs the old wire had and
         unable to carry discrete state at all.
 
-        Imported lazily for the same reason as `control_client`: a plain install has
+        Imported lazily: a plain install has
         no ``[grpc]`` extra, and `outlet` / `launcher` must keep working without it.
 
         Examples
@@ -195,7 +198,8 @@ class InterfaceSpec:
         """Construct an [`LSLOutlet`][] for streaming a continuous pose to the control hand.
 
         Opt-in: only consumed when VHI is put in STREAM control mode via
-        ``control_client().set_control_mode("STREAM")``. Raises
+        a declared control-pose stream (`canonical_client().declare(...,
+        control_pose=...)`). Raises
         [`ValueError`][] if this interface has no control-pose stream
         configured.
         """
@@ -219,12 +223,47 @@ class InterfaceSpec:
             location = f" at {self.install_root}" if self.install_root else ""
             raise FileNotFoundError(
                 f"{self.name}: not installed{location}.\n"
-                f"  Run `python -m myogestic.tools.install_vhi` to fetch the "
-                f"latest release for this platform.\n"
+                f"  Run `python -m myogestic.tools.install_vhi` to fetch a release "
+                f"for this platform ({MIN_VHI_TAG} or newer).\n"
                 f"  Or set $VHI_PATH to an existing VHI Godot project and "
                 f"$GODOT_BIN to a Godot 4.x binary for source-mode."
             )
+        self._refuse_a_pre_v2_install()
         return [(self.name, list(self.process))]
+
+    def _refuse_a_pre_v2_install(self) -> None:
+        """Refuse to launch an installed release too old to speak v2.
+
+        The marker `install_vhi` leaves behind is the only way to know what is on disk
+        before starting it. Checked here, at the launch, because the alternative is a
+        renderer that comes up looking healthy and is then refused by every `VhiTarget`
+        — with the reason three layers away from the button that started it.
+
+        Silent when there is no marker: a source-mode checkout has none, and neither
+        does a hand-placed build. Absence is not evidence of an old version.
+        """
+        if not self.install_root:
+            return
+        marker = Path(self.install_root) / "vhi-version.txt"
+        try:
+            text = marker.read_text()
+        except OSError:
+            return
+        tag = ""
+        for line in text.splitlines():
+            if line.startswith("installed_tag="):
+                tag = line.partition("=")[2].strip()
+        version = _version_of(tag)
+        if version is None or version >= _version_of(MIN_VHI_TAG):
+            return
+        raise FileNotFoundError(
+            f"{self.name}: the installed release is {tag}, which does not serve the v2 "
+            f"control contract.\n"
+            f"  MyoGestic 2.x asks the renderer which controls it exports and refuses "
+            f"to guess, so this build cannot be driven at all.\n"
+            f"  Upgrade: python -m myogestic.tools.install_vhi --tag {MIN_VHI_TAG} --force\n"
+            f"  Or run a checkout from source: set $VHI_PATH and $GODOT_BIN."
+        )
 
 
 # --- Launch resolution -------------------------------------------------------
