@@ -18,6 +18,25 @@ download against the SHA-256 GitHub publishes per asset, unpacks it
 atomically into the location `virtual_hand()` searches, and prints a
 single-line success summary.
 
+!!! warning "MyoGestic 2.x needs VHI 2.0 or newer"
+    MyoGestic drives VHI over the v2 control contract: it asks the renderer which
+    controls it exports and refuses to guess. A pre-2.0 build has no manifest to
+    answer with, and the v1 bridge that used to cover for that was removed — so an
+    older release is not limited, it does not work.
+
+    Both the installer and the launcher check. `install_vhi` resolves what `latest`
+    actually points at *before* downloading and refuses anything below 2.0, and
+    `virtual_hand().launcher()` reads `vhi-version.txt` and refuses to start a
+    pre-2.0 install. Neither refuses when there is no marker, since a source-mode
+    checkout has none.
+
+    Until a 2.x release is published, run a checkout from source:
+
+    ```bash
+    export VHI_PATH=/path/to/Virtual-Hand-Interface
+    export GODOT_BIN=/path/to/godot          # Godot 4.x with .NET support
+    ```
+
 ## What gets installed where
 
 The default install root mirrors what `virtual_hand()` looks at:

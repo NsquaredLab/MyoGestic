@@ -1,0 +1,307 @@
+"""`ControlMapEditor` — the authoring UI's logic, without a renderer or a window.
+
+The drawing needs ImGui and the manifest needs a running VHI, but neither is where the
+risk is. The risk is in the parts that decide whether a file is safe to write: the
+validation, the collision rule, and the round trip through the TOML that stays the source
+of truth. Those are ordinary methods, so they are tested as ordinary methods.
+
+The property that matters most: **a save either produces a file `load_control_map` reads
+back unchanged, or does not happen.** An editor that could write a file its own loader
+rejects would be worse than no editor, because something else is reading that file.
+"""
+
+from __future__ import annotations
+
+import tomllib
+
+import pytest
+
+from myogestic.controls import Capability, load_control_map
+from myogestic.widgets import ControlMapEditor
+
+#: A stand-in for VHI's manifest, including the aliasing that makes collisions possible:
+#: `vhi.prediction.thumb` and `...thumb.flexion` are one channel under two names.
+MANIFEST = [
+    Capability(
+        "vhi.prediction.thumb", "continuous", -1.0, 1.0, 0.0, channel=0,
+        stream_name="MyoGestic_Output",
+    ),
+    Capability(
+        "vhi.prediction.thumb.flexion", "continuous", -1.0, 1.0, 0.0, channel=0,
+        stream_name="MyoGestic_Output",
+    ),
+    Capability(
+        "vhi.prediction.index", "continuous", -1.0, 1.0, 0.0, channel=2,
+        stream_name="MyoGestic_Output",
+    ),
+    Capability(
+        "vhi.prediction.middle", "continuous", -1.0, 1.0, 0.0, channel=3,
+        stream_name="MyoGestic_Output",
+    ),
+    # A second hand, numbering from 0 again — a channel means nothing without its stream.
+    Capability(
+        "vhi.control.pose.thumb", "continuous", -1.0, 1.0, 0.0, channel=0,
+        stream_name="MyoGestic_ControlPose",
+    ),
+    Capability(
+        "vhi.control.gesture", "discrete", states=("Rest", "Fist", "Pointing"),
+        rest_state="Rest",
+    ),
+]
+
+
+class _Client:
+    def capabilities(self):
+        return MANIFEST
+
+
+def _editor(tmp_path, body: str | None = None, *, connected: bool = True):
+    path = tmp_path / "controls.toml"
+    if body is not None:
+        path.write_text(body)
+    editor = ControlMapEditor(path, client=_Client() if connected else None)
+    editor.load()
+    if connected:
+        editor._connect()
+    return editor
+
+
+GOOD = """
+[dofs]
+grip = [
+  { target = "vhi.prediction.index", weight = 0.8 },
+  { target = "vhi.prediction.middle" },
+]
+"""
+
+
+class TestTheFileStaysTheSourceOfTruth:
+    def test_a_file_loads_into_editable_entries(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        assert [e["alias"] for e in editor._draft] == ["grip"]
+        assert editor._draft[0]["targets"] == [
+            ["vhi.prediction.index", 0.8],
+            ["vhi.prediction.middle", 1.0],
+        ]
+
+    def test_saving_then_loading_changes_nothing(self, tmp_path):
+        """The round trip that makes this an editor rather than a second store."""
+        editor = _editor(tmp_path, GOOD)
+        before = editor.as_control_map().as_dict()
+        assert editor.save() is True
+        editor.load()
+        assert editor.as_control_map().as_dict() == before
+
+    def test_what_it_writes_is_what_load_control_map_reads(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        editor.save()
+        with editor.path.open("rb") as handle:
+            reparsed = load_control_map(tomllib.load(handle))
+        assert reparsed.as_dict() == editor.as_control_map().as_dict()
+
+    def test_an_absent_file_starts_an_empty_map_rather_than_failing(self, tmp_path):
+        """Creating a map is the same act as editing one."""
+        editor = ControlMapEditor(tmp_path / "new.toml", client=_Client())
+        editor.load()
+        assert editor._draft == []
+        assert "does not exist yet" in editor._message
+        assert not editor.path.exists(), "loading must not create it"
+
+    def test_saving_creates_the_file(self, tmp_path):
+        editor = _editor(tmp_path, None)
+        editor.add_control("my_index", "vhi.prediction.index")
+        assert editor.save() is True
+        assert editor.path.exists()
+        with editor.path.open("rb") as handle:
+            assert "my_index" in load_control_map(tomllib.load(handle)).bindings
+
+    def test_a_broken_file_is_shown_rather_than_raised(self, tmp_path):
+        """This is the tool you would use to fix a broken file, so it must open one."""
+        editor = _editor(tmp_path, "[dofs\nbroken =\n")
+        assert editor._error
+        assert editor._draft == []
+
+    def test_a_file_that_parses_but_is_not_a_map_is_shown_too(self, tmp_path):
+        editor = _editor(tmp_path, '[dofs]\nx = "not-an-address"\n')
+        assert editor._error
+        assert "address" in editor._error
+
+    def test_the_written_file_carries_a_header_for_whoever_opens_it_next(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        editor.save()
+        text = editor.path.read_text()
+        assert text.startswith("#")
+        assert "source of truth" in text
+
+
+class TestSaveIsBlockedWhileTheMapIsWrong:
+    """A disabled Save with a reason beats a rejected write, and beats a bad file."""
+
+    def test_a_valid_map_has_no_problems(self, tmp_path):
+        assert _editor(tmp_path, GOOD).problems() == []
+
+    def test_two_aliases_with_one_name_are_refused(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        editor.add_control("grip", "vhi.prediction.thumb")
+        editor._draft[-1]["alias"] = "grip"
+        assert any("used twice" in p for p in editor.problems())
+        assert editor.as_control_map() is None
+        assert editor.save() is False
+
+    def test_an_unnamed_control_is_refused(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        editor._draft[0]["alias"] = "  "
+        assert any("no name" in p for p in editor.problems())
+
+    def test_a_control_pointing_nowhere_is_refused(self, tmp_path):
+        editor = _editor(tmp_path, None)
+        editor.add_control("my_index")
+        assert any("points at nothing" in p for p in editor.problems())
+
+    def test_an_address_the_target_does_not_export_is_refused(self, tmp_path):
+        editor = _editor(tmp_path, None)
+        editor.add_control("my_wrist", "vhi.prediction.wrist")
+        assert any("does not export" in p for p in editor.problems())
+
+    def test_two_aliases_on_one_channel_are_refused_even_under_two_names(self, tmp_path):
+        """The conflict `resolve` cannot see: one channel, two addresses naming it."""
+        editor = _editor(tmp_path, None)
+        editor.add_control("a", "vhi.prediction.thumb")
+        editor.add_control("b", "vhi.prediction.thumb.flexion")
+        problems = editor.problems()
+        assert any("same control" in p for p in problems), problems
+        assert editor.save() is False
+
+    def test_the_same_channel_on_two_streams_is_not_a_collision(self, tmp_path):
+        """Both hands number from 0; conflating them would refuse a valid map."""
+        editor = _editor(tmp_path, None)
+        editor.add_control("predicted", "vhi.prediction.thumb")
+        editor.add_control("operator", "vhi.control.pose.thumb")
+        assert editor.problems() == []
+
+    def test_one_alias_fanning_out_to_several_controls_is_fine(self, tmp_path):
+        """The distinction the collision rule must not blur: one output, many controls."""
+        editor = _editor(tmp_path, None)
+        editor.add_control("fist", "vhi.prediction.index")
+        editor._draft[0]["targets"].append(["vhi.prediction.middle", 0.6])
+        assert editor.problems() == []
+
+    @pytest.mark.parametrize("weight", [0.0, 1.5, 2.0, -1.5])
+    def test_a_weight_outside_the_usable_range_is_refused(self, tmp_path, weight):
+        editor = _editor(tmp_path, None)
+        editor.add_control("a", "vhi.prediction.index")
+        editor._draft[0]["targets"][0][1] = weight
+        assert any("weight" in p for p in editor.problems())
+
+    def test_a_negative_weight_is_allowed_and_survives_a_save(self, tmp_path):
+        """The library permits one on a signed target, so refusing here would make a
+        valid hand-written file unsavable the moment it was opened."""
+        editor = _editor(tmp_path, None)
+        editor.add_control("wrist", "vhi.prediction.index")
+        editor._draft[0]["targets"][0][1] = -0.5
+        assert editor.problems() == []
+        assert editor.save() is True
+        editor.load()
+        assert editor._draft[0]["targets"][0][1] == -0.5
+
+    @pytest.mark.parametrize("fraction", [-0.1, 1.1])
+    def test_a_cutoff_outside_zero_to_one_is_refused(self, tmp_path, fraction):
+        editor = _editor(tmp_path, None)
+        editor.add_control("a", "vhi.prediction.index")
+        editor._draft[0]["threshold_fraction"] = fraction
+        assert any("threshold_fraction" in p for p in editor.problems())
+
+    def test_nothing_is_written_while_a_problem_stands(self, tmp_path):
+        """The point of all of the above: the file on disk stays loadable."""
+        editor = _editor(tmp_path, GOOD)
+        original = editor.path.read_text()
+        editor.add_control("a", "vhi.prediction.thumb")
+        editor.add_control("b", "vhi.prediction.thumb.flexion")
+        assert editor.save() is False
+        assert editor.path.read_text() == original
+
+
+class TestEditing:
+    def test_a_new_control_gets_a_free_name(self, tmp_path):
+        editor = _editor(tmp_path, None)
+        editor.add_control()
+        editor.add_control()
+        editor.add_control()
+        names = [e["alias"] for e in editor._draft]
+        assert len(set(names)) == 3, names
+
+    def test_a_requested_name_is_kept_when_it_is_free(self, tmp_path):
+        editor = _editor(tmp_path, None)
+        editor.add_control("wrist", "vhi.prediction.index")
+        assert editor._draft[0]["alias"] == "wrist"
+
+    def test_reload_discards_unsaved_edits(self, tmp_path):
+        """The working copy is not a store: nothing survives that the file does not."""
+        editor = _editor(tmp_path, GOOD)
+        editor.add_control("scratch", "vhi.prediction.thumb")
+        editor.load()
+        assert [e["alias"] for e in editor._draft] == ["grip"]
+
+    def test_a_gate_survives_the_round_trip(self, tmp_path):
+        editor = _editor(tmp_path, None)
+        editor.add_control("fist", "vhi.prediction.index")
+        editor._draft[0]["threshold_fraction"] = 0.4
+        editor._draft[0]["debounce_s"] = 0.25
+        assert editor.save() is True
+        editor.load()
+        assert editor._draft[0]["threshold_fraction"] == 0.4
+        assert editor._draft[0]["debounce_s"] == 0.25
+
+
+class TestItExplainsWhatTheTargetWouldMakeOfIt:
+    def test_it_reports_each_route_with_its_weight(self, tmp_path):
+        summary = _editor(tmp_path, GOOD).resolved_summary()
+        assert "grip" in summary
+        assert "index x0.8" in summary
+        assert "middle x1.0" in summary
+
+    def test_it_names_a_held_state_as_such(self, tmp_path):
+        editor = _editor(tmp_path, None)
+        editor.add_control("gesture", "vhi.control.gesture")
+        assert "held state" in editor.resolved_summary()
+
+    def test_it_shows_the_cutoff_for_a_classifier_input(self, tmp_path):
+        editor = _editor(tmp_path, None)
+        editor.add_control("fist", "vhi.prediction.index")
+        editor._draft[0]["threshold_fraction"] = 0.5
+        assert "on at >= 0.5" in editor.resolved_summary()
+
+    def test_it_says_so_rather_than_guessing_when_offline(self, tmp_path):
+        editor = _editor(tmp_path, GOOD, connected=False)
+        assert "Not connected" in editor.resolved_summary()
+
+    def test_it_points_at_the_problems_rather_than_resolving_a_bad_map(self, tmp_path):
+        editor = _editor(tmp_path, None)
+        editor.add_control("a")           # no target
+        assert "problems" in editor.resolved_summary()
+
+
+class TestItWorksWithoutATarget:
+    """Offline it is a plain text editor with validation — not a broken one."""
+
+    def test_it_loads_and_saves_with_no_client(self, tmp_path):
+        editor = _editor(tmp_path, GOOD, connected=False)
+        assert [e["alias"] for e in editor._draft] == ["grip"]
+        assert editor.save() is True
+
+    def test_an_unknown_address_is_not_flagged_without_a_manifest(self, tmp_path):
+        """It cannot know. Inventing a refusal from an empty list would block everything."""
+        editor = _editor(tmp_path, None, connected=False)
+        editor.add_control("a", "some.target.address")
+        assert editor.problems() == []
+
+    def test_connecting_to_nothing_says_so(self, tmp_path):
+        class Silent:
+            def capabilities(self):
+                return None
+
+        editor = ControlMapEditor(tmp_path / "c.toml", client=Silent())
+        editor.load()
+        editor._connect()
+        assert editor.capabilities == ()
+        assert "No target answered" in editor._message

@@ -306,12 +306,29 @@ class TestTheGenericEntriesComeFirstAndWork:
                     config.get("program", "")
                 ), f"{config['name']} is in the first group but is not for the user's own files"
 
-    def test_the_examples_are_marked_as_the_optional_ones(self, configs):
-        """A name is what a user reads in the picker; 'Example:' says what it is."""
+    def test_every_entry_says_what_kind_of_thing_it_is(self, configs):
+        """A name is what a user reads in the picker, so the prefix carries the sort.
+
+        "Playground:" is something to try, "Example:" is a reference app to read,
+        "Prerequisite:" is a thing to start first. The distinction matters more than the
+        directory an entry happens to point into — both playgrounds live under
+        `examples/` and neither is a demonstration of an EMG pipeline.
+        """
+        allowed = ("Playground:", "Example:", "Reference:", "Prerequisite:", "Rig check:")
         for config in configs:
             program = config.get("program", "")
-            if "/examples/" in program:
-                assert config["name"].startswith("Example:"), config["name"]
+            if "${file}" in program or "inspect_control_map" in program:
+                continue  # the generic entries are named for the action, not the kind
+            assert config["name"].startswith(allowed), config["name"]
+
+    def test_the_playground_is_reachable_and_named_as_such(self, configs):
+        """The entry a user is pointed at first to see VHI 2 move."""
+        playgrounds = [c for c in configs if c["name"].startswith("Playground:")]
+        assert playgrounds, "no playground entry"
+        assert any("vhi_playground" in c.get("program", "") for c in playgrounds)
+        assert any("no VHI needed" in c["name"] for c in playgrounds), (
+            "the editor-only playground must say it needs no renderer"
+        )
 
     def test_every_input_reference_is_declared(self):
         """An undeclared ${input:...} fails the launch with a variable-resolution error."""

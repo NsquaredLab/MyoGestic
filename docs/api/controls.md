@@ -167,16 +167,21 @@ target = VhiTarget(vhi.outlet(), client=vhi.canonical_client())
 bus = ControlBus(controls, targets=[target])
 ```
 
-Against a Virtual Hand that speaks the v2 contract this negotiates the channel layout
-by name and lets discrete DOFs through as well. Against an older build the handshake
-comes back empty and the target falls back to the legacy pose on its own — nothing
-downstream changes either way, which is the point.
+The client is **required**, because every channel, range and state comes from that
+answer. A Virtual Hand older than 2.0 has no manifest to answer with and is reported as
+unsupported — MyoGestic 2.x has no fallback and no table of channel numbers.
 
-The fallback is **all-or-nothing**. A partly-understood negotiation is worse than
-none: it would leave some DOFs believed rendered and others quietly dropped, and a
-dropped joint is indistinguishable from a joint that is working and holding still. So
-a refused DOF, a channel order with no place for a declared name, or a reply that will
-not state its wire encoding all fall the whole way back.
+What it refuses, rather than half-rendering: an address the renderer does not export,
+one it does not carry on this stream, two aliases aimed at one control, a channel order
+with no place for a declared name, or a reply that will not state its wire encoding. A
+partly-understood negotiation is worse than none — it would leave some controls believed
+rendered and others quietly dropped, and a dropped control is indistinguishable from one
+that is working and holding still.
+
+One case is **deferred** rather than refused: a renderer that has not answered *at all*.
+An application that launches VHI from its own button binds before VHI exists, so nothing
+is decided until [`negotiate`][myogestic.vhi.VhiTarget.negotiate] settles it. A renderer
+that answers and does not speak v2 is a settled fact and raises.
 
 ::: myogestic.vhi.interfaces.InterfaceSpec.canonical_client
 

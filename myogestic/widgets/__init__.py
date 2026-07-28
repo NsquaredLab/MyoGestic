@@ -29,6 +29,7 @@ from myogestic.widgets.training import (
     TrialPreview,
 )
 from myogestic.widgets.vhi import (
+    ControlMapEditor,
     VhiMovementPanel,
     VhiStateCache,
     VhiStateSnapshot,
@@ -60,6 +61,7 @@ __all__ = [
     "TemplateInspector",
     "TemplateInspectorRow",
     "TrialPreview",
+    "ControlMapEditor",
     "VhiMovementPanel",
     "VhiStateCache",
     "VhiStateSnapshot",

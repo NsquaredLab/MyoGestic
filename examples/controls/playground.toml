@@ -1,0 +1,20 @@
+# The VHI 2 playground's control map. Edit it here or in the app's editor panel.
+#   left  = your name, anything you like
+#   right = a control VHI declares (it owns the kind, range and states)
+#
+# Change a name or a weight, save, and press Reload in the app — or just press F5.
+
+[dofs]
+
+# One output closing the whole hand, with the thumb deliberately under-driven.
+# Change 0.6 and watch the thumb alone move differently.
+close = [
+  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.index" },
+  { target = "vhi.prediction.middle" },
+  { target = "vhi.prediction.ring" },
+  { target = "vhi.prediction.little" },
+]
+
+# One output, one control. The short `...thumb` means flexion, so name the axis.
+thumb_spread = "vhi.prediction.thumb.abduction"
