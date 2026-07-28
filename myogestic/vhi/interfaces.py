@@ -150,11 +150,11 @@ class InterfaceSpec:
 
         Examples
         --------
-        >>> from myogestic.controls import ControlBus, load_dofs
+        >>> from myogestic.controls import ControlBus, Continuous, ControlSet
         >>> from myogestic.vhi import VhiTarget, virtual_hand
         >>>
         >>> vhi = virtual_hand()
-        >>> controls = load_dofs({"dofs": {"index.flexion": "continuous"}})
+        >>> controls = ControlSet(dofs={"my_index": Continuous("my_index")})
         >>> target = VhiTarget(vhi.outlet(), client=vhi.canonical_client())
         >>> bus = ControlBus(controls, targets=[target])
         >>> target.negotiated          # True against a v2 VHI, False against an older one

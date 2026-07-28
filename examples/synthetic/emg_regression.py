@@ -10,16 +10,23 @@ Workflow:
        so the gesture buttons are the sole movement source → Stop Rec
     4. Select sessions → Train (regression on kinematics)
     5. Predict → VHI predicted hand mirrors control hand
+
+The control space lives in `examples/controls/regression.toml`: the aliases on its left
+are this script's own vocabulary, the addresses on its right are VHI's. It cannot be
+resolved before VHI runs — VHI is what declares what those addresses accept — so the
+bus is built on the first click that needs it.
 """
 
+import pathlib
 import sys
+import tomllib
 
 import numpy as np
 import torch
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, load_dofs
+from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_regressor
@@ -27,7 +34,7 @@ from myogestic.session import iter_aligned_windows, iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import VhiTarget, virtual_hand
-from myogestic.vhi.legacy import decode_pose
+from myogestic.vhi.legacy import LEGACY_ADDRESS_CHANNELS, LEGACY_POSE_DOFS, decode_pose
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
@@ -57,36 +64,17 @@ vhi_legacy = vhi.control_client()
 # Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
-# The canonical control space this app commands. Five signed, normalized DOFs:
-# +1 is the direction the name says (full flexion), -1 the opposite, 0 rest.
-# Thumb abduction is left out to keep the regressor manageable on fake EMG.
+# The control space this app commands, as a *mapping* rather than a declaration: five
+# continuous aliases for the digits plus one discrete gesture, each pointed at an address
+# VHI declares. What an address means — number or held state, its range, its states — is
+# VHI's to say, so this stays unresolved until VHI answers (see `_ensure_vhi`).
 #
 # No VHI channel number appears here, and none should: `VhiTarget` owns the
 # translation to whatever the hand happens to want on the wire.
 # --8<-- [start:dofs]
-CONTROLS = load_dofs(
-    {
-        "dofs": {
-            **dict.fromkeys(
-                [
-                    "thumb.flexion",
-                    "index.flexion",
-                    "middle.flexion",
-                    "ring.flexion",
-                    "little.flexion",
-                ],
-                "continuous",
-            ),
-            # The gesture the operator commands while recording, as a canonical
-            # discrete DOF: a *held state*, snapped to and held. Its states are the
-            # class names, lowercased, which is what the target resolves against
-            # whatever the renderer calls them.
-            "hand.gesture": [c.lower() for c in CLASSES],
-        }
-    }
-)
-DOF_NAMES = CONTROLS.channel_labels()
-N_DOF = len(DOF_NAMES)
+CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "regression.toml"
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
 # --8<-- [end:dofs]
 
 # MyoVerse transforms — preferred over hand-rolled numpy here so the feature
@@ -118,22 +106,20 @@ PROCESSES = [
 ]
 
 # --8<-- [start:bus]
-# One bus owns the whole output path: substitute rest -> clip -> smooth ->
-# clip again -> hand it to every target. `VhiTarget` is what turns canonical
-# names into whatever this VHI renders.
+# The bus cannot exist yet. Resolving the control file needs VHI to say what its
+# addresses accept, and VHI is launched from this app's own ProcessLauncher — so these
+# stay None until `_ensure_vhi` runs, on the first click that needs them.
 #
-# Passing a canonical client makes the target *ask* rather than assume: against a
-# v2 VHI it negotiates the channel layout by name, and against an older one it
-# falls back to the legacy pose on its own. Nothing below changes either way.
+# Once built, one bus owns the whole output path: substitute rest -> clip -> smooth ->
+# clip again -> hand it to every target. `VhiTarget` is what turns resolved aliases into
+# whatever this VHI renders on the wire.
 vhi_canonical = vhi.canonical_client()
-vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
-bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
+vhi_target = None
+bus = None
+controls = None
 # --8<-- [end:bus]
 
 app = App("EMG Regression", ui_scale=0.85)
-# Recordings then carry the space they were made under: a bare -1 does not say
-# whether it was a full excursion or out of range.
-app.ctx.control_space = CONTROLS
 app.streams(
     Stream("emg", source=LSLSource("TestEMG1"), window_ms=1000, buffer_ms=60000),
     Stream(
@@ -166,7 +152,7 @@ HOP_MS = 100
 
 @pipeline.train
 def train(data: TrainingData):
-    """Train CatBoost regressor: EMG features → 5-DOF kinematics.
+    """Train CatBoost regressor: EMG features → one column per continuous alias.
 
     For sessions with `vhi_control` kinematics: use iter_aligned_windows
     (EMG window → kinematics target via timestamp alignment).
@@ -178,7 +164,27 @@ def train(data: TrainingData):
     """
     log = pipeline.train_log
     log.clear()
-    log.append(f"Training from {len(data.paths)} sessions...")
+
+    # The target vector is named in the alias vocabulary, so the map has to be resolved
+    # first — the same handler-side resolve the buttons do, here on the training thread.
+    # (Never on the predict thread: `capabilities` blocks on an RPC.)
+    _ensure_vhi()
+    if controls is None:
+        raise ValueError(
+            "controls are not resolved yet — launch VHI, then train. Its manifest is what "
+            "says which aliases are continuous, and those are the regression targets."
+        )
+    aliases = controls.channel_labels()
+    n_dof = len(aliases)
+    # The recorded control hand is VHI's legacy 9-channel pose, and `decode_pose` keys it
+    # by pose channel — so each alias finds its column through the address it routes to.
+    # The aliases stay the vocabulary; the addresses only do the lookup. One route each
+    # here; an alias fanned out to several controls would need a rule for which to learn
+    # from, so this takes the first deliberately rather than by accident.
+    pose_keys = [
+        LEGACY_POSE_DOFS[LEGACY_ADDRESS_CHANNELS[controls.routes[a][0].address]] for a in aliases
+    ]
+    log.append(f"Training from {len(data.paths)} sessions, targets: {', '.join(aliases)}")
 
     all_X: list[np.ndarray] = []
     all_y: list[np.ndarray] = []
@@ -216,7 +222,7 @@ def train(data: TrainingData):
         # signed negation, not the old `abs()` - which folded any extension the
         # operator did into flexion of the same magnitude.
         pose = decode_pose(aligned["vhi_control"])
-        kin = np.array([pose[name] for name in DOF_NAMES], dtype=np.float64)
+        kin = np.array([pose[key] for key in pose_keys], dtype=np.float64)
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
     # --8<-- [end:kin_loop]
@@ -237,7 +243,7 @@ def train(data: TrainingData):
     ):
         # +1 is flexion under the canonical standard, so a Fist target is all 1s
         # and Rest is all 0s - the same numbers as before, now for a stated reason.
-        kin = np.ones(N_DOF, dtype=np.float64) if ci == 1 else np.zeros(N_DOF, dtype=np.float64)
+        kin = np.ones(n_dof, dtype=np.float64) if ci == 1 else np.zeros(n_dof, dtype=np.float64)
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
     # --8<-- [end:label_loop]
@@ -264,12 +270,15 @@ def train(data: TrainingData):
 # --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
-    """Regress the five canonical DOFs and hand them to the bus."""
+    """Regress the continuous aliases and hand them to the bus."""
+    if bus is None:
+        return None  # nothing resolved yet, so there is nothing to command
     pred = model.predict(features.reshape(1, -1))[0]
-    # The bus sanitises, smooths and renders. No clip here: each DOF's declared
-    # range is the authority, and clipping before the smoother would let the
-    # filter overshoot straight back out of it.
-    return {"dof": bus.push(dict(zip(DOF_NAMES, pred, strict=True)))}
+    # Still the model's own vocabulary: the bus is keyed by alias, and the routing to
+    # VHI's addresses travels with the resolved set. The bus sanitises, smooths and
+    # renders. No clip here: each alias's resolved range is the authority, and clipping
+    # before the smoother would let the filter overshoot straight back out of it.
+    return {"dof": bus.push(dict(zip(controls.channel_labels(), pred, strict=True)))}
 
 
 # --8<-- [end:predict]
@@ -291,18 +300,33 @@ grid = Grid(
 
 # --8<-- [start:negotiate]
 def _ensure_vhi() -> None:
-    """Settle the target's contract, once VHI is actually up.
+    """Resolve the control map once VHI is up and can say what it exports.
 
-    `bind` ran when the bus was constructed — which is before the user clicks Launch,
-    so VHI did not exist yet and "no answer" could not be read as "old build". This
-    resolves it the first time it matters. Cheap and idempotent once settled.
+    Semantics come from the target, so nothing can be built at import time: the app
+    launches VHI from its own ProcessLauncher. Called from the UI handlers and the
+    training thread — never from the predict callback, because `capabilities` blocks
+    on an RPC. Cheap and idempotent once settled.
     """
-    if not vhi_target.negotiate():
-        app.ctx.log("VHI not reachable yet — gestures will not render until it is")
-    elif vhi_target.negotiated:
-        app.ctx.log("VHI negotiated the canonical contract (v2)")
-    else:
-        app.ctx.log("VHI is pre-v2 — using the legacy pose and v1 movements")
+    global bus, controls, vhi_target
+    if bus is not None:
+        return
+    capabilities = vhi_canonical.capabilities()
+    if capabilities is None:
+        app.ctx.log("VHI not reachable yet — controls stay unresolved")
+        return
+    # Refuses an address this build does not export, naming the near misses.
+    controls = resolve(CONTROL_MAP, capabilities)
+    # `legacy_client` stays for the one case a manifest cannot cover: a VHI that answers
+    # the manifest but not the v2 control-space negotiation still renders a held state
+    # through v1 `SetMovement`. It goes away with v1.
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
+    bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
+    # Recordings then carry the space they were made under: a bare -1 does not say
+    # whether it was a full excursion or out of range.
+    app.ctx.control_space = CONTROL_MAP
+    # `bind` ran inside the bus, and VHI is up by now, so this verdict is decisive.
+    wire = "the canonical contract (v2)" if vhi_target.negotiated else "the legacy pose"
+    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI via {wire}")
 # --8<-- [end:negotiate]
 
 
@@ -317,7 +341,10 @@ def _on_gesture(i: int) -> None:
     # noisy prediction, and rebases the trigger so the next push does not re-fire it.
     _ensure_vhi()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
-    bus.select("hand.gesture", CLASSES[i].lower())
+    if bus is not None:
+        # The state names are VHI's own movements, straight out of its manifest — the
+        # class names here match them, and `select` returns False if one ever does not.
+        bus.select("gesture", CLASSES[i])
 # --8<-- [end:gesture]
 
 
@@ -391,7 +418,8 @@ def main() -> None:
         # Rest the hand first, and make that frame land: the outlet sends on a
         # paced thread, so a pose pushed at exit would otherwise never go out
         # and the hand would hold its last commanded position.
-        bus.stop()
+        if bus is not None:
+            bus.stop()
         training_aid.stop_program()      # no-op unless a program was started
         training_aid.set_recording_session(False)
         training_aid.stop()

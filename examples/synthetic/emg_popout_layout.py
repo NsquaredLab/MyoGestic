@@ -19,6 +19,7 @@ Experimental - see the README "Status" note for macOS caveats.
 import re
 import sys
 import time as _time
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -31,7 +32,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Stream, TrainingData
-from myogestic.controls import ControlBus, load_dofs
+from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
@@ -45,7 +46,6 @@ from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import VhiTarget, virtual_hand
-from myogestic.vhi.legacy import LEGACY_POSE_DOFS
 from myogestic.widgets import (
     LogPanel,
     PostProcessor,
@@ -71,28 +71,37 @@ vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 output_filter = PostProcessor(hz=32)
 
-# Canonical DOF values: +1 is the direction the name says, 0 is rest. The fist abducts
-# the thumb — this used to write channel 1 as 0, but recorded VHI sessions have it at
-# full excursion.
+# Which of *this example's* output names go to which of VHI's controls. Parsing the file
+# needs no VHI; learning what its addresses mean does — see `_ensure_vhi`.
+CONTROL_FILE = Path(__file__).resolve().parent.parent / "controls" / "popout_layout.toml"
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
+
+# Our aliases, taken from the file, so renaming one there needs no edit here.
+POSE_ALIASES = tuple(CONTROL_MAP.bindings)
+
+# Per-class poses in canonical values: +1 is the direction the alias' target names, 0 is
+# rest. The fist abducts the thumb — this used to write that channel as 0, but recorded
+# VHI sessions have it at full excursion.
 HAND_POSES: dict[int, dict[str, float]] = {
     0: {},  # Rest
-    1: dict.fromkeys(LEGACY_POSE_DOFS, 1.0),  # Fist
+    1: dict.fromkeys(POSE_ALIASES, 1.0),  # Fist
     2: {  # Pinch
-        "thumb.flexion": 0.7,
-        "thumb.abduction": 0.6,
-        "index.flexion": 0.8,
-        "middle.flexion": 0.6,
+        "thumb_curl": 0.7,
+        "thumb_spread": 0.6,
+        "index_curl": 0.8,
+        "middle_curl": 0.6,
     },
-    3: dict.fromkeys(LEGACY_POSE_DOFS, -0.5),  # Open: extended past rest
+    3: dict.fromkeys(POSE_ALIASES, -0.5),  # Open: extended past rest
 }
 
 # The bus + target own the wire. VHI's continuous inlet takes *canonical* values as of
 # 2.0 while older builds want the negated legacy pose, so a hand-built frame is correct
-# on exactly one of them. `VhiTarget` asks which and encodes accordingly.
-CONTROLS = load_dofs({"dofs": dict.fromkeys(LEGACY_POSE_DOFS, "continuous")})
+# on exactly one of them. `VhiTarget` asks which and encodes accordingly. Both wait for
+# `_ensure_vhi`: the map says nothing about kinds or ranges until VHI has declared them.
 vhi_canonical = vhi.canonical_client()
-vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
-bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
+vhi_target: VhiTarget | None = None
+bus: ControlBus | None = None
 
 rms_transform = RMS(window_size=32)
 mav_transform = MAV(window_size=32)
@@ -217,20 +226,39 @@ def predict(model, features):
     else:
         proba = None
         class_idx = int(model.predict(x)[0])
+    if bus is None:
+        # Nothing resolved yet, so there is nothing to command — and asking VHI what it
+        # exports blocks on an RPC, which this thread must not do.
+        return {"class": class_idx, "proba": proba, "hand": {}}
     pose = HAND_POSES.get(class_idx, HAND_POSES[0])
-    hand = bus.push({**dict.fromkeys(LEGACY_POSE_DOFS, 0.0), **pose})
+    hand = bus.push({**dict.fromkeys(POSE_ALIASES, 0.0), **pose})
     return {"class": class_idx, "proba": proba, "hand": hand}
 
 
 def _ensure_vhi() -> None:
-    """Settle the target's contract once VHI is up — bind ran before it existed."""
-    if not vhi_target.negotiate():
-        app.ctx.log("VHI not reachable yet — poses use the legacy encoding until it is")
+    """Resolve the control map once VHI is up and can say what it exports."""
+    global bus, vhi_target
+    if bus is not None:
+        return
+    capabilities = vhi_canonical.capabilities()
+    if capabilities is None:
+        app.ctx.log("VHI not reachable yet — controls stay unresolved")
+        return
+    controls = resolve(CONTROL_MAP, capabilities)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+    bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
+    app.ctx.control_space = CONTROL_MAP  # recordings record what they were made under
+    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
 
 
 def _on_gesture(i: int) -> None:
     _ensure_vhi()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
+
+
+def _on_record() -> None:
+    _ensure_vhi()
+    app.start_recording()
 
 
 # --- Per-block render functions (each becomes its own dockable window) -----
@@ -266,7 +294,7 @@ def _processes_block() -> None:
 
 _recording = RecordingControls(
     CLASSES,
-    on_record=app.start_recording,
+    on_record=_on_record,
     on_stop=app.stop_recording,
     on_gesture=_on_gesture,
 )
@@ -386,7 +414,8 @@ def main() -> None:
         app.run()
     finally:
         # Rest the hand and make that frame land before the outlet's thread dies.
-        bus.stop()
+        if bus is not None:
+            bus.stop()
         vhi_canonical.stop()
 
 

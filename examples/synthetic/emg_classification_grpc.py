@@ -18,14 +18,20 @@ Workflow:
     4. Select sessions → Train → Predict → the predicted hand follows the
        classification (LSL), and each class *change* also commands the control
        hand (gRPC)
+
+Where the two outputs *go* is declared in ../controls/classification_grpc.toml, not
+here: this example names its outputs `fist` and `gesture`, and that file maps them onto
+the control addresses VHI declares it exports.
 """
 
+import pathlib
 import sys
+import tomllib
 
 import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, load_dofs
+from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
@@ -34,7 +40,6 @@ from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import VhiTarget, virtual_hand
-from myogestic.vhi.legacy import LEGACY_POSE_DOFS
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -57,21 +62,27 @@ training_aid = vhi.training_client()
 vhi_canonical = vhi.canonical_client()
 vhi_legacy = vhi.control_client()
 
-# Per-class poses in canonical DOF values: +1 is the direction the name says, 0 is
-# rest. The fist abducts the thumb — channel 1 used to be written as 0 here, but
-# recorded VHI sessions have it at full excursion.
-HAND_REST: dict[str, float] = {}
-HAND_FIST = dict.fromkeys(LEGACY_POSE_DOFS, 1.0)
+# Where this example's two outputs go. The left side of that file is ours (`fist` and
+# `gesture`), the right side is VHI's — read it, it is commented. Parsing is all that
+# happens here: what an address *means* is VHI's to declare, so nothing is resolved
+# until it answers (see `_ensure_vhi`).
+CONTROL_FILE = (
+    pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification_grpc.toml"
+)
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
 
 # Output-side smoothing applied to the hand pose vector before pushing
 # to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
-# CLASSES are sent verbatim to VHI as movement names — keep them in sync
-# with VHI's movement set (see MovementDefinitions.cs). "Rest" and "Fist"
-# are both valid VHI movements; the fake generator only produces two
-# amplitude levels, so two classes is also what it can cleanly drive.
+# CLASSES double as the states of the discrete `gesture` output, and those states are
+# VHI's movement names — so they are sent verbatim and must be movements this VHI
+# offers (see MovementDefinitions.cs). "Rest" and "Fist" both are; the fake generator
+# only produces two amplitude levels, so two classes is also what it can cleanly drive.
 CLASSES = ["Rest", "Fist"]
+# Per-class value for both the generator's amplitude and the `fist` output: 0 is an
+# open hand, 1 fully closed. One scalar — the control file fans it out to six controls.
 CTRL_VALUES = [0.0, 1.0]
 
 
@@ -155,35 +166,11 @@ def train(data: TrainingData):
     return clf
 
 
-# Commanding a movement re-triggers VHI's animation, so it must happen only when the
-# class actually changes *and has settled*: the tick-to-tick argmax flickers during
-# the ~0.2 s sliding-window transition after a gesture, and without a debounce the
-# control hand visibly jumps between poses before settling.
-#
-# That debounce is a property of the DOF, so it is declared on the DOF rather than
-# hand-rolled around the client — the bus owns the edge detection, the dedupe, and
-# the rebase-on-manual-click that used to live in this file.
-STABLE_SECONDS = 0.1
-CONTROLS = load_dofs(
-    {
-        "dofs": {
-            **dict.fromkeys(LEGACY_POSE_DOFS, "continuous"),
-            "hand.gesture": {
-                "kind": "discrete",
-                "states": [c.lower() for c in CLASSES],
-                "rest": CLASSES[0].lower(),
-                "debounce_s": STABLE_SECONDS,
-            },
-        }
-    }
-)
-vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
-bus = ControlBus(
-    CONTROLS,
-    targets=[vhi_target],
-    smoothing=output_filter,
-    hz=pipeline.predict_hz,
-)
+# Both are built by `_ensure_vhi` rather than here: the control file says *where* each
+# output goes, and VHI says what those addresses accept — so there is nothing to
+# resolve until VHI is running, and this app launches it from its own UI.
+vhi_target: VhiTarget | None = None
+bus: ControlBus | None = None
 
 
 @pipeline.predict
@@ -193,12 +180,15 @@ def predict(model, features):
     hand (gRPC)."""
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
+    if bus is None:
+        # Nothing resolved yet, so nothing to command. Resolving here is not an option:
+        # it blocks on an RPC and this runs on the predict thread.
+        return {"class": class_idx, "proba": proba}
 
-    # One frame carries both outputs: the pose streams to the predicted hand, and
-    # the gesture is delivered to the control hand only when it has settled. The bus
-    # does the debounce declared on the DOF, so there is no trigger to drive here.
-    pose = HAND_FIST if class_idx == 1 else HAND_REST
-    values = bus.push({**pose, "hand.gesture": CLASSES[class_idx].lower()})
+    # One frame carries both outputs: `fist` streams to the predicted hand, and the
+    # gesture reaches the control hand only once it has settled. The bus applies the
+    # debounce the control file declares, so there is no trigger to drive here.
+    values = bus.push({"fist": CTRL_VALUES[class_idx], "gesture": CLASSES[class_idx]})
 
     return {"class": class_idx, "proba": proba, "hand": values}
 
@@ -220,18 +210,46 @@ grid = Grid(
 
 
 def _ensure_vhi() -> None:
-    """Settle the target's contract once VHI is up — bind ran before it existed."""
-    if not vhi_target.negotiate():
-        app.ctx.log("VHI not reachable yet — gestures will not render until it is")
+    """Resolve the control map once VHI is up and can say what it exports.
+
+    Called from UI handlers only — never from the predict callback, because
+    `capabilities` blocks on an RPC and predict runs on its own thread.
+    """
+    global bus, vhi_target
+    if bus is not None:
+        return
+    capabilities = vhi_canonical.capabilities()
+    if capabilities is None:
+        app.ctx.log("VHI not reachable yet — controls stay unresolved")
+        return
+    controls = resolve(CONTROL_MAP, capabilities)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical, legacy_client=vhi_legacy)
+    bus = ControlBus(
+        controls,
+        targets=[vhi_target],
+        smoothing=output_filter,
+        hz=pipeline.predict_hz,
+    )
+    # Recordings then record which mapping they were made under.
+    app.ctx.control_space = CONTROL_MAP
+    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
+
+
+def _select_gesture(state: str) -> None:
+    """Deliver a VHI movement from a click, resolving the control map first if needed.
+
+    `select` delivers immediately and rebases the DOF's trigger, so the next predict
+    ticks — still on the old ~0.2 s window — do not re-fire or jump.
+    """
+    _ensure_vhi()
+    if bus is not None:
+        bus.select("gesture", state)
 
 
 def _on_gesture(i: int) -> None:
     """Manual class button: drive the fake generator and the VHI control hand."""
-    _ensure_vhi()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
-    # `select` delivers immediately and rebases the DOF's trigger, so the next
-    # predict ticks — still on the old ~0.2 s window — do not re-fire or jump.
-    bus.select("hand.gesture", CLASSES[i].lower())
+    _select_gesture(CLASSES[i])
 
 
 def _on_record() -> None:
@@ -249,13 +267,9 @@ def _on_stop() -> None:
 
 # VhiMovementPanel owns its own state cache and the throttled background
 # get_state() refresh, so the @app.ui body stays free of plumbing.
-vhi_panel = VhiMovementPanel(
-    training_aid,
-    # Clicks go through the canonical DOF, not straight at the renderer: `select`
-    # delivers immediately and rebases the DOF's debounce so the next predict ticks
-    # do not re-fire.
-    lambda state: bus.select("hand.gesture", state.lower()),
-)
+# Clicks go through the `gesture` output, not straight at the renderer, so they pass
+# through the same debounce and rebase it — see `_select_gesture`.
+vhi_panel = VhiMovementPanel(training_aid, _select_gesture)
 
 viewer = SignalViewer("emg")
 logo = AppLogo()
@@ -312,7 +326,8 @@ def main() -> None:
     try:
         app.run()
     finally:
-        bus.stop()
+        if bus is not None:
+            bus.stop()
         training_aid.set_recording_session(False)
         training_aid.stop()
         vhi_canonical.stop()

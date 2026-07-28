@@ -1,0 +1,46 @@
+# Control map for examples/synthetic/emg_32ch_multi_model.py
+#
+# Loaded with:
+#
+#     import tomllib
+#     from myogestic.controls import load_control_map, resolve
+#
+#     with open("multi_model.toml", "rb") as f:     # "rb" — tomllib requires binary
+#         control_map = load_control_map(tomllib.load(f))
+#
+#     controls = resolve(control_map, vhi.canonical_client().capabilities())
+#
+# Two vocabularies meet here, and keeping them apart is the whole point:
+#
+#   LEFT  — yours. `thumb_curl` is not a word VHI knows; it is what *this example* calls
+#           one of its outputs. MyoGestic never prescribes these names and never reads
+#           meaning out of them. Rename them, and rename them in the example's poses.
+#
+#   RIGHT — the target's. `vhi.prediction.thumb.flexion` is a name VHI declares in its
+#           own manifest, along with everything needed to send it: number or held state,
+#           its range, its neutral value. Ask a running VHI what it exports:
+#               uv run --extra grpc python tools/inspect_canonical_control.py
+#
+# An address this VHI does not export is reported by name when the example resolves the
+# map — with the near misses and the full list — never accepted and silently ignored.
+
+[dofs]
+
+# Six one-to-one bindings, because this example poses each joint independently: its
+# Pinch class curls the thumb 0.7 while the index goes to 0.8, so a single fanned-out
+# `fist` alias could not express it. See examples/controls/hand.toml for the fan-out and
+# weighted fan-out forms, and for a target-declared discrete control.
+#
+# The explicit axis form (`.flexion`, `.abduction`) is used throughout: the thumb has two
+# axes, so the short `vhi.prediction.thumb` is declared to mean flexion only, and being
+# explicit here keeps the pose table readable next to it.
+thumb_curl = "vhi.prediction.thumb.flexion"
+thumb_spread = "vhi.prediction.thumb.abduction"
+index_curl = "vhi.prediction.index.flexion"
+middle_curl = "vhi.prediction.middle.flexion"
+ring_curl = "vhi.prediction.ring.flexion"
+little_curl = "vhi.prediction.little.flexion"
+
+# There is deliberately no wrist entry: VHI's manifest exports no wrist prediction
+# control, because the rig has no wrist. Asking for one fails at resolve time by name,
+# which beats a joint that appears to work and holds still.

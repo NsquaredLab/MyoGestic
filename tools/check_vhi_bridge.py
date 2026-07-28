@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import time
 
-from myogestic.controls import ControlBus, load_dofs
+from myogestic.controls import Continuous, ControlBus, ControlSet
 from myogestic.vhi import VhiTarget, virtual_hand
 from myogestic.vhi.legacy import LEGACY_POSE_DOFS
 
@@ -51,7 +51,9 @@ EXPECTED = {
 
 def main() -> None:
     """Sweep every legacy DOF through both directions and print the checklist."""
-    controls = load_dofs({"dofs": dict.fromkeys(LEGACY_POSE_DOFS, "continuous")})
+    # Built directly rather than from a mapping file: this is a rig diagnostic, so the
+    # names ARE the legacy channels under test — there is no user vocabulary involved.
+    controls = ControlSet(dofs={n: Continuous(n) for n in LEGACY_POSE_DOFS})
     outlet = virtual_hand().outlet()
     # No smoothing: a ramp would blur which frame produced which pose.
     bus = ControlBus(controls, targets=[VhiTarget(outlet)])

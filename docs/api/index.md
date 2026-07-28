@@ -20,7 +20,7 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 
     Declare what an app controls by name; targets render it.
 
-    [`load_dofs`][myogestic.controls.load_dofs] · [`ControlBus`][myogestic.controls.ControlBus]
+    [`load_control_map`][myogestic.controls.load_control_map] · [`ControlBus`][myogestic.controls.ControlBus]
 
     [:octicons-arrow-right-24: Control standard](controls.md)
 

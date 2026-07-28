@@ -10,12 +10,14 @@ Workflow:
     4. Select sessions → Train → Predict → VHI hand moves
 """
 
+import pathlib
 import sys
+import tomllib
 
 import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, load_dofs
+from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
@@ -24,7 +26,6 @@ from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import VhiTarget, virtual_hand
-from myogestic.vhi.legacy import LEGACY_POSE_DOFS
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -42,11 +43,18 @@ ctrl_outlet = control_outlet()
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 
-# Per-class poses in canonical DOF values: +1 is the direction the name says, 0 is rest.
-# The fist abducts the thumb — this used to write channel 1 as 0, but recorded VHI
-# sessions have it at full excursion.
-HAND_REST: dict[str, float] = {}
-HAND_FIST = dict.fromkeys(LEGACY_POSE_DOFS, 1.0)
+# What this app controls, declared in a file: the left side is *ours*, the right side is
+# VHI's. Parsing needs no VHI; resolving does, so that waits until one is up (`_ensure_vhi`).
+CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification.toml"
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
+
+# Per-class poses, keyed by *our* aliases: +1 is the direction the alias means, 0 is rest.
+# `fist` fans out to all five digits, so a whole-hand pose is two numbers rather than a
+# channel vector. The fist also abducts the thumb — this used to write channel 1 as 0, but
+# recorded VHI sessions have it at full excursion.
+HAND_REST: dict[str, float] = {"fist": 0.0, "thumb_spread": 0.0}
+HAND_FIST: dict[str, float] = {"fist": 1.0, "thumb_spread": 1.0}
 
 # --8<-- [end:poses]
 
@@ -58,11 +66,12 @@ output_filter = PostProcessor(hz=32)
 
 # The bus + target own the wire. VHI's continuous inlet takes *canonical* values as of
 # 2.0 while older builds want the negated legacy pose, so a hand-built frame is correct
-# on exactly one of them. `VhiTarget` asks which and encodes accordingly.
-CONTROLS = load_dofs({"dofs": dict.fromkeys(LEGACY_POSE_DOFS, "continuous")})
+# on exactly one of them. `VhiTarget` asks which and encodes accordingly. Both are built
+# in `_ensure_vhi`, not here: the aliases above mean nothing until VHI has said what its
+# addresses do, and this script launches VHI itself.
 vhi_canonical = vhi.canonical_client()
-vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
-bus = ControlBus(CONTROLS, targets=[vhi_target], smoothing=output_filter, hz=32)
+vhi_target: VhiTarget | None = None
+bus: ControlBus | None = None
 
 
 # Reference RMS / MAV / WL / VAR / ZC live in myogestic.recipes.features; mix
@@ -184,8 +193,9 @@ def predict(model, features):
     """
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
-    pose = HAND_FIST if class_idx == 1 else HAND_REST
-    hand = bus.push({**dict.fromkeys(LEGACY_POSE_DOFS, 0.0), **pose})
+    if bus is None:
+        return {"class": class_idx, "proba": proba}  # unresolved; nothing to command
+    hand = bus.push(HAND_FIST if class_idx == 1 else HAND_REST)
     return {"class": class_idx, "proba": proba, "hand": hand}
 
 
@@ -211,9 +221,23 @@ grid = Grid(
 
 
 def _ensure_vhi() -> None:
-    """Settle the target's contract once VHI is up — bind ran before it existed."""
-    if not vhi_target.negotiate():
-        app.ctx.log("VHI not reachable yet — poses use the legacy encoding until it is")
+    """Resolve the control map once VHI is up and can say what it exports.
+
+    Called from UI handlers only. `capabilities` blocks on an RPC, and `predict` runs on
+    its own thread — an RPC there would stall the control loop.
+    """
+    global bus, vhi_target
+    if bus is not None:
+        return
+    capabilities = vhi_canonical.capabilities()
+    if capabilities is None:
+        app.ctx.log("VHI not reachable yet — controls stay unresolved")
+        return
+    controls = resolve(CONTROL_MAP, capabilities)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+    bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
+    app.ctx.control_space = CONTROL_MAP  # recordings record what they were made under
+    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
 
 
 def _on_gesture(i: int) -> None:
@@ -221,12 +245,17 @@ def _on_gesture(i: int) -> None:
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
+def _on_record() -> None:
+    _ensure_vhi()
+    app.start_recording()
+
+
 viewer = SignalViewer("emg")
 logo = AppLogo()
 processes = ProcessLauncher(PROCESSES)
 recording = RecordingControls(
     CLASSES,
-    on_record=app.start_recording,
+    on_record=_on_record,
     on_stop=app.stop_recording,
     on_gesture=_on_gesture,
 )
@@ -277,7 +306,8 @@ def main() -> None:
         app.run()
     finally:
         # Rest the hand and make that frame land before the outlet's thread dies.
-        bus.stop()
+        if bus is not None:
+            bus.stop()
         vhi_canonical.stop()
 
 

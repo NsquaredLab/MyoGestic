@@ -1,0 +1,42 @@
+# Control space for examples/synthetic/emg_regression_raulnet.py.
+#
+# Left of the `=` is **yours**: whatever your model calls its outputs. MyoGestic never
+# prescribes these names and never reads meaning out of them — rename them freely, or
+# point them somewhere else tomorrow.
+#
+# Right of it is the **target's**: `vhi.prediction.index` is an address VHI declares in
+# its own manifest, along with everything needed to send it — number or held state, its
+# range, its neutral value, its states. Nothing here decides any of that. Ask a running
+# VHI what it exports:
+#
+#     uv run --extra grpc python tools/inspect_canonical_control.py
+#
+# An address this VHI does not export is reported by name when the map resolves, with the
+# near misses and the full list — never accepted and silently ignored.
+
+[dofs]
+
+# One alias per network output, in the order RaulNetV17 emits them. These five lines *are*
+# `nr_of_outputs=5`, so `DOF_TARGETS` in the example mirrors them; rename one here and
+# rename it there too, or the example pushes a name nothing is listening for.
+#
+# The short address is the finger's primary axis: `vhi.prediction.thumb` means thumb
+# flexion, and abduction is addressed separately as `vhi.prediction.thumb.abduction`. No
+# wrist appears because VHI's prediction hand exports none.
+thumb = "vhi.prediction.thumb"
+index = "vhi.prediction.index"
+middle = "vhi.prediction.middle"
+ring = "vhi.prediction.ring"
+little = "vhi.prediction.little"
+
+# The Rest / Fist buttons that drive the control hand while recording. This alias resolves
+# to a *held state* rather than a number because `vhi.control.gesture` says so — and its
+# states are the movements this VHI build offers, so "Fist" is spelled the way VHI spells
+# it, not lowercased here.
+#
+# `debounce_s` is the one thing declared on this side, because it belongs to your control
+# loop rather than to the target: how long a state must hold before it counts as a
+# transition, which is what stops a chattering classifier from flapping the hand. The
+# buttons in this example bypass it (a deliberate click needs no settling time); it is
+# here for when a model drives the gesture instead.
+gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }

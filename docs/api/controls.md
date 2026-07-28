@@ -31,34 +31,76 @@ Write a TOML file. A ready-to-copy one ships at
 
 ```toml
 [dofs]
-"index.flexion" = "continuous"                                 # [-1, 1], rest 0
-"hand.grasp"    = ["rest", "fist", "pinch"]                    # array => discrete
-"grip.force"    = { kind = "continuous", range = [0.0, 1.0] }  # one-way
+my_index = "vhi.prediction.index"            # your name = the target's control
+
+fist = [                                     # one output, fanned out
+  "vhi.prediction.index",
+  "vhi.prediction.middle",
+]
+
+pinch = [                                    # ...with a per-target gain
+  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.index" },
+]
+
+gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
 ```
 
-Load it in two lines:
+**The left side is yours.** `my_index`, `fist`, `pinch` — whatever your model calls its
+outputs. Nothing prescribes these names or reads meaning out of them.
+
+**The right side belongs to the target.** `vhi.prediction.index` is a name VHI declares
+in its own manifest, along with everything needed to send it: whether it takes a number
+or a held state, its range, its states. Ask a running target what it exports:
+
+```bash
+uv run --extra grpc python tools/inspect_canonical_control.py
+```
+
+Load it and resolve it:
 
 ```python
 import tomllib
-from myogestic.controls import load_dofs
+from myogestic.controls import load_control_map, resolve
 
 with open("hand.toml", "rb") as f:          # "rb" — tomllib requires binary
-    controls = load_dofs(tomllib.load(f))
+    control_map = load_control_map(tomllib.load(f))
+
+# Resolution needs a live target: it is what declares the semantics.
+controls = resolve(control_map, vhi.canonical_client().capabilities())
 ```
 
-**Mapping-first**: the *shape* of each value is the discriminator. A bare string is a
-continuous DOF at its defaults, a bare array is a discrete DOF's states, and a table is
-the explicit form for a one-way range, a non-zero rest, a label, or a `debounce_s`
-stability gate.
+**Mapping-first**: the *shape* of each value says how a value travels. A bare string is
+one target control; an array is a fan-out reaching several; a table with `target`/`targets`
+is the explicit form, and the only place a per-target `weight` or a `debounce_s` stability
+gate is written. Whether a control is a number or a held state is **not** written here —
+the target declares that.
 
-!!! note "`load_dofs` takes a Mapping, not a path"
-    That is deliberate, and it is why the snippet above opens the file itself. The
-    library reads no configuration files — a design rule, not an oversight — so the same
-    call accepts JSON, a dict literal, a row from a database, or a config system you
-    already have. TOML is what a *human* wants to edit, which is why the shipped example
-    is TOML.
+!!! note "`load_control_map` takes a Mapping, not a path"
+    That is deliberate, and it is why the snippet above opens the file itself. The library
+    reads no configuration files — a design rule, not an oversight — so the same call
+    accepts JSON, a dict literal, a row from a database, or a config system you already
+    have. TOML is what a *human* wants to edit, which is why the shipped example is TOML.
 
-::: myogestic.controls.load_dofs
+!!! warning "A mapping is not a control space until a target answers"
+    `load_control_map` checks structure; it cannot know whether `vhi.prediction.index` is
+    a number or a held state, because that is the target's to declare. So an application
+    that launches its own target resolves *after* startup, not at import — see the
+    examples, which all build their bus lazily for exactly this reason.
+
+::: myogestic.controls.load_control_map
+
+::: myogestic.controls.resolve
+
+::: myogestic.controls.Capability
+
+::: myogestic.controls.ControlMap
+
+::: myogestic.controls.Binding
+
+::: myogestic.controls.TargetRef
+
+::: myogestic.controls.read_control_space
 
 ::: myogestic.controls.ControlSet
 

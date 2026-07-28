@@ -23,10 +23,12 @@ import pathlib
 import numpy as np
 import pytest
 
-from myogestic.controls import ControlBus, load_dofs
+from myogestic.controls import ControlBus
 from myogestic.session import open_session_store
 from myogestic.vhi.legacy import LEGACY_POSE_DOFS, decode_pose, encode_pose
 from myogestic.vhi.target import VhiTarget
+
+from .conftest import build_controls
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 MOVED = FIXTURES / "vhi_pose_moved.session.zip"
@@ -245,7 +247,7 @@ def test_a_recorded_pose_survives_train_then_serve():
             pass
 
     bus = ControlBus(
-        load_dofs({"dofs": dict.fromkeys(names, "continuous")}),
+        build_controls(dict.fromkeys(names, "continuous")),
         targets=[VhiTarget(Sink())],
     )
     bus.push(dict(zip(names, target, strict=True)))

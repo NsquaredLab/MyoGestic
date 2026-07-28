@@ -12,19 +12,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from myogestic.controls import load_dofs
 from myogestic.outputs import LSLOutlet
 from myogestic.sources import LSLSource
 
-CONTROLS = load_dofs(
-    {
-        "dofs": {
+from .conftest import build_controls
+
+CONTROLS = build_controls({
             "index.flexion": "continuous",
             "thumb.flexion": "continuous",
             "wrist.pronation": "continuous",
-        }
-    }
-)
+        })
 
 
 def _roundtrip(name: str, **kwargs) -> object:
