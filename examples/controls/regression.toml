@@ -1,50 +1,17 @@
-# The control space of examples/synthetic/emg_regression.py.
-#
-# Read every line as LEFT = yours, RIGHT = the target's.
-#
-#   LEFT  — your model's output names. The regressor learns one column per continuous
-#           alias, in the order written here, and the example's code says nothing else.
-#           Rename them, reorder them, point them somewhere else tomorrow: MyoGestic
-#           never prescribes these names and never reads meaning out of them.
-#
-#   RIGHT — addresses VHI declares in its own manifest. VHI is what says whether an
-#           address takes a number or a held state, over what range, with which states —
-#           so this file is a *mapping*, not a declaration, and it is not usable until a
-#           running VHI has answered. Ask one what it exports:
-#               uv run --extra grpc python tools/inspect_canonical_control.py
-#
-# An address this build does not export is refused by name when the map is resolved,
-# with the near misses and the full list — never accepted and silently dropped.
+# Map your model's outputs to VHI's controls.
+#   left  = your name, anything you like
+#   right = a control VHI declares (it owns the kind, range and states)
+# See what a running VHI exports:  uv run --extra grpc python tools/inspect_canonical_control.py
+# Full reference: docs/api/controls.md
 
 [dofs]
 
-# --- five continuous flexion DOFs, one per digit -----------------------------------
-#
-# What the CatBoost regressor predicts. The explicit `.flexion` axis is deliberate: the
-# thumb also exports `vhi.prediction.thumb.abduction`, and this example leaves abduction
-# out to keep the regression learnable from synthetic EMG. The short form
-# `vhi.prediction.thumb` names the same channel as `vhi.prediction.thumb.flexion` —
-# flexion is the primary axis — but spelling the axis out states the choice.
+# One regressed output per digit.
 thumb = "vhi.prediction.thumb.flexion"
 index = "vhi.prediction.index.flexion"
 middle = "vhi.prediction.middle.flexion"
 ring = "vhi.prediction.ring.flexion"
 little = "vhi.prediction.little.flexion"
 
-# --- one discrete gesture ----------------------------------------------------------
-#
-# The pose the operator commands while recording, so the control hand holds one gesture
-# per class and the recorded kinematics settle to a static value per class — which is
-# what the regressor learns to map EMG amplitude back onto.
-#
-# It is discrete because *VHI says so*: `vhi.control.gesture` declares itself a held
-# state whose states are whatever movements this build offers ("Rest", "Fist", ...).
-# Nothing on this side of the file chose that, and nothing here lists those states.
-#
-# `debounce_s` is the one thing declared on this side, because it belongs to this control
-# loop rather than to the target: how long a state must hold before it counts as a
-# transition. It is what stops a chattering prediction from flapping the hand.
+# Discrete, per VHI. `debounce_s` gates classifier chatter.
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
-
-# One alias can also fan out to several controls, with a per-target gain — see
-# examples/controls/hand.toml, which tours the whole format.

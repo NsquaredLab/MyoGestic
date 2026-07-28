@@ -1,42 +1,15 @@
-# Control map for examples/synthetic/emg_popout_layout.py — the per-class hand poses
-# that demo sends when a class is predicted.
-#
-# Two vocabularies meet here, and keeping them apart is the whole point:
-#
-#   LEFT  — yours. `thumb_flexion` is only this example's name for one model output.
-#           Rename it here and in HAND_POSES and nothing else notices: MyoGestic never
-#           prescribes these names and never reads meaning out of them.
-#
-#   RIGHT — the target's. `vhi.prediction.thumb.flexion` is an address VHI declares in
-#           its own manifest, along with everything needed to send it correctly: number
-#           or held state, its range, its neutral value, its states. Ask a running VHI
-#           what it exports:
-#               uv run --extra grpc python tools/inspect_canonical_control.py
-#
-# The example resolves this file against a *live* VHI, which is why it cannot resolve at
-# import time — the app launches VHI from its own Processes panel. An address this build
-# does not export is then reported by name, with the near misses and the full list,
-# rather than quietly driving nothing.
+# Map your model's outputs to VHI's controls.
+#   left  = your name, anything you like
+#   right = a control VHI declares (it owns the kind, range and states)
+# See what a running VHI exports:  uv run --extra grpc python tools/inspect_canonical_control.py
+# Full reference: docs/api/controls.md
 
 [dofs]
 
-# The six joints this rig renders, one alias each. The explicit axis form is used here
-# because the thumb has two axes: its short address `vhi.prediction.thumb` is declared to
-# mean flexion, so abduction has to be asked for by name.
+# One output per digit.
 thumb_curl = "vhi.prediction.thumb.flexion"
 thumb_spread = "vhi.prediction.thumb.abduction"
 index_curl = "vhi.prediction.index.flexion"
 middle_curl = "vhi.prediction.middle.flexion"
 ring_curl = "vhi.prediction.ring.flexion"
 little_curl = "vhi.prediction.little.flexion"
-
-# Every one of those resolves to a *signed* control, because VHI declares [-1, 1] with 0
-# at rest. That is what lets the "Open" pose in HAND_POSES send -0.5 and get extension
-# instead of a value clamped away at rest.
-#
-# Note what is absent: there is no wrist prediction address, because this rig has no
-# wrist joint to drive. Wrist movements exist only as gesture presets, on the discrete
-# `vhi.control.gesture` control.
-#
-# One alias may also fan out to several addresses, with an optional per-target weight —
-# see examples/controls/hand.toml for that shape and for a discrete binding.

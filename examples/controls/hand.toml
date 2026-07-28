@@ -1,44 +1,13 @@
-# Map your model's outputs onto a target's controls.
-#
-#     import tomllib
-#     from myogestic.controls import load_control_map, resolve
-#     from myogestic.vhi import virtual_hand
-#
-#     with open("hand.toml", "rb") as f:          # "rb" — tomllib requires binary
-#         control_map = load_control_map(tomllib.load(f))
-#
-#     client = virtual_hand().canonical_client()
-#     controls = resolve(control_map, client.capabilities())
-#
-# Two vocabularies, and the split is the whole point:
-#
-#   LEFT  — yours. Whatever your model calls its outputs. MyoGestic never prescribes
-#           these names, never reads meaning out of them, and never requires them to look
-#           a particular way. Rename them freely; point them somewhere else tomorrow.
-#
-#   RIGHT — the target's. `vhi.prediction.index` is a name VHI declares in its own
-#           manifest, along with everything needed to send it: number or held state, its
-#           range, its neutral value, its states. Ask a running VHI what it exports:
-#               uv run --extra grpc python tools/inspect_canonical_control.py
-#
-# An address this VHI does not export is reported by name at startup, with the near
-# misses and the full list — never accepted and silently ignored.
+# Map your model's outputs to VHI's controls.
+#   left  = your name, anything you like
+#   right = a control VHI declares (it owns the kind, range and states)
+# See what a running VHI exports:  uv run --extra grpc python tools/inspect_canonical_control.py
+# Full reference: docs/api/controls.md
 
 [dofs]
 
-# --- one output, many controls (a weighted fan-out) --------------------------------
-#
-# `fist` is a single model output — one scalar — broadcast to every listed control. Each
-# applies its own declared range and direction, so you do not need a whole-hand
-# capability just to close the hand.
-#
-# The thumb carries a weight because at full flexion it drives through the fingers.
-# Weight defaults to 1.0 and is applied *before* each target's own range conversion, so a
-# target still clamps whatever it receives — a gain scales a value, it cannot smuggle one
-# past what the target accepts.
-#
-# A negative weight is accepted only when the resolved control declares signed motion;
-# otherwise there is no opposite direction to send, and saying so beats clamping it away.
+# One output -> many controls, with an optional per-target weight.
+# Equal weights need no tables:  fist = ["vhi.prediction.index", "vhi.prediction.middle"]
 fist = [
   { target = "vhi.prediction.thumb", weight = 0.6 },
   { target = "vhi.prediction.index" },
@@ -47,35 +16,8 @@ fist = [
   { target = "vhi.prediction.little" },
 ]
 
-
-# --- one output, one control ------------------------------------------------------
-#
-# The common case. `thumb_spread` is your name; the right side is VHI's. The explicit
-# axis form is used here because the short `vhi.prediction.thumb` is declared to mean
-# flexion — the thumb has two axes, so VHI does not guess which one you meant.
+# One output -> one control. The short `...thumb` means flexion, so name the axis.
 thumb_spread = "vhi.prediction.thumb.abduction"
 
-
-# --- a held state ------------------------------------------------------------------
-#
-# Whether an output is a number or a held state is the *target's* declaration, not yours:
-# `vhi.control.gesture` is discrete, so `gesture` resolves to a state machine whose states
-# are whatever movements this VHI offers.
-#
-# `debounce_s` is the one thing declared on this side, because it belongs to your control
-# loop rather than to the target: how long a state must hold before it counts as a
-# transition. It is what stops a chattering classifier from flapping the hand.
+# VHI declares this one discrete. `debounce_s` is yours: how long a state must hold.
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
-
-
-# --- another target, same shape ----------------------------------------------------
-#
-# Nothing above is VHI-specific except the addresses. A keyboard or cursor target exports
-# its own vocabulary the same way, and the same alias can point somewhere else tomorrow
-# without touching your model:
-#
-#   clicker = "keyboard.space"
-#   drive_x = "cursor.x_velocity"
-#
-# Note that two aliases may not target the SAME control: one control cannot take two
-# outputs, so that is refused at resolution rather than letting whichever wrote last win.

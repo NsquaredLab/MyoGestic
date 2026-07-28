@@ -1,42 +1,12 @@
-# Control map for examples/synthetic/emg_classification_grpc.py — one classifier, two
-# outputs: a continuous pose streamed on LSL, and a discrete gesture over gRPC.
-#
-#     import tomllib
-#     from myogestic.controls import load_control_map, resolve
-#
-#     with open("classification_grpc.toml", "rb") as f:  # "rb" — tomllib wants binary
-#         control_map = load_control_map(tomllib.load(f))
-#
-#     controls = resolve(control_map, virtual_hand().canonical_client().capabilities())
-#
-# Two vocabularies meet here, and keeping them apart is the whole point:
-#
-#   LEFT  — yours. `fist` and `gesture` are this example's own names for its two model
-#           outputs. MyoGestic never prescribes them, never reads meaning out of them,
-#           and never requires them to look canonical. Rename them freely.
-#
-#   RIGHT — the target's. VHI declares `vhi.prediction.index` in its own manifest,
-#           along with everything needed to send it: number or held state, its range,
-#           its neutral value, its states. Ask a running VHI what it exports:
-#               uv run --extra grpc python tools/inspect_canonical_control.py
-#
-# Because the semantics live on the right, nothing here is usable until a VHI has
-# answered — and an address this build does not export is reported by name at startup,
-# with the near misses and the full list, rather than silently ignored.
+# Map your model's outputs to VHI's controls.
+#   left  = your name, anything you like
+#   right = a control VHI declares (it owns the kind, range and states)
+# See what a running VHI exports:  uv run --extra grpc python tools/inspect_canonical_control.py
+# Full reference: docs/api/controls.md
 
 [dofs]
 
-# --- the classified pose: one output, six controls ---------------------------------
-#
-# The classifier produces a single scalar — how closed the hand is — and it is
-# broadcast to every control listed. Each applies its own declared range and
-# direction, so closing the hand needs neither a whole-hand capability on the VHI side
-# nor a per-finger output on the model side.
-#
-# The thumb is addressed by axis because it has two: the short form
-# `vhi.prediction.thumb` is declared to mean flexion, and abduction is its own
-# address. Abduction is in the fan-out deliberately — a VHI fist abducts the thumb, so
-# leaving it out renders a fist with the thumb still lying alongside the fingers.
+# One output, fanned out to every finger.
 fist = [
   "vhi.prediction.thumb.flexion",
   "vhi.prediction.thumb.abduction",
@@ -46,17 +16,5 @@ fist = [
   "vhi.prediction.little",
 ]
 
-# --- the classified gesture: a held state ------------------------------------------
-#
-# Whether an output is a number or a held state is the *target's* declaration, not
-# yours: `vhi.control.gesture` is discrete, so `gesture` resolves to a state machine
-# whose states are whatever movements this VHI offers ("Rest", "Fist", pinches, the
-# wrist movements the prediction controls cannot reach). That is why the example sends
-# its class names verbatim instead of declaring a state list of its own.
-#
-# `debounce_s` is the one thing declared on this side, because it is a property of
-# your control loop rather than of the target: how long a state must hold before it
-# counts as a transition. Commanding a movement re-triggers VHI's animation, and the
-# tick-to-tick argmax flickers during the ~0.2 s sliding-window transition after a
-# gesture — without this the control hand visibly jumps between poses before settling.
+# Discrete, per VHI. `debounce_s` gates classifier chatter.
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
