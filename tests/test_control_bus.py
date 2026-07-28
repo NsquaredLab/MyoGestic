@@ -270,3 +270,156 @@ def test_a_clip_is_reported_once_not_every_tick():
         bus.push({"a.flexion": 9.0})
     assert len(warnings) == 1, "a per-tick warning erases the log that explains it"
     assert "a.flexion" in warnings[0]
+
+
+# --- the three layers, and the boundaries between them --------------------------
+#
+# Smoothing is not one mechanism. Continuous DOFs are numerically filtered; discrete
+# DOFs are *stability gated*; a renderer may additionally blend for appearance. The
+# tests below pin the boundaries, because collapsing any two of them is a bug and each
+# collapse has its own failure mode.
+
+
+def test_layer_1_continuous_smoothing_actually_ramps():
+    """A step must arrive as a ramp — otherwise `smoothing` is doing nothing.
+
+    The filter is settled at rest first: a one-euro filter's very first sample passes
+    through unchanged, correctly, because there is nothing yet to interpolate from.
+    """
+    from myogestic.outputs.filters import OneEuroFilter
+
+    rec = Recorder()
+    bus = ControlBus(MIXED, targets=[rec], smoothing=OneEuroFilter(), hz=50)
+    for _ in range(4):
+        bus.push({"a.flexion": 0.0, "hand.grasp": "rest"})
+    settled = len(rec.frames)
+
+    for _ in range(6):
+        bus.push({"a.flexion": 1.0, "hand.grasp": "rest"})
+    ramp = [f[0]["a.flexion"] for f in rec.frames[settled:]]
+    assert ramp[0] < 1.0, f"the step must lag rather than jump: {ramp}"
+    assert ramp == sorted(ramp), f"a step should approach monotonically, got {ramp}"
+    assert ramp[-1] > ramp[0], "and it must actually be approaching"
+
+
+def test_layer_1_smoothing_is_applied_before_the_target_sees_anything():
+    """Authoritative means *before* delivery: two targets must never disagree."""
+    from myogestic.outputs.filters import OneEuroFilter
+
+    a, b = Recorder(), Recorder()
+    bus = ControlBus(MIXED, targets=[a, b], smoothing=OneEuroFilter(), hz=50)
+    for _ in range(4):
+        bus.push({"a.flexion": 1.0})
+    assert [f[0]["a.flexion"] for f in a.frames] == [f[0]["a.flexion"] for f in b.frames]
+
+
+def test_layer_2_a_discrete_dof_is_never_numerically_filtered():
+    """The invariant the split exists for.
+
+    Averaging "rest" and "fist" would interpolate through a state nobody selected. A
+    discrete value must always be exactly one of its declared states, no matter what
+    filter is configured — the filter only ever sees the continuous vector.
+    """
+    from myogestic.outputs.filters import OneEuroFilter
+
+    rec = Recorder()
+    bus = ControlBus(MIXED, targets=[rec], smoothing=OneEuroFilter(), hz=50)
+    for state in ("rest", "fist", "rest", "fist", "fist", "rest"):
+        bus.push({"a.flexion": 0.5, "hand.grasp": state})
+    delivered = [f[0]["hand.grasp"] for f in rec.frames]
+    assert set(delivered) <= {"rest", "fist"}, delivered
+    for value in delivered:
+        assert isinstance(value, str), f"a filtered discrete value would be a float: {value!r}"
+
+
+def test_layer_2_the_filter_only_ever_sees_continuous_channels():
+    """Proven by inspecting the vector handed to the filter, not just the output."""
+    widths: list[int] = []
+
+    def spy(vec):
+        widths.append(len(vec))
+        return vec
+
+    ControlBus(MIXED, targets=[Recorder()], smoothing=spy, hz=50).push(
+        {"a.flexion": 0.2, "g.force": 0.4, "hand.grasp": "fist"}
+    )
+    # Two continuous DOFs in MIXED; the discrete one is not in the vector at all.
+    assert widths == [2]
+
+
+def test_layer_2_debounce_gates_a_chattering_classifier():
+    """The thing a low-pass filter cannot do for a discrete control.
+
+    A classifier flickering between states tick to tick must produce *no* transition
+    until one state holds — not an averaged in-between, and not a stream of edges.
+    """
+    controls = load_dofs(
+        {
+            "dofs": {
+                "hand.grasp": {
+                    "kind": "discrete",
+                    "states": ["rest", "fist"],
+                    "rest": "rest",
+                    "debounce_s": 0.06,  # 3 ticks at 50 Hz
+                }
+            }
+        }
+    )
+    rec = Recorder()
+    bus = ControlBus(controls, targets=[rec], hz=50)
+    for state in ("fist", "rest", "fist", "rest", "fist", "rest"):
+        bus.push({"hand.grasp": state})
+    assert all(not f[1] for f in rec.frames), "chatter must not produce a single edge"
+
+    for _ in range(4):
+        bus.push({"hand.grasp": "fist"})
+    assert any(f[1] == {"hand.grasp": "fist"} for f in rec.frames), "a settled state must fire"
+
+
+def test_layer_2_a_settled_state_fires_exactly_once():
+    """A held state is not an event stream — re-sending it must not re-fire."""
+    rec = Recorder()
+    bus = ControlBus(MIXED, targets=[rec], hz=50)
+    for _ in range(8):
+        bus.push({"hand.grasp": "fist"})
+    fired = [f[1] for f in rec.frames if f[1]]
+    assert len(fired) == 1, fired
+
+
+def test_the_two_gates_are_independent():
+    """Debounce must not delay a continuous value, nor smoothing delay a transition."""
+    from myogestic.outputs.filters import OneEuroFilter
+
+    controls = load_dofs(
+        {
+            "dofs": {
+                "a.flexion": "continuous",
+                "hand.grasp": {
+                    "kind": "discrete",
+                    "states": ["rest", "fist"],
+                    "rest": "rest",
+                    "debounce_s": 0.1,
+                },
+            }
+        }
+    )
+    rec = Recorder()
+    bus = ControlBus(controls, targets=[rec], smoothing=OneEuroFilter(), hz=50)
+    bus.push({"a.flexion": 1.0, "hand.grasp": "fist"})
+    # The continuous channel is delivered on the very first tick even though the
+    # discrete one is still inside its debounce window.
+    assert rec.frames[0][0]["a.flexion"] != 0.0
+    assert rec.frames[0][1] == {}
+
+
+def test_layer_3_is_not_represented_in_the_bus_at_all():
+    """Renderer blending is the target's business, and the bus has no opinion on it.
+
+    If the bus grew a "visual smoothing" setting it would be the second authoritative
+    smoother, and two authorities is how a commanded value stops being knowable.
+    """
+    import inspect
+
+    params = set(inspect.signature(ControlBus.__init__).parameters)
+    assert params & {"smoothing", "hysteresis", "dead_zone"}
+    assert not {p for p in params if "blend" in p or "visual" in p or "present" in p}

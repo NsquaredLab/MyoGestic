@@ -4,17 +4,24 @@ The **Virtual Hand Interface (VHI)** is the Godot-based 3-D hand
 visualisation that ships alongside MyoGestic. It can be driven on two
 planes at once:
 
-* **LSL data plane** - high-rate continuous pose. The 9-channel
-  `MyoGestic_Output` outlet streams a `[-1, 1]` pose vector every tick;
-  VHI renders it directly on the *predicted hand*.
-* **gRPC control plane** - discrete, idempotent control. RPCs like
-  `SetMovement`, `SetSessionActive`, `SetControlMode` make the *control
-  hand* play canonical movements, freeze, switch modes, or report state
-  back to MyoGestic.
+* **LSL data plane** - high-rate continuous values. Continuous DOFs stream
+  every tick; VHI renders them on the *predicted hand*.
+* **gRPC control plane** - the negotiation, discrete state, and verification.
+  `Declare` agrees a control space by *name*, `SetControl` carries held
+  states, and a separate recording aid gates a session and drives training
+  trajectories.
 
-You don't have to pick one - most examples use both. Classifier output
-becomes a `SetMovement` RPC on class change; regression output streams as
-a continuous 9-vec.
+You don't have to pick one, and mostly you don't choose at all: declare what
+you control and hand it to a
+[`ControlBus`](../api/controls.md) with a `VhiTarget`. The target negotiates,
+puts continuous values on LSL, and sends discrete states over gRPC.
+
+!!! tip "Declare DOFs, don't push channels"
+    The rest of this page shows the transport underneath, which is worth
+    understanding when something misbehaves. But application code should not
+    contain channel indices or sign flips — that is what `VhiTarget` is for,
+    and the four wrong pose tables this project fixed all came from hand-written
+    channel maps.
 
 ![VHI dual-plane integration](../images/vhi-integration.svg){ align=center }
 
@@ -25,7 +32,8 @@ from myogestic.vhi.interfaces import virtual_hand
 
 vhi = virtual_hand()                  # resolves install path + gRPC endpoint
 vhi_outlet = vhi.outlet()             # 9-ch LSL outlet @ 32 Hz
-vhi_client = vhi.control_client()     # fire-and-forget gRPC client
+vhi_canonical = vhi.canonical_client()   # negotiates the control space (v2)
+training_aid = vhi.training_client()     # recording session gate + training programs
 ```
 
 `virtual_hand()` looks at `$VHI_PATH`, the per-user install root, and the
@@ -140,63 +148,98 @@ def ui(ctx):
 
 See [Post-process predictions](post-process-output.md) for filter tuning.
 
-## Plane 2 - discrete control over gRPC
+## Plane 2 - discrete state and negotiation over gRPC
 
-For classifier output, the right primitive isn't "push a pose every
-tick" - it's "tell VHI to play movement X *when the class changes*". The
-gRPC client is the discrete-event sibling of the LSL outlet:
+For classifier output the right primitive isn't "push a pose every tick" — it's
+"hold state X, and change it only when the class has actually settled". That is a
+**canonical discrete DOF**, and the bus owns the gating:
 
 ```python
-from myogestic.outputs import EdgeTrigger
+from myogestic.controls import ControlBus, load_dofs
+from myogestic.vhi import VhiTarget
 
-CLASSES = ["Rest", "Fist", "Pinch", "Point"]
-
-trigger = EdgeTrigger(callback=vhi_client.set_movement)
+CONTROLS = load_dofs({
+    "dofs": {
+        "hand.gesture": {
+            "kind": "discrete",
+            "states": ["rest", "fist", "pinch", "point"],
+            "rest": "rest",
+            "debounce_s": 0.1,       # hold a state this long before it counts
+        }
+    }
+})
+target = VhiTarget(vhi.outlet(), client=vhi_canonical)
+bus = ControlBus(CONTROLS, targets=[target], hz=32)
 
 @pipeline.predict
 def predict(model, features):
     class_idx = int(np.argmax(model.predict_proba(features)))
-    trigger.fire_if_changed(CLASSES[class_idx])
+    bus.push({"hand.gesture": CLASSES[class_idx].lower()})
     return {"class": class_idx}
 ```
 
-`EdgeTrigger` suppresses the per-tick repeats so the RPC only fires on
-the rising edge of a class change. See [the EdgeTrigger
-concept](../concepts/edge-trigger.md) for `rebase()` and the
-thread-safety story.
+`debounce_s` is declared on the DOF rather than wrapped around the client, because
+it is a property of the control: a classifier flickering tick-to-tick must produce
+*no* transition until one state holds. Use `bus.select(...)` for a deliberate click
+— it delivers immediately and rebases the gate so the next predict ticks don't
+re-fire.
 
-The control client is **fire-and-forget**: every method enqueues onto a
-daemon thread that issues the unary RPC with a short deadline.
-Disconnect errors are de-duplicated and logged once. GUI handlers never
-block on a 60 fps render loop.
+!!! warning "Never low-pass filter a discrete control"
+    Smoothing is three separate mechanisms and mixing them up is a bug:
 
-Useful RPCs:
+    | Layer | Where | Applies to |
+    |---|---|---|
+    | Continuous smoothing | `ControlBus(smoothing=...)` | continuous DOFs |
+    | Debounce / hysteresis | declared on the DOF | discrete DOFs |
+    | Presentation blending | `canonical_client().set_presentation(...)` | appearance only |
 
-| Call                                                      | Effect on VHI                                                                 |
-|-----------------------------------------------------------|-------------------------------------------------------------------------------|
-| `set_movement(name)`                                      | Play movement, snap to end pose and hold.                                     |
-| `set_movement(name, cycle=True)`                          | Play full open/close cycle - for **recording regression data**.               |
-| `freeze(True / False)`                                    | Pause / resume control-hand animation.                                        |
-| `set_session_active(True / False)`                        | Gate VHI's local keyboard control while a MyoGestic session is recording.    |
-| `set_control_mode("MOVEMENT" / "STREAM" / "IDLE")`        | Switch the control-hand driver (see "Control-pose streaming" below).         |
-| `set_speed(frequency_hz, hold_time_s, rest_time_s)`       | Adjust movement-cycle timing.                                                 |
-| `set_smoothing(enabled, smoothing_speed)`                 | Toggle predicted-hand smoothing on the VHI side.                              |
-| `set_chirality(right_hand)`                               | Swap to the left-hand model and back.                                         |
-| `get_state()`                                             | **Synchronous** - query connection, current movement, available palette.     |
+    Averaging "rest" and "fist" would interpolate through a state nobody selected,
+    so the bus never passes a discrete value through a filter — the filter only
+    ever sees the continuous vector. And renderer blending, while worth having,
+    cannot make an unstable prediction stable: with blending on and no debounce a
+    hand still jumps between states, just smoothly.
 
-`get_state()` is the one synchronous call. Use it on startup or an
-explicit GUI refresh button - never in the render loop.
+### The clients
+
+Both gRPC clients are constructed from the interface spec, and both degrade rather
+than raise when VHI is older or absent:
+
+| Call | Effect |
+|---|---|
+| `canonical_client().declare(controls)` | Negotiate. Returns `None` when VHI does not speak v2 — `VhiTarget` then falls back on its own. |
+| `canonical_client().set_control(...)` | Command a frame. Fire-and-forget; safe from the predict thread. |
+| `canonical_client().sweep(name)` | Drive one DOF across its range and report which bones moved, in signed degrees. Verification only — it animates a joint. |
+| `canonical_client().set_presentation(blend=...)` | Renderer blending. Appearance only. |
+| `training_aid.set_recording_session(True / False)` | Gate VHI's local keyboard so a recording has one movement source. |
+| `training_aid.start_program(movement, frequency_hz=...)` | Cycle the control hand to generate a training trajectory. |
+| `training_aid.state()` | Movements, current movement, whether a program is running. |
+
+`declare`, `sweep` and the aid's calls are **synchronous** — they are setup, teardown
+and verification, and a caller needs the answer. `set_control` is fire-and-forget on a
+worker thread, so it never blocks a 60 fps render loop.
+
+!!! note "Recording is not control"
+    The training program deliberately keeps the control hand *moving*, which is the
+    opposite of what a discrete DOF means. That is exactly why it lives in a separate
+    service: collecting training data must not redefine "hold this state". While a
+    program runs it owns the control hand, and discrete DOFs are refused with the
+    reason rather than silently interrupting the trajectory a recording is aligned
+    against.
 
 ## A ready-made movement palette
 
-`VhiMovementPanel` packages "fetch state in the background, render the
-movement buttons, dispatch clicks through gRPC" into one widget. Drop it
-in a grid cell and forget about it:
+`VhiMovementPanel` packages "fetch control-hand state in the background, render the
+movement buttons, dispatch clicks" into one widget. It reads the recording aid for
+state and takes the click handler explicitly — wire it to a canonical DOF, because
+dispatching straight at the renderer would bypass the debounce:
 
 ```python
 from myogestic.widgets.vhi.panel import VhiMovementPanel
 
-panel = VhiMovementPanel(vhi_client)
+panel = VhiMovementPanel(
+    training_aid,
+    lambda state: bus.select("hand.gesture", state.lower()),
+)
 
 @app.ui
 def ui(ctx):
@@ -204,36 +247,49 @@ def ui(ctx):
         panel.ui()
 ```
 
-Pass `on_movement=` to layer a side-effect on click - e.g. snap a
-session label, or rebase the predict-side `EdgeTrigger` so the next
-tick doesn't re-fire what the button just did:
+The handler is where you layer side-effects on a click — snap a session label, drive
+a fake generator, whatever the experiment needs:
 
 ```python
 def _on_movement_click(name: str) -> None:
-    vhi_client.set_movement(name)
-    trigger.rebase(name)
-
-panel = VhiMovementPanel(vhi_client, on_movement=_on_movement_click)
+    ctrl_outlet.push_sample(...)                    # e.g. drive the EMG generator
+    bus.select("hand.gesture", name.lower())        # deliver + rebase the debounce
 ```
 
-## Control-pose streaming (STREAM mode)
+`bus.select` is the important part: it delivers the state immediately *and* rebases
+the DOF's stability gate, so the next predict ticks — still carrying the old
+sliding-window class — do not re-fire what the button just did.
 
-Some workflows - e.g. continuous regression where the control hand is
-the *target* - want to drive the control hand from a pose vector instead
-of canonical movements. Put VHI into **STREAM** mode and push to the
-`MyoGestic_ControlPose` outlet:
+## Driving the control hand as a recording target
+
+Some workflows — continuous regression, where the control hand is the *target* the
+model learns — want the control hand to move on its own so the recorded kinematics
+sweep a range. That is what the **recording aid** is for:
 
 ```python
-control_pose = vhi.control_outlet()       # 9-ch LSL outlet @ 32 Hz
-vhi_client.set_control_mode("STREAM")     # SetMovement is rejected in STREAM mode
-
-@some_recording_loop
-def recording_tick(pose_target):
-    control_pose.push(pose_target)
+training_aid.start_program("Fist", frequency_hz=0.7)   # cycles, producing a trajectory
+...
+training_aid.stop_program()                            # stops and rests the hand
 ```
 
-Switch back with `set_control_mode("MOVEMENT")` (the default), or
-`"IDLE"` to make the control hand hold rest.
+A training program is deliberately *not* a control primitive. It exists so that
+collecting data never has to redefine what a discrete DOF means: a discrete DOF holds
+a state, and a program sweeps — two different jobs, two different vocabularies. While
+a program runs it owns the control hand and discrete DOFs are refused with the reason.
+
+Wrap a recording in the session gate so VHI's local keyboard cannot compete as a
+movement source:
+
+```python
+def _on_record() -> None:
+    app.start_recording()
+    if not training_aid.set_recording_session(True):
+        app.ctx.log("no VHI recording gate — the keyboard is not blocked")
+```
+
+It returns `False` rather than raising when the aid is unavailable, because whether an
+ungated recording is acceptable is a judgement about experiment integrity and not the
+client's to make.
 
 ## Testing without VHI
 
@@ -257,16 +313,18 @@ when VHI is running - the proto is at
 See the full **[Troubleshooting](../troubleshooting.md)** index for
 symptom-organised debugging.
 
-* **Pushing the wrong shape.** VHI expects a 9-vec. `(1, 9)` or any
-  other shape breaks the outlet's metadata. Use
-  `np.asarray(pose, dtype=np.float32).reshape(9)` if unsure.
-* **Re-firing `SetMovement` every tick.** Wrap the call in an
-  [`EdgeTrigger`](../concepts/edge-trigger.md). Continuous re-fire is
-  harmless for idempotency but re-triggers the animation cycle.
-* **Forgetting `set_session_active(False)` on session end.** VHI keeps
-  ignoring its own keyboard until you toggle it back.
-* **Pushing to `control_outlet()` outside STREAM mode.** VHI ignores
-  the stream - switch the mode first.
+* **Building the wire frame by hand.** Declare DOFs and let `VhiTarget` encode. A
+  hand-built frame is correct for exactly one wire convention, and VHI's continuous
+  inlet now takes canonical values while older builds want the negated legacy pose —
+  so a hand-built frame is silently inverted on one of them.
+* **Numerically filtering a discrete control.** It interpolates through states nobody
+  selected. Declare `debounce_s` on the DOF instead; see the smoothing table above.
+* **Relying on renderer blending to steady a classifier.** It cannot. Blending changes
+  how a commanded value looks, not whether it is stable.
+* **Forgetting `set_recording_session(False)` on session end.** VHI keeps ignoring its
+  own keyboard until you toggle it back.
+* **Leaving a training program running.** It keeps the control hand moving and refuses
+  discrete DOFs. `stop_program()` is idempotent — call it in teardown regardless.
 * **Forgetting `pose_filter.reset()` on retrain.** The first few smoothed
   frames blend the new model's first prediction with the old model's
   last; looks like a brief pose drift on every train cycle.
