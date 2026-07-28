@@ -1,7 +1,7 @@
 # Examples directory
 
 Every runnable example under [`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic),
-what it teaches, and what's tweakable. All six are hardware-free - the
+what it teaches, and what's tweakable. All of them are hardware-free - the
 `ProcessLauncher` panel spawns `myogestic.tools.emg_generator` for you,
 so one terminal is enough.
 
@@ -17,10 +17,20 @@ uv sync --extra examples --extra grpc # adds the gRPC-control examples
 uv run python examples/synthetic/<name>.py
 ```
 
+### From VS Code
+
+`.vscode/launch.json` is committed, so **Run and Debug** lists every example on this
+page, the walkthrough, and the VHI prerequisites by name — with the extras synced by a
+`preLaunchTask` first, so a fresh clone works on the first press of F5. The entries say
+which need a display, which need a running Virtual Hand, and which need someone watching
+the hand. Read the comments at the top of the file for the one thing worth knowing in
+advance: the installed VHI release is pre-v2, so a v2 manifest needs source-mode.
+
 ## The control file
 
-All six examples declare what they control by *name*. A ready-to-copy TOML declaration
-ships at
+Each example maps its own output names onto controls the target declares, in a file of
+its own under [`examples/controls/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/controls).
+A ready-to-copy declaration ships at
 [`examples/controls/hand.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/hand.toml)
 — signed continuous DOFs, a discrete grasp state, a one-way range, and a `debounce_s`
 stability gate, with the mapping-first short forms alongside the explicit table form.
@@ -34,7 +44,7 @@ uv run --extra grpc python tools/inspect_canonical_control.py
 That runs safely with no Virtual Hand at all, and prints a different section for a v2
 build, a pre-v2 build, and nothing running.
 
-## The six examples
+## The examples
 
 ### `emg_classification.py` - start here
 
@@ -130,6 +140,22 @@ uv run python examples/synthetic/emg_popout_layout.py
 docking with the `Grid` layout from
 [Grid layout](../concepts/grid-layout.md) for the in-window panels.
 
+### `vhi_control_hand.py` - the operator's hand, not the model's
+
+The only example that drives `vhi.control.pose.*` instead of `vhi.prediction.*`: sliders
+pose the hand an operator sets up by hand, on its own stream. Both namespaces number
+channels from 0, so `VhiTarget(..., stream="control_pose")` is what keeps a control-pose
+address off the other hand's channel — and it declares the stream during negotiation,
+which is how the renderer knows to read a pose instead of animating its own movements.
+
+```bash
+uv run --extra grpc python examples/synthetic/vhi_control_hand.py
+```
+
+**What to tweak:** add a mapping to
+[`examples/controls/control_hand.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/control_hand.toml)
+— a slider appears for it and nothing else changes.
+
 ## Choosing where to start
 
 * **Brand new** - [Anatomy of an app](../anatomy.md) →
@@ -141,6 +167,7 @@ docking with the `Grid` layout from
   `emg_regression.py` → swap in `_raulnet` for the deep variant.
 * **Comparing models** - `emg_32ch_multi_model.py`.
 * **Multi-monitor / docking** - `emg_popout_layout.py`.
+* **Posing the control hand for setup or labelling** - `vhi_control_hand.py`.
 * **Custom extension point** - skip the examples and read the
   [how-to guides](../how-to/index.md) - each is a recipe for one
   extension point.
