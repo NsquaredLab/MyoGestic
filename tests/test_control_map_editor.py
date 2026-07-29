@@ -305,3 +305,187 @@ class TestItWorksWithoutATarget:
         editor._connect()
         assert editor.capabilities == ()
         assert "No target answered" in editor._message
+
+
+class TestTheFileCanBeEditedAsText:
+    """The other way in: type TOML directly, not just fill fields.
+
+    Same contract as the fields, from the other direction — nothing invalid gets into the
+    working copy, so `Save` still cannot write a file that would not load back. That is
+    what makes a free-text box safe to point at a file something else is reading.
+    """
+
+    def test_the_text_is_the_file_verbatim_when_nothing_has_changed(self, tmp_path):
+        """Comments included — opening the text view must not silently eat them."""
+        path = tmp_path / "controls.toml"
+        path.write_text("# my notes\n[dofs]\nclose = \"vhi.prediction.index\"\n")
+        editor = ControlMapEditor(path, client=_Client())
+        editor.load()
+        assert editor.raw_text().startswith("# my notes")
+
+    def test_it_renders_from_the_fields_once_they_have_diverged(self, tmp_path):
+        """Stale text beside live fields is worse than losing the comments."""
+        editor = _editor(tmp_path, GOOD)
+        editor.add_control("extra", "vhi.prediction.thumb")
+        assert "extra" in editor.raw_text()
+
+    def test_valid_text_replaces_the_working_copy(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        assert editor.apply_raw(
+            '[dofs]\ngrip = { target = "vhi.prediction.thumb", weight = 0.5 }\n'
+        )
+        assert [e["alias"] for e in editor._draft] == ["grip"]
+        assert editor._draft[0]["targets"] == [["vhi.prediction.thumb", 0.5]]
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("[dofs", "Not valid TOML"),
+            ("[settings]\nx = 1\n", "No [dofs] table"),
+            ('[dofs]\nx = "nope"\n', "is not a target address"),
+            ('[dofs]\nx = { target = "vhi.prediction.index", threshold_fraction = 7 }\n',
+             "threshold_fraction"),
+        ],
+        ids=["malformed", "no-dofs", "bad-address", "bad-fraction"],
+    )
+    def test_bad_text_is_refused_with_the_reason(self, tmp_path, text, expected):
+        editor = _editor(tmp_path, GOOD)
+        before = [dict(entry) for entry in editor._draft]
+        assert editor.apply_raw(text) is False
+        assert expected in editor._raw_error
+        assert editor._draft == before, "a refused apply must change nothing"
+
+    def test_text_that_parses_but_would_not_bind_still_blocks_the_save(self, tmp_path):
+        """Two aliases on one channel: valid TOML, valid addresses, unusable map."""
+        editor = _editor(tmp_path, GOOD)
+        original = editor.path.read_text()
+        assert editor.apply_raw(
+            '[dofs]\na = "vhi.prediction.thumb"\nb = "vhi.prediction.thumb.flexion"\n'
+        ), "the text itself is valid, so applying it succeeds"
+        assert editor.problems(), "but the map is not usable"
+        assert editor.save() is False
+        assert editor.path.read_text() == original
+
+    def test_a_round_trip_through_the_text_changes_nothing(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        before = editor.as_control_map().as_dict()
+        assert editor.apply_raw(editor.raw_text())
+        assert editor.as_control_map().as_dict() == before
+
+    def test_unparseable_text_on_disk_is_shown_so_it_can_be_fixed(self, tmp_path):
+        """The editor has to be usable *on* a broken file, not just a good one."""
+        path = tmp_path / "controls.toml"
+        path.write_text("[dofs\nbroken =\n")
+        editor = ControlMapEditor(path, client=_Client())
+        editor.load()
+        assert "broken" in editor.raw_text()
+
+
+class TestThePickerRowsAreReadable:
+    """What a row says is the only thing standing between a user and the address syntax.
+
+    The list has one genuine surprise in it: a renderer publishes the short and the
+    explicit-axis form of a control as two addresses on **one** channel, so eleven rows
+    can mean six controls. A row that hides that invites someone to map two of their
+    outputs onto the same finger and only find out at the save.
+    """
+
+    @pytest.fixture
+    def editor(self, tmp_path):
+        return _editor(tmp_path, GOOD)
+
+    @pytest.mark.parametrize(
+        "address",
+        [
+            "vhi.prediction.thumb",
+            "vhi.prediction.thumb.flexion",
+            "vhi.control.pose.thumb",
+            "vhi.control.gesture",
+        ],
+    )
+    def test_a_row_shows_the_address_the_file_uses(self, editor, address):
+        """No prettier short form. A shortened name is a second vocabulary for the same
+        thing: you would read `thumb` in the picker and have to know it means
+        `vhi.prediction.thumb` in the TOML."""
+        cap = next(c for c in MANIFEST if c.address == address)
+        assert editor._describe(cap).startswith(address)
+
+    def test_a_row_says_which_channel_it_lands_on(self, editor):
+        cap = next(c for c in MANIFEST if c.address == "vhi.prediction.index")
+        assert "ch2" in editor._describe(cap)
+
+    def test_a_row_says_when_a_control_is_not_streamed(self, editor):
+        off = Capability("vhi.grip.force", "continuous", 0.0, 1.0, 0.0, channel=-1)
+        assert "not streamed" in editor._describe(off)
+
+    def test_a_discrete_row_says_states_and_that_it_goes_over_grpc(self, editor):
+        cap = next(c for c in MANIFEST if c.kind == "discrete")
+        described = editor._describe(cap)
+        assert "3 states" in described
+        assert "gRPC" in described
+
+    def test_the_aliased_forms_of_one_control_are_reported_as_peers(self, editor):
+        """`thumb` and `thumb.flexion` are one channel; a user has to be able to see it."""
+        thumb = next(c for c in MANIFEST if c.address == "vhi.prediction.thumb")
+        assert editor._peers(thumb) == ["vhi.prediction.thumb.flexion"]
+        # Reported as addresses too, for the same reason the rows are.
+        assert all(peer.startswith("vhi.") for peer in editor._peers(thumb))
+
+    def test_a_control_with_its_own_channel_has_no_peers(self, editor):
+        alone = next(c for c in MANIFEST if c.address == "vhi.prediction.index")
+        assert editor._peers(alone) == []
+
+    def test_the_same_channel_on_another_stream_is_not_a_peer(self, editor):
+        """Both hands number from 0 — conflating them would claim two hands are one."""
+        predicted = next(c for c in MANIFEST if c.address == "vhi.prediction.thumb")
+        assert "vhi.control.pose.thumb" not in editor._peers(predicted)
+
+    def test_a_row_carries_nothing_but_the_address_and_its_facts(self, editor):
+        """Three fields, no fourth: the address, what it takes, where it lands."""
+        for cap in MANIFEST:
+            described = editor._describe(cap)
+            assert described.count(cap.address) == 1, "the address, exactly once"
+            assert ("ch" in described) or ("gRPC" in described) or (
+                "not streamed" in described
+            )
+
+
+class TestTheRangeIsOnlyShownWhenItIsNews:
+    """`[-1..+1]` on all twenty-two rows is not information, it is wallpaper.
+
+    Signed and normalized is the standard, and every control a Virtual Hand declares uses
+    it — so printing it on every line trains the eye to skip the column, which is exactly
+    where a one-way `[0..1]` would then hide. It is stated when it differs and left unsaid
+    when it does not; the selected control's full facts are on the picker's own tooltip.
+    """
+
+    @pytest.fixture
+    def editor(self, tmp_path):
+        return _editor(tmp_path, GOOD)
+
+    def test_the_signed_default_is_left_unsaid(self, editor):
+        cap = next(c for c in MANIFEST if c.address == "vhi.prediction.index")
+        described = editor._describe(cap)
+        assert "-1" not in described and "+1" not in described
+        assert described == "vhi.prediction.index   ch2"
+
+    def test_a_one_way_range_is_called_out(self, editor):
+        one_way = Capability(
+            "vhi.grip.force", "continuous", 0.0, 1.0, 0.0, channel=7,
+            stream_name="MyoGestic_Output",
+        )
+        assert "[+0.0..+1.0]" in editor._describe(one_way)
+
+    def test_an_asymmetric_range_is_called_out(self, editor):
+        odd = Capability(
+            "vhi.wrist.rotation", "continuous", -0.5, 1.0, 0.0, channel=8,
+            stream_name="MyoGestic_Output",
+        )
+        assert "[-0.5..+1.0]" in editor._describe(odd)
+
+    def test_the_full_facts_are_still_available_on_the_selected_control(self, editor):
+        """Nothing is lost by leaving the usual case unsaid — `_summary` is the tooltip."""
+        cap = next(c for c in MANIFEST if c.address == "vhi.prediction.index")
+        summary = editor._summary(cap)
+        assert "-1.0" in summary and "+1.0" in summary
+        assert "channel 2" in summary

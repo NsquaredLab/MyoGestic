@@ -162,6 +162,77 @@ class TestTheEditorFitsTheWidthItIsGiven:
         assert _overflow(_context, width, editor.ui) == pytest.approx(0.0, abs=1.0)
 
 
+def _widest_overhang(io, width: int, draw, watch) -> float:
+    """How far past the panel's content edge the item drawn by `watch` reaches.
+
+    A second metric, and the honest one for a full-width item. `_overflow` enables a
+    horizontal scrollbar so ImGui will report a content extent — but that flag *changes*
+    how a `-1` ("fill available") width resolves, so it reports a false overhang for the
+    one item in this widget that uses it. This renders in a plain window and compares the
+    item's own right edge to the window's content edge, which nothing perturbs.
+    """
+    seen = [0.0]
+    original = getattr(imgui, watch)
+
+    def spy(*args, **kwargs):
+        result = original(*args, **kwargs)
+        style = imgui.get_style()
+        limit = (
+            imgui.get_window_pos().x + imgui.get_window_width() - style.window_padding.x
+        )
+        seen[0] = imgui.get_item_rect_max().x - limit
+        return result
+
+    setattr(imgui, watch, spy)
+    try:
+        io.display_size = imgui.ImVec2(width + 40, 1400)
+        for _ in range(4):
+            imgui.new_frame()
+            imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+            imgui.set_next_window_size(imgui.ImVec2(width, 1400))
+            imgui.begin("plain", None, imgui.WindowFlags_.no_saved_settings)
+            draw()
+            imgui.end()
+            imgui.end_frame()
+    finally:
+        setattr(imgui, watch, original)
+    return seen[0]
+
+
+class TestTheTextViewFitsToo:
+    """The free-text editor is the widest thing in the panel when it is open."""
+
+    @staticmethod
+    def _open(editor):
+        editor._raw = editor.raw_text()
+
+        def draw():
+            original = imgui.collapsing_header
+            imgui.collapsing_header = lambda label, *a, **k: True   # as if expanded
+            try:
+                editor.ui()
+            finally:
+                imgui.collapsing_header = original
+
+        return draw
+
+    @pytest.mark.parametrize("width", (240, *WIDTHS))
+    def test_the_text_box_stays_inside_the_panel(self, _context, tmp_path, width):
+        """Measured on the box's own edge, since it is the one `-1`-width item here."""
+        editor = _editor(tmp_path)
+        overhang = _widest_overhang(
+            _context, width, self._open(editor), "input_text_multiline"
+        )
+        assert overhang <= 0.0, f"the text box is {overhang:.0f}px past the edge"
+
+    @pytest.mark.parametrize("width", (240, *WIDTHS))
+    def test_the_apply_buttons_stay_inside_the_panel(self, _context, tmp_path, width):
+        """Three long labels; below ~420px they have to wrap rather than run off."""
+        editor = _editor(tmp_path)
+        overhang = _widest_overhang(_context, width, self._open(editor), "button")
+        assert overhang <= 0.0, f"a button is {overhang:.0f}px past the edge"
+
+
 class TestTheActionsStayReachable:
     """Save and Reload are the two things a user cannot work around."""
 
@@ -251,3 +322,106 @@ class TestThePlaygroundPicksALayoutForTheWidth:
         # The whole point: the wide layout gives the editor the slack, so the control
         # column is Px and the editor column is Fr.
         assert "col_width=[Px(CONTROLS_W), Fr(1)]" in source
+
+
+class TestThePickerPopupIsBounded:
+    """A combo popup sizes itself to its contents, so an unbounded child fills the screen.
+
+    That is what happened: the search field inside the popup asked for `-1` (fill the
+    available width), and in a popup with no size yet that is unbounded — the dropdown
+    grew to the whole display. The constraint is applied on every frame the picker draws,
+    whether or not the popup is open, so it can be checked without opening one.
+    """
+
+    @pytest.mark.parametrize("width", WIDTHS)
+    def test_the_popup_is_constrained_before_it_opens(self, _context, tmp_path, width):
+        editor = _editor(tmp_path)
+        seen: list[tuple[float, float]] = []
+        original = imgui.set_next_window_size_constraints
+
+        def spy(size_min, size_max, *args, **kwargs):
+            seen.append((size_min.x, size_max.x))
+            return original(size_min, size_max, *args, **kwargs)
+
+        imgui.set_next_window_size_constraints = spy
+        try:
+            _overflow(_context, width, editor.ui)
+        finally:
+            imgui.set_next_window_size_constraints = original
+
+        assert seen, "the picker must constrain its popup"
+        for lo, hi in seen:
+            assert hi <= 640.0, f"popup allowed to reach {hi:.0f}px at a {width}px panel"
+            assert lo <= hi, (lo, hi)
+
+    def test_the_search_field_is_not_unbounded(self):
+        """`set_next_item_width(-1)` inside the popup is the bug; keep it out."""
+        source = (
+            pathlib.Path(__file__).resolve().parent.parent
+            / "myogestic"
+            / "widgets"
+            / "vhi"
+            / "control_map_editor.py"
+        ).read_text()
+        popup = source.split("begin_combo")[1].split("end_combo")[0]
+        assert "set_next_item_width(-1)" not in popup
+
+
+class TestThePlaygroundsOwnSlidersFit:
+    """The other half of the window: one slider per control in the file.
+
+    A slider is the control that must not be squeezed — a 60-pixel one cannot be dragged
+    to a useful value — so below a threshold its label moves above it, which buys the
+    label's width back for the track. Tested against the real function, with the module's
+    bus and levels stood in, because that sizing is where a squeezed slider would come
+    from.
+    """
+
+    @pytest.fixture(scope="class")
+    def playground(self):
+        """The real module. Importable now that it uses `launchable()`."""
+        return pytest.importorskip("examples.synthetic.vhi_playground")
+
+    @pytest.fixture
+    def wired(self, playground):
+        """Stand in a bus and some controls, then put it back."""
+
+        class Bus:
+            def push(self, values):
+                return values
+
+        levels = dict.fromkeys(
+            ("close", "thumb_spread", "a_rather_long_control_name"), 0.0
+        )
+        before = (playground.bus, dict(playground.levels))
+        playground.bus, playground.levels = Bus(), levels
+        yield playground
+        playground.bus, playground.levels = before[0], before[1]
+
+    @pytest.mark.parametrize("width", (240, *WIDTHS))
+    def test_no_slider_reaches_past_the_panel(self, _context, wired, width):
+        overhang = _widest_overhang(_context, width, wired._sliders_ui, "slider_float")
+        assert overhang <= 0.0, f"a slider is {overhang:.0f}px past the edge at {width}px"
+
+    @pytest.mark.parametrize("width", (240, *WIDTHS))
+    def test_the_rest_button_stays_inside_the_panel(self, _context, wired, width):
+        overhang = _widest_overhang(_context, width, wired._sliders_ui, "button")
+        assert overhang <= 0.0, f"Rest is {overhang:.0f}px past the edge at {width}px"
+
+    def test_a_slider_keeps_a_usable_track_when_narrow(self, _context, wired):
+        """The point of moving the label above it: the track keeps the whole width."""
+        widths: list[float] = []
+        original = imgui.slider_float
+
+        def spy(label, *args, **kwargs):
+            result = original(label, *args, **kwargs)
+            widths.append(imgui.get_item_rect_max().x - imgui.get_item_rect_min().x)
+            return result
+
+        imgui.slider_float = spy
+        try:
+            _overflow(_context, 260, wired._sliders_ui)
+        finally:
+            imgui.slider_float = original
+        assert widths, "no sliders drawn"
+        assert min(widths) >= 150.0, f"narrowest track was {min(widths):.0f}px"

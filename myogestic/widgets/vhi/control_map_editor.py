@@ -62,6 +62,11 @@ _WEIGHT_W = 130.0
 _DROP_W = 26.0
 #: A name field wide enough for a real alias, but never more than half a wide row.
 _NAME_MAX_W = 240.0
+#: The normalized signed domain a continuous control is expected to declare: `+1` is the
+#: direction the control denotes, rest is `0`. Shown in a row only when a target declares
+#: something *else*, because a fact repeated on every line is not a fact anyone reads —
+#: and a one-way range buried among twenty identical ones is exactly what gets missed.
+_SIGNED = (-1.0, 1.0)
 #: A picker wide enough for the longest address there is. Capped, because a control that
 #: grows without limit is not "responsive" — on a 1800 px window it became a 1000 px
 #: dropdown holding a 20-character name, which reads as a layout mistake and puts the
@@ -74,6 +79,26 @@ _HEADER = (
     "  left  = your name for a model output, anything you like\n"
     "  right = a control the target declares (it owns the kind, range and states)"
 )
+
+
+def _leading_comments(text: str) -> str:
+    """The comment block a file opens with, without the `#` markers.
+
+    Re-emitted on save so a hand-written preamble survives a trip through the editor.
+    Stops at the first line that is not a comment or blank, so it takes the header and
+    nothing else.
+    """
+    kept: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            kept.append(stripped.lstrip("#").strip())
+        elif not stripped:
+            if kept:
+                kept.append("")
+        else:
+            break
+    return "\n".join(kept).strip()
 
 
 def _label_w(label: str) -> float:
@@ -108,6 +133,10 @@ class ControlMapEditor:
     invalid**, so the file on disk is never a file that would not load — which matters
     because something else is reading it.
 
+    A save keeps the comment block the file opened with, so a hand-written preamble
+    survives a round trip. Comments *between* entries do not: preserving those needs a
+    comment-preserving TOML writer, and this says so rather than pretending.
+
     The editor holds its own working copy while editing, and that copy is discarded by
     **Reload**. It is not a second configuration store: nothing else reads it, it does
     not outlive the window, and every path out of it goes through the same
@@ -122,8 +151,8 @@ class ControlMapEditor:
     """
 
     __slots__ = (
-        "_capabilities", "_client", "_draft", "_error", "_filter", "_message",
-        "_path", "_title", "_loaded",
+        "_capabilities", "_client", "_draft", "_error", "_filter", "_header", "_message",
+        "_path", "_raw", "_raw_error", "_raw_open", "_title", "_loaded",
     )
 
     def __init__(
@@ -144,6 +173,17 @@ class ControlMapEditor:
         self._filter = ""
         self._message = ""
         self._error = ""
+        #: The file as text, for editing it directly. Filled when the text view is opened
+        #: and when `Revert` is pressed — *not* every frame, because rewriting the buffer
+        #: under someone's cursor is how a text box eats what you just typed.
+        self._raw = ""
+        self._raw_open = False
+        self._raw_error = ""
+        #: The comment block the file opened with, kept so a save does not erase what
+        #: whoever wrote it was explaining. Only the *leading* block survives — comments
+        #: interleaved with entries would need a comment-preserving TOML writer, and
+        #: silently dropping those is stated in the class docstring rather than hidden.
+        self._header = ""
         self._loaded = False
 
     # --- file -------------------------------------------------------------------
@@ -152,10 +192,12 @@ class ControlMapEditor:
         """Read the file into the working copy, replacing anything unsaved."""
         self._draft = []
         self._error = ""
+        self._header = ""
         if not self._path.exists():
             self._message = f"{self._path.name} does not exist yet — Save will create it."
             self._loaded = True
             return
+        self._header = _leading_comments(self._path.read_text())
         try:
             with self._path.open("rb") as handle:  # "rb" — tomllib requires binary
                 control_map = load_control_map(tomllib.load(handle))
@@ -178,13 +220,67 @@ class ControlMapEditor:
         self._message = f"Loaded {len(self._draft)} control(s) from {self._path.name}."
         self._loaded = True
 
+    def raw_text(self) -> str:
+        """The working copy as TOML text, for editing by hand.
+
+        The file's own bytes when nothing has been changed in the fields, so opening the
+        text view shows exactly what is on disk — comments and all. Once the fields have
+        diverged it is rendered from them instead, because showing stale text next to
+        live fields is worse than losing the comments.
+        """
+        rendered = dump_control_map(self.as_control_map() or ControlMap(bindings={}))
+        if not self._path.exists():
+            return rendered
+        on_disk = self._path.read_text()
+        try:
+            same = load_control_map(tomllib.loads(on_disk)).as_dict() == (
+                self.as_control_map() or ControlMap(bindings={})
+            ).as_dict()
+        except (tomllib.TOMLDecodeError, ValueError):
+            return on_disk        # unparseable: show it so it can be fixed by hand
+        return on_disk if same else rendered
+
+    def apply_raw(self, text: str) -> bool:
+        """Replace the working copy from TOML text. False (with a reason) if it will not load.
+
+        The other direction of the same contract the fields obey: nothing invalid gets in,
+        so `Save` still cannot write a file that would not load back.
+        """
+        self._raw_error = ""
+        try:
+            raw = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as exc:
+            self._raw_error = f"Not valid TOML: {exc}"
+            return False
+        if "dofs" not in raw:
+            self._raw_error = 'No [dofs] table — a control map needs one.'
+            return False
+        try:
+            control_map = load_control_map(raw)
+        except ValueError as exc:
+            self._raw_error = str(exc)
+            return False
+        self._draft = [
+            {
+                "alias": binding.alias,
+                "targets": [[ref.address, float(ref.weight)] for ref in binding.targets],
+                "debounce_s": float(binding.debounce_s),
+                "threshold_fraction": binding.threshold_fraction,
+            }
+            for binding in control_map.bindings.values()
+        ]
+        self._message = f"Applied {len(self._draft)} control(s) from the text."
+        return True
+
     def save(self) -> bool:
         """Write the working copy back as TOML. False if it would not load."""
         control_map = self.as_control_map()
         if control_map is None:
             return False
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(dump_control_map(control_map, header=_HEADER))
+        self._path.write_text(
+            dump_control_map(control_map, header=self._header or _HEADER)
+        )
         self._message = f"Saved {len(self._draft)} control(s) to {self._path.name}."
         return True
 
@@ -353,6 +449,54 @@ class ControlMapEditor:
             for problem in problems:
                 imgui.bullet()
                 imgui.text_wrapped(problem)
+
+        saved = self._raw_ui() or saved
+        return saved
+
+    def _raw_ui(self) -> bool:
+        """Edit the file as text. Returns True if a save happened from here."""
+        imgui.separator()
+        opened = imgui.collapsing_header("Edit as text (TOML)")
+        if opened and not self._raw_open:
+            # Filled on open, not per frame: see `_raw`.
+            self._raw = self.raw_text()
+        self._raw_open = bool(opened)
+        if not opened:
+            return False
+
+        # Width -1 is ImGui's "fill what is left", which it computes *after* deciding
+        # whether the panel needs a vertical scrollbar. Passing the available width
+        # measured beforehand is 16 px too wide exactly when that scrollbar appears.
+        avail = imgui.get_content_region_avail()
+        changed, self._raw = imgui.input_text_multiline(
+            "##raw", self._raw, imgui.ImVec2(-1.0, max(120.0, avail.y - 60.0))
+        )
+        # Wrapped like the action row above: these labels are long enough that on a
+        # narrow panel one of the three would otherwise sit past the edge.
+        saved = False
+        if imgui.button("Apply to fields"):
+            self.apply_raw(self._raw)
+        if self._room_for(_label_w("Apply and save") + 24.0):
+            imgui.same_line()
+        # `save()` refuses on its own if the applied text still has problems, so the
+        # button is one call rather than a check-then-act.
+        if imgui.button("Apply and save") and self.apply_raw(self._raw):
+            saved = self.save()
+        if self._room_for(_label_w("Revert text") + 24.0):
+            imgui.same_line()
+        if imgui.button("Revert text"):
+            self._raw = self.raw_text()
+            self._raw_error = ""
+        if self._raw_error:
+            imgui.push_style_color(imgui.Col_.text, DANGER)
+            imgui.text_wrapped(self._raw_error)
+            imgui.pop_style_color()
+        else:
+            imgui.push_style_color(imgui.Col_.text, muted())
+            imgui.text_wrapped(
+                "Type freely — nothing reaches the file until it parses and resolves."
+            )
+            imgui.pop_style_color()
         return saved
 
     def _connect(self) -> None:
@@ -411,8 +555,26 @@ class ControlMapEditor:
 
     @staticmethod
     def _room_for(needed: float) -> bool:
-        """Whether `needed` more pixels fit on the current line."""
-        return imgui.get_content_region_avail().x >= needed
+        """Whether `needed` more pixels fit beside the item just drawn.
+
+        Measured from that item's right edge, not from `get_content_region_avail`. After
+        an item the cursor is already at the start of the *next* line, so the available
+        width is the whole line — asking it "does one more button fit?" always answers yes,
+        and the `same_line` that follows then puts the button back on the full line whether
+        it fits or not. That is what left the text view's three buttons 16 px over at a
+        320 px panel while each of them measured fine alone.
+        """
+        # This build of the bindings exposes no `get_window_content_region_max`, so the
+        # right edge is derived: window origin + width, less the padding on both sides.
+        style = imgui.get_style()
+        right = imgui.get_item_rect_max().x + style.item_spacing.x + needed
+        limit = (
+            imgui.get_window_pos().x
+            + imgui.get_window_width()
+            - style.window_padding.x
+            - imgui.get_style().scrollbar_size
+        )
+        return right <= limit
 
     def _target_ui(self, pair: list[Any], *, drop: bool) -> bool:
         """One route: which control, at what weight, and a way to remove it.
@@ -468,36 +630,72 @@ class ControlMapEditor:
             if changed:
                 pair[0] = typed
             return
-        label = self._short(address) if address else "choose a control..."
+        label = address or "choose a control..."
+        # A combo popup sizes itself to its contents, and a `-1` item inside it means
+        # "fill the available width" — which in a popup that has not been sized yet is
+        # unbounded, so the search field grew the popup to the whole display. Constrain
+        # the popup and give the field a real width instead.
+        popup_w = max(width, _PICKER_MAX_W)
+        imgui.set_next_window_size_constraints(
+            imgui.ImVec2(width, 0.0), imgui.ImVec2(popup_w, 320.0)
+        )
         if imgui.begin_combo("control", label):
-            imgui.set_next_item_width(-1)
+            imgui.set_next_item_width(popup_w - _label_w("search") - 24.0)
             changed, self._filter = imgui.input_text("search", self._filter)
             for cap in self._capabilities:
                 if self._filter and self._filter.lower() not in cap.address.lower():
                     continue
                 selected, _ = imgui.selectable(self._describe(cap), cap.address == address)
+                if imgui.is_item_hovered():
+                    peers = self._peers(cap)
+                    if peers:
+                        imgui.set_tooltip(
+                            "The same control as:\n  " + "\n  ".join(peers)
+                        )
                 if selected:
                     pair[0] = cap.address
             imgui.end_combo()
-        # The full address and what the target declared about it: a tooltip rather than
-        # a trailing label, so a long address cannot widen the row it sits in. An
-        # advanced reader still gets it; a first-time one is not made to read it.
+        # What the target declared about the *selected* control, on hover: read once,
+        # rather than repeated down every row of the list.
         cap = next((c for c in self._capabilities if c.address == address), None)
         if cap is not None and imgui.is_item_hovered():
             imgui.set_tooltip(f"{cap.address}\n{self._summary(cap)}")
 
-    @staticmethod
-    def _short(address: str) -> str:
-        """The last two segments, which read like a name ("index.flexion")."""
-        return ".".join(address.split(".")[-2:])
+    def _describe(self, cap: Capability) -> str:
+        """One row of the picker: the address, what it takes, and where it goes.
 
-    @staticmethod
-    def _describe(cap: Capability) -> str:
-        """A capability as a line someone can choose from without knowing gRPC."""
-        short = ControlMapEditor._short(cap.address)
-        if cap.kind == "continuous":
-            return f"{short}   [{cap.lo:+.0f}..{cap.hi:+.0f}]   {cap.address}"
-        return f"{short}   {len(cap.states)} states   {cap.address}"
+        The address **verbatim**, not a prettier short form of it. A shortened name is a
+        second vocabulary for the same thing: you would read `thumb` here and have to know
+        it means `vhi.prediction.thumb` in the file. One name, the real one, and the list
+        reads the way the file does.
+
+        The range is shown only when it is *not* the signed `[-1, +1]` every control here
+        declares — see `_SIGNED`. The full facts of whatever is selected are on the
+        picker's own tooltip, so nothing is lost by leaving the usual case unsaid.
+
+        The channel is shown because it is the only thing that reveals the list's one
+        surprise — a renderer publishes the short and the explicit-axis form of a control
+        as two addresses on **one** channel, so two rows can mean the same physical
+        control. Two rows with the same `ch` are the same control.
+        """
+        if cap.kind != "continuous":
+            return f"{cap.address}   {len(cap.states)} states   over gRPC"
+        where = f"ch{cap.channel}" if cap.channel >= 0 else "not streamed"
+        usual = abs(cap.lo - _SIGNED[0]) < 1e-6 and abs(cap.hi - _SIGNED[1]) < 1e-6
+        span = "" if usual else f"   [{cap.lo:+.1f}..{cap.hi:+.1f}]"
+        return f"{cap.address}{span}   {where}"
+
+    def _peers(self, cap: Capability) -> list[str]:
+        """Other addresses that land on the same control as this one."""
+        if getattr(cap, "channel", -1) < 0:
+            return []
+        return [
+            other.address
+            for other in self._capabilities
+            if other.address != cap.address
+            and getattr(other, "channel", -1) == cap.channel
+            and getattr(other, "stream_name", "") == getattr(cap, "stream_name", "")
+        ]
 
     @staticmethod
     def _summary(cap: Capability) -> str:
