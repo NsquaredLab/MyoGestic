@@ -227,13 +227,39 @@ class TestSaveIsBlockedWhileTheMapIsWrong:
 
 
 class TestEditing:
-    def test_a_new_control_gets_a_free_name(self, tmp_path):
+    def test_a_new_control_gets_a_free_numbered_name(self, tmp_path):
+        """Numbered from one, with no bare first entry: the sequence reads the same all
+        the way down instead of `my_control`, `my_control_2`, `my_control_3`."""
         editor = _editor(tmp_path, None)
+        for _ in range(3):
+            editor.add_control()
+        assert [e["alias"] for e in editor._draft] == [
+            "my_control_1",
+            "my_control_2",
+            "my_control_3",
+        ]
+
+    def test_it_numbers_around_a_name_the_file_already_had(self, tmp_path):
+        path = tmp_path / "controls.toml"
+        path.write_text('[dofs]\nmy_control = "vhi.prediction.index"\n')
+        editor = ControlMapEditor(path, client=_Client())
+        editor.load()
+        editor._connect()
         editor.add_control()
         editor.add_control()
-        editor.add_control()
-        names = [e["alias"] for e in editor._draft]
-        assert len(set(names)) == 3, names
+        assert [e["alias"] for e in editor._draft] == [
+            "my_control",
+            "my_control_1",
+            "my_control_2",
+        ]
+
+    def test_an_asked_for_name_is_kept_and_only_collisions_are_suffixed(self, tmp_path):
+        """A caller that named it meant that name; the suffix is for the second one on."""
+        editor = _editor(tmp_path, None)
+        editor.add_control("wrist")
+        editor.add_control("wrist")
+        editor.add_control("wrist")
+        assert [e["alias"] for e in editor._draft] == ["wrist", "wrist_1", "wrist_2"]
 
     def test_a_requested_name_is_kept_when_it_is_free(self, tmp_path):
         editor = _editor(tmp_path, None)
