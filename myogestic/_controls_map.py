@@ -7,7 +7,7 @@ calls its outputs. MyoGestic never prescribes these names, never parses meaning 
 them, and never requires them to look canonical. The same alias may map to a Virtual Hand
 in one configuration and to a cursor axis in another.
 
-**The right side belongs to the target.** ``vhi.prediction.index.flexion`` is a name VHI
+**The right side belongs to the target.** ``vhi.prediction.index`` is a name VHI
 declares in its own manifest, along with everything needed to send it correctly: whether
 it takes a number or a held state, its domain, its neutral value, its states. MyoGestic
 resolves those addresses at handshake time and **hard-codes none of their semantics** — a
@@ -80,7 +80,7 @@ class TargetRef:
     Attributes
     ----------
     address
-        The target-owned control address, e.g. ``"vhi.prediction.index.flexion"``.
+        The target-owned control address, e.g. ``"vhi.prediction.index"``.
     weight
         Multiplied into the value **before** the target applies its own range. A
         fan-out where one member should move less than the others is the reason this
@@ -300,7 +300,7 @@ class Capability:
     Attributes
     ----------
     address
-        The stable dotted address, e.g. ``"vhi.prediction.index.flexion"``.
+        The stable dotted address, e.g. ``"vhi.prediction.index"``.
     kind
         ``"continuous"`` or ``"discrete"``.
     lo, hi, rest
@@ -309,9 +309,10 @@ class Capability:
         Discrete only: the accepted states and the neutral one.
     channel
         Which channel of the target's stream carries this control, or ``-1`` when it is
-        not streamed. Published per capability rather than inferred from a list, because
-        two addresses may legitimately name one control — a short form and its explicit
-        axis form.
+        not streamed — a held state travels over gRPC and occupies none. Published per
+        capability rather than inferred from position in a list, so a target is free to
+        publish its controls in any order, to leave gaps, and to name one control under
+        more than one address if it wants to.
     encoding
         How a value must be encoded on that stream: ``1`` canonical, ``2``
         legacy-negated, ``0`` unstated. A client that reads ``0`` must not guess.

@@ -7,9 +7,9 @@
 [dofs]
 
 # One output per axis this hand can render.
-thumb_curl = "vhi.prediction.thumb.flexion"
+thumb_curl = "vhi.prediction.thumb"
 thumb_spread = "vhi.prediction.thumb.abduction"
-index_curl = "vhi.prediction.index.flexion"
-middle_curl = "vhi.prediction.middle.flexion"
-ring_curl = "vhi.prediction.ring.flexion"
-little_curl = "vhi.prediction.little.flexion"
+index_curl = "vhi.prediction.index"
+middle_curl = "vhi.prediction.middle"
+ring_curl = "vhi.prediction.ring"
+little_curl = "vhi.prediction.little"

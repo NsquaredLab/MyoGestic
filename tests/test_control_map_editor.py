@@ -30,6 +30,13 @@ MANIFEST = [
         "vhi.prediction.thumb.flexion", "continuous", -1.0, 1.0, 0.0, channel=0,
         stream_name="MyoGestic_Output",
     ),
+    # The thumb's second axis: its own channel, so it is a different control rather than
+    # another name for one. Without it here, the "not collapsed away" test had nothing to
+    # assert against.
+    Capability(
+        "vhi.prediction.thumb.abduction", "continuous", -1.0, 1.0, 0.0, channel=1,
+        stream_name="MyoGestic_Output",
+    ),
     Capability(
         "vhi.prediction.index", "continuous", -1.0, 1.0, 0.0, channel=2,
         stream_name="MyoGestic_Output",
@@ -447,19 +454,24 @@ class TestThePickerRowsAreReadable:
         cap = next(c for c in MANIFEST if c.address == address)
         assert editor._describe(cap).startswith(address)
 
-    def test_a_row_says_which_channel_it_lands_on(self, editor):
+    def test_a_row_carries_no_channel_number(self, editor):
+        """A wire index is not something a reader should decode to pick a finger, and with
+        one row per control there is nothing left for it to disambiguate."""
         cap = next(c for c in MANIFEST if c.address == "vhi.prediction.index")
-        assert "ch2" in editor._describe(cap)
+        assert editor._describe(cap) == "vhi.prediction.index"
 
-    def test_a_row_says_when_a_control_is_not_streamed(self, editor):
-        off = Capability("vhi.grip.force", "continuous", 0.0, 1.0, 0.0, channel=-1)
-        assert "not streamed" in editor._describe(off)
+    def test_an_unstreamed_control_is_not_offered_at_all(self, editor):
+        """It cannot be driven this way, so offering it only earns a refusal later."""
+        off = Capability(
+            "vhi.grip.force", "continuous", 0.0, 1.0, 0.0, channel=-1,
+            stream_name="MyoGestic_Output",
+        )
+        editor._capabilities = (*editor._capabilities, off)
+        assert "vhi.grip.force" not in [c.address for c in editor._offered()]
 
-    def test_a_discrete_row_says_states_and_that_it_goes_over_grpc(self, editor):
+    def test_a_discrete_row_says_how_many_states(self, editor):
         cap = next(c for c in MANIFEST if c.kind == "discrete")
-        described = editor._describe(cap)
-        assert "3 states" in described
-        assert "gRPC" in described
+        assert "3 states" in editor._describe(cap)
 
     def test_the_aliased_forms_of_one_control_are_reported_as_peers(self, editor):
         """`thumb` and `thumb.flexion` are one channel; a user has to be able to see it."""
@@ -477,14 +489,11 @@ class TestThePickerRowsAreReadable:
         predicted = next(c for c in MANIFEST if c.address == "vhi.prediction.thumb")
         assert "vhi.control.pose.thumb" not in editor._peers(predicted)
 
-    def test_a_row_carries_nothing_but_the_address_and_its_facts(self, editor):
-        """Three fields, no fourth: the address, what it takes, where it lands."""
+    def test_a_row_carries_the_address_and_nothing_it_does_not_need(self, editor):
         for cap in MANIFEST:
             described = editor._describe(cap)
             assert described.count(cap.address) == 1, "the address, exactly once"
-            assert ("ch" in described) or ("gRPC" in described) or (
-                "not streamed" in described
-            )
+            assert "ch" not in described.replace(cap.address, ""), described
 
 
 class TestTheRangeIsOnlyShownWhenItIsNews:
@@ -504,7 +513,7 @@ class TestTheRangeIsOnlyShownWhenItIsNews:
         cap = next(c for c in MANIFEST if c.address == "vhi.prediction.index")
         described = editor._describe(cap)
         assert "-1" not in described and "+1" not in described
-        assert described == "vhi.prediction.index   ch2"
+        assert described == "vhi.prediction.index", "the address, and nothing else"
 
     def test_a_one_way_range_is_called_out(self, editor):
         one_way = Capability(
@@ -841,3 +850,49 @@ class TestOneWayToDriveTheControlHand:
             '[dofs]\nmodel = "vhi.prediction.thumb"\noperator = "vhi.control.pose.thumb"\n',
         )
         assert editor.problems() == [], editor.problems()
+
+
+class TestOneRowPerControlNotPerName:
+    """Eleven names for six controls made the list need a channel column to explain itself.
+
+    A renderer publishes the short and the explicit-axis form of a control as two addresses
+    on one channel, and picking either does the same thing. Collapsing them is what let the
+    channel number — a wire detail — leave the UI.
+    """
+
+    @pytest.fixture
+    def editor(self, tmp_path):
+        return _editor(tmp_path, GOOD)
+
+    def test_the_aliased_forms_collapse_to_one_row(self, editor):
+        addresses = [cap.address for cap in editor._offered()]
+        assert "vhi.prediction.thumb" in addresses
+        assert "vhi.prediction.thumb.flexion" not in addresses
+
+    def test_the_shortest_name_is_the_one_offered(self, editor):
+        """`thumb` reads better than `thumb.flexion`, and means the same."""
+        thumb = [a for a in (c.address for c in editor._offered()) if "thumb" in a]
+        assert "vhi.prediction.thumb" in thumb
+
+    def test_a_control_with_its_own_channel_is_not_collapsed_away(self, editor):
+        """The thumb's second axis is a different control, not another name for one."""
+        assert "vhi.prediction.thumb.abduction" in [c.address for c in editor._offered()]
+
+    def test_the_value_a_file_already_uses_is_still_offered(self, editor):
+        """Otherwise opening the picker would hide the current value, or silently swap it
+        for the canonical name — a diff nobody asked for."""
+        addresses = [
+            cap.address
+            for cap in editor._offered(current="vhi.prediction.thumb.flexion")
+        ]
+        assert "vhi.prediction.thumb.flexion" in addresses
+        assert addresses.count("vhi.prediction.thumb") == 0, "and not both"
+
+    def test_the_alternatives_are_still_reachable_on_hover(self, editor):
+        thumb = next(
+            c for c in editor._offered() if c.address == "vhi.prediction.thumb"
+        )
+        assert editor._peers(thumb) == ["vhi.prediction.thumb.flexion"]
+
+    def test_held_states_survive_the_collapse(self, editor):
+        assert "vhi.control.gesture" in [c.address for c in editor._offered()]

@@ -8,7 +8,7 @@
 
 # One output, fanned out to every finger.
 fist = [
-  "vhi.prediction.thumb.flexion",
+  "vhi.prediction.thumb",
   "vhi.prediction.thumb.abduction",
   "vhi.prediction.index",
   "vhi.prediction.middle",
