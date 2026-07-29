@@ -173,11 +173,16 @@ class TestSaveIsBlockedWhileTheMapIsWrong:
         assert editor.save() is False
 
     def test_the_same_channel_on_two_streams_is_not_a_collision(self, tmp_path):
-        """Both hands number from 0; conflating them would refuse a valid map."""
+        """Both hands number from 0, and conflating them would be the wrong diagnosis.
+
+        Mixing the hands in one map *is* refused — see `TestOneMapDrivesOneHand` — but as
+        "one map controls one hand", not as "these two reach the same control". The channel
+        numbers matching is a coincidence of two hands both counting from zero.
+        """
         editor = _editor(tmp_path, None)
         editor.add_control("predicted", "vhi.prediction.thumb")
         editor.add_control("operator", "vhi.control.pose.thumb")
-        assert editor.problems() == []
+        assert not any("same control" in p for p in editor.problems())
 
     def test_one_alias_fanning_out_to_several_controls_is_fine(self, tmp_path):
         """The distinction the collision rule must not blur: one output, many controls."""
@@ -489,3 +494,77 @@ class TestTheRangeIsOnlyShownWhenItIsNews:
         summary = editor._summary(cap)
         assert "-1.0" in summary and "+1.0" in summary
         assert "channel 2" in summary
+
+
+class TestOneMapDrivesOneHand:
+    """The picker must not offer a control the map's own target cannot drive.
+
+    A `VhiTarget` drives one hand, so a map mixing `vhi.prediction.*` with
+    `vhi.control.pose.*` cannot bind. The editor knew each control's stream all along and
+    ignored it: it offered all 23, validated a cross-hand pick as fine, enabled Save, wrote
+    the file — and the refusal then arrived from the bus, three layers from the click. The
+    two hands even share channel numbers, so this is not a cosmetic mix-up.
+    """
+
+    @pytest.mark.parametrize(
+        ("stream", "offered", "withheld"),
+        [
+            ("output", "vhi.prediction.thumb", "vhi.control.pose.thumb"),
+            ("control_pose", "vhi.control.pose.thumb", "vhi.prediction.thumb"),
+        ],
+    )
+    def test_only_its_own_hand_is_offered(self, tmp_path, stream, offered, withheld):
+        path = tmp_path / "controls.toml"
+        path.write_text(GOOD)
+        editor = ControlMapEditor(path, client=_Client(), stream=stream)
+        editor.load()
+        editor._connect()
+        addresses = [cap.address for cap in editor._offered()]
+        assert offered in addresses
+        assert withheld not in addresses
+
+    def test_a_held_state_is_offered_to_both(self, tmp_path):
+        """Discrete controls travel over gRPC, so they belong to neither hand."""
+        for stream in ("output", "control_pose"):
+            path = tmp_path / f"{stream}.toml"
+            path.write_text(GOOD)
+            editor = ControlMapEditor(path, client=_Client(), stream=stream)
+            editor.load()
+            editor._connect()
+            assert "vhi.control.gesture" in [c.address for c in editor._offered()]
+
+    def test_an_address_from_the_other_hand_blocks_the_save(self, tmp_path):
+        """The case from the screenshot: picked, saved, then refused by the bus."""
+        path = tmp_path / "controls.toml"
+        path.write_text('[dofs]\nmy_control = "vhi.control.pose.thumb"\n')
+        editor = ControlMapEditor(path, client=_Client(), stream="output")
+        editor.load()
+        editor._connect()
+        problems = editor.problems()
+        assert any("one hand" in p for p in problems), problems
+        assert editor.save() is False
+
+    def test_the_reason_names_both_hands_in_plain_words(self, tmp_path):
+        """"not a streamed continuous control on 'MyoGestic_Output'" is not an answer."""
+        path = tmp_path / "controls.toml"
+        path.write_text('[dofs]\nmy_control = "vhi.control.pose.thumb"\n')
+        editor = ControlMapEditor(path, client=_Client(), stream="output")
+        editor.load()
+        editor._connect()
+        reason = next(p for p in editor.problems() if "one hand" in p)
+        assert "operator's hand" in reason
+        assert "model's hand" in reason
+
+    def test_the_same_file_is_fine_as_a_control_hand_map(self, tmp_path):
+        """Nothing is wrong with the address — only with which map it was put in."""
+        path = tmp_path / "controls.toml"
+        path.write_text('[dofs]\nmy_control = "vhi.control.pose.thumb"\n')
+        editor = ControlMapEditor(path, client=_Client(), stream="control_pose")
+        editor.load()
+        editor._connect()
+        assert editor.problems() == []
+
+    @pytest.mark.parametrize("bad", ["", "prediction", "Output", "control-pose"])
+    def test_an_unknown_stream_is_refused_at_construction(self, tmp_path, bad):
+        with pytest.raises(ValueError, match="stream must be one of"):
+            ControlMapEditor(tmp_path / "c.toml", stream=bad)

@@ -62,6 +62,13 @@ _WEIGHT_W = 130.0
 _DROP_W = 26.0
 #: A name field wide enough for a real alias, but never more than half a wide row.
 _NAME_MAX_W = 240.0
+#: Which renderer stream a map drives, and what a target calls it. One control map is
+#: bound by one target, and a target drives one hand — so a map that mixes the two is
+#: refused at bind time. The editor knows which stream every control belongs to, so it can
+#: keep that from being written in the first place.
+_STREAM_NAMES = {"output": "MyoGestic_Output", "control_pose": "MyoGestic_ControlPose"}
+_STREAM_LABELS = {"output": "the model's hand", "control_pose": "the operator's hand"}
+
 #: The normalized signed domain a continuous control is expected to declare: `+1` is the
 #: direction the control denotes, rest is `0`. Shown in a row only when a target declares
 #: something *else*, because a fact repeated on every line is not a fact anyone reads —
@@ -123,6 +130,12 @@ class ControlMapEditor:
         Called on **Connect** rather than every frame, because it blocks on an RPC.
         Without it the editor still opens the file and shows it; it just cannot offer a
         list to pick from or validate an address, and says so.
+    stream
+        Which renderer stream the map being edited drives — ``"output"`` (the model's
+        hand, the default) or ``"control_pose"`` (the operator's). Must match the
+        `myogestic.vhi.VhiTarget` that will bind it, because a target drives one hand:
+        the picker offers only that stream's controls, and an address from the other one
+        is reported as a problem rather than saved and refused later.
     title
         Panel header text.
 
@@ -152,7 +165,7 @@ class ControlMapEditor:
 
     __slots__ = (
         "_capabilities", "_client", "_draft", "_error", "_filter", "_header", "_message",
-        "_path", "_raw", "_raw_error", "_raw_open", "_title", "_loaded",
+        "_path", "_raw", "_raw_error", "_raw_open", "_stream", "_title", "_loaded",
     )
 
     def __init__(
@@ -160,10 +173,16 @@ class ControlMapEditor:
         path: pathlib.Path,
         *,
         client: Any = None,
+        stream: str = "output",
         title: str = "CONTROL MAP",
     ) -> None:
+        if stream not in _STREAM_NAMES:
+            raise ValueError(
+                f"stream must be one of {sorted(_STREAM_NAMES)}, got {stream!r}"
+            )
         self._path = path
         self._client = client
+        self._stream = stream
         self._title = title
         #: alias -> [(address, weight)], plus the gates. A plain structure rather than a
         #: ControlMap because a half-edited map is not a valid one, and `Binding` is
@@ -339,6 +358,14 @@ class ControlMapEditor:
                     continue
                 if self._capabilities and address not in exported:
                     found.append(f"{alias}: the target does not export {address!r}.")
+                other = self._wrong_stream(address)
+                if other is not None:
+                    found.append(
+                        f"{alias}: {address} drives "
+                        f"{_STREAM_LABELS['control_pose' if self._stream == 'output' else 'output']}"
+                        f", but this map drives {_STREAM_LABELS[self._stream]}. One map "
+                        f"controls one hand — remove it, or put it in the map for that hand."
+                    )
                 if not -1.0 <= weight <= 1.0 or weight == 0.0:
                     found.append(
                         f"{alias}: weight {weight} is outside [-1, 1] or zero. A weight "
@@ -621,6 +648,31 @@ class ControlMapEditor:
             imgui.set_tooltip("Remove this target")
         return clicked
 
+    def _offered(self) -> list[Capability]:
+        """The controls this map may use: its own stream's, plus the held states.
+
+        A discrete control travels over gRPC rather than a pose stream, so it belongs to
+        neither hand and is always on offer.
+        """
+        wanted = _STREAM_NAMES[self._stream]
+        return [
+            cap
+            for cap in self._capabilities
+            if cap.kind != "continuous"
+            or not getattr(cap, "stream_name", "")
+            or cap.stream_name == wanted
+        ]
+
+    def _wrong_stream(self, address: str) -> Capability | None:
+        """The capability for `address` if it belongs to the *other* hand."""
+        wanted = _STREAM_NAMES[self._stream]
+        for cap in self._capabilities:
+            if cap.address == address and cap.kind == "continuous":
+                name = getattr(cap, "stream_name", "")
+                if name and name != wanted:
+                    return cap
+        return None
+
     def _picker(self, pair: list[Any], *, width: float) -> None:
         """Choose a control from what the target exports, or type one when offline."""
         address = pair[0]
@@ -642,7 +694,7 @@ class ControlMapEditor:
         if imgui.begin_combo("control", label):
             imgui.set_next_item_width(popup_w - _label_w("search") - 24.0)
             changed, self._filter = imgui.input_text("search", self._filter)
-            for cap in self._capabilities:
+            for cap in self._offered():
                 if self._filter and self._filter.lower() not in cap.address.lower():
                     continue
                 selected, _ = imgui.selectable(self._describe(cap), cap.address == address)
