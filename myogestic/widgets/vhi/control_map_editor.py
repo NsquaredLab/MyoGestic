@@ -435,12 +435,21 @@ class ControlMapEditor:
     # --- editing ----------------------------------------------------------------
 
     def add_control(self, alias: str = "", address: str = "") -> None:
-        """Add a control, named and pointed however the caller likes."""
+        """Add a control, named and pointed however the caller likes.
+
+        A placeholder name is always numbered — `my_control_1`, `my_control_2` — rather
+        than leaving the first one bare and numbering the rest from two. The sequence reads
+        and sorts the same way all the way down, and there is no first-one-is-special case.
+
+        A name the caller *asked* for is kept as it is when it is free, because that is
+        what they asked for; only a collision gets the lowest free suffix.
+        """
         taken = {entry["alias"] for entry in self._draft}
-        name = alias or _NEW_ALIAS
-        suffix = 2
-        while name in taken:
-            name = f"{alias or _NEW_ALIAS}_{suffix}"
+        stem = alias or _NEW_ALIAS
+        name = stem if alias and stem not in taken else ""
+        suffix = 1
+        while not name or name in taken:
+            name = f"{stem}_{suffix}"
             suffix += 1
         self._draft.append(
             {
