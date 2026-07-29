@@ -48,7 +48,13 @@ bus: ControlBus | None = None
 status = "Launch VHI, then press Connect."
 failure = ""
 
-editor = ControlMapEditor(CONTROL_FILE, client=vhi_canonical, title="EDIT THE MAP")
+# `stream="output"` is the default, and stating it is the point: this app drives the
+# model's hand, so the editor offers that hand's controls and refuses one from the
+# operator's before it can be saved. Without it the picker would offer all 23 and the
+# refusal would arrive from the bus, three layers from the click that caused it.
+editor = ControlMapEditor(
+    CONTROL_FILE, client=vhi_canonical, stream="output", title="EDIT THE MAP"
+)
 # `launchable` not `launcher`: an unlaunchable renderer must not stop this app from
 # opening — a renderer that is already running needs no button, and the reason is
 # logged either way.

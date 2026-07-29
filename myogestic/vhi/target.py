@@ -330,10 +330,12 @@ class VhiTarget:
                 cap = by_address.get(ref.address)
                 if cap is None or getattr(cap, "kind", "") != "continuous":
                     raise ValueError(
-                        f"{alias!r} -> {ref.address!r} is not a streamed continuous control "
-                        f"on {wanted!r}. Check the namespace: vhi.prediction.* is the "
-                        f"model-driven hand and vhi.control.pose.* is the operator's — a "
-                        f"target drives one stream, not both."
+                        f"{alias!r} points at {ref.address!r}, which this target cannot "
+                        f"drive. Either the renderer does not carry it as a number on "
+                        f"{wanted!r}, or it belongs to the other hand: vhi.prediction.* "
+                        f"is the model's hand and vhi.control.pose.* is the operator's. "
+                        f"One target drives one hand, so a map mixing them cannot bind — "
+                        f"use two maps and two targets."
                     )
                 channel = getattr(cap, "channel", -1)
                 if channel < 0:

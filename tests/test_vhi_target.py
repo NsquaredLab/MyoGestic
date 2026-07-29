@@ -1146,7 +1146,7 @@ def test_an_output_target_ignores_control_pose_addresses():
         load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
     )
     target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS))
-    with pytest.raises(ValueError, match="not a streamed continuous control"):
+    with pytest.raises(ValueError, match="cannot drive"):
         target.bind(controls)
 
 
@@ -1159,7 +1159,7 @@ def test_a_control_pose_target_ignores_prediction_addresses():
     target = VhiTarget(
         FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS), stream="control_pose"
     )
-    with pytest.raises(ValueError, match="not a streamed continuous control"):
+    with pytest.raises(ValueError, match="cannot drive"):
         target.bind(controls)
 
 
