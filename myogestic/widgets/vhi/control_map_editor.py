@@ -62,10 +62,12 @@ _WEIGHT_W = 130.0
 _DROP_W = 26.0
 #: A name field wide enough for a real alias, but never more than half a wide row.
 _NAME_MAX_W = 240.0
-#: Which renderer stream a map drives, and what a target calls it. One control map is
-#: bound by one target, and a target drives one hand — so a map that mixes the two is
-#: refused at bind time. The editor knows which stream every control belongs to, so it can
-#: keep that from being written in the first place.
+#: Which renderer stream a map's *numbers* go to, and what a target calls it. One control
+#: map is bound by one target, and a target streams a pose to one hand — so a map mixing
+#: the two pose namespaces is refused at bind time. Held states are exempt: they travel over
+#: gRPC rather than a pose stream, so they reach the control hand from either map. The
+#: editor knows which stream every control belongs to, so it can keep the mix from being
+#: written in the first place.
 _STREAM_NAMES = {"output": "MyoGestic_Output", "control_pose": "MyoGestic_ControlPose"}
 _STREAM_LABELS = {"output": "the model's hand", "control_pose": "the operator's hand"}
 
@@ -361,10 +363,11 @@ class ControlMapEditor:
                 other = self._wrong_stream(address)
                 if other is not None:
                     found.append(
-                        f"{alias}: {address} drives "
+                        f"{alias}: {address} streams to "
                         f"{_STREAM_LABELS['control_pose' if self._stream == 'output' else 'output']}"
-                        f", but this map drives {_STREAM_LABELS[self._stream]}. One map "
-                        f"controls one hand — remove it, or put it in the map for that hand."
+                        f", but this map streams to {_STREAM_LABELS[self._stream]}. A map's "
+                        f"numbers all go to one hand — remove it, or put it in that hand's "
+                        f"map. (Held states are exempt: they travel over gRPC.)"
                     )
                 if not -1.0 <= weight <= 1.0 or weight == 0.0:
                     found.append(
@@ -373,13 +376,26 @@ class ControlMapEditor:
                         f"needs a target that declares signed motion."
                     )
                 cap = by_address.get(address)
-                if cap is not None and getattr(cap, "channel", -1) >= 0:
+                if (
+                    cap is not None
+                    and cap.kind == "continuous"
+                    and getattr(cap, "channel", -1) >= 0
+                ):
+                    # Continuous only: a held state occupies no pose channel. Trusting the
+                    # number alone is not safe — a target that omits `channel` for a
+                    # discrete control reports proto3's default of 0, which reads as pose
+                    # channel 0 and made two held states collide with each other.
                     slot = (getattr(cap, "stream_name", ""), cap.channel)
                     channels.setdefault(slot, []).append(alias)
 
             fraction = entry["threshold_fraction"]
             if fraction is not None and not 0.0 <= fraction <= 1.0:
                 found.append(f"{alias}: threshold_fraction must be between 0 and 1.")
+            no_threshold, no_debounce = self._gate_rules(entry)
+            if fraction is not None and no_threshold:
+                found.append(f"{alias}: {no_threshold}.")
+            if entry["debounce_s"] and no_debounce:
+                found.append(f"{alias}: {no_debounce}.")
 
         for (stream, channel), owners in channels.items():
             distinct = sorted(set(owners))
@@ -663,6 +679,35 @@ class ControlMapEditor:
             or cap.stream_name == wanted
         ]
 
+    def _gate_rules(self, entry: dict[str, Any]) -> tuple[str, str]:
+        """Why `threshold_fraction` / `debounce_s` cannot apply to this entry, or "".
+
+        The single place that knows, so the checkbox that offers a gate and the validation
+        that refuses one cannot disagree — the bug this exists to stop is a UI that offers
+        what the resolver will reject, which then surfaces as a refusal from the bus, layers
+        away from the click.
+
+        Empty strings mean "allowed". Unknowable — offline, or an address the target does
+        not export — is also allowed: refusing on a guess would block a valid file.
+        """
+        address = entry["targets"][0][0] if entry["targets"] else ""
+        cap = next((c for c in self._capabilities if c.address == address), None)
+        if cap is None:
+            return "", ""
+        if cap.kind == "continuous":
+            # A number has no state transition to hold, and the bus applies the stability
+            # gate to discrete DOFs only — so a debounce here would silently do nothing.
+            return "", "a number has no state transition to hold — this is for held states"
+        if len(cap.states) != 2:
+            # A single number cannot pick among more than two states, and inventing an
+            # ordering over states nobody declared would be worse than refusing.
+            return (
+                f"{address.split('.')[-1]} has {len(cap.states)} states, so a probability "
+                f"cannot pick one — send the state name instead",
+                "",
+            )
+        return "", ""
+
     def _wrong_stream(self, address: str) -> Capability | None:
         """The capability for `address` if it belongs to the *other* hand."""
         wanted = _STREAM_NAMES[self._stream]
@@ -738,13 +783,18 @@ class ControlMapEditor:
         return f"{cap.address}{span}   {where}"
 
     def _peers(self, cap: Capability) -> list[str]:
-        """Other addresses that land on the same control as this one."""
-        if getattr(cap, "channel", -1) < 0:
+        """Other addresses that land on the same control as this one.
+
+        Continuous only, for the reason in `problems`: a held state occupies no channel,
+        and a target that omits the field reports 0 rather than -1.
+        """
+        if cap.kind != "continuous" or getattr(cap, "channel", -1) < 0:
             return []
         return [
             other.address
             for other in self._capabilities
             if other.address != cap.address
+            and other.kind == "continuous"
             and getattr(other, "channel", -1) == cap.channel
             and getattr(other, "stream_name", "") == getattr(cap, "stream_name", "")
         ]
@@ -760,19 +810,29 @@ class ControlMapEditor:
         return f"held state: {states}{more}"
 
     def _gates_ui(self, entry: dict[str, Any]) -> None:
-        """`threshold_fraction` and `debounce_s`, in plain words."""
+        """`threshold_fraction` and `debounce_s`, in plain words.
+
+        A gate that cannot apply to the chosen control is disabled with the reason on
+        hover, rather than offered and refused at the save.
+        """
         imgui.indent()
+        no_threshold, no_debounce = self._gate_rules(entry)
         gated = entry["threshold_fraction"] is not None
         # A short label, with the explanation in the tooltip: a long checkbox label is
         # the one thing in ImGui that cannot wrap.
+        imgui.begin_disabled(bool(no_threshold))
         changed, gated = imgui.checkbox("classifier probability", gated)
+        imgui.end_disabled()
         if changed:
             entry["threshold_fraction"] = 0.5 if gated else None
         if imgui.is_item_hovered():
             imgui.set_tooltip(
-                "Tick this when the model outputs a confidence in 0..1 rather than a\n"
-                "position. It is turned into a plain on/off at the cutoff below, and\n"
-                "then travels the same weighted path a regressor's value does."
+                no_threshold
+                or (
+                    "Tick this when the model outputs a confidence in 0..1 rather than a\n"
+                    "position. It is turned into a plain on/off at the cutoff below, and\n"
+                    "then travels the same weighted path a regressor's value does."
+                )
             )
         if entry["threshold_fraction"] is not None:
             imgui.set_next_item_width(_WEIGHT_W)
@@ -783,13 +843,18 @@ class ControlMapEditor:
                 entry["threshold_fraction"] = round(fraction, 2)
 
         imgui.set_next_item_width(_WEIGHT_W)
+        imgui.begin_disabled(bool(no_debounce))
         changed, debounce = imgui.slider_float("hold for (s)", entry["debounce_s"], 0.0, 1.0)
+        imgui.end_disabled()
         if changed:
             entry["debounce_s"] = round(debounce, 2)
         if imgui.is_item_hovered():
             imgui.set_tooltip(
-                "For a held-state control: how long a state must stay put before it\n"
-                "counts. Stops a flickering classifier from chattering. 0 disables it."
+                no_debounce
+                or (
+                    "For a held-state control: how long a state must stay put before it\n"
+                    "counts. Stops a flickering classifier from chattering. 0 disables it."
+                )
             )
         imgui.unindent()
 
