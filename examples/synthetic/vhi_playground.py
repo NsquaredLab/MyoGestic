@@ -32,9 +32,7 @@ from myogestic.vhi import VhiTarget, virtual_hand
 from myogestic.widgets import AppLogo, ControlMapEditor, ProcessLauncher
 from myogestic.widgets.common import DANGER, SUCCESS, muted, panel_header
 
-CONTROL_FILE = (
-    pathlib.Path(__file__).resolve().parent.parent / "controls" / "playground.toml"
-)
+CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "playground.toml"
 
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
@@ -51,7 +49,10 @@ status = "Launch VHI, then press Connect."
 failure = ""
 
 editor = ControlMapEditor(CONTROL_FILE, client=vhi_canonical, title="EDIT THE MAP")
-processes = ProcessLauncher([*vhi.launcher()])
+# `launchable` not `launcher`: an unlaunchable renderer must not stop this app from
+# opening — a renderer that is already running needs no button, and the reason is
+# logged either way.
+processes = ProcessLauncher(vhi.launchable())
 logo = AppLogo()
 
 LOGO_CELL_W = 260
@@ -155,9 +156,7 @@ def playground_ui(ctx):
             imgui.text_colored(DANGER, "Refused:")
             imgui.text_wrapped(failure)
         else:
-            imgui.push_style_color(
-                imgui.Col_.text, SUCCESS if bus is not None else muted()
-            )
+            imgui.push_style_color(imgui.Col_.text, SUCCESS if bus is not None else muted())
             imgui.text_wrapped(status)
             imgui.pop_style_color()
 
@@ -192,9 +191,7 @@ def _sliders_ui() -> None:
     for alias in levels:
         if not inline:
             imgui.text_unformatted(alias)
-        imgui.set_next_item_width(
-            avail - (imgui.calc_text_size(alias).x + 12.0 if inline else 0.0)
-        )
+        imgui.set_next_item_width(avail - (imgui.calc_text_size(alias).x + 12.0 if inline else 0.0))
         edited, levels[alias] = imgui.slider_float(
             alias if inline else f"##{alias}", levels[alias], -1.0, 1.0
         )

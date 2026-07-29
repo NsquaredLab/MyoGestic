@@ -26,6 +26,7 @@ VHI ships in two ways and ``virtual_hand()`` accepts both transparently:
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 from dataclasses import dataclass
@@ -42,6 +43,8 @@ if TYPE_CHECKING:
 #: Kept in step with `myogestic.tools.install_vhi.MIN_VHI_TAG`, and asserted equal by
 #: tests/test_install_vhi_version_gate.py — duplicated rather than imported because the
 #: installer pulls in typer, which launching a process should not require.
+log = logging.getLogger("myogestic.vhi")
+
 MIN_VHI_TAG = "v2.0.0"
 
 
@@ -230,6 +233,29 @@ class InterfaceSpec:
             )
         self._refuse_a_pre_v2_install()
         return [(self.name, list(self.process))]
+
+    def launchable(self) -> list[tuple[str, list[str]]]:
+        """Like `launcher`, but empty instead of raising when nothing can be launched.
+
+        For a `myogestic.widgets.ProcessLauncher` in an application's own UI, where an
+        in-app Launch button is a *convenience*. `launcher` raising there takes the whole
+        app down at import — including when a perfectly good renderer is already running
+        and the app never needed the button at all.
+
+        So: this returns no rows and logs why, and the app opens. `launcher` stays strict
+        for a caller whose entire job is to start the thing (`tools/launch_vhi.py`), where
+        the refusal *is* the answer.
+
+        Examples
+        --------
+        >>> from myogestic.vhi import virtual_hand
+        >>> processes = virtual_hand().launchable()   # [] rather than an exception
+        """
+        try:
+            return self.launcher()
+        except FileNotFoundError as exc:
+            log.info("%s cannot be launched from this app: %s", self.name, exc)
+            return []
 
     def _refuse_a_pre_v2_install(self) -> None:
         """Refuse to launch an installed release too old to speak v2.

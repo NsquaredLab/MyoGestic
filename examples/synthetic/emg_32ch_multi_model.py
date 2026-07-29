@@ -152,9 +152,11 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
-    # vhi.launcher() returns a [(name, argv)] entry; splat it so EMG
-    # Generator and VHI Hand share a single launcher panel.
-    *vhi.launcher(),
+    # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
+    # Hand share one launcher panel. `launchable` rather than `launcher` because an
+    # unlaunchable renderer must not stop this app from opening — a running one needs no
+    # button, and the reason is logged either way.
+    *vhi.launchable(),
 ]
 
 app = App("EMG 32ch Multi-Model", ui_scale=0.85)
