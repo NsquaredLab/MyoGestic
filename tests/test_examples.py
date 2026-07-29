@@ -57,3 +57,43 @@ def test_example_wires_up(path, monkeypatch):
         runpy.run_path(str(path), run_name="__main__")
     except (ImportError, ModuleNotFoundError) as e:
         pytest.skip(f"optional dependency missing for {path.name}: {e}")
+
+
+def test_examples_survive_an_unlaunchable_renderer(monkeypatch):
+    """An app must open even when VHI cannot be launched from inside it.
+
+    This is deliberately *not* covered by the stub above. `test_example_wires_up`
+    replaces `launcher` with a no-op so a machine without VHI installed can still run
+    the suite — and that stub also hid a real crash: with a pre-2.0 release on disk,
+    `launcher()` raises, and every example that splatted it into a `ProcessLauncher` died
+    at import. Including when a perfectly good v2 renderer was already running and the
+    app never needed the button.
+
+    So here the refusal is what gets simulated, not what gets stubbed away.
+    """
+    import myogestic.vhi.interfaces  # noqa: PLC0415
+
+    def refuse(self):
+        raise FileNotFoundError(f"{self.name}: the installed release is v1.0.0")
+
+    monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
+    monkeypatch.setattr(myogestic.vhi.interfaces.InterfaceSpec, "launcher", refuse)
+
+    vhi_examples = [
+        path
+        for path in EXAMPLES
+        if "vhi" in path.read_text() and path.parent.name == "synthetic"
+    ]
+    assert vhi_examples, "no VHI examples found — has the layout moved?"
+    for path in vhi_examples:
+        monkeypatch.syspath_prepend(str(path.parent))
+        try:
+            runpy.run_path(str(path), run_name="__main__")
+        except (ImportError, ModuleNotFoundError) as exc:
+            pytest.skip(f"optional dependency missing for {path.name}: {exc}")
+        except FileNotFoundError as exc:  # pragma: no cover - the bug this pins
+            pytest.fail(
+                f"{path.name} does not open when VHI cannot be launched: {exc}. "
+                f"Use `vhi.launchable()` rather than `vhi.launcher()` for a "
+                f"ProcessLauncher row."
+            )

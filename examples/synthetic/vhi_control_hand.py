@@ -49,7 +49,9 @@ bus: ControlBus | None = None
 
 app = App("VHI control hand")
 
-PROCESSES = [*vhi.launcher()]
+# `launchable` not `launcher`: an unlaunchable renderer must not stop this app
+# from opening — a renderer that is already running needs no button.
+PROCESSES = vhi.launchable()
 processes = ProcessLauncher(PROCESSES)
 logo = AppLogo()
 
