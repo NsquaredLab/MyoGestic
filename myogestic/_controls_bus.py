@@ -166,6 +166,30 @@ class ControlBus:
 
         for target in self._targets:
             target.bind(controls)
+        self._check_every_control_is_claimed(controls)
+
+    def _check_every_control_is_claimed(self, controls: ControlSet) -> None:
+        """Refuse a control no target will render.
+
+        Several targets can share one control space — one per Virtual Hand, say — so no
+        single target need claim all of it, and a target that does not know what it claims
+        (a recorder, a test double) is assumed to take everything. But if *every* target
+        reports its claims and a control appears in none of them, nothing renders it: the
+        failure that looks exactly like a control which is working and holding still.
+        """
+        reported = [getattr(target, "claims", None) for target in self._targets]
+        if not reported or any(claims is None for claims in reported):
+            return
+        claimed: set[str] = set()
+        for claims in reported:
+            claimed |= set(claims)
+        orphans = [name for name in controls.dofs if name not in claimed]
+        if orphans:
+            raise ValueError(
+                f"no target renders {sorted(orphans)}. Each target drives one of the "
+                f"renderer's pose streams, so a control on another stream needs a target "
+                f"for that stream too — add one, or take the control out of the map."
+            )
 
     def _record(self, name: str) -> Callable[[str], None]:
         """An `EdgeTrigger` callback that notes an edge for this tick."""

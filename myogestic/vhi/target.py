@@ -124,8 +124,8 @@ class VhiTarget:
     """
 
     __slots__ = (
-        "_answered", "_client", "_dofs", "_negate", "_negotiated", "_order", "_outlet",
-        "_pending", "_routed", "_slots", "_stream", "_width",
+        "_answered", "_client", "_discrete", "_dofs", "_negate", "_negotiated", "_order",
+        "_outlet", "_pending", "_routed", "_slots", "_stream", "_width",
     )
 
     def __init__(
@@ -149,6 +149,8 @@ class VhiTarget:
         #: an application that has not launched its renderer yet.
         self._answered = False
         self._dofs: tuple[Continuous, ...] = ()
+        #: Names of the held states this target commands over gRPC once negotiated.
+        self._discrete: tuple[str, ...] = ()
         #: Negotiated channel order.
         self._order: tuple[str, ...] = ()
         #: Whether the negotiated wire wants values negated. The renderer declares this;
@@ -165,6 +167,21 @@ class VhiTarget:
         #: only discrete DOFs negotiates fine and has an empty channel order.
         self._negotiated = False
         self._width = int(getattr(outlet, "n_channels", _POSE_WIDTH) or _POSE_WIDTH)
+
+    @property
+    def claims(self) -> frozenset[str]:
+        """Which aliases this target actually drives.
+
+        A bus with one target per hand shares a single control map between them, so no one
+        target drives all of it. `ControlBus` reads this to check that every control was
+        claimed by *someone* — the alternative being an alias that renders nowhere and
+        looks exactly like one that is working and holding still.
+        """
+        routed = {alias for _, alias, *_ in self._routed}
+        by_name = {dof.name for _, dof in self._slots}
+        # Held states go over gRPC, so a negotiated target claims them whichever pose
+        # stream it drives.
+        return frozenset(routed | by_name | set(self._discrete))
 
     @property
     def negotiated(self) -> bool:
@@ -185,6 +202,7 @@ class VhiTarget:
         self._order = ()
         self._slots = ()
         self._routed = ()
+        self._discrete = ()
         self._pending = None
         self._negate = False
         self._negotiated = False
@@ -309,6 +327,14 @@ class VhiTarget:
             for cap in capabilities
             if not getattr(cap, "stream_name", "") or cap.stream_name == wanted
         }
+        # What the *other* streams carry, so "not mine" can be told from "nobody's".
+        # Skipping the first is how two targets share one map; refusing the second is how
+        # a typo stays an error instead of a control that renders nothing.
+        elsewhere = {
+            cap.address: cap.stream_name
+            for cap in capabilities
+            if getattr(cap, "stream_name", "") and cap.stream_name != wanted
+        }
 
         reply = self._client.declare(controls, client_name="myogestic", control_pose=pose)
         if reply is None:
@@ -328,14 +354,25 @@ class VhiTarget:
                 continue  # discrete aliases travel over gRPC, not the stream
             for ref in refs:
                 cap = by_address.get(ref.address)
+                if cap is None and ref.address in elsewhere:
+                    # Another stream's control, and the renderer says so. Not this
+                    # target's to drive and not an error: a bus may hold one target per
+                    # hand and share a single map between them. The alias is simply
+                    # someone else's, and `ControlBus` checks that *someone* claimed it.
+                    log.debug(
+                        "%r -> %r belongs to %s; leaving it to the target that drives it",
+                        alias,
+                        ref.address,
+                        elsewhere[ref.address],
+                    )
+                    continue
                 if cap is None or getattr(cap, "kind", "") != "continuous":
                     raise ValueError(
-                        f"{alias!r} points at {ref.address!r}, which this target cannot "
-                        f"drive. Either the renderer does not carry it as a number on "
-                        f"{wanted!r}, or it belongs to the other hand: vhi.prediction.* "
-                        f"is the model's hand and vhi.control.pose.* is the operator's. "
-                        f"One target drives one hand, so a map mixing them cannot bind — "
-                        f"use two maps and two targets."
+                        f"{alias!r} points at {ref.address!r}, which no target can drive "
+                        f"as a number: the renderer does not export it on any pose stream. "
+                        f"Check the address against what it does export — "
+                        f"vhi.prediction.* is the model's hand and vhi.control.pose.* the "
+                        f"operator's."
                     )
                 channel = getattr(cap, "channel", -1)
                 if channel < 0:
@@ -366,6 +403,7 @@ class VhiTarget:
                 )
 
         self._dofs = controls.continuous
+        self._discrete = tuple(dof.name for dof in controls.discrete)
         self._routed = tuple(slots)
         self._order = tuple(reply.continuous_channel_order)
         self._negate = False  # per-capability sign lives in each slot
@@ -433,6 +471,7 @@ class VhiTarget:
                 f"convention — guessing wrong inverts every joint."
             )
         self._dofs = controls.continuous
+        self._discrete = tuple(dof.name for dof in controls.discrete)
         self._order = order
         # Resolve each declared DOF to its negotiated channel once, here, rather than
         # looking names up per tick on the predict thread.

@@ -723,3 +723,95 @@ class TestAHeldStateOccupiesNoChannel:
             '[dofs]\na = "vhi.prediction.thumb"\nb = "vhi.prediction.thumb.flexion"\n',
         )
         assert any("same control" in p for p in editor.problems())
+
+
+class TestAMapMayServeBothHands:
+    """An app with a target per hand shares one map, so the editor can serve that too."""
+
+    def test_both_offers_every_stream(self, tmp_path):
+        path = tmp_path / "controls.toml"
+        path.write_text(GOOD)
+        editor = ControlMapEditor(path, client=_Client(), stream="both")
+        editor.load()
+        editor._connect()
+        addresses = [cap.address for cap in editor._offered()]
+        assert "vhi.prediction.thumb" in addresses
+        assert "vhi.control.pose.thumb" in addresses
+
+    def test_both_does_not_call_a_mixed_map_a_problem(self, tmp_path):
+        path = tmp_path / "controls.toml"
+        path.write_text(
+            '[dofs]\nmodel = "vhi.prediction.thumb"\noperator = "vhi.control.pose.thumb"\n'
+        )
+        editor = ControlMapEditor(path, client=_Client(), stream="both")
+        editor.load()
+        editor._connect()
+        assert editor.problems() == []
+        assert editor.save() is True
+
+    def test_a_single_stream_editor_still_refuses_the_mix(self, tmp_path):
+        """The default stays strict: most apps have one target."""
+        path = tmp_path / "controls.toml"
+        path.write_text(
+            '[dofs]\nmodel = "vhi.prediction.thumb"\noperator = "vhi.control.pose.thumb"\n'
+        )
+        editor = ControlMapEditor(path, client=_Client(), stream="output")
+        editor.load()
+        editor._connect()
+        assert any("one hand" in p for p in editor.problems())
+
+
+class TestOneWayToDriveTheControlHand:
+    """The renderer's own exclusion, and it taught it to us by refusing a declaration.
+
+    Streaming a pose to the operator's hand and commanding it a movement would both drive
+    that hand, so VHI accepts one or the other:
+
+        a discrete DOF and a control-pose stream would both drive the control hand —
+        declare one or the other
+
+    A `stream="both"` map is where this becomes reachable, so it is caught before the
+    handshake rather than by it.
+    """
+
+    def _editor(self, tmp_path, body, stream="both"):
+        path = tmp_path / "controls.toml"
+        path.write_text(body)
+        editor = ControlMapEditor(path, client=_Client(), stream=stream)
+        editor.load()
+        editor._connect()
+        return editor
+
+    def test_a_pose_and_a_movement_on_the_same_hand_are_refused(self, tmp_path):
+        editor = self._editor(
+            tmp_path,
+            '[dofs]\nposed = "vhi.control.pose.thumb"\nheld = "vhi.control.gesture"\n',
+        )
+        problems = editor.problems()
+        assert any("one or the other" in p for p in problems), problems
+        assert editor.save() is False
+
+    def test_the_reason_names_both_sides(self, tmp_path):
+        editor = self._editor(
+            tmp_path,
+            '[dofs]\nposed = "vhi.control.pose.thumb"\nheld = "vhi.control.gesture"\n',
+        )
+        reason = next(p for p in editor.problems() if "one or the other" in p)
+        assert "posed" in reason and "held" in reason
+
+    def test_a_pose_on_the_model_hand_beside_a_movement_is_fine(self, tmp_path):
+        """Different hands: the prediction stream and a control-hand movement coexist —
+        which is exactly what emg_classification_grpc does."""
+        editor = self._editor(
+            tmp_path,
+            '[dofs]\nmodel = "vhi.prediction.thumb"\nheld = "vhi.control.gesture"\n',
+        )
+        assert editor.problems() == [], editor.problems()
+
+    def test_two_pose_streams_together_are_fine(self, tmp_path):
+        """The case that works, and the one this whole change was about."""
+        editor = self._editor(
+            tmp_path,
+            '[dofs]\nmodel = "vhi.prediction.thumb"\noperator = "vhi.control.pose.thumb"\n',
+        )
+        assert editor.problems() == [], editor.problems()

@@ -964,7 +964,17 @@ def test_force_re_declares_after_a_settled_handshake():
 CANONICAL_ENC, LEGACY_ENC = 1, 2
 
 
-def _cap(address, channel, *, lo=-1.0, hi=1.0, kind="continuous", enc=CANONICAL_ENC, states=()):
+def _cap(
+    address,
+    channel,
+    *,
+    lo=-1.0,
+    hi=1.0,
+    kind="continuous",
+    enc=CANONICAL_ENC,
+    states=(),
+    stream="",
+):
     from myogestic.controls import Capability
 
     return Capability(
@@ -977,6 +987,7 @@ def _cap(address, channel, *, lo=-1.0, hi=1.0, kind="continuous", enc=CANONICAL_
         rest_state=states[0] if states else "",
         channel=channel,
         encoding=enc,
+        stream_name=stream,
     )
 
 
@@ -1139,15 +1150,21 @@ TWO_STREAMS = [
 
 
 def test_an_output_target_ignores_control_pose_addresses():
-    """Channel 2 of one stream is not channel 2 of the other."""
+    """Channel 2 of one stream is not channel 2 of the other, so it routes nothing.
+
+    Left to the target that drives that stream rather than refused: a bus may hold one
+    target per hand and share a single map. `ControlBus` is what notices a control *no*
+    target claimed.
+    """
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(
         load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
     )
     target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS))
-    with pytest.raises(ValueError, match="cannot drive"):
-        target.bind(controls)
+    target.bind(controls)
+    assert target.claims == frozenset(), "it claims nothing on this stream"
+    assert target._routed == ()
 
 
 def test_a_control_pose_target_ignores_prediction_addresses():
@@ -1159,16 +1176,22 @@ def test_a_control_pose_target_ignores_prediction_addresses():
     target = VhiTarget(
         FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS), stream="control_pose"
     )
-    with pytest.raises(ValueError, match="cannot drive"):
-        target.bind(controls)
+    target.bind(controls)
+    assert target.claims == frozenset()
+    assert target._routed == ()
 
 
 def test_the_refusal_names_both_namespaces():
-    """A namespace mix-up is the likely mistake, so the error should say which is which."""
+    """A namespace mix-up is the likely mistake, so the error should say which is which.
+
+    A *known* other-stream address is now another target's business; this is the refusal
+    that remains, for an address no stream exports at all.
+    """
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
+        load_control_map({"dofs": {"a": "vhi.prediction.wrist"}}),
+        [*TWO_STREAMS, _cap("vhi.prediction.wrist", -1, stream="MyoGestic_Output")],
     )
     target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS))
     with pytest.raises(ValueError) as excinfo:
@@ -1194,3 +1217,133 @@ def test_each_target_routes_its_own_stream():
         assert target.negotiated is True, stream
         target.send({"a": 1.0}, {})
         assert outlet.last[3] == pytest.approx(1.0), stream
+
+
+# --- two hands at once: one map, one target per stream ----------------------------
+
+
+def _two_hand_manifest():
+    """A renderer that carries both pose streams, as VHI does."""
+    return [
+        _cap("vhi.prediction.index", 2, stream="MyoGestic_Output"),
+        _cap("vhi.prediction.thumb", 0, stream="MyoGestic_Output"),
+        _cap("vhi.control.pose.thumb", 0, stream="MyoGestic_ControlPose"),
+        _cap("vhi.control.pose.index", 2, stream="MyoGestic_ControlPose"),
+        _cap("vhi.control.gesture", -1, kind="discrete", states=("Rest", "Fist")),
+    ]
+
+
+def _two_hand_controls():
+    from myogestic.controls import load_control_map, resolve
+
+    return resolve(
+        load_control_map(
+            {
+                "dofs": {
+                    "model_index": "vhi.prediction.index",
+                    "operator_thumb": "vhi.control.pose.thumb",
+                    "gesture": "vhi.control.gesture",
+                }
+            }
+        ),
+        _two_hand_manifest(),
+    )
+
+
+def test_one_map_drives_both_hands_through_two_targets():
+    """The natural way to drive both: a target per stream, sharing one control space.
+
+    Each target used to *refuse* the other's addresses, so this could not bind at all —
+    the map had to be split in two. A control on another stream is now simply not this
+    target's, which is a different thing from an address nothing exports.
+    """
+    controls = _two_hand_controls()
+    manifest = _two_hand_manifest()
+    predicted = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), manifest))
+    operator = VhiTarget(
+        FakeOutlet(),
+        client=ManifestClient(FakeReply(), manifest),
+        stream="control_pose",
+    )
+    bus = ControlBus(controls, targets=[predicted, operator], hz=32)
+    assert "model_index" in predicted.claims
+    assert "operator_thumb" not in predicted.claims
+    assert "operator_thumb" in operator.claims
+    assert "model_index" not in operator.claims
+    bus.stop()
+
+
+def test_each_hand_gets_only_its_own_values():
+    """Both streams number channels from 0, so a leak would be silent, not loud."""
+    controls = _two_hand_controls()
+    manifest = _two_hand_manifest()
+    left, right = FakeOutlet(), FakeOutlet()
+    predicted = VhiTarget(left, client=ManifestClient(FakeReply(), manifest))
+    operator = VhiTarget(
+        right, client=ManifestClient(FakeReply(), manifest), stream="control_pose"
+    )
+    bus = ControlBus(controls, targets=[predicted, operator], hz=32)
+    bus.push({"model_index": 1.0, "operator_thumb": -1.0})
+    assert left.last[2] == pytest.approx(1.0), "the model's index, on channel 2"
+    assert left.last[0] == 0.0, "the operator's thumb must not reach the model's hand"
+    assert right.last[0] == pytest.approx(-1.0), "the operator's thumb, on channel 0"
+    assert right.last[2] == 0.0
+    bus.stop()
+
+
+def test_a_held_state_is_claimed_by_whichever_target_negotiated():
+    controls = _two_hand_controls()
+    manifest = _two_hand_manifest()
+    predicted = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), manifest))
+    predicted.bind(controls)
+    assert "gesture" in predicted.claims
+
+
+def test_a_control_no_target_claims_is_refused_by_the_bus():
+    """The hazard of "not mine": with one target, the other hand's control renders nowhere.
+
+    Skipping it silently is the failure this whole layer exists to prevent, so the bus
+    checks the union of what its targets claim.
+    """
+    controls = _two_hand_controls()
+    manifest = _two_hand_manifest()
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), manifest))
+    with pytest.raises(ValueError, match="no target renders"):
+        ControlBus(controls, targets=[target], hz=32)
+
+
+def test_an_address_no_stream_exports_is_still_refused():
+    """"Not mine" must not swallow a typo."""
+    from myogestic.controls import load_control_map, resolve
+
+    manifest = _two_hand_manifest()
+    # The same address, but declared with no channel — as a control that exists and is not
+    # streamed. "Not mine" must not swallow that.
+    bad = resolve(
+        load_control_map({"dofs": {"a": "vhi.prediction.index"}}),
+        [cap for cap in manifest if cap.address != "vhi.prediction.index"]
+        + [_cap("vhi.prediction.index", -1, stream="MyoGestic_Output")],
+    )
+    unstreamed = [
+        cap for cap in manifest if cap.address != "vhi.prediction.index"
+    ] + [_cap("vhi.prediction.index", -1, stream="MyoGestic_Output")]
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), unstreamed))
+    with pytest.raises(ValueError, match="not carried on a stream"):
+        target.bind(bad)
+
+
+def test_a_target_that_does_not_report_claims_is_assumed_to_take_everything():
+    """A recorder consumes the whole frame, and must not trip the unclaimed check."""
+
+    class Recorder:
+        def bind(self, controls) -> None: ...
+
+        def send(self, values, changed) -> None: ...
+
+        def stop(self) -> None: ...
+
+    controls = _two_hand_controls()
+    manifest = _two_hand_manifest()
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), manifest))
+    bus = ControlBus(controls, targets=[target, Recorder()], hz=32)
+    bus.stop()
