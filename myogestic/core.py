@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import gc
 import logging
+import os
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -14,6 +17,81 @@ from typing import Any
 from myogestic._platform import _register_assets_folder, _try_set_macos_dock_icon
 from myogestic.session import Session
 from myogestic.stream import Stream
+
+#: GLFW's Cocoa backend logs this once or twice *per frame*, which is ~90 lines a second and
+#: buries everything the application prints.
+#:
+#: The cause is a **mirrored display**. GLFW builds its monitor list from CoreGraphics'
+#: *online* displays, which includes a mirror slave; macOS gives a mirror slave no
+#: `NSScreen`. So GLFW holds a monitor it can never resolve, and every work-area query for
+#: it fails. Measured on this machine: CoreGraphics reports 3 online displays, AppKit reports
+#: 2 screens, and the missing one is the built-in mirroring an external. Stop mirroring
+#: (use Extended) and the warning goes away.
+#:
+#: Nothing here can fix it: it reproduces in a bare imgui_bundle app with no MyoGestic code,
+#: with multi-viewport on *or* off, and GLFW's error callback is unreachable because
+#: imgui_bundle links GLFW statically and exposes no setter. It does not affect rendering —
+#: the app draws on the screens that do exist.
+_GLFW_MONITOR_SPAM = b"Cannot query workarea without screen"
+
+
+@contextlib.contextmanager
+def _collapse_glfw_monitor_spam():
+    """Show that GLFW error once, count the rest, and pass everything else through.
+
+    Suppressing it outright would hide a real machine condition; leaving it makes the
+    terminal useless. So the first line is printed as GLFW wrote it, and the repeats are
+    counted and summarised on the way out.
+
+    Implemented at the file-descriptor level because GLFW writes to fd 2 from C, where a
+    Python-level `sys.stderr` wrapper never sees it.
+    """
+    try:
+        saved = os.dup(2)
+    except OSError:  # pragma: no cover - no stderr to redirect (embedded, some sandboxes)
+        yield
+        return
+    read_fd, write_fd = os.pipe()
+    suppressed = 0
+    sys.stderr.flush()
+    os.dup2(write_fd, 2)
+    os.close(write_fd)
+
+    def pump() -> None:
+        nonlocal suppressed
+        seen_once = False
+        with os.fdopen(read_fd, "rb", 0) as pipe:
+            for line in pipe:
+                if _GLFW_MONITOR_SPAM in line:
+                    if seen_once:
+                        suppressed += 1
+                        continue
+                    seen_once = True
+                os.write(saved, line)
+
+    pump_thread = threading.Thread(target=pump, name="stderr-filter", daemon=True)
+    pump_thread.start()
+    try:
+        yield
+    finally:
+        sys.stderr.flush()
+        # Restoring fd 2 drops the last reference to the pipe's write end, so `pump`
+        # reaches EOF and finishes on its own.
+        os.dup2(saved, 2)
+        pump_thread.join(timeout=2.0)
+        if suppressed:
+            # Written to the same descriptor the warnings went to, not to `sys.stderr`:
+            # they are not always the same object, and the summary belongs beside the line
+            # it is summarising.
+            os.write(
+                saved,
+                f"({suppressed} more identical GLFW monitor warnings suppressed. Usual "
+                f"cause: a mirrored display, which macOS gives no NSScreen while GLFW "
+                f"still lists it. Switch mirroring to Extended to silence it at the "
+                f"source.)\n".encode(),
+            )
+        os.close(saved)
+
 
 log = logging.getLogger("myogestic")
 
@@ -601,7 +679,8 @@ class App:
             addons.with_implot = True
             addons.with_implot3d = True
 
-            immapp.run(runner_params=runner_params, add_ons_params=addons)
+            with _collapse_glfw_monitor_spam():
+                immapp.run(runner_params=runner_params, add_ons_params=addons)
         finally:
             _active_app = None
             self._runner_params = None
