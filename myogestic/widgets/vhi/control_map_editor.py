@@ -133,11 +133,12 @@ class ControlMapEditor:
         Without it the editor still opens the file and shows it; it just cannot offer a
         list to pick from or validate an address, and says so.
     stream
-        Which renderer stream the map being edited drives — ``"output"`` (the model's
-        hand, the default) or ``"control_pose"`` (the operator's). Must match the
-        `myogestic.vhi.VhiTarget` that will bind it, because a target drives one hand:
-        the picker offers only that stream's controls, and an address from the other one
-        is reported as a problem rather than saved and refused later.
+        Which renderer stream the map's *numbers* go to — ``"output"`` (the model's hand,
+        the default), ``"control_pose"`` (the operator's), or ``"both"``. Must match the
+        `myogestic.vhi.VhiTarget` set that will bind it: one target streams to one hand,
+        so with a single target the picker offers only that stream's controls and an
+        address from the other is a problem. An application with a target *per* hand
+        shares one map between them and passes ``"both"``.
     title
         Panel header text.
 
@@ -178,9 +179,9 @@ class ControlMapEditor:
         stream: str = "output",
         title: str = "CONTROL MAP",
     ) -> None:
-        if stream not in _STREAM_NAMES:
+        if stream not in (*_STREAM_NAMES, "both"):
             raise ValueError(
-                f"stream must be one of {sorted(_STREAM_NAMES)}, got {stream!r}"
+                f"stream must be one of {[*sorted(_STREAM_NAMES), 'both']}, got {stream!r}"
             )
         self._path = path
         self._client = client
@@ -396,6 +397,30 @@ class ControlMapEditor:
                 found.append(f"{alias}: {no_threshold}.")
             if entry["debounce_s"] and no_debounce:
                 found.append(f"{alias}: {no_debounce}.")
+
+        # The renderer's own exclusion, learned from its refusal: streaming a pose to the
+        # control hand and commanding it a movement would both drive that hand, so it
+        # accepts one or the other. Caught here rather than at the handshake.
+        posed = [
+            entry["alias"]
+            for entry in self._draft
+            for address, _ in entry["targets"]
+            if (cap := by_address.get(address)) is not None
+            and cap.kind == "continuous"
+            and getattr(cap, "stream_name", "") == _STREAM_NAMES["control_pose"]
+        ]
+        held = [
+            entry["alias"]
+            for entry in self._draft
+            for address, _ in entry["targets"]
+            if (cap := by_address.get(address)) is not None and cap.kind != "continuous"
+        ]
+        if posed and held:
+            found.append(
+                f"{sorted(set(posed))} stream a pose to the operator's hand while "
+                f"{sorted(set(held))} command it a movement. Both drive that hand, so the "
+                f"renderer accepts one or the other — keep the pose, or keep the movement."
+            )
 
         for (stream, channel), owners in channels.items():
             distinct = sorted(set(owners))
@@ -670,6 +695,8 @@ class ControlMapEditor:
         A discrete control travels over gRPC rather than a pose stream, so it belongs to
         neither hand and is always on offer.
         """
+        if self._stream == "both":
+            return list(self._capabilities)
         wanted = _STREAM_NAMES[self._stream]
         return [
             cap
@@ -710,6 +737,8 @@ class ControlMapEditor:
 
     def _wrong_stream(self, address: str) -> Capability | None:
         """The capability for `address` if it belongs to the *other* hand."""
+        if self._stream == "both":
+            return None
         wanted = _STREAM_NAMES[self._stream]
         for cap in self._capabilities:
             if cap.address == address and cap.kind == "continuous":

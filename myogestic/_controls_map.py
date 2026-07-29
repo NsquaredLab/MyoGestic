@@ -621,6 +621,15 @@ def resolve(
     >>> resolved.dofs["drive_x"].lo
     -1.0
     """
+    if capabilities is None:
+        # `capabilities()` returns None when the target has not answered, and passing that
+        # straight through produced `TypeError: 'NoneType' is not iterable` from inside a
+        # dict comprehension — which says nothing about the actual situation.
+        raise ValueError(
+            "resolve() needs the target's manifest, but it has not answered. An "
+            "application that launches its own renderer must resolve *after* it is up: "
+            "check `client.capabilities()` for None and try again once it is."
+        )
     by_address = {cap.address: cap for cap in capabilities}
     available = sorted(by_address)
     errs: list[str] = []
