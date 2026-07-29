@@ -39,7 +39,7 @@ A "degree of freedom" in the controlled output - e.g. one finger joint, or one a
 
 ### Pose
 
-A 9-float vector understood by the Virtual Hand Interface (VHI). Indices 0–5 are finger flexion/rotation; 6–8 are wrist axes. Values clipped to `[-1, 1]`.
+A 9-float vector understood by the Virtual Hand Interface (VHI). Indices 0–5 carry the six controls it renders — thumb flexion, thumb abduction, then index, middle, ring and little flexion. **Indices 6–8 are read by nothing**: this rig has no wrist on the pose stream, which is why wrist movement is a `vhi.control.gesture` preset instead. Values clipped to `[-1, 1]`.
 
 ### Bridge
 

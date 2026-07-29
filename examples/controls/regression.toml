@@ -7,11 +7,11 @@
 [dofs]
 
 # One regressed output per digit.
-thumb = "vhi.prediction.thumb.flexion"
-index = "vhi.prediction.index.flexion"
-middle = "vhi.prediction.middle.flexion"
-ring = "vhi.prediction.ring.flexion"
-little = "vhi.prediction.little.flexion"
+thumb = "vhi.prediction.thumb"
+index = "vhi.prediction.index"
+middle = "vhi.prediction.middle"
+ring = "vhi.prediction.ring"
+little = "vhi.prediction.little"
 
 # Discrete, per VHI. `debounce_s` gates classifier chatter.
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }

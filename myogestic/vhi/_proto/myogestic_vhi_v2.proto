@@ -103,12 +103,17 @@ message ControlCapability {
   // a second to close wants a higher bar than a cursor click.
   float activation_threshold = 12;
 
-  // Which channel of stream_name carries this control. -1 when it is not streamed.
+  // Which channel of stream_name carries this control. -1 when it is not streamed — a
+  // held state travels over gRPC and occupies no channel at all.
   //
   // This is the address-to-channel map, published per capability rather than inferred
-  // from a list, because two addresses may legitimately name the same channel: a short
-  // form and its explicit axis form are the same control. A client resolves its own
-  // alias to an address and the address to a channel, and never has to guess an index.
+  // from position in a list, so a target may publish its controls in any order, leave
+  // gaps, and — if it wants to — name one control under more than one address. A client
+  // resolves its own alias to an address and the address to a channel, and never has to
+  // guess an index.
+  //
+  // Read it together with stream_name: this renderer publishes two pose streams and both
+  // number their channels from zero, so a channel means nothing on its own.
   int32 channel = 11;
 }
 

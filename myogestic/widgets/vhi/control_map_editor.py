@@ -382,10 +382,10 @@ class ControlMapEditor:
                     and cap.kind == "continuous"
                     and getattr(cap, "channel", -1) >= 0
                 ):
-                    # Continuous only: a held state occupies no pose channel. Trusting the
-                    # number alone is not safe — a target that omits `channel` for a
-                    # discrete control reports proto3's default of 0, which reads as pose
-                    # channel 0 and made two held states collide with each other.
+                    # Continuous only: a held state occupies no pose channel. Keyed on kind
+                    # rather than on the number, because a target that omits `channel` for a
+                    # discrete control reports proto3's default of 0 — indistinguishable from
+                    # pose channel 0, which made two held states collide with each other.
                     slot = (getattr(cap, "stream_name", ""), cap.channel)
                     channels.setdefault(slot, []).append(alias)
 
@@ -698,22 +698,45 @@ class ControlMapEditor:
             imgui.set_tooltip("Remove this target")
         return clicked
 
-    def _offered(self) -> list[Capability]:
-        """The controls this map may use: its own stream's, plus the held states.
+    def _offered(self, current: str = "") -> list[Capability]:
+        """The controls worth offering: one row per *control*, not per name.
 
-        A discrete control travels over gRPC rather than a pose stream, so it belongs to
-        neither hand and is always on offer.
+        Three reductions, all so a reader never has to decode a transport detail:
+
+        * only this map's stream (plus the held states, which belong to neither hand);
+        * only controls the stream actually carries — one with no channel cannot be driven
+          this way, so offering it just earns a refusal later;
+        * **one row per channel.** A renderer *may* publish several addresses for one
+          control — a short form and its explicit axis form, say — where picking either does
+          exactly the same thing. VHI stopped advertising those, so for it this reduction is
+          now a no-op; it stays because the manifest is the target's to write and another one
+          may still alias. The shortest name wins; the others are in the row's tooltip.
+
+        `current` is always included even if it would otherwise be collapsed away, so
+        opening the picker on a file that uses an axis form neither hides its value nor
+        quietly rewrites it.
         """
-        if self._stream == "both":
-            return list(self._capabilities)
-        wanted = _STREAM_NAMES[self._stream]
-        return [
-            cap
-            for cap in self._capabilities
-            if cap.kind != "continuous"
-            or not getattr(cap, "stream_name", "")
-            or cap.stream_name == wanted
-        ]
+        wanted = None if self._stream == "both" else _STREAM_NAMES[self._stream]
+        best: dict[tuple[str, int], Capability] = {}
+        held: list[Capability] = []
+        for cap in self._capabilities:
+            if cap.kind != "continuous":
+                held.append(cap)
+                continue
+            stream = getattr(cap, "stream_name", "")
+            if wanted is not None and stream and stream != wanted:
+                continue
+            if getattr(cap, "channel", -1) < 0:
+                continue
+            slot = (stream, cap.channel)
+            winner = best.get(slot)
+            if (
+                winner is None
+                or cap.address == current
+                or (winner.address != current and len(cap.address) < len(winner.address))
+            ):
+                best[slot] = cap
+        return [*best.values(), *held]
 
     def _gate_rules(self, entry: dict[str, Any]) -> tuple[str, str]:
         """Why `threshold_fraction` / `debounce_s` cannot apply to this entry, or "".
@@ -777,16 +800,16 @@ class ControlMapEditor:
         if imgui.begin_combo("control", label):
             imgui.set_next_item_width(popup_w - _label_w("search") - 24.0)
             changed, self._filter = imgui.input_text("search", self._filter)
-            for cap in self._offered():
+            for cap in self._offered(current=address):
                 if self._filter and self._filter.lower() not in cap.address.lower():
                     continue
                 selected, _ = imgui.selectable(self._describe(cap), cap.address == address)
                 if imgui.is_item_hovered():
                     peers = self._peers(cap)
-                    if peers:
-                        imgui.set_tooltip(
-                            "The same control as:\n  " + "\n  ".join(peers)
-                        )
+                    imgui.set_tooltip(
+                        self._summary(cap)
+                        + ("\n\nalso addressable as:\n  " + "\n  ".join(peers) if peers else "")
+                    )
                 if selected:
                     pair[0] = cap.address
             imgui.end_combo()
@@ -804,21 +827,20 @@ class ControlMapEditor:
         it means `vhi.prediction.thumb` in the file. One name, the real one, and the list
         reads the way the file does.
 
-        The range is shown only when it is *not* the signed `[-1, +1]` every control here
-        declares — see `_SIGNED`. The full facts of whatever is selected are on the
-        picker's own tooltip, so nothing is lost by leaving the usual case unsaid.
+        No channel number. A wire index is not something a reader should decode to pick a
+        finger, and there is nothing left for it to disambiguate: `_offered` gives one row
+        per control, and the two addresses that used to share a channel are no longer both
+        advertised.
 
-        The channel is shown because it is the only thing that reveals the list's one
-        surprise — a renderer publishes the short and the explicit-axis form of a control
-        as two addresses on **one** channel, so two rows can mean the same physical
-        control. Two rows with the same `ch` are the same control.
+        The range appears only when it is *not* the signed `[-1, +1]` every control here
+        declares (see `_SIGNED`), because a fact repeated on every row is one nobody reads.
+        The full facts of whatever is selected are on the picker's own tooltip.
         """
         if cap.kind != "continuous":
-            return f"{cap.address}   {len(cap.states)} states   over gRPC"
-        where = f"ch{cap.channel}" if cap.channel >= 0 else "not streamed"
+            return f"{cap.address}   {len(cap.states)} states"
         usual = abs(cap.lo - _SIGNED[0]) < 1e-6 and abs(cap.hi - _SIGNED[1]) < 1e-6
-        span = "" if usual else f"   [{cap.lo:+.1f}..{cap.hi:+.1f}]"
-        return f"{cap.address}{span}   {where}"
+        span = f"   [{cap.lo:+.1f}..{cap.hi:+.1f}]" if not usual else ""
+        return f"{cap.address}{span}"
 
     def _peers(self, cap: Capability) -> list[str]:
         """Other addresses that land on the same control as this one.

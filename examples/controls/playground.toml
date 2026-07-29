@@ -16,5 +16,6 @@ close = [
   { target = "vhi.prediction.little" },
 ]
 
-# One output, one control. The short `...thumb` means flexion, so name the axis.
+# The thumb's second axis. `...thumb` alone means flexion — signed, so +1 flexes
+# and -1 extends — and abduction is a different control, so it is named.
 thumb_spread = "vhi.prediction.thumb.abduction"

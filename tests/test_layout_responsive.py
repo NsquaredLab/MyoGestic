@@ -46,6 +46,13 @@ MANIFEST = [
         "vhi.prediction.thumb.abduction", "continuous", -1.0, 1.0, 0.0, channel=1,
         stream_name="MyoGestic_Output",
     ),
+    # The aliased name of channel 0, so a test that means to provoke the *collision* gets
+    # one. Without it, adding `...thumb.flexion` raised "the target does not export" and the
+    # collision test passed on the wrong error.
+    Capability(
+        "vhi.prediction.thumb.flexion", "continuous", -1.0, 1.0, 0.0, channel=0,
+        stream_name="MyoGestic_Output",
+    ),
     Capability(
         "vhi.control.gesture", "discrete", states=("Rest", "Fist"), rest_state="Rest",
     ),
@@ -146,7 +153,12 @@ class TestTheEditorFitsTheWidthItIsGiven:
         wrong — which is the worst moment for them to be cut off."""
         editor = _editor(tmp_path)
         editor.add_control("clash", "vhi.prediction.thumb.flexion")
-        assert editor.problems(), "expected the collision to be reported"
+        # `thumb` is already mapped by BUSY, and `...thumb.flexion` is its other name on
+        # channel 0 — so this is the collision, not an unknown address. Asserting the
+        # *reason* is what stops this passing on the wrong error again.
+        assert any("same control" in problem for problem in editor.problems()), (
+            editor.problems()
+        )
         assert _overflow(_context, width, editor.ui) == pytest.approx(0.0, abs=1.0)
 
     @pytest.mark.parametrize("width", (320, 1600))

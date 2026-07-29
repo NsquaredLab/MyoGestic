@@ -11,6 +11,26 @@ Continuous controls are **normalized**: `+1` is the direction the control denote
 `0`, and the range is signed when the target says the control is. Discrete controls are
 separate on purpose — a held state delivered on change is not the same thing as a number.
 
+!!! tip "There is no separate control for the other direction"
+    A signed control already has both halves: `+1` on `vhi.prediction.thumb` flexes the
+    thumb and `-1` extends it. So there is **no** `…thumb.extension` address, and you do not
+    need one — a model that wants extension emits a negative value, or a mapping gives that
+    target a negative `weight`.
+
+    Two things that look like exceptions:
+
+    * **`vhi.prediction.thumb.abduction`** is a genuinely different control, not the other
+      half of one. The thumb has two axes; the short `…thumb` is *declared* to mean flexion,
+      and the second axis has to be named because silently picking one of two would be a
+      guess. Every other digit has one axis, so its short form is all there is.
+    * **`ThumbExtension`** is one of `vhi.control.gesture`'s **movement presets** — a held
+      state on the control hand, not a number and not an address. It exists because presets
+      reach poses the pose stream cannot, notably the wrist.
+
+    A renderer is free to publish one control under several addresses — `…index` and
+    `…index.flexion` on one channel, say — and the manifest's `channel` field is what tells
+    you two names are one control. VHI advertises each of its controls once.
+
 !!! tip "See it work before reading further"
     There is a narrated walkthrough that runs the whole path — declaration, the two
     kinds of control, the wire frame, and the negotiation against whatever Virtual Hand
