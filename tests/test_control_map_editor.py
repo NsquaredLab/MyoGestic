@@ -248,14 +248,20 @@ class TestEditing:
         assert [e["alias"] for e in editor._draft] == ["grip"]
 
     def test_a_gate_survives_the_round_trip(self, tmp_path):
+        """Each gate on the kind of control it belongs to.
+
+        Both on one entry is what this used to assert, and it is a combination `resolve`
+        refuses: a hold has nothing to hold on a number.
+        """
         editor = _editor(tmp_path, None)
         editor.add_control("fist", "vhi.prediction.index")
         editor._draft[0]["threshold_fraction"] = 0.4
-        editor._draft[0]["debounce_s"] = 0.25
-        assert editor.save() is True
+        editor.add_control("gesture", "vhi.control.gesture")
+        editor._draft[1]["debounce_s"] = 0.25
+        assert editor.save() is True, editor.problems()
         editor.load()
         assert editor._draft[0]["threshold_fraction"] == 0.4
-        assert editor._draft[0]["debounce_s"] == 0.25
+        assert editor._draft[1]["debounce_s"] == 0.25
 
 
 class TestItExplainsWhatTheTargetWouldMakeOfIt:
@@ -543,6 +549,8 @@ class TestOneMapDrivesOneHand:
         problems = editor.problems()
         assert any("one hand" in p for p in problems), problems
         assert editor.save() is False
+        # And it says why a held state is *not* caught by the same rule.
+        assert any("gRPC" in p for p in problems), problems
 
     def test_the_reason_names_both_hands_in_plain_words(self, tmp_path):
         """"not a streamed continuous control on 'MyoGestic_Output'" is not an answer."""
@@ -568,3 +576,150 @@ class TestOneMapDrivesOneHand:
     def test_an_unknown_stream_is_refused_at_construction(self, tmp_path, bad):
         with pytest.raises(ValueError, match="stream must be one of"):
             ControlMapEditor(tmp_path / "c.toml", stream=bad)
+
+
+class TestAGateIsOnlyOfferedWhereItApplies:
+    """The UI must not offer what the resolver will refuse.
+
+    Three separate reports came from that one shape: a control from the other hand, a
+    probability cutoff on a 17-state control, and a stability gate on a number. Each was
+    offered, validated clean, saved — and then refused by the bus, layers from the click.
+    `_gate_rules` is the single place that knows, so the checkbox that offers a gate and
+    the check that refuses one cannot drift apart.
+    """
+
+    MANY_STATES = Capability(
+        "vhi.control.many",
+        "discrete",
+        states=tuple(f"s{n}" for n in range(17)),
+        rest_state="s0",
+    )
+    TWO_STATES = Capability(
+        "vhi.control.grip", "discrete", states=("Rest", "Closed"), rest_state="Rest"
+    )
+
+    @pytest.fixture
+    def client(self):
+        caps = [*MANIFEST, self.MANY_STATES, self.TWO_STATES]
+
+        class Client:
+            def capabilities(self):
+                return caps
+
+        return Client()
+
+    def _entry(self, tmp_path, client, address, **gates):
+        path = tmp_path / "controls.toml"
+        path.write_text(f'[dofs]\nmine = "{address}"\n')
+        editor = ControlMapEditor(path, client=client, stream="output")
+        editor.load()
+        editor._connect()
+        editor._draft[0].update(gates)
+        return editor
+
+    def test_a_number_takes_a_cutoff_but_not_a_hold(self, tmp_path, client):
+        editor = self._entry(tmp_path, client, "vhi.prediction.index")
+        no_threshold, no_debounce = editor._gate_rules(editor._draft[0])
+        assert no_threshold == ""
+        assert "no state transition to hold" in no_debounce
+
+    def test_a_seventeen_state_control_takes_a_hold_but_not_a_cutoff(self, tmp_path, client):
+        editor = self._entry(tmp_path, client, "vhi.control.many")
+        no_threshold, no_debounce = editor._gate_rules(editor._draft[0])
+        assert "17 states" in no_threshold
+        assert "state name" in no_threshold, "it must say what to send instead"
+        assert no_debounce == ""
+
+    def test_a_two_state_control_takes_both(self, tmp_path, client):
+        """The case a cutoff was designed for: rest, or the one other state."""
+        editor = self._entry(tmp_path, client, "vhi.control.grip")
+        assert editor._gate_rules(editor._draft[0]) == ("", "")
+
+    def test_a_cutoff_on_a_many_state_control_blocks_the_save(self, tmp_path, client):
+        editor = self._entry(tmp_path, client, "vhi.control.many", threshold_fraction=0.5)
+        assert any("17 states" in p for p in editor.problems())
+        assert editor.save() is False
+
+    def test_a_hold_on_a_number_blocks_the_save(self, tmp_path, client):
+        """Silently doing nothing is the worse outcome: the bus gates discrete DOFs only."""
+        editor = self._entry(tmp_path, client, "vhi.prediction.index", debounce_s=0.2)
+        assert any("hold" in p for p in editor.problems())
+        assert editor.save() is False
+
+    def test_an_unset_gate_is_never_a_problem(self, tmp_path, client):
+        """Only a gate actually *set* where it cannot apply is wrong."""
+        for address in ("vhi.prediction.index", "vhi.control.many"):
+            editor = self._entry(tmp_path, client, address)
+            assert editor.problems() == [], address
+
+    def test_nothing_is_refused_on_a_guess(self, tmp_path, client):
+        """Offline, or an address the target does not export, is unknowable — allow it."""
+        path = tmp_path / "controls.toml"
+        path.write_text('[dofs]\nmine = { target = "some.other.thing", debounce_s = 0.2 }\n')
+        editor = ControlMapEditor(path, stream="output")   # no client at all
+        editor.load()
+        assert editor._gate_rules(editor._draft[0]) == ("", "")
+
+
+class TestAHeldStateOccupiesNoChannel:
+    """A discrete control shares no pose channel, whatever number it reports.
+
+    A target that leaves `channel` unset for a held state reports proto3's default of **0**,
+    which is indistinguishable from pose channel 0 — so two held states looked like one
+    control, and a held state looked like the thumb. Keyed on `kind` now, so the client is
+    right regardless of what the target omits. (VHI was also fixed to declare -1.)
+    """
+
+    UNSET = Capability(
+        "vhi.control.a", "discrete", states=("Rest", "On"), rest_state="Rest", channel=0
+    )
+    ALSO_UNSET = Capability(
+        "vhi.control.b", "discrete", states=("Rest", "On"), rest_state="Rest", channel=0
+    )
+
+    @pytest.fixture
+    def client(self):
+        caps = [*MANIFEST, self.UNSET, self.ALSO_UNSET]
+
+        class Client:
+            def capabilities(self):
+                return caps
+
+        return Client()
+
+    def _editor_with(self, tmp_path, client, body):
+        path = tmp_path / "controls.toml"
+        path.write_text(body)
+        editor = ControlMapEditor(path, client=client, stream="output")
+        editor.load()
+        editor._connect()
+        return editor
+
+    def test_two_held_states_reporting_channel_zero_do_not_collide(self, tmp_path, client):
+        editor = self._editor_with(
+            tmp_path,
+            client,
+            '[dofs]\na = "vhi.control.a"\nb = "vhi.control.b"\n',
+        )
+        assert not any("same control" in p for p in editor.problems()), editor.problems()
+
+    def test_a_held_state_does_not_collide_with_pose_channel_zero(self, tmp_path, client):
+        editor = self._editor_with(
+            tmp_path,
+            client,
+            '[dofs]\nheld = "vhi.control.a"\nthumb = "vhi.prediction.thumb"\n',
+        )
+        assert editor.problems() == [], editor.problems()
+
+    def test_a_held_state_has_no_peers(self, tmp_path, client):
+        editor = self._editor_with(tmp_path, client, '[dofs]\na = "vhi.control.a"\n')
+        assert editor._peers(self.UNSET) == []
+
+    def test_two_numbers_on_one_channel_still_collide(self, tmp_path, client):
+        """The rule that must survive the fix."""
+        editor = self._editor_with(
+            tmp_path,
+            client,
+            '[dofs]\na = "vhi.prediction.thumb"\nb = "vhi.prediction.thumb.flexion"\n',
+        )
+        assert any("same control" in p for p in editor.problems())

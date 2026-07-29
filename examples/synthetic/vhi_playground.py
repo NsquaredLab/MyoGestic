@@ -44,6 +44,13 @@ app = App("VHI 2 playground")
 # state: `levels` has one entry per alias *in the file*, and the bus is resolved against
 # the manifest, which needs VHI up.
 levels: dict[str, float] = {}
+#: alias -> the states a held control accepts, straight from the target's manifest. A
+#: discrete control cannot be driven by a slider: it takes one of *its* names, and it goes
+#: over gRPC rather than the pose stream. Without this, mapping `vhi.control.gesture` here
+#: produced a control the app could not command at all — mapped, resolved, and inert.
+states: dict[str, tuple[str, ...]] = {}
+#: The state each held control is currently showing, so the picker has something to say.
+chosen: dict[str, str] = {}
 bus: ControlBus | None = None
 status = "Launch VHI, then press Connect."
 failure = ""
@@ -105,7 +112,7 @@ def _connect() -> None:
     on an RPC. Rebuilding from scratch each time is deliberate — a stale slider for an
     alias that no longer exists would send a value nothing reads.
     """
-    global bus, levels, status, failure
+    global bus, levels, states, status, failure
     failure = ""
     if bus is not None:
         bus.stop()
@@ -130,9 +137,17 @@ def _connect() -> None:
         status = "That map cannot be rendered by this VHI."
         return
     bus = new_bus
-    levels = dict.fromkeys(controls.dofs, 0.0)
+    levels = {
+        alias: 0.0 for alias, dof in controls.dofs.items() if not hasattr(dof, "states")
+    }
+    states = {
+        alias: tuple(dof.states)
+        for alias, dof in controls.dofs.items()
+        if hasattr(dof, "states")
+    }
     app.ctx.control_space = control_map
-    status = f"Driving {len(levels)} control(s) from {CONTROL_FILE.name}."
+    held = f" and {len(states)} held state(s)" if states else ""
+    status = f"Driving {len(levels)} control(s){held} from {CONTROL_FILE.name}."
 
 
 @app.ui
@@ -207,6 +222,29 @@ def _sliders_ui() -> None:
         changed = True
     if changed:
         bus.push(levels)
+    _held_states_ui()
+
+
+def _held_states_ui() -> None:
+    """A picker per held control: choose one of the states the target declared.
+
+    `bus.select` rather than `bus.push`: a held state is delivered on change and rebases
+    its own stability gate, so the next frame's push does not re-fire what was just
+    chosen. And the states are the *target's* names — this app invents none of them.
+    """
+    assert bus is not None
+    if not states:
+        return
+    imgui.separator()
+    for alias, options in states.items():
+        imgui.set_next_item_width(imgui.get_content_region_avail().x * 0.6)
+        if imgui.begin_combo(alias, chosen.get(alias, options[0])):
+            for state in options:
+                selected, _ = imgui.selectable(state, chosen.get(alias) == state)
+                if selected:
+                    chosen[alias] = state
+                    bus.select(alias, state)
+            imgui.end_combo()
 
 
 def main() -> None:
