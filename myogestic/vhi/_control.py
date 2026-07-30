@@ -1,14 +1,14 @@
-"""gRPC client for VHI's canonical control service (v2).
+"""gRPC client for VHI's control service.
 
-The v2 counterpart to `myogestic.vhi._client`. Three calls, three shapes:
+Three calls, three shapes:
 
-- `VhiCanonicalClient.declare` is a **synchronous handshake**. It runs once at bind
+- `VhiControlClient.declare` is a **synchronous handshake**. It runs once at bind
   time and its answer decides how everything afterwards is encoded, so a caller has
-  to wait for it. It returns ``None`` rather than raising when VHI does not speak v2
-  (an older build answers ``UNIMPLEMENTED``).
-- `VhiCanonicalClient.set_control` is fire-and-forget on a worker thread, like every
-  v1 command: it may be called from the predict thread and must never block it.
-- `VhiCanonicalClient.sweep` is synchronous and slow — it drives a joint through its
+  to wait for it. It returns ``None`` rather than raising when VHI does not speak the
+  control contract (an older build answers ``UNIMPLEMENTED``).
+- `VhiControlClient.set_control` is fire-and-forget on a worker thread: it may be
+  called from the predict thread and must never block it.
+- `VhiControlClient.sweep` is synchronous and slow — it drives a joint through its
   range. For verification tools, never for a running app.
 
 Continuous per-tick values still go over LSL. This carries the negotiation, discrete
@@ -25,15 +25,15 @@ from typing import TYPE_CHECKING, Any
 import grpc
 
 from myogestic._controls_core import Continuous, Discrete
-from myogestic.vhi._proto import myogestic_vhi_v2_pb2 as pb2
-from myogestic.vhi._proto.myogestic_vhi_v2_pb2_grpc import VhiCanonicalControlStub
+from myogestic.vhi._proto import myogestic_vhi_pb2 as pb2
+from myogestic.vhi._proto.myogestic_vhi_pb2_grpc import VhiControlStub
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from myogestic.controls import ControlSet
 
-log = logging.getLogger("myogestic.vhi_client_v2")
+log = logging.getLogger("myogestic.vhi_control")
 
 _RPC_TIMEOUT_S = 2.0
 
@@ -50,44 +50,33 @@ _SWEEP_SLACK_S = 5.0
 
 
 def declare_request(
-    controls: ControlSet, client_name: str = "", *, control_pose: str = ""
+    controls: ControlSet, client_name: str = "", *, control_pose: bool = False
 ) -> pb2.DeclareRequest:
     """A `DeclareRequest` describing ``controls``, in declaration order.
 
-    Order is the canonical wire order: VHI echoes it back as the channel layout it
-    expects, so a reordered configuration must rename channels rather than silently
-    remap them.
+    Order is the wire order: VHI echoes it back as the channel layout it expects, so a
+    reordered configuration must rename channels rather than silently remap them.
 
     Parameters
     ----------
     control_pose
-        Opt in to driving the renderer's *second* pose stream, and say which convention
-        you will send on it: ``"canonical"`` or ``"legacy"``. Empty (the default) does
-        not declare that stream at all, leaving an existing renderer-unit producer
-        working as before.
+        Opt in to driving the renderer's *second* pose stream. False (the default)
+        does not declare that stream at all, leaving an existing renderer-unit
+        producer working as before.
     """
     if not hasattr(controls, "dofs"):
         # A ControlMap is the *unresolved* form and cannot be declared: a declaration
         # carries each control's kind and range, and only the target can supply those.
-        # Raised, not swallowed — None here would read as "this target does not speak v2".
+        # Raised, not swallowed — None here would read as "this target is unreachable".
         raise TypeError(
             f"declare() needs a resolved ControlSet, got {type(controls).__name__}. "
             f"Resolve first: resolve(control_map, client.capabilities())."
         )
 
-    encodings = {
-        "": pb2.ENCODING_UNSPECIFIED,
-        "canonical": pb2.CANONICAL,
-        "legacy": pb2.LEGACY_NEGATED,
-    }
-    if control_pose not in encodings:
-        raise ValueError(
-            f"control_pose must be one of {sorted(encodings)!r}, got {control_pose!r}"
-        )
     request = pb2.DeclareRequest(
         standard_version=controls.standard_version,
         client_name=client_name,
-        control_pose_encoding=encodings[control_pose],
+        control_pose=control_pose,
     )
     routes = getattr(controls, "routes", {}) or {}
     for dof in controls.dofs.values():
@@ -120,22 +109,21 @@ def declare_request(
     return request
 
 
-class VhiCanonicalClient:
-    """Client for VHI's v2 canonical control service.
+class VhiControlClient:
+    """Client for VHI's control service.
 
     Parameters
     ----------
     host, port
-        Where VHI's gRPC server is listening. The same server as v1 — v2 is an
-        additional service on it, not a second port.
+        Where VHI's gRPC server is listening.
 
     Examples
     --------
     >>> from myogestic.controls import Continuous, ControlSet
-    >>> from myogestic.vhi._client_v2 import VhiCanonicalClient
-    >>> client = VhiCanonicalClient()
+    >>> from myogestic.vhi._control import VhiControlClient
+    >>> client = VhiControlClient()
     >>> reply = client.declare(ControlSet(dofs={"my_index": Continuous("my_index")}))
-    >>> reply is None      # None means this VHI does not speak v2
+    >>> reply is None      # None means this VHI is unreachable
     True
     """
 
@@ -145,7 +133,7 @@ class VhiCanonicalClient:
         self.target = f"{host}:{port}"
 
         self._channel = grpc.insecure_channel(self.target)
-        self._stub = VhiCanonicalControlStub(self._channel)
+        self._stub = VhiControlStub(self._channel)
 
         self._commands: queue.Queue[pb2.SetControlRequest | None] = queue.Queue(
             maxsize=_QUEUE_DEPTH
@@ -160,7 +148,7 @@ class VhiCanonicalClient:
 
         self._running = True
         self._thread = threading.Thread(
-            target=self._send_loop, name="VhiCanonicalClient", daemon=True
+            target=self._send_loop, name="VhiControlClient", daemon=True
         )
         self._thread.start()
 
@@ -171,7 +159,7 @@ class VhiCanonicalClient:
         controls: ControlSet,
         *,
         client_name: str = "",
-        control_pose: str = "",
+        control_pose: bool = False,
     ) -> pb2.DeclareReply | None:
         """Negotiate ``controls`` with VHI, or return ``None`` if it cannot.
 
@@ -289,7 +277,6 @@ class VhiCanonicalClient:
                 channel=cap.channel,
                 stream_name=cap.stream_name,
                 activation_threshold=cap.activation_threshold,
-                encoding=int(cap.encoding),
                 description=cap.description,
             )
             for cap in manifest.capabilities
@@ -400,4 +387,4 @@ class VhiCanonicalClient:
         log.log(level, "%s.%s failed — %s", type(self).__name__, operation, detail)
 
 
-__all__ = ["VhiCanonicalClient", "declare_request"]
+__all__ = ["VhiControlClient", "declare_request"]

@@ -25,7 +25,7 @@ import pytest
 
 from myogestic.controls import ControlBus, ControlSet
 from myogestic.outputs.filters import GaussianFilter
-from myogestic.vhi._client_v2 import _QUEUE_DEPTH
+from myogestic.vhi._control import _QUEUE_DEPTH
 from myogestic.vhi.legacy import LEGACY_POSE_DOFS, LEGACY_POSE_WIDTH
 from myogestic.vhi.target import VhiTarget
 
@@ -65,31 +65,25 @@ class FakeVerdict:
     message: str = ""
 
 
-#: The v2 `ContinuousEncoding` values.
-UNSPECIFIED, CANONICAL, NEGATED = 0, 1, 2
-
-
 @dataclasses.dataclass
 class FakeReply:
     accepted: bool = True
     continuous_channel_order: tuple[str, ...] = ()
     verdicts: tuple[FakeVerdict, ...] = ()
     standard_version: str = "1"
-    continuous_encoding: int = CANONICAL
     control_pose_stream_name: str = ""
     control_pose_channel_order: tuple[str, ...] = ()
-    control_pose_encoding: int = UNSPECIFIED
 
 
 class FakeClient:
-    """A `VhiCanonicalClient` stand-in recording what the target asked of it."""
+    """A `VhiControlClient` stand-in recording what the target asked of it."""
 
     def __init__(self, reply=None) -> None:
         self.reply = reply
         self.declared: list[object] = []
         self.sent: list[tuple[dict | None, dict | None]] = []
 
-    def declare(self, controls, client_name="", control_pose=""):
+    def declare(self, controls, client_name="", control_pose=False):
         self.declared.append((controls, control_pose))
         return self.reply
 
@@ -419,6 +413,22 @@ def test_a_negotiated_binding_does_not_negate():
     assert outlet.last[2] == pytest.approx(+1.0)
 
 
+def test_a_value_reaches_the_wire_with_the_sign_it_was_given():
+    """There is one encoding now, so nothing may flip a value on the way out."""
+    outlet = FakeOutlet()
+    controls = _controls("index.flexion")
+    target = VhiTarget(outlet, client=FakeClient(FakeReply(
+        continuous_channel_order=("index.flexion",),
+    )))
+    target.bind(controls)
+    target.send({"index.flexion": 1.0}, {})
+
+    assert outlet.last[0] == pytest.approx(1.0), "the value was negated on the way out"
+
+    target.send({"index.flexion": -1.0}, {})
+    assert outlet.last[0] == pytest.approx(-1.0)
+
+
 def test_a_partial_acceptance_is_refused_outright():
     """Rendering only the accepted DOFs would hide the refused ones as held joints."""
     client = FakeClient(
@@ -501,7 +511,7 @@ def test_rebinding_re_negotiates_rather_than_keeping_the_old_verdict():
 def test_declare_request_maps_the_control_set():
     """The real protobuf message, including declaration order and both kinds."""
     pytest.importorskip("grpc")
-    from myogestic.vhi._client_v2 import declare_request
+    from myogestic.vhi._control import declare_request
 
     controls = build_controls(
         {
@@ -520,50 +530,6 @@ def test_declare_request_maps_the_control_set():
     assert grasp.rest_state == "rest"
 
 
-def test_a_reply_that_does_not_state_its_encoding_is_refused():
-    """The bug the field exists for: guessing a sign convention inverts every joint.
-
-    The first end-to-end v2 run agreed on channel names while VHI still decoded legacy
-    units, so a canonical +1 arrived as legacy +1 and the hand extended when it was
-    told to flex. A server that will not say gets no benefit of the doubt.
-    """
-    client = FakeClient(
-        FakeReply(continuous_channel_order=NINE, continuous_encoding=UNSPECIFIED)
-    )
-    target = VhiTarget(FakeOutlet(), client=client)
-    with pytest.raises(ValueError, match="did not say how to encode"):
-        target.bind(_controls(*NINE))
-    assert target.negotiated is False
-
-
-def test_a_legacy_negated_wire_is_negated():
-    """VHI reports this while its continuous path is still the pre-v2 decoder."""
-    outlet = FakeOutlet()
-    target = VhiTarget(
-        outlet,
-        client=FakeClient(
-            FakeReply(continuous_channel_order=NINE, continuous_encoding=NEGATED)
-        ),
-    )
-    target.bind(_controls(*NINE))
-    assert target.negotiated is True
-    target.send({**dict.fromkeys(NINE, 0.0), "index.flexion": 1.0}, {})
-    assert outlet.last[2] == pytest.approx(-1.0)
-
-
-def test_a_canonical_wire_is_not_negated():
-    outlet = FakeOutlet()
-    target = VhiTarget(
-        outlet,
-        client=FakeClient(
-            FakeReply(continuous_channel_order=NINE, continuous_encoding=CANONICAL)
-        ),
-    )
-    target.bind(_controls(*NINE))
-    target.send({**dict.fromkeys(NINE, 0.0), "index.flexion": 1.0}, {})
-    assert outlet.last[2] == pytest.approx(+1.0)
-
-
 def test_a_negotiated_order_shorter_than_the_wire_pads_the_tail():
     """VHI names six channels on a nine-float transport; the tail stays at rest.
 
@@ -574,15 +540,13 @@ def test_a_negotiated_order_shorter_than_the_wire_pads_the_tail():
     outlet = FakeOutlet()
     target = VhiTarget(
         outlet,
-        client=FakeClient(
-            FakeReply(continuous_channel_order=six, continuous_encoding=NEGATED)
-        ),
+        client=FakeClient(FakeReply(continuous_channel_order=six)),
     )
     target.bind(_controls(*six))
     assert target.negotiated is True
     target.send({**dict.fromkeys(six, 0.0), "little.flexion": 1.0}, {})
     assert outlet.last.shape == (LEGACY_POSE_WIDTH,)
-    assert outlet.last[5] == pytest.approx(-1.0)
+    assert outlet.last[5] == pytest.approx(1.0)
     assert outlet.last[6:].tolist() == [0.0, 0.0, 0.0]
 
 
@@ -596,7 +560,6 @@ def test_a_discrete_only_configuration_negotiates_and_delivers():
     client = FakeClient(
         FakeReply(
             continuous_channel_order=(),
-            continuous_encoding=NEGATED,
             verdicts=(FakeVerdict("hand.grasp"),),
         )
     )
@@ -611,10 +574,7 @@ def test_a_discrete_only_configuration_negotiates_and_delivers():
 def test_a_mixed_configuration_negotiates_both_kinds():
     """v2 lifts v1's exclusivity: a pose and a held state travel together."""
     client = FakeClient(
-        FakeReply(
-            continuous_channel_order=("index.flexion",),
-            continuous_encoding=NEGATED,
-        )
+        FakeReply(continuous_channel_order=("index.flexion",))
     )
     outlet = FakeOutlet()
     target = VhiTarget(outlet, client=client)
@@ -623,7 +583,7 @@ def test_a_mixed_configuration_negotiates_both_kinds():
     )
     assert target.negotiated is True
     target.send({"index.flexion": 1.0, "hand.grasp": "fist"}, {"hand.grasp": "fist"})
-    assert outlet.last[0] == pytest.approx(-1.0)
+    assert outlet.last[0] == pytest.approx(1.0)
     assert client.sent == [(None, {"hand.grasp": "fist"})]
 
 
@@ -638,27 +598,21 @@ def test_a_subset_of_the_negotiated_channels_is_legal():
     target = VhiTarget(
         outlet,
         client=FakeClient(
-            FakeReply(
-                continuous_channel_order=LEGACY_POSE_DOFS,
-                continuous_encoding=NEGATED,
-            )
+            FakeReply(continuous_channel_order=LEGACY_POSE_DOFS)
         ),
     )
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
     target.send({"index.flexion": 1.0}, {})
     # Placed at the channel VHI named, not at position 0 of the declaration.
-    assert outlet.last[2] == pytest.approx(-1.0)
+    assert outlet.last[2] == pytest.approx(1.0)
     assert outlet.last[0] == 0.0
 
 
 def test_a_declared_dof_with_no_negotiated_channel_is_refused():
     """The case that must still fail: a DOF with nowhere to go renders nothing."""
     client = FakeClient(
-        FakeReply(
-            continuous_channel_order=("index.flexion",),
-            continuous_encoding=NEGATED,
-        )
+        FakeReply(continuous_channel_order=("index.flexion",))
     )
     target = VhiTarget(FakeOutlet(), client=client)
     with pytest.raises(ValueError, match="has no place for them"):
@@ -666,13 +620,13 @@ def test_a_declared_dof_with_no_negotiated_channel_is_refused():
     assert target.negotiated is False
 
 
-def test_the_canonical_client_is_publicly_importable():
+def test_the_control_client_is_publicly_importable():
     """Nobody should have to reach into a private module to negotiate."""
     pytest.importorskip("grpc")
     import myogestic.vhi as vhi_pkg
 
-    assert "VhiCanonicalClient" in vhi_pkg.__all__
-    assert vhi_pkg.VhiCanonicalClient.__name__ == "VhiCanonicalClient"
+    assert "VhiControlClient" in vhi_pkg.__all__
+    assert vhi_pkg.VhiControlClient.__name__ == "VhiControlClient"
 
 
 def test_the_vhi_package_still_rejects_unknown_attributes():
@@ -795,77 +749,22 @@ def test_negotiate_is_idempotent_when_already_settled():
     assert target.negotiate() is True
 
 
-# --- the control-pose stream: a second stream, its own convention ----------------
-
-
-def test_the_control_pose_stream_reads_its_own_order_and_encoding():
-    """Two streams, two conventions. Reading the wrong pair inverts every joint."""
-    outlet = FakeOutlet()
-    client = FakeClient(
-        FakeReply(
-            continuous_channel_order=LEGACY_POSE_DOFS,
-            continuous_encoding=CANONICAL,
-            control_pose_stream_name="MyoGestic_ControlPose",
-            control_pose_channel_order=LEGACY_POSE_DOFS,
-            control_pose_encoding=NEGATED,
-        )
-    )
-    target = VhiTarget(outlet, client=client, stream="control_pose")
-    target.bind(_controls("index.flexion"))
-    assert target.negotiated is True
-    target.send({"index.flexion": 1.0}, {})
-    # NEGATED on *this* stream, even though the other stream is CANONICAL.
-    assert outlet.last[2] == pytest.approx(-1.0)
-
-
-def test_the_output_stream_is_unaffected_by_the_control_pose_encoding():
-    outlet = FakeOutlet()
-    client = FakeClient(
-        FakeReply(
-            continuous_channel_order=LEGACY_POSE_DOFS,
-            continuous_encoding=CANONICAL,
-            control_pose_channel_order=LEGACY_POSE_DOFS,
-            control_pose_encoding=NEGATED,
-        )
-    )
-    target = VhiTarget(outlet, client=client)  # default stream="output"
-    target.bind(_controls("index.flexion"))
-    target.send({"index.flexion": 1.0}, {})
-    assert outlet.last[2] == pytest.approx(+1.0)
+# --- the control-pose stream: a second stream, its own channel order -------------
 
 
 def test_declaring_the_control_pose_stream_is_opt_in():
     """Default must not declare it — that is what keeps existing producers working."""
     client = FakeClient(FakeReply(continuous_channel_order=LEGACY_POSE_DOFS))
     VhiTarget(FakeOutlet(), client=client).bind(_controls("index.flexion"))
-    assert client.declared[-1][1] == "", "the output target must not declare a control pose"
+    assert client.declared[-1][1] is False, "the output target must not declare a control pose"
 
     client2 = FakeClient(
-        FakeReply(
-            control_pose_channel_order=LEGACY_POSE_DOFS,
-            control_pose_encoding=CANONICAL,
-        )
+        FakeReply(control_pose_channel_order=LEGACY_POSE_DOFS)
     )
     VhiTarget(FakeOutlet(), client=client2, stream="control_pose").bind(
         _controls("index.flexion")
     )
-    assert client2.declared[-1][1] == "canonical"
-
-
-def test_a_control_pose_reply_with_no_encoding_is_refused():
-    """An unnegotiated second stream must not be guessed at either."""
-    client = FakeClient(
-        FakeReply(
-            continuous_channel_order=LEGACY_POSE_DOFS,
-            continuous_encoding=CANONICAL,
-            control_pose_channel_order=LEGACY_POSE_DOFS,
-            control_pose_encoding=UNSPECIFIED,
-        )
-    )
-    target = VhiTarget(FakeOutlet(), client=client, stream="control_pose")
-    with pytest.raises(ValueError, match="did not say how to encode"):
-        target.bind(_controls("index.flexion"))
-    assert target.negotiated is False
+    assert client2.declared[-1][1] is True
 
 
 @pytest.mark.parametrize("bad", ["", "predicted", "Output", "control-pose"])
@@ -875,19 +774,14 @@ def test_an_unknown_stream_name_is_refused_at_construction(bad):
         VhiTarget(FakeOutlet(), stream=bad)
 
 
-def test_declare_request_carries_the_control_pose_encoding():
+def test_declare_request_carries_control_pose():
+    """The real protobuf message, opting the second pose stream in or out."""
     pytest.importorskip("grpc")
-    from myogestic.vhi._client_v2 import declare_request
+    from myogestic.vhi._control import declare_request
 
     controls = build_controls({"index.flexion": "continuous"})
-    assert declare_request(controls).control_pose_encoding == UNSPECIFIED
-    assert declare_request(controls, control_pose="canonical").control_pose_encoding == CANONICAL
-    assert (
-        declare_request(controls, control_pose="legacy").control_pose_encoding
-        == NEGATED
-    )
-    with pytest.raises(ValueError, match="control_pose must be one of"):
-        declare_request(controls, control_pose="nonsense")
+    assert declare_request(controls).control_pose is False
+    assert declare_request(controls, control_pose=True).control_pose is True
 
 
 # --- deferral must not commit to a convention while VHI is silent -----------------
@@ -942,9 +836,7 @@ def test_a_silent_renderer_that_appears_later_gets_negotiated():
     target.bind(_controls("index.flexion"))
     assert target.negotiated is False
 
-    client.reply = FakeReply(
-        continuous_channel_order=LEGACY_POSE_DOFS, continuous_encoding=CANONICAL
-    )
+    client.reply = FakeReply(continuous_channel_order=LEGACY_POSE_DOFS)
     assert target.negotiate() is True
     assert target.negotiated is True
     assert target._pending is None
@@ -952,9 +844,7 @@ def test_a_silent_renderer_that_appears_later_gets_negotiated():
 
 def test_force_re_declares_after_a_settled_handshake():
     """A renderer restart loses VHI's side of the contract; force is the remedy."""
-    client = FakeClient(
-        FakeReply(continuous_channel_order=LEGACY_POSE_DOFS, continuous_encoding=CANONICAL)
-    )
+    client = FakeClient(FakeReply(continuous_channel_order=LEGACY_POSE_DOFS))
     target = VhiTarget(FakeOutlet(), client=client)
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
@@ -970,8 +860,6 @@ def test_force_re_declares_after_a_settled_handshake():
 # The routed path is what makes a user-owned alias drive a target-owned control. It is
 # keyed on what the *target* published, so these fakes carry a manifest.
 
-CANONICAL_ENC, LEGACY_ENC = 1, 2
-
 
 def _cap(
     address,
@@ -980,7 +868,6 @@ def _cap(
     lo=-1.0,
     hi=1.0,
     kind="continuous",
-    enc=CANONICAL_ENC,
     states=(),
     stream="",
 ):
@@ -995,7 +882,6 @@ def _cap(
         states=tuple(states),
         rest_state=states[0] if states else "",
         channel=channel,
-        encoding=enc,
         stream_name=stream,
     )
 
@@ -1073,14 +959,6 @@ def test_a_weight_cannot_push_a_value_past_the_targets_range():
     assert outlet.last[4] == pytest.approx(1.0), "clamped to the declared hi"
 
 
-def test_the_declared_encoding_decides_the_sign():
-    """Per capability, because two streams on one target need not share a convention."""
-    legacy = [_cap("vhi.prediction.index", 2, enc=LEGACY_ENC)]
-    target, outlet, _ = _routed_target({"a": "vhi.prediction.index"}, manifest=legacy)
-    target.send({"a": 1.0}, {})
-    assert outlet.last[2] == pytest.approx(-1.0), "legacy-negated wire"
-
-
 def test_two_aliases_on_one_channel_are_refused_rather_than_racing():
     """Whichever wrote last would win silently, and the other would look broken."""
     from myogestic.controls import load_control_map, resolve
@@ -1146,7 +1024,7 @@ def _cap_on(address, channel, stream, **kw):
 
     return Capability(
         address=address, kind="continuous", lo=-1.0, hi=1.0, rest=0.0,
-        channel=channel, encoding=CANONICAL_ENC, stream_name=stream, **kw
+        channel=channel, stream_name=stream, **kw
     )
 
 
@@ -1693,9 +1571,9 @@ class TestTheControlQueueCannotGrowForever:
     @staticmethod
     def _client():
         """A client whose sender never runs, so the queue only fills."""
-        from myogestic.vhi._client_v2 import VhiCanonicalClient
+        from myogestic.vhi._control import VhiControlClient
 
-        client = VhiCanonicalClient.__new__(VhiCanonicalClient)
+        client = VhiControlClient.__new__(VhiControlClient)
         client._running = True
         client._dropped = 0
         client._commands = queue.Queue(maxsize=_QUEUE_DEPTH)
@@ -1703,9 +1581,9 @@ class TestTheControlQueueCannotGrowForever:
 
     def test_the_real_client_bounds_its_queue(self):
         """The bound has to be in `__init__`, not just in the drop path above."""
-        from myogestic.vhi._client_v2 import VhiCanonicalClient
+        from myogestic.vhi._control import VhiControlClient
 
-        client = VhiCanonicalClient(host="127.0.0.1", port=59999)   # nothing listening
+        client = VhiControlClient(host="127.0.0.1", port=59999)   # nothing listening
         try:
             assert client._commands.maxsize == _QUEUE_DEPTH, "the queue is unbounded"
         finally:

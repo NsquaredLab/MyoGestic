@@ -1,15 +1,15 @@
-"""Client for VHI's v2 recording aid — session gating and training programs.
+"""Client for VHI's recording session gate and trajectories.
 
-Separate from `myogestic.vhi._client_v2` for the same reason the services are
-separate on the VHI side: **none of this is control**. A canonical DOF is something an
+Separate from `myogestic.vhi._control` for the same reason the RPCs are grouped
+apart on the service: **none of this is control**. A DOF is something an
 application commands; these are properties of a recording *session*.
 
 The distinction earns its keep in one specific way. Collecting regression training
 data wants a control hand that keeps *moving*, so the recorded kinematics sweep a
-continuous range for EMG windows to align against. A canonical discrete DOF wants the
+continuous range for EMG windows to align against. A discrete DOF wants the
 opposite — ask for a grip, hold a grip. Expressing the first through the second would
-have made a held state mean "held, unless someone is recording", so the recording aid
-gets its own vocabulary and the canonical one stays honest.
+have made a held state mean "held, unless someone is recording", so recording gets its
+own vocabulary and the control one stays honest.
 
 Every call here is **synchronous**. They are all setup and teardown around a recording
 — a button click, not a per-tick command — and a caller needs to know whether the
@@ -22,27 +22,27 @@ import logging
 
 import grpc
 
-from myogestic.vhi._proto import myogestic_vhi_v2_pb2 as pb2
-from myogestic.vhi._proto.myogestic_vhi_v2_pb2_grpc import VhiTrainingAidStub
+from myogestic.vhi._proto import myogestic_vhi_pb2 as pb2
+from myogestic.vhi._proto.myogestic_vhi_pb2_grpc import VhiControlStub
 
-log = logging.getLogger("myogestic.vhi_training")
+log = logging.getLogger("myogestic.vhi_recording")
 
 _RPC_TIMEOUT_S = 3.0
 
 
-class VhiTrainingAidClient:
-    """Drive VHI's recording aid: the session gate and training programs.
+class VhiRecordingClient:
+    """Drive VHI's recording session: the session gate and trajectories.
 
     Parameters
     ----------
     host, port
-        VHI's gRPC server — the same one the control services use. The aid is an
-        additional service on it, not a second port.
+        VHI's gRPC server — the same one `myogestic.vhi._control.VhiControlClient`
+        uses. There is one service now, not a second port.
 
     Examples
     --------
     >>> from myogestic.vhi import virtual_hand
-    >>> aid = virtual_hand().training_client()
+    >>> aid = virtual_hand().recording_client()
     >>> aid.available_movements()          # discover, don't hard-code
     []
     """
@@ -50,7 +50,7 @@ class VhiTrainingAidClient:
     def __init__(self, host: str = "127.0.0.1", port: int = 50051):
         self.target = f"{host}:{port}"
         self._channel = grpc.insecure_channel(self.target)
-        self._stub = VhiTrainingAidStub(self._channel)
+        self._stub = VhiControlStub(self._channel)
         self._seen_errors: set[tuple[str, str]] = set()
         self.available = False
 
@@ -68,9 +68,9 @@ class VhiTrainingAidClient:
             "SetRecordingSession", pb2.SetRecordingSessionRequest(active=active)
         )
 
-    # --- training programs ---------------------------------------------------
+    # --- trajectories ----------------------------------------------------------
 
-    def start_program(
+    def start_trajectory(
         self,
         movement: str,
         *,
@@ -80,17 +80,17 @@ class VhiTrainingAidClient:
     ) -> bool:
         """Start cycling ``movement`` so the control hand sweeps a range.
 
-        This is the training aid, not a control command: it deliberately keeps the
+        This is the recording aid, not a control command: it deliberately keeps the
         hand moving. The defaults leave VHI's own timing alone — a non-positive
         frequency and negative hold/rest times mean "don't change it".
 
-        Refused while another program is running: a recording is being aligned
-        against the current trajectory, and swapping it underneath would corrupt the
-        labels for everything already captured.
+        Refused while another trajectory is running: a recording is being aligned
+        against the current one, and swapping it underneath would corrupt the labels
+        for everything already captured.
         """
         return self._call(
-            "StartTrainingProgram",
-            pb2.StartTrainingProgramRequest(
+            "StartRecordingTrajectory",
+            pb2.StartRecordingTrajectoryRequest(
                 movement=movement,
                 frequency_hz=frequency_hz,
                 hold_time_s=hold_time_s,
@@ -98,17 +98,19 @@ class VhiTrainingAidClient:
             ),
         )
 
-    def stop_program(self) -> bool:
-        """Stop any running program and rest the hand. Safe to call unconditionally."""
-        return self._call("StopTrainingProgram", pb2.StopTrainingProgramRequest())
+    def stop_trajectory(self) -> bool:
+        """Stop any running trajectory and rest the hand. Safe to call unconditionally."""
+        return self._call(
+            "StopRecordingTrajectory", pb2.StopRecordingTrajectoryRequest()
+        )
 
     # --- state ---------------------------------------------------------------
 
-    def state(self) -> pb2.TrainingState | None:
-        """The aid's state, or ``None`` when VHI does not offer it."""
+    def state(self) -> pb2.RecordingSessionState | None:
+        """The session's state, or ``None`` when VHI does not offer it."""
         try:
-            reply = self._stub.GetTrainingState(
-                pb2.GetTrainingStateRequest(), timeout=_RPC_TIMEOUT_S
+            reply = self._stub.GetRecordingSessionState(
+                pb2.GetRecordingSessionStateRequest(), timeout=_RPC_TIMEOUT_S
             )
         except Exception as e:  # noqa: BLE001 - absence is an answer during migration
             self.available = False
@@ -119,16 +121,16 @@ class VhiTrainingAidClient:
         return reply
 
     def available_movements(self) -> list[str]:
-        """Movement names a program may use. Empty when the aid is unavailable."""
+        """Movement names a trajectory may use. Empty when the aid is unavailable."""
         state = self.state()
         return list(state.available_movements) if state is not None else []
 
     def stop(self) -> None:
-        """Close the channel. Does **not** stop a running program.
+        """Close the channel. Does **not** stop a running trajectory.
 
         Deliberately separate: closing a client is not the same act as ending a
         recording, and a teardown path that silently ended someone's session would be
-        surprising. Call `stop_program` explicitly.
+        surprising. Call `stop_trajectory` explicitly.
         """
         self._channel.close()
 
@@ -159,4 +161,4 @@ class VhiTrainingAidClient:
         log.log(level, "%s.%s failed — %s", type(self).__name__, operation, detail)
 
 
-__all__ = ["VhiTrainingAidClient"]
+__all__ = ["VhiRecordingClient"]
