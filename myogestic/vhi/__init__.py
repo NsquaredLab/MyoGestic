@@ -13,9 +13,9 @@ from myogestic.vhi.target import PoseSink, VhiTarget
 __all__ = [
     "InterfaceSpec",
     "PoseSink",
-    "VhiCanonicalClient",
+    "VhiControlClient",
+    "VhiRecordingClient",
     "VhiTarget",
-    "VhiTrainingAidClient",
     "virtual_hand",
 ]
 
@@ -26,12 +26,12 @@ def __getattr__(name: str):
     A module-level import would pull in ``grpc`` for everyone, including installs with
     no ``[grpc]`` extra that only ever call `virtual_hand().outlet()`.
     """
-    if name == "VhiCanonicalClient":
-        from myogestic.vhi._client_v2 import VhiCanonicalClient
+    if name == "VhiControlClient":
+        from myogestic.vhi._control import VhiControlClient
 
-        return VhiCanonicalClient
-    if name == "VhiTrainingAidClient":
-        from myogestic.vhi._training import VhiTrainingAidClient
+        return VhiControlClient
+    if name == "VhiRecordingClient":
+        from myogestic.vhi._recording import VhiRecordingClient
 
-        return VhiTrainingAidClient
+        return VhiRecordingClient
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

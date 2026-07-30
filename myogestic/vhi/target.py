@@ -28,20 +28,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("myogestic.vhi_target")
 
-# The v2 `ContinuousEncoding` values, spelled out so this module does not import the
-# generated protobuf (which needs the grpc extra) just to read three integers.
-_ENCODING_UNSPECIFIED = 0
-_ENCODING_CANONICAL = 1
-_ENCODING_NEGATED = 2
-
 #: Channels on VHI's pose transport. A fallback only — the outlet is asked first, since
 #: an application constructs it and may have made it wider.
 _POSE_WIDTH = 9
-
-
-def _encoding_of(capability: Any) -> int:
-    """A capability's declared wire encoding, defaulting to canonical."""
-    return int(getattr(capability, "encoding", _ENCODING_CANONICAL) or _ENCODING_CANONICAL)
 
 
 class PoseSink(Protocol):
@@ -73,14 +62,14 @@ class VhiTarget:
         construct it yourself and register its ``stop`` with ``app.cleanup_hooks``.
         Only `PoseSink.push` and `PoseSink.flush` are called on it.
     client
-        A `myogestic.vhi._client_v2.VhiCanonicalClient` — ``virtual_hand().canonical_client()``.
+        A `myogestic.vhi._control.VhiControlClient` — ``virtual_hand().control_client()``.
         Required: the control space is negotiated over it, and it carries discrete
         state, which the pose transport cannot express.
     stream
         Which of the renderer's pose streams this target drives: ``"output"`` (the
         default — the predicted hand) or ``"control_pose"`` (the control hand). It
-        decides which channel order *and which encoding* the target reads out of the
-        handshake; the two streams do not share a convention.
+        decides which channel order the target reads out of the handshake; the two
+        streams do not share one.
 
     Notes
     -----
@@ -102,7 +91,7 @@ class VhiTarget:
     >>> from myogestic.vhi import VhiTarget, virtual_hand
     >>>
     >>> vhi = virtual_hand()
-    >>> client = vhi.canonical_client()
+    >>> client = vhi.control_client()
     >>> control_map = load_control_map({"dofs": {"my_index": "vhi.prediction.index"}})
     >>> controls = resolve(control_map, client.capabilities())   # needs VHI running
     >>> bus = ControlBus(controls, targets=[VhiTarget(vhi.outlet(), client=client)])
@@ -110,7 +99,7 @@ class VhiTarget:
     """
 
     __slots__ = (
-        "_answered", "_client", "_discrete", "_dofs", "_interface", "_negate",
+        "_answered", "_client", "_discrete", "_dofs", "_interface",
         "_negotiated", "_order", "_outlet", "_pending", "_routed", "_slots", "_stream",
         "_width",
     )
@@ -152,17 +141,14 @@ class VhiTarget:
         self._discrete: tuple[str, ...] = ()
         #: Negotiated channel order.
         self._order: tuple[str, ...] = ()
-        #: Whether the negotiated wire wants values negated. Declared by the renderer,
-        #: never inferred.
-        self._negate = False
         #: Declared DOFs paired with the channel VHI put them on, for a name-declared
         #: configuration.
         self._slots: tuple[tuple[int, Continuous], ...] = ()
-        #: Address-routed slots: (channel, alias, weight, sign, lo, hi, address). The
+        #: Address-routed slots: (channel, alias, weight, lo, hi, address). The
         #: address rides along as the channel's *label* on a self-describing stream —
         #: the alias cannot be, since a fan-out sends one alias to several channels.
         #: Non-empty when the configuration was resolved against a manifest.
-        self._routed: tuple[tuple[int, str, float, float, float, float, str], ...] = ()
+        self._routed: tuple[tuple[int, str, float, float, float, str], ...] = ()
         #: Tracked explicitly rather than inferred from `_order`: a configuration of
         #: only discrete DOFs negotiates fine and has an empty channel order.
         self._negotiated = False
@@ -205,7 +191,6 @@ class VhiTarget:
         self._routed = ()
         self._discrete = ()
         self._pending = None
-        self._negate = False
         self._negotiated = False
         self._answered = False
         if not controls.dofs:
@@ -220,7 +205,7 @@ class VhiTarget:
             raise ValueError(
                 "VhiTarget needs a canonical client: every channel, range and state "
                 "comes from the renderer's manifest, so without one there is nothing "
-                "to render against. Pass client=virtual_hand().canonical_client()."
+                "to render against. Pass client=virtual_hand().control_client()."
             )
         if self._negotiate(controls):
             return
@@ -287,13 +272,13 @@ class VhiTarget:
 
     def _negotiate(self, controls: ControlSet) -> bool:
         """Try the handshake. False means "no answer yet", never a refusal."""
-        pose = "canonical" if self._stream == "control_pose" else ""
+        pose = self._stream == "control_pose"
         routes = getattr(controls, "routes", None) or {}
         if routes:
             return self._negotiate_routed(controls, routes, pose)
         return self._negotiate_by_name(controls, pose)
 
-    def _negotiate_routed(self, controls: ControlSet, routes: Mapping, pose: str) -> bool:
+    def _negotiate_routed(self, controls: ControlSet, routes: Mapping, pose: bool) -> bool:
         """Resolve alias -> address -> channel through the renderer's own manifest.
 
         The addresses come from the configuration; the channels and ranges come from the
@@ -369,7 +354,7 @@ class VhiTarget:
                 f"work and hold still."
             )
 
-        slots: list[tuple[int, str, float, float, float, float, str]] = []
+        slots: list[tuple[int, str, float, float, float, str]] = []
         taken: dict[int, str] = {}
         for alias, refs in routes.items():
             if alias not in controls.dofs or not isinstance(controls.dofs[alias], Continuous):
@@ -421,13 +406,11 @@ class VhiTarget:
                         f"single output out to several controls instead."
                     )
                 taken[channel] = alias
-                sign = -1.0 if _encoding_of(cap) == _ENCODING_NEGATED else 1.0
                 slots.append(
                     (
                         channel,
                         alias,
                         float(ref.weight),
-                        sign,
                         float(cap.lo),
                         float(cap.hi),
                         ref.address,
@@ -441,7 +424,6 @@ class VhiTarget:
         self._discrete = tuple(dof.name for dof in controls.discrete if dof.name in mine)
         self._routed = self._own_the_wire(slots) if self._interface else tuple(slots)
         self._order = tuple(reply.continuous_channel_order)
-        self._negate = False  # per-capability sign lives in each slot
         self._negotiated = True
         # Put the declared rest pose on the wire immediately: the hand should hold what
         # this configuration calls rest, and the renderer drops an inlet that has never
@@ -455,7 +437,7 @@ class VhiTarget:
         )
         return True
 
-    def _negotiate_by_name(self, controls: ControlSet, pose: str) -> bool:
+    def _negotiate_by_name(self, controls: ControlSet, pose: bool) -> bool:
         """Declare a set whose DOF *names* are the renderer's addresses.
 
         The path a directly-built `ControlSet` takes — a rig diagnostic, a test — where
@@ -474,14 +456,12 @@ class VhiTarget:
                 f"only what it accepted would leave the rest looking like controls that "
                 f"work and hold still."
             )
-        # Each stream carries its own order and its own encoding; reading the wrong pair
-        # leaves a frame correct on one stream and inverted on the other.
+        # Each stream carries its own order; reading the wrong one leaves a frame
+        # correct on one stream and empty on the other.
         if self._stream == "control_pose":
             order = tuple(reply.control_pose_channel_order)
-            encoding = getattr(reply, "control_pose_encoding", _ENCODING_UNSPECIFIED)
         else:
             order = tuple(reply.continuous_channel_order)
-            encoding = getattr(reply, "continuous_encoding", _ENCODING_UNSPECIFIED)
         declared = controls.channel_labels()
         # The negotiated order is VHI's channel *map*, not a demand that the client
         # command every channel on it: a configuration may declare a subset and leave
@@ -498,26 +478,14 @@ class VhiTarget:
                 f"VHI negotiated {len(order)} channels but this outlet carries only "
                 f"{self._width}. Construct the outlet at least that wide."
             )
-        # A server that does not say how to encode gets no benefit of the doubt.
-        if encoding not in (_ENCODING_CANONICAL, _ENCODING_NEGATED):
-            raise ValueError(
-                f"VHI negotiated channel names but did not say how to encode them "
-                f"(encoding={encoding!r}). Refusing rather than guessing a sign "
-                f"convention — guessing wrong inverts every joint."
-            )
         self._dofs = controls.continuous
         self._discrete = tuple(dof.name for dof in controls.discrete)
         self._order = order
         # Resolve each declared DOF to its negotiated channel once, here, rather than
         # looking names up per tick on the predict thread.
         self._slots = tuple((order.index(d.name), d) for d in controls.continuous)
-        self._negate = encoding == _ENCODING_NEGATED
         self._negotiated = True
-        log.info(
-            "VHI negotiated %s (%s)",
-            list(order),
-            "negated wire" if self._negate else "canonical wire",
-        )
+        log.info("VHI negotiated %s", list(order))
         return True
 
     def _rebound(self) -> ControlSet | None:
@@ -563,24 +531,23 @@ class VhiTarget:
         each = {d.name: float(values.get(d.name, d.rest)) for d in self._dofs}
         frame = np.zeros(self._width, dtype=np.float32)
         if self._routed:
-            for channel, alias, weight, sign, lo, hi, _address in self._routed:
+            for channel, alias, weight, lo, hi, _address in self._routed:
                 # Weight first, then the target's own range — a gain must not be able to
                 # push a value past what the target said it accepts.
                 value = weight * each.get(alias, 0.0)
-                frame[channel] = sign * min(hi, max(lo, value))
+                frame[channel] = min(hi, max(lo, value))
             return frame
         # The negotiated order is a *prefix* of the transport, not its full width: the
         # outlet's channel count is fixed at construction and VHI will not name a channel
         # it does not read. The tail stays at zero because the frame width is what the
         # outlet validates against.
-        sign = -1.0 if self._negate else 1.0
         for channel, dof in self._slots:
-            frame[channel] = sign * each[dof.name]
+            frame[channel] = each[dof.name]
         return frame
 
     def _own_the_wire(
-        self, slots: list[tuple[int, str, float, float, float, float, str]]
-    ) -> tuple[tuple[int, str, float, float, float, float, str], ...]:
+        self, slots: list[tuple[int, str, float, float, float, str]]
+    ) -> tuple[tuple[int, str, float, float, float, str], ...]:
         """Build a stream carrying exactly these controls, labelled with their addresses.
 
         The renderer's channel index is an index into *its* full pose layout — nine wide,
@@ -592,10 +559,10 @@ class VhiTarget:
         Sorted by the renderer's own index so the layout is stable across runs.
         """
         ordered = sorted(slots, key=lambda slot: slot[0])
-        addresses = [slot[6] for slot in ordered]
+        addresses = [slot[5] for slot in ordered]
         renumbered = tuple(
-            (index, alias, weight, sign, lo, hi, address)
-            for index, (_, alias, weight, sign, lo, hi, address) in enumerate(ordered)
+            (index, alias, weight, lo, hi, address)
+            for index, (_, alias, weight, lo, hi, address) in enumerate(ordered)
         )
         if not addresses:
             # Every alias belonged to another stream, or the configuration is discrete

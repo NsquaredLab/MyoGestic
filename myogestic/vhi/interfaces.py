@@ -9,7 +9,7 @@ stream names — behind a single call:
     vhi = virtual_hand()
     vhi_outlet = vhi.outlet()           # 9-ch LSLOutlet @ 32 Hz
     process_launcher(vhi.launcher())    # the packaged binary or `godot --path`
-    client = vhi.canonical_client()     # gRPC control plane: declare, command, discover
+    client = vhi.control_client()       # gRPC control plane: declare, command, discover
 
 The example still owns *what* to push through the outlet — DOF mapping, sign
 flips, smoothing.
@@ -38,8 +38,8 @@ from myogestic.outputs import LSLOutlet
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from myogestic.vhi._client_v2 import VhiCanonicalClient
-    from myogestic.vhi._training import VhiTrainingAidClient
+    from myogestic.vhi._control import VhiControlClient
+    from myogestic.vhi._recording import VhiRecordingClient
 
 #: Kept in step with `myogestic.tools.install_vhi.MIN_VHI_TAG` (asserted equal by
 #: tests/test_install_vhi_version_gate.py). Duplicated rather than imported: the
@@ -164,13 +164,12 @@ class InterfaceSpec:
             source_id=f"myogestic:{self.name}:{self.output_stream_name}",
         )
 
-    def canonical_client(self) -> VhiCanonicalClient:
-        """Construct a client for this interface's **v2** canonical control service.
+    def control_client(self) -> VhiControlClient:
+        """Construct a client for this interface's control service.
 
         Hand it to `myogestic.vhi.VhiTarget` and the target asks VHI which named
-        DOFs it renders, falling back to the legacy pose when VHI does not speak
-        v2. Without one the target is legacy-only: the six DOFs of the old wire,
-        and no discrete state.
+        DOFs it renders, refusing a configuration it cannot place. Required: without
+        one there is nothing to negotiate the control space against.
 
         Imported lazily — a plain install has no ``[grpc]`` extra, and
         `outlet` / `launcher` must keep working without it.
@@ -182,36 +181,36 @@ class InterfaceSpec:
         >>>
         >>> vhi = virtual_hand()
         >>> controls = ControlSet(dofs={"my_index": Continuous("my_index")})
-        >>> target = VhiTarget(vhi.outlet(), client=vhi.canonical_client())
+        >>> target = VhiTarget(vhi.outlet(), client=vhi.control_client())
         >>> bus = ControlBus(controls, targets=[target])
-        >>> target.negotiated          # True against a v2 VHI, False against an older one
+        >>> target.negotiated          # True once VHI has answered, False until then
         False
         """
-        from myogestic.vhi._client_v2 import VhiCanonicalClient
+        from myogestic.vhi._control import VhiControlClient
 
-        return VhiCanonicalClient(host=self.grpc_host, port=self.grpc_port)
+        return VhiControlClient(host=self.grpc_host, port=self.grpc_port)
 
-    def training_client(self) -> VhiTrainingAidClient:
-        """Construct a client for this interface's **v2 recording aid**.
+    def recording_client(self) -> VhiRecordingClient:
+        """Construct a client for this interface's recording session gate.
 
-        The aid is not a control plane and nothing it does is a canonical DOF. It
-        carries the two things a *recording session* needs: the gate that stops VHI's
-        local keyboard competing as a movement source, and training programs that
-        cycle the control hand so the recorded kinematics sweep a continuous range.
+        Not a control plane, and nothing it does is a control DOF. It carries the two
+        things a *recording session* needs: the gate that stops VHI's local keyboard
+        competing as a movement source, and trajectories that cycle the control hand
+        so the recorded kinematics sweep a continuous range.
 
-        Imported lazily, like the other gRPC clients, so a plain install without the
+        Imported lazily, like the other gRPC client, so a plain install without the
         ``[grpc]`` extra can still use `outlet` / `launcher`.
 
         Examples
         --------
         >>> from myogestic.vhi import virtual_hand
-        >>> aid = virtual_hand().training_client()
-        >>> aid.set_recording_session(True)     # False when VHI has no v2 aid
+        >>> aid = virtual_hand().recording_client()
+        >>> aid.set_recording_session(True)     # False when VHI is unreachable
         False
         """
-        from myogestic.vhi._training import VhiTrainingAidClient
+        from myogestic.vhi._recording import VhiRecordingClient
 
-        return VhiTrainingAidClient(host=self.grpc_host, port=self.grpc_port)
+        return VhiRecordingClient(host=self.grpc_host, port=self.grpc_port)
 
     def control_outlet(
         self,
@@ -222,7 +221,7 @@ class InterfaceSpec:
         """Construct an [`LSLOutlet`][] for streaming a continuous pose to the control hand.
 
         Only consumed when VHI is put in STREAM control mode via a declared
-        control-pose stream (`canonical_client().declare(..., control_pose=...)`).
+        control-pose stream (`control_client().declare(..., control_pose=True)`).
         Raises [`ValueError`][] if this interface has no control-pose stream
         configured.
 
