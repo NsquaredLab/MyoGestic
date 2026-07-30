@@ -2,7 +2,7 @@
 
 A `Bridge` is a subprocess MyoGestic spawns alongside the app for **heavy-data acquisition that doesn't fit the LSL pull model** - typically a webcam decoder that writes frames straight to Zarr and publishes an LSL clock outlet so the rest of the app can align timestamps.
 
-Bridges are registered via `app.bridges(...)`, started before the GUI loop, and terminated as part of `App.run()`'s cleanup hook chain.
+Bridges are registered via `app.bridges(...)`. Registering does not spawn anything — you call `start()` when you want the subprocess up — and `App.run()` calls `stop()` on every registered bridge during cleanup.
 
 ## Base class
 

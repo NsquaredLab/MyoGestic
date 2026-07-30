@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
+
+log = logging.getLogger("myogestic.bridges")
 
 
 class Bridge:
@@ -14,22 +17,24 @@ class Bridge:
     own buffer. The bridge subprocess runs whatever it wants; MyoGestic
     only cares that it stays alive and exits cleanly.
 
-    The bridge pattern is intentionally minimal: no IPC contract beyond
-    "the subprocess exists, is alive, and stops on terminate". For data
-    flowing back into the app, the subprocess publishes an LSL outlet
-    (or writes to a Zarr file the app reads) - the same machinery
-    every other source uses.
+    There is no IPC contract beyond "the subprocess exists, is alive,
+    and stops on terminate". Data flows back into the app the way it
+    already travels: the subprocess publishes an LSL outlet, or writes
+    a Zarr file the app reads.
 
-    Registered via ``app.bridges(...)``; the app starts them after
-    streams and tears them down on cleanup.
+    Registered via ``app.bridges(...)``. Registering does not spawn
+    anything - you call [`start`][] when you want it up - and
+    ``App.run()`` calls [`stop`][] on every registered bridge on cleanup.
 
     Parameters
     ----------
     name
-        Human label, used in the bridge panel and logs.
+        Human label, used in log messages about this bridge.
     command
-        argv passed to ``subprocess.Popen``. Stdout and stderr
-        are captured to PIPE; nothing reads them by default.
+        argv passed to ``subprocess.Popen``. Stdout and stderr go to
+        ``DEVNULL``: a child that outgrows the pipe buffer blocks in
+        ``write()`` forever while [`alive`][] still reports ``True``.
+        To watch its output, run ``command`` in a terminal.
 
     Examples
     --------
@@ -44,26 +49,64 @@ class Bridge:
         self.name = name
         self.command = command
         self.process: subprocess.Popen | None = None
-        self.status = "stopped"
 
     def start(self) -> None:
-        """Spawn the subprocess. Idempotent only if you check [`alive`][] first."""
+        """Spawn the subprocess, unless one is already [`alive`][].
+
+        Idempotent: overwriting a live handle drops the only reference to a running
+        process, and the next call then stacks a second one on top of it.
+        """
+        if self.alive:
+            return
         self.process = subprocess.Popen(
             self.command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
-        self.status = "running"
 
     def stop(self) -> None:
-        """Terminate the subprocess (SIGTERM, then SIGKILL after 5 s)."""
+        """Terminate the subprocess - SIGTERM, then SIGKILL if it ignores that.
+
+        Returns while **still holding the handle** if neither signal lands: a process
+        parked in an uninterruptible kernel wait ignores SIGKILL too. [`alive`][] and
+        [`status`][] then keep saying it is running and [`start`][] refuses. Call this
+        again to retry.
+
+        SIGTERM first, so a bridge script's own handler and cleanup get to run.
+        """
         if self.process:
             self.process.terminate()
             try:
                 self.process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self.process.kill()
-        self.status = "stopped"
+                try:
+                    # Short: a process that *can* take SIGKILL is reaped in single-digit
+                    # milliseconds, so anything still here has an uninterruptible wait
+                    # to finish first and no amount of waiting helps.
+                    self.process.wait(timeout=0.2)
+                except subprocess.TimeoutExpired:
+                    # Nothing renders a bridge, so there is no log panel to append to.
+                    log.warning(
+                        "bridge %r: PID %s ignored SIGKILL and is still held. start() "
+                        "will refuse until it goes; call stop() again to retry.",
+                        self.name,
+                        self.process.pid,
+                    )
+
+    @property
+    def status(self) -> str:
+        """``"running"`` or ``"stopped"``, read from the subprocess on every read.
+
+        Derived rather than assigned at each transition: a stored copy goes stale the
+        moment the subprocess exits on its own.
+
+        Two values only. A signalled child carries a non-zero return code, so any
+        "``code != 0`` means crashed" rule would report every successful [`stop`][] as
+        a failure. Whether an exit was clean is on ``process.returncode``, which
+        [`stop`][] leaves in place.
+        """
+        return "running" if self.alive else "stopped"
 
     @property
     def alive(self) -> bool:
