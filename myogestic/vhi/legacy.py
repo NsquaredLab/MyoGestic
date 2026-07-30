@@ -25,8 +25,11 @@ ch   what VHI does with it                                 canonical name
 
 Two consequences worth stating, because both contradict what the old docs implied:
 
-- There are **no wrist channels**. Channels 6-8 are dead on both ends, which is why
-  they are exactly ``0.0`` in every reference recording.
+- **Nothing wrote channels 6-8**, which is why they are exactly ``0.0`` in every
+  reference recording. That is a fact about the corpus, not about the renderer: VHI renders
+  all three as the wrist now — flexion, abduction and rotation on bone 0, which parents
+  every digit. A *recording* still has nothing in any of them, so this reader still drops
+  all three; it decodes an archive, not a live stream.
 - The **positive half renders**. VHI multiplies the sample by a per-bone gain with
   no clamping, and the flexion gains are negative, so legacy ``-1`` is flexion and
   ``+1`` simply rotates the other way. The positive half is missing from the
@@ -122,29 +125,3 @@ def decode_pose(frame: np.ndarray) -> dict[str, np.ndarray]:
         )
     values = np.clip(-arr[..., : len(LEGACY_POSE_DOFS)], -1.0, 1.0)
     return {name: values[..., i] for i, name in enumerate(LEGACY_POSE_DOFS)}
-
-
-def encode_pose(values: dict[str, float]) -> np.ndarray:
-    """Canonical DOF values as a legacy 9-channel pose frame.
-
-    The inverse of `decode_pose`, for driving an unmodified VHI build during
-    migration. Names absent from ``values`` are sent at rest, and channels 6-8 are
-    zero because nothing reads them.
-
-    Exists so the canonical layer can be exercised end to end against the old
-    binary before anything changes on the VHI side — its upgrade path is deletion,
-    not generalisation.
-
-    Examples
-    --------
-    >>> from myogestic.vhi.legacy import encode_pose
-    >>> encode_pose({"index.flexion": 1.0}).tolist()
-    [0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    """
-    frame = np.zeros(LEGACY_POSE_WIDTH, dtype=np.float32)
-    for i, name in enumerate(LEGACY_POSE_DOFS):
-        v = values.get(name)
-        if v is None:
-            continue
-        frame[i] = -float(np.clip(v, -1.0, 1.0))
-    return frame

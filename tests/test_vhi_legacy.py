@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 from myogestic.session import open_session_store
-from myogestic.vhi.legacy import LEGACY_POSE_DOFS, decode_pose, encode_pose
+from myogestic.vhi.legacy import LEGACY_POSE_DOFS, decode_pose
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 MOVED = FIXTURES / "vhi_pose_moved.session.zip"
@@ -172,31 +172,6 @@ def test_all_six_dofs_are_identical_because_the_corpus_is_rank_one():
 def test_rest_frames_decode_to_canonical_rest():
     for values in decode_pose(_pose(RESTED)).values():
         assert np.count_nonzero(values) == 0
-
-
-def test_encode_is_the_inverse_of_decode():
-    """One declaration serves both directions, so train and serve cannot drift."""
-    pose = _pose(MOVED)
-    frame = pose[int(np.argmin(pose[:, 0]))]
-    decoded = {k: float(v) for k, v in decode_pose(frame).items()}
-    assert encode_pose(decoded) == pytest.approx(frame, abs=1e-6)
-
-
-def test_encode_handles_the_extension_half_symmetrically():
-    """A signed canonical value must survive both directions, not just the recorded one."""
-    for v in (-1.0, -0.25, 0.0, 0.5, 1.0):
-        frame = encode_pose({"index.flexion": v})
-        assert float(decode_pose(frame)["index.flexion"]) == pytest.approx(v)
-
-
-def test_encode_rests_the_names_it_was_not_given():
-    frame = encode_pose({"index.flexion": 1.0})
-    assert frame.tolist() == [0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-
-def test_encode_always_zeroes_the_dead_channels():
-    frame = encode_pose(dict.fromkeys(LEGACY_POSE_DOFS, 1.0))
-    assert frame[6:].tolist() == [0.0, 0.0, 0.0]
 
 
 @pytest.mark.parametrize("width", [1, 5, 6, 8, 10])
