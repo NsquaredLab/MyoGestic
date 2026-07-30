@@ -131,6 +131,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The recorded control-space format changed** and is tagged `alias-address/1`. Recordings
   and model sidecars written before it are refused with a message naming the format, rather
   than being reinterpreted under a grammar whose meaning has moved.
+- **VHI's control plane collapsed to one gRPC service, and none of this has a compatibility
+  window.** The separate `VhiTrainingAid` service is gone; its RPCs move onto `VhiControl`
+  and lose "training" from their names in the process (`StartTrainingProgram` →
+  `StartRecordingTrajectory`, `StopTrainingProgram` → `StopRecordingTrajectory`,
+  `GetTrainingState` → `GetRecordingSessionState`) — a recording aid that cannot see what
+  the control service already declared to the same hand was two sources of truth for one
+  state machine, not two independent responsibilities. The per-capability
+  `ContinuousEncoding` field is gone from the manifest, and `control_pose_encoding` narrows
+  to a plain `control_pose` bool on both `DeclareRequest` and `DeclareReply`: the sign
+  convention it used to carry left the wire entirely once `VhiTarget` stopped computing one
+  to negate. On the Python side, `VhiCanonicalClient` and `VhiTrainingAidClient` become
+  `VhiControlClient` and `VhiRecordingClient`, both bound to the one stub. None of this
+  degrades gracefully — an old MyoGestic against a new VHI, or the reverse, refuses to link
+  at all: wrong service name, wrong RPC names, a field that no longer exists. **MyoGestic
+  and VHI must be upgraded together**; there is no staged rollout and no version this pair
+  is backward-compatible with.
 
 ### Changed
 
