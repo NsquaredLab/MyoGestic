@@ -48,6 +48,27 @@ service VhiControl {
   // What can this target be told to do? Returns every control VHI exports, with the
   // semantics VHI itself declares for each. Call it before Declare.
   rpc GetControlManifest (GetControlManifestRequest) returns (ControlManifest);
+
+  // --- recording session ---------------------------------------------------
+  // Not control: these coordinate VHI's participation in a recording session that
+  // something else owns. They live here because they drive the same hand through the
+  // same state machine — a second service implied an independence the renderer does
+  // not have, and the arbitration between them is already cross-cutting.
+
+  // Mark a recording session active or finished. While active, VHI ignores its own
+  // keyboard so the recording has a single movement source.
+  rpc SetRecordingSession (SetRecordingSessionRequest) returns (RecordingAck);
+
+  // Start cycling the control hand through a movement, so the recorded pose stream
+  // sweeps a continuous range instead of snapping between held states. Refused if a
+  // trajectory is already running.
+  rpc StartRecordingTrajectory (StartRecordingTrajectoryRequest) returns (RecordingAck);
+
+  // Stop the trajectory. Rests the hand only if one was running.
+  rpc StopRecordingTrajectory (StopRecordingTrajectoryRequest) returns (RecordingAck);
+
+  // Session state, plus the movement names a trajectory may use.
+  rpc GetRecordingSessionState (GetRecordingSessionStateRequest) returns (RecordingSessionState);
 }
 
 // Empty — proto3 needs a message type even with no parameters.
@@ -328,55 +349,14 @@ message SweepControlReply {
   bool matched_expectation = 4;
 }
 
-// ---------------------------------------------------------------------------
-// Recording / label-acquisition aid.
-//
-// Deliberately a SEPARATE service, not extra RPCs on VhiControl, because
-// the distinction is the whole point: this is not a control plane and nothing here
-// is a control.
-//
-// A discrete control is a *held state* — an application asks for "grip" and
-// the hand holds a grip. That semantics must not bend to accommodate data
-// collection. But collecting regression training data needs the opposite: a
-// deliberately moving control hand, so the recorded VHI_Control stream sweeps a
-// continuous kinematic range for EMG windows to be aligned against.
-//
-// Both live here because both are properties of a *recording session* rather than of
-// the thing being controlled:
-//
-//   - the session gate, which stops VHI's local keyboard from competing with
-//     MyoGestic as a movement source while a session is being recorded;
-//   - the training program, which cycles the control hand to generate a trajectory.
-//
-// A program names a VHI movement, and that is intentional: a recording aid is
-// allowed to be application-specific, precisely so the control vocabulary does not
-// have to grow a concept ("sweep me for training") that no application controls.
-// ---------------------------------------------------------------------------
-service VhiTrainingAid {
-  // Mark a MyoGestic recording session active or finished. While active, VHI ignores
-  // its local keyboard so the recording has a single movement source.
-  rpc SetRecordingSession (SetRecordingSessionRequest) returns (TrainingAck);
-
-  // Start cycling the control hand through a movement, producing a continuous
-  // trajectory on VHI_Control. Refused if a program is already running.
-  rpc StartTrainingProgram (StartTrainingProgramRequest) returns (TrainingAck);
-
-  // Stop the program and return the control hand to rest.
-  rpc StopTrainingProgram (StopTrainingProgramRequest) returns (TrainingAck);
-
-  // Query the aid's state. Also carries the movement names a program may use, so a
-  // client can discover them without the v1 control service.
-  rpc GetTrainingState (GetTrainingStateRequest) returns (TrainingState);
-}
-
 message SetRecordingSessionRequest {
   // true while a recording session is in progress.
   bool active = 1;
 }
 
-message StartTrainingProgramRequest {
-  // A VHI movement name, from TrainingState.available_movements. Application-specific
-  // by design — see the note above this service.
+message StartRecordingTrajectoryRequest {
+  // A VHI movement name, from RecordingSessionState.available_movements.
+  // Application-specific by design.
   string movement = 1;
   // Movement cycles per second. Non-positive leaves VHI's current timing alone.
   float frequency_hz = 2;
@@ -387,25 +367,25 @@ message StartTrainingProgramRequest {
 }
 
 // Empty — proto3 needs a message type even with no parameters.
-message StopTrainingProgramRequest {}
-message GetTrainingStateRequest {}
+message StopRecordingTrajectoryRequest {}
+message GetRecordingSessionStateRequest {}
 
-message TrainingAck {
+message RecordingAck {
   bool applied = 1;
   // Human-readable reason when applied == false.
   string message = 2;
 }
 
-message TrainingState {
+message RecordingSessionState {
   // Whether a recording session is currently marked active.
   bool recording_session_active = 1;
-  // Whether a training program is cycling the control hand right now.
-  bool program_running = 2;
-  // The movement a running program is cycling; empty when none is running.
-  string program_movement = 3;
+  // Whether a trajectory is cycling the control hand right now.
+  bool trajectory_running = 2;
+  // The movement a running trajectory is cycling; empty when none is running.
+  string trajectory_movement = 3;
   // The control hand's animation state, e.g. "waiting" | "closing" | "holding".
   string animation_state = 4;
-  // Movement names a program may name. Discover, don't hard-code.
+  // Movement names a trajectory may use. Discover, don't hard-code.
   repeated string available_movements = 5;
   // The control hand's currently selected movement, whatever selected it. Lets a UI
   // highlight it without the v1 control service.
