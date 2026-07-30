@@ -1,9 +1,8 @@
 """Model, loader and pure transforms for the canonical control standard.
 
-Private core of `myogestic.controls`, which is the public entry point, carries
-the standard's reference documentation and re-exports everything here. The split
-exists so no module imports its own aggregator: `_controls_bus` imports this,
-and `controls` imports both.
+Private core of `myogestic.controls`, the public entry point, which carries the
+standard's reference documentation and re-exports everything here. `_controls_bus`
+imports this; `controls` imports both.
 
 Continuous DOFs are signed and normalized to ``[-1, 1]`` with ``0`` at rest; a
 name denotes its ``+1`` direction. Nothing here knows what a target is.
@@ -45,15 +44,9 @@ class Continuous:
         as active. Below it the value becomes ``0.0``; at or above it, ``1.0``. Gated here,
         before anything else sees the number.
 
-        Named for what it is compared against — a probability fraction — and deliberately
-        not "threshold": a *target* may also declare a threshold
-        (`Capability.activation_threshold`), and the two answer different questions. This
-        one is about the model's confidence.
-
-        This is what lets a binary classifier drive the same grouped mapping a regressor
-        drives. The gated 0/1 is just a control value — fanned out and weighted like any
-        other — so the target receives continuous per-control values either way, and no
-        separate state command is involved. ``None`` uses the value as given.
+        Distinct from a target's `Capability.activation_threshold`: this one is about the
+        model's confidence. The gated 0/1 is an ordinary control value, fanned out and
+        weighted like any other. ``None`` uses the value as given.
 
     Examples
     --------
@@ -90,15 +83,12 @@ class Discrete:
         every change immediately.
     activates
         The state a **numeric** activation selects once it reaches `threshold_fraction`.
-        Set when
-        the target declares exactly two states, so a binary classifier emitting a
+        Set when the target declares exactly two states, so a binary classifier emitting a
         probability in ``[0, 1]`` needs no thresholding of its own. Empty when a scalar
-        cannot pick a state — with three or more states a number is ambiguous, and
-        guessing which one it meant is worse than refusing the input.
+        cannot pick a state: with three or more states a number is ambiguous.
     threshold_fraction
         The probability fraction at which `activates` is selected. Taken from the target
-        when it declares one (`Capability.activation_threshold`), because the target knows
-        what its states cost; overridable per binding.
+        when it declares one (`Capability.activation_threshold`); overridable per binding.
     label
         Optional display label; the name is used when empty.
 
@@ -138,10 +128,8 @@ class ControlSet:
         Control name -> the DOFs it commands. Empty means no declared controls.
     standard_version
         The vocabulary-format version this configuration was written against.
-        Recorded verbatim and **not** validated: refusing an unfamiliar version here
-        would reject a configuration this library can in fact load. Deciding what a
-        version means is a negotiation with a target, so it is settled by the target
-        handshake rather than by the loader.
+        Recorded verbatim and **not** validated: what a version means is settled by
+        the target handshake, not by the loader.
 
     Examples
     --------
@@ -156,9 +144,8 @@ class ControlSet:
     standard_version: str = STANDARD_VERSION
     #: Alias -> the target control addresses its value is routed to, with per-target
     #: weights. Populated by `myogestic.controls.resolve`; empty for a configuration
-    #: built without a target manifest. A `Dof` describes what the *alias* accepts, and
-    #: this says where it goes — the two are separate because the alias name is the
-    #: user's and the address is the target's.
+    #: built without a target manifest. A `Dof` describes what the *alias* accepts;
+    #: this says where it goes.
     routes: Mapping[str, tuple[Any, ...]] = field(default_factory=dict)
 
     @property
@@ -219,13 +206,10 @@ def _num(v: Any) -> bool:
 def _as_float(v: Any, rest: float) -> tuple[float, bool]:
     """Coerce a runtime value to a finite float, falling back to ``rest``.
 
-    The single coercion every runtime transform uses, so they cannot disagree about
-    what a value means. It accepts anything numpy hands over — ``np.float32`` is
-    **not** a subclass of `float`, and it is this library's prediction dtype, so an
-    ``isinstance(v, float)`` test would silently zero every real prediction.
-
-    Strings and bytes are rejected rather than parsed: a sanitiser that turns
-    ``b"1.5"`` into a joint angle is not sanitising.
+    The single coercion every runtime transform uses. It accepts anything numpy hands
+    over — ``np.float32`` is **not** a subclass of `float`, and it is this library's
+    prediction dtype, so an ``isinstance(v, float)`` test would silently zero every
+    real prediction. Strings and bytes are rejected rather than parsed.
 
     Returns
     -------
@@ -245,12 +229,10 @@ def substitute_rest(controls: ControlSet, values: Mapping[str, Any]) -> dict[str
     """Fill a full frame, replacing anything unusable with the DOF's rest value.
 
     A missing key, a non-finite number and an unknown discrete state all become
-    rest. Keys that are not declared DOFs are dropped — a ``@pipeline.predict``
-    return value carries other things (a class label for the UI, diagnostics), and
-    those are not this function's business.
+    rest. Keys that are not declared DOFs are dropped.
 
-    Never raises. Sanitising on the predict thread must not be able to fail: an
-    exception there is logged with a full traceback on *every* tick.
+    Never raises: this runs on the predict thread, where an exception is logged
+    with a full traceback on *every* tick.
 
     Examples
     --------
@@ -268,9 +250,8 @@ def substitute_rest(controls: ControlSet, values: Mapping[str, Any]) -> dict[str
                 out[name] = v
             elif dof.activates:
                 # A model may emit a probability rather than a state name. Threshold it
-                # into one *here*, so everything downstream — the debounce gate, the
-                # target, the recording — sees a named state and never a bare 0.73. A
-                # discrete control is a state, not a small number.
+                # into one *here*, so the debounce gate, the target and the recording all
+                # see a named state and never a bare 0.73.
                 level, bad = _as_float(v, float("nan"))
                 out[name] = (
                     dof.rest if bad or level < dof.threshold_fraction else dof.activates
@@ -281,9 +262,8 @@ def substitute_rest(controls: ControlSet, values: Mapping[str, Any]) -> dict[str
             level, bad = _as_float(v, dof.rest)
             if not bad and dof.threshold_fraction is not None:
                 # A classifier's output is an activation, not a joint value. Gate it here
-                # so everything downstream — the weights, the wire, the recording — sees
-                # the 0/1 that was actually decided, never a bare 0.73 standing in for a
-                # position.
+                # so the weights, the wire and the recording all see the 0/1 that was
+                # actually decided.
                 level = 1.0 if level >= dof.threshold_fraction else 0.0
             out[name] = level
     return out
@@ -350,9 +330,6 @@ def encode(controls: ControlSet, values: Mapping[str, Any]) -> np.ndarray:
 
 def decode(controls: ControlSet, frame: Sequence[float]) -> dict[str, float]:
     """Inverse of `encode` — a wire frame back to named continuous values.
-
-    One declaration drives both directions, so the channel selection used to
-    *serve* a target cannot drift from the one used to *train* against it.
 
     Raises
     ------

@@ -36,7 +36,7 @@ class Output:
       an atomic slot (CPython's GIL guarantees atomic reference
       assignment). It is **latest-wins, not queued** - if you push
       faster than ``hz``, intermediate values are overwritten and
-      never sent. That's the contract.
+      never sent.
     - Exceptions raised by `_send` are caught, deduplicated per
       ``(error class, message)`` pair, and logged once. A flapping
       destination logs one line per failure mode and the send thread
@@ -83,9 +83,7 @@ class Output:
         self._latest: np.ndarray | None = None
         self._hz = hz
         self._running = True
-        # Dedup key per (exception class name, str(exception)) - log the
-        # first occurrence per kind, suppress subsequent ones so a noisy
-        # disconnect does not spam the log.
+        # Dedup key per (exception class name, str(exception)).
         self._seen_send_errors: set[tuple[str, str]] = set()
         if _IS_BROWSER:
             # Pyodide: no threads, and asyncio tasks don't dispatch while
@@ -108,20 +106,17 @@ class Output:
         self._latest = data  # GIL guarantees atomic ref assignment
 
     def _send_step(self) -> float:
-        """Run one send-loop iteration. Returns seconds-to-sleep.
+        """Run one send-loop iteration and return seconds-to-sleep.
 
-        Shared between the threaded and async loop variants so the
-        send logic stays in one place; only the pacing primitive
-        (time.sleep vs await asyncio.sleep) differs at the call site.
+        Shared by the threaded and async loop variants; only the pacing
+        primitive differs at the call site.
         """
         t_start = time.perf_counter()
         if self._latest is not None:
             try:
                 self._send(self._latest)
             except Exception as e:
-                # Never crash the send loop; log first occurrence per
-                # (error class, message) pair so a noisy disconnect
-                # does not flood the log.
+                # Never crash the send loop.
                 key = (type(e).__name__, str(e))
                 if key not in self._seen_send_errors:
                     self._seen_send_errors.add(key)
@@ -162,10 +157,8 @@ class Output:
 
         The send loop is paced, so a value pushed immediately before teardown is
         normally never sent at all: the thread is mid-sleep, and [`stop`][] ends the
-        loop before it wakes. For the neutral "release everything" frame that a
-        target delivers on shutdown, that is the difference between a hand returning
-        to rest and one frozen in the last commanded pose - so anything guaranteeing
-        rest-on-stop must flush rather than push.
+        loop before it wakes. Anything guaranteeing rest-on-stop - the neutral
+        "release everything" frame - must flush rather than push.
 
         Errors are swallowed and logged exactly as on a normal tick, and a flush
         before the first [`push`][] does nothing.

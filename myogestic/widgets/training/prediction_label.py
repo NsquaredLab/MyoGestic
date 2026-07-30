@@ -21,8 +21,7 @@ pipeline panel::
         with grid[5, 0]:
             label.ui()
 
-Pure read-only widget — no callbacks, no state. The example owns ``CLASSES``
-so the widget stays generic across examples (binary, multi-DOF, ...).
+Pure read-only widget — no callbacks, no state. The caller owns ``CLASSES``.
 """
 
 from __future__ import annotations
@@ -44,10 +43,8 @@ class PredictionLabel:
     """Render the current predicted class name as a big centred label.
 
     The class index is looked up in ``pipeline.predictions[class_key]`` and the
-    name is taken from ``class_names``. Colour-codes each class with the
-    shared `PALETTE` so the same class is
-    always the same colour (matches the recording / session-manager
-    chips).
+    name is taken from ``class_names``. Colour-coded from the shared `PALETTE`,
+    so a class keeps the same colour as its recording / session-manager chips.
 
     Examples
     --------
@@ -120,18 +117,14 @@ class PredictionLabel:
             name = self._class_names[idx]
             rgb = PALETTE[idx % len(PALETTE)]
             rgba = imgui.ImVec4(float(rgb[0]), float(rgb[1]), float(rgb[2]), 1.0)
-            # Flash toward the theme's text colour when the predicted class changes
-            # — a subtle "new prediction" pulse on the hero readout. Not literal
-            # white: on the light theme that flashed the readout into the card.
+            # Pulse on a class change, toward the theme's text colour rather than
+            # literal white — white flashes the readout into the light-theme card.
             rgba = flash_color(self._widget_id or self._title, idx, rgba, primary())
 
-            # Big, centred class name. `set_window_font_scale` was removed
-            # upstream; the modern API is `push_font(None, unscaled_base_size)`
-            # — pass None to keep the current font, and a size in the
-            # *unscaled* base unit (style global scale factors are applied on
-            # top automatically).
-            # Hero readout in Instrument Serif (display face); falls back to the
-            # body font when the display face isn't loaded (display_font None).
+            # Big, centred class name in the display face; `display_font()`
+            # returns None when it isn't loaded, which keeps the body font.
+            # `push_font` takes a size in the *unscaled* base unit — style
+            # global scale factors are applied on top automatically.
             base_size = imgui.get_style().font_size_base
             imgui.push_font(display_font(), base_size * self._font_scale)
             try:

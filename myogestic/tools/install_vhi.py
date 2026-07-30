@@ -6,9 +6,9 @@ right asset for the host OS/arch, downloads it, unpacks it into the location
 ``virtual_hand()`` looks at, and drops a ``vhi-version.txt`` marker so a
 later install knows what's already there.
 
-MyoGestic 2.x drives VHI over the **v2 control contract** and has no fallback: it asks
-the renderer what it exports and refuses to guess. A pre-2.0 release cannot answer that,
-so this refuses to install one — see `MIN_VHI_TAG`.
+MyoGestic 2.x drives VHI over the **v2 control contract**, asking the renderer what it
+exports. A pre-2.0 release cannot answer that, so this refuses to install one — see
+`MIN_VHI_TAG`.
 
 Usage:
     python -m myogestic.tools.install_vhi                # latest, default dest
@@ -19,9 +19,8 @@ Usage:
 Or after ``pip install myogestic``:
     myogestic-install-vhi
 
-Pin ``--tag`` in production: ``latest`` is convenient for a fresh checkout but
-not reproducible — a downstream rebuild months later may pick up a different
-VHI version with subtly different behaviour.
+Pin ``--tag`` in production: ``latest`` is not reproducible, so a later rebuild
+may pick up a different VHI version.
 """
 
 from __future__ import annotations
@@ -46,14 +45,12 @@ import typer
 REPO = "NsquaredLab/MyoGestic-VHI"
 
 #: The oldest VHI this MyoGestic can drive. Below it there is no control manifest to
-#: negotiate against, and the v1 bridge that used to paper over that is gone — so an
-#: older install is not "degraded", it does not work at all. Installing one would put a
-#: binary on disk that every launch then refuses, which is a worse failure than this one.
+#: negotiate against, so an older install would be refused at every launch.
 MIN_VHI_TAG = "v2.0.0"
 
-# (system, machine) → release asset. Darwin/x86_64 is deliberately absent:
-# only an arm64 macOS build is shipped, and Rosetta translates x86_64 → arm64,
-# NOT the reverse, so the arm64 binary cannot run on Intel Macs. See
+# (system, machine) → release asset. Darwin/x86_64 is absent: only an arm64
+# macOS build is shipped, and Rosetta translates x86_64 → arm64, NOT the
+# reverse, so the arm64 binary cannot run on Intel Macs. See
 # https://support.apple.com/en-ie/guide/security/secebb113be1/web
 ASSETS = {
     ("Darwin", "arm64"): "VHI-macos-arm64.zip",
@@ -132,9 +129,8 @@ def _resolve_latest_tag() -> str | None:
 def _check_supported(tag: str) -> str:
     """Refuse a release too old to speak v2. Returns the resolved tag.
 
-    Checked *before* the download, because the failure this prevents is silent: an old
-    binary installs perfectly happily and then every `VhiTarget` refuses it at bind
-    time, far from the command that put it there.
+    Checked *before* the download: an old binary installs happily and is then refused
+    by every `VhiTarget` at bind time, far from the command that put it there.
     """
     resolved = _resolve_latest_tag() if tag == "latest" else tag
     if resolved is None:
@@ -174,9 +170,7 @@ def _fetch_release_digest(tag: str, asset: str) -> str | None:
     """Fetch the SHA-256 hex digest for ``asset`` at ``tag`` from the GitHub API.
 
     GitHub publishes ``assets[].digest`` (``"sha256:<hex>"``) in every release
-    payload — used by ``install_vhi`` to integrity-check the downloaded zip
-    against the value GitHub computed at upload time. No coordination with
-    VHI's release pipeline required.
+    payload, computed at upload time.
 
     Returns the hex digest (no ``sha256:`` prefix), or ``None`` if the API is
     unreachable, the tag doesn't exist, or the asset has no digest.
@@ -220,8 +214,7 @@ def _verify(archive: Path, expected: str | None) -> None:
 
     Aborts the install on mismatch — a tampered or corrupted artifact must
     never reach the unpack step. ``expected=None`` (digest unavailable from
-    the API) downgrades to a warning instead of an error; the warning is
-    intentional so it isn't silently masked.
+    the API) warns instead of aborting.
     """
     if expected is None:
         print(
@@ -303,9 +296,8 @@ def _restore_exec_bits(target: Path) -> None:
 def _strip_quarantine(target: Path) -> None:
     """Remove macOS Gatekeeper's `com.apple.quarantine` xattr so the .app launches.
 
-    Loud on purpose: this is security-sensitive (we're trusting the
-    GitHub-hosted artifact), and the user should see it happen rather than
-    have it done silently.
+    Printed rather than done silently: this is security-sensitive, since it
+    means trusting the GitHub-hosted artifact.
     """
     if platform.system() != "Darwin":
         return
@@ -320,10 +312,9 @@ def _macos_gatekeeper_note(target: Path) -> None:
     """Print the macOS-specific "what to do when Gatekeeper blocks it" notice.
 
     VHI's .app is ad-hoc signed (no Apple Developer ID, no notarization), so
-    macOS will block it when launched via Finder / `open`. The block does NOT
-    fire when MyoGestic launches it via process_launcher (subprocess.Popen
-    bypasses LaunchServices) - so for the integrated workflow this is a
-    non-issue. The note is for users who try to double-click the app.
+    macOS blocks it when launched via Finder / `open`. The block does NOT fire
+    when MyoGestic launches it via process_launcher (subprocess.Popen bypasses
+    LaunchServices); the note is for users who double-click the app.
     """
     if platform.system() != "Darwin":
         return
@@ -415,8 +406,7 @@ def _install(
 
     # Atomic install: stage in a temp dir, validate, then swap with dest.
     # A failed download or malformed archive never leaves a half-installed
-    # dest behind. Checksum verification happens before unpack — a tampered
-    # archive never reaches the file extraction step.
+    # dest behind.
     with tempfile.TemporaryDirectory(prefix="myogestic-vhi-") as tmp:
         tmp_path = Path(tmp)
         archive = tmp_path / asset

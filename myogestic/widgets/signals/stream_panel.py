@@ -1,11 +1,9 @@
 """Per-stream status panel for @app.ui.
 
-A compact replacement for the MyoGestic "device setup" tab that only shows
-what's actually true at runtime: source class, connection status, sample
-rate, channel count, last-sample age, plus inline connect buttons for any
-target the source's ``discover()`` reports. Rendering is one-shot per
-frame — no hidden state beyond the discovery cache (shared with the signal
-viewers).
+Shows source class, connection status, sample rate, channel count and
+last-sample age, plus inline connect buttons for any target the source's
+``discover()`` reports. Rendering is one-shot per frame — no hidden state
+beyond the discovery cache, which is shared with the signal viewers.
 """
 
 from __future__ import annotations
@@ -27,9 +25,8 @@ if TYPE_CHECKING:
 _OK = SUCCESS
 _BAD = DANGER
 
-# Streams we've already auto-discovered once. Forces the auto-scan to fire
-# only on the first frame each stream is observed disconnected — the user's
-# scan button can refresh later.
+# Streams we've already auto-discovered once, so the auto-scan fires only on the
+# first frame each stream is seen disconnected. The scan button refreshes later.
 _auto_scanned: set[str] = set()
 
 
@@ -206,10 +203,7 @@ def _connect_buttons(name: str, stream: Stream, scan: _ScanState) -> None:
 
 
 def _current_target(stream: object) -> str | None:
-    """Best-effort read of the stream name the source is currently targeting.
-
-    Used to suppress the redundant button for the failing target.
-    """
+    """Best-effort read of the stream name the source is currently targeting."""
     src = stream._source  # type: ignore
     for attr in ("stream_name", "_stream_name", "name", "_name"):
         val = getattr(src, attr, None)
@@ -221,9 +215,9 @@ def _current_target(stream: object) -> str | None:
 def _last_ts_age(stream: object) -> float | None:
     """Seconds since the most recent sample reached the ring buffer.
 
-    Defers to ``Stream.last_timestamp()`` which takes the per-stream lock —
-    necessary because ``reconnect()`` zeroes ``_display_n`` and reallocates
-    ``_display_t``, so a lock-free read can index a torn buffer.
+    Must go through ``Stream.last_timestamp()``, which takes the per-stream lock:
+    ``reconnect()`` zeroes ``_display_n`` and reallocates ``_display_t``, so a
+    lock-free read can index a torn buffer.
     """
     last_fn = getattr(stream, "last_timestamp", None)
     if last_fn is None:

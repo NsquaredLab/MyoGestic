@@ -1,12 +1,8 @@
 """Sanitise a control frame once, then fan it out to every target.
 
 Private implementation of `myogestic.controls.Target` and
-`myogestic.controls.ControlBus`, which are re-exported there. Split out so the
-standard itself stays free of runtime plumbing.
-
-The bus exists so that no application re-derives the ordering below. Getting it
-wrong is not a style problem: a value that escapes its declared range, or a NaN
-that survives into a filter, moves a hand.
+`myogestic.controls.ControlBus`, re-exported there. The standard stays in
+`controls.py`; the runtime lives here.
 """
 
 from __future__ import annotations
