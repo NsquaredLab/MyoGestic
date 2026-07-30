@@ -39,17 +39,13 @@ class NotchCache:
     stream / epoch / rate / freq / drawn-channels it was built for. Each frame it filters only
     the newly-arrived samples (identified by absolute sample *sequence*) and reuses the
     already-filtered values for the rest of the visible window, so the output equals
-    re-notching the whole window every frame (``apply_mains_notch``) at a fraction of the
-    cost. A key change, a coverage gap (the warm-up now reaches back before the cached tail),
-    a sequence discontinuity, or a reconnect (new `epoch`) triggers a cold rebuild.
+    re-notching the whole window every frame at a fraction of the cost. Already-drawn
+    samples are never revised as the window scrolls. A key change, a coverage gap (the
+    warm-up now reaches back before the cached tail), a sequence discontinuity, or a
+    reconnect (new `epoch`) triggers a cold rebuild.
 
-    Persistent state means already-drawn samples are never revised as the window scrolls —
-    strictly better than re-seeding a fresh warm-up each frame, which the old per-frame notch
-    did (their settled outputs agree to well within the trace's line width).
-
-    ponytail: the tail is re-`concatenate`d each frame — a bounded ~window-sized copy, far
-    cheaper than the O(window) IIR it replaces; a preallocated ring would drop even that copy
-    if it ever profiles hot.
+    ponytail: the tail is re-`concatenate`d each frame — a bounded ~window-sized copy; a
+    preallocated ring would drop it if this ever profiles hot.
     """
 
     def __init__(self) -> None:
@@ -106,8 +102,7 @@ class NotchCache:
         if cold:
             self._key = key
             self._filter = NotchFilter(fs, freq)
-            # Column-select ONLY the warm-up+region rows, never the whole buffer:
-            # `data_raw[:, channel_map]` over a 60 s buffer fancy-copies ~40 MB/frame.
+            # Column-select ONLY the warm-up+region rows, never the whole buffer (see `_cols`).
             self._filtered = self._filter.step(_cols(data_raw[warm_idx:], channel_map))
             self._start_seq = warm_seq
             self._next_seq = end_seq
@@ -139,13 +134,11 @@ class ViewerState:
     fps: list[float] = field(default_factory=list)
     channels_initialized: bool = False
     # `(stream_key, n_channels)` that `channels` currently reflects — set by
-    # `resolve_enabled`. `None` until the first resolve. Also read by
-    # `_controls.py` to reset the toggle-grid's shift-click anchor on a
-    # stream/channel-count change.
+    # `resolve_enabled`, `None` until the first resolve. Also read by `_controls.py`
+    # to reset the toggle-grid's shift-click anchor on a stream/channel-count change.
     active_channels_key: tuple[str, int, tuple[int, ...] | None] | None = None
-    # Per-`(stream_key, n_channels)` selection cache so a `selectable`
-    # viewer that flips between streams restores each stream's own
-    # selection instead of sharing/resetting a single one. Populated by
+    # Per-`(stream_key, n_channels)` selection cache so a `selectable` viewer that
+    # flips between streams restores each stream's own selection. Populated by
     # `resolve_enabled` whenever it moves `channels` to a new key.
     _channels_by_key: dict[tuple[str, int], set[int]] = field(default_factory=dict, repr=False)
     last_hovered: int = -1
@@ -154,24 +147,22 @@ class ViewerState:
     y_min: float = -1.0
     y_max: float = 1.0
     per_channel_scale: bool = False
-    # Pending "Rescale/Fit & lock" click, remembering which BASIS it applies to ("shared" fits the
-    # one shared y-range; "per_channel" fits each channel's lane) so a same-frame Per-Ch toggle
-    # can't misapply it. `None` = no request. Consumed once in `viewer.py`.
+    # Pending "Rescale/Fit & lock" click, remembering which BASIS it applies to ("shared"
+    # fits the one shared y-range; "per_channel" fits each channel's lane) so a same-frame
+    # Per-Ch toggle can't misapply it. `None` = no request. Consumed once in `viewer.py`.
     rescale_pending: str | None = None
-    # Auto-scale easing state (see `_plot.update_auto_scale`): in auto mode `y_min/y_max` are
-    # eased toward the data range each frame instead of ImPlot refitting instantly. `scale_ease_t`
-    # is the last frame's `perf_counter` (dt source); `scale_ease_key` is the (stream, channels,
+    # Auto-scale easing state (see `_plot.update_auto_scale`). `scale_ease_t` is the last
+    # frame's `perf_counter` (dt source); `scale_ease_key` is the (stream, channels,
     # display_filter) context — a change snaps rather than eases across an unrelated scale.
     scale_ease_key: tuple | None = None
     scale_ease_t: float = 0.0
-    # Per-channel-mode easing (see `_plot.update_per_channel_ranges`): the same grow-fast/
-    # shrink-slow ease, but over each channel's normalisation `(min, max)` so unit-lane amplitudes
-    # don't breathe every frame. `pc_ranges` is the eased range per real channel index.
+    # Per-channel-mode easing (see `_plot.update_per_channel_ranges`): the same ease over
+    # each channel's normalisation `(min, max)`. `pc_ranges` is keyed by real channel index.
     pc_ranges: dict[int, tuple[float, float]] = field(default_factory=dict, repr=False)
     pc_ease_key: tuple | None = None
     pc_ease_t: float = 0.0
-    # Artifact-robust scaling: ignore transients shorter than this (ms) when fitting the y-range,
-    # so a brief movement-artifact spike doesn't define the scale. 0 = plain min/max. See
+    # Ignore transients shorter than this (ms) when fitting the y-range, so a brief
+    # movement artifact doesn't define the scale. 0 = plain min/max. See
     # `_plot.robust_channel_ranges`.
     transient_ms: float = 20.0
     paused: bool = False
@@ -191,31 +182,24 @@ class ViewerState:
     show_markers: bool = True
     show_retarget: bool = False
     show_controls: bool = True  # top control menu; toggled from the panel header for plot/grid room
-    # Decimation output-size target used by the *last* `render_plot` call
-    # (sized to the live plot's pixel width there — see
-    # `resolve_decimation_target`). `render_footer` reads it back to report
-    # accurate decimation stats without needing a live ImPlot context of
-    # its own (it renders after `end_plot()`).
+    # Decimation output-size target used by the *last* `render_plot` call (see
+    # `resolve_decimation_target`). `render_footer` reads it back to report decimation
+    # stats without a live ImPlot context of its own (it renders after `end_plot()`).
     last_decim_n_out: int = 0
-    # Cached per-channel diagnostics `(channels, rms, pp, mean)` and the
-    # perf_counter time they were computed. `render_footer` computes these
-    # over the *raw* (undecimated) window — O(window_samples * n_enabled),
-    # which is tens of ms at a high sample rate / wide window / many channels
-    # — so it throttles the recompute to ~10 Hz (and on an enabled-set
-    # change) and renders the cached values in between, rather than paying it
-    # every frame for a readout that changes slowly.
+    # Cached per-channel diagnostics `(channels, rms, pp, mean)` and the perf_counter
+    # time they were computed. `render_footer` computes these over the *raw*
+    # (undecimated) window — O(window_samples * n_enabled), tens of ms at a high rate /
+    # wide window / many channels — so it throttles the recompute to ~10 Hz (and on an
+    # enabled-set change) and renders the cached values in between.
     stats_cache: tuple[list[int], np.ndarray, np.ndarray, np.ndarray] | None = field(
         default=None, repr=False
     )
     stats_last_t: float = 0.0
-    # Incremental causal-notch state (see `NotchCache`): persists the filtered
-    # tail + per-biquad IIR state so the notch filters only the newly-arrived
-    # samples each frame instead of re-notching the whole visible window.
+    # Incremental causal-notch state (see `NotchCache`).
     notch_cache: NotchCache = field(default_factory=NotchCache, repr=False)
-    # Buffer identity captured when paused, so the notch cache treats the frozen
-    # window as one unchanging snapshot (no re-filtering while paused). `frozen_fs`
-    # is captured with the samples so a reconnect at a new rate can't be applied to
-    # the frozen old-rate data.
+    # Buffer identity captured when paused, so the notch cache treats the frozen window
+    # as one unchanging snapshot. `frozen_fs` is captured with the samples so a
+    # reconnect at a new rate can't be applied to the frozen old-rate data.
     frozen_epoch: int = 0
     frozen_seq: int = 0
     frozen_fs: float = 0.0
@@ -225,11 +209,9 @@ class ViewerState:
 class SignalFrame:
     # The enabled-subset trace to plot. Normally the raw (display-filtered)
     # visible window; in `rms_env` mode the *sparse* RMS envelope. Its rows
-    # pair with `trace_ts` (not `ts_win`).
+    # pair with `trace_ts`, not `ts_win`.
     data: np.ndarray
-    # Visible-window timestamps (raw samples). Drives the label markers and is
-    # `trace_ts` in every non-`rms_env` mode. Kept distinct from `trace_ts`
-    # because the RMS envelope has its own, sparser time base.
+    # Visible-window timestamps (raw samples). Drives the label markers.
     ts_win: np.ndarray
     # Full-width visible window used by the footer diagnostics (kept RAW in
     # `rms_env` mode so the numeric readout still describes the real signal).
@@ -237,18 +219,16 @@ class SignalFrame:
     # Timestamps paired with `data` for plotting. Equals `ts_win` normally; the
     # hop-endpoint times of the RMS envelope in `rms_env` mode.
     trace_ts: np.ndarray
-    # Time that maps to plot-x 0 — the visible window's left edge. Passed to
-    # the decimator so a sparse trace starting after the edge is not shifted
-    # left and the markers stay aligned.
+    # Time that maps to plot-x 0 — the visible window's left edge. Passed to the
+    # decimator so a sparse trace starting after the edge is not shifted left.
     x_origin: float
     n_channels: int
     n_points: int
     frame_start: float
-    # Real channel index for each column of `data`, ascending: `data[:, i]`
-    # is channel `channel_map[i]`. `data` only spans the enabled subset, so
-    # callers must go through this map instead of indexing `data` by real
-    # channel index (`data_win` stays full-width and can still be indexed by
-    # real channel index directly).
+    # Real channel index for each column of `data`, ascending: `data[:, i]` is
+    # channel `channel_map[i]`. `data` only spans the enabled subset, so callers
+    # MUST go through this map rather than index `data` by real channel index
+    # (`data_win` stays full-width and can be indexed directly).
     channel_map: list[int]
 
 
@@ -270,40 +250,29 @@ def minmax_grid_all_shared_x(
 
     Returns `(xs, ys)`: `xs` has shape `(2*n_buckets+2,)`, shared across every
     channel; `ys` has shape `(n_channels, 2*n_buckets+2)`. Each channel keeps
-    its own min/max envelope — there is no cross-channel index union (that
-    union is what made the old shared decimator's reduction vanish at high
-    channel counts: the union of many channels' distinct picks approaches
-    the full window, e.g. 64 channels over a 5 s / 2048 Hz window unioning to
-    the *entire* window). The two points per bucket sit at the bucket's
-    CENTER time (the shared `xs`), which is sub-pixel-accurate once
-    `n_out ~= 3 * plot_width`, rather than at either member sample's own
-    timestamp.
+    its own min/max envelope — no cross-channel index union, whose reduction
+    vanishes at high channel counts (64 channels over a 5 s / 2048 Hz window
+    union to the *entire* window). The two points per bucket sit at the
+    bucket's CENTER time (the shared `xs`), sub-pixel-accurate once
+    `n_out ~= 3 * plot_width`.
 
     Buckets are anchored to an *absolute*-time grid (`bucket_dt = window_s /
-    n_buckets`), not to this window's own start. `t` is the absolute
-    (continuous) sample timestamp, and the visible window slides every frame
-    as new samples arrive — bucketing relative to the window's own first
-    timestamp would recompute different bucket boundaries every frame even
-    though the underlying samples are unchanged, which is what caused the
-    left-edge scrolling flicker (most visible in the partial leftmost
-    bucket, since its boundary shifts the most between frames). Flooring the
-    *absolute* timestamp onto a grid whose width is fixed frame-to-frame
-    instead maps a given sample to the same bucket regardless of where the
-    window currently starts, so the per-bucket min/max — and therefore the
-    drawn envelope — is stable as the window scrolls.
+    n_buckets`), not to this window's own start. `t` is the absolute sample
+    timestamp and the visible window slides every frame, so window-relative
+    boundaries would move frame to frame over unchanged samples and flicker
+    the left edge. On the absolute grid a sample always lands in the same
+    bucket, so the drawn envelope is stable as the window scrolls.
 
     Pure NumPy, all channels processed together (no per-channel Python
-    loop): ~0.9 ms for 64 channels / 5 s / 2048 Hz, versus ~15.7 ms for the
-    old per-channel loop over `m4_decimate_channel`.
+    loop): ~0.9 ms for 64 channels / 5 s / 2048 Hz.
     """
     data = np.ascontiguousarray(data)
     n, n_channels = data.shape
     if n == 0:
         return np.empty(0, dtype=np.float64), np.empty((n_channels, 0), dtype=np.float64)
-    # `x_origin` is the time that maps to plot-x 0 (the visible window's left
-    # edge). It defaults to the first sample's own timestamp — correct for a
-    # dense window that fills the view — but a *sparse* trace (e.g. the RMS
-    # envelope) can start after the left edge, and subtracting its own `t[0]`
+    # `x_origin` is the time that maps to plot-x 0 (the visible window's left edge).
+    # It defaults to the first sample's own timestamp, but a *sparse* trace (e.g. the
+    # RMS envelope) can start after the left edge, and subtracting its own `t[0]`
     # would slide it against the raw x-axis and misalign the label markers.
     if x_origin is None:
         x_origin = float(t[0])
@@ -314,12 +283,9 @@ def minmax_grid_all_shared_x(
     n_buckets = max(1, n_out // 2)
     bucket_dt = window_s / n_buckets if window_s > 0 else 0.0
     if not np.isfinite(bucket_dt) or bucket_dt <= 0:
-        # Degenerate window (<=0, or too small relative to n_buckets to
-        # produce a usable grid) -- fall back to splitting the samples into
-        # n_buckets equal-count groups so we still reduce the point count.
-        # Not scroll-stable, but window_s <= 0 is not a state the viewer
-        # should ever reach in practice (the window slider is floored at
-        # 0.1 s; see _controls.py).
+        # Degenerate window (<=0, or too small for a usable grid): fall back to
+        # n_buckets equal-count groups so we still reduce the point count. Not
+        # scroll-stable, but the window slider is floored at 0.1 s (_controls.py).
         bucket_id = (np.arange(n, dtype=np.int64) * n_buckets) // n
     else:
         bucket_id = np.floor(t / bucket_dt).astype(np.int64)
@@ -329,21 +295,17 @@ def minmax_grid_all_shared_x(
     # order). `starts` locates each run's first offset; `lengths` its size.
     starts = np.flatnonzero(np.r_[True, bucket_id[1:] != bucket_id[:-1]])
     lengths = np.diff(starts, append=n)
-    # Cap the padded run width. `blocks` below is `(n_buckets, width,
-    # n_channels)`; with `width = lengths.max()` a *single* pathological run
-    # would force *every* bucket to that width and blow the allocation up to
-    # gigabytes. Such a run is realistic: a device clock stall or a
-    # monotonic-clamped session drops many samples onto one timestamp, so
-    # they all land in one bucket. Cap width at a generous multiple of the
-    # uniform run length; the few runs that exceed the cap get an exact
-    # reduction below, so nothing is silently dropped.
+    # Cap the padded run width. `blocks` below is `(n_buckets, width, n_channels)`;
+    # with `width = lengths.max()` one pathological run — a device clock stall drops
+    # many samples onto a single timestamp, so onto one bucket — would force *every*
+    # bucket to that width and blow the allocation up to gigabytes. The few runs over
+    # the cap get an exact reduction below, so nothing is silently dropped.
     uniform = -(-n // len(starts))  # ceil(n / n_buckets)
     width = min(int(lengths.max()), max(4 * uniform, 64))
-    # Gather every run into one (buckets, width, channels) block, padding
-    # short runs by repeating their last sample (`np.minimum(..., lengths -
-    # 1)` clamps the take-index so it never reads past a run's own end) —
-    # trades a little extra memory for a single vectorized reduction instead
-    # of a per-bucket Python loop.
+    # Gather every run into one (buckets, width, channels) block, padding short runs
+    # by repeating their last sample (`np.minimum(..., lengths - 1)` clamps the
+    # take-index so it never reads past a run's own end): one vectorized reduction
+    # instead of a per-bucket Python loop.
     take = starts[:, None] + np.minimum(np.arange(width, dtype=np.intp), lengths[:, None] - 1)
     blocks = data[take]  # (buckets, width, channels); tail padded by repeat
     lows = np.fmin.reduce(blocks, axis=1)  # (buckets, channels), NaN-robust
@@ -375,8 +337,8 @@ def minmax_grid_all_shared_x(
 
 
 #: Draw-density bounds for the "Detail" control, in points per plot pixel.
-#: `_DETAIL_FULL` (a few points/pixel) keeps sharp features / MinMax peaks
-#: crisp; `_DETAIL_MIN` is the coarsest, cheapest trace.
+#: `_DETAIL_FULL` keeps sharp features / MinMax peaks crisp; `_DETAIL_MIN`
+#: is the coarsest, cheapest trace.
 _DETAIL_MIN = 0.5
 _DETAIL_FULL = 3.0
 #: Floor on the width-derived target so a very narrow (or not-yet-laid-out)
@@ -393,12 +355,9 @@ def resolve_decimation_target(plot_width_px: float, v: ViewerState) -> int:
     `plot_width_px` should come from the live plot (e.g.
     ``implot.get_plot_size().x``, only valid between `begin_plot` /
     `end_plot`). The drawn point count per channel is
-    ``plot_width_px * v.detail_factor`` — the "Detail" control sets the
-    density directly, so full detail always tracks the plot width instead of
-    fighting a fixed absolute cap. `v.n_pixels` is an *optional* hard cap
-    (an escape hatch, `None`/`0` = no cap) and the fallback when
-    `plot_width_px` isn't available yet (the very first frame, reported as
-    `<= 0`).
+    ``plot_width_px * v.detail_factor``. `v.n_pixels` is an *optional* hard
+    cap (`None`/`0` = no cap) and the fallback when `plot_width_px` isn't
+    available yet (the very first frame, reported as `<= 0`).
     """
     if plot_width_px <= 0:
         target = v.n_pixels or _DECIMATE_FALLBACK_POINTS
@@ -431,8 +390,7 @@ def get_viewer_state(
     if v is None:
         s0 = ctx.streams.get(stream_name or widget_id)
         # Caller override wins; fall back to the stream's processing window
-        # (typically tiny — 0.2 s for classification — which is fine for the
-        # model but unreadable on screen).
+        # (typically tiny — 0.2 s for classification — and unreadable on screen).
         if window_s is not None:
             win0 = window_s
         else:
@@ -463,42 +421,36 @@ def resolve_enabled(
     Must run before [`build_signal_frame`][] so the frame can decimate
     only the enabled columns.
 
-    The selection is cached on `v` keyed by `(stream_key, n_channels)`, so
-    a `selectable` viewer that flips between streams restores each
-    stream's own selection instead of resetting a single shared one — and
-    a channel-count change on the active stream (e.g. a reconnect at a
-    different channel count) is treated as a fresh key rather than
-    clobbering that stream's other-size selection.
+    The selection is cached on `v` keyed by `(stream_key, n_channels)`, so a
+    `selectable` viewer that flips between streams restores each stream's own
+    selection, and a channel-count change (e.g. a reconnect at a different
+    count) is a fresh key rather than a clobber.
 
-    `initial_channels` seeds
-    `resolve_initial` only
-    the very first time this `ViewerState` ever creates a selection —
-    i.e. once, for whichever `(stream_key, n_channels)` is active on that
-    first call. Every later first-sight of a *different* key (a stream
-    switch, or a channel-count change) falls back to `resolve_initial`'s
-    `None` policy instead: every channel for streams with
-    `n_channels <= 32`, otherwise just the first 16. This keeps a user's
-    own edits from ever being silently overwritten by the caller's
-    one-shot hint. Returns the live `v.channels` set; safe because
-    nothing reads it again until the *next* frame, after which only
-    `render_channel_controls` mutates it.
+    `initial_channels` seeds `resolve_initial` only the very first time this
+    `ViewerState` ever creates a selection — once, for whichever
+    `(stream_key, n_channels)` is active on that call — so the caller's
+    one-shot hint can never overwrite a user's own edits. Every later
+    first-sight of a *different* key falls back to `resolve_initial`'s `None`
+    policy: every channel for `n_channels <= 32`, otherwise the first 16.
+    Returns the live `v.channels` set; nothing reads it again until the *next*
+    frame, after which only `render_channel_controls` mutates it.
 
-    `scope` (from `resolve_scope`) is the hard
-    restriction — the columns this viewer may *ever* show. It bounds the seed,
-    any restored selection, and the live set on **every** path, and it forms
-    part of the cache key so a differently-scoped viewer sharing a
-    ``widget_id`` never inherits another's selection. ``None`` is unrestricted.
+    `scope` (from `resolve_scope`) is the hard restriction — the columns this
+    viewer may *ever* show. It bounds the seed, any restored selection, and the
+    live set on **every** path, and it forms part of the cache key so a
+    differently-scoped viewer sharing a ``widget_id`` never inherits another's
+    selection. ``None`` is unrestricted.
     """
     # The scope fingerprint is part of the identity: state is keyed by `widget_id`,
-    # not by Python instance, so a re-created (or same-id, differently-scoped)
-    # viewer must not inherit a selection resolved under a different scope.
+    # not by Python instance, so a same-id differently-scoped viewer must not
+    # inherit a selection resolved under another scope.
     key = (stream_key, n_channels, None if scope is None else tuple(scope))
     scope_set = None if scope is None else set(scope)
     if v.channels_initialized and v.active_channels_key == key:
         if scope_set is not None:
-            # Enforce on the fast path too: this returns before any of the seeding
-            # below, so intersecting only on restore would let anything that
-            # mutated `v.channels` in between escape the scope.
+            # Enforce on the fast path too: it returns before the seeding below, so
+            # intersecting only on restore would let anything that mutated
+            # `v.channels` in between escape the scope.
             v.channels.intersection_update(scope_set)
         return v.channels
 
@@ -536,10 +488,9 @@ def _notch_from(
     """``data_raw[region_start_idx:]`` (columns ``channel_map``) with a notch.
 
     Delegates to ``v.notch_cache`` (see `NotchCache`), which warms the causal notch up over
-    ``_NOTCH_WARMUP_S`` of samples before ``region_start_t``, drops that warm-up, and — the
-    whole point of the cache — filters only the samples newer than the previous frame while
-    reusing the already-filtered tail. ``freq == 0`` is a no-op (and releases the cache so its
-    tail/IIR state is not retained while the notch is off). ``(epoch, end_seq)`` come from
+    ``_NOTCH_WARMUP_S`` of samples before ``region_start_t`` and then drops that warm-up.
+    ``freq == 0`` is a no-op and releases the cache, so no tail/IIR state is retained while
+    the notch is off. ``(epoch, end_seq)`` come from
     [`Stream.get_raw_snapshot_stable`][] and identify the snapshot for the cache.
 
     ``channel_map`` restricts the notch (and the returned columns) to the channels actually
@@ -567,14 +518,12 @@ def build_signal_frame(
     footer diagnostics, which index it by real channel. In every mode except
     `rms_env`, `data` is the display-filtered visible window and `trace_ts`
     equals `ts_win`. In `rms_env` mode `data` is instead the *sparse* RMS
-    envelope from `compute_rms_trace` (computed over a pre-roll-extended,
-    enabled-only slice), `trace_ts` is its hop-endpoint time base, and
-    `data_win` is kept RAW so the footer's rms/pp/mean still describe the real
-    signal.
+    envelope from `compute_rms_trace` (over a pre-roll-extended, enabled-only
+    slice), `trace_ts` is its hop-endpoint time base, and `data_win` is kept
+    RAW so the footer's rms/pp/mean still describe the real signal.
 
-    Does *not* MinMax-decimate: that runs once per frame over every enabled
-    column at once (`minmax_grid_all_shared_x`) inside `render_plot`
-    (`_plot.py`) — this function only hands it the trace to draw.
+    Does *not* MinMax-decimate: that runs in `render_plot` (`_plot.py`) via
+    `minmax_grid_all_shared_x`.
     """
     frame_start = _time.perf_counter()
     if v.paused and v.frozen_data is not None and v.frozen_ts is not None:
@@ -586,10 +535,10 @@ def build_signal_frame(
         # frames, so it needs samples the acquire thread can't overwrite mid-filter,
         # plus (epoch, end_seq) to tell new samples from already-filtered ones and `fs`
         # captured atomically with the data (a separate stream.info.fs read can race a
-        # reconnect). Copy only the visible window + notch warm-up (+ rms pre-roll), not
-        # the whole 60 s buffer — that copy alone was the dominant per-frame cost at 10 kHz.
-        # Exception: when *entering* pause, take the FULL buffer, because the window / rms
-        # sliders stay live while paused and a trimmed freeze couldn't satisfy a widening.
+        # reconnect). Copy only the visible window + notch warm-up (+ rms pre-roll); at
+        # 10 kHz copying the whole 60 s buffer dominates the frame.
+        # Exception: when *entering* pause, take the FULL buffer — the window / rms
+        # sliders stay live while paused and a trimmed freeze can't satisfy a widening.
         margin_s = v.window + _NOTCH_WARMUP_S + 0.25
         if v.display_filter == "rms_env":
             margin_s += max(v.rms_window_ms, 0.0) / 1000.0
@@ -608,14 +557,11 @@ def build_signal_frame(
 
     n_raw = len(data_raw)
     n_channels = data_raw.shape[1]
-    # Slice the visible window by *timestamp*, not by sample count.
-    # Sample-count slicing only matches v.window seconds when timestamps
-    # are perfectly uniform. Sources that stamp at host arrival time
-    # (e.g. BLE) produce non-uniform per-sample timestamps under radio
-    # jitter — a fixed-count slice can then span more than v.window
-    # seconds and the trace draws past the right edge of the plot's
-    # hard `[0, v.window]` x-axis. Time-based slicing makes the rendered
-    # span always equal `min(v.window, data_age)`.
+    # Slice the visible window by *timestamp*, not by sample count: sources that
+    # stamp at host arrival time (e.g. BLE under radio jitter) have non-uniform
+    # timestamps, so a fixed-count slice can span more than v.window seconds and
+    # draw past the right edge of the plot's hard `[0, v.window]` x-axis. Time-based
+    # slicing makes the rendered span always `min(v.window, data_age)`.
     if n_raw > 0:
         last_ts = float(ts_raw[-1])
         vis_start_t = last_ts - v.window
@@ -632,10 +578,10 @@ def build_signal_frame(
     channel_map = sorted(c for c in enabled if 0 <= c < n_channels)
 
     if v.display_filter == "rms_env":
-        # Sparse RMS envelope. Read one RMS window of PRE-ROLL before the
-        # visible edge so the leftmost envelope points have a full window of
-        # history (otherwise they are a scroll-dependent partial transient),
-        # and slice to the enabled columns *before* the O(window·ch) RMS work.
+        # Sparse RMS envelope. Read one RMS window of PRE-ROLL before the visible
+        # edge so the leftmost envelope points have a full window of history
+        # (otherwise they are a scroll-dependent partial transient), and slice to
+        # the enabled columns *before* the O(window·ch) RMS work.
         window_s = max(v.rms_window_ms, 0.0) / 1000.0
         pre_idx = (
             int(np.searchsorted(ts_raw, vis_start_t - window_s, side="left")) if n_raw > 0 else 0
@@ -650,15 +596,12 @@ def build_signal_frame(
         keep = rms_ts >= vis_start_t
         trace_ts = rms_ts[keep]
         data_sel = rms_data[keep]
-        # Footer diagnostics read `data_win`; keep it the RAW visible window so
-        # the numeric rms/pp/mean still describe the real signal, not the
-        # envelope.
+        # Footer diagnostics read `data_win`; keep it RAW so the numeric
+        # rms/pp/mean describe the real signal, not the envelope.
         data_win = data_win_raw
     else:
-        # Footer stats read `data_win` (full width); keep it the RAW visible
-        # window (display-filtered), like the rms_env branch, so the numbers
-        # describe the real signal. Only the *drawn* trace gets the notch, and
-        # only on the channels actually plotted (`channel_map`).
+        # Only the *drawn* trace gets the notch, and only on the channels actually
+        # plotted (`channel_map`); `data_win` stays un-notched for the footer.
         data_win = apply_display_filter(data_win_raw, v.display_filter, fs)
         notched = _notch_from(
             v, id(stream), epoch, end_seq, data_raw, ts_raw, start_idx,

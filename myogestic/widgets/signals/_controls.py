@@ -47,9 +47,8 @@ def render_controls(
         imgui.pop_item_width()
         if changed:
             v.selected_stream = names[idx]
-            # Channel selection is *not* reset here: `resolve_enabled`
-            # (in `_state.py`) keys the selection by `(stream, n_channels)`
-            # and restores each stream's own set the next time it runs.
+            # Channel selection is *not* reset here: `resolve_enabled` keys it
+            # by `(stream, n_channels)` and restores each stream's own set.
             v.paused = False
             v.frozen_ts = None
             v.frozen_data = None
@@ -84,9 +83,9 @@ def render_controls(
 def _render_rms_sliders(stream_name: str, v: ViewerState, fs: float) -> None:
     """The RMS-envelope window + hop sliders, shown only for the rms_env mode.
 
-    Hop is capped at ``min(100 ms, window)`` so windows always overlap or abut
-    (never leave gaps), and the invariant ``hop <= window`` is re-clamped every
-    frame in case the window slider was dragged below the current hop.
+    Hop is capped at ``min(100 ms, window)`` so windows overlap or abut rather
+    than leave gaps; the cap is re-applied every frame in case the window
+    slider was dragged below the current hop.
     """
     imgui.push_item_width(104)
     w_changed, w_new = imgui.slider_float(
@@ -144,8 +143,7 @@ def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None
         )
     imgui.same_line()
 
-    # Visual-only display transform, label on the left so it can't be mistaken
-    # for the scaling controls that follow it on the row.
+    # Visual-only display transform.
     df_modes = ["none", "rectify", "dc_removal", "rms_env"]
     df_labels = ["Raw", "Rectified", "DC removed", "RMS envelope"]
     df_idx = df_modes.index(v.display_filter) if v.display_filter in df_modes else 0
@@ -163,18 +161,15 @@ def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None
         imgui.same_line()
         _render_rms_sliders(stream_name, v, fs)
 
-    # Row break: the y-scaling group drops to its own line below source /
-    # transport / View, instead of crowding them all onto one row.
-    # Y-scaling group kept together: Auto/Manual + Rescale + Per-Ch. `Per-Ch` is the scaling BASIS
-    # (shared axis vs one lane per channel); `Auto`/`Manual` is the adaptation policy and applies to
-    # either basis. Only the shared numeric min/max fields (and Gain in per-channel Auto, where
-    # normalization cancels it) are context-specific.
+    # Y-scaling group on its own row: Auto/Manual + Rescale + Per-Ch. `Per-Ch` is
+    # the scaling BASIS (shared axis vs one lane per channel); `Auto`/`Manual` is
+    # the adaptation policy and applies to either basis. Only the shared numeric
+    # min/max fields (and Gain in per-channel Auto, where normalization cancels
+    # it) are context-specific.
     per_ch = v.per_channel_scale
     if v.scale_mode not in ("auto", "manual"):
         v.scale_mode = "auto"
 
-    # Per-Ch is the scaling BASIS; Auto/Manual decides whether that basis adapts — so both apply in
-    # per-channel mode too (they used to grey out). Segmented so both modes are visible.
     scale_i = segmented(f"{stream_name}_scale", ["Auto", "Manual"], 1 if v.scale_mode == "manual" else 0)
     v.scale_mode = "manual" if scale_i == 1 else "auto"
     if imgui.is_item_hovered():
@@ -183,8 +178,8 @@ def render_filter_and_scale(stream_name: str, v: ViewerState, fs: float) -> None
             "Per-Ch on: applied to each channel's own lane instead of one shared range."
         )
 
-    # One-shot "Fit & lock": fit the current visible data (per basis) and switch to Manual, so it
-    # stays put. Remember the basis on the click so a same-frame Per-Ch toggle can't misapply it.
+    # One-shot "Fit & lock". The basis is recorded on the click so a same-frame
+    # Per-Ch toggle can't misapply it.
     imgui.same_line()
     if imgui.button(f"Rescale##{stream_name}_rescale"):
         v.rescale_pending = "per_channel" if per_ch else "shared"
@@ -229,9 +224,8 @@ def render_resolution_controls(
     stream: Stream,
     v: ViewerState,
 ) -> None:
-    # Three label+slider columns in a stretch table, so each label sits
-    # directly left of its own slider (no floating-between-sliders ambiguity)
-    # and the widths track the panel width / DPI instead of hand-computed pixels.
+    # Stretch table so each label sits directly left of its own slider and the
+    # widths track panel width / DPI instead of hand-computed pixels.
     max_window = stream._buffer_seconds if hasattr(stream, "_buffer_seconds") else 60.0
     per_ch = v.per_channel_scale
     if not imgui.begin_table(f"{stream_name}_scope_row", 4, imgui.TableFlags_.sizing_stretch_same):
@@ -242,10 +236,8 @@ def render_resolution_controls(
     imgui.text("Detail")
     imgui.same_line()
     imgui.set_next_item_width(-1)
-    # `detail_factor` is points-per-pixel internally; show it to the user as a
-    # percentage of full detail (100% = the crispest _DETAIL_FULL density), so
-    # the control reads as "how much detail" and tops out at 100% rather than a
-    # confusing ">1x".
+    # `detail_factor` is points-per-pixel internally; shown as a percentage of
+    # full detail (100% = the crispest _DETAIL_FULL density).
     pct = v.detail_factor / _DETAIL_FULL * 100.0
     changed_r, new_pct = imgui.slider_float(
         f"##{stream_name}_detail", pct, _DETAIL_MIN / _DETAIL_FULL * 100.0, 100.0, "%.0f%%"
@@ -271,8 +263,8 @@ def render_resolution_controls(
     imgui.table_next_column()
     imgui.text("Gain")
     imgui.same_line()
-    # Gain is inert in per-channel AUTO (normalization cancels it), so grey it there; in per-channel
-    # MANUAL it magnifies each trace against its frozen range, so keep it live.
+    # Gain is inert in per-channel AUTO (normalization cancels it); in per-channel
+    # MANUAL it magnifies each trace against its frozen range, so it stays live.
     gain_inert = per_ch and v.scale_mode == "auto"
     if gain_inert:
         imgui.begin_disabled()
@@ -289,7 +281,6 @@ def render_resolution_controls(
     imgui.text("Artifact")
     imgui.same_line()
     imgui.set_next_item_width(-1)
-    # Reads as "Artifact < 20 ms" — the label states what it does, spelled out.
     changed_t, new_t = imgui.slider_float(
         f"##{stream_name}_transient", v.transient_ms, 0.0, 40.0, "< %.0f ms"
     )
@@ -329,21 +320,20 @@ class _DragSession:
 class _GridUIState:
     """Per-stream interaction state for the channel grid.
 
-    Mirrors the module-level per-stream-name dict pattern already used by
-    `_scan.py`'s `_ScanState` for transient widget state that must survive
-    across frames but doesn't belong on the shared `ViewerState`.
+    Transient widget state that must survive across frames but doesn't belong
+    on the shared `ViewerState`; same per-stream-name dict pattern as
+    `_scan.py`'s `_ScanState`.
     """
 
     drag: _DragSession = field(default_factory=_DragSession)
     last_clicked: int = -1
-    # `v.active_channels_key` as of the last frame this grid was rendered —
-    # lets `render_channel_controls` detect a stream/channel-count change
-    # and drop the shift-click anchor so it can't briefly resolve a range
-    # against the *new* stream's out-of-range channel indices.
+    # `v.active_channels_key` as of the last frame this grid was rendered.
+    # `render_channel_controls` compares it to drop the shift-click anchor on a
+    # stream/channel-count change, so a range can't resolve against the new
+    # stream's out-of-range channel indices.
     last_key: tuple[str, int] | None = None
-    # Whether the floating channel-grid window is open. Driven by the
-    # compact bar's `[Edit…]` button and by the window's own title-bar
-    # close button (see `render_grid_window`).
+    # Whether the floating channel-grid window is open. Driven by the compact
+    # bar's `[Edit…]` button and by the window's own title-bar close button.
     show_grid: bool = False
 
 
@@ -359,14 +349,13 @@ def render_channel_controls(
 ) -> tuple[set[int], list[str] | None, int]:
     """Render the compact channel bar, and mutate `v.channels` from user input.
 
-    The bar is always drawn inline; the spatial toggle-grid itself only
-    renders when `ui.show_grid` is set (via the bar's `[Edit…]` button), in
-    its own floating window — see `render_grid_window`. `hovered_ch` is -1
-    whenever that window is closed, since nothing can be hovered then.
+    The bar is always drawn inline; the spatial toggle-grid renders only when
+    `ui.show_grid` is set, in its own floating window (`render_grid_window`).
+    `hovered_ch` is -1 whenever that window is closed.
 
     `resolve_enabled` (in `_state.py`) owns initializing `v.channels` before
-    this runs each frame — this function only ever reads/mutates the
-    existing selection, it never (re)seeds it.
+    this runs each frame; this function only reads/mutates the existing
+    selection, never (re)seeds it.
     """
     enabled = v.channels
     ch_names = stream.info.channel_names if stream.info else None
@@ -377,9 +366,8 @@ def render_channel_controls(
     ui = _grid_ui.setdefault(stream_name, _GridUIState())
     if ui.last_key != v.active_channels_key:
         ui.last_clicked = -1
-        # Disarm any in-flight drag too: its snapshot and origin cell belong to
-        # the *previous* stream/scope, so finishing it here would apply a stale
-        # selection (or ch0) to the new one.
+        # Disarm any in-flight drag: its snapshot and origin cell belong to the
+        # previous stream/scope and would apply a stale selection to the new one.
         ui.drag = _DragSession()
         ui.last_key = v.active_channels_key
 
@@ -389,9 +377,8 @@ def render_channel_controls(
     if ui.show_grid:
         hovered_ch = render_grid_window(stream_name, layout, enabled, ch_names, ui)
 
-    # Resolve a click/drag session on mouse-up even if the window closed
-    # mid-drag (e.g. the user hit the title-bar [x] while dragging) — cheap,
-    # and keeps `ui.drag` from staying armed forever.
+    # Resolve on mouse-up even if the window closed mid-drag, or `ui.drag`
+    # stays armed forever.
     _finalize_drag(ui, enabled)
 
     return enabled, ch_names, hovered_ch
@@ -405,9 +392,8 @@ def render_channel_bar(
 ) -> None:
     """Render the always-inline, one-line channel bar.
 
-    `Channels {enabled}/{total}` + the global All/None/Invert ops (what the
-    full-grid footer did before) + `[Edit…]`, which toggles the floating
-    grid window (`ui.show_grid`) — the grid itself never renders inline.
+    `Channels {enabled}/{total}` + the global All/None/Invert ops + `[Edit…]`,
+    which toggles the floating grid window (`ui.show_grid`).
 
     Every op is bounded by `scope` — the columns this viewer may show — so the
     total, All and Invert describe the panel's own channels rather than the
@@ -424,20 +410,17 @@ def render_channel_bar(
     imgui.same_line()
     if imgui.small_button(f"Invert##{stream_name}_bar_invert"):
         # Complement *within the scope*, not `reduce_selection`'s XOR: XOR keeps
-        # any out-of-scope member of `enabled` (it isn't in the target set), so
-        # inverting could smuggle a foreign channel back in.
+        # out-of-scope members of `enabled`, smuggling a foreign channel back in.
         new_enabled = set(scope) - enabled
         enabled.clear()
         enabled.update(new_enabled)
     imgui.same_line()
 
-    # Highlight the toggle while the grid window is open — same "active
-    # state" cue as the Manual scale-mode button in render_filter_and_scale.
+    # Highlight the toggle while the grid window is open.
     was_open = ui.show_grid
     if was_open:
         push_selected()
-    # small_button (not button) so it matches the All/None/Invert pills — a full
-    # button is taller and sits out of line with them.
+    # small_button, not button, so it lines up with the All/None/Invert pills.
     if imgui.small_button(f"Edit…##{stream_name}_bar_edit"):
         ui.show_grid = not ui.show_grid
     if was_open:
@@ -455,19 +438,15 @@ def render_grid_window(
 ) -> int:
     """Render the floating per-stream channel-grid window; returns `hovered_ch`.
 
-    A real `imgui.begin`/`imgui.end` window — movable, resizable, and
-    closable via the title-bar `[x]` (which clears `ui.show_grid`) — not a
-    `begin_popup`: that auto-closes on any click outside its bounds, which
-    would abort a rectangle drag the instant it strays past the popup's
-    edge.
+    A real `imgui.begin`/`imgui.end` window, closable via the title-bar `[x]`
+    (which clears `ui.show_grid`) — not a `begin_popup`, which auto-closes on
+    any click outside its bounds and would abort a rectangle drag the instant
+    it strays past the edge.
     """
-    # When multi-viewport is on (desktop default), open the grid as its OWN
-    # native OS window instead of a panel confined to the app window. A
-    # NoAutoMerge window class keeps it a separate platform window even when
-    # dragged back over the app; positioned just inside the main window so it
-    # opens on-screen (the user can move it, and the position persists). With
-    # viewports off (browser / older build) this is skipped and it stays a
-    # normal in-app floating window.
+    # With multi-viewport on (desktop default), open the grid as its own native
+    # OS window: a NoAutoMerge window class keeps it separate even when dragged
+    # back over the app, positioned just inside the main window so it opens
+    # on-screen. With viewports off it stays a normal in-app floating window.
     if imgui.get_io().config_flags & imgui.ConfigFlags_.viewports_enable.value:
         wc = imgui.WindowClass()
         wc.viewport_flags_override_set = imgui.ViewportFlags_.no_auto_merge
@@ -485,17 +464,15 @@ def render_grid_window(
         f"Channel selection — {stream_name}##{stream_name}_grid_window", True
     )
     hovered_ch = -1
-    # The layout is already scope-restricted by `normalize_layout`, so its own
-    # columns are exactly what may be selected — the bound a shift-click range
-    # has to respect.
+    # `normalize_layout` already scope-restricted the layout, so its columns are
+    # exactly the bound a shift-click range must respect.
     allowed = {c for g in layout for c in g.columns}
     try:
         if visible:
-            # Tile the grids near-square (n_cols per row) instead of one tall
-            # vertical stack: each grid is a `begin_group`ed block so `same_line`
-            # places the next column to its right, wrapping onto a new row every
-            # n_cols. `render_grid` reads its own absolute cursor origin, so its
-            # drag hit-testing keeps working wherever the block lands.
+            # Tile the grids near-square, n_cols per row: each grid is a
+            # `begin_group`ed block so `same_line` places the next to its right.
+            # `render_grid` reads its own absolute cursor origin, so drag
+            # hit-testing works wherever the block lands.
             for grid_idx, grid in enumerate(layout):
                 if grid_idx % n_cols != 0:
                     imgui.same_line(0.0, cell)  # one-cell gap between grid columns
@@ -516,8 +493,7 @@ def _grid_cell_size() -> float:
     """Cell edge length for the floating grid window.
 
     Large enough that a 3-digit channel index (``"255"``) fits centered
-    without overflow — cells are no longer squeezed by the inline viewer's
-    vertical budget now that they live in their own resizable window.
+    without overflow.
     """
     return imgui.get_frame_height() * 1.6
 
@@ -525,9 +501,8 @@ def _grid_cell_size() -> float:
 def _grid_window_size(layout: list[ChannelGrid], cell: float, n_cols: int) -> imgui.ImVec2:
     """First-open size for the grid window, fit to the tiled grid blocks.
 
-    Sized so an ``n_cols``-wide near-square tiling of the grids opens fully
-    visible (capped so it never exceeds a reasonable on-screen size); the
-    window stays freely resizable afterwards.
+    Sized so an ``n_cols``-wide tiling opens fully visible, capped to a
+    reasonable on-screen size; the window stays resizable afterwards.
     """
     n = len(layout)
     if n == 0:
@@ -603,10 +578,9 @@ def render_grid(
                 allowed,
             )
 
-    # Live rectangle update: recompute from the mouse-down snapshot every
-    # frame the drag is in progress, hit-testing the cursor against this
-    # frame's own grid geometry — a hovered *item* isn't reliable here since
-    # ImGui suppresses other items' hover while the origin cell is active.
+    # Live rectangle update: recompute from the mouse-down snapshot each frame,
+    # hit-testing the cursor against this frame's grid geometry. Item hover is
+    # unusable here — ImGui suppresses it while the origin cell is active.
     drag = ui.drag
     if drag.armed and drag.grid_idx == grid_idx and imgui.is_mouse_down(imgui.MouseButton_.left):
         io = imgui.get_io()
@@ -629,17 +603,14 @@ def _hit_test(
 ) -> tuple[int, int]:
     """Map a screen-space mouse position to a `(row, col)` cell address.
 
-    Purely geometric (uniform grid, known origin/step) — no reliance on
-    per-item hover, which ImGui suppresses for non-active items during a
-    drag. Out-of-range results are expected and safe: `rect_to_channels`
-    clamps them to the grid bounds.
+    Purely geometric, so it does not rely on per-item hover (which ImGui
+    suppresses for non-active items during a drag). Out-of-range results are
+    safe: `rect_to_channels` clamps them to the grid bounds.
 
-    Cells are laid out with `same_line()` horizontally — column stride is
-    `cell + spacing_x` — and wrap onto a new line vertically — row stride
-    is `cell + spacing_y`. The two axes use ImGui's independent
-    `item_spacing.x`/`.y`, so they must not be conflated (a single shared
-    `spacing` drifts the vertical hit-test whenever `x != y`, as it does
-    with this app's theme).
+    Column stride is `cell + spacing_x`, row stride `cell + spacing_y`. The two
+    axes use ImGui's independent `item_spacing.x`/`.y` and must not be
+    conflated: a single shared `spacing` drifts the vertical hit-test whenever
+    `x != y`, as it does with this app's theme.
     """
     return _hit_test_xy(mouse.x, mouse.y, origin.x, origin.y, cell, spacing_x, spacing_y)
 
@@ -668,13 +639,11 @@ def _draw_cell_label(
 ) -> None:
     """Draw the global channel index `ch`, centered in the cell rect `p_min`-`p_max`.
 
-    Uses the theme's plain text color (not the per-channel accent) so the
-    number stays legible over *both* the enabled cell's tinted fill and the
-    disabled cell's hollow background — the accent color already carries
-    the on/off cue via the filled dot vs. hollow border in `render_cell`.
-    A modestly reduced font size (`push_font(None, ...)`, the imgui-bundle
-    idiom for a one-off size — see `prediction_label.py`) keeps a 3-digit
-    index from crowding the cell.
+    Uses the theme's plain text color, not the per-channel accent, so the number
+    stays legible over both the enabled cell's tinted fill and the disabled
+    cell's hollow background. The reduced font size (`push_font(None, ...)`, the
+    imgui-bundle idiom for a one-off size) keeps a 3-digit index from crowding
+    the cell.
     """
     label = str(ch)
     base_size = imgui.get_style().font_size_base
@@ -726,8 +695,7 @@ def render_cell(
         dot = imgui.color_convert_float4_to_u32(imgui.ImVec4(color[0], color[1], color[2], 1.0))
         dl.add_circle_filled(center, cell * 0.18, dot)
     else:
-        # Dim + hollow border: an on/off cue beyond brightness alone
-        # (colorblind-safe) — a filled dot vs. no dot, not just color.
+        # Hollow border: an on/off cue beyond color alone (filled dot vs. none).
         border = imgui.color_convert_float4_to_u32(hairline(0.6))
         dl.add_rect(p_min, p_max, border, rounding=rounding)
 

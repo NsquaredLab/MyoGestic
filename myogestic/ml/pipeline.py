@@ -61,9 +61,7 @@ class PipelineState(StrEnum):
     The core app only knows about ``"idle"`` and ``"recording"``;
     attaching a [`Pipeline`][] (via ``Pipeline(app)``) adds two more
     states for the ML lifecycle. Mutually exclusive with each other and
-    with the core states: a Pipeline cannot be predicting and training
-    at the same time, by design (the train pause exists so the GPU
-    isn't fought over).
+    with the core states.
 
     The enum is a ``StrEnum`` so it compares cleanly against the raw
     string written to ``app.ctx.state`` by the transition methods.
@@ -123,9 +121,8 @@ class Pipeline:
         self.on_extract: Callable | None = None
         self.on_train: Callable | None = None
         self.on_predict: Callable | None = None
-        # Set if you want save/load buttons to do anything; the
-        # `myogestic.ml.save_pickle` / `load_pickle` joblib helpers are the
-        # obvious default but the library doesn't force them.
+        # Set if you want save/load buttons to do anything; the joblib helpers
+        # `myogestic.ml.save_pickle` / `load_pickle` are the default.
         self.save_model: Callable | None = None
         self.load_model: Callable | None = None
         # Set this from inside `@app.ui` to publish what the user picked
@@ -222,11 +219,8 @@ class Pipeline:
                 ctx.state = "idle"
 
         if _IS_BROWSER:
-            # Pyodide: no threads. Run synchronously on the UI frame
-            # that triggered the click. Blocks that frame for the
-            # duration of training - acceptable for the small models
-            # the playground demos. Heavy models would need an explicit
-            # split-step trainer, out of scope here.
+            # Pyodide: no threads. Run synchronously on the UI frame that
+            # triggered the click, blocking it for the duration of training.
             _worker()
         else:
             threading.Thread(target=_worker, daemon=True).start()

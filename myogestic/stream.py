@@ -18,17 +18,15 @@ if TYPE_CHECKING:
     from myogestic.session import Session
 
 # Pyodide reports sys.platform == "emscripten" and forbids OS threads
-# (Thread.start raises RuntimeError). When detected, the framework
-# schedules its acquire / send / predict loops as asyncio tasks on the
-# browser's event loop instead. Same loop bodies; only the pacing
-# primitive (time.sleep vs await asyncio.sleep) differs.
+# (Thread.start raises RuntimeError); the acquire / send / predict loops run
+# on the browser's event loop instead, paced with await asyncio.sleep.
 _IS_BROWSER = sys.platform == "emscripten"
 
 
-#: Dtypes a [`Stream`][] / [`Source`][] may use. Covers every LSL wire
-#: format (``int8`` / ``int16`` / ``int32`` / ``int64`` / ``float32`` /
+#: Dtypes a [`Stream`][] / [`Source`][] may use: every LSL wire format
+#: (``int8`` / ``int16`` / ``int32`` / ``int64`` / ``float32`` /
 #: ``float64``) plus ``float16`` as a storage-only cast. Unsigned ints are
-#: excluded: never an LSL wire format and unused for biosignals.
+#: excluded.
 SUPPORTED_DTYPES: tuple[np.dtype, ...] = tuple(
     np.dtype(t)
     for t in (
@@ -60,9 +58,8 @@ class ChannelGrid:
 class StreamInfo:
     """Describes the shape and dtype of a [`Source`][]'s data.
 
-    Returned by [`Source.connect`][]. The framework uses it to size
-    the ring buffer, lay out the signal viewer, and decide how to
-    serialise the stream when recording.
+    Returned by [`Source.connect`][]; sizes the ring buffer and lays out
+    the signal viewer.
 
     Attributes
     ----------
@@ -75,10 +72,9 @@ class StreamInfo:
         NumPy dtype of each sample, one of `SUPPORTED_DTYPES`.
         Defaults to ``float32``. Accepts anything [`numpy.dtype`][]
         understands (``"int16"``, ``np.int16``, ``np.dtype("int16")``)
-        and normalises it. Picking a compact dtype (e.g. ``int16``)
-        keeps the ring buffer and Zarr recording small; the window
-        handed to ``@pipeline.extract`` is **always upcast to float32**
-        regardless, so feature/ML code never has to branch on dtype.
+        and normalises it. A compact dtype (e.g. ``int16``) keeps the
+        ring buffer and Zarr recording small; the window handed to
+        ``@pipeline.extract`` is **always upcast to float32** regardless.
     channel_names
         Optional per-channel labels for the signal viewer
         legend. ``None`` (default) renders as ``ch0``, ``ch1``, ...
@@ -116,11 +112,9 @@ class StreamInfo:
 class Source(Protocol):
     """Protocol every data source must implement.
 
-    Three methods, no inheritance: ``connect`` opens the device or file
-    and returns a [`StreamInfo`][] describing the data, ``read``
-    polls non-blockingly for the next chunk, ``disconnect`` releases
-    the device. The framework's [`Stream`][] wraps any object
-    matching this Protocol and runs it on a daemon acquisition thread.
+    Three methods, no inheritance. [`Stream`][] wraps any object matching
+    this Protocol and runs it on a daemon acquisition thread, so ``read``
+    must not block.
 
     See [Add a custom source](../how-to/add-a-source.md) for worked
     examples and the full contract.
@@ -152,9 +146,8 @@ def _unwrap_ring_into(rb: RingBuffer, out: np.ndarray, cap: int) -> int:
     """Copy ring buffer contents into pre-allocated `out`. Zero allocation.
 
     Uses dvg-ringbuffer internals (_arr, _idx_L, is_full) to avoid
-    np.array(rb) which creates a new array every call.
-
-    Returns number of valid samples written to `out`.
+    np.array(rb), which allocates every call. Returns the number of valid
+    samples written to `out`.
     """
     n = rb.shape[0]
     if n == 0:
@@ -176,23 +169,16 @@ def _unwrap_ring_into(rb: RingBuffer, out: np.ndarray, cap: int) -> int:
 class Stream:
     """A named ring-buffered live stream backed by a [`Source`][].
 
-    The framework's central data primitive: pair a name (``"emg"``) with
-    a source (``LSLSource("TestEMG1")``) and a window duration, register
-    the stream with ``app.streams(...)``, and the rest of the framework
-    can pull windows (for ML), display snapshots (for the signal
-    viewer), or recorded chunks (for the session) by stream name.
-
-    Architecture:
+    Pair a name (``"emg"``) with a source (``LSLSource("TestEMG1")``) and a
+    window duration, register it with ``app.streams(...)``, and the rest of
+    the framework addresses it by stream name.
 
     - One daemon **acquisition thread** is started per Stream when
       ``App.run()`` begins. It loops ``source.read()``, appends to the
       ring buffer, refreshes the display snapshot, and (if a recording
       session is active) appends to the session's Zarr store.
-    - Two consumer surfaces are then available concurrently:
-      [`get_window`][] (channels-first, exact window-seconds long,
-      consumed by ``@pipeline.extract``) and [`get_display`][]
-      (min/max envelope decimated for 60 fps rendering, consumed by
-      ``signal_viewer``).
+    - [`get_window`][] and [`get_display`][] are then readable
+      concurrently from other threads.
     - The ring buffer holds the last ``buffer_ms`` of samples so
       transient consumers (slow extract, momentary GUI hitches) don't
       lose data.
@@ -239,14 +225,11 @@ class Stream:
         self._buffer_seconds = buffer_ms / 1000.0
         self._running = False
         self._session: Session | None = None
-        # Guards `_session` against the acquire loop. `stop_recording()` tears
-        # the session down (and a daemon thread clears its Zarr stores) while
-        # this stream's acquire thread may still be inside `session.append()`.
-        # Holding this lock around both the append and attach/detach makes the
-        # teardown wait for any in-flight append, so the stores are never
-        # cleared mid-append. Deliberately separate from `_lock` (which guards
-        # the display buffers and is read by the GUI thread) so we never block
-        # rendering on Zarr disk I/O — only the rare Stop path ever waits here.
+        # Guards `_session` against the acquire loop: held around both the
+        # append and attach/detach, so teardown waits for any in-flight append
+        # and the Zarr stores are never cleared mid-append. Separate from
+        # `_lock` (display buffers, read by the GUI thread) so rendering never
+        # blocks on Zarr disk I/O.
         self._session_lock = threading.Lock()
         self.status = "disconnected"
         self.last_error = ""
@@ -273,13 +256,11 @@ class Stream:
         self._m4_work_t: np.ndarray | None = None
         self._win_d = np.empty(0)
         self._win_t = np.empty(0)
-        # Display-buffer identity for stateful render-side consumers (the
-        # incremental notch, `_state.NotchCache`). `epoch` bumps on every
-        # (re)allocation — a possibly-new fs/n_channels means "start over".
-        # `_total_seq` counts samples appended this epoch (written only under
-        # `_lock`); `_display_seq_end` is `_total_seq` captured together with
-        # `_display_n` under the snapshot lock, so a reader gets a *consistent*
-        # (count, newest-sequence) pair and can tell new samples from seen ones.
+        # Display-buffer identity for stateful render-side consumers. `epoch`
+        # bumps on every (re)allocation. `_total_seq` counts samples appended
+        # this epoch (written only under `_lock`); `_display_seq_end` is
+        # `_total_seq` captured together with `_display_n` under the same lock,
+        # so a reader gets a consistent (count, newest-sequence) pair.
         self.epoch = 0
         self._total_seq = 0
         self._display_seq_end = 0
@@ -312,8 +293,7 @@ class Stream:
         self._display_d = np.empty((self._cap, self.info.n_channels), dtype=self.info.dtype)
         self._display_t = np.empty(self._cap, dtype=np.float64)
         self._display_n = 0
-        # Fresh buffer identity: a new epoch invalidates any cached filter state
-        # keyed to the old buffer, and the sample counter restarts.
+        # New epoch invalidates any cached filter state keyed to the old buffer.
         self.epoch += 1
         self._total_seq = 0
         self._display_seq_end = 0
@@ -333,13 +313,13 @@ class Stream:
     def reconnect(self, target: str | None = None) -> bool:
         """Reconnect source. Optionally switch to a different target.
 
-        If the source implements reconnect(), uses that (preserves source-specific
-        logic like LSL resolve or serial port open). Otherwise falls back to
-        disconnect + connect. Either way the source is connected ONCE — buffers
-        are then (re)allocated from the returned StreamInfo.
+        Uses the source's own ``reconnect()`` if it has one (preserving
+        source-specific logic like LSL resolve or serial port open), else
+        disconnect + connect. Either way the source is connected ONCE, then
+        buffers are (re)allocated from the returned StreamInfo.
 
-        Holds `self._lock` for the whole swap to prevent the acquire loop
-        from reading through a half-torn state.
+        Holds `self._lock` for the whole swap so the acquire loop never reads
+        a half-torn state.
         """
         with self._lock:
             self._connected = False
@@ -359,8 +339,7 @@ class Stream:
                 self.last_error = str(e)
                 return False
 
-            # Re-init buffers for potentially different channel count/fs
-            # (no double-connect — source was already (re)connected above).
+            # Re-init buffers for a potentially different channel count/fs.
             self._allocate_buffers()
             return True
 
@@ -368,11 +347,9 @@ class Stream:
         """Start the acquisition loop (a daemon thread, or a per-frame task in the browser)."""
         self._running = True
         if _IS_BROWSER:
-            # Pyodide: no OS threads, and asyncio tasks scheduled here
-            # don't dispatch (immapp.run blocks Python inside the
-            # Emscripten main loop). Register one step with the
-            # per-frame scheduler instead - the App's GUI callback
-            # ticks it every frame.
+            # Pyodide: no OS threads, and asyncio tasks scheduled here don't
+            # dispatch (immapp.run blocks Python inside the Emscripten main
+            # loop). Register one step with the per-frame scheduler instead.
             from myogestic._browser import register
 
             register(lambda: self._acquire_step() if self._running else 1.0)
@@ -400,9 +377,8 @@ class Stream:
     def detach_session(self) -> None:
         """Stop recording this stream (called by [`App.stop_recording`][myogestic.App.stop_recording]).
 
-        Holding ``_session_lock`` makes this *wait for* any append currently
-        in flight on the acquire thread and guarantees no further append can
-        start. Once this returns, the caller may safely finalise/clear the
+        Waits for any append in flight on the acquire thread and blocks
+        further ones, so once this returns the caller may finalise/clear the
         session's Zarr stores without racing the acquire loop.
         """
         with self._session_lock:
@@ -411,10 +387,9 @@ class Stream:
     def _acquire_step(self) -> float:
         """Run one iteration of the acquire loop body.
 
-        Returns the number of seconds the caller should sleep before
-        the next call. Pulled out of the loop so both the threaded and
-        the async (browser) variants can share the work and only
-        differ in how they pace themselves.
+        Returns the number of seconds the caller should sleep before the next
+        call; the threaded and browser loops share this body and differ only
+        in how they pace themselves.
         """
         if not self._connected:
             return 0.0 if self._connect() else 1.0
@@ -432,17 +407,13 @@ class Stream:
 
         bad = self._validate_chunk(data, ts)
         if bad is not None:
-            # Shape mismatch - keep the loop alive but surface the
-            # reason. Source code (or the device) is producing
-            # something other than (n_samples, n_channels) with
-            # n_channels matching StreamInfo.
+            # Shape mismatch — keep the loop alive but surface the reason.
             self.status = "disconnected"
             self.last_error = bad
             return 0.1
 
         if self._data is None or self._timestamps is None:
-            # Shouldn't happen once connected (_connect initialises both), but
-            # narrows the Optional for the type checker and is harmless defence.
+            # Unreachable once connected; narrows the Optional for the checker.
             return 1.0
         with self._lock:
             self._data.extend(data)
@@ -451,17 +422,13 @@ class Stream:
         self.status = "connected"
         self.last_error = ""
 
-        # Update raw snapshot every chunk (cheap memcpy). M4 decimation is deliberately
-        # NOT done here: nothing on the hot path consumes it, and the all-channel
-        # decimation starved the socket read at high channel counts (120-256 ch).
-        # get_display() computes it lazily on the render thread instead.
+        # Raw snapshot every chunk (cheap memcpy). M4 decimation must NOT run
+        # here — at 120-256 channels it starves the socket read; get_display()
+        # computes it lazily on the render thread instead.
         self._update_raw_snapshot()
 
-        # Append to zarr session if recording. Hold `_session_lock` across the
-        # check-and-append so `detach_session()` (called from stop_recording)
-        # cannot null the session and clear its stores in the middle of an
-        # append — that race surfaced as `KeyError: '<stream>'` killing this
-        # acquire thread. The lock is uncontended except during teardown.
+        # `_session_lock` spans the check-and-append so `detach_session()`
+        # cannot null the session and clear its stores mid-append.
         with self._session_lock:
             if self._session is not None:
                 self._session.append(self.name, data, ts)
@@ -484,17 +451,14 @@ class Stream:
         """
         while self._running:
             delay = self._acquire_step()
-            # asyncio.sleep(0) still yields to the event loop, which is
-            # what we want when the source has more data ready.
+            # asyncio.sleep(0) still yields, so a delay of 0 is not a hot loop.
             await asyncio.sleep(delay)
 
     def _validate_chunk(self, data: np.ndarray, ts: np.ndarray) -> str | None:
         """Check that a chunk from `source.read()` matches the StreamInfo.
 
         Returns ``None`` when the chunk is well-formed, or an error message
-        suitable for ``self.last_error`` when it is not. Keeps the loop in
-        one place — callers skip the chunk and sleep briefly on error.
-        Messages name the expected shape and the most likely fix.
+        suitable for ``self.last_error`` when it is not.
         """
         if data.ndim == 1:
             return (
@@ -534,19 +498,17 @@ class Stream:
         with self._lock:
             n = _unwrap_ring_into(self._data, self._display_d, self._cap)
             _unwrap_ring_into(self._timestamps, self._display_t, self._cap)
-            # Set the count and its matching newest-sequence together under the
-            # lock so a concurrent `get_raw_snapshot_stable` never reads a count
-            # that disagrees with `_total_seq` (which the append bumped in a
-            # separate lock acquisition just before this call).
+            # Count and its matching newest-sequence must be set together under
+            # the lock, or `get_raw_snapshot_stable` can read a count that
+            # disagrees with `_total_seq`.
             self._display_n = n
             self._display_seq_end = self._total_seq
 
     def _update_m4_snapshot(self) -> None:
         """Compute the M4-decimated display snapshot.
 
-        Called lazily from [`get_display`][] on the render thread (no longer on the
-        acquire hot path), so it snapshots the display buffer under the lock before
-        decimating rather than reading it concurrently with the acquire thread.
+        Called lazily from [`get_display`][] on the render thread, so it copies
+        the display buffer under the lock before decimating.
         """
         with self._lock:
             n = self._display_n
@@ -569,10 +531,9 @@ class Stream:
     def _m4_decimate(
         self, t: np.ndarray, d: np.ndarray, n_out: int
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Per-stream M4 decimation via tsdownsample with pre-allocated scratch.
+        """Decimate via tsdownsample's M4 using pre-allocated scratch.
 
-        Previously module-global — moved here because multiple streams running
-        the acquire loop concurrently would stomp on shared scratch buffers.
+        Scratch is per-stream: concurrent streams must not share it.
         """
         downsampler = self._m4_downsampler
         if downsampler is None:
@@ -583,9 +544,8 @@ class Stream:
         n, n_ch = d.shape
 
         # Bind each scratch buffer to a local right after its lazy-alloc guard:
-        # the type checker can't narrow an Optional *instance attribute* across
-        # the loop + downsampler calls below, but it narrows a local; locals also
-        # save repeated attribute lookups in this per-frame hot path.
+        # the type checker narrows a local but not an Optional attribute, and
+        # locals save attribute lookups in this per-frame hot path.
         work_col = self._m4_work_col
         if work_col is None or work_col.shape[0] < n:
             work_col = self._m4_work_col = np.empty(n, dtype=d.dtype)
@@ -606,11 +566,9 @@ class Stream:
         all_idx = np.unique(work_idx[:pos])
         n_sel = len(all_idx)
 
-        # Size the output scratch to the sample count, not `n_out * n_ch`.
-        # `all_idx` is the *unique* union of every channel's picks, so
-        # `n_sel <= n` (there are only `n` distinct sample indices to pick);
-        # `n_out * n_ch` over-allocated by ~100x here (~2 GiB at 256 ch /
-        # n_out=8000 vs the ~21 MB actually needed).
+        # Size the output scratch to `n`, not `n_out * n_ch`: `all_idx` is the
+        # unique union of every channel's picks, so `n_sel <= n`. Sizing by
+        # `n_out * n_ch` costs ~2 GiB at 256 ch / n_out=8000 vs ~21 MB.
         work_d = self._m4_work_d
         if work_d is None or work_d.shape[0] < n_sel or work_d.shape[1] != n_ch:
             work_d = self._m4_work_d = np.empty((n, n_ch), dtype=d.dtype)
@@ -626,13 +584,11 @@ class Stream:
     def get_window(self) -> tuple[np.ndarray, np.ndarray]:
         """Return the most recent ``window_ms`` as ``(data, ts)``.
 
-        ``data`` is **channels-first** ``(n_channels, n_samples)`` — the
-        same convention used everywhere user code touches signal data —
-        and **always float32**, whatever dtype the stream buffers in, so
-        ``@pipeline.extract`` never has to branch on dtype. ``ts`` is a
-        view into a reusable per-stream buffer; for a float32 stream
-        ``data`` is a view too, otherwise a fresh float32 copy. Copy
-        explicitly if you need to retain either past the next call.
+        ``data`` is **channels-first** ``(n_channels, n_samples)`` and
+        **always float32**, whatever dtype the stream buffers in. ``ts`` is a
+        view into a reusable per-stream buffer; for a float32 stream ``data``
+        is a view too, otherwise a fresh float32 copy. Copy explicitly to
+        retain either past the next call.
         """
         if self._data is None or self._timestamps is None or self.info is None:
             return (
@@ -655,9 +611,8 @@ class Stream:
     def get_display(self, n_pixels: int = 800) -> tuple[np.ndarray, np.ndarray] | None:
         """M4-decimated display snapshot, computed on demand on the render thread.
 
-        The acquire thread deliberately does NOT precompute this: nothing on the hot
-        path consumed it, and the all-channel decimation starved the socket read at
-        high channel counts. Recomputed per call from the current display buffer.
+        Recomputed per call from the current display buffer; the acquire thread
+        must not precompute it (it starves the socket read at high channel counts).
         """
         self._m4_n_pixels = n_pixels
         self._update_m4_snapshot()
@@ -678,25 +633,21 @@ class Stream:
     ) -> tuple[int, int, float, np.ndarray, np.ndarray] | None:
         """Locked *copy* of the (tail of the) display snapshot, tagged with buffer identity.
 
-        Like [`get_raw_snapshot`][] but returns arrays the acquire thread cannot overwrite,
-        plus the current ``epoch``, the sample rate, and the absolute sample sequence just
-        past the newest sample. A render-side consumer that carries state across frames (the
-        incremental display notch, `_state.NotchCache`) needs these: the copy so a
-        concurrent in-place buffer refresh can't tear the samples it filters (a torn read
-        would poison the IIR state permanently), ``(epoch, end_seq)`` so it can tell which
-        samples are new and detect a reallocation, and ``fs`` so the rate always matches the
-        copied samples — reading ``stream.info.fs`` separately can race a reconnect and pair a
-        new-rate rate with old-rate data.
+        Like [`get_raw_snapshot`][] but returns arrays the acquire thread cannot
+        overwrite, for render-side consumers carrying state across frames (the
+        incremental display notch): the copy so a concurrent buffer refresh cannot
+        tear the samples being filtered (a torn read poisons the IIR state
+        permanently), ``(epoch, end_seq)`` to tell new samples from seen ones and
+        detect a reallocation, and ``fs`` so the rate matches the copied samples —
+        reading ``stream.info.fs`` separately can race a reconnect.
 
-        ``duration_s`` copies only the newest ``duration_s`` seconds (the caller's visible
-        window + warm-up) instead of the whole buffer — a 60 s buffer at 10 kHz is ~40 MB and
-        copying all of it every frame is pure waste when only a few seconds are drawn. The
-        trim uses the *locked* ``fs`` so it stays consistent with the returned rate.
-        ``end_seq`` stays absolute, so the returned ``data[i]`` still has sequence
-        ``end_seq - len(data) + i``.
+        ``duration_s`` copies only the newest ``duration_s`` seconds instead of the
+        whole buffer (a 60 s buffer at 10 kHz is ~40 MB per frame). The trim uses the
+        *locked* ``fs``. ``end_seq`` stays absolute, so the returned ``data[i]`` has
+        sequence ``end_seq - len(data) + i``.
 
-        Returns ``(epoch, end_seq, fs, ts, data)`` or ``None`` if fewer than 2 samples are
-        buffered (or the stream is not connected).
+        Returns ``(epoch, end_seq, fs, ts, data)`` or ``None`` if fewer than 2 samples
+        are buffered (or the stream is not connected).
         """
         with self._lock:
             n = self._display_n
@@ -718,9 +669,8 @@ class Stream:
     def last_timestamp(self) -> float | None:
         """Most recent sample timestamp, or None if no samples yet.
 
-        Holds `_lock` while reading `_display_t[_display_n-1]` so a concurrent
-        `reconnect()` (which zeroes `_display_n` and reallocates `_display_t`)
-        cannot strand the read on a torn buffer.
+        Holds `_lock` so a concurrent `reconnect()` (which zeroes `_display_n`
+        and reallocates `_display_t`) cannot strand the read on a torn buffer.
         """
         with self._lock:
             n = self._display_n

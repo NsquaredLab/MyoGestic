@@ -30,8 +30,8 @@ from myogestic.widgets.panels.log_box import (
 )
 from myogestic.widgets.panels.recording import STATE_COLORS
 
-# Per-panel persistent log UX state, keyed by widget_id (defaults to "ml").
-# Lets each panel remember its own autoscroll + popout state across frames.
+# Per-panel log UX state, keyed by widget_id (defaults to "ml"), so each panel
+# remembers its own autoscroll + popout across frames.
 _autoscroll: dict[str, bool] = {}
 _popout_open: dict[str, bool] = {}
 
@@ -54,8 +54,6 @@ def _render_train_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)
 
 def _render_predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> None:
     state = pipeline.app.ctx.state
-    # Predict needs three things together: the state must be idle, a model
-    # must be loaded, AND both extract + predict callbacks must be wired.
     can_start = (
         state == "idle"
         and pipeline.model is not None
@@ -73,7 +71,7 @@ def _render_predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 
         imgui.button(f"{fa.ICON_FA_PLAY}  Predict##ml_pred", imgui.ImVec2(*size))
         imgui.end_disabled()
         # Say *why* Predict is unavailable — a disabled control with no reason
-        # is a dead end (flagged by both design reviews).
+        # is a dead end.
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
             if state != "idle":
                 why = "Busy — wait until the current action finishes."
@@ -140,9 +138,8 @@ def _render_load_model_button(
 def _render_pipeline_panel(
     pipeline: Pipeline, *, log_height: float = 80.0, widget_id: str = "ml"
 ) -> None:
-    # Render any open popout first so it survives frames even when the
-    # surrounding panel scrolls out of view (same pattern as
-    # process_launcher._render_open_popouts).
+    # Render any open popout first so it survives frames even when the surrounding
+    # panel scrolls out of view (as in process_launcher._render_open_popouts).
     if _popout_open.get(widget_id, False):
         autoscroll = _autoscroll.setdefault(widget_id, True)
         still_open = render_log_popout(
@@ -159,9 +156,8 @@ def _render_pipeline_panel(
     imgui.same_line()
     _render_predict_button(pipeline)
 
-    # The log's autoscroll + popout toggles only mean something once a log
-    # exists to control, so they render with it (inline above the log) rather
-    # than dangling on the Train/Predict row over a hidden, empty log.
+    # The autoscroll + popout toggles only mean something once a log exists, so
+    # they render inline above it rather than dangling on the Train/Predict row.
     autoscroll = _autoscroll.setdefault(widget_id, True)
     popped = _popout_open.get(widget_id, False)
     if pipeline.train_log or popped:
@@ -223,8 +219,8 @@ class PredictButton:
 class TrainingLog:
     """Read-only view of ``pipeline.train_log`` with smart autoscroll.
 
-    The autoscroll/popout *toggles* aren't drawn here — they're part of
-    [`PipelinePanel`][]'s control row so they sit next to Train/Predict.
+    The autoscroll/popout *toggles* aren't drawn here — they live on
+    [`PipelinePanel`][]'s control row, next to Train/Predict.
 
     Examples
     --------

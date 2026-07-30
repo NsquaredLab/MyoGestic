@@ -342,11 +342,9 @@ class FilterProcessor:
         muted = imgui.get_style().color_(imgui.Col_.text_disabled)
         spec = self._by_key[self._selected]
 
-        # Header row: icon + title (truncates to an ellipsis, then icon-only)
-        # and a right-aligned Reset. Reset is prioritized — if the row can't
-        # fit even the icon + Reset side by side, Reset drops to its own line
-        # below the (icon-only) header. The delay estimate is shown between
-        # them only when it fits (its units stay lower-case, unlike the title).
+        # Header row: icon + title, then a right-aligned Reset. Reset is
+        # prioritized — if icon + Reset cannot fit side by side, Reset drops to
+        # its own line below the icon-only header.
         style = imgui.get_style()
         sp = style.item_spacing.x
         icon = fa.ICON_FA_WAVE_SQUARE
@@ -355,8 +353,7 @@ class FilterProcessor:
         icon_w = imgui.calc_text_size(icon).x
         inline = imgui.get_content_region_avail().x >= icon_w + sp + reset_w
 
-        # panel_header reserves reset_w, so the title truncates leaving that
-        # much room — the header is therefore never wider than avail - reset_w.
+        # panel_header reserves reset_w, so the title truncates to leave room.
         panel_header(self._title, icon, reserve=(reset_w + sp) if inline else 0.0)
 
         if inline:
@@ -381,8 +378,6 @@ class FilterProcessor:
         if imgui.is_item_hovered():
             imgui.set_tooltip("Clear smoothing history (e.g. on a new session).")
 
-        # Filter selector (dropdown) + its parameter sliders. Params re-fetch
-        # the selection because the combo may have just switched it this frame.
         self._render_combo()
         self._render_params()
 
@@ -396,16 +391,14 @@ class FilterProcessor:
             self._select(self._specs[idx].key)
 
     def _render_params(self) -> None:
-        # Fetch spec + values together from the current selection: the combo
-        # may have switched selection this frame, so a spec captured earlier
-        # could otherwise be paired with a different filter's value dict.
+        # Fetch spec + values together: the combo may have switched selection
+        # this frame, pairing an earlier spec with another filter's values.
         spec = self._by_key[self._selected]
         if not spec.params:
             return
         values = self._values[self._selected]
-        # Label to the LEFT of the slider (aligned column) when there's room;
-        # otherwise stack the label ABOVE a full-width slider so it stays
-        # usable in a narrow panel instead of collapsing to a sliver.
+        # Label left of the slider in an aligned column when there's room;
+        # otherwise stacked above it — see `_MIN_SLIDER_W`.
         gap = imgui.get_style().item_spacing.x * 3.0
         label_w = max(imgui.calc_text_size(p.label).x for p in spec.params) + gap
         stacked = imgui.get_content_region_avail().x - label_w < _MIN_SLIDER_W

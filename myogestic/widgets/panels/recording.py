@@ -41,7 +41,6 @@ if TYPE_CHECKING:
 
 
 # Layout — local constants so users can read but not override.
-# (Want a different layout? Write your own widget.)
 _RECORD_BTN_W = 118
 _LABEL_BTN_W = 100
 _LABEL_BTN_H = 30
@@ -86,10 +85,7 @@ _DEFAULT_COLOR = IDLE
 
 
 def _safe_label_index(current: int, n_classes: int) -> int:
-    """Clamp a stale class index to -1 if it's out of range for n_classes.
-
-    Pure helper so the bounds-check logic can be tested without ImGui.
-    """
+    """Clamp a stale class index to -1 if it's out of range for n_classes."""
     return current if 0 <= current < n_classes else -1
 
 
@@ -146,10 +142,6 @@ def _render_recording_controls(
 ) -> None:
     """Record/Stop + per-class label buttons + state pill.
 
-    The widget reads `ctx` and drives recording via the explicit callbacks —
-    it does not import App. Pass `app.start_recording` / `app.stop_recording`
-    if you're using the standard App.
-
     Clicking a class button while recording snaps a label event at that moment
     (the active class is shown in the "Recording into: …" header). Outside of
     recording it just sets the *next* class to be used when Record is clicked.
@@ -172,31 +164,26 @@ def _render_recording_controls(
         label-button click (e.g. switching a fake-signal generator).
     """
     n_classes = len(class_names) if class_names else 0
-    # Defensive: clamp stale current_label to a safe range. Users can swap
-    # CLASSES between runs — a leftover index could silently corrupt labels.
+    # CLASSES can be swapped between runs; a leftover index would corrupt labels.
     if class_names:
         ctx.current_label = _safe_label_index(ctx.current_label, n_classes)
-        # Mirror class_names into ctx so save_meta() can persist them in the
-        # session's meta.json without the App needing to know about CLASSES.
+        # Mirror into ctx so save_meta() can persist them in the session's
+        # meta.json without the App knowing about CLASSES.
         ctx.class_names = list(class_names)
 
     panel_header("RECORDING", fa.ICON_FA_CIRCLE_DOT)
 
-    # Above the buttons: hint of what they do
     if class_names:
         imgui.text("Gesture:")
 
-    # Per-class label buttons — selects current class; while recording also snaps
-    # try/finally so an exception raised by on_record / on_stop /
-    # on_gesture (or by their downstream effects, e.g. zarr init in a
-    # threadless runtime) doesn't leave the ImGui style stack unbalanced,
-    # which would then trip an IM_ASSERT on the next end_child further
-    # up the call chain.
+    # try/finally: an exception from on_record / on_stop / on_gesture must not
+    # leave the ImGui style stack unbalanced — that trips an IM_ASSERT on the
+    # next end_child further up the call chain.
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(12, 8))
     try:
         if class_names:
             # Wrap the label buttons onto the next row instead of letting a
-            # wide class list (or a narrow cell) run them off the right edge.
+            # wide class list run them off the right edge.
             # (get_window_content_region_max isn't in this binding, so derive
             # the row's right edge from the cursor + available width.)
             spacing = imgui.get_style().item_spacing.x
@@ -231,8 +218,7 @@ def _render_recording_controls(
                 f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
             ):
                 on_record()
-                # Auto-add the current label at the start of the recording, but
-                # only if it's a valid index for the current class_names.
+                # Auto-add the current label at the start of the recording.
                 if ctx.session is not None and class_names and 0 <= ctx.current_label < n_classes:
                     ctx.session.add_label(ctx.current_label)
         elif ctx.state == AppState.RECORDING and imgui.button(
@@ -242,8 +228,7 @@ def _render_recording_controls(
     finally:
         imgui.pop_style_var()
 
-    # Status line — single state pill + status message + (when recording) the
-    # snap affordance hint so the user knows clicking a class label snaps it.
+    # Status line — state pill + status message + (when recording) the snap hint.
     imgui.spacing()
     color = STATE_COLORS.get(ctx.state, _DEFAULT_COLOR)
     _status_pill(ctx.state.upper(), color)
@@ -259,9 +244,8 @@ def _render_recording_controls(
             else "—"
         )
         message = f"{n_labels} labels · into: {active_name} (click a class to snap)"
-    # Vertically center message with the pill (the pill is taller than a text
-    # line by 2*_PILL_PAD_Y, so nudge text down by the pad to share a baseline).
-    # Don't restore the cursor afterwards — moving cursor without submitting an
-    # item next breaks imgui's window-growth assertion in end_child.
+    # Nudge the text down by the pad to share a baseline with the taller pill.
+    # Don't restore the cursor afterwards — moving the cursor without submitting
+    # an item next breaks imgui's window-growth assertion in end_child.
     imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + _PILL_PAD_Y)
     imgui.text(message)
