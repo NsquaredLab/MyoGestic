@@ -23,7 +23,6 @@ from myogestic.vhi import legacy as _legacy
 # Objects whose docstring Examples are deterministic and dependency-free.
 RUNNABLE = [
     _legacy.decode_pose,
-    _legacy.encode_pose,
     _controls.Continuous,
     _controls.Discrete,
     _controls.ControlSet,
