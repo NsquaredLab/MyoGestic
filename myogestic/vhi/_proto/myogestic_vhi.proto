@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package myogestic.vhi.v2;
+package myogestic.vhi;
 
 // Control plane between MyoGestic and the Virtual Hand Interface.
 //
@@ -83,9 +83,9 @@ message ControlCapability {
   repeated string states = 6;
   string rest_state = 7;
 
-  // How a value on this control must be encoded when it travels over LSL rather than
-  // over SetControl. Per-capability because the two inlets do not share a convention.
-  ContinuousEncoding encoding = 8;
+  // Reserved: was `ContinuousEncoding encoding = 8`, dropped with the encoding enum —
+  // there is one encoding now, so nothing is left to name per capability.
+  reserved 8;
 
   // Human-readable: what moves, and any target-local behaviour worth knowing. For a
   // log or a UI — clients must not parse it.
@@ -210,25 +210,10 @@ message DeclareRequest {
   // Optional client identifier for VHI's log — an app name, not an identity.
   string client_name = 3;
 
-  // Opt in to driving the *control* hand from a streamed pose, and say which
-  // convention you will send on MyoGestic_ControlPose.
-  //
-  // ENCODING_UNSPECIFIED (the default, and what every existing client sends by
-  // omission) means "I am not declaring that stream": VHI leaves the control hand
-  // and that inlet exactly as they were, decoding renderer units. That is what keeps
-  // this additive — a producer written before this field keeps working unchanged.
-  //
-  // CANONICAL asks VHI to read the stream as canonical values (+1 is the direction
-  // the channel's name denotes) and to put the control hand into Stream mode so the
-  // inlet is actually consumed. LEGACY_NEGATED asks for the same mode switch while
-  // keeping renderer units, which is the migration path for an existing producer that
-  // wants the handshake without changing its numbers yet.
-  //
-  // Declaring this alongside a discrete DOF is refused: a discrete DOF renders as a
-  // control-hand *movement*, and a streamed pose drives the same bones. Two drivers
-  // for one hand is what v1's ControlMode existed to arbitrate, and refusing the
-  // combination up front is better than arbitrating it per command.
-  ContinuousEncoding control_pose_encoding = 4;
+  // Whether this client also drives the control hand's pose stream. False releases it:
+  // a client that stops declaring the stream gives it back, which is what lets a later
+  // client take it. Separate from the DOF list because the two hands are separate.
+  bool control_pose = 4;
 }
 
 // What VHI can do with one declared DOF.
@@ -248,44 +233,15 @@ message DofVerdict {
   string renders_as = 4;
 }
 
-// How values on the negotiated continuous stream are to be interpreted.
-//
-// This exists because the first end-to-end run of v2 got it wrong: the handshake
-// agreed on channel *names* while VHI's LSL consumer still decoded legacy units, so
-// a canonical +1 arrived as legacy +1 and the hand extended when it should have
-// flexed. Nothing on the wire said which convention was in force. A negotiation that
-// settles identity but leaves units implicit is not a negotiation.
-enum ContinuousEncoding {
-  // The server did not say. A client MUST NOT guess — treat it as "cannot
-  // negotiate" and fall back, because guessing wrong inverts every joint.
-  ENCODING_UNSPECIFIED = 0;
-  // Canonical: the value means what the standard says, +1 being the direction the
-  // DOF name denotes. No transformation.
-  CANONICAL = 1;
-  // Raw rig units: the pose multipliers the renderer applies to its per-bone gains,
-  // with no canonical conversion at all. Only `MyoGestic_ControlPose` can still be
-  // negotiated this way, for a producer that wants the handshake before it changes its
-  // numbers.
-  //
-  // The name is historical and now inaccurate: nothing is negated. It was chosen when
-  // the renderer converted canonical values by negating every channel — a rule derived
-  // from "the flexion gains are negative", which is backwards, because the gain table
-  // *is* the fully-closed pose and so a multiplier of +1 already flexes. Renderer units
-  // and canonical values therefore agree on the five flexion channels and differ only on
-  // thumb abduction, whose canonical +1 is the negative of the tabulated (adducted) pose.
-  // Renaming the value would break every generated client for no behavioural gain.
-  LEGACY_NEGATED = 2;
-}
-
 message DeclareReply {
   // true only if every declared DOF is renderable.
   bool accepted = 1;
   repeated DofVerdict verdicts = 2;
   // VHI's own standard version.
   string standard_version = 3;
-  // How to encode values on continuous_stream_name. Not optional in practice: an
-  // ENCODING_UNSPECIFIED reply must be treated as a failed negotiation.
-  ContinuousEncoding continuous_encoding = 6;
+  // Reserved: was `ContinuousEncoding continuous_encoding = 6`, dropped with the
+  // encoding enum — there is one encoding now, so nothing is left to negotiate.
+  reserved 6;
   // The LSL stream VHI will read continuous values from, and the channel order
   // it expects on it. Order is authoritative: index i of this list is channel i,
   // and a client is expected to build its frame *from* this list rather than from
@@ -302,14 +258,14 @@ message DeclareReply {
   // on — never so it can treat that as a substitute for its own debounce.
   bool blends_presentation = 7;
 
-  // The control-hand pose stream, populated only when the request declared a
-  // control_pose_encoding. Same contract as the continuous fields above: the order is
-  // authoritative, and the encoding is what VHI will actually apply — which may differ
-  // from what was asked for if VHI could not honour it, so read it rather than
-  // assuming the request was accepted.
+  // The control-hand pose stream, populated only when the request declared
+  // control_pose. Same contract as the continuous fields above: the order is
+  // authoritative.
   string control_pose_stream_name = 8;
   repeated string control_pose_channel_order = 9;
-  ContinuousEncoding control_pose_encoding = 10;
+  // Echoes what was granted: may differ from what was requested if VHI could not
+  // honour it, so read it rather than assuming the request was accepted.
+  bool control_pose = 10;
 }
 
 message SetControlRequest {
