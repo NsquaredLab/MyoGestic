@@ -325,7 +325,7 @@ class TestTheGenericEntriesComeFirstAndWork:
         """The entry a user is pointed at first to see VHI 2 move."""
         playgrounds = [c for c in configs if c["name"].startswith("Playground:")]
         assert playgrounds, "no playground entry"
-        assert any("vhi_playground" in c.get("program", "") for c in playgrounds)
+        assert any("control_map_studio" in c.get("program", "") for c in playgrounds)
         assert any("no VHI needed" in c["name"] for c in playgrounds), (
             "the editor-only playground must say it needs no renderer"
         )

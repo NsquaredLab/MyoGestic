@@ -6,8 +6,13 @@ manifest — and still be refused the moment a target tries to route it, because
 named the same control. That shipped on two pages. It is exactly the failure a reader hits
 first, since the docs are what they copy.
 
-So each block is taken the whole way: load, resolve against VHI's manifest, and bind to a
-`VhiTarget` — which is where the routing conflict surfaces.
+So each block is taken the whole way: load, resolve against the manifest, and bind to real
+targets — which is where the routing conflict surfaces.
+
+The manifest is the **union** of what the shipped targets export, and both are bound,
+because the docs now show one file naming a finger and a key in the same table. A VHI-only
+manifest would fail those pages for the wrong reason: not "this mapping is wrong" but "the
+test does not know about half of it".
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ import tomllib
 import pytest
 
 from myogestic.controls import Capability, ControlBus, load_control_map, resolve
+from myogestic.keyboard import KeyboardTarget, keyboard_capabilities
 from myogestic.vhi import VhiTarget
 
 DOCS = pathlib.Path(__file__).resolve().parent.parent / "docs"
@@ -39,6 +45,10 @@ VHI_MANIFEST = [
         rest_state="Rest",
     ),
 ]
+
+
+#: Everything the shipped targets export. A block may name controls on either.
+MANIFEST = [*VHI_MANIFEST, *keyboard_capabilities()]
 
 
 def _dof_blocks() -> list[tuple[str, int, str]]:
@@ -76,10 +86,16 @@ def test_a_documented_mapping_loads_resolves_and_routes(page, line, block):
     raw = tomllib.loads(block)
     if "dofs" not in raw:  # a fragment showing one entry, not a whole file
         raw = {"dofs": raw}
-    controls = resolve(load_control_map(raw), VHI_MANIFEST)
+    controls = resolve(load_control_map(raw), MANIFEST)
     # Binding is the point: `resolve` cannot see a routing conflict, because two aliases
-    # sharing a control is only wrong once something has to put them on one wire.
-    bus = ControlBus(controls, targets=[VhiTarget(_Outlet(), client=_Client())], hz=50)
+    # sharing a control is only wrong once something has to put them on one wire. The
+    # keyboard target is left **disarmed**, which is its default — it binds and claims its
+    # aliases without any way to press anything, so this suite cannot type.
+    bus = ControlBus(
+        controls,
+        targets=[VhiTarget(_Outlet(), client=_Client()), KeyboardTarget()],
+        hz=50,
+    )
     bus.stop()
     assert controls.dofs, where
 

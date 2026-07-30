@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controls are a separate kind — a held state delivered on change, never a number.
   `load_control_map` takes a plain mapping, so the library still reads no config files;
   `resolve` needs a live target, because the target is what declares the semantics.
-- **A playground and a control-map editor.** `examples/synthetic/vhi_playground.py` is
+- **A playground and a control-map editor.** `examples/synthetic/control_map_studio.py` is
   the shortest path from a mapping file to a hand that moves: a slider per name in
   `examples/controls/playground.toml`, straight to VHI's predicted hand, with no model
   and no EMG. Beside it, `myogestic.widgets.ControlMapEditor` — a reusable panel that
@@ -90,8 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in the space it was fitted for; loading one trained on a one-way `[0, 1]` DOF against a
   signed configuration produces motion in a direction it never learned.
 - **`myogestic.vhi.legacy`** — reads legacy VHI pose recordings as canonical values. It
-  outlives the migration: VHI's outlets stay in the renderer's units, so archived sessions
-  are permanently in that convention and `decode_pose` remains their reader.
+  outlives the migration: `VHI_Control` stays in the renderer's units, so archived sessions
+  are permanently in that convention and `decode_pose` remains their reader. `VHI_Predict`
+  is canonical as of the direction fix below, and nothing archived depends on it.
 
 ### Removed (breaking)
 
@@ -146,6 +147,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A `Bridge` could report a subprocess stopped while it was still running.** `stop()` sent
+  SIGKILL and then never waited for it, recording `"stopped"` either way — but SIGKILL does
+  not reach a process parked in an uninterruptible kernel wait, and a wedged driver is enough
+  to put one there. It now waits the kill out, keeps the handle when it does not land, and
+  logs a warning naming the PID, since nothing renders a bridge. `status` is derived from the
+  subprocess on every read instead of stored, so it can no longer contradict `alive` or go
+  stale when a child exits on its own — it is read-only now, with the two values it always
+  had, and `process.returncode` is what says whether an exit was clean. `start()` refuses
+  while a child is `alive` rather than overwriting the handle and orphaning it, which is how
+  four renderers stacked up in `ProcessLauncher`. And stdout/stderr go to `DEVNULL`: those
+  pipes never had a reader, so a bridge that outgrew the ~64 KB buffer blocked in `write()`
+  forever while still reading as alive — a silently stalled data source rather than a hang
+  you would notice. Run the command in a terminal to watch a bridge's output. Registering a
+  bridge still does not start it, which the docs had claimed for some time.
+
+- **A keyboard target — `myogestic.keyboard`.** Press a key while a control is active.
+  `keyboard.hold.letter.w` is held for as long as the control is above its threshold;
+  `keyboard.tap.edit.space` is one press per crossing however long you hold it. Around 220
+  addresses, every key in both modes.
+
+  **Nothing in the control standard changed for this.** A key is a two-state discrete
+  control, so activating above `0.5` is `Capability.activation_threshold` selecting the
+  non-rest state, overriding it per control is `threshold_fraction`, ignoring a chattering
+  signal is `debounce_s`, and "it just changed" is the discrete edge `ControlBus` already
+  delivers. The address rule already reserved the `keyboard.` namespace. That the second
+  target needed no new mechanism is the strongest evidence the standard is the right shape.
+
+  It starts **disarmed** and sends nothing until armed, because a resolved map types into
+  whatever window has focus. It disarms on stop, on a backend failure, and on exit, letting
+  go of everything it holds — a held key outlives the process that set it. Needs the
+  `keyboard` extra (`pynput`, *not* the PyPI package called `keyboard`, which wants root and
+  is unmaintained) and, on macOS, Accessibility permission, without which `pynput` reports
+  success and does nothing.
+- **The picker is a tree.** `ControlMapEditor` splits addresses on their dots and nests
+  them, so `vhi` and `keyboard` are two roots and each `.` is another level. Addresses are
+  dotted by contract and the first segment names the target, so this needed no
+  target-specific code — the same function organises 19 VHI controls and 214 keys. Typing in
+  the search box prunes the tree and opens what is left, rather than making you hunt.
+- **The editor takes several manifests.** `ControlMapEditor(..., clients=[vhi, keys])` merges
+  them, because one file can name controls on more than one target. `client=` still works.
+- **`examples/synthetic/vhi_playground.py` is now `control_map_studio.py`**, and drives VHI
+  and the keyboard from one map. The old name stopped being true the moment a second target
+  existed.
+- **`VhiTarget` can build its own stream.** `VhiTarget(client=…, interface=…)` with no
+  outlet publishes one carrying exactly the controls the configuration resolved to, each
+  channel labelled with the **address** it holds — so a two-control app sends two floats
+  instead of nine with seven commanding rest, and the channel order stops being a secret
+  shared with the renderer. `VhiTarget(outlet, …)` is unchanged.
+
+  The labels are addresses, not aliases: a fan-out sends one alias to several channels, so
+  an alias is not a channel's identity. And they have to be set when the outlet is
+  constructed — LSL fixes a stream's description at that point — which is why the target
+  builds it at `bind`, after `resolve` has decided what goes where.
+- **`InterfaceSpec.outlet` / `control_outlet` take `n_channels` and `channel_names`**, for
+  a caller that wants to build such a stream itself.
+- **`thumb` is `thumb.flexion`** in every shipped `examples/controls/*.toml`. VHI advertises
+  the explicit axis now, because the thumb has two and a bare name did not say which. A
+  single-axis digit keeps its bare name. Any map outside this repo using `vhi.prediction.thumb`
+  or `vhi.control.pose.thumb` needs the same one-word edit; the renderer still accepts the
+  bare form, but `resolve()` validates against the manifest and will refuse it.
+- **`tools/verify_canonical_direction.py`** — a live gate proving the predicted hand's
+  canonical direction. VHI's own suite proves *direction* from its rig, but cannot drive the
+  LSL inlet, which is the path every real client uses; this checks that a canonical `+1`
+  flexes, reads back as `+1` on `VHI_Predict`, and does so identically whether the client
+  declared nothing, the predicted stream, or both streams — over repeated frames, repeated
+  runs, and (with `--restart`) repeated renderer processes. It found the renderer inverting
+  every flexion DOF, fixed in VHI as `Vhi.CanonicalPose`.
+
+  Two ordering rules it documents are properties of the renderer worth knowing: an
+  `Output` repeats its last pushed vector at `hz` and the renderer overwrites its whole
+  pose from the inlet every frame, so **a still-streaming outlet beats `SweepControl`'s own
+  commands** — and a stale outlet left behind by an earlier process still wins the single
+  `MyoGestic_Output` inlet, which is why a canonical `+1` could appear to render either way.
+  A replaced outlet is also not noticed immediately: VHI re-resolves by name only while it
+  has no inlet at all, so recovery rides on the outlet's stable `source_id`.
 - **Four pose tables documented channel 1 as `0` in a fist; recorded VHI sessions have it at
   exactly `-1.0`.** The integration guide also described channel 0 as thumb *rotation* and
   channels 6-8 as a wrist. Channel 0 is thumb flexion, channel 1 thumb abduction, and 6-8

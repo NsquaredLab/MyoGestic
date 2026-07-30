@@ -56,7 +56,7 @@ Write a TOML file. A ready-to-copy one ships at
 my_thumb_spread = "vhi.prediction.thumb.abduction"
 
 fist = [                                       # one output, fanned out
-  { target = "vhi.prediction.thumb", weight = 0.6 },   # ...with a per-target gain
+  { target = "vhi.prediction.thumb.flexion", weight = 0.6 },   # ...with a per-target gain
   { target = "vhi.prediction.index" },
   { target = "vhi.prediction.middle" },
   { target = "vhi.prediction.ring" },
@@ -119,7 +119,7 @@ confidence:
 
 ```toml
 fist = { targets = [
-  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.thumb.flexion", weight = 0.6 },
   { target = "vhi.prediction.index" },
 ], threshold_fraction = 0.5 }
 ```

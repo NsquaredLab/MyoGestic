@@ -87,3 +87,39 @@ def test_the_positional_constructor_still_works():
         outlet.push(np.zeros(3, dtype=np.float32))
     finally:
         outlet.stop()
+
+
+# --- the VHI pose stream describes itself ---------------------------------------
+
+
+def test_the_vhi_pose_stream_can_be_narrow_and_labelled():
+    """`InterfaceSpec.outlet` builds a stream carrying only what is driven.
+
+    The loopback matters here for the same reason as above: `VhiTarget` computes the
+    labels and hands them to this factory, and tests with a fake interface prove the
+    hand-off but not that a two-channel `MyoGestic_Output` is something LSL will
+    actually publish and a consumer resolve.
+    """
+    from myogestic.sources import LSLSource
+    from myogestic.vhi import virtual_hand
+
+    addresses = ["vhi.prediction.index", "vhi.prediction.middle"]
+    outlet = virtual_hand().outlet(n_channels=2, channel_names=addresses)
+    try:
+        source = LSLSource("MyoGestic_Output")
+        try:
+            info = source.connect()
+        finally:
+            source.disconnect()
+    finally:
+        outlet.stop()
+    assert info.n_channels == 2
+    assert info.channel_names == addresses
+
+
+def test_a_label_per_channel_or_none_at_all():
+    """A partial labelling would be worse than none: it reads as a full one."""
+    from myogestic.vhi import virtual_hand
+
+    with pytest.raises(ValueError, match="channel_names has 1 entries"):
+        virtual_hand().outlet(n_channels=2, channel_names=["vhi.prediction.index"])

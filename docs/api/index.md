@@ -24,6 +24,16 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 
     [:octicons-arrow-right-24: Control standard](controls.md)
 
+-   :material-keyboard:{ .lg .middle } __Keyboard__
+
+    ---
+
+    Press keys when a control is active — a target that is not a hand.
+
+    [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] · [`keyboard_capabilities`][myogestic.keyboard.keyboard_capabilities]
+
+    [:octicons-arrow-right-24: Keyboard](keyboard.md)
+
 -   :material-access-point:{ .lg .middle } __Sources__
 
     ---

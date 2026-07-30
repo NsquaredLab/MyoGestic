@@ -57,22 +57,36 @@ That runs safely with no Virtual Hand at all, and prints a different section for
 build and nothing running — and it needs VHI 2.0 or newer, since a pre-2.0 renderer
 has no manifest to resolve against.
 
-## Start here: the playground
+## Start here: the control-map studio
 
-The shortest path from a control map to a hand that moves — no model, no EMG, no
+The shortest path from a control map to something moving — no model, no EMG, no
 training. One slider per name in
 [`examples/controls/playground.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/playground.toml),
-straight through a `VhiTarget` to VHI's predicted hand, next to an editor for the file
-itself.
+next to an editor for the file itself.
 
 ```bash
-uv run --extra grpc python examples/synthetic/vhi_playground.py
+uv run --extra grpc --extra keyboard python examples/synthetic/control_map_studio.py
 ```
 
 Launch VHI, press **Connect**, drag a slider. Then change the thumb's `weight` in the
-file and press **Reload** — or use the editor panel, which lists what VHI exports so a
-control can be picked rather than typed, and refuses a map the renderer would not accept
-before it can be saved. The TOML stays the source of truth either way.
+file and save — the file is watched, so the panel and the sliders follow with no button.
+Or use the editor panel, which lists what every connected target exports so a control can
+be picked rather than typed, and refuses a map that would not resolve before it can be
+saved. The TOML stays the source of truth either way.
+
+It drives **two** targets, which is the point of the name: the same file can bend a finger
+and press a key.
+
+```toml
+[dofs]
+close = "vhi.prediction.index"          # a finger
+walk  = "keyboard.hold.letter.w"        # held while the control is above 0.5
+fire  = "keyboard.tap.edit.space"       # one press per crossing
+```
+
+A key is an ordinary two-state control, so the threshold, the debounce and the fan-out are
+the same machinery the hand uses — see [Keyboard](../api/keyboard.md). Key sending starts
+**disarmed**, because a resolved map types into whatever window has focus.
 
 The editor is a widget, so it works in your own app too:
 

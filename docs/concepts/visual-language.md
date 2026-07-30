@@ -76,9 +76,44 @@ Established meanings — reuse them rather than picking a near-synonym:
 | `UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER` / its inverse | pop out to a window / dock back |
 | `BARS` | reveal a hidden menu |
 | `TERMINAL` | program output |
+| `CIRCLE` | the live state of whatever this panel controls — see below |
+| `PLUS` | append one more row to the list this button sits at the end of |
+| `TRASH` | delete the thing this row *is* |
+| `XMARK` | remove one row from a list |
 
 Icon plus label is `f"{icon}  Label"` — two spaces, so the glyph doesn't crowd the text. Header
 actions (`panel_header_button`) are icon-only.
+
+### Adding and removing rows
+
+An editable list follows one shape at every depth, so a nested one reads without instructions:
+
+* **`PLUS` goes at the end of the list it appends to**, indented with its rows — not up beside
+  the list's title. A button that says `+ Add target` while sitting a level above the targets is
+  claiming to belong to the row it is on.
+* **Removing is `destructive_button`**, which is red *on hover only*. `DANGER` means destructive
+  and a delete has to read as one, but a permanently red button in every row turns the list into
+  an alarm. Quiet at rest, red when the pointer is on it.
+* **`TRASH` with a label for the whole row, a bare `XMARK` for one entry inside it.** The two
+  sizes are the hierarchy: deleting a control is not the same act as dropping one of its
+  targets, so they must not look identical.
+
+### State colours
+
+Four tokens, and they mean the same thing everywhere:
+
+| Token | Means |
+| --- | --- |
+| `SUCCESS` | running, connected, armed — working right now |
+| `IDLE` | not running, and nothing is wrong with that |
+| `WARNING` | works, but something about it is worth knowing |
+| `DANGER` | failed, refused, or destructive |
+
+`panel_header(title, icon, status=…)` puts a `CIRCLE` in one of them before the title, which
+is how a panel says how its subject is doing without spending a row on the word. **Colour is
+the only thing a dot carries**, so it can never be the only place the state lives — give the
+header a tooltip with the detail (a PID, an exit code) so the fact survives for a reader who
+cannot tell the hues apart.
 
 ## Plots
 

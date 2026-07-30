@@ -117,7 +117,7 @@
       "name": "Playground: drive VHI 2 from a TOML control map",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/examples/synthetic/vhi_playground.py",
+      "program": "${workspaceFolder}/examples/synthetic/control_map_studio.py",
       "python": "${workspaceFolder}/.venv/bin/python",
       "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",
@@ -269,11 +269,11 @@
       "justMyCode": false,
       "preLaunchTask": "uv: sync (grpc only)",
       "env": {
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONUNBUFFERED": "1",
         // Source-mode: uncomment and point these at a VHI checkout and a Godot 4.x
         // binary. Required for the v2 control manifest — see the note at the top.
-        // "VHI_PATH": "${workspaceFolder}/../Virtual-Hand-Interface",
-        // "GODOT_BIN": "/Applications/Godot.app/Contents/MacOS/Godot"
+        "VHI_PATH": "${workspaceFolder}/../Virtual-Hand-Interface",
+        "GODOT_BIN": "/Applications/Godot.app/Contents/MacOS/Godot"
       },
       "presentation": { "group": "4-prerequisites", "order": 1 }
     },

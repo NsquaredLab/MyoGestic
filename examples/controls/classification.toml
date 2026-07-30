@@ -15,7 +15,7 @@
 #
 # Drop it and the identical mapping serves a regressor emitting 0..1 directly.
 fist = { targets = [
-  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.thumb.flexion", weight = 0.6 },
   { target = "vhi.prediction.index" },
   { target = "vhi.prediction.middle" },
   { target = "vhi.prediction.ring" },
