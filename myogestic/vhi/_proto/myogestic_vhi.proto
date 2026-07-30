@@ -2,11 +2,11 @@ syntax = "proto3";
 
 package myogestic.vhi.v2;
 
-// Canonical control plane between MyoGestic and the Virtual Hand Interface.
+// Control plane between MyoGestic and the Virtual Hand Interface.
 //
 // v1 (myogestic_vhi.proto) is untouched and still served: it speaks in *movement
 // names* and in a 9-float pose whose channel meaning lives nowhere. This service
-// speaks the canonical control standard instead — an application declares what it
+// speaks the control standard instead — an application declares what it
 // controls by address ("vhi.prediction.index"), and VHI answers with what it
 // can render. Neither side hard-codes a channel index.
 //
@@ -26,13 +26,13 @@ package myogestic.vhi.v2;
 //
 // Continuous time-series still belongs on LSL. This service carries the
 // negotiation, discrete state, and verification.
-service VhiCanonicalControl {
+service VhiControl {
   // Negotiate a control space. The client declares every DOF it intends to
   // command; VHI answers per DOF, and names the LSL layout it will read
   // continuous values from. Call before streaming anything.
   rpc Declare (DeclareRequest) returns (DeclareReply);
 
-  // Command one canonical frame. Intended for discrete DOFs and low-rate
+  // Command one control frame. Intended for discrete DOFs and low-rate
   // continuous updates; a per-tick continuous stream belongs on LSL.
   rpc SetControl (SetControlRequest) returns (ControlAck);
 
@@ -157,7 +157,7 @@ message SetPresentationRequest {
   float blend_speed = 2;
 }
 
-// What a canonical DOF is. Mirrors the standard rather than VHI's rig: a
+// What a control is. Mirrors the standard rather than VHI's rig: a
 // continuous DOF is signed and normalized, +1 meaning the direction the name
 // denotes, and rest is expressible inside the declared range.
 enum Kind {
@@ -262,9 +262,18 @@ enum ContinuousEncoding {
   // Canonical: the value means what the standard says, +1 being the direction the
   // DOF name denotes. No transformation.
   CANONICAL = 1;
-  // The legacy convention: the renderer multiplies by a negative per-bone gain, so
-  // a canonical value must be negated before it goes on the wire. Reported while
-  // VHI's continuous path is still the pre-v2 decoder.
+  // Raw rig units: the pose multipliers the renderer applies to its per-bone gains,
+  // with no canonical conversion at all. Only `MyoGestic_ControlPose` can still be
+  // negotiated this way, for a producer that wants the handshake before it changes its
+  // numbers.
+  //
+  // The name is historical and now inaccurate: nothing is negated. It was chosen when
+  // the renderer converted canonical values by negating every channel — a rule derived
+  // from "the flexion gains are negative", which is backwards, because the gain table
+  // *is* the fully-closed pose and so a multiplier of +1 already flexes. Renderer units
+  // and canonical values therefore agree on the five flexion channels and differ only on
+  // thumb abduction, whose canonical +1 is the negative of the tabulated (adducted) pose.
+  // Renaming the value would break every generated client for no behavioural gain.
   LEGACY_NEGATED = 2;
 }
 
@@ -304,10 +313,10 @@ message DeclareReply {
 }
 
 message SetControlRequest {
-  // Continuous DOF values by canonical name. Each must be finite and inside the
+  // Continuous DOF values by control name. Each must be finite and inside the
   // range declared for it.
   map<string, float> continuous = 1;
-  // Discrete DOF states by canonical name. Each must be one of that DOF's
+  // Discrete DOF states by control name. Each must be one of that DOF's
   // declared states. Kept separate from continuous on purpose: a held state and
   // a number are not the same kind of command.
   //
@@ -366,11 +375,11 @@ message SweepControlReply {
 // ---------------------------------------------------------------------------
 // Recording / label-acquisition aid.
 //
-// Deliberately a SEPARATE service, not extra RPCs on VhiCanonicalControl, because
+// Deliberately a SEPARATE service, not extra RPCs on VhiControl, because
 // the distinction is the whole point: this is not a control plane and nothing here
-// is a canonical DOF.
+// is a control.
 //
-// A canonical discrete DOF is a *held state* — an application asks for "grip" and
+// A discrete control is a *held state* — an application asks for "grip" and
 // the hand holds a grip. That semantics must not bend to accommodate data
 // collection. But collecting regression training data needs the opposite: a
 // deliberately moving control hand, so the recorded VHI_Control stream sweeps a
@@ -384,7 +393,7 @@ message SweepControlReply {
 //   - the training program, which cycles the control hand to generate a trajectory.
 //
 // A program names a VHI movement, and that is intentional: a recording aid is
-// allowed to be application-specific, precisely so the canonical vocabulary does not
+// allowed to be application-specific, precisely so the control vocabulary does not
 // have to grow a concept ("sweep me for training") that no application controls.
 // ---------------------------------------------------------------------------
 service VhiTrainingAid {
