@@ -12,25 +12,16 @@ class Kind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     KIND_UNSPECIFIED: _ClassVar[Kind]
     CONTINUOUS: _ClassVar[Kind]
     DISCRETE: _ClassVar[Kind]
-
-class ContinuousEncoding(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
-    __slots__ = ()
-    ENCODING_UNSPECIFIED: _ClassVar[ContinuousEncoding]
-    CANONICAL: _ClassVar[ContinuousEncoding]
-    LEGACY_NEGATED: _ClassVar[ContinuousEncoding]
 KIND_UNSPECIFIED: Kind
 CONTINUOUS: Kind
 DISCRETE: Kind
-ENCODING_UNSPECIFIED: ContinuousEncoding
-CANONICAL: ContinuousEncoding
-LEGACY_NEGATED: ContinuousEncoding
 
 class GetControlManifestRequest(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
 class ControlCapability(_message.Message):
-    __slots__ = ("address", "kind", "lo", "hi", "rest", "states", "rest_state", "encoding", "description", "stream_name", "activation_threshold", "channel")
+    __slots__ = ("address", "kind", "lo", "hi", "rest", "states", "rest_state", "description", "stream_name", "activation_threshold", "channel")
     ADDRESS_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     LO_FIELD_NUMBER: _ClassVar[int]
@@ -38,7 +29,6 @@ class ControlCapability(_message.Message):
     REST_FIELD_NUMBER: _ClassVar[int]
     STATES_FIELD_NUMBER: _ClassVar[int]
     REST_STATE_FIELD_NUMBER: _ClassVar[int]
-    ENCODING_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
     STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
     ACTIVATION_THRESHOLD_FIELD_NUMBER: _ClassVar[int]
@@ -50,12 +40,11 @@ class ControlCapability(_message.Message):
     rest: float
     states: _containers.RepeatedScalarFieldContainer[str]
     rest_state: str
-    encoding: ContinuousEncoding
     description: str
     stream_name: str
     activation_threshold: float
     channel: int
-    def __init__(self, address: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., description: _Optional[str] = ..., stream_name: _Optional[str] = ..., activation_threshold: _Optional[float] = ..., channel: _Optional[int] = ...) -> None: ...
+    def __init__(self, address: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., description: _Optional[str] = ..., stream_name: _Optional[str] = ..., activation_threshold: _Optional[float] = ..., channel: _Optional[int] = ...) -> None: ...
 
 class ControlManifest(_message.Message):
     __slots__ = ("target_name", "vocabulary_version", "capabilities")
@@ -98,16 +87,16 @@ class DofDeclaration(_message.Message):
     def __init__(self, name: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., address: _Optional[str] = ..., weight: _Optional[float] = ...) -> None: ...
 
 class DeclareRequest(_message.Message):
-    __slots__ = ("standard_version", "dofs", "client_name", "control_pose_encoding")
+    __slots__ = ("standard_version", "dofs", "client_name", "control_pose")
     STANDARD_VERSION_FIELD_NUMBER: _ClassVar[int]
     DOFS_FIELD_NUMBER: _ClassVar[int]
     CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
-    CONTROL_POSE_ENCODING_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_POSE_FIELD_NUMBER: _ClassVar[int]
     standard_version: str
     dofs: _containers.RepeatedCompositeFieldContainer[DofDeclaration]
     client_name: str
-    control_pose_encoding: ContinuousEncoding
-    def __init__(self, standard_version: _Optional[str] = ..., dofs: _Optional[_Iterable[_Union[DofDeclaration, _Mapping]]] = ..., client_name: _Optional[str] = ..., control_pose_encoding: _Optional[_Union[ContinuousEncoding, str]] = ...) -> None: ...
+    control_pose: bool
+    def __init__(self, standard_version: _Optional[str] = ..., dofs: _Optional[_Iterable[_Union[DofDeclaration, _Mapping]]] = ..., client_name: _Optional[str] = ..., control_pose: bool = ...) -> None: ...
 
 class DofVerdict(_message.Message):
     __slots__ = ("name", "address", "renderable", "message", "renders_as")
@@ -124,28 +113,26 @@ class DofVerdict(_message.Message):
     def __init__(self, name: _Optional[str] = ..., address: _Optional[str] = ..., renderable: bool = ..., message: _Optional[str] = ..., renders_as: _Optional[str] = ...) -> None: ...
 
 class DeclareReply(_message.Message):
-    __slots__ = ("accepted", "verdicts", "standard_version", "continuous_encoding", "continuous_stream_name", "continuous_channel_order", "blends_presentation", "control_pose_stream_name", "control_pose_channel_order", "control_pose_encoding")
+    __slots__ = ("accepted", "verdicts", "standard_version", "continuous_stream_name", "continuous_channel_order", "blends_presentation", "control_pose_stream_name", "control_pose_channel_order", "control_pose")
     ACCEPTED_FIELD_NUMBER: _ClassVar[int]
     VERDICTS_FIELD_NUMBER: _ClassVar[int]
     STANDARD_VERSION_FIELD_NUMBER: _ClassVar[int]
-    CONTINUOUS_ENCODING_FIELD_NUMBER: _ClassVar[int]
     CONTINUOUS_STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
     CONTINUOUS_CHANNEL_ORDER_FIELD_NUMBER: _ClassVar[int]
     BLENDS_PRESENTATION_FIELD_NUMBER: _ClassVar[int]
     CONTROL_POSE_STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
     CONTROL_POSE_CHANNEL_ORDER_FIELD_NUMBER: _ClassVar[int]
-    CONTROL_POSE_ENCODING_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_POSE_FIELD_NUMBER: _ClassVar[int]
     accepted: bool
     verdicts: _containers.RepeatedCompositeFieldContainer[DofVerdict]
     standard_version: str
-    continuous_encoding: ContinuousEncoding
     continuous_stream_name: str
     continuous_channel_order: _containers.RepeatedScalarFieldContainer[str]
     blends_presentation: bool
     control_pose_stream_name: str
     control_pose_channel_order: _containers.RepeatedScalarFieldContainer[str]
-    control_pose_encoding: ContinuousEncoding
-    def __init__(self, accepted: bool = ..., verdicts: _Optional[_Iterable[_Union[DofVerdict, _Mapping]]] = ..., standard_version: _Optional[str] = ..., continuous_encoding: _Optional[_Union[ContinuousEncoding, str]] = ..., continuous_stream_name: _Optional[str] = ..., continuous_channel_order: _Optional[_Iterable[str]] = ..., blends_presentation: bool = ..., control_pose_stream_name: _Optional[str] = ..., control_pose_channel_order: _Optional[_Iterable[str]] = ..., control_pose_encoding: _Optional[_Union[ContinuousEncoding, str]] = ...) -> None: ...
+    control_pose: bool
+    def __init__(self, accepted: bool = ..., verdicts: _Optional[_Iterable[_Union[DofVerdict, _Mapping]]] = ..., standard_version: _Optional[str] = ..., continuous_stream_name: _Optional[str] = ..., continuous_channel_order: _Optional[_Iterable[str]] = ..., blends_presentation: bool = ..., control_pose_stream_name: _Optional[str] = ..., control_pose_channel_order: _Optional[_Iterable[str]] = ..., control_pose: bool = ...) -> None: ...
 
 class SetControlRequest(_message.Message):
     __slots__ = ("continuous", "discrete")
@@ -222,7 +209,7 @@ class SetRecordingSessionRequest(_message.Message):
     active: bool
     def __init__(self, active: bool = ...) -> None: ...
 
-class StartTrainingProgramRequest(_message.Message):
+class StartRecordingTrajectoryRequest(_message.Message):
     __slots__ = ("movement", "frequency_hz", "hold_time_s", "rest_time_s")
     MOVEMENT_FIELD_NUMBER: _ClassVar[int]
     FREQUENCY_HZ_FIELD_NUMBER: _ClassVar[int]
@@ -234,15 +221,15 @@ class StartTrainingProgramRequest(_message.Message):
     rest_time_s: float
     def __init__(self, movement: _Optional[str] = ..., frequency_hz: _Optional[float] = ..., hold_time_s: _Optional[float] = ..., rest_time_s: _Optional[float] = ...) -> None: ...
 
-class StopTrainingProgramRequest(_message.Message):
+class StopRecordingTrajectoryRequest(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
-class GetTrainingStateRequest(_message.Message):
+class GetRecordingSessionStateRequest(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
-class TrainingAck(_message.Message):
+class RecordingAck(_message.Message):
     __slots__ = ("applied", "message")
     APPLIED_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
@@ -250,18 +237,18 @@ class TrainingAck(_message.Message):
     message: str
     def __init__(self, applied: bool = ..., message: _Optional[str] = ...) -> None: ...
 
-class TrainingState(_message.Message):
-    __slots__ = ("recording_session_active", "program_running", "program_movement", "animation_state", "available_movements", "current_movement")
+class RecordingSessionState(_message.Message):
+    __slots__ = ("recording_session_active", "trajectory_running", "trajectory_movement", "animation_state", "available_movements", "current_movement")
     RECORDING_SESSION_ACTIVE_FIELD_NUMBER: _ClassVar[int]
-    PROGRAM_RUNNING_FIELD_NUMBER: _ClassVar[int]
-    PROGRAM_MOVEMENT_FIELD_NUMBER: _ClassVar[int]
+    TRAJECTORY_RUNNING_FIELD_NUMBER: _ClassVar[int]
+    TRAJECTORY_MOVEMENT_FIELD_NUMBER: _ClassVar[int]
     ANIMATION_STATE_FIELD_NUMBER: _ClassVar[int]
     AVAILABLE_MOVEMENTS_FIELD_NUMBER: _ClassVar[int]
     CURRENT_MOVEMENT_FIELD_NUMBER: _ClassVar[int]
     recording_session_active: bool
-    program_running: bool
-    program_movement: str
+    trajectory_running: bool
+    trajectory_movement: str
     animation_state: str
     available_movements: _containers.RepeatedScalarFieldContainer[str]
     current_movement: str
-    def __init__(self, recording_session_active: bool = ..., program_running: bool = ..., program_movement: _Optional[str] = ..., animation_state: _Optional[str] = ..., available_movements: _Optional[_Iterable[str]] = ..., current_movement: _Optional[str] = ...) -> None: ...
+    def __init__(self, recording_session_active: bool = ..., trajectory_running: bool = ..., trajectory_movement: _Optional[str] = ..., animation_state: _Optional[str] = ..., available_movements: _Optional[_Iterable[str]] = ..., current_movement: _Optional[str] = ...) -> None: ...
