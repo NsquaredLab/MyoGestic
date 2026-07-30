@@ -147,7 +147,7 @@
       "name": "Reference: walkthrough of the control standard",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/tools/inspect_canonical_control.py",
+      "program": "${workspaceFolder}/tools/inspect_control.py",
       "python": "${workspaceFolder}/.venv/bin/python",
       "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
       "cwd": "${workspaceFolder}",

@@ -1,7 +1,7 @@
 """VHI movement palette — a button grid for the VHI control hand's movements.
 
 The Virtual Hand Interface reports its valid movement names over the gRPC
-control plane (``VhiTrainingAidClient.state().available_movements`` — 17 in AI
+control plane (``VhiRecordingClient.state().available_movements`` — 17 in AI
 mode, 15 in Classifier mode). This module renders them as a grid of buttons;
 clicking one commands that movement on VHI's control hand.
 
@@ -52,7 +52,7 @@ from imgui_bundle import imgui
 from myogestic.widgets.common import DANGER, SUCCESS, panel_header, pop_selected, push_selected
 
 if TYPE_CHECKING:
-    from myogestic.vhi._training import VhiTrainingAidClient
+    from myogestic.vhi._recording import VhiRecordingClient
 
 # Movement button size. Columns are computed from the panel width, so the grid
 # reflows as the panel is resized. Width fits VHI's longest name ("ThreeFingerPinch").
@@ -81,8 +81,8 @@ class VhiStateSnapshot:
     mode: str
     connected: bool
     message: str
-    program_running: bool = False
-    program_movement: str = ""
+    trajectory_running: bool = False
+    trajectory_movement: str = ""
 
 
 @dataclass
@@ -100,8 +100,8 @@ class VhiStateCache:
     current_movement: str = ""
     current_state: str = ""
     mode: str = ""
-    program_running: bool = False
-    program_movement: str = ""
+    trajectory_running: bool = False
+    trajectory_movement: str = ""
     connected: bool = False
     refreshing: bool = False
     message: str = "Launch VHI, then refresh."
@@ -118,13 +118,13 @@ class VhiStateCache:
                 mode=self.mode,
                 connected=self.connected,
                 message=self.message,
-                program_running=self.program_running,
-                program_movement=self.program_movement,
+                trajectory_running=self.trajectory_running,
+                trajectory_movement=self.trajectory_movement,
             )
 
 
 def request_vhi_state_refresh(
-    client: VhiTrainingAidClient,
+    client: VhiRecordingClient,
     cache: VhiStateCache,
     *,
     force: bool = False,
@@ -132,7 +132,7 @@ def request_vhi_state_refresh(
     disconnected_interval_s: float = 5.0,
     probe_timeout_s: float = 0.5,  # noqa: ARG001 - kept for API compatibility
 ) -> None:
-    """Start at most one throttled background ``GetTrainingState`` refresh.
+    """Start at most one throttled background ``GetRecordingSessionState`` refresh.
 
     Safe to call every frame from ``@app.ui``: it returns immediately unless a
     refresh is due and none is already in flight. The blocking ``state()``
@@ -177,9 +177,9 @@ def request_vhi_state_refresh(
                 cache.movements = list(reply.available_movements)
                 cache.current_movement = reply.current_movement
                 cache.current_state = reply.animation_state
-                cache.program_running = reply.program_running
-                cache.program_movement = reply.program_movement
-                cache.mode = "training" if reply.program_running else "movement"
+                cache.trajectory_running = reply.trajectory_running
+                cache.trajectory_movement = reply.trajectory_movement
+                cache.mode = "recording" if reply.trajectory_running else "movement"
             except AttributeError as e:
                 # A malformed reply (e.g. an incomplete stub) must not take down
                 # this daemon thread — surface it instead.
@@ -187,8 +187,8 @@ def request_vhi_state_refresh(
                 cache.message = f"VHI reply malformed: {e}"
                 return
             cache.connected = True
-            if reply.program_running:
-                cache.message = f"training program: {reply.program_movement}"
+            if reply.trajectory_running:
+                cache.message = f"recording trajectory: {reply.trajectory_movement}"
             else:
                 cache.message = f"{len(cache.movements)} movements"
 

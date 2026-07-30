@@ -37,7 +37,7 @@ separate on purpose — a held state delivered on change is not the same thing a
     you have:
 
     ```bash
-    uv run --extra grpc python tools/inspect_canonical_control.py
+    uv run --extra grpc python tools/inspect_control.py
     ```
 
     It is safe to run with no Virtual Hand at all: it still walks the first three steps
@@ -76,7 +76,7 @@ in its own manifest, along with everything needed to send it: whether it takes a
 or a held state, its range, its states. Ask a running target what it exports:
 
 ```bash
-uv run --extra grpc python tools/inspect_canonical_control.py
+uv run --extra grpc python tools/inspect_control.py
 ```
 
 Load it and resolve it:
@@ -89,7 +89,7 @@ with open("hand.toml", "rb") as f:          # "rb" — tomllib requires binary
     control_map = load_control_map(tomllib.load(f))
 
 # Resolution needs a live target: it is what declares the semantics.
-controls = resolve(control_map, vhi.canonical_client().capabilities())
+controls = resolve(control_map, vhi.control_client().capabilities())
 ```
 
 **Mapping-first**: the *shape* of each value says how a value travels. A bare string is
@@ -179,11 +179,11 @@ an ordering that is easy to get subtly wrong per-application.
 ### Negotiating with the target
 
 A target does not have to guess what an application can render. Hand `VhiTarget` a
-canonical client and it **asks** at bind time, then encodes according to the answer:
+control client and it **asks** at bind time, then encodes according to the answer:
 
 ```python
 vhi = virtual_hand()
-target = VhiTarget(vhi.outlet(), client=vhi.canonical_client())
+target = VhiTarget(vhi.outlet(), client=vhi.control_client())
 bus = ControlBus(controls, targets=[target])
 ```
 
@@ -203,7 +203,7 @@ An application that launches VHI from its own button binds before VHI exists, so
 is decided until [`negotiate`][myogestic.vhi.VhiTarget.negotiate] settles it. A renderer
 that answers and does not speak v2 is a settled fact and raises.
 
-::: myogestic.vhi.interfaces.InterfaceSpec.canonical_client
+::: myogestic.vhi.interfaces.InterfaceSpec.control_client
 
 ### Three layers of smoothing, and why they are not interchangeable
 
@@ -214,7 +214,7 @@ places, and collapsing any two of them is a bug:
 |---|---|---|---|
 | **1. Continuous smoothing** | `ControlBus(smoothing=...)`, MyoGestic | continuous DOFs | **Yes** — it decides the value that is commanded |
 | **2. Debounce + hysteresis** | `Discrete.debounce_s`, `ControlBus(hysteresis=...)`, MyoGestic | discrete DOFs | **Yes** — it decides *when* a state transition happens |
-| **3. Presentation blending** | the renderer (`canonical_client().set_presentation`) | how a commanded value looks | **No** — appearance only |
+| **3. Presentation blending** | the renderer (`control_client().set_presentation`) | how a commanded value looks | **No** — appearance only |
 
 Layer 1 runs before any target sees a frame, which is what makes it authoritative:
 smoothing after delivery would mean different targets acted on different values.
@@ -233,7 +233,7 @@ is arguably worse because it *looks* deliberate.
 
 ### Recording is not control
 
-A canonical discrete DOF is a **held state**: ask for a grip, hold a grip. Collecting
+A discrete DOF is a **held state**: ask for a grip, hold a grip. Collecting
 regression training data wants the opposite — a control hand that keeps *moving*, so
 the recorded kinematics sweep a continuous range for EMG windows to align against.
 
@@ -246,7 +246,7 @@ While a training program runs it owns the control hand, and discrete DOFs are re
 with a reason rather than silently interrupting the trajectory a recording is aligned
 against. Continuous DOFs are unaffected.
 
-::: myogestic.vhi.interfaces.InterfaceSpec.training_client
+::: myogestic.vhi.interfaces.InterfaceSpec.recording_client
 
 ## Encoding helpers
 

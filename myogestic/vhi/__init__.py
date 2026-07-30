@@ -1,9 +1,9 @@
 """Virtual Hand Interface (VHI) integration.
 
-Groups the output-interface registry (`interfaces`), the canonical-control target
-(`target`), the gRPC control client (`_client`), and the generated protobuf stubs
-(`_proto`) for driving the VHI. `legacy` holds the wire mapping the target encodes
-with, kept apart because its upgrade path is deletion.
+Groups the output-interface registry (`interfaces`), the control target (`target`),
+the gRPC clients (`_control`, `_recording`), and the generated protobuf stubs
+(`_proto`) for driving the VHI. `legacy` is separate: it reads VHI's own recorded
+pose format for old sessions, and never touches the live control path.
 """
 
 from myogestic.vhi.interfaces import InterfaceSpec, virtual_hand

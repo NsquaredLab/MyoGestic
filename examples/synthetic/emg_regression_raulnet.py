@@ -124,9 +124,9 @@ ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
-# The recording aid (session gate, training programs) and the control client.
-training_aid = vhi.training_client()
-vhi_canonical = vhi.canonical_client()
+# The recording aid (session gate, trajectory playback) and the control client.
+recording_aid = vhi.recording_client()
+vhi_control = vhi.control_client()
 
 # Which control each of the network's five outputs drives. The aliases on the left are
 # ours and must match regression_raulnet.toml; the names on the right are what
@@ -147,7 +147,7 @@ CONTROL_FILE = Path(__file__).resolve().parent.parent / "controls" / "regression
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
 
-# Output-side smoothing, applied by the control bus to the canonical vector.
+# Output-side smoothing, applied by the control bus to the control vector.
 # Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
@@ -263,7 +263,7 @@ def train(data: TrainingData) -> L.LightningModule:
         n_alignment_samples=10,
     ):
         X_list.append(sliding_rms(emg_window))
-        # decode_pose reads the recorded pose as canonical values, so the training
+        # decode_pose reads the recorded pose as control values, so the training
         # target is in exactly the space `predict` commands. A signed negation, not
         # the old abs() — which folded extension into flexion of equal magnitude.
         pose = decode_pose(aligned["vhi_control"])
@@ -364,7 +364,7 @@ def train(data: TrainingData) -> L.LightningModule:
 
 @pipeline.predict
 def predict(model: L.LightningModule, features: np.ndarray) -> dict:
-    """Regress the five canonical DOFs and hand them to the bus."""
+    """Regress the five control DOFs and hand them to the bus."""
     with torch.inference_mode():
         x = torch.from_numpy(features).float().to(model.device)
         x = x.unsqueeze(0).unsqueeze(0)  # (1, 1, n_ch, INPUT_LENGTH)
@@ -391,7 +391,7 @@ def _ensure_vhi() -> None:
     global bus, vhi_target
     if bus is not None:
         return
-    capabilities = vhi_canonical.capabilities()
+    capabilities = vhi_control.capabilities()
     if capabilities is None:
         app.ctx.log("VHI not reachable yet — controls stay unresolved")
         return
@@ -405,9 +405,9 @@ def _ensure_vhi() -> None:
             f"{CONTROL_FILE.name} does not declare {unknown}, but this example pushes "
             f"those aliases. It declares: {sorted(controls.dofs)}."
         )
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
     # One bus owns the output path: substitute rest -> clip -> smooth -> clip again ->
-    # deliver. VhiTarget negotiates v2 when this VHI speaks it, else the legacy pose.
+    # deliver. VhiTarget negotiates the space and refuses a VHI it cannot fully drive.
     bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
     # Recordings then carry the space they were made under: a bare -1 does not say
     # whether it was a full excursion or out of range.
@@ -416,7 +416,7 @@ def _ensure_vhi() -> None:
 
 
 def _on_gesture(i: int) -> None:
-    # A canonical held state through the same bus the continuous DOFs use. The
+    # A discrete held state through the same bus the continuous DOFs use. The
     # control hand snaps to the pose and holds it, so VHI_Control settles to a static
     # kinematic value the regressor can map back from EMG amplitude.
     _ensure_vhi()
@@ -431,13 +431,13 @@ def _on_record() -> None:
     # gesture buttons are this session's only movement source.
     _ensure_vhi()
     app.start_recording()
-    if not training_aid.set_recording_session(True):
+    if not recording_aid.set_recording_session(True):
         app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
 
 
 def _on_stop() -> None:
     app.stop_recording()
-    training_aid.set_recording_session(False)
+    recording_aid.set_recording_session(False)
 
 
 viewer = SignalViewer("emg")
@@ -483,10 +483,10 @@ def main() -> None:
     finally:
         if bus is not None:
             bus.stop()
-        training_aid.stop_program()
-        training_aid.set_recording_session(False)
-        training_aid.stop()
-        vhi_canonical.stop()
+        recording_aid.stop_trajectory()
+        recording_aid.set_recording_session(False)
+        recording_aid.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

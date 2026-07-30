@@ -203,7 +203,7 @@ class VhiTarget:
             )
         if self._client is None:
             raise ValueError(
-                "VhiTarget needs a canonical client: every channel, range and state "
+                "VhiTarget needs a control client: every channel, range and state "
                 "comes from the renderer's manifest, so without one there is nothing "
                 "to render against. Pass client=virtual_hand().control_client()."
             )

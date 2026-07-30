@@ -53,11 +53,11 @@ CTRL_VALUES = [0.0, 1.0]
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 # The v2 recording aid — the session gate and, if you want a swept trajectory
-# instead of held poses, training programs. Not a control plane; see
-# `training_client` for why that separation matters.
-training_aid = vhi.training_client()
+# instead of held poses, trajectory playback. Not a control plane; see
+# `recording_client` for why that separation matters.
+recording_aid = vhi.recording_client()
 
-# Output-side smoothing, applied by the control bus to the canonical vector.
+# Output-side smoothing, applied by the control bus to the control vector.
 # Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
@@ -112,7 +112,7 @@ PROCESSES = [
 # Once built, one bus owns the whole output path: substitute rest -> clip -> smooth ->
 # clip again -> hand it to every target. `VhiTarget` is what turns resolved aliases into
 # whatever this VHI renders on the wire.
-vhi_canonical = vhi.canonical_client()
+vhi_control = vhi.control_client()
 vhi_target = None
 bus = None
 controls = None
@@ -216,7 +216,7 @@ def train(data: TrainingData):
         HOP_MS,
         n_alignment_samples=10,
     ):
-        # decode_pose reads VHI's recorded pose as canonical values, so the
+        # decode_pose reads VHI's recorded pose as control values, so the
         # training target is in exactly the space `predict` commands. It is a
         # signed negation, not the old `abs()` - which folded any extension the
         # operator did into flexion of the same magnitude.
@@ -240,7 +240,7 @@ def train(data: TrainingData):
         HOP_MS,
         classes=data.classes if data.classes else None,
     ):
-        # +1 is flexion under the canonical standard, so a Fist target is all 1s
+        # +1 is flexion under the control standard, so a Fist target is all 1s
         # and Rest is all 0s - the same numbers as before, now for a stated reason.
         kin = np.ones(n_dof, dtype=np.float64) if ci == 1 else np.zeros(n_dof, dtype=np.float64)
         all_X.append(extract_features(emg_window))
@@ -309,20 +309,20 @@ def _ensure_vhi() -> None:
     global bus, controls, vhi_target
     if bus is not None:
         return
-    capabilities = vhi_canonical.capabilities()
+    capabilities = vhi_control.capabilities()
     if capabilities is None:
         app.ctx.log("VHI not reachable yet — controls stay unresolved")
         return
     # Refuses an address this build does not export, naming the near misses.
     controls = resolve(CONTROL_MAP, capabilities)
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
     bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
     # Recordings then carry the space they were made under: a bare -1 does not say
     # whether it was a full excursion or out of range.
     app.ctx.control_space = CONTROL_MAP
-    # `bind` ran inside the bus, and VHI is up by now, so this verdict is decisive.
-    wire = "the canonical contract (v2)" if vhi_target.negotiated else "the legacy pose"
-    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI via {wire}")
+    # `bind` ran inside the bus, and VHI already answered above, so the handshake is
+    # settled — `bind` would have raised otherwise.
+    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
 # --8<-- [end:negotiate]
 
 
@@ -352,13 +352,13 @@ def _on_record() -> None:
     # stray keyboard movements and nothing downstream could tell.
     _ensure_vhi()
     app.start_recording()
-    if not training_aid.set_recording_session(True):
+    if not recording_aid.set_recording_session(True):
         app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
 
 
 def _on_stop() -> None:
     app.stop_recording()
-    training_aid.set_recording_session(False)
+    recording_aid.set_recording_session(False)
 # --8<-- [end:record]
 
 
@@ -416,10 +416,10 @@ def main() -> None:
         # and the hand would hold its last commanded position.
         if bus is not None:
             bus.stop()
-        training_aid.stop_program()      # no-op unless a program was started
-        training_aid.set_recording_session(False)
-        training_aid.stop()
-        vhi_canonical.stop()
+        recording_aid.stop_trajectory()      # no-op unless a trajectory was started
+        recording_aid.set_recording_session(False)
+        recording_aid.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

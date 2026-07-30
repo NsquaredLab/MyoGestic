@@ -12,7 +12,7 @@ channels. The mapping below was read out of the VHI source, where the two consum
 (``PredictedHandSkeleton``/``ControlHandSkeleton``) index the sample they receive:
 
 ===  ====================================================  ======================
-ch   what VHI does with it                                 canonical name
+ch   what VHI does with it                                 name
 ===  ====================================================  ======================
 0    thumb flexion — bones 1/2/3 X axis                    ``thumb.flexion``
 1    thumb abduction — bones 1/2/3 Z axis                  ``thumb.abduction``
@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import numpy as np
 
-#: Canonical names for the six legacy pose channels VHI actually consumed, in wire
+#: Names for the six legacy pose channels VHI actually consumed, in wire
 #: order. Channels 6-8 are omitted because no consumer reads them.
 LEGACY_POSE_DOFS: tuple[str, ...] = (
     "thumb.flexion",
@@ -84,9 +84,9 @@ LEGACY_POSE_WIDTH = 9
 
 
 def decode_pose(frame: np.ndarray) -> dict[str, np.ndarray]:
-    """Legacy 9-channel pose samples as canonical DOF values in ``[-1, 1]``.
+    """Legacy 9-channel pose samples as control DOF values in ``[-1, 1]``.
 
-    A single negation, because canonical ``+1`` is the direction a name denotes and
+    A single negation, because a control ``+1`` is the direction a name denotes and
     VHI's flexion gains were negative. Exact and symmetric — deliberately **not** a
     rescale: mapping the observed ``[-1, 0]`` support onto ``[-1, 1]`` would invent
     an extension half that was never recorded *and* move rest away from ``0.0``,

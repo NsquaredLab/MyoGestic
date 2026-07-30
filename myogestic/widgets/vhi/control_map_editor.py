@@ -7,7 +7,7 @@ declared, and lets a name be pointed at one by picking from that list. The file 
 the source of truth: this reads it, edits it and writes it back with
 `myogestic.controls.dump_control_map`.
 
-    editor = ControlMapEditor(pathlib.Path("my_controls.toml"), client=canonical_client)
+    editor = ControlMapEditor(pathlib.Path("my_controls.toml"), client=control_client)
 
     @app.ui
     def ui(ctx):
@@ -230,7 +230,7 @@ class ControlMapEditor:
         Not fixed for the life of the editor: **Save as...** writes elsewhere and the
         editor *follows*, so read `path` rather than remembering what was passed in.
     client
-        A `myogestic.vhi._client_v2.VhiCanonicalClient`, or anything with a
+        A `myogestic.vhi._client_v2.VhiControlClient`, or anything with a
         ``capabilities()`` method returning a sequence of `myogestic.controls.Capability`.
         Called on **Connect** rather than every frame, because it blocks on an RPC.
         Without it the editor still opens the file and shows it; it just cannot offer a
@@ -1058,7 +1058,7 @@ class ControlMapEditor:
         """Ask silent targets what they export, off the render thread.
 
         Called every frame from `ui`. Connecting was click-only because
-        `VhiCanonicalClient.capabilities()` blocks for its RPC timeout when nothing is
+        `VhiControlClient.capabilities()` blocks for its RPC timeout when nothing is
         listening, and a two-second stall per frame is not a thing a UI can do. But that is
         an argument against blocking *here*, not against connecting at all — a
         `KeyboardTarget` answers from a local list and never needed a click in the first

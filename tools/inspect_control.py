@@ -2,7 +2,7 @@
 
 Run it to *see* the system work rather than read about it:
 
-    uv run --extra grpc python tools/inspect_canonical_control.py
+    uv run --extra grpc python tools/inspect_control.py
 
 Safe anywhere. With no Virtual Hand running it still loads the real config file and shows
 what a mapping is *before* a target has answered — which is the design, not a degraded
@@ -83,10 +83,10 @@ def step_2_ask_the_target(client):
         # renderer that is already running.
         if getattr(client, "unimplemented", False):
             print("  A Virtual Hand answered, but it does not export a manifest.")
-            print("   - That is a pre-v2 build. `VhiTarget` falls back to the legacy pose")
-            print("     for it, all-or-nothing, so an application keeps working — but")
-            print("     there is no vocabulary to resolve against, so steps 3 to 5 need a")
-            print("     v2 build. Point $VHI_PATH and $GODOT_BIN at a VHI checkout to run")
+            print("   - That is a pre-v2 build. `VhiTarget.bind` refuses it outright and")
+            print("     raises, rather than guessing at a wire it cannot verify — there")
+            print("     is no vocabulary to resolve against, so steps 3 to 5 need a v2")
+            print("     build. Point $VHI_PATH and $GODOT_BIN at a VHI checkout to run")
             print("     one from source.")
         else:
             print("  No target answered.")
@@ -225,12 +225,12 @@ def step_6_commands():
     """Print the commands a reader can run themselves."""
     heading(6, "Commands you can run")
     print("""  This walkthrough, with no Virtual Hand (safe anywhere):
-      uv run --extra grpc python tools/inspect_canonical_control.py
+      uv run --extra grpc python tools/inspect_control.py
 
   Then launch a Virtual Hand and run it again to see the handshake:
       python -m myogestic.tools.install_vhi        # if you have not installed it
       # start VHI from any example's Launch button, or run the binary directly
-      uv run --extra grpc python tools/inspect_canonical_control.py
+      uv run --extra grpc python tools/inspect_control.py
 
   Confirm what the hand actually renders, per control, in signed degrees:
       uv run python tools/check_vhi_bridge.py
@@ -245,7 +245,7 @@ def step_6_commands():
   The contracts themselves:
       myogestic/controls.py                        the standard
       myogestic/_controls_map.py                   aliases, addresses, resolution
-      myogestic/vhi/_proto/myogestic_vhi_v2.proto  the wire contract""")
+      myogestic/vhi/_proto/myogestic_vhi.proto   the wire contract""")
 
 
 def main() -> None:
@@ -255,7 +255,7 @@ def main() -> None:
     print(RULE)
     control_map = step_1_the_file()
 
-    client = virtual_hand().canonical_client()
+    client = virtual_hand().control_client()
     try:
         capabilities = step_2_ask_the_target(client)
         if capabilities is not None:

@@ -88,15 +88,14 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 POSE_ALIASES = tuple(CONTROL_MAP.bindings)
 
 # Both stay None until `_ensure_vhi` — see its docstring. The bus + target own the wire
-# once built, and that matters more than it looks: VHI's continuous inlet now takes
-# *canonical* values, and a build that predates that still wants the old convention.
-# `VhiTarget` asks which one this VHI speaks and encodes accordingly, so pushing a frame
-# built by hand would be right on exactly one of them.
-vhi_canonical = vhi.canonical_client()
+# once built, and that matters more than it looks: VHI's continuous inlet takes control
+# values, and `VhiTarget` negotiates the space at bind time and refuses a VHI it cannot
+# fully drive rather than guessing.
+vhi_control = vhi.control_client()
 vhi_target = None
 bus = None
 
-# Per-class hand poses, in canonical values keyed by *our* aliases: +1 is the
+# Per-class hand poses, in control values keyed by *our* aliases: +1 is the
 # direction the alias names, 0 is rest, and an alias left out of a pose rests.
 # The target turns them into whatever this VHI's wire wants, so no channel index
 # or sign flip appears here.
@@ -392,8 +391,8 @@ def predict(model, features):
     if bus is None:
         return {"class": class_idx, "proba": proba}  # nothing resolved yet, nothing to command
 
-    # Canonical values in; the bus rests every alias the pose omits, sanitises and
-    # smooths, and the target encodes for whichever convention this VHI negotiated.
+    # Control values in; the bus rests every alias the pose omits, sanitises and
+    # smooths, and the target places them on the channels this VHI negotiated.
     values = bus.push(HAND_POSES.get(class_idx, HAND_POSES[0]))
     return {"class": class_idx, "proba": proba, "hand": values}
 
@@ -418,12 +417,12 @@ def _ensure_vhi() -> None:
     global bus, vhi_target
     if bus is not None:
         return
-    capabilities = vhi_canonical.capabilities()
+    capabilities = vhi_control.capabilities()
     if capabilities is None:
         app.ctx.log("VHI not reachable yet — controls stay unresolved")
         return
     controls = resolve(CONTROL_MAP, capabilities)
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
     bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
     app.ctx.control_space = CONTROL_MAP  # recordings record what they were made under
     app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
@@ -494,7 +493,7 @@ def main() -> None:
         # Rest the hand and make that frame land before the outlet's thread dies.
         if bus is not None:
             bus.stop()
-        vhi_canonical.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

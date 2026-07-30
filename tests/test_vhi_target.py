@@ -110,7 +110,7 @@ POSE = LEGACY_POSE_DOFS
 
 
 def _client(order=POSE, **reply):
-    """A renderer that accepts a by-name declaration in canonical units."""
+    """A renderer that accepts a by-name declaration in control units."""
     return FakeClient(FakeReply(continuous_channel_order=order, **reply))
 
 
@@ -122,7 +122,7 @@ def _controls(*names: str, **entries: object):
 
 
 def _bound(*names: str, **entries: object) -> tuple[VhiTarget, FakeOutlet]:
-    """A target bound to a renderer that names the six pose controls, canonically."""
+    """A target bound to a renderer that names the six pose controls by address."""
     outlet = FakeOutlet()
     target = VhiTarget(outlet, client=_client())
     target.bind(_controls(*names, **entries))
@@ -739,7 +739,7 @@ def test_the_refusal_says_how_to_get_a_v2_build():
 
 def test_a_target_with_no_client_is_refused_at_bind():
     """Every channel comes from the manifest, so there is nothing to render without one."""
-    with pytest.raises(ValueError, match="needs a canonical client"):
+    with pytest.raises(ValueError, match="needs a control client"):
         VhiTarget(FakeOutlet()).bind(_controls("index.flexion"))
 
 
@@ -790,7 +790,7 @@ def test_declare_request_carries_control_pose():
 class Silent:
     """A client whose renderer never answers — 'old build' and 'not up' look the same."""
 
-    def declare(self, controls, client_name="", control_pose=""):
+    def declare(self, controls, client_name="", control_pose=False):
         return None
 
     def set_control(self, continuous=None, discrete=None):

@@ -65,12 +65,11 @@ FIST_ALIASES = ("fist", "thumb_spread")
 output_filter = PostProcessor(hz=32)
 # --8<-- [end:filter]
 
-# The bus + target own the wire. VHI's continuous inlet takes *canonical* values as of
-# 2.0 while older builds want the negated legacy pose, so a hand-built frame is correct
-# on exactly one of them. `VhiTarget` asks which and encodes accordingly. Both are built
-# in `_ensure_vhi`, not here: the aliases above mean nothing until VHI has said what its
-# addresses do, and this script launches VHI itself.
-vhi_canonical = vhi.canonical_client()
+# The bus + target own the wire. VHI's continuous inlet takes control values, and
+# `VhiTarget` negotiates the space and refuses a VHI it cannot fully drive rather than
+# guessing. Both are built in `_ensure_vhi`, not here: the aliases above mean nothing
+# until VHI has said what its addresses do, and this script launches VHI itself.
+vhi_control = vhi.control_client()
 vhi_target: VhiTarget | None = None
 bus: ControlBus | None = None
 
@@ -236,12 +235,12 @@ def _ensure_vhi() -> None:
     global bus, vhi_target
     if bus is not None:
         return
-    capabilities = vhi_canonical.capabilities()
+    capabilities = vhi_control.capabilities()
     if capabilities is None:
         app.ctx.log("VHI not reachable yet — controls stay unresolved")
         return
     controls = resolve(CONTROL_MAP, capabilities)
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
     bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
     app.ctx.control_space = CONTROL_MAP  # recordings record what they were made under
     app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
@@ -315,7 +314,7 @@ def main() -> None:
         # Rest the hand and make that frame land before the outlet's thread dies.
         if bus is not None:
             bus.stop()
-        vhi_canonical.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

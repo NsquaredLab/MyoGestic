@@ -1,4 +1,4 @@
-"""Live check that VHI renders canonical DOFs as their names claim.
+"""Live check that VHI renders control DOFs as their names claim.
 
 This is the one thing no offline test can prove. ``tests/test_vhi_target.py`` pins
 exactly what `myogestic.vhi.VhiTarget` puts on the wire, and
@@ -14,8 +14,8 @@ Two claims are under test, and each is a decision the migration rests on:
    *producer*. They agree, which is strong — but if the two skeletons ever indexed
    differently, offline evidence could not tell.
 2. **The extension half renders.** VHI multiplies the sample by a per-bone gain with
-   no clamping, so canonical ``-1`` should rotate the other way rather than being
-   ignored. That reading is why the canonical domain is signed ``[-1, 1]`` at all. It
+   no clamping, so a control ``-1`` should rotate the other way rather than being
+   ignored. That reading is why the control domain is signed ``[-1, 1]`` at all. It
    has never been observed, because no operator ever extended on record.
 
 Run it with the VHI binary up — launch it from any example's ProcessLauncher, or
@@ -38,7 +38,7 @@ from myogestic.vhi.legacy import LEGACY_POSE_DOFS
 #: Seconds to hold each excursion. Long enough to look at, short enough to sit through.
 HOLD_S = 1.5
 
-#: What each canonical name claims will move, for the operator to check against.
+#: What each control name claims will move, for the operator to check against.
 EXPECTED = {
     "thumb.flexion": "the thumb curls across the palm",
     "thumb.abduction": "the thumb swings away from the index finger",

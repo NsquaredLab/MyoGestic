@@ -17,7 +17,7 @@ you control and hand it to a
 puts continuous values on LSL, and sends discrete states over gRPC.
 
 !!! tip "Watch it happen first"
-    `uv run --extra grpc python tools/inspect_canonical_control.py` walks the whole
+    `uv run --extra grpc python tools/inspect_control.py` walks the whole
     path end to end and prints what reaches the wire. It needs no Virtual Hand, and
     tells you which contract yours speaks if you have one running.
 
@@ -55,7 +55,7 @@ from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.vhi import VhiTarget, virtual_hand
 
 vhi = virtual_hand()
-vhi_canonical = vhi.canonical_client()
+vhi_control = vhi.control_client()
 
 with open("hand.toml", "rb") as f:            # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(f))
@@ -68,11 +68,11 @@ def ensure_vhi() -> None:
     global bus
     if bus is not None:
         return
-    capabilities = vhi_canonical.capabilities()
+    capabilities = vhi_control.capabilities()
     if capabilities is None:
         return                                # not reachable yet; try again later
     controls = resolve(CONTROL_MAP, capabilities)
-    target = VhiTarget(vhi.outlet(), client=vhi_canonical)
+    target = VhiTarget(vhi.outlet(), client=vhi_control)
     bus = ControlBus(controls, targets=[target], hz=32)
 ```
 
@@ -107,8 +107,8 @@ from myogestic.vhi.interfaces import virtual_hand
 
 vhi = virtual_hand()                  # resolves install path + gRPC endpoint
 vhi_outlet = vhi.outlet()             # 9-ch LSL outlet @ 32 Hz
-vhi_canonical = vhi.canonical_client()   # negotiates the control space (v2)
-training_aid = vhi.training_client()     # recording session gate + training programs
+vhi_control = vhi.control_client()   # negotiates the control space (v2)
+recording = vhi.recording_client()     # recording session gate + training programs
 ```
 
 `virtual_hand()` looks at `$VHI_PATH`, the per-user install root, and the
@@ -160,7 +160,7 @@ except FileNotFoundError as e:
 
 ## Plane 1 - continuous pose over LSL
 
-!!! tip "Prefer the canonical control standard"
+!!! tip "Prefer the control standard"
     Everything below describes the **legacy** wire, kept for builds that predate
     the v2 contract. New work should declare DOFs by name and let
     [`VhiTarget`](../api/controls.md) negotiate — then none of these channel
@@ -303,7 +303,7 @@ re-fire.
     |---|---|---|
     | Continuous smoothing | `ControlBus(smoothing=...)` | continuous DOFs |
     | Debounce / hysteresis | declared on the DOF | discrete DOFs |
-    | Presentation blending | `canonical_client().set_presentation(...)` | appearance only |
+    | Presentation blending | `control_client().set_presentation(...)` | appearance only |
 
     Averaging "rest" and "fist" would interpolate through a state nobody selected,
     so the bus never passes a discrete value through a filter — the filter only
@@ -319,13 +319,13 @@ the renderer starts:
 
 | Call | Effect |
 |---|---|
-| `canonical_client().declare(controls)` | Negotiate. Returns `None` when VHI has not answered; `VhiTarget` defers and retries. A build that answers without the v2 service is refused. |
-| `canonical_client().set_control(...)` | Command a frame. Fire-and-forget; safe from the predict thread. |
-| `canonical_client().sweep(name)` | Drive one DOF across its range and report which bones moved, in signed degrees. Verification only — it animates a joint. |
-| `canonical_client().set_presentation(blend=...)` | Renderer blending. Appearance only. |
-| `training_aid.set_recording_session(True / False)` | Gate VHI's local keyboard so a recording has one movement source. |
-| `training_aid.start_program(movement, frequency_hz=...)` | Cycle the control hand to generate a training trajectory. |
-| `training_aid.state()` | Movements, current movement, whether a program is running. |
+| `control_client().declare(controls)` | Negotiate. Returns `None` when VHI has not answered; `VhiTarget` defers and retries. A build that answers without the v2 service is refused. |
+| `control_client().set_control(...)` | Command a frame. Fire-and-forget; safe from the predict thread. |
+| `control_client().sweep(name)` | Drive one DOF across its range and report which bones moved, in signed degrees. Verification only — it animates a joint. |
+| `control_client().set_presentation(blend=...)` | Renderer blending. Appearance only. |
+| `recording.set_recording_session(True / False)` | Gate VHI's local keyboard so a recording has one movement source. |
+| `recording.start_trajectory(movement, frequency_hz=...)` | Cycle the control hand to generate a training trajectory. |
+| `recording.state()` | Movements, current movement, whether a program is running. |
 
 `declare`, `sweep` and the aid's calls are **synchronous** — they are setup, teardown
 and verification, and a caller needs the answer. `set_control` is fire-and-forget on a
@@ -343,14 +343,14 @@ worker thread, so it never blocks a 60 fps render loop.
 
 `VhiMovementPanel` packages "fetch control-hand state in the background, render the
 movement buttons, dispatch clicks" into one widget. It reads the recording aid for
-state and takes the click handler explicitly — wire it to a canonical DOF, because
+state and takes the click handler explicitly — wire it to a control-standard DOF, because
 dispatching straight at the renderer would bypass the debounce:
 
 ```python
 from myogestic.widgets.vhi.panel import VhiMovementPanel
 
 panel = VhiMovementPanel(
-    training_aid,
+    recording,
     lambda state: bus.select("gesture", state),
 )
 
@@ -380,9 +380,9 @@ model learns — want the control hand to move on its own so the recorded kinema
 sweep a range. That is what the **recording aid** is for:
 
 ```python
-training_aid.start_program("Fist", frequency_hz=0.7)   # cycles, producing a trajectory
+recording.start_trajectory("Fist", frequency_hz=0.7)   # cycles, producing a trajectory
 ...
-training_aid.stop_program()                            # stops and rests the hand
+recording.stop_trajectory()                            # stops and rests the hand
 ```
 
 A training program is deliberately *not* a control primitive. It exists so that
@@ -396,7 +396,7 @@ movement source:
 ```python
 def _on_record() -> None:
     app.start_recording()
-    if not training_aid.set_recording_session(True):
+    if not recording.set_recording_session(True):
         app.ctx.log("no VHI recording gate — the keyboard is not blocked")
 ```
 
@@ -437,7 +437,7 @@ symptom-organised debugging.
 * **Forgetting `set_recording_session(False)` on session end.** VHI keeps ignoring its
   own keyboard until you toggle it back.
 * **Leaving a training program running.** It keeps the control hand moving and refuses
-  discrete DOFs. `stop_program()` is idempotent — call it in teardown regardless.
+  discrete DOFs. `stop_trajectory()` is idempotent — call it in teardown regardless.
 * **Forgetting `pose_filter.reset()` on retrain.** The first few smoothed
   frames blend the new model's first prediction with the old model's
   last; looks like a brief pose drift on every train cycle.

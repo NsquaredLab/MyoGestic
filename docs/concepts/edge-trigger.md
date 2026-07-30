@@ -14,7 +14,7 @@ tick where the value differs from the previous one.
     **discrete DOF** with `debounce_s` gets the same gating plus the dedupe and
     the rebase-on-click, owned by `ControlBus` — see
     [the control standard](../api/controls.md). Reach for `EdgeTrigger` when you
-    are driving something that is *not* a canonical target.
+    are driving something that is *not* a `myogestic.controls.Target`.
 
 ## The pattern
 
@@ -121,6 +121,6 @@ not here.
 
 ## See also
 
-* [[integrate-vhi]] - the canonical use case, gating gRPC `SetMovement`
+* [[integrate-vhi]] - the reference use case, gating gRPC `SetMovement`
   on the predicted class.
 * [`myogestic.outputs.edge_trigger.EdgeTrigger`](../api/core.md) - full API reference.

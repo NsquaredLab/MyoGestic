@@ -1,7 +1,7 @@
-"""Prove that a canonical +1 always moves the predicted hand the same documented way.
+"""Prove that a control +1 always moves the predicted hand the same documented way.
 
-    uv run --extra grpc python tools/verify_canonical_direction.py
-    uv run --extra grpc python tools/verify_canonical_direction.py --runs 5 --restart
+    uv run --extra grpc python tools/verify_control_direction.py
+    uv run --extra grpc python tools/verify_control_direction.py --runs 5 --restart
 
 Needs a live VHI 2. Exits 0 when every check holds, 1 when any of them does not, and 2
 when VHI never answered — so it is usable as a gate, not only as something to read.
@@ -17,7 +17,7 @@ Four things are checked per run:
 
 1. **Direction.** A sweep of the index must bend the rig the way a closing hand bends:
    negative degrees. This is the anchor — everything below is self-consistency.
-2. **Round-trip.** Canonical +1 pushed on `MyoGestic_Output` must read back as +1 on
+2. **Round-trip.** A control +1 pushed on `MyoGestic_Output` must read back as +1 on
    `VHI_Predict`, so the renderer is the identity rather than a sign flip.
 3. **Declaration independence.** The same input under three declarations — none,
    predicted-only, and predicted-plus-control-pose — must render identically. A
@@ -40,7 +40,7 @@ than of this tool:
   read zeros: it re-resolves by name only while it has no inlet at all, so a replaced
   producer is recovered through the outlet's stable `source_id`, not immediately.
 
-Together those are why a canonical +1 could appear to render either way earlier: a stale
+Together those are why a control +1 could appear to render either way earlier: a stale
 outlet left streaming by a previous process still wins the single `MyoGestic_Output`
 inlet, and which producer VHI binds depends on resolution order.
 """
@@ -72,7 +72,7 @@ POSE_DOF = "vhi.control.pose.index"
 INDEX_CHANNEL = 2
 
 #: The value under test. +1 is the direction the DOF's name denotes.
-CANONICAL = 1.0
+PLUS_ONE = 1.0
 
 #: Frames to hold, and the tolerance on a read-back. The rig rounds through degrees, so
 #: exact equality is the wrong test; a sign flip is nowhere near this loose.
@@ -108,9 +108,9 @@ def _predict_inlet() -> StreamInlet:
 
 
 def _hold(
-    outlet, inlet: StreamInlet, value: float = CANONICAL, seconds: float = 1.2
+    outlet, inlet: StreamInlet, value: float = PLUS_ONE, seconds: float = 1.2
 ) -> list[float]:
-    """Hold one canonical value on the pose stream, then read what the rig made of it."""
+    """Hold one control value on the pose stream, then read what the rig made of it."""
     sample = np.zeros(9, np.float32)
     sample[INDEX_CHANNEL] = value
     deadline = time.monotonic() + seconds
@@ -167,7 +167,7 @@ def check_direction(client) -> str:
     backwards = [o.element for o in reply.observed if o.degrees_at_hi >= 0.0]
     if backwards:
         raise Failure(
-            f"canonical +1 on {DOF} extended {', '.join(backwards)} instead of flexing "
+            f"control +1 on {DOF} extended {', '.join(backwards)} instead of flexing "
             f"({observed})"
         )
     return observed
@@ -220,9 +220,9 @@ def check_scenarios(vhi, client, outlet, inlet: StreamInlet) -> dict[str, float]
                 f"{label}: the read-back moved while the input was held — "
                 f"{min(seen):+.3f} to {max(seen):+.3f} over {len(seen)} frames"
             )
-        if abs(seen[-1] - CANONICAL) > TOL:
+        if abs(seen[-1] - PLUS_ONE) > TOL:
             raise Failure(
-                f"{label}: sent {CANONICAL:+.1f}, read back {seen[-1]:+.3f} — the renderer "
+                f"{label}: sent {PLUS_ONE:+.1f}, read back {seen[-1]:+.3f} — the renderer "
                 f"is not the identity on this path"
             )
         rendered[label] = seen[-1]
@@ -247,7 +247,7 @@ def _relaunch() -> None:
         )
     deadline = time.monotonic() + 90.0
     while time.monotonic() < deadline:
-        probe = virtual_hand().canonical_client()
+        probe = virtual_hand().control_client()
         answered = probe.capabilities() is not None
         probe.stop()
         if answered:
@@ -265,7 +265,7 @@ def _one_run(run: int, total: int, vhi, inlet: StreamInlet) -> None:
     each run re-proves that a restarted producer is picked up at all.
     """
     print(f"\n{RULE}\nrun {run} of {total}\n{RULE}")
-    client = vhi.canonical_client()
+    client = vhi.control_client()
     outlet = None
     try:
         print(f"  1. direction: {check_direction(client)}")
@@ -288,7 +288,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    probe = virtual_hand().canonical_client()
+    probe = virtual_hand().control_client()
     answered = probe.capabilities() is not None
     probe.stop()
     if not answered:
@@ -315,7 +315,7 @@ def main() -> int:
             return 1
 
     print(f"\n{RULE}")
-    print("✓ canonical +1 flexes, reads back as +1, and does so identically under every")
+    print("✓ control +1 flexes, reads back as +1, and does so identically under every")
     print(f"  declaration, across {args.runs} run(s).")
     return 0
 

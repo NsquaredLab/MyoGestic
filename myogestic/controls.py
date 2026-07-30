@@ -1,4 +1,4 @@
-"""The canonical control standard — named DOFs, independent of any application.
+"""The control standard — named DOFs, independent of any application.
 
 MyoGestic defines the vocabulary; VHI, a keyboard, a cursor or a robotic hand are
 *targets* that render some of it. There is no channel index, no pose vector, no

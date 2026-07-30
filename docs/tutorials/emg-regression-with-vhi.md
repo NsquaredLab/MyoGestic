@@ -3,7 +3,7 @@
 End-to-end walkthrough of
 [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py):
 8-channel synthetic EMG → MyoVerse RMS+MAV+WL features →
-**multi-output CatBoost regressor** → five canonical DOFs → a
+**multi-output CatBoost regressor** → five control DOFs → a
 `ControlBus` that sanitises and smooths them → a `VhiTarget` that
 renders them on the Virtual Hand.
 
@@ -15,7 +15,7 @@ to learn after `emg_classification.py`:
   index. That changes both the recorder setup and the training-data
   iterator.
 * **The dual-plane idiom is unavoidable.** The example commands a
-  *canonical discrete DOF* over gRPC to drive the control hand to static
+  *discrete DOF* over gRPC to drive the control hand to static
   end poses, uses the *recording aid* to gate the session, reads the
   resulting kinematics over LSL, and pushes the predicted pose back over
   LSL. Three streams, three roles.
@@ -43,17 +43,17 @@ button click.** The flow:
 
 1. Click **Launch** on EMG Generator and VHI Hand.
 2. Click a gesture button (Rest / Fist). Two things happen:
-   * `bus.select("gesture", name)` - the gesture is a canonical
+   * `bus.select("gesture", name)` - the gesture is a
      **discrete DOF**, a *held state*: the control hand snaps to that
      pose and stays there. That it holds rather than sweeps is
      load-bearing here — regression needs the hand to reach and hold the
      target, so `VHI_Control` settles to a static kinematic value the
      regressor can map back from EMG amplitude. (If you *want* a swept
-     trajectory instead, that is `training_aid.start_program(...)`, a
+     trajectory instead, that is `recording_aid.start_trajectory(...)`, a
      recording aid rather than a control command.)
    * `ctrl_outlet.push_sample([CTRL_VALUES[i]])` - the EMG generator
      switches to the corresponding amplitude pattern.
-3. Click **Record**. `training_aid.set_recording_session(True)` disables
+3. Click **Record**. `recording_aid.set_recording_session(True)` disables
    VHI's local keyboard so the *only* movement source for this session
    is your gesture buttons. The session captures EMG samples
    *and* the `VHI_Control` 9-channel kinematics stream side by side.
@@ -77,14 +77,16 @@ which application receives it:
 
 Each is **signed and normalized**: `+1` is the direction the name says
 (full flexion), `-1` is the opposite, `0` is rest. That is the whole
-canonical vocabulary; see [Control standard](../api/controls.md) for the
+control vocabulary; see [Control standard](../api/controls.md) for the
 declaration format and the rules it enforces.
 
 Five DOFs keeps the regressor manageable on fake EMG, so thumb
 abduction is left out. Notice what is *absent*: no channel index, no
-sign convention, no mention of nine of anything. A legacy Virtual Hand
-does want a 9-float frame with flexion as negative — but that belongs to
-the hand, so `VhiTarget` is the only thing that knows it.
+sign convention, no mention of nine of anything. VHI's own recorded pose
+format did encode flexion as negative — but that was the hand's concern,
+not the declaration's: `VhiTarget` refuses a renderer too old to negotiate
+rather than adapting to it, and only `myogestic.vhi.legacy.decode_pose`
+still reads that convention, for archived sessions.
 
 ## The output path
 
@@ -113,7 +115,7 @@ The training callback handles **two kinds of session** transparently:
 
 `iter_aligned_windows` walks every EMG window in the session and
 *time-aligns* a slice of the `vhi_control` stream to it. `decode_pose`
-then reads that recorded slice as canonical values, so the training
+then reads that recorded slice as control values, so the training
 target lands in exactly the space `predict` commands — one declaration
 serving both directions is what keeps train and serve from drifting.
 This is the primary path: sessions with both EMG and kinematics.
@@ -125,8 +127,8 @@ This is the primary path: sessions with both EMG and kinematics.
 `iter_labeled_windows` is the fallback for sessions that were recorded
 *before* VHI was wired up (no `vhi_control` store). The script
 synthesises a 5-vec target from the class index - `Fist → all 1s`,
-`Rest → all 0s`. Those are the same numbers as before the canonical
-conversion, but now for a stated reason rather than by accident: `+1`
+`Rest → all 0s`. Those are the same numbers as before the switch to
+control values, but now for a stated reason rather than by accident: `+1`
 *is* flexion. Useful for mixing pre-VHI data into a new training set
 without re-recording.
 

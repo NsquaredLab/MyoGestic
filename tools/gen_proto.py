@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Regenerate the VHI gRPC Python stubs from the vendored .proto.
 
-The canonical contract lives in the Virtual-Hand-Interface repo
-(``proto/myogestic_vhi_v2.proto``); ``myogestic/vhi/_proto/myogestic_vhi_v2.proto`` is a
-vendored copy. After updating the vendored copy, run:
+The contract lives in the Virtual-Hand-Interface repo (``proto/myogestic_vhi.proto``);
+``myogestic/vhi/_proto/myogestic_vhi.proto`` is a vendored copy. After updating the
+vendored copy, run:
 
     uv run --extra grpc python tools/gen_proto.py
 
-This writes ``myogestic/vhi/_proto/myogestic_vhi_v2_pb2.py``, ``..._pb2.pyi`` (type
+This writes ``myogestic/vhi/_proto/myogestic_vhi_pb2.py``, ``..._pb2.pyi`` (type
 stubs so checkers see the generated message classes), and ``..._pb2_grpc.py`` —
 all committed so a plain install needs only grpcio at runtime (not grpcio-tools).
 """
