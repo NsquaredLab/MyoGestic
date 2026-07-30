@@ -1,6 +1,6 @@
 """Compact VHI control-hand aid — auto-refreshed state + click dispatch in one call.
 
-This is a **VHI training / control-hand aid**, not a control surface for an
+This is a **VHI recording / control-hand aid**, not a control surface for an
 application's own DOFs. It reads the v2 recording aid for state and dispatches clicks
 through a caller-supplied handler, which is expected to command a *discrete
 DOF* — normally ``bus.select("gesture", state)``, under whatever alias your

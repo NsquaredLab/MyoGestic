@@ -108,7 +108,7 @@ from myogestic.vhi.interfaces import virtual_hand
 vhi = virtual_hand()                  # resolves install path + gRPC endpoint
 vhi_outlet = vhi.outlet()             # 9-ch LSL outlet @ 32 Hz
 vhi_control = vhi.control_client()   # negotiates the control space (v2)
-recording = vhi.recording_client()     # recording session gate + training programs
+recording = vhi.recording_client()     # recording session gate + trajectory playback
 ```
 
 `virtual_hand()` looks at `$VHI_PATH`, the per-user install root, and the
@@ -178,15 +178,17 @@ confirmed against recorded sessions:
 | 3     | Middle flexion   |                                          |
 | 4     | Ring flexion     |                                          |
 | 5     | Little flexion   |                                          |
-| 6-8   | **unused**       | read by no consumer; always `0`          |
+| 6-8   | Wrist flexion, abduction, rotation | bone 0, which parents every digit |
 
 Two corrections to what this page used to say, both verified rather than assumed:
 
 * Channel 0 is thumb **flexion**, not thumb rotation, and channel 1 is thumb
   **abduction**, not thumb flexion. A recorded fist has channel 1 at exactly
   `-1.0`, which is what settled it.
-* There are **no wrist channels**. Channels 6-8 are dead on both ends — nothing
-  in VHI reads them, which is why they are `0` in every reference recording.
+* Channels 6-8 **do** drive the wrist. They read `0` in every reference
+  recording because no archived session predates wrist support — a fact about
+  that corpus, not about the renderer; see `myogestic.vhi.legacy` for the
+  reader that still has to account for it.
 
 `0` is rest and `-1` is full flexion on this wire — the sign is the renderer's,
 not the standard's. Push every predict tick: `vhi_outlet` runs its own send
@@ -325,17 +327,17 @@ the renderer starts:
 | `control_client().set_presentation(blend=...)` | Renderer blending. Appearance only. |
 | `recording.set_recording_session(True / False)` | Gate VHI's local keyboard so a recording has one movement source. |
 | `recording.start_trajectory(movement, frequency_hz=...)` | Cycle the control hand to generate a training trajectory. |
-| `recording.state()` | Movements, current movement, whether a program is running. |
+| `recording.state()` | Movements, current movement, whether a trajectory is running. |
 
 `declare`, `sweep` and the aid's calls are **synchronous** — they are setup, teardown
 and verification, and a caller needs the answer. `set_control` is fire-and-forget on a
 worker thread, so it never blocks a 60 fps render loop.
 
 !!! note "Recording is not control"
-    The training program deliberately keeps the control hand *moving*, which is the
+    A recording trajectory deliberately keeps the control hand *moving*, which is the
     opposite of what a discrete DOF means. That is exactly why it lives in a separate
     service: collecting training data must not redefine "hold this state". While a
-    program runs it owns the control hand, and discrete DOFs are refused with the
+    trajectory runs it owns the control hand, and discrete DOFs are refused with the
     reason rather than silently interrupting the trajectory a recording is aligned
     against.
 
@@ -385,10 +387,11 @@ recording.start_trajectory("Fist", frequency_hz=0.7)   # cycles, producing a tra
 recording.stop_trajectory()                            # stops and rests the hand
 ```
 
-A training program is deliberately *not* a control primitive. It exists so that
+A recording trajectory is deliberately *not* a control primitive. It exists so that
 collecting data never has to redefine what a discrete DOF means: a discrete DOF holds
-a state, and a program sweeps — two different jobs, two different vocabularies. While
-a program runs it owns the control hand and discrete DOFs are refused with the reason.
+a state, and a trajectory sweeps — two different jobs, two different vocabularies.
+While a trajectory runs it owns the control hand and discrete DOFs are refused with
+the reason.
 
 Wrap a recording in the session gate so VHI's local keyboard cannot compete as a
 movement source:
@@ -436,8 +439,9 @@ symptom-organised debugging.
   how a commanded value looks, not whether it is stable.
 * **Forgetting `set_recording_session(False)` on session end.** VHI keeps ignoring its
   own keyboard until you toggle it back.
-* **Leaving a training program running.** It keeps the control hand moving and refuses
-  discrete DOFs. `stop_trajectory()` is idempotent — call it in teardown regardless.
+* **Leaving a recording trajectory running.** It keeps the control hand moving and
+  refuses discrete DOFs. `stop_trajectory()` is idempotent — call it in teardown
+  regardless.
 * **Forgetting `pose_filter.reset()` on retrain.** The first few smoothed
   frames blend the new model's first prediction with the old model's
   last; looks like a brief pose drift on every train cycle.

@@ -24,8 +24,9 @@ separate on purpose — a held state delivered on change is not the same thing a
       and the second axis has to be named because silently picking one of two would be a
       guess. Every other digit has one axis, so its short form is all there is.
     * **`ThumbExtension`** is one of `vhi.control.gesture`'s **movement presets** — a held
-      state on the control hand, not a number and not an address. It exists because presets
-      reach poses the pose stream cannot, notably the wrist.
+      state on the control hand, not a number and not an address. It exists because a
+      preset commands a whole-hand pose in one held state — a compound shape no single
+      continuous address expresses.
 
     A renderer is free to publish one control under several addresses — `…index` and
     `…index.flexion` on one channel, say — and the manifest's `channel` field is what tells
@@ -242,9 +243,9 @@ Those are different jobs, so they have different vocabularies. The sweep lives i
 accommodate data collection would make `hand.grip` mean "grip, unless someone is
 recording".
 
-While a training program runs it owns the control hand, and discrete DOFs are refused
-with a reason rather than silently interrupting the trajectory a recording is aligned
-against. Continuous DOFs are unaffected.
+While a recording trajectory runs it owns the control hand, and discrete DOFs are
+refused with a reason rather than silently interrupting the trajectory a recording is
+aligned against. Continuous DOFs are unaffected.
 
 ::: myogestic.vhi.interfaces.InterfaceSpec.recording_client
 

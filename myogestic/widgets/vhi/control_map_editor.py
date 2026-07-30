@@ -230,7 +230,7 @@ class ControlMapEditor:
         Not fixed for the life of the editor: **Save as...** writes elsewhere and the
         editor *follows*, so read `path` rather than remembering what was passed in.
     client
-        A `myogestic.vhi._client_v2.VhiControlClient`, or anything with a
+        A `myogestic.vhi._control.VhiControlClient`, or anything with a
         ``capabilities()`` method returning a sequence of `myogestic.controls.Capability`.
         Called on **Connect** rather than every frame, because it blocks on an RPC.
         Without it the editor still opens the file and shows it; it just cannot offer a
