@@ -161,6 +161,19 @@ In `DeclareRequest`, replace `ContinuousEncoding control_pose_encoding = 4;` wit
 
 In `DeclareReply`, replace `ContinuousEncoding control_pose_encoding = 10;` with `bool control_pose = 10;` and a comment saying it echoes what was granted.
 
+- [ ] **Step 3b: Drop the version from the package name**
+
+`package myogestic.vhi.v2;` still carries a version for a v1 that no longer exists, and the
+filename and service have both dropped it. Change it to:
+
+```proto
+package myogestic.vhi;
+```
+
+This changes every generated symbol path — the C# namespace becomes `Myogestic.Vhi` and the
+Python descriptors move with it. Both are regenerated in Tasks 4 and 5, so nothing needs a
+manual edit; it is listed here because it is part of the same wire break, not a separate one.
+
 - [ ] **Step 4: Copy to MyoGestic and verify identical**
 
 ```bash
