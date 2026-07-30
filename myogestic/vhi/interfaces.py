@@ -1,9 +1,8 @@
 """Output interface registry — pre-wired (process, output stream, control).
 
-Each example used to repeat the same VHI boilerplate (Godot path, output
-outlet name + channel count + sample rate, control stream name). The
-``InterfaceSpec`` dataclass and ``virtual_hand()`` constructor pull that
-boilerplate behind a single call:
+The ``InterfaceSpec`` dataclass and ``virtual_hand()`` constructor hold the VHI
+boilerplate — Godot path, outlet name + channel count + sample rate, control
+stream names — behind a single call:
 
     from myogestic.vhi.interfaces import virtual_hand
 
@@ -12,12 +11,12 @@ boilerplate behind a single call:
     process_launcher(vhi.launcher())    # the packaged binary or `godot --path`
     client = vhi.canonical_client()     # gRPC control plane: declare, command, discover
 
-The example still owns *what* to push through the outlet — DOF mapping,
-sign flips, smoothing — only the wiring moves into the registry.
+The example still owns *what* to push through the outlet — DOF mapping, sign
+flips, smoothing.
 
-VHI ships in two ways and ``virtual_hand()`` accepts both transparently:
+VHI ships in two ways and ``virtual_hand()`` accepts both:
 
-* **Packaged binary** (the default, end-user friendly), installed by
+* **Packaged binary** (the default), installed by
   ``python -m myogestic.tools.install_vhi`` or the ``myogestic-install-vhi``
   console script. Launched directly.
 * **Godot source project** (for VHI development). Launched via
@@ -37,11 +36,13 @@ from typing import TYPE_CHECKING
 from myogestic.outputs import LSLOutlet
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from myogestic.vhi._client_v2 import VhiCanonicalClient
     from myogestic.vhi._training import VhiTrainingAidClient
 
-#: Kept in step with `myogestic.tools.install_vhi.MIN_VHI_TAG`, and asserted equal by
-#: tests/test_install_vhi_version_gate.py — duplicated rather than imported because the
+#: Kept in step with `myogestic.tools.install_vhi.MIN_VHI_TAG` (asserted equal by
+#: tests/test_install_vhi_version_gate.py). Duplicated rather than imported: the
 #: installer pulls in typer, which launching a process should not require.
 log = logging.getLogger("myogestic.vhi")
 
@@ -67,9 +68,8 @@ class InterfaceSpec:
         Human label, used as the process_launcher row title.
     process
         argv to spawn the interface (passed to ``subprocess.Popen``).
-        An empty list means "VHI not installed" — ``launcher()`` surfaces
-        a friendly error pointing at ``install_vhi`` rather than letting
-        Popen fail mysteriously.
+        An empty list means "VHI not installed"; ``launcher()`` then raises
+        pointing at ``install_vhi``.
     output_stream_name
         LSL outlet name the interface listens on.
     n_output_channels
@@ -77,14 +77,14 @@ class InterfaceSpec:
     output_hz
         Outlet send rate.
     control_stream_name
-        LSL inlet name the interface publishes when the user
-        drives it manually (used for regression targets). May be None.
+        LSL inlet name the interface publishes when the user drives it
+        manually (used for regression targets). May be None.
     n_control_channels
         Channel count of the control stream, if known.
     control_pose_stream_name
-        LSL *outlet* name for streaming a continuous pose
-        TO the interface's control hand (opt-in; consumed only when VHI is
-        in STREAM control mode). Opposite direction to ``control_stream_name``.
+        LSL *outlet* name for streaming a continuous pose TO the interface's
+        control hand — opposite direction to ``control_stream_name``. Consumed
+        only when VHI is in STREAM control mode.
     n_control_pose_channels
         Channel count of the control-pose outlet.
     control_pose_hz
@@ -94,8 +94,8 @@ class InterfaceSpec:
     grpc_port
         VHI gRPC control-server port.
     install_root
-        The directory we resolved ``process`` from. Carried so the
-        "not installed" error can quote it.
+        The directory ``process`` was resolved from; quoted in the
+        "not installed" error.
 
     Examples
     --------
@@ -125,34 +125,55 @@ class InterfaceSpec:
     grpc_port: int = 50051
     install_root: Path | None = None
 
-    def outlet(self) -> LSLOutlet:
+    def outlet(
+        self,
+        *,
+        n_channels: int | None = None,
+        channel_names: Sequence[str] | None = None,
+    ) -> LSLOutlet:
         """Construct an LSLOutlet matching this interface's output stream.
 
-        Carries a stable ``source_id`` so the consumer can *recover* this stream
-        after a restart instead of going deaf. Without one, LSL cannot tell a
-        restarted outlet from a new stream, and a consumer that resolved the old
-        one keeps a dead inlet — VHI warns about exactly this on connect, and its
-        own re-resolve only runs while it has no inlet at all, so the pairing has
-        to be recoverable from this side.
+        Carries a stable ``source_id`` so a consumer can re-resolve this stream
+        after a restart. Without one, LSL cannot tell a restarted outlet from a
+        new stream and a consumer that resolved the old one keeps a dead inlet.
+
+        Parameters
+        ----------
+        n_channels
+            Override the interface's declared width — e.g. to carry only the
+            controls one configuration drives, rather than the renderer's full
+            pose layout.
+        channel_names
+            One **target control address** per channel, published in the stream's
+            description, so a consumer can map by name instead of by position.
+            See `myogestic.vhi.VhiTarget`, which fills it in from what it resolved.
+            Addresses, not the user's aliases: a fan-out sends one alias to several
+            channels, so an alias does not identify one.
+
+        Notes
+        -----
+        LSL fixes a stream's description when the outlet is constructed, so labels
+        cannot be added to a live outlet — a labelled stream has to be built *after*
+        the configuration is resolved.
         """
         return LSLOutlet(
             name=self.output_stream_name,
-            n_channels=self.n_output_channels,
+            n_channels=self.n_output_channels if n_channels is None else n_channels,
             hz=self.output_hz,
+            channel_names=channel_names,
             source_id=f"myogestic:{self.name}:{self.output_stream_name}",
         )
 
     def canonical_client(self) -> VhiCanonicalClient:
         """Construct a client for this interface's **v2** canonical control service.
 
-        Hand it to `myogestic.vhi.VhiTarget` and the target negotiates instead of
-        assuming: it asks VHI which named DOFs it renders, and falls back to the
-        legacy pose when the answer is "I do not speak v2". Without one, the target
-        is legacy-only — correct, but limited to the six DOFs the old wire had and
-        unable to carry discrete state at all.
+        Hand it to `myogestic.vhi.VhiTarget` and the target asks VHI which named
+        DOFs it renders, falling back to the legacy pose when VHI does not speak
+        v2. Without one the target is legacy-only: the six DOFs of the old wire,
+        and no discrete state.
 
-        Imported lazily: a plain install has
-        no ``[grpc]`` extra, and `outlet` / `launcher` must keep working without it.
+        Imported lazily — a plain install has no ``[grpc]`` extra, and
+        `outlet` / `launcher` must keep working without it.
 
         Examples
         --------
@@ -176,12 +197,7 @@ class InterfaceSpec:
         The aid is not a control plane and nothing it does is a canonical DOF. It
         carries the two things a *recording session* needs: the gate that stops VHI's
         local keyboard competing as a movement source, and training programs that
-        deliberately cycle the control hand so the recorded kinematics sweep a
-        continuous range.
-
-        Kept apart from `canonical_client` so the boundary is visible at the call
-        site: a discrete DOF means "hold this state", and collecting training data
-        must not quietly redefine that.
+        cycle the control hand so the recorded kinematics sweep a continuous range.
 
         Imported lazily, like the other gRPC clients, so a plain install without the
         ``[grpc]`` extra can still use `outlet` / `launcher`.
@@ -197,21 +213,29 @@ class InterfaceSpec:
 
         return VhiTrainingAidClient(host=self.grpc_host, port=self.grpc_port)
 
-    def control_outlet(self) -> LSLOutlet:
+    def control_outlet(
+        self,
+        *,
+        n_channels: int | None = None,
+        channel_names: Sequence[str] | None = None,
+    ) -> LSLOutlet:
         """Construct an [`LSLOutlet`][] for streaming a continuous pose to the control hand.
 
-        Opt-in: only consumed when VHI is put in STREAM control mode via
-        a declared control-pose stream (`canonical_client().declare(...,
-        control_pose=...)`). Raises
-        [`ValueError`][] if this interface has no control-pose stream
+        Only consumed when VHI is put in STREAM control mode via a declared
+        control-pose stream (`canonical_client().declare(..., control_pose=...)`).
+        Raises [`ValueError`][] if this interface has no control-pose stream
         configured.
+
+        `n_channels` and `channel_names` mean what they mean on `outlet`.
         """
         if self.control_pose_stream_name is None:
             raise ValueError(f"{self.name}: no control_pose_stream_name configured")
+        default_width = self.n_control_pose_channels or self.n_output_channels
         return LSLOutlet(
             name=self.control_pose_stream_name,
-            n_channels=self.n_control_pose_channels or self.n_output_channels,
+            n_channels=default_width if n_channels is None else n_channels,
             hz=self.control_pose_hz or self.output_hz,
+            channel_names=channel_names,
             source_id=f"myogestic:{self.name}:{self.control_pose_stream_name}",
         )
 
@@ -219,8 +243,7 @@ class InterfaceSpec:
         """Return the (name, argv) tuple list expected by `process_launcher`.
 
         Raises ``FileNotFoundError`` with an ``install_vhi`` hint when VHI
-        is not installed at the resolved location — better than a silent
-        ``Popen`` failure on first run.
+        is not installed at the resolved location.
         """
         if not self.process:
             location = f" at {self.install_root}" if self.install_root else ""
@@ -238,13 +261,10 @@ class InterfaceSpec:
         """Like `launcher`, but empty instead of raising when nothing can be launched.
 
         For a `myogestic.widgets.ProcessLauncher` in an application's own UI, where an
-        in-app Launch button is a *convenience*. `launcher` raising there takes the whole
-        app down at import — including when a perfectly good renderer is already running
-        and the app never needed the button at all.
-
-        So: this returns no rows and logs why, and the app opens. `launcher` stays strict
-        for a caller whose entire job is to start the thing (`tools/launch_vhi.py`), where
-        the refusal *is* the answer.
+        in-app Launch button is a *convenience*: `launcher` raising there takes the whole
+        app down at import, even when a renderer is already running. This returns no rows
+        and logs why instead. `launcher` stays strict for a caller whose entire job is to
+        start the thing (`tools/launch_vhi.py`).
 
         Examples
         --------
@@ -261,12 +281,11 @@ class InterfaceSpec:
         """Refuse to launch an installed release too old to speak v2.
 
         The marker `install_vhi` leaves behind is the only way to know what is on disk
-        before starting it. Checked here, at the launch, because the alternative is a
-        renderer that comes up looking healthy and is then refused by every `VhiTarget`
-        — with the reason three layers away from the button that started it.
+        before starting it, so the check happens here rather than after the renderer
+        comes up and every `VhiTarget` refuses it.
 
         Silent when there is no marker: a source-mode checkout has none, and neither
-        does a hand-placed build. Absence is not evidence of an old version.
+        does a hand-placed build.
         """
         if not self.install_root:
             return
@@ -298,10 +317,9 @@ class InterfaceSpec:
 def _user_data_root() -> Path:
     """Per-user data root for VHI when not in a writable git checkout.
 
-    Uses ``platformdirs`` when available (preferred — well-known dirs:
-    ``~/Library/Application Support`` on macOS, ``%LOCALAPPDATA%`` on Windows,
-    ``$XDG_DATA_HOME`` / ``~/.local/share`` on Linux). Hand-rolled fallback
-    keeps this importable without the dep so error messages still work.
+    Uses ``platformdirs`` when available: ``~/Library/Application Support`` on
+    macOS, ``%LOCALAPPDATA%`` on Windows, ``$XDG_DATA_HOME`` / ``~/.local/share``
+    on Linux. The hand-rolled fallback keeps this importable without the dep.
     """
     try:
         import platformdirs
@@ -453,8 +471,7 @@ def virtual_hand(
     Returns
     -------
     An ``InterfaceSpec`` with the resolved argv, ready to wire into
-    ``process_launcher()``. If VHI isn't installed yet, ``launcher()`` raises
-    a ``FileNotFoundError`` pointing at ``install_vhi``.
+    ``process_launcher()``.
 
     Examples
     --------

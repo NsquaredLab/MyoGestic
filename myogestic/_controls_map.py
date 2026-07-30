@@ -1,25 +1,23 @@
 """Map user-owned model outputs onto target-owned control addresses.
 
-Two vocabularies meet here, and keeping them apart is the whole design:
+Two vocabularies meet here:
 
 **The left side is yours.** ``fist``, ``my_thumb``, ``drive_x`` — whatever your model
-calls its outputs. MyoGestic never prescribes these names, never parses meaning out of
-them, and never requires them to look canonical. The same alias may map to a Virtual Hand
-in one configuration and to a cursor axis in another.
+calls its outputs. MyoGestic never prescribes these names and never parses meaning out
+of them. The same alias may map to a Virtual Hand in one configuration and to a cursor
+axis in another.
 
 **The right side belongs to the target.** ``vhi.prediction.index`` is a name VHI
 declares in its own manifest, along with everything needed to send it correctly: whether
 it takes a number or a held state, its domain, its neutral value, its states. MyoGestic
-resolves those addresses at handshake time and **hard-codes none of their semantics** — a
-target that grows a new control needs no change here.
+resolves those addresses at handshake time and **hard-codes none of their semantics**.
 
-So a declaration is a *mapping*, and it is deliberately not usable until a target has
-answered:
+A declaration is a *mapping*, and is not usable until a target has answered:
 
 .. code-block:: toml
 
     [dofs]
-    my_thumb = "vhi.prediction.thumb"                  # one output, one control
+    my_thumb = "vhi.prediction.thumb.flexion"                  # one output, one control
 
     fist = [                                           # one output, fanned out
       "vhi.prediction.index",
@@ -27,14 +25,13 @@ answered:
     ]
 
     pinch = [                                          # ...with per-target gain
-      { target = "vhi.prediction.thumb", weight = 0.6 },
+      { target = "vhi.prediction.thumb.flexion", weight = 0.6 },
       { target = "vhi.prediction.index" },
     ]
 
 `load_control_map` parses that into a `ControlMap` — names and structure checked, meaning
 still unknown. `resolve` turns it into a `myogestic.controls.ControlSet` once a target has
-declared what it can do, and refuses an address the target does not export, naming the
-alternatives.
+declared what it can do, and refuses an address the target does not export.
 """
 
 from __future__ import annotations
@@ -50,8 +47,7 @@ if TYPE_CHECKING:
 
 #: A target address: dotted, lowercase, at least two segments. The first segment
 #: namespaces the target (``vhi.``, ``keyboard.``, ``cursor.``) so two targets cannot
-#: collide in one configuration. This is the *only* name shape this module constrains,
-#: and it constrains it because the target owns it — not the user.
+#: collide in one configuration. The only name shape this module constrains.
 _ADDRESS_SEGMENTS = 2
 
 #: Keys accepted in a per-target inline table.
@@ -63,8 +59,18 @@ _BINDING_KEYS = frozenset(
 )
 
 
-def _is_address(value: Any) -> bool:
-    """Whether ``value`` looks like a target-owned address rather than a user name."""
+def is_address(value: Any) -> bool:
+    """Whether ``value`` looks like a target-owned address rather than a user name.
+
+    Public so `myogestic.widgets.ControlMapEditor` can validate a typed address against
+    the same rule the loader applies, rather than keeping a second copy of it.
+
+    Examples
+    --------
+    >>> from myogestic.controls import is_address
+    >>> is_address("vhi.prediction.index"), is_address("my_index")
+    (True, False)
+    """
     if not isinstance(value, str) or not value:
         return False
     parts = value.split(".")
@@ -82,10 +88,9 @@ class TargetRef:
     address
         The target-owned control address, e.g. ``"vhi.prediction.index"``.
     weight
-        Multiplied into the value **before** the target applies its own range. A
-        fan-out where one member should move less than the others is the reason this
-        exists: ``weight = 0.6`` on a thumb sends it 60% of what the fingers get.
-        Defaults to ``1.0``.
+        Multiplied into the value **before** the target applies its own range, so one
+        member of a fan-out can move less than the others: ``weight = 0.6`` on a thumb
+        sends it 60% of what the fingers get. Defaults to ``1.0``.
     """
 
     address: str
@@ -105,16 +110,16 @@ class Binding:
         every listed control, each applying its own declared range and direction.
     debounce_s
         For a binding that resolves to a discrete control: how long a state must hold
-        before it counts as a transition. Declared here because it is a property of
-        *this* control loop, not of the target.
+        before it counts as a transition. A property of this control loop, not of the
+        target.
     threshold_fraction
         For a **classifier** input: the probability fraction at which it counts as active.
         Below it the value is ``0.0``; at or above it, ``1.0``. On a continuous binding
         that gated 0/1 then travels the ordinary weighted fan-out; on a discrete one it
         selects the non-rest state. ``None`` leaves a continuous value as given and takes
         a discrete control's threshold from the target — override only when your model's
-        calibration differs. Named for what it is compared against, and kept distinct from
-        the *target*-declared `Capability.activation_threshold`.
+        calibration differs. Distinct from the *target*-declared
+        `Capability.activation_threshold`.
     label
         Optional display label; the alias is used when empty.
     """
@@ -130,9 +135,8 @@ class Binding:
 class ControlMap:
     """A parsed but **unresolved** declaration: aliases bound to target addresses.
 
-    Deliberately not a usable control space. Whether ``fist`` is a number or a held
-    state, and what its range is, are facts the *target* declares — so a `ControlMap`
-    carries no such answers, and `resolve` is where they arrive.
+    Not yet a usable control space. Whether ``fist`` is a number or a held state, and
+    what its range is, are facts the *target* declares; `resolve` is where they arrive.
 
     Examples
     --------
@@ -155,8 +159,8 @@ class ControlMap:
     def as_dict(self) -> dict[str, Any]:
         """A plain mapping that round-trips through `load_control_map`.
 
-        Tagged with `CONTROL_SPACE_FORMAT` so anything that persists it stays legible:
-        a reader can name the format it found rather than guessing from the shape.
+        Tagged with `CONTROL_SPACE_FORMAT` so a reader can name the format it found
+        rather than guess from the shape.
         """
         dofs: dict[str, Any] = {}
         for binding in self.bindings.values():
@@ -186,15 +190,8 @@ class ControlMap:
 def dump_control_map(control_map: ControlMap, *, header: str = "") -> str:
     """Render a `ControlMap` back to TOML text that `load_control_map` reads.
 
-    The file is the portable source of truth, so anything that edits a control map —
-    a UI, a script, a migration — writes through here rather than inventing its own
-    formatting. Round-trips: ``load_control_map(tomllib.loads(dump_control_map(m)))``
-    has the same bindings as ``m``.
-
-    Written by hand rather than with a TOML library because the shape is narrow — a
-    table of strings, arrays and inline tables — and the alternative is a dependency
-    for thirty lines. Aliases are quoted only when they have to be, since an unquoted
-    dotted key would come back as a nested table rather than the alias it looks like.
+    Round-trips: ``load_control_map(tomllib.loads(dump_control_map(m)))`` has the same
+    bindings as ``m``.
 
     Parameters
     ----------
@@ -237,8 +234,7 @@ def dump_control_map(control_map: ControlMap, *, header: str = "") -> str:
             extras.append(f"label = {_toml_string(binding.label)}")
         weighted = any(ref.weight != 1.0 for ref in binding.targets)
 
-        # The simplest form that still says everything, so a hand-written file stays
-        # hand-readable after a tool has been through it.
+        # The simplest form that still says everything.
         if len(binding.targets) == 1 and not extras and not weighted:
             lines.append(f"{key} = {_toml_string(binding.targets[0].address)}")
         elif not extras and not weighted:
@@ -250,9 +246,8 @@ def dump_control_map(control_map: ControlMap, *, header: str = "") -> str:
             ref = binding.targets[0]
             parts = [f"target = {_toml_string(ref.address)}"]
             if ref.weight != 1.0:
-                # Easy to forget, because a lone target reads like it needs no weight —
-                # but a weight scales it just the same, and dropping it here silently
-                # changed the value on every round trip through a tool.
+                # A lone target still scales by its weight; dropping it here would
+                # change the value on every round trip.
                 parts.append(f"weight = {_toml_number(ref.weight)}")
             lines.append(f"{key} = {{ {', '.join([*parts, *extras])} }}")
         else:
@@ -269,9 +264,7 @@ def dump_control_map(control_map: ControlMap, *, header: str = "") -> str:
 def _toml_key(alias: str) -> str:
     """Quote an alias unless it is a bare key.
 
-    An unquoted dotted key is a *nested table* in TOML, which is the one trap in this
-    file format — `load_control_map` diagnoses it, and this makes sure nothing written
-    here walks into it.
+    An unquoted dotted key is a *nested table* in TOML, not the alias it looks like.
     """
     bare = alias and all(c.isalnum() or c in "_-" for c in alias) and alias.isascii()
     return alias if bare else _toml_string(alias)
@@ -294,8 +287,7 @@ class Capability:
     """One control a **target** exports, with the semantics the target declares.
 
     Built from a target's manifest — for VHI, from its ``GetControlManifest`` reply.
-    Nothing in MyoGestic invents these values; a target that changes its mind about a
-    control's range says so here and every client follows.
+    Nothing in MyoGestic invents these values.
 
     Attributes
     ----------
@@ -310,19 +302,16 @@ class Capability:
     channel
         Which channel of the target's stream carries this control, or ``-1`` when it is
         not streamed — a held state travels over gRPC and occupies none. Published per
-        capability rather than inferred from position in a list, so a target is free to
-        publish its controls in any order, to leave gaps, and to name one control under
-        more than one address if it wants to.
+        capability, so a target may publish its controls in any order and leave gaps.
     encoding
         How a value must be encoded on that stream: ``1`` canonical, ``2``
         legacy-negated, ``0`` unstated. A client that reads ``0`` must not guess.
     stream_name
-        Which stream carries it. A channel number is meaningless without this: a target
-        may publish two streams, and channel 2 of one is not channel 2 of the other.
+        Which stream carries it. A channel number is meaningless without this — channel
+        2 of one stream is not channel 2 of another.
     activation_threshold
         Discrete only: the level at which a client emitting a probability should select
-        the non-rest state. ``0.0`` means the target has no opinion. Declared by the
-        target because it knows what its states cost.
+        the non-rest state. ``0.0`` means the target has no opinion.
     description
         Human-readable. For a log or an error message; never parsed.
 
@@ -357,7 +346,7 @@ class Capability:
 
 def _parse_target(alias: str, value: Any, errs: list[str]) -> TargetRef | None:
     """One fan-out member: a bare address, or a table with a weight."""
-    if _is_address(value):
+    if is_address(value):
         return TargetRef(address=value)
     if isinstance(value, str):
         errs.append(
@@ -381,7 +370,7 @@ def _parse_target(alias: str, value: Any, errs: list[str]) -> TargetRef | None:
         )
         return None
     address = value.get("target")
-    if not _is_address(address):
+    if not is_address(address):
         errs.append(f"[dofs] {alias!r}: {address!r} is not a target address.")
         return None
 
@@ -391,8 +380,7 @@ def _parse_target(alias: str, value: Any, errs: list[str]) -> TargetRef | None:
         return None
     weight = float(weight)
     if not math.isfinite(weight):
-        # A non-finite gain becomes a full-scale deflection the moment it is multiplied
-        # in, and NaN would defeat the clamp entirely.
+        # inf becomes a full-scale deflection once multiplied in; NaN defeats the clamp.
         errs.append(f"[dofs] {alias!r}: weight for {address!r} must be finite.")
         return None
     return TargetRef(address=address, weight=weight)
@@ -414,9 +402,7 @@ def _parse_binding(alias: Any, value: Any, errs: list[str]) -> Binding | None:
     if isinstance(value, dict) and not ({"target", "targets"} & set(value)):
         # TOML turns an unquoted dotted key into a NESTED TABLE, so `my.thumb = "..."`
         # arrives here as alias "my" with value {"thumb": "..."} — a binding nobody
-        # wrote, which would otherwise be reported as a mysterious unknown key. The
-        # discriminator is the absence of target/targets, and it matters: the old parser
-        # had the same trap and a phantom entry there shifted every wire index after it.
+        # wrote. The discriminator is the absence of target/targets.
         nested = [k for k, v in value.items() if isinstance(v, (str, list, dict))]
         errs.append(
             f"[dofs] {alias!r}: this is a table, not a mapping — TOML read "
@@ -506,9 +492,9 @@ def load_control_map(config: Mapping[str, Any]) -> ControlMap:
     Takes a `~collections.abc.Mapping`, not a path — parse your own TOML (or JSON, or a
     dict literal) and hand it over, so this library reads no configuration files.
 
-    What this checks is structure, not meaning: that every alias is usable and every
-    address is address-shaped. Whether an address *exists*, and what it accepts, is the
-    target's to say — see `resolve`.
+    Checks structure, not meaning: that every alias is usable and every address is
+    address-shaped. Whether an address *exists*, and what it accepts, is the target's to
+    say — see `resolve`.
 
     Parameters
     ----------
@@ -524,8 +510,7 @@ def load_control_map(config: Mapping[str, Any]) -> ControlMap:
     Raises
     ------
     ValueError
-        With **every** fault found, not just the first — a half-corrected config file is
-        worse than an uncorrected one.
+        With **every** fault found, not just the first.
 
     Examples
     --------
@@ -586,13 +571,10 @@ def resolve(
 ) -> ControlSet:
     """Resolve a `ControlMap` against what a target says it can do.
 
-    This is where meaning arrives. Each alias becomes a
-    `myogestic.controls.Continuous` or `myogestic.controls.Discrete` **because its
-    target said so** — nothing here decides on the target's behalf.
-
-    The resulting `myogestic.controls.ControlSet` is keyed by *your* aliases, so a
-    `myogestic.controls.ControlBus` and every model stay in your vocabulary; the routing
-    to addresses travels alongside in `myogestic.controls.ControlSet.routes`.
+    Each alias becomes a `myogestic.controls.Continuous` or
+    `myogestic.controls.Discrete` according to what its target declared. The resulting
+    `myogestic.controls.ControlSet` is keyed by *your* aliases; the routing to addresses
+    travels alongside in `myogestic.controls.ControlSet.routes`.
 
     Parameters
     ----------
@@ -623,9 +605,7 @@ def resolve(
     -1.0
     """
     if capabilities is None:
-        # `capabilities()` returns None when the target has not answered, and passing that
-        # straight through produced `TypeError: 'NoneType' is not iterable` from inside a
-        # dict comprehension — which says nothing about the actual situation.
+        # `capabilities()` returns None when the target has not answered.
         raise ValueError(
             "resolve() needs the target's manifest, but it has not answered. An "
             "application that launches its own renderer must resolve *after* it is up: "
@@ -689,8 +669,7 @@ def resolve(
             states = tuple(cap.states)
             rest_state = cap.rest_state or states[0]
             # A scalar can only pick a state when there are exactly two of them. With
-            # more, a number is ambiguous and the model must emit the state name itself —
-            # inventing an ordering over states nobody declared would be worse.
+            # more, the model must emit the state name itself.
             others = [s for s in states if s != rest_state]
             activates = others[0] if len(others) == 1 else ""
             fraction = binding.threshold_fraction
@@ -714,14 +693,11 @@ def resolve(
             )
         else:
             # The alias is signed only if *every* target can render both directions —
-            # otherwise a negative prediction would be silently clamped away on one of
-            # them, which reads as a control that works and then stops working.
+            # otherwise a negative prediction is silently clamped away on one of them.
             signed = all(cap.signed for _, cap in resolved)
             # A `threshold_fraction` on a continuous binding says the input is a
-            # CLASSIFIER's probability rather than a regressed value: gate it to 0/1, then
-            # let the ordinary weighted fan-out carry it. That is the whole unification —
-            # classification and regression reach the target the same way, and the target
-            # receives continuous per-control values either way.
+            # CLASSIFIER's probability rather than a regressed value: gate it to 0/1,
+            # then let the ordinary weighted fan-out carry it.
             gated = binding.threshold_fraction is not None
             dofs[alias] = Continuous(
                 name=alias,
@@ -732,9 +708,8 @@ def resolve(
                 threshold_fraction=binding.threshold_fraction,
             )
             if gated and binding.debounce_s:
-                # Stability gating for a classifier belongs to the control loop, and the
-                # bus already owns it for discrete DOFs. Reaching it from a continuous
-                # activation needs bus support that does not exist yet, so refuse rather
+                # The bus debounces discrete DOFs only; reaching it from a continuous
+                # activation needs bus support that does not exist yet. Refuse rather
                 # than accept a debounce that would silently do nothing.
                 errs.append(
                     f"[dofs] {alias!r}: debounce_s is not applied to a continuous "
@@ -756,8 +731,7 @@ def read_control_space(raw: Mapping[str, Any]) -> ControlMap:
     """A recording's persisted control space, as a `ControlMap`.
 
     New recordings store the alias-to-address mapping and tag it with
-    `CONTROL_SPACE_FORMAT`. That tag is what makes the format **legible**: a reader can
-    say which form a recording used instead of inferring it from the shape.
+    `CONTROL_SPACE_FORMAT`.
 
     Parameters
     ----------
@@ -768,17 +742,15 @@ def read_control_space(raw: Mapping[str, Any]) -> ControlMap:
     Returns
     -------
     ControlMap
-        Still unresolved — an archived mapping means nothing until a target declares
-        what its addresses do, exactly like a freshly parsed file.
+        Still unresolved, exactly like a freshly parsed file.
 
     Raises
     ------
     ValueError
         For a control space written in the pre-alias format, naming the format it found.
         It is **not** normalised on the way in: that older shape declared its own kinds
-        and ranges, which the target now owns, so silently reinterpreting it would put
-        made-up semantics on archived data and call them recorded fact. Re-record, or
-        read the archive with the version that wrote it.
+        and ranges, which the target now owns. Re-record, or read the archive with the
+        version that wrote it.
 
     Examples
     --------

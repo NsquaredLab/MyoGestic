@@ -7,7 +7,7 @@
 [dofs]
 
 # One regressed output per digit.
-thumb = "vhi.prediction.thumb"
+thumb = "vhi.prediction.thumb.flexion"
 index = "vhi.prediction.index"
 middle = "vhi.prediction.middle"
 ring = "vhi.prediction.ring"

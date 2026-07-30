@@ -77,7 +77,10 @@ app = App("panel: ControlMapEditor")
 @app.ui
 def ui(ctx):
     if editor.ui():
-        print(f"[editor] saved -> {SCRATCH}")
+        # "changed", not "saved": this also fires when the file is edited outside the app
+        # and picked up, and when `Save as...` moves to a different file — hence
+        # `editor.path` rather than the constant it started on.
+        print(f"[editor] changed -> {editor.path}")
         print(editor.resolved_summary())
 
 

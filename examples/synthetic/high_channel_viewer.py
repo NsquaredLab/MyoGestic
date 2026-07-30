@@ -53,7 +53,10 @@ app.streams(
 grid = Grid(
     5,
     2,
-    row_height=[Fr(1)] * 5,
+    # The launcher is two rows tall now — a header with a status dot and one row of
+    # controls — so a fifth of the window would leave it floating at the top of an empty
+    # cell. `Px(90)` is its natural height; the rest goes to the panels that have content.
+    row_height=[Px(90), Fr(1), Fr(1), Fr(1), Fr(1)],
     col_width=[Px(260), Fr(1)],
 )
 

@@ -9,7 +9,7 @@
 # One output -> many controls, with an optional per-target weight.
 # Equal weights need no tables:  fist = ["vhi.prediction.index", "vhi.prediction.middle"]
 fist = [
-  { target = "vhi.prediction.thumb", weight = 0.6 },
+  { target = "vhi.prediction.thumb.flexion", weight = 0.6 },
   { target = "vhi.prediction.index" },
   { target = "vhi.prediction.middle" },
   { target = "vhi.prediction.ring" },

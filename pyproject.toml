@@ -66,6 +66,10 @@ zarrs = ["zarrs>=0.2.0"]
 # needed to regenerate stubs via tools/gen_proto.py; generated _pb2 files are
 # committed so a plain install needs only grpcio + protobuf at runtime.
 grpc = ["grpcio>=1.60", "grpcio-tools>=1.60", "protobuf>=4.21"]
+# `pynput`, not the PyPI package called `keyboard`: that one needs root on macOS and Linux
+# and is effectively unmaintained. On macOS this also needs Accessibility permission, which
+# no dependency can grant — see myogestic.keyboard.
+keyboard = ["pynput>=1.7"]
 # Domain-specific: these belong to user code, not the framework.
 # `examples` keeps the smoke tests runnable without forcing them on every install.
 examples = ["catboost>=1.2.10", "myoverse>=2.0.0", "torch>=2.0", "scikit-learn>=1.4"]

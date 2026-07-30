@@ -10,7 +10,7 @@
 # (vhi.prediction.*). Separate stream, so use
 #   VhiTarget(vhi.control_outlet(), client=client, stream="control_pose")
 # and declare it:  client.declare(controls, control_pose="canonical")
-setup_thumb = "vhi.control.pose.thumb"
+setup_thumb = "vhi.control.pose.thumb.flexion"
 setup_index = "vhi.control.pose.index"
 
 # One output closing the operator's hand.

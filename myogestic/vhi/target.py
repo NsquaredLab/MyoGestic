@@ -3,27 +3,22 @@
 `VhiTarget` is the `myogestic.controls.Target` for the VHI: it takes the sanitised frame
 a `myogestic.controls.ControlBus` delivers and writes the pose the hand expects.
 
-**The wire layout lives entirely behind this module.** Nothing upstream of it knows that
-VHI counts channels, that the renderer's units run the other way, or that three of its
-nine channels are dead; an application declares its own alias, maps it onto an address
-VHI publishes, and this translates.
-
-Every fact about where a value goes comes from VHI's own manifest, asked for at bind
-time — never from a table in this file. A build that grows a control therefore needs no
-change here, and a build that disagrees with the configuration is refused rather than
-guessed at.
+**The wire layout lives entirely behind this module.** An application declares its own
+alias and maps it onto an address VHI publishes; this translates. Every fact about where
+a value goes comes from VHI's own manifest, asked for at bind time — never from a table
+in this file.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
 # Imported at runtime, not just for typing: the routed path needs isinstance checks to
-# tell a streamed continuous alias from a discrete one. _controls_core has no dependency
-# back on this module, so this cannot re-create the import cycle the core/bus split fixed.
+# tell a streamed continuous alias from a discrete one.
 from myogestic._controls_core import Continuous
 
 if TYPE_CHECKING:
@@ -52,10 +47,7 @@ def _encoding_of(capability: Any) -> int:
 class PoseSink(Protocol):
     """The slice of `myogestic.outputs.Output` a `VhiTarget` uses.
 
-    Narrow on purpose: a target needs somewhere to put a pose frame and a way to
-    make the last one land before shutdown, nothing more. `myogestic.outputs.LSLOutlet`
-    satisfies it, and so does a recorder or a test double — which is why this target
-    is testable without a hand running.
+    `myogestic.outputs.LSLOutlet` satisfies it, and so does a recorder or a test double.
     """
 
     def push(self, data: np.ndarray) -> None:
@@ -71,44 +63,38 @@ class VhiTarget:
     """Drive a Virtual Hand from control values.
 
     Requires a VHI that speaks the v2 control contract: it *asks* the renderer what it
-    exports and refuses anything it cannot place. There is no fallback and no table of
-    channel numbers — a pre-2.0 build is reported as unsupported rather than driven on
-    a guess.
+    exports and refuses anything it cannot place. A pre-2.0 build is reported as
+    unsupported rather than driven on a guess.
 
     Parameters
     ----------
     outlet
-        Where pose frames go — normally ``virtual_hand().outlet()``. **User-owned**,
-        exactly like any `myogestic.outputs.Output`: construct it yourself and
-        register its ``stop`` with ``app.cleanup_hooks``. Only `PoseSink.push` and
-        `PoseSink.flush` are called on it.
+        Where pose frames go — normally ``virtual_hand().outlet()``. **User-owned**:
+        construct it yourself and register its ``stop`` with ``app.cleanup_hooks``.
+        Only `PoseSink.push` and `PoseSink.flush` are called on it.
     client
         A `myogestic.vhi._client_v2.VhiCanonicalClient` — ``virtual_hand().canonical_client()``.
-        Required: it is what the control space is negotiated over, and it carries
-        discrete state, which the pose transport cannot express at all.
+        Required: the control space is negotiated over it, and it carries discrete
+        state, which the pose transport cannot express.
     stream
         Which of the renderer's pose streams this target drives: ``"output"`` (the
         default — the predicted hand) or ``"control_pose"`` (the control hand). It
         decides which channel order *and which encoding* the target reads out of the
-        handshake. The two streams do not share a convention, so a target that guessed
-        would be right on one and inverted on the other.
+        handshake; the two streams do not share a convention.
 
     Notes
     -----
-    `bind` **refuses** a configuration it cannot render rather than rendering part of
-    it: an address the renderer does not export, one it does not carry on this stream,
-    two aliases aimed at one control. A silently-dropped control would look exactly
-    like a control that is working and holding still — the failure a limb controller
-    must never have.
+    `bind` **refuses** a configuration it cannot render rather than rendering part of it:
+    a silently-dropped control is indistinguishable from one holding still.
 
     Binding is **deferred** rather than decided when the renderer is silent, because an
     application that launches VHI from its own UI necessarily binds before VHI exists.
-    Call `negotiate` once it is up. A renderer that *answers* and does not speak v2 is a
-    settled fact, and raises.
+    Call `negotiate` once it is up. A renderer that *answers* and does not speak v2
+    raises.
 
-    On shutdown the declared rest frame is pushed *and flushed*. Pushing alone is not
-    enough: the send loop is paced, so the frame would sit unsent in the slot while
-    the process exits, leaving the hand holding its last commanded pose.
+    On shutdown the declared rest frame is pushed *and flushed*: the send loop is paced,
+    so a pushed-only frame would sit unsent while the process exits, leaving the hand at
+    its last commanded pose.
 
     Examples
     --------
@@ -124,58 +110,73 @@ class VhiTarget:
     """
 
     __slots__ = (
-        "_answered", "_client", "_discrete", "_dofs", "_negate", "_negotiated", "_order",
-        "_outlet", "_pending", "_routed", "_slots", "_stream", "_width",
+        "_answered", "_client", "_discrete", "_dofs", "_interface", "_negate",
+        "_negotiated", "_order", "_outlet", "_pending", "_routed", "_slots", "_stream",
+        "_width",
     )
 
     def __init__(
         self,
-        outlet: PoseSink,
+        outlet: PoseSink | None = None,
         *,
         client: Any = None,
         stream: str = "output",
+        interface: Any = None,
     ) -> None:
         if stream not in ("output", "control_pose"):
             raise ValueError(
                 f"stream must be 'output' or 'control_pose', got {stream!r}"
             )
+        if outlet is None and interface is None:
+            raise ValueError(
+                "VhiTarget needs either an outlet to write to or an `interface=` to "
+                "build one from. With an interface it builds a stream carrying exactly "
+                "the controls this configuration drives, labelled with their addresses, "
+                "which it can only do once `bind` has resolved them."
+            )
         self._stream = stream
+        #: Set at construction, or built at `bind` when only an `interface` was given.
         self._outlet = outlet
+        #: The `InterfaceSpec` to build an outlet from, or None when one was supplied.
+        #: Its presence selects a labelled, exactly-wide stream over the renderer's full
+        #: positional pose layout.
+        self._interface = interface if outlet is None else None
         self._client = client
         #: The configuration still awaiting a reachable VHI, or None once settled.
         self._pending: ControlSet | None = None
-        #: Whether VHI has ever *answered* the handshake. "It refused" and "it never
-        #: replied" need opposite handling: the first is a settled fact, the second is
-        #: an application that has not launched its renderer yet.
+        #: Whether VHI has ever *answered* the handshake — a refusal is settled, silence
+        #: is not.
         self._answered = False
         self._dofs: tuple[Continuous, ...] = ()
         #: Names of the held states this target commands over gRPC once negotiated.
         self._discrete: tuple[str, ...] = ()
         #: Negotiated channel order.
         self._order: tuple[str, ...] = ()
-        #: Whether the negotiated wire wants values negated. The renderer declares this;
-        #: it is never inferred, because guessing inverts every joint.
+        #: Whether the negotiated wire wants values negated. Declared by the renderer,
+        #: never inferred.
         self._negate = False
         #: Declared DOFs paired with the channel VHI put them on, for a name-declared
         #: configuration.
         self._slots: tuple[tuple[int, Continuous], ...] = ()
-        #: Address-routed slots: (channel, alias, weight, sign, lo, hi). Non-empty when
-        #: the configuration was resolved against a manifest, which is what distinguishes
-        #: an alias-mapped set from a name-declared one.
-        self._routed: tuple[tuple[int, str, float, float, float, float], ...] = ()
+        #: Address-routed slots: (channel, alias, weight, sign, lo, hi, address). The
+        #: address rides along as the channel's *label* on a self-describing stream —
+        #: the alias cannot be, since a fan-out sends one alias to several channels.
+        #: Non-empty when the configuration was resolved against a manifest.
+        self._routed: tuple[tuple[int, str, float, float, float, float, str], ...] = ()
         #: Tracked explicitly rather than inferred from `_order`: a configuration of
         #: only discrete DOFs negotiates fine and has an empty channel order.
         self._negotiated = False
+        #: Frame width. Fixed by the supplied outlet, or decided at `bind` from how many
+        #: controls were actually routed when this target builds its own.
         self._width = int(getattr(outlet, "n_channels", _POSE_WIDTH) or _POSE_WIDTH)
 
     @property
     def claims(self) -> frozenset[str]:
         """Which aliases this target actually drives.
 
-        A bus with one target per hand shares a single control map between them, so no one
-        target drives all of it. `ControlBus` reads this to check that every control was
-        claimed by *someone* — the alternative being an alias that renders nowhere and
-        looks exactly like one that is working and holding still.
+        A bus with one target per hand shares a single control map, so no one target
+        drives all of it. `ControlBus` reads this to check that every control was
+        claimed by *someone*.
         """
         routed = {alias for _, alias, *_ in self._routed}
         by_name = {dof.name for _, dof in self._slots}
@@ -209,8 +210,8 @@ class VhiTarget:
         self._answered = False
         if not controls.dofs:
             # Checked here rather than left to the handshake: a renderer accepts an empty
-            # declaration quite happily, and the result is a target that is bound,
-            # negotiated, and renders nothing at all.
+            # declaration happily, leaving a target that is bound, negotiated, and
+            # renders nothing.
             raise ValueError(
                 "VhiTarget has nothing to render: the configuration declares no DOFs "
                 "at all."
@@ -224,24 +225,17 @@ class VhiTarget:
         if self._negotiate(controls):
             return
         if self._answered:
-            # Reachable and not speaking v2. A settled fact, not a transient one.
             raise ValueError(
                 "this Virtual Hand does not serve the v2 control contract, so its "
                 "controls cannot be discovered. MyoGestic 2.x requires VHI 2.0 or "
                 "newer — upgrade the renderer (python -m myogestic.tools.install_vhi), "
                 "or run one from source with $VHI_PATH and $GODOT_BIN."
             )
-        # Silent. An application that launches VHI from its own UI binds before VHI
-        # exists, so decide nothing: defer and let `negotiate` settle it.
+        # Silent — decide nothing, and let `negotiate` settle it.
         self._pending = controls
 
     def negotiate(self, *, force: bool = False) -> bool:
         """Retry the handshake now — for an application that launches its own renderer.
-
-        `bind` runs when the `myogestic.controls.ControlBus` is constructed, which for
-        an app that spawns VHI from its own UI is necessarily *before* VHI exists. `bind`
-        therefore defers rather than deciding, and this settles it once the renderer is
-        actually there.
 
         Cheap and idempotent when already settled, so it is fine to call from a button
         handler. Never call it from the predict thread — it blocks on an RPC.
@@ -253,8 +247,7 @@ class VhiTarget:
             renderer restarts: VHI's side of the contract is *stateful* (declaring a
             control-pose stream also puts its control hand into Stream mode), and a
             restart loses that while this target still believes it is negotiated. There
-            is no automatic detection of that today, so an application that reconnects
-            deliberately should re-declare deliberately.
+            is no automatic detection of that today.
 
         Returns
         -------
@@ -266,10 +259,8 @@ class VhiTarget:
         ------
         ValueError
             If the renderer answers and does not speak v2, or answers and the
-            configuration cannot be rendered. Both are configuration-level facts rather
-            than transient ones, so they are raised rather than swallowed; call this
-            from a setup path or a button handler where a traceback is visible, never
-            from the predict thread.
+            configuration cannot be rendered. Call this from a setup path or a button
+            handler where a traceback is visible, never from the predict thread.
         """
         if force and self._pending is None:
             # Re-arm from whatever is currently bound, so a caller does not have to
@@ -305,9 +296,8 @@ class VhiTarget:
     def _negotiate_routed(self, controls: ControlSet, routes: Mapping, pose: str) -> bool:
         """Resolve alias -> address -> channel through the renderer's own manifest.
 
-        The addresses come from the configuration, the channels and ranges come from the
-        renderer. Nothing here decides where a control lives; it asks, and refuses rather
-        than guessing when the answer does not cover what was configured.
+        The addresses come from the configuration; the channels and ranges come from the
+        renderer.
         """
         fetch = getattr(self._client, "capabilities", None)
         capabilities = fetch() if callable(fetch) else None
@@ -317,8 +307,8 @@ class VhiTarget:
         if capabilities is None:
             return False
         # Only this stream's controls. A renderer publishes several, and a channel index
-        # means nothing across them — routing an address from the wrong stream would put
-        # a value on a same-numbered channel of a different hand.
+        # means nothing across them — an address from the wrong stream would put a value
+        # on a same-numbered channel of a different hand.
         wanted = (
             "MyoGestic_ControlPose" if self._stream == "control_pose" else "MyoGestic_Output"
         )
@@ -328,15 +318,47 @@ class VhiTarget:
             if not getattr(cap, "stream_name", "") or cap.stream_name == wanted
         }
         # What the *other* streams carry, so "not mine" can be told from "nobody's".
-        # Skipping the first is how two targets share one map; refusing the second is how
-        # a typo stays an error instead of a control that renders nothing.
+        # Skipping the first is how two targets share one map; refusing the second keeps
+        # a typo an error instead of a control that renders nothing.
         elsewhere = {
             cap.address: cap.stream_name
             for cap in capabilities
             if getattr(cap, "stream_name", "") and cap.stream_name != wanted
         }
 
-        reply = self._client.declare(controls, client_name="myogestic", control_pose=pose)
+        # Which of these aliases are *this* target's, decided before anything is declared:
+        # `Declare` is all-or-nothing, so a `keyboard.*` control sharing the file would
+        # take the VHI controls down with it. Matched by **namespace**, not exact address
+        # — a `vhi.*` address this build does not export is still refused below.
+        namespaces = {
+            address.split(".", 1)[0] for address in (*by_address, *elsewhere)
+        }
+        mine = {
+            alias
+            for alias, refs in routes.items()
+            if any(
+                getattr(ref, "address", "").split(".", 1)[0] in namespaces for ref in refs
+            )
+        }
+        if not mine:
+            # Nothing in this file is ours. Not an error: `ControlBus` checks that
+            # *someone* claims every alias, so an unrendered alias is still caught.
+            log.info("VHI renders none of %d configured control(s)", len(controls.dofs))
+            self._dofs = ()
+            self._discrete = ()
+            self._routed = ()
+            self._negotiated = True
+            return True
+        declaring = (
+            controls
+            if len(mine) == len(controls.dofs)
+            else dataclasses.replace(
+                controls,
+                dofs={a: d for a, d in controls.dofs.items() if a in mine},
+                routes={a: r for a, r in routes.items() if a in mine},
+            )
+        )
+        reply = self._client.declare(declaring, client_name="myogestic", control_pose=pose)
         if reply is None:
             return False
         if not reply.accepted:
@@ -347,7 +369,7 @@ class VhiTarget:
                 f"work and hold still."
             )
 
-        slots: list[tuple[int, str, float, float, float, float]] = []
+        slots: list[tuple[int, str, float, float, float, float, str]] = []
         taken: dict[int, str] = {}
         for alias, refs in routes.items():
             if alias not in controls.dofs or not isinstance(controls.dofs[alias], Continuous):
@@ -355,10 +377,9 @@ class VhiTarget:
             for ref in refs:
                 cap = by_address.get(ref.address)
                 if cap is None and ref.address in elsewhere:
-                    # Another stream's control, and the renderer says so. Not this
-                    # target's to drive and not an error: a bus may hold one target per
-                    # hand and share a single map between them. The alias is simply
-                    # someone else's, and `ControlBus` checks that *someone* claimed it.
+                    # Another stream's control, and the renderer says so. Not an error:
+                    # a bus may hold one target per hand and share a single map between
+                    # them, and `ControlBus` checks that *someone* claimed it.
                     log.debug(
                         "%r -> %r belongs to %s; leaving it to the target that drives it",
                         alias,
@@ -381,16 +402,19 @@ class VhiTarget:
                         f"(the target reports no channel for it). Command it with "
                         f"SetControl instead of routing it onto the outlet."
                     )
-                if channel >= self._width:
+                # Only when the caller supplied the outlet. A target building its own
+                # renumbers the channels into a compact frame below, so the renderer's
+                # index is a routing key here rather than a wire position.
+                if self._interface is None and channel >= self._width:
                     raise ValueError(
                         f"{alias!r} -> {ref.address!r} is on channel {channel}, but this "
                         f"outlet carries {self._width}. Construct the outlet at least "
-                        f"{channel + 1} channels wide."
+                        f"{channel + 1} channels wide, or pass `interface=` instead of an "
+                        f"outlet and let this target size its own."
                     )
                 if channel in taken and taken[channel] != alias:
                     # Two of the user's outputs aiming at one control: whichever wrote
-                    # last would win silently, and the other would look like a control
-                    # that stopped working.
+                    # last would win silently.
                     raise ValueError(
                         f"{taken[channel]!r} and {alias!r} both map to {ref.address!r}. "
                         f"One control cannot take two outputs — remove one, or fan a "
@@ -399,15 +423,31 @@ class VhiTarget:
                 taken[channel] = alias
                 sign = -1.0 if _encoding_of(cap) == _ENCODING_NEGATED else 1.0
                 slots.append(
-                    (channel, alias, float(ref.weight), sign, float(cap.lo), float(cap.hi))
+                    (
+                        channel,
+                        alias,
+                        float(ref.weight),
+                        sign,
+                        float(cap.lo),
+                        float(cap.hi),
+                        ref.address,
+                    )
                 )
 
-        self._dofs = controls.continuous
-        self._discrete = tuple(dof.name for dof in controls.discrete)
-        self._routed = tuple(slots)
+        # Filtered the same way the declaration was: `claims` has to report the truth, or
+        # `ControlBus`'s every-alias-is-claimed check would see a foreign control as
+        # covered.
+        self._dofs = tuple(dof for dof in controls.continuous if dof.name in mine)
+        self._discrete = tuple(dof.name for dof in controls.discrete if dof.name in mine)
+        self._routed = self._own_the_wire(slots) if self._interface else tuple(slots)
         self._order = tuple(reply.continuous_channel_order)
         self._negate = False  # per-capability sign lives in each slot
         self._negotiated = True
+        # Put the declared rest pose on the wire immediately: the hand should hold what
+        # this configuration calls rest, and the renderer drops an inlet that has never
+        # sent anything, re-resolving it in a loop until someone touches the UI.
+        if self._outlet is not None and self._dofs:
+            self._outlet.push(self._frame({d.name: d.rest for d in self._dofs}))
         log.info(
             "VHI routed %d alias-address pairs onto channels %s",
             len(slots),
@@ -418,8 +458,8 @@ class VhiTarget:
     def _negotiate_by_name(self, controls: ControlSet, pose: str) -> bool:
         """Declare a set whose DOF *names* are the renderer's addresses.
 
-        The path a `ControlSet` built directly takes — a rig diagnostic, a test — where
-        there is no mapping file and the names in play are already the renderer's own.
+        The path a directly-built `ControlSet` takes — a rig diagnostic, a test — where
+        there is no mapping file.
         """
         reply = self._client.declare(controls, client_name="myogestic", control_pose=pose)
         # "Answered" includes an explicit UNIMPLEMENTED: that server is reachable and
@@ -434,10 +474,8 @@ class VhiTarget:
                 f"only what it accepted would leave the rest looking like controls that "
                 f"work and hold still."
             )
-        # Each stream carries its own order and its own encoding. Reading the wrong pair
-        # is how a frame ends up correct on one stream and inverted on another — the two
-        # conventions coexist by design, so the target must know which stream it drives
-        # rather than assume there is one answer.
+        # Each stream carries its own order and its own encoding; reading the wrong pair
+        # leaves a frame correct on one stream and inverted on the other.
         if self._stream == "control_pose":
             order = tuple(reply.control_pose_channel_order)
             encoding = getattr(reply, "control_pose_encoding", _ENCODING_UNSPECIFIED)
@@ -447,8 +485,7 @@ class VhiTarget:
         declared = controls.channel_labels()
         # The negotiated order is VHI's channel *map*, not a demand that the client
         # command every channel on it: a configuration may declare a subset and leave
-        # the rest at rest. What must not happen is a declared DOF that has no channel —
-        # that one would silently never render.
+        # the rest at rest. A declared DOF with no channel would silently never render.
         missing = [name for name in declared if name not in order]
         if missing:
             raise ValueError(
@@ -461,9 +498,7 @@ class VhiTarget:
                 f"VHI negotiated {len(order)} channels but this outlet carries only "
                 f"{self._width}. Construct the outlet at least that wide."
             )
-        # How to encode the stream is not a detail to infer. A server that does not say
-        # gets no benefit of the doubt: guessing wrong inverts every joint, which is
-        # exactly how the first end-to-end v2 run made a hand extend when told to flex.
+        # A server that does not say how to encode gets no benefit of the doubt.
         if encoding not in (_ENCODING_CANONICAL, _ENCODING_NEGATED):
             raise ValueError(
                 f"VHI negotiated channel names but did not say how to encode them "
@@ -501,20 +536,26 @@ class VhiTarget:
         declared rest, so neither a stray key nor a missing one can move a joint or
         raise on the predict thread.
 
-        ``changed`` carries discrete edges, which go over gRPC: a keystroke-like state
-        change is not a pose, and re-sending it every tick is not the same thing as
-        re-sending a number.
+        ``changed`` carries discrete edges, which go over gRPC rather than onto the pose
+        stream.
         """
-        self._outlet.push(self._frame(values))
+        if self._outlet is not None:
+            self._outlet.push(self._frame(values))
         if not changed:
             return
+        # Only *our* edges. `changed` is the bus's, so on a shared map it also carries the
+        # edges of every other target, and forwarding those makes VHI log a rejection per
+        # keystroke.
+        ours = {name: state for name, state in changed.items() if name in self._discrete}
+        if not ours:
+            return
         if self._negotiated:
-            self._client.set_control(discrete=dict(changed))
+            self._client.set_control(discrete=ours)
         else:
             log.warning(
                 "discrete edge %s dropped: VHI has not been reached yet, so its states "
                 "are unresolved. Call VhiTarget.negotiate() once VHI is running.",
-                dict(changed),
+                ours,
             )
 
     def _frame(self, values: Mapping[str, float | str]) -> np.ndarray:
@@ -522,7 +563,7 @@ class VhiTarget:
         each = {d.name: float(values.get(d.name, d.rest)) for d in self._dofs}
         frame = np.zeros(self._width, dtype=np.float32)
         if self._routed:
-            for channel, alias, weight, sign, lo, hi in self._routed:
+            for channel, alias, weight, sign, lo, hi, _address in self._routed:
                 # Weight first, then the target's own range — a gain must not be able to
                 # push a value past what the target said it accepts.
                 value = weight * each.get(alias, 0.0)
@@ -530,18 +571,74 @@ class VhiTarget:
             return frame
         # The negotiated order is a *prefix* of the transport, not its full width: the
         # outlet's channel count is fixed at construction and VHI will not name a channel
-        # it does not read. The tail stays at zero rather than being dropped, because the
-        # frame width is what the outlet validates against.
+        # it does not read. The tail stays at zero because the frame width is what the
+        # outlet validates against.
         sign = -1.0 if self._negate else 1.0
         for channel, dof in self._slots:
             frame[channel] = sign * each[dof.name]
         return frame
 
+    def _own_the_wire(
+        self, slots: list[tuple[int, str, float, float, float, float, str]]
+    ) -> tuple[tuple[int, str, float, float, float, float, str], ...]:
+        """Build a stream carrying exactly these controls, labelled with their addresses.
+
+        The renderer's channel index is an index into *its* full pose layout — nine wide,
+        three of them dead. The channels are renumbered into a compact frame and each one
+        labelled with the address it carries, so a consumer maps by name rather than by
+        position. A consumer that ignores labels cannot interpret the stream, which is
+        why the caller opts in by passing `interface=` instead of an outlet.
+
+        Sorted by the renderer's own index so the layout is stable across runs.
+        """
+        ordered = sorted(slots, key=lambda slot: slot[0])
+        addresses = [slot[6] for slot in ordered]
+        renumbered = tuple(
+            (index, alias, weight, sign, lo, hi, address)
+            for index, (_, alias, weight, sign, lo, hi, address) in enumerate(ordered)
+        )
+        if not addresses:
+            # Every alias belonged to another stream, or the configuration is discrete
+            # only. A zero-channel LSL outlet is not a thing, so this target goes without
+            # one and `send` skips the frame.
+            self._outlet = None
+            self._width = 0
+            log.info("VhiTarget has no continuous control on %s; no stream", self._stream)
+            return renumbered
+        build = (
+            self._interface.control_outlet
+            if self._stream == "control_pose"
+            else self._interface.outlet
+        )
+        # Replace rather than mutate: LSL fixes a stream's description at construction, so
+        # labelling means a new outlet. Any outlet from an earlier bind is dropped here —
+        # `bind` is a main-thread call and nothing is streaming yet.
+        self._outlet = build(n_channels=len(addresses), channel_names=addresses)
+        self._width = len(addresses)
+        log.info(
+            "VhiTarget built a %d-channel labelled %s stream: %s",
+            self._width,
+            self._stream,
+            addresses,
+        )
+        return renumbered
+
     def stop(self) -> None:
-        """Return the hand to its declared rest pose, and make sure that lands."""
+        """Return the hand to its declared rest pose, and make sure that lands.
+
+        An outlet this target *built* is also stopped, because nothing else can: a
+        caller-supplied one is left alone, since the application owns it and may still
+        be using it.
+        """
+        if self._outlet is None:
+            return
         if self._dofs:
             self._outlet.push(self._frame({d.name: d.rest for d in self._dofs}))
         self._outlet.flush()
+        if self._interface is not None:
+            stop = getattr(self._outlet, "stop", None)
+            if callable(stop):
+                stop()
 
 
 __all__ = ["PoseSink", "VhiTarget"]
