@@ -2,7 +2,7 @@
 
 A button grid of the VHI control hand's movements: it auto-refreshes state in the
 background, highlights the current movement, and dispatches clicks to a handler you
-supply. Normally the state comes from a live ``VhiTrainingAidClient`` and the handler
+supply. Normally the state comes from a live ``VhiRecordingClient`` and the handler
 commands a discrete DOF (``bus.select("gesture", state)``); to run
 without a VHI process we hand it a **fake aid** whose ``state()`` returns a canned
 movement list, and a handler that just logs — so refresh, highlighting, and click
@@ -37,8 +37,8 @@ MOVEMENTS = (
 )
 
 
-class _FakeTrainingAid:
-    """Stand-in for VhiTrainingAidClient — no gRPC, never raises."""
+class _FakeRecordingAid:
+    """Stand-in for VhiRecordingClient — no gRPC, never raises."""
 
     def __init__(self) -> None:
         self.current = "Fist"
@@ -48,18 +48,18 @@ class _FakeTrainingAid:
             available_movements=MOVEMENTS,
             current_movement=self.current,
             animation_state="waiting",
-            program_running=False,
-            program_movement="",
+            trajectory_running=False,
+            trajectory_movement="",
         )
 
 
-aid = _FakeTrainingAid()
+aid = _FakeRecordingAid()
 
 
 def _on_movement(state: str) -> None:
     """Stands in for `bus.select("gesture", state)` in a real app."""
     aid.current = state
-    print(f"[vhi] canonical discrete state -> {state!r}")
+    print(f"[vhi] discrete state -> {state!r}")
 
 
 panel = VhiMovementPanel(aid, _on_movement)

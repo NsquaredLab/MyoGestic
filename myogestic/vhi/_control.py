@@ -166,8 +166,9 @@ class VhiControlClient:
         Returns
         -------
         DeclareReply or None
-            ``None`` when VHI does not implement v2, is unreachable, or errors; the
-            caller falls back to the legacy encoding.
+            ``None`` when VHI does not implement v2, is unreachable, or errors. The
+            caller (`myogestic.vhi.VhiTarget`) defers until VHI answers, unless it has
+            already answered and does not speak v2 — then it raises rather than guess.
 
             A reply with ``accepted == False`` is **not** ``None``: VHI answered,
             and its per-DOF verdicts say what it refused and why.
@@ -202,7 +203,7 @@ class VhiControlClient:
         continuous: Mapping[str, float] | None = None,
         discrete: Mapping[str, str] | None = None,
     ) -> None:
-        """Queue one canonical frame, dropping the oldest if the sender is behind.
+        """Queue one control frame, dropping the oldest if the sender is behind.
 
         Safe to call from the predict thread: never blocks, never raises. A control frame
         is latest-wins — a held state and a pose both mean "be this now" — so when the
@@ -245,7 +246,7 @@ class VhiControlClient:
         -------
         list[Capability] or None
             ``None`` when VHI is unreachable or predates the manifest; the caller
-            falls back rather than guessing a vocabulary.
+            defers and retries once it is reachable, rather than guessing a vocabulary.
         """
         from myogestic.controls import Capability
 

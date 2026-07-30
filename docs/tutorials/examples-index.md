@@ -50,7 +50,7 @@ stability gate, with the mapping-first short forms alongside the explicit table 
 To watch it load and drive a hand end to end:
 
 ```bash
-uv run --extra grpc python tools/inspect_canonical_control.py
+uv run --extra grpc python tools/inspect_control.py
 ```
 
 That runs safely with no Virtual Hand at all, and prints a different section for a v2
@@ -93,7 +93,7 @@ The editor is a widget, so it works in your own app too:
 ```python
 from myogestic.widgets import ControlMapEditor
 
-editor = ControlMapEditor(pathlib.Path("my_controls.toml"), client=vhi.canonical_client())
+editor = ControlMapEditor(pathlib.Path("my_controls.toml"), client=vhi.control_client())
 
 @app.ui
 def ui(ctx):
@@ -111,7 +111,7 @@ To see it with no renderer at all:
 The simplest end-to-end loop: 8-channel synthetic EMG → MyoVerse RMS+MAV
 features → CatBoost binary classifier → smoothed control values to the VHI
 predicted hand via the `MyoGestic_Output` LSL outlet. No gRPC. This is
-the canonical first read, and its line-by-line companion is the
+the reference first read, and its line-by-line companion is the
 [EMG classification tutorial](emg-classification.md).
 
 ```bash
@@ -125,7 +125,7 @@ sklearn-shaped classifier.
 ### `emg_classification_grpc.py` - add the gRPC control plane
 
 Same classifier, plus the `VhiControlClient` gRPC plane: each predicted
-class change commands a canonical **discrete DOF**, whose declared
+class change commands a **discrete DOF**, whose declared
 `debounce_s` gates the tick-to-tick argmax flicker, and a `VhiMovementPanel`
 in the UI lets the user click movements directly. Demonstrates the
 dual-plane idiom (continuous LSL pose + discrete gRPC events) on a single
@@ -175,7 +175,7 @@ training callback streams the same per-epoch log either way.
 32-channel EMG with a *selectable* classifier - compare CatBoost,
 sklearn LDA, sklearn SVM, etc. live without re-running the script. Adds
 the **Save/Load model** panel so a tuned model survives a restart, and
-the pose-lookup pattern for mapping multiple gestures to canonical poses.
+the pose-lookup pattern for mapping multiple gestures to control poses.
 
 ```bash
 uv run python examples/synthetic/emg_32ch_multi_model.py

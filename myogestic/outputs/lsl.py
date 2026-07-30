@@ -41,7 +41,7 @@ class LSLOutlet(Output):
         self-describing: a reordered configuration then renames channels rather
         than silently remapping them.
     channel_units
-        Optional per-channel unit strings, same length rule. Canonical control
+        Optional per-channel unit strings, same length rule. Control-standard
         DOFs are normalized, so ``"normalized"`` is the honest value for them.
     source_id
         Optional stable identifier for this outlet. LSL uses it to recognise the

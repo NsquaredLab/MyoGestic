@@ -304,8 +304,8 @@ class Capability:
         not streamed — a held state travels over gRPC and occupies none. Published per
         capability, so a target may publish its controls in any order and leave gaps.
     encoding
-        How a value must be encoded on that stream: ``1`` canonical, ``2``
-        legacy-negated, ``0`` unstated. A client that reads ``0`` must not guess.
+        Reserved. There is one wire encoding now, so nothing sets this to anything
+        but its default.
     stream_name
         Which stream carries it. A channel number is meaningless without this — channel
         2 of one stream is not channel 2 of another.

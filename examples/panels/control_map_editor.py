@@ -7,7 +7,7 @@ and mark an output as a classifier probability so it is gated to on/off.
 To run without a VHI process we hand it a **fake client** whose ``capabilities()``
 returns a canned manifest, and a scratch file in the system temp directory — so the
 picker, the validation, the collision refusal and Save/Reload all work offline. In a real
-app the client is ``virtual_hand().canonical_client()`` and the path is your own TOML.
+app the client is ``virtual_hand().control_client()`` and the path is your own TOML.
 
 Run with:
     uv run python examples/panels/control_map_editor.py
@@ -63,7 +63,7 @@ SCRATCH.write_text(
 
 
 class _FakeTarget:
-    """Stand-in for VhiCanonicalClient — no gRPC, always answers."""
+    """Stand-in for VhiControlClient — no gRPC, always answers."""
 
     def capabilities(self):
         return MANIFEST

@@ -244,7 +244,7 @@ class TestTheWalkthroughSaysWhichVhiProblemItHit:
 
     @staticmethod
     def _run(unimplemented: bool, capsys) -> str:
-        import tools.inspect_canonical_control as walkthrough  # noqa: PLC0415
+        import tools.inspect_control as walkthrough  # noqa: PLC0415
 
         class Client:
             def __init__(self) -> None:

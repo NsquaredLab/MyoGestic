@@ -1,4 +1,4 @@
-"""Model, loader and pure transforms for the canonical control standard.
+"""Model, loader and pure transforms for the control standard.
 
 Private core of `myogestic.controls`, the public entry point, which carries the
 standard's reference documentation and re-exports everything here. `_controls_bus`
@@ -116,7 +116,7 @@ Dof = Continuous | Discrete
 class ControlSet:
     """A validated control configuration.
 
-    ``dofs`` preserves declaration order, and that order **is** the canonical wire
+    ``dofs`` preserves declaration order, and that order **is** the wire
     order: it is the layout of the vector `encode` produces and the labels a
     target publishes.
 
@@ -348,7 +348,7 @@ def decode(controls: ControlSet, frame: Sequence[float]) -> dict[str, float]:
         raise ValueError(
             f"frame has {len(frame)} channels but {len(cont)} continuous DOFs are "
             f"declared ({[d.name for d in cont]}). `decode` is the exact inverse "
-f"of `encode`; a wider legacy frame is a target concern, not a canonical one."
+            f"of `encode`; a wider legacy frame is a target concern, not a control-standard one."
         )
     return {dof.name: float(frame[i]) for i, dof in enumerate(cont)}
 

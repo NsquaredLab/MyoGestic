@@ -104,7 +104,7 @@ def _manifest():
         print(f"  (no gRPC support installed: {exc})")
         return None, None
 
-    client = virtual_hand().canonical_client()
+    client = virtual_hand().control_client()
     capabilities = client.capabilities()
     if capabilities is None:
         if getattr(client, "unimplemented", False):

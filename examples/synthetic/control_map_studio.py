@@ -61,7 +61,7 @@ from myogestic.widgets.common import DANGER, SUCCESS, WARNING, muted, panel_head
 CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "playground.toml"
 
 vhi = virtual_hand()
-vhi_canonical = vhi.canonical_client()
+vhi_control = vhi.control_client()
 
 # The second target, and the reason this is no longer "the VHI playground". A key is a
 # two-state discrete control, so nothing in the map format or the bus knows the difference
@@ -109,7 +109,7 @@ def _new_document(path=None) -> ControlMapEditor:
     hand, so the picker offers that hand's controls and refuses one from the operator's
     before it can be saved, rather than letting the bus refuse it three layers later."""
     return ControlMapEditor(
-        path, clients=[vhi_canonical, keys], stream="output", title="EDIT THE MAP"
+        path, clients=[vhi_control, keys], stream="output", title="EDIT THE MAP"
     )
 
 
@@ -186,7 +186,7 @@ NARROW = Grid(
 
 #: Namespace -> client, in merge order. One list rather than a literal per function, because
 #: the editor's picker and these sliders must not disagree about who owns a first segment.
-TARGETS = (("vhi", vhi_canonical), ("keyboard", keys))
+TARGETS = (("vhi", vhi_control), ("keyboard", keys))
 
 
 def _manifests() -> tuple[list, list[str]]:
@@ -331,7 +331,7 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
         # address it holds. Map two controls and two floats go on the wire, not nine with
         # seven commanding rest — and the labels are what let VHI place them, so the
         # channel *order* stops being a shared secret.
-        target = VhiTarget(client=vhi_canonical, interface=vhi)
+        target = VhiTarget(client=vhi_control, interface=vhi)
         # Both targets share one map. `ControlBus` checks that *someone* claims every
         # alias, so a keyboard address in a VHI-only app is caught here rather than
         # rendering nowhere and looking like a control that works and holds still.
@@ -839,7 +839,7 @@ def main() -> None:
         if bus is not None:
             bus.stop()          # reaches both targets: rests the hand, lifts every key
         keys.stop()             # and again, in case the bus was never built
-        vhi_canonical.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

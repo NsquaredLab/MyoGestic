@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 class Target(Protocol):
-    """Render some canonical DOFs. One protocol for every application.
+    """Render some control DOFs. One protocol for every application.
 
     A target is **user-owned**, exactly like `myogestic.outputs.Output`: construct
     it, hand it to a `ControlBus`, and register teardown with

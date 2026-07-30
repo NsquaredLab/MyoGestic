@@ -1,7 +1,7 @@
 """The direction gate's own decisions, checked without a renderer.
 
-`tools/verify_canonical_direction.py` is a gate: a live run of it is what says the
-predicted hand still flexes on a canonical +1. That makes its *judgement* load-bearing —
+`tools/verify_control_direction.py` is a gate: a live run of it is what says the
+predicted hand still flexes on a control +1. That makes its *judgement* load-bearing —
 a gate whose assertions are inverted or vacuous is worse than no gate, because it blesses
 the regression it was written to catch. These tests feed it canned observations and pin
 what it accepts and what it refuses.
@@ -17,12 +17,12 @@ import pathlib
 
 import pytest
 
-TOOL = pathlib.Path(__file__).parent.parent / "tools" / "verify_canonical_direction.py"
+TOOL = pathlib.Path(__file__).parent.parent / "tools" / "verify_control_direction.py"
 
 
 def _load():
     """Import the tool by path — `tools/` is not a package."""
-    spec = importlib.util.spec_from_file_location("verify_canonical_direction", TOOL)
+    spec = importlib.util.spec_from_file_location("verify_control_direction", TOOL)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -49,7 +49,7 @@ class _Reply:
 
 
 class _Client:
-    """A canonical client whose sweep returns whatever the test wants."""
+    """A control client whose sweep returns whatever the test wants."""
 
     def __init__(self, reply):
         self._reply = reply

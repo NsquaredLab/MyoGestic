@@ -62,17 +62,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Three smoothing layers, kept distinct.** Continuous smoothing (`ControlBus(smoothing=…)`,
   authoritative, before any target sees a frame), discrete debounce and hysteresis
   (declared on the DOF), and optional renderer blending
-  (`canonical_client().set_presentation(…)`, appearance only). A discrete control is
+  (`control_client().set_presentation(…)`, appearance only). A discrete control is
   **never** numerically low-pass filtered — averaging "rest" and "fist" interpolates
   through a state nobody selected — and that is enforced structurally: the filter only
   ever receives the continuous vector.
-- **`myogestic.vhi.VhiTarget` — renders canonical DOFs on a Virtual Hand.** It *asks* which
-  contract the hand speaks rather than assuming, and falls back to the legacy pose when the
-  answer is "I don't speak v2". The fallback is all-or-nothing on purpose: a
-  partly-understood negotiation would leave some DOFs believed rendered and others quietly
-  dropped, and a dropped joint is indistinguishable from a joint that is working and
-  holding still.
-- **`InterfaceSpec.canonical_client()` / `training_client()`** for VHI's v2 control service
+- **`myogestic.vhi.VhiTarget` — renders control DOFs on a Virtual Hand.** It *asks* which
+  contract the hand speaks rather than assuming, and refuses a configuration it cannot
+  fully render rather than rendering part of it — a partly-understood negotiation would
+  leave some DOFs believed rendered and others quietly dropped, and a dropped joint is
+  indistinguishable from a joint that is working and holding still. Binding is deferred
+  rather than decided when the renderer is silent, since an application that launches VHI
+  from its own UI necessarily binds before VHI exists; a renderer that answers and does
+  not speak the contract raises.
+- **`InterfaceSpec.control_client()` / `recording_client()`** for VHI's v2 control service
   and its recording aid. Exported lazily, so a plain install without the `[grpc]` extra
   still uses `outlet()` / `launcher()` without importing grpc.
 - **`Output.flush()`** — send the latest pushed value now instead of on the next tick. The
@@ -89,10 +91,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sidecar and `load_pickle(..., controls=…)` refuses a mismatch. A model is only meaningful
   in the space it was fitted for; loading one trained on a one-way `[0, 1]` DOF against a
   signed configuration produces motion in a direction it never learned.
-- **`myogestic.vhi.legacy`** — reads legacy VHI pose recordings as canonical values. It
+- **`myogestic.vhi.legacy`** — reads legacy VHI pose recordings as control values. It
   outlives the migration: `VHI_Control` stays in the renderer's units, so archived sessions
   are permanently in that convention and `decode_pose` remains their reader. `VHI_Predict`
-  is canonical as of the direction fix below, and nothing archived depends on it.
+  has used control values as of the direction fix below, and nothing archived depends on
+  it.
 
 ### Removed (breaking)
 
@@ -207,25 +210,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   single-axis digit keeps its bare name. Any map outside this repo using `vhi.prediction.thumb`
   or `vhi.control.pose.thumb` needs the same one-word edit; the renderer still accepts the
   bare form, but `resolve()` validates against the manifest and will refuse it.
-- **`tools/verify_canonical_direction.py`** — a live gate proving the predicted hand's
-  canonical direction. VHI's own suite proves *direction* from its rig, but cannot drive the
-  LSL inlet, which is the path every real client uses; this checks that a canonical `+1`
+- **`tools/verify_control_direction.py`** — a live gate proving the predicted hand's
+  control direction. VHI's own suite proves *direction* from its rig, but cannot drive the
+  LSL inlet, which is the path every real client uses; this checks that a control `+1`
   flexes, reads back as `+1` on `VHI_Predict`, and does so identically whether the client
   declared nothing, the predicted stream, or both streams — over repeated frames, repeated
   runs, and (with `--restart`) repeated renderer processes. It found the renderer inverting
-  every flexion DOF, fixed in VHI as `Vhi.CanonicalPose`.
+  every flexion DOF, fixed in VHI as `Vhi.StandardPose`.
 
   Two ordering rules it documents are properties of the renderer worth knowing: an
   `Output` repeats its last pushed vector at `hz` and the renderer overwrites its whole
   pose from the inlet every frame, so **a still-streaming outlet beats `SweepControl`'s own
   commands** — and a stale outlet left behind by an earlier process still wins the single
-  `MyoGestic_Output` inlet, which is why a canonical `+1` could appear to render either way.
+  `MyoGestic_Output` inlet, which is why a control `+1` could appear to render either way.
   A replaced outlet is also not noticed immediately: VHI re-resolves by name only while it
   has no inlet at all, so recovery rides on the outlet's stable `source_id`.
 - **Four pose tables documented channel 1 as `0` in a fist; recorded VHI sessions have it at
   exactly `-1.0`.** The integration guide also described channel 0 as thumb *rotation* and
   channels 6-8 as a wrist. Channel 0 is thumb flexion, channel 1 thumb abduction, and 6-8
-  are read by no consumer. All four tables are gone — the examples declare canonical values,
+  are read by no consumer. All four tables are gone — the examples declare control values,
   so there is nothing left to be wrong.
 - **`emg_regression` clipped predictions *before* smoothing**, letting the filter overshoot
   back out of the range just enforced. The bus clips, smooths, and clips again.

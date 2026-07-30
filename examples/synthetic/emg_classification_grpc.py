@@ -57,8 +57,8 @@ ctrl_outlet = control_outlet()
 vhi = virtual_hand()
 vhi_outlet = vhi.outlet()
 # The recording aid (session gate) and the control client.
-training_aid = vhi.training_client()
-vhi_canonical = vhi.canonical_client()
+recording_aid = vhi.recording_client()
+vhi_control = vhi.control_client()
 
 # Where this example's two outputs go. The left side of that file is ours (`fist` and
 # `gesture`), the right side is VHI's — read it, it is commented. Parsing is all that
@@ -218,12 +218,12 @@ def _ensure_vhi() -> None:
     global bus, vhi_target
     if bus is not None:
         return
-    capabilities = vhi_canonical.capabilities()
+    capabilities = vhi_control.capabilities()
     if capabilities is None:
         app.ctx.log("VHI not reachable yet — controls stay unresolved")
         return
     controls = resolve(CONTROL_MAP, capabilities)
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_canonical)
+    vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
     bus = ControlBus(
         controls,
         targets=[vhi_target],
@@ -256,20 +256,20 @@ def _on_record() -> None:
     """The recording aid gates VHI's keyboard so MyoGestic is the sole authority."""
     _ensure_vhi()
     app.start_recording()
-    if not training_aid.set_recording_session(True):
+    if not recording_aid.set_recording_session(True):
         app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
 
 
 def _on_stop() -> None:
     app.stop_recording()
-    training_aid.set_recording_session(False)
+    recording_aid.set_recording_session(False)
 
 
 # VhiMovementPanel owns its own state cache and the throttled background
 # get_state() refresh, so the @app.ui body stays free of plumbing.
 # Clicks go through the `gesture` output, not straight at the renderer, so they pass
 # through the same debounce and rebase it — see `_select_gesture`.
-vhi_panel = VhiMovementPanel(training_aid, _select_gesture)
+vhi_panel = VhiMovementPanel(recording_aid, _select_gesture)
 
 viewer = SignalViewer("emg")
 logo = AppLogo()
@@ -328,9 +328,9 @@ def main() -> None:
     finally:
         if bus is not None:
             bus.stop()
-        training_aid.set_recording_session(False)
-        training_aid.stop()
-        vhi_canonical.stop()
+        recording_aid.set_recording_session(False)
+        recording_aid.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

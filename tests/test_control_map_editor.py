@@ -908,7 +908,7 @@ class TestOneRowPerControlNotPerName:
 
     def test_the_value_a_file_already_uses_is_still_offered(self, editor):
         """Otherwise opening the picker would hide the current value, or silently swap it
-        for the canonical name — a diff nobody asked for."""
+        for the shortest name — a diff nobody asked for."""
         addresses = [
             cap.address
             for cap in editor._offered(current="vhi.prediction.thumb.flexion")

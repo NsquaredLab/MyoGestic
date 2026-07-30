@@ -44,7 +44,7 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 # adding a mapping there adds a slider here and nothing else changes.
 levels: dict[str, float] = dict.fromkeys(CONTROL_MAP.bindings, 0.0)
 
-vhi_canonical = vhi.canonical_client()
+vhi_control = vhi.control_client()
 bus: ControlBus | None = None
 
 app = App("VHI control hand")
@@ -70,14 +70,14 @@ def _connect() -> None:
     global bus
     if bus is not None:
         return
-    capabilities = vhi_canonical.capabilities()
+    capabilities = vhi_control.capabilities()
     if capabilities is None:
         app.ctx.log("VHI not reachable yet — launch it, then Connect again")
         return
     controls = resolve(CONTROL_MAP, capabilities)
     # `stream="control_pose"` is the whole point: it routes onto the control hand's
     # outlet and declares that stream, rather than the predicted hand's.
-    target = VhiTarget(vhi.control_outlet(), client=vhi_canonical, stream="control_pose")
+    target = VhiTarget(vhi.control_outlet(), client=vhi_control, stream="control_pose")
     bus = ControlBus(controls, targets=[target], hz=32)
     app.ctx.control_space = CONTROL_MAP
     app.ctx.log(f"resolved {len(controls.dofs)} control-hand controls against VHI")
@@ -119,7 +119,7 @@ def main() -> None:
         # Rest the hand and make that frame land before the outlet's thread dies.
         if bus is not None:
             bus.stop()
-        vhi_canonical.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

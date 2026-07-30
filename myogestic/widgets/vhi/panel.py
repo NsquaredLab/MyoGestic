@@ -2,10 +2,10 @@
 
 This is a **VHI training / control-hand aid**, not a control surface for an
 application's own DOFs. It reads the v2 recording aid for state and dispatches clicks
-through a caller-supplied handler, which is expected to command a *canonical discrete
+through a caller-supplied handler, which is expected to command a *discrete
 DOF* — normally ``bus.select("gesture", state)``, under whatever alias your
-mapping file gave that control. It does not speak v1
-``SetMovement``, and the movement names it shows are the renderer's own vocabulary.
+mapping file gave that control. The movement names it shows are the renderer's own
+vocabulary.
 
 Wraps the three-piece pattern most examples use verbatim:
 
@@ -32,7 +32,7 @@ from myogestic.widgets.vhi.palette import (
 )
 
 if TYPE_CHECKING:
-    from myogestic.vhi._training import VhiTrainingAidClient
+    from myogestic.vhi._recording import VhiRecordingClient
 
 
 class VhiMovementPanel:
@@ -41,10 +41,10 @@ class VhiMovementPanel:
     Parameters
     ----------
     client
-        The `myogestic.vhi.VhiTrainingAidClient` used to fetch control-hand state
-        (available movements, the current one, whether a training program is running).
+        The `myogestic.vhi.VhiRecordingClient` used to fetch control-hand state
+        (available movements, the current one, whether a recording trajectory is running).
     on_movement
-        Click handler for a movement button — **required**. Wire it to a canonical
+        Click handler for a movement button — **required**. Wire it to a
         discrete DOF, e.g. ``lambda s: bus.select("gesture", s)`` — the states come
         from the target's manifest, so pass one of those names through. There
         is deliberately no default: dispatching straight to a renderer would bypass
@@ -60,7 +60,7 @@ class VhiMovementPanel:
     --------
     >>> from myogestic.widgets import VhiMovementPanel
     >>> panel = VhiMovementPanel(
-    ...     vhi.training_client(),
+    ...     vhi.recording_client(),
     ...     lambda state: bus.select("gesture", state),
     ... )
     >>> panel.ui()
@@ -70,7 +70,7 @@ class VhiMovementPanel:
 
     def __init__(
         self,
-        client: VhiTrainingAidClient,
+        client: VhiRecordingClient,
         on_movement: Callable[[str], None],
         *,
         min_interval_s: float = 1.0,

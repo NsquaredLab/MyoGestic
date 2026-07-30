@@ -117,21 +117,19 @@ class _Reply:
 
     accepted = True
     verdicts = ()
-    continuous_encoding = 1  # CANONICAL
     continuous_channel_order = ()
     standard_version = "1"
     control_pose_stream_name = ""
     control_pose_channel_order = ()
-    control_pose_encoding = 0
 
 
 class _Client:
-    """A canonical client that answers the manifest and accepts every declaration."""
+    """A control client that answers the manifest and accepts every declaration."""
 
     def capabilities(self):
         return VHI_MANIFEST
 
-    def declare(self, controls, client_name="", control_pose=""):
+    def declare(self, controls, client_name="", control_pose=False):
         return _Reply()
 
     def set_control(self, continuous=None, discrete=None) -> None: ...

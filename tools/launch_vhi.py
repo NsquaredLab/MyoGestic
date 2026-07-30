@@ -1,7 +1,7 @@
 """Start the Virtual Hand and wait, so it can be a launch target of its own.
 
 Every GUI example launches VHI from its own `ProcessLauncher` button, but two things
-that need a running renderer have no UI to click: `tools/inspect_canonical_control.py`
+that need a running renderer have no UI to click: `tools/inspect_control.py`
 and `tools/check_vhi_bridge.py`. This is the prerequisite for those — run it, leave it
 running, and run the other in a second terminal or debug session.
 

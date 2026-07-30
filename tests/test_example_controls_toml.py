@@ -1,7 +1,7 @@
 """The shipped mapping file must load, and must keep demonstrating what it claims to.
 
 `examples/controls/hand.toml` is user-facing: people copy it, edit it, and expect it to
-work. It is also what `tools/inspect_canonical_control.py` loads, so a syntax error or a
+work. It is also what `tools/inspect_control.py` loads, so a syntax error or a
 rename would break the walkthrough silently.
 
 These assert the properties the file is meant to *teach* — arbitrary aliases, a 1:1
@@ -142,7 +142,7 @@ def test_the_resolved_space_actually_drives_a_bus(resolved):
 
 def test_the_walkthrough_points_at_this_file():
     """If the walkthrough's path drifts, this suite is the only thing that would know."""
-    walkthrough = CONFIG.parents[2] / "tools" / "inspect_canonical_control.py"
+    walkthrough = CONFIG.parents[2] / "tools" / "inspect_control.py"
     text = walkthrough.read_text()
     assert '"examples"' in text and '"controls"' in text and '"hand.toml"' in text
 
@@ -193,7 +193,7 @@ class TestTheClassificationFileTeachesTheUnifiedPath:
 
 
 class TestTheWalkthroughDemonstratesTheClassifierPath:
-    """`tools/inspect_canonical_control.py` is the one runnable artifact for this design.
+    """`tools/inspect_control.py` is the one runnable artifact for this design.
 
     It is what the docs tell a reader to run, so terminology that never appears there is
     terminology they will not meet. `threshold_fraction` was absent from it for exactly
@@ -201,7 +201,7 @@ class TestTheWalkthroughDemonstratesTheClassifierPath:
     and left the demonstration behind.
     """
 
-    WALKTHROUGH = CONFIG.parents[2] / "tools" / "inspect_canonical_control.py"
+    WALKTHROUGH = CONFIG.parents[2] / "tools" / "inspect_control.py"
 
     @pytest.fixture(scope="class")
     def source(self):

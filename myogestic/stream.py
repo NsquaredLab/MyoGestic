@@ -100,7 +100,7 @@ class StreamInfo:
     channel_grids: list[ChannelGrid] | None = None
 
     def __post_init__(self) -> None:
-        # Normalise str / type / np.dtype to a canonical np.dtype, then validate.
+        # Normalise str / type / np.dtype to a single np.dtype form, then validate.
         self.dtype = np.dtype(self.dtype)
         if self.dtype not in SUPPORTED_DTYPES:
             supported = ", ".join(d.name for d in SUPPORTED_DTYPES)

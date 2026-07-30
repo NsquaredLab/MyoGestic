@@ -138,7 +138,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![VhiMovementPanel](images/widgets/VhiMovementPanel.png){ .widget-thumb loading=lazy }
 
-    Compact VHI control palette - auto-refreshes the cached control-hand state from the v2 recording aid (off-thread, throttled) and dispatches button clicks to a handler you supply — normally `bus.select(...)` on a canonical discrete DOF. Highlights the current movement; greys out while disconnected.
+    Compact VHI control palette - auto-refreshes the cached control-hand state from the v2 recording aid (off-thread, throttled) and dispatches button clicks to a handler you supply — normally `bus.select(...)` on a discrete DOF. Highlights the current movement; greys out while disconnected.
 
 </div>
 

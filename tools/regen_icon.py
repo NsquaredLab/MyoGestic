@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regenerate the MyoGestic shipped icon + in-app wordmark from the source PNG.
 
-Reads ``docs/images/myogestic_logo.png`` (canonical source, 2339×1579 RGBA)
+Reads ``docs/images/myogestic_logo.png`` (source, 2339×1579 RGBA)
 and writes two assets that ship inside the package wheel:
 
 * ``myogestic/assets/app_settings/icon.png`` — 512×512 square padded with

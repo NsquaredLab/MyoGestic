@@ -110,7 +110,7 @@ def test_channels_six_to_eight_are_dead():
 
 
 def test_rest_archive_is_all_zero():
-    """A rest frame is zeros, which is what makes 0.0 the canonical neutral value."""
+    """A rest frame is zeros, which is what makes 0.0 the neutral value."""
     assert np.count_nonzero(_pose(RESTED)) == 0
 
 
@@ -132,7 +132,7 @@ def test_decode_is_a_single_negation():
         assert decoded[name] == pytest.approx(-pose[:, i], abs=1e-6)
 
 
-def test_decoded_values_stay_inside_the_canonical_domain():
+def test_decoded_values_stay_inside_the_control_domain():
     decoded = decode_pose(_pose(MOVED))
     for values in decoded.values():
         assert values.min() >= -1.0
@@ -140,7 +140,7 @@ def test_decoded_values_stay_inside_the_canonical_domain():
 
 
 def test_the_recorded_corpus_only_reaches_the_positive_half():
-    """The operator only flexed, so canonical values never go negative.
+    """The operator only flexed, so control values never go negative.
 
     A property of the corpus, not of the target: VHI multiplies with no clamp, so
     the extension half renders fine. Nothing may read this as a limit.
@@ -169,7 +169,7 @@ def test_all_six_dofs_are_identical_because_the_corpus_is_rank_one():
         assert values == pytest.approx(reference, abs=1e-6), name
 
 
-def test_rest_frames_decode_to_canonical_rest():
+def test_rest_frames_decode_to_control_rest():
     for values in decode_pose(_pose(RESTED)).values():
         assert np.count_nonzero(values) == 0
 

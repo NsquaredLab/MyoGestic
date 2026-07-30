@@ -262,7 +262,7 @@ def test_session_manager_lists_base_path_sessions(imgui_frame, tmp_path):
 
 
 def test_session_manager_dedups_same_session_across_path_spellings(tmp_path):
-    """The same session picked via a non-canonical path (symlink, /var vs
+    """The same session picked via a differently-spelled path (symlink, /var vs
     /private/var, ..) dedups against the scanned row instead of doubling."""
     import json
     import zipfile
@@ -279,9 +279,9 @@ def test_session_manager_dedups_same_session_across_path_spellings(tmp_path):
         zf.writestr("meta.json", json.dumps({"class_names": ["A"]}))
 
     st = SessionWidgetState()
-    st.sessions = scan_sessions(str(real))  # first-render scan, canonical path
+    st.sessions = scan_sessions(str(real))  # first-render scan, resolved path
     assert len(st.sessions) == 1
-    # the dialog returns the same file via a non-canonical spelling
+    # the dialog returns the same file via a differently-spelled path
     load_session_files(st, [str(tmp_path / "real" / ".." / "real" / "s.session.zip")])
     assert len(st.sessions) == 1  # deduped, not doubled
 

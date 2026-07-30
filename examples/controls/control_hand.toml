@@ -1,7 +1,7 @@
 # Map your model's outputs to VHI's controls.
 #   left  = your name, anything you like
 #   right = a control VHI declares (it owns the kind, range and states)
-# See what a running VHI exports:  uv run --extra grpc python tools/inspect_canonical_control.py
+# See what a running VHI exports:  uv run --extra grpc python tools/inspect_control.py
 # Full reference: docs/api/controls.md
 
 [dofs]
@@ -9,7 +9,7 @@
 # The OPERATOR's hand (vhi.control.pose.*), not the model's
 # (vhi.prediction.*). Separate stream, so use
 #   VhiTarget(vhi.control_outlet(), client=client, stream="control_pose")
-# and declare it:  client.declare(controls, control_pose="canonical")
+# and declare it:  client.declare(controls, control_pose=True)
 setup_thumb = "vhi.control.pose.thumb.flexion"
 setup_index = "vhi.control.pose.index"
 

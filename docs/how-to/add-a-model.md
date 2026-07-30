@@ -38,7 +38,7 @@ That's the entire surface. Three decorators, no inheritance.
 
 ## Case 1: scikit-learn / CatBoost / XGBoost
 
-The straightforward case. Train returns a fitted estimator, predict calls it. See [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py) for the canonical pattern. Key beats:
+The straightforward case. Train returns a fitted estimator, predict calls it. See [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py) for the reference pattern. Key beats:
 
 ```python
 @pipeline.train
