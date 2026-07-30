@@ -23,7 +23,7 @@ from collections import deque
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import DANGER, IDLE, SUCCESS, panel_header
+from myogestic.widgets.common import DANGER, IDLE, SUCCESS, WARNING, panel_header
 from myogestic.widgets.panels.log_box import (
     render_log,
     render_log_buttons,
@@ -58,6 +58,11 @@ class _ProcState:
         self.process: subprocess.Popen | None = None  # type: ignore[type-arg]
         self.log: deque[str] = deque(maxlen=200)
         self._reader_thread: threading.Thread | None = None
+        #: A Stop was pressed for the process currently held. The one piece of state the
+        #: dot cannot infer: after a kill that has not landed yet, `poll()` says "running"
+        #: and after one that has, it says "died with a non-zero code" — neither of which
+        #: is what happened. Reset by `start`, so it always describes the live process.
+        self._kill_wanted = False
 
     @property
     def alive(self) -> bool:
@@ -66,6 +71,7 @@ class _ProcState:
     def start(self) -> None:
         if self.alive:
             return
+        self._kill_wanted = False
         self.log.clear()
         self.log.append(f"$ {' '.join(self.command)}")
         self.process = subprocess.Popen(
@@ -85,11 +91,26 @@ class _ProcState:
             return
         # Use SIGKILL directly — SIGTERM causes crash in some apps
         # (e.g. Godot mono's C# runtime fails during shutdown)
+        self._kill_wanted = True
         self.process.kill()
         try:
-            self.process.wait(timeout=3)
+            # Short on purpose: this runs on the render thread, from the click. A signal a
+            # process *can* receive is reaped in single-digit milliseconds, so anything
+            # still here at 200 ms is not going to answer this frame either — it is in an
+            # uninterruptible wait, and the three seconds this used to spend were three
+            # seconds of frozen window in exactly the situation where the window freezing
+            # is the complaint.
+            self.process.wait(timeout=0.2)
         except subprocess.TimeoutExpired:
-            pass
+            # SIGKILL does not land on a process blocked in an uninterruptible kernel
+            # wait, and a wedged network driver is enough to put it there — VHI's LSL
+            # resolver thread sits in exactly that call. So keep holding it rather than
+            # forgetting it: dropping the handle reported "Not running", `alive` went
+            # False, and the next Launch spawned another VHI on top of one that was
+            # still alive and still resolving LSL streams. Four of them stacked up that
+            # way, each adding the multicast traffic that keeps the driver wedged.
+            self.log.append("[still alive — SIGKILL did not land; press Stop to retry]")
+            return
         self.log.append("[process stopped]")
         self.process = None
 
@@ -106,6 +127,46 @@ class _ProcState:
         # Check exit code
         if proc.poll() is not None:
             self.log.append(f"[exited with code {proc.returncode}]")
+
+
+def _status_of(state: _ProcState) -> tuple[imgui.ImVec4, str]:
+    """The header dot's colour for a process, and the detail behind it.
+
+    Mostly read off bookkeeping that already exists: `_ProcState.stop` clears ``process``
+    once the kill lands, so a process you killed is indistinguishable from one never
+    started and therefore *cannot* be mistaken for one that died. Only a process still
+    holding a finished `Popen` exited on its own, and only then does a non-zero code mean
+    something went wrong.
+
+    The exception, and the one thing `_kill_wanted` is for, is a kill that has **not**
+    landed — a process in an uninterruptible wait ignores SIGKILL. `poll()` reports that
+    one as plainly running, so the dot went green and the tooltip named its PID for a
+    process the user had just pressed Stop on. That reads as "nothing happened, press
+    Launch again", which is how four renderers ended up alive at once.
+
+    The string is what the header's tooltip says. Colour alone cannot be the whole signal:
+    a dot is small, and red against green is the one pair a reader may not be able to tell
+    apart at all.
+    """
+    proc = state.process
+    if proc is None:
+        return IDLE, "Not running."
+    code = proc.poll()
+    if code is None:
+        if state._kill_wanted:
+            return WARNING, (
+                f"Stop was pressed, but PID {proc.pid} has not died — it is ignoring "
+                f"SIGKILL, which means it is stuck in the kernel. Launch will refuse "
+                f"until it goes, rather than start a second one alongside it."
+            )
+        return SUCCESS, f"Running (PID {proc.pid})."
+    if state._kill_wanted:
+        # The kill landed, just not while `stop` was waiting. A killed process carries a
+        # non-zero code, and reporting that as a crash would turn Stop into a red dot.
+        return IDLE, "Stopped."
+    if code == 0:
+        return IDLE, "Exited cleanly."
+    return DANGER, f"Exited on its own with code {code}."
 
 
 _selected: dict[str, int] = {}  # label -> selected index
@@ -143,7 +204,7 @@ class ProcessLauncher:
         processes: list[Process],
         *,
         widget_id: str = "",
-        log_height: float = -1.0,
+        log_height: float = 0.0,
     ) -> None:
         self._processes = processes
         self._widget_id = widget_id
@@ -157,9 +218,14 @@ class ProcessLauncher:
 def _render_process_launcher(
     processes: list[Process],
     widget_id: str = "",
-    log_height: float = -1.0,
+    log_height: float = 0.0,
 ) -> None:
-    """Dropdown + Launch/Stop + scrollable log panel.
+    """Dropdown + Launch/Stop, and the log one click away.
+
+    Two rows: a header whose coloured dot is the selected process's state, then the
+    dropdown, Launch/Stop and the log's own buttons. Deliberately compact — it used to
+    print the log inline into whatever height its cell had, and spend a whole row on the
+    word "Stopped".
 
     Multiple launchers can coexist in the same UI —
     each gets unique ImGui IDs via the widget_id parameter.
@@ -171,12 +237,11 @@ def _render_process_launcher(
     widget_id
         Unique ID for this launcher instance. Auto-generated if empty.
     log_height
-        Height of the inline log panel in pixels. Pass ``<= 0``
-        (default) to fill the remaining vertical space of the parent
-        cell — matches the ImGui convention where ``-1`` means "fill
-        available". When the log is popped out (see ``↗`` button), the
-        inline log is replaced by a placeholder and the full log is
-        rendered in a separate floating ImGui window.
+        Height in pixels of an **optional** inline log. ``<= 0`` (the default) draws no
+        inline log at all: the state is the header's dot and the output is one click away
+        in the ``↗`` popout window, which can be moved, resized, and left open while the
+        dropdown moves to another process. Pass a positive height to get the old strip
+        back under the controls.
     """
     if not processes:
         return
@@ -193,10 +258,6 @@ def _render_process_launcher(
 
     names = [name for name, _ in processes]
 
-    # Persistent selected index per launcher
-    if widget_id not in _selected:
-        _selected[widget_id] = 0
-
     # Render every popped-out log window owned by this launcher FIRST,
     # before the inline UI. This makes popouts independent of the dropdown
     # selection: once popped out, a log window stays up even when the user
@@ -206,7 +267,16 @@ def _render_process_launcher(
     # the window would silently disappear.)
     _render_open_popouts(widget_id)
 
-    panel_header("PROCESS", fa.ICON_FA_TERMINAL)
+    # The dot needs the selected process, which is chosen below — so read the selection
+    # first and draw the header with it, rather than splitting the header in two.
+    if widget_id not in _selected:
+        _selected[widget_id] = 0
+    _selected[widget_id] = min(_selected[widget_id], len(names) - 1)
+    dot, detail = _status_of(_procs[(widget_id, names[_selected[widget_id]])])
+    panel_header("PROCESS", fa.ICON_FA_TERMINAL, status=dot)
+    # The detail the removed status row used to carry. On the header, because that is what
+    # the dot is attached to, and because colour on its own is not a readable answer.
+    imgui.set_item_tooltip(detail)
 
     # Row 1: dropdown + Launch/Stop + popout + autoscroll. Keep every control
     # reachable when the cell is narrow: the dropdown shares the row with the
@@ -269,22 +339,16 @@ def _render_process_launcher(
     _autoscroll[pop_key] = autoscroll_on
     _popout_open[pop_key] = popped
 
-    # Row 2: status text on its own line so it can never get cropped.
-    if proc is not None and proc.poll() is None:
-        imgui.text_colored(SUCCESS, f"Running (PID {proc.pid})")
-    else:
-        imgui.text_colored(IDLE, "Stopped")
-
-    # Log area: inline if not popped, placeholder otherwise. The popout
-    # itself is rendered at the top of the function (see _render_open_popouts).
-    h = log_height if log_height > 0 else -1.0
-    if _popout_open.get(pop_key, False):
-        imgui.text_disabled(f"(log popped out — see '{selected_name} log' window)")
-    else:
+    # No status row and no log: the state is the dot in the header, and the log is one click
+    # away in its own window. This panel is two rows on purpose — it was filling whatever
+    # height its cell gave it with output nobody had asked to see.
+    if log_height > 0 and not _popout_open.get(pop_key, False):
+        # Opt in to an inline log by asking for a height. `<= 0` no longer means "fill the
+        # cell"; it means "do not draw one".
         render_log(
             f"{widget_id}_{selected_name}",
             state.log,
-            height=h,
+            height=log_height,
             autoscroll=_autoscroll.get(pop_key, True),
         )
 

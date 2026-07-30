@@ -297,3 +297,160 @@ def test_channel_scope_is_frozen_at_construction():
     assert viewer._channel_scope == (5, 1, 5, 3)  # materialised, order kept
     assert viewer._channel_scope == (5, 1, 5, 3)  # still there on the next frame
     assert SignalViewer("emg")._channel_scope is None  # unrestricted default
+
+
+class TestTheProcessDotSaysTheState:
+    """The header's coloured circle replaced a whole row that said "Stopped".
+
+    The choice is a pure function of the process, which is the point: `_ProcState.stop` sets
+    ``process = None``, so a process you killed looks like one never started and therefore
+    cannot be reported as a crash — `kill()` leaves a non-zero code behind, and without that
+    distinction pressing Stop would turn the dot red.
+    """
+
+    @staticmethod
+    def _state(process):
+        from myogestic.widgets.panels.process_launcher import _ProcState
+
+        state = _ProcState("x", ["true"])
+        state.process = process
+        return state
+
+    class _Exited:
+        def __init__(self, code: int, pid: int = 4242):
+            self._code = code
+            self.pid = pid
+
+        def poll(self):
+            return self._code
+
+    class _Running:
+        pid = 1234
+
+        def poll(self):
+            return None
+
+    def test_a_process_that_survives_the_kill_is_still_held(self):
+        """`stop` must not forget a child SIGKILL failed to take down.
+
+        A process blocked in an uninterruptible kernel wait — which a wedged network
+        driver is enough to cause, and VHI's LSL resolver thread is a candidate — ignores
+        SIGKILL. Forgetting the handle here made `alive` False and the dot say "Not
+        running", so the next Launch stacked a second renderer on a live one.
+        """
+        import subprocess
+
+        from myogestic.widgets.common import SUCCESS
+        from myogestic.widgets.panels.process_launcher import _status_of
+
+        class _Unkillable(self._Running):
+            killed = 0
+
+            def kill(self):
+                type(self).killed += 1
+
+            def wait(self, timeout=None):
+                raise subprocess.TimeoutExpired("vhi", timeout)
+
+        from myogestic.widgets.common import WARNING
+
+        state = self._state(_Unkillable())
+        state.stop()
+
+        assert state.process is not None, "the handle was dropped on a live process"
+        assert state.alive, "a process that ignored SIGKILL must still read as alive"
+
+        colour, detail = _status_of(state)
+        assert colour is WARNING, "a Stop that did not land must not read as healthy"
+        assert colour is not SUCCESS
+        assert "has not died" in detail
+
+        state.start()  # the next Launch must refuse rather than spawn a second one
+        assert isinstance(state.process, _Unkillable)
+
+        state.stop()  # and Stop stays usable, so the kill can be retried
+        assert _Unkillable.killed == 2
+
+    def test_a_kill_that_lands_late_is_stopped_not_a_crash(self):
+        """SIGKILL leaves a non-zero code; that must not be reported as a crash.
+
+        `stop` only waits 200 ms, so a process that dies just after it gives up is still
+        held — with the -9 of the signal that killed it. Without `_kill_wanted` the dot
+        would go red and say the renderer had crashed on its own.
+        """
+        import subprocess
+
+        from myogestic.widgets.common import DANGER, IDLE
+        from myogestic.widgets.panels.process_launcher import _status_of
+
+        class _DiesLate(self._Running):
+            def kill(self):
+                pass
+
+            def wait(self, timeout=None):
+                raise subprocess.TimeoutExpired("vhi", timeout)
+
+        state = self._state(_DiesLate())
+        state.stop()
+        state.process.poll = lambda: -9  # it died, just not while stop was waiting
+
+        colour, detail = _status_of(state)
+        assert colour is IDLE, "a deliberate kill is not a crash"
+        assert colour is not DANGER
+        assert detail == "Stopped."
+
+    def test_never_started_is_idle(self):
+        from myogestic.widgets.common import IDLE
+        from myogestic.widgets.panels.process_launcher import _status_of
+
+        colour, detail = _status_of(self._state(None))
+        assert colour is IDLE
+        assert "Not running" in detail
+
+    def test_running_is_success_and_says_the_pid(self):
+        from myogestic.widgets.common import SUCCESS
+        from myogestic.widgets.panels.process_launcher import _status_of
+
+        colour, detail = _status_of(self._state(self._Running()))
+        assert colour is SUCCESS
+        assert "1234" in detail
+
+    def test_a_bad_exit_is_danger_and_says_the_code(self):
+        from myogestic.widgets.common import DANGER
+        from myogestic.widgets.panels.process_launcher import _status_of
+
+        colour, detail = _status_of(self._state(self._Exited(1)))
+        assert colour is DANGER
+        assert "code 1" in detail
+
+    def test_a_clean_exit_is_not_an_error(self):
+        from myogestic.widgets.common import IDLE
+        from myogestic.widgets.panels.process_launcher import _status_of
+
+        colour, _ = _status_of(self._state(self._Exited(0)))
+        assert colour is IDLE
+
+    def test_pressing_stop_does_not_look_like_a_crash(self):
+        """The case the three states exist for. `kill()` leaves a non-zero code, so this
+        would be red if `stop` did not null the process."""
+        from myogestic.widgets.common import IDLE
+        from myogestic.widgets.panels.process_launcher import _ProcState, _status_of
+
+        state = _ProcState("x", ["true"])
+        state.process = self._Exited(-9)          # SIGKILL, as `stop` leaves it
+        state.process = None                      # ...which `stop` then clears
+        assert _status_of(state)[0] is IDLE
+
+
+def test_the_launcher_draws_no_inline_log_by_default():
+    """Its whole appeal is being two rows. The log is in the popout."""
+    import inspect
+
+    from myogestic.widgets.panels import process_launcher
+
+    source = inspect.getsource(process_launcher._render_process_launcher)
+    assert "if log_height > 0" in source, "an inline log must be opt-in"
+    # The removed *call*, not the word: the docstring explains what the dot replaced and
+    # would match a naive search for it.
+    assert "imgui.text_colored(IDLE" not in source
+    assert "status=dot" in source, "the header carries the state now"
