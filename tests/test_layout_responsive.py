@@ -25,6 +25,7 @@ import pytest
 
 from myogestic.controls import Capability
 from myogestic.widgets import ControlMapEditor
+from myogestic.widgets.common import label_column
 
 imgui = pytest.importorskip("imgui_bundle").imgui
 
@@ -137,6 +138,14 @@ class TestTheEditorFitsTheWidthItIsGiven:
     def test_nothing_overflows_offline_either(self, _context, tmp_path, width):
         """Offline the picker is a text field, which is a different width entirely."""
         editor = _editor(tmp_path, connected=False)
+        assert _overflow(_context, width, editor.ui) == pytest.approx(0.0, abs=1.0)
+
+    @pytest.mark.parametrize("width", WIDTHS)
+    def test_the_conflict_banner_fits_too(self, _context, tmp_path, width):
+        """It only draws when the file changed under unsaved edits, so the width sweep
+        above never reaches it — and it adds two more buttons to an already-full row."""
+        editor = _editor(tmp_path)
+        editor._conflict = True
         assert _overflow(_context, width, editor.ui) == pytest.approx(0.0, abs=1.0)
 
     def test_widening_the_window_does_not_make_it_worse(self, _context, tmp_path):
@@ -276,13 +285,383 @@ class TestTheActionsStayReachable:
         finally:
             imgui.button = original
 
+        # Matched as a suffix: the labels now carry a leading glyph (`FLOPPY_DISK  Save`),
+        # and what this class is about is that the *action* is reachable, not how it is
+        # spelled. Save-as is deliberately absent — Save covers the untitled case by routing
+        # to the same dialog, so it is the one that cannot be worked around.
         for label in ("Connect", "Save", "Reload", "Add control"):
-            drawn = [x for name, x in seen if name == label]
+            drawn = [x for name, x in seen if name.endswith(label)]
             assert drawn, f"{label} was not drawn at {width} px"
             assert max(drawn) <= right + 1.0, (
                 f"{label} extends past the panel at {width} px "
                 f"({max(drawn):.0f} > {right:.0f})"
             )
+
+
+
+class TestAddControlSitsWithTheControls:
+    """`Add control` is drawn under the last control row, not in the file-command row.
+
+    Placement is the whole signal. Beside `Save` / `Save as...` / `Reload` it reads as a
+    fourth thing you do to the *file*; under the rows it reads as what it is — one more row,
+    appended where the new row will appear. It is also the only control on screen when the
+    map is empty, which is exactly when it is the thing to press.
+
+    Asserted by y rather than by source order, because y is the claim: this is about where the
+    button *appears*. Mutation-checked — moving the call back up beside `Reload` fails both
+    assertions. (A stray `same_line()` at the current call site does not, and cannot: the row
+    above ends with an item that has already broken the line, so there is no line to join.)
+    """
+
+    @staticmethod
+    def _ys(io, editor) -> list[tuple[str, float]]:
+        """Every button's label and the y it was drawn at, over one settled frame."""
+        seen: list[tuple[str, float]] = []
+        original = imgui.button
+
+        def spy(label, *args, **kwargs):
+            result = original(label, *args, **kwargs)
+            seen.append((label, imgui.get_item_rect_min().y))
+            return result
+
+        imgui.button = spy
+        try:
+            io.display_size = imgui.ImVec2(900, 1400)
+            for _ in range(3):  # ImGui needs a frame to settle its layout
+                seen.clear()
+                imgui.new_frame()
+                imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+                imgui.set_next_window_size(imgui.ImVec2(860, 1400))
+                imgui.begin("place", None, imgui.WindowFlags_.no_saved_settings)
+                editor.ui()
+                imgui.end()
+                imgui.end_frame()
+        finally:
+            imgui.button = original
+        return seen
+
+    @staticmethod
+    def _at(seen, suffix) -> list[float]:
+        drawn = [y for label, y in seen if label.endswith(suffix)]
+        assert drawn, f"{suffix!r} was not drawn at all"
+        return drawn
+
+    def test_it_is_below_the_file_commands(self, _context, tmp_path):
+        seen = self._ys(_context, _editor(tmp_path))
+        assert min(self._at(seen, "Add control")) > max(self._at(seen, "Save")), (
+            "Add control is level with or above Save — it is back in the file-command row"
+        )
+
+    def test_it_is_below_the_last_control_row(self, _context, tmp_path):
+        """With two controls it has to be under *both*, not between them."""
+        editor = _editor(tmp_path)
+        editor.add_control()
+        editor.add_control()
+        seen = self._ys(_context, editor)
+        rows = self._at(seen, "Remove control")
+        assert len(rows) >= 2, "expected one Remove per control row"
+        assert min(self._at(seen, "Add control")) > max(rows)
+
+    def test_an_empty_map_still_offers_it(self, _context, tmp_path):
+        """No rows, so it is the only thing to press — and it must still be drawn."""
+        path = tmp_path / "empty.toml"
+        path.write_text("[dofs]\n")
+        editor = ControlMapEditor(path)
+        editor.load()
+        self._at(self._ys(_context, editor), "Add control")
+
+    def test_add_target_follows_the_same_rule(self, _context, tmp_path):
+        """`Add target` appends to the target list, so it goes at the end of *that* list.
+
+        It was up in the name row beside `Remove control` — one indent level above the rows it
+        adds, and giving an append the same weight as a delete.
+        """
+        from imgui_bundle import icons_fontawesome_6 as fa
+
+        editor = _editor(tmp_path)
+        seen = self._ys(_context, editor)
+        # BUSY's first control has five targets, so this has to clear the last of them.
+        assert min(self._at(seen, "Add target")) > max(self._at(seen, fa.ICON_FA_XMARK)), (
+            "Add target is not below the target rows it appends to"
+        )
+        assert min(self._at(seen, "Add target")) > min(self._at(seen, "Remove control")), (
+            "Add target is still up on the name row"
+        )
+
+
+
+class TestTheProbabilityGateIsAToggle:
+    """The gate is a sticky on/off, so it is the contract's toggle, not an `imgui.checkbox`.
+
+    `CLAUDE.md`: *use `push_selected`/`pop_selected` for any sticky on/off control*. It was the
+    only labelled checkbox in the app, and at this theme's frame padding an unticked box is a
+    tall empty rounded rectangle — which reads as a text field, not as an off switch.
+
+    Clicked twice here rather than inspected, because the risk in swapping a `checkbox` for a
+    `button` is the return value: `checkbox` hands back the new state, `button` only says it
+    was pressed, so the toggle has to be derived instead of assigned.
+    """
+
+    @staticmethod
+    def _click(io, editor, label, frames=1):
+        """Render `frames` frames with `label` reporting a click, and nothing else clicked."""
+        original = imgui.button
+
+        def spy(text, *args, **kwargs):
+            original(text, *args, **kwargs)
+            return text.endswith(label)
+
+        imgui.button = spy
+        try:
+            io.display_size = imgui.ImVec2(900, 1400)
+            for _ in range(frames):
+                imgui.new_frame()
+                imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+                imgui.set_next_window_size(imgui.ImVec2(860, 1400))
+                imgui.begin("gate", None, imgui.WindowFlags_.no_saved_settings)
+                editor.ui()
+                imgui.end()
+                imgui.end_frame()
+        finally:
+            imgui.button = original
+
+    def test_it_is_drawn_as_a_button(self, _context, tmp_path):
+        editor = _editor(tmp_path)
+        seen = TestAddControlSitsWithTheControls._ys(_context, editor)
+        assert any(label == "Treat as probability" for label, _ in seen), (
+            "the gate is not among the buttons drawn — it is still a checkbox"
+        )
+
+    def test_clicking_turns_it_on_with_a_cutoff_then_off_again(self, _context, tmp_path):
+        editor = _editor(tmp_path)
+        assert editor._draft[0]["threshold_fraction"] is None
+        self._click(_context, editor, "Treat as probability")
+        assert editor._draft[0]["threshold_fraction"] == 0.5, "one click should arm the gate"
+        self._click(_context, editor, "Treat as probability")
+        assert editor._draft[0]["threshold_fraction"] is None, "a second click should disarm it"
+
+
+
+class TestTheLabelColumnLinesFieldsUp:
+    """`common.label_column` — the ragged left edge, and the trap in fixing it.
+
+    Two gates labelled "On at or above" and "Hold for" started their sliders at two different
+    x, because each label was measured on its own. One column measured across the group fixes
+    that; `same_line`'s absolute `offset_from_start_x` form looks like the way to do it and is
+    not, because it measures from the window edge and ignores `imgui.indent` — which is
+    exactly where these rows live.
+    """
+
+    LABELS = ("On at or above", "Hold for")
+
+    @staticmethod
+    def _run(io, draw, width=900):
+        """Run `draw` in a settled frame and hand it a list to record positions into."""
+        marks: list[tuple[str, float, float]] = []
+        io.display_size = imgui.ImVec2(width + 40, 1400)
+        for _ in range(3):
+            marks.clear()
+            imgui.new_frame()
+            imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+            imgui.set_next_window_size(imgui.ImVec2(width, 1400))
+            imgui.begin("col", None, imgui.WindowFlags_.no_saved_settings)
+            draw(marks)
+            imgui.end()
+            imgui.end_frame()
+        return marks
+
+    def _row(self, marks, label, value=0.5):
+        label_column(label, self.LABELS)
+        imgui.slider_float(f"##{label}", value, 0.0, 1.0, "")
+        marks.append((label, imgui.get_item_rect_min().x, imgui.get_item_rect_max().x))
+
+    def test_both_fields_start_at_the_same_x(self, _context):
+        marks = self._run(_context, lambda m: [self._row(m, x) for x in self.LABELS])
+        assert marks[0][1] == pytest.approx(marks[1][1], abs=1.0), (
+            f"the fields start at different x: {marks}"
+        )
+
+    def test_it_survives_an_indent(self, _context):
+        """The field must clear its own label, and shift with the indent rather than ignore it.
+
+        `same_line(offset_from_start_x=column)` passes the first assertion and fails the
+        second: at an indent deeper than the column it puts the field *left* of the label it
+        belongs to, i.e. on top of it.
+        """
+
+        def draw(marks):
+            self._row(marks, "Hold for")
+            imgui.indent()
+            imgui.indent()
+            label_column("Hold for", self.LABELS)
+            label_right = imgui.get_item_rect_max().x
+            imgui.slider_float("##indented", 0.5, 0.0, 1.0, "")
+            marks.append(("indented", imgui.get_item_rect_min().x, label_right))
+            imgui.unindent()
+            imgui.unindent()
+
+        flat, indented = self._run(_context, draw)
+        assert indented[1] > indented[2], "the field overlaps the label it is indented under"
+        assert indented[1] > flat[1], "the field ignored the indent"
+
+    def test_a_narrow_panel_stacks_instead_of_shrinking(self, _context):
+        """Below a usable field width the label goes above it, rather than to a sliver."""
+        wide = self._run(_context, lambda m: self._row(m, "On at or above"), width=900)
+        narrow = self._run(_context, lambda m: self._row(m, "On at or above"), width=180)
+        assert wide[0][1] > 100.0, "wide should put the field beside the label"
+        assert narrow[0][1] < 30.0, "narrow should put the field on its own line"
+        assert narrow[0][2] - narrow[0][1] > 90.0, "and it should still be usable"
+
+
+
+class TestTheActionsShareOneRow:
+    """Four buttons on one line when they fit, with a gap where the subject changes.
+
+    `Connect` had a row to itself because it sat beside a note about the target. The note is
+    gone — how many addresses a target publishes is not something anyone reads — so the row
+    was a line spent on a gap. It keeps the gap, as a gap.
+    """
+
+    ACTIONS = ("Connect", "Save", "Save as...", "Reload")
+
+    def _row(self, io, editor, width):
+        """Every action button, as (label, x, y), from a settled frame at `width`."""
+        seen: list[tuple[str, float, float]] = []
+        original = imgui.button
+
+        def spy(label, *args, **kwargs):
+            result = original(label, *args, **kwargs)
+            if label.endswith(self.ACTIONS):
+                seen.append((label, imgui.get_item_rect_min().x, imgui.get_item_rect_min().y))
+            return result
+
+        imgui.button = spy
+        try:
+            io.display_size = imgui.ImVec2(width + 40, 1400)
+            for _ in range(3):
+                seen.clear()
+                imgui.new_frame()
+                imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+                imgui.set_next_window_size(imgui.ImVec2(width, 1400))
+                imgui.begin(f"actions_row{width}", None, imgui.WindowFlags_.no_saved_settings)
+                editor.ui()
+                imgui.end()
+                imgui.end_frame()
+        finally:
+            imgui.button = original
+        return seen[: len(self.ACTIONS)]
+
+    @pytest.mark.parametrize("width", (420, 560, 720, 1000, 1600))
+    def test_they_all_share_one_line_when_there_is_room(self, _context, tmp_path, width):
+        row = self._row(_context, _editor(tmp_path), width)
+        assert len(row) == len(self.ACTIONS), f"an action went missing: {row}"
+        assert len({y for _, _, y in row}) == 1, f"the actions wrapped at {width} px: {row}"
+
+    def test_a_narrow_panel_still_wraps_rather_than_clips(self, _context, tmp_path):
+        """320 px cannot hold four, so one drops to a second line — never off the edge."""
+        row = self._row(_context, _editor(tmp_path), 320)
+        assert len({y for _, _, y in row}) > 1, "four buttons cannot fit 320 px"
+
+    def test_the_gap_marks_where_the_subject_changes(self, _context, tmp_path):
+        """Re-asking the targets and writing the file are two subjects, so `_GROUP_GAP`.
+
+        Measured as a comparison, not against a pixel count: what matters is that the break
+        before Save is wider than the ordinary spacing between the file buttons.
+        """
+        row = {label.split("  ")[-1]: x for label, x, _ in self._row(_context, _editor(tmp_path), 900)}
+        before_save = row["Save"] - row["Connect"]
+        between_file_buttons = row["Reload"] - row["Save as..."]
+        assert before_save > between_file_buttons, (
+            f"no visible break before Save: {row}"
+        )
+
+
+
+class TestOnlyTheGatesThatApplyAreDrawn:
+    """A gate that cannot apply to the chosen control is not drawn at all.
+
+    Both were drawn always, disabled, with the reason on hover. That is two permanent rows per
+    control spent on settings that do not apply to the continuous DOFs almost every map is made
+    of — and "Steady for" then sat there *enabled* whenever the address could not be checked,
+    which is every freshly added control, since it has no address yet.
+
+    Two exceptions, both so the editor cannot hide state it refuses to save.
+    """
+
+    @staticmethod
+    def _labels(io, editor):
+        """Every button and label drawn for one settled frame."""
+        seen: list[str] = []
+        original_button, original_text = imgui.button, imgui.text
+
+        def spy_button(label, *args, **kwargs):
+            seen.append(label)
+            return original_button(label, *args, **kwargs)
+
+        def spy_text(label, *args, **kwargs):
+            seen.append(label)
+            return original_text(label, *args, **kwargs)
+
+        imgui.button, imgui.text = spy_button, spy_text
+        try:
+            io.display_size = imgui.ImVec2(940, 1400)
+            for _ in range(3):
+                seen.clear()
+                imgui.new_frame()
+                imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+                imgui.set_next_window_size(imgui.ImVec2(900, 1400))
+                imgui.begin("gates", None, imgui.WindowFlags_.no_saved_settings)
+                editor.ui()
+                imgui.end()
+                imgui.end_frame()
+        finally:
+            imgui.button, imgui.text = original_button, original_text
+        return seen
+
+    @staticmethod
+    def _editor_for(tmp_path, body):
+        path = tmp_path / "g.toml"
+        path.write_text(body)
+        editor = ControlMapEditor(path, client=_Client())
+        editor.load()
+        editor._connect()
+        return editor
+
+    def test_a_number_is_not_offered_a_debounce(self, _context, tmp_path):
+        """`vhi.prediction.index` is continuous — it has no state transition to hold."""
+        editor = self._editor_for(tmp_path, '[dofs]\na = "vhi.prediction.index"\n')
+        drawn = self._labels(_context, editor)
+        assert "Steady for" not in drawn
+        assert any(label.endswith("Add target") for label in drawn), "the row still drew"
+
+    def test_a_held_state_is(self, _context, tmp_path):
+        """`vhi.control.gesture` has exactly two states, so both gates apply."""
+        editor = self._editor_for(tmp_path, '[dofs]\na = "vhi.control.gesture"\n')
+        drawn = self._labels(_context, editor)
+        assert "Steady for" in drawn
+        assert "Treat as probability" in drawn
+
+    def test_a_control_with_no_address_yet_is_offered_neither(self, _context, tmp_path):
+        """The state every control is in the moment it is added: nothing to gate."""
+        editor = self._editor_for(tmp_path, '[dofs]\na = "vhi.control.gesture"\n')
+        editor.add_control()          # appended with no target
+        drawn = self._labels(_context, editor)
+        assert drawn.count("Steady for") == 1, "the empty control was offered a debounce"
+
+    def test_a_value_the_control_refuses_is_still_shown_and_editable(self, _context, tmp_path):
+        """The dead end this replaced: disabled *and* set, so `problems` blocked the save and
+        the only way to clear it was the text view."""
+        editor = self._editor_for(
+            tmp_path,
+            '[dofs]\na = { target = "vhi.prediction.index", debounce_s = 0.3 }\n',
+        )
+        assert editor._draft[0]["debounce_s"] == 0.3
+        assert any("no state transition" in p for p in editor.problems()), (
+            "a debounce on a continuous DOF should still block the save"
+        )
+        assert "Steady for" in self._labels(_context, editor), (
+            "a value in the file must stay visible, or it cannot be cleared here"
+        )
 
 
 class TestThePlaygroundPicksALayoutForTheWidth:
@@ -301,7 +680,7 @@ class TestThePlaygroundPicksALayoutForTheWidth:
             pathlib.Path(__file__).resolve().parent.parent
             / "examples"
             / "synthetic"
-            / "vhi_playground.py"
+            / "control_map_studio.py"
         ).read_text()
         namespace: dict[str, object] = {}
         for line in source.splitlines():
@@ -322,12 +701,50 @@ class TestThePlaygroundPicksALayoutForTheWidth:
         """A slider narrower than this cannot be dragged to a useful value."""
         assert module["CONTROLS_W"] >= 260.0
 
+    def test_a_slider_can_be_typed_into(self):
+        """Double-click opens a field, and the click that opened it does not move the value.
+
+        Clicking a slider track jumps the value to the click position, so the second click
+        of a double-click arrives on an already-changed number. Restoring it is the whole
+        difference between "type an exact value" and "set a random one, then type".
+        """
+        source = self._source()
+        assert "is_mouse_double_clicked" in source
+        assert "levels[alias] = before" in source, "the jump must be undone"
+        assert "set_keyboard_focus_here" in source, "the field must take the caret"
+
+    def test_a_typed_value_is_clamped_to_the_range_the_slider_offers(self):
+        """A field that accepted 5.0 would show a number the hand will never render.
+
+        Pinned against the slider's own bounds rather than as literals: if the slider
+        domain ever changes, a clamp left behind at the old one is exactly the mismatch
+        this catches.
+        """
+        source = self._source()
+        assert "imgui.slider_float(label, levels[alias], -1.0, 1.0)" in source
+        assert "min(1.0, max(-1.0, value))" in source
+
+    def test_an_open_field_is_closed_when_the_map_reloads(self):
+        """Hot reload can rename or drop any alias, and a field left open on a vanished
+        one would be typing into nothing."""
+        source = self._source()
+        assert "typing.clear()" in source
+        assert "focus_pending.clear()" in source
+
+    def _source(self) -> str:
+        return (
+            pathlib.Path(__file__).resolve().parent.parent
+            / "examples"
+            / "synthetic"
+            / "control_map_studio.py"
+        ).read_text()
+
     def test_both_layouts_are_declared_and_differ(self):
         source = (
             pathlib.Path(__file__).resolve().parent.parent
             / "examples"
             / "synthetic"
-            / "vhi_playground.py"
+            / "control_map_studio.py"
         ).read_text()
         assert "WIDE = Grid(" in source
         assert "NARROW = Grid(" in source
@@ -392,7 +809,7 @@ class TestThePlaygroundsOwnSlidersFit:
     @pytest.fixture(scope="class")
     def playground(self):
         """The real module. Importable now that it uses `launchable()`."""
-        return pytest.importorskip("examples.synthetic.vhi_playground")
+        return pytest.importorskip("examples.synthetic.control_map_studio")
 
     @pytest.fixture
     def wired(self, playground):
@@ -437,3 +854,403 @@ class TestThePlaygroundsOwnSlidersFit:
             imgui.slider_float = original
         assert widths, "no sliders drawn"
         assert min(widths) >= 150.0, f"narrowest track was {min(widths):.0f}px"
+
+
+class TestTheStudioHoldsSeveralDocuments:
+    """Tabs: one editor per open map, the active one driving the targets."""
+
+    @pytest.fixture
+    def studio(self):
+        module = pytest.importorskip("examples.synthetic.control_map_studio")
+        module.documents[:] = [module._new_document()]
+        module.active = 0
+        return module
+
+    def test_it_starts_on_one_blank_untitled_map(self, studio):
+        assert len(studio.documents) == 1
+        assert studio.documents[0].path is None
+        assert studio._tab_label(0) == "Untitled"
+
+    def test_untitled_maps_are_numbered_for_the_reader(self, studio):
+        """The widget calls them all "Untitled"; which one of several is the app's question."""
+        studio.documents.append(studio._new_document())
+        studio.documents.append(studio._new_document())
+        assert [studio._tab_label(i) for i in range(3)] == [
+            "Untitled",
+            "Untitled 2",
+            "Untitled 3",
+        ]
+
+    def test_opening_a_file_twice_focuses_it_rather_than_duplicating(self, studio):
+        studio._open_document(studio.CONTROL_FILE)
+        first = studio.active
+        studio._open_document(studio.CONTROL_FILE)
+        assert studio.active == first
+        assert sum(1 for d in studio.documents if d.path is not None) == 1
+
+    def test_closing_the_last_document_leaves_a_blank_one(self, studio):
+        """An app with no document has nothing to look at and no obvious way back."""
+        studio._close_document(0)
+        assert len(studio.documents) == 1
+        assert studio.documents[0].path is None
+
+    def test_switching_disarms_the_keyboard(self, studio):
+        """A map you navigated away from must not keep sending keystrokes."""
+        studio.documents.append(studio._new_document())
+        studio.keys._armed = True          # as `arm()` would leave it
+        studio._switch_to(1)
+        assert studio.keys.armed is False
+
+    def test_closing_also_disarms(self, studio):
+        studio.documents.append(studio._new_document())
+        studio.active = 1
+        studio.keys._armed = True
+        studio._close_document(1)
+        assert studio.keys.armed is False
+
+
+class TestTheTabBarSurvivesAClose:
+    """Closing the active tab killed the app, and the mechanism is worth pinning.
+
+    `_tab_label` indexed the *live* document list while the render loop walked a copy. A
+    close shrank the live list, the next label raised `IndexError`, and that escaped past
+    `end_tab_bar()` — which ImGui answers with `IM_ASSERT(Missing EndTabBar())`, aborting the
+    process instead of raising. So a mistake in one label took the whole studio down.
+    """
+
+    @pytest.fixture
+    def studio(self):
+        module = pytest.importorskip("examples.synthetic.control_map_studio")
+        module.documents[:] = [module._new_document()]
+        module.active = 0
+        return module
+
+    def test_a_label_is_numbered_within_the_list_it_is_given(self, studio):
+        """The fix: labels read the caller's snapshot, not mutable global state."""
+        snapshot = [studio._new_document(), studio._new_document()]
+        assert studio._tab_label(1, snapshot) == "Untitled 2"
+
+    def test_a_stale_index_cannot_reach_past_the_live_list(self, studio):
+        """The exact crash: a snapshot longer than `documents`, as a close leaves it."""
+        snapshot = [studio._new_document(), studio._new_document()]
+        assert len(studio.documents) == 1 < len(snapshot)
+        assert studio._tab_label(1, snapshot)          # must not raise
+
+    def test_rendering_the_bar_pairs_begin_and_end(self, _context, studio):
+        """A frame that leaves a tab bar open is what turns a Python error into an abort, so
+        render it for real rather than trusting the shape of the code."""
+        studio.documents.append(studio._new_document())
+        studio._open_document(studio.CONTROL_FILE)
+        # Two frames: the second is the one that would trip an unbalanced stack.
+        for _ in range(2):
+            _overflow(_context, 900, studio._tabs_ui)
+
+    def test_a_close_is_applied_after_the_bar_not_during_it(self, studio):
+        """Bookkeeping only, but it is the invariant the crash violated: the list may not
+        change while it is being walked."""
+        import inspect
+
+        source = inspect.getsource(studio._tabs_ui)
+        body = source.split("imgui.end_tab_bar()")
+        assert len(body) == 2, "one end_tab_bar, or this check means nothing"
+        before, after = body
+        assert "_close_document(" not in before
+        assert "documents.append(" not in before
+        assert "_close_document(" in after
+
+
+class TestTheDocumentsMenu:
+    """Opening a map moved off the tab strip.
+
+    A tab strip is for tabs, so a button shaped like one reading "Open..." looked like a
+    document by that name. Everything that *makes* a tab now lives behind a caret next to
+    the `+`, which is where you already look for another one.
+    """
+
+    @pytest.fixture
+    def studio(self):
+        module = pytest.importorskip("examples.synthetic.control_map_studio")
+        module.documents[:] = [module._new_document()]
+        module.active = 0
+        module.recent.clear()
+        return module
+
+    def test_the_tab_strip_has_no_open_button_left(self, studio):
+        import inspect
+
+        source = inspect.getsource(studio._tabs_ui)
+        assert 'tab_item_button("Open' not in source
+        assert 'tab_item_button("+"' in source
+
+    def test_the_examples_are_reachable(self, studio):
+        """The studio starts blank now, so examples/controls went from "the file you opened
+        into" to invisible. The menu is what keeps them findable."""
+        examples = sorted(studio.CONTROL_FILE.parent.glob("*.toml"))
+        assert examples, "the shipped maps are what the menu lists"
+        studio._open_document(examples[0])
+        assert studio.documents[studio.active].path == examples[0]
+
+    def test_recent_remembers_what_was_closed(self, studio):
+        """Its whole use: reopening a tab you just closed."""
+        studio._open_document(studio.CONTROL_FILE)
+        opened_at = studio.active
+        studio._close_document(opened_at)
+        assert studio.CONTROL_FILE.resolve() in studio.recent
+
+    def test_recent_is_most_recent_first_and_deduped(self, studio):
+        examples = sorted(studio.CONTROL_FILE.parent.glob("*.toml"))[:2]
+        studio._open_document(examples[0])
+        studio._open_document(examples[1])
+        studio._open_document(examples[0])
+        assert studio.recent[0] == examples[0].resolve()
+        assert len(studio.recent) == 2
+
+    def test_recent_is_bounded(self, studio):
+        """A menu that grows without limit is a menu nobody scrolls."""
+        for n in range(20):
+            studio._open_document(studio.CONTROL_FILE.parent / f"nope{n}.toml")
+        assert len(studio.recent) <= 8
+
+    def test_rendering_the_bar_and_menu_pairs_up(self, _context, studio):
+        """Popups and tab bars are separate ImGui stacks, and an unbalanced one aborts the
+        process rather than raising — so render it rather than trusting the shape."""
+        studio._open_document(studio.CONTROL_FILE)
+        for _ in range(2):
+            _overflow(_context, 900, studio._tabs_ui)
+
+
+def test_opening_a_file_that_is_gone_does_not_crash(tmp_path):
+    """The recent list makes this ordinary: a path that has moved since it was opened.
+
+    `_connect` runs from a click, so an unguarded `open()` here took the window down rather
+    than the tab — the same failure shape as the tab-close crash.
+    """
+    studio = pytest.importorskip("examples.synthetic.control_map_studio")
+    studio.documents[:] = [studio._new_document()]
+    studio.active = 0
+    studio._open_document(tmp_path / "never-existed.toml")
+    assert "could not be read" in studio.status or "Untitled" in studio.status
+
+
+class TestTheStudioFollowsWhatTheTargetsOffer:
+    """Launching a renderer has to reach the sliders, not just the editor's picker."""
+
+    @pytest.fixture
+    def studio(self):
+        module = pytest.importorskip("examples.synthetic.control_map_studio")
+        module.documents[:] = [module._new_document()]
+        module.active = 0
+        module.bus = None
+        module.caps_seen.clear()
+        return module
+
+    def test_a_target_coming_up_or_going_away_rebuilds_the_bus(self, studio, monkeypatch):
+        """The asymmetry behind "the VHI stuff only shows up sometimes".
+
+        `_connect` was reachable only from a button, a tab switch or a save, so after
+        pressing Launch the editor's dropdown filled itself while DRIVE THE MAP went on
+        saying "Press Connect" — the manifest had changed and nothing here noticed.
+        """
+        from myogestic.controls import Capability
+
+        calls = []
+        monkeypatch.setattr(studio, "_connect", lambda known=None: calls.append(1))
+
+        studio._rebuild_if_the_manifest_changed()
+        assert len(calls) == 1, "the first frame must connect rather than wait for a click"
+
+        for _ in range(5):
+            studio._rebuild_if_the_manifest_changed()
+        assert len(calls) == 1, "it rebuilt on a frame where nothing had changed"
+
+        studio.documents[0]._capabilities = (
+            Capability(
+                "vhi.prediction.index", "continuous", -1.0, 1.0, 0.0,
+                channel=2, stream_name="MyoGestic_Output",
+            ),
+        )
+        studio._rebuild_if_the_manifest_changed()
+        assert len(calls) == 2, "a renderer that came up did not reach the sliders"
+
+        studio.documents[0]._capabilities = ()
+        studio._rebuild_if_the_manifest_changed()
+        assert len(calls) == 3, "a renderer that went away left its sliders behind"
+
+    def test_a_connect_that_returns_early_clears_the_old_waiting_list(self, studio):
+        """`waiting` is drawn unconditionally, so a stale one belongs to the wrong map.
+
+        It was assigned only on the path that reaches `_split`, and `_connect` returns before
+        that for an untitled map and for a file that will not read — so an Untitled tab
+        reported undrivable controls out of the map you had just navigated away from.
+        """
+        studio.waiting = {"close": "vhi.prediction.index — vhi has not answered"}
+        studio._connect()          # the active document is untitled: an early return
+        assert studio.waiting == {}, "the previous map's controls were still listed"
+        assert "Untitled" in studio.status
+
+    def test_closing_a_document_forgets_its_manifest_count(self, studio, monkeypatch):
+        """`caps_seen` is keyed by `id`, and CPython reuses ids of collected objects.
+
+        A new document inheriting a dead one's entry, with the same number of controls
+        offered, would read as "nothing has changed" and never build a bus at all.
+        """
+        monkeypatch.setattr(studio, "_connect", lambda known=None: None)
+        studio.documents.append(studio._new_document())
+        doomed = studio.documents[1]
+        studio._rebuild_if_the_manifest_changed()          # records the active one
+        studio.caps_seen[id(doomed)] = 99
+
+        studio._close_document(1)
+
+        assert id(doomed) not in studio.caps_seen, "a closed document's count outlived it"
+
+    def test_the_render_loop_actually_reaches_the_rebuild_check(
+        self, studio, _context, monkeypatch
+    ):
+        """A helper nothing calls is not a fix.
+
+        The direct-call test pins the helper's logic; this pins the wiring. Deleting the
+        call from `studio_ui` left the whole suite green, which is the same class of gap as
+        the bug being fixed — the render loop never asked.
+        """
+        calls = []
+        monkeypatch.setattr(studio, "_connect", lambda known=None: calls.append(1))
+        studio.caps_seen.clear()
+
+        _overflow(_context, 900, lambda: studio.studio_ui(studio.app.ctx))
+
+        assert calls, "studio_ui never reached the manifest check"
+
+    def test_an_automatic_rebuild_does_not_disarm_the_keyboard(
+        self, studio, monkeypatch, tmp_path
+    ):
+        """`bus.stop()` lifts every key, which is right on the way out and wrong here.
+
+        Rebuilding used to follow a click only, so disarming was something the user had
+        just asked for. It now also follows a renderer turning up, and an arm switch that
+        flicks itself off mid-session — silently, since nothing here draws a log — is worse
+        than one that stays on. `_switch_to` and `_close_document` still disarm on purpose:
+        they do it *before* calling `_connect`, so the arm they see is already False.
+        """
+        from myogestic.controls import Capability
+
+        class _Keys:
+            def __init__(self):
+                self.armed = False
+                self.claims = frozenset({"walk"})
+
+            def arm(self):
+                self.armed = True
+
+            def disarm(self):
+                self.armed = False
+
+            def stop(self):
+                self.disarm()
+
+            def capabilities(self):
+                return [
+                    Capability("keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0,
+                               states=("up", "down"), channel=-1)
+                ]
+
+        class _Target:
+            def stop(self):
+                pass
+
+            def negotiate(self):
+                return False
+
+        class _Bus:
+            def __init__(self, controls, targets=(), hz=0):
+                self.targets = list(targets)
+
+            def stop(self):
+                for target in self.targets:
+                    target.stop()
+
+        fake_keys = _Keys()
+        monkeypatch.setattr(studio, "keys", fake_keys)
+        monkeypatch.setattr(studio, "VhiTarget", lambda **kw: _Target())
+        monkeypatch.setattr(studio, "ControlBus", _Bus)
+
+        path = tmp_path / "keys.toml"
+        path.write_text('[dofs]\nwalk = "keyboard.hold.letter.w"\n')
+        studio.documents[:] = [studio._new_document(path)]
+        studio.active = 0
+        studio.bus = None
+
+        studio._connect()
+        assert studio.bus is not None, studio.status
+
+        studio._connect()                     # a rebuild while it was never armed
+        assert not fake_keys.armed, "a rebuild armed a keyboard nobody had switched on"
+
+        fake_keys.arm()                       # the user ticks "Send keys to the system"
+        studio._connect()                     # a renderer turned up: an automatic rebuild
+
+        assert fake_keys.armed, "launching a renderer switched the keyboard off"
+
+    def test_switching_tabs_still_disarms_on_purpose(self, studio, monkeypatch, tmp_path):
+        """The carry must not resurrect a disarm the app asked for."""
+
+        class _Keys:
+            def __init__(self):
+                self.armed = True
+
+            def disarm(self):
+                self.armed = False
+
+        fake_keys = _Keys()
+        monkeypatch.setattr(studio, "keys", fake_keys)
+        monkeypatch.setattr(studio, "_connect", lambda known=None: None)
+        studio.documents.append(studio._new_document())
+
+        studio._switch_to(1)
+
+        assert not fake_keys.armed, "a tab switch must leave the keyboard disarmed"
+
+    def test_an_automatic_rebuild_does_not_re_ask_the_targets(
+        self, studio, monkeypatch, tmp_path
+    ):
+        """No click happened, so nobody is waiting through a round trip — and the editor's
+        worker already fetched the very answer that triggered this."""
+        handed = []
+        monkeypatch.setattr(studio, "_connect", lambda known=None: handed.append(known))
+        monkeypatch.setattr(
+            studio, "_manifests", lambda: pytest.fail("the render thread re-asked")
+        )
+        studio.caps_seen.clear()
+
+        studio._rebuild_if_the_manifest_changed()
+
+        assert handed and handed[0] is not None, "it re-asked instead of reusing"
+
+    def test_the_editors_manifest_names_the_targets_that_said_nothing(self, studio):
+        """`absent` is read back off the addresses, so it cannot drift from the merge."""
+        from myogestic.controls import Capability
+
+        studio.documents[0]._capabilities = (
+            Capability("keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0,
+                       states=("up", "down"), channel=-1),
+        )
+        capabilities, absent = studio._editor_manifest()
+        assert [c.address for c in capabilities] == ["keyboard.hold.letter.w"]
+        assert absent == ["vhi"]
+
+        studio.documents[0]._capabilities = ()
+        assert studio._editor_manifest()[1] == ["vhi", "keyboard"]
+
+    def test_a_press_still_asks_for_itself(self, studio, monkeypatch, tmp_path):
+        """The button exists to re-ask; reusing a cached manifest there would defeat it."""
+        asked = []
+        monkeypatch.setattr(studio, "_manifests", lambda: (asked.append(1), ([], ["vhi"]))[1])
+        path = tmp_path / "press.toml"
+        path.write_text('[dofs]\nwalk = "keyboard.hold.letter.w"\n')
+        studio.documents[:] = [studio._new_document(path)]
+        studio.active = 0
+        studio.bus = None
+
+        studio._connect()
+
+        assert asked, "a bare _connect() must ask the targets itself"

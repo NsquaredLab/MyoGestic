@@ -12,6 +12,7 @@ rejects would be worse than no editor, because something else is reading that fi
 
 from __future__ import annotations
 
+import pathlib
 import tomllib
 
 import pytest
@@ -339,16 +340,40 @@ class TestItWorksWithoutATarget:
         editor.add_control("a", "some.target.address")
         assert editor.problems() == []
 
-    def test_connecting_to_nothing_says_so(self, tmp_path):
+    def test_pressing_connect_with_nothing_running_says_so(self, tmp_path):
+        """A pressed button with no visible effect is worse than a line of noise.
+
+        The *timer* stays silent — see `test_the_background_retry_says_nothing`. This is the
+        press, which has to answer.
+        """
+
         class Silent:
             def capabilities(self):
                 return None
 
         editor = ControlMapEditor(tmp_path / "c.toml", client=Silent())
         editor.load()
+        editor._asked = True          # what the button sets
         editor._connect()
         assert editor.capabilities == ()
-        assert "No target answered" in editor._message
+        assert "did not answer" in editor._message
+
+    def test_the_background_retry_says_nothing(self, tmp_path):
+        """Connecting is on a timer, so a report per round is a report forever.
+
+        This is the line the user actually saw: "1 target(s) did not answer", permanently, for
+        a target they had not asked about and a retry they did not press.
+        """
+
+        class Silent:
+            def capabilities(self):
+                return None
+
+        editor = ControlMapEditor(tmp_path / "c.toml", client=Silent())
+        editor.load()
+        editor._message = ""          # `load` says the file is new; that is not this
+        editor._connect()             # no `_asked`: this is the timer
+        assert editor._message == "", "the timer wrote a line nobody asked for"
 
 
 class TestTheFileCanBeEditedAsText:
@@ -469,9 +494,12 @@ class TestThePickerRowsAreReadable:
         editor._capabilities = (*editor._capabilities, off)
         assert "vhi.grip.force" not in [c.address for c in editor._offered()]
 
-    def test_a_discrete_row_says_how_many_states(self, editor):
+    def test_a_discrete_row_names_the_states_it_accepts(self, editor):
+        """Named rather than counted, while they fit. "3 states" makes a reader go and look
+        them up; the names are the answer they were going to look for."""
         cap = next(c for c in MANIFEST if c.kind == "discrete")
-        assert "3 states" in editor._describe(cap)
+        described = editor._describe(cap)
+        assert " / ".join(cap.states) in described
 
     def test_the_aliased_forms_of_one_control_are_reported_as_peers(self, editor):
         """`thumb` and `thumb.flexion` are one channel; a user has to be able to see it."""
@@ -896,3 +924,1071 @@ class TestOneRowPerControlNotPerName:
 
     def test_held_states_survive_the_collapse(self, editor):
         assert "vhi.control.gesture" in [c.address for c in editor._offered()]
+
+
+class TestTheFileIsWatched:
+    """Hot reload: an external write reaches the panel without a button.
+
+    The risk here is not detection, it is the *guard*. This editor's draft is the only copy
+    of whatever has been typed into it, so a reload that fires at the wrong moment destroys
+    work with no undo. Every test below is really about which of the two versions survives.
+    """
+
+    #: A second map, distinguishable from GOOD by its alias.
+    OTHER = """
+[dofs]
+elsewhere = "vhi.prediction.ring"
+"""
+
+    def _touch(self, editor, body: str) -> None:
+        """Write the file as another program would, past the mtime granularity."""
+        import os
+        import time
+
+        editor.path.write_text(body)
+        # Bump the stamp explicitly rather than sleeping: `st_mtime_ns` is fine-grained but
+        # some filesystems round, and a test that depends on the clock advancing is a test
+        # that fails on a fast machine.
+        stamp = time.time() + 10
+        os.utime(editor.path, (stamp, stamp))
+
+    def test_an_external_change_is_picked_up_when_nothing_is_unsaved(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        self._touch(editor, self.OTHER)
+        assert editor.poll_disk() is True
+        assert [e["alias"] for e in editor._draft] == ["elsewhere"]
+
+    def test_nothing_happens_when_the_file_has_not_changed(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        assert editor.poll_disk() is False
+        assert editor.poll_disk() is False
+
+    def test_our_own_save_is_not_mistaken_for_someone_elses_change(self, tmp_path):
+        """Without re-stamping on save, every save would report a change on the next frame."""
+        editor = _editor(tmp_path, GOOD)
+        editor._draft[0]["alias"] = "renamed"
+        assert editor.save() is True
+        assert editor.poll_disk() is False
+
+    def test_an_external_change_never_overwrites_unsaved_edits(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        editor._draft[0]["alias"] = "mine"
+        before = [dict(entry) for entry in editor._draft]
+        self._touch(editor, self.OTHER)
+        assert editor.poll_disk() is False
+        assert editor._conflict is True
+        assert editor._draft == before
+
+    def test_reloading_from_disk_resolves_the_conflict(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        editor._draft[0]["alias"] = "mine"
+        self._touch(editor, self.OTHER)
+        editor.poll_disk()
+        assert editor.take_disk_version() is True
+        assert [e["alias"] for e in editor._draft] == ["elsewhere"]
+        assert editor._conflict is False
+
+    def test_keeping_my_edits_resolves_it_and_does_not_ask_again(self, tmp_path):
+        """Dismissing has to re-stamp, or the banner returns on the very next frame."""
+        editor = _editor(tmp_path, GOOD)
+        editor._draft[0]["alias"] = "mine"
+        self._touch(editor, self.OTHER)
+        editor.poll_disk()
+        editor.keep_mine()
+        assert editor._conflict is False
+        assert editor.poll_disk() is False
+        assert editor._conflict is False
+        assert [e["alias"] for e in editor._draft] == ["mine"]
+
+    def test_unapplied_text_in_the_raw_view_counts_as_unsaved(self, tmp_path):
+        """The text view is not the draft until Apply, so a reload would eat it.
+
+        `_matches_disk` alone says this editor is clean — the fields do match the file. What
+        is unsaved is sitting in the text buffer, which is exactly the case a narrower dirty
+        check misses.
+        """
+        editor = _editor(tmp_path, GOOD)
+        editor._raw_open = True
+        editor._raw = '[dofs]\nhalf_typed = "vhi.prediction.li'
+        assert editor._matches_disk() is True
+        assert editor._dirty() is True
+        self._touch(editor, self.OTHER)
+        assert editor.poll_disk() is False
+        assert editor._conflict is True
+        assert editor._raw.endswith("vhi.prediction.li")
+
+    def test_a_file_that_stops_parsing_asks_rather_than_reloading(self, tmp_path):
+        """Half-written TOML is what you catch an editor mid-save with."""
+        editor = _editor(tmp_path, GOOD)
+        self._touch(editor, "[dofs]\nbroken = ")
+        assert editor.poll_disk() is False
+        assert editor._conflict is True
+
+    def test_a_missing_file_does_not_raise(self, tmp_path):
+        """`poll_disk` runs inside a render frame; it may not throw."""
+        editor = _editor(tmp_path, GOOD)
+        editor.path.unlink()
+        assert editor.poll_disk() is False
+        assert editor._conflict is False
+
+
+class TestSaveAs:
+    def test_it_writes_the_new_path_and_follows_it(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        elsewhere = tmp_path / "nested" / "experiment.toml"
+        assert editor.save_as(elsewhere) is True
+        assert editor.path == elsewhere
+        assert load_control_map(tomllib.loads(elsewhere.read_text())).bindings
+
+    def test_the_original_is_left_alone(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        original = editor.path
+        was = original.read_text()
+        editor._draft[0]["alias"] = "changed"
+        editor.save_as(tmp_path / "copy.toml")
+        assert original.read_text() == was
+
+    def test_a_later_save_goes_to_the_new_path(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        original = editor.path
+        was = original.read_text()
+        editor.save_as(tmp_path / "copy.toml")
+        editor._draft[0]["alias"] = "after_save_as"
+        assert editor.save() is True
+        assert "after_save_as" in (tmp_path / "copy.toml").read_text()
+        assert original.read_text() == was
+
+    def test_the_watch_follows_the_new_path(self, tmp_path):
+        """Otherwise the editor would keep reacting to the file it no longer edits."""
+        editor = _editor(tmp_path, GOOD)
+        editor.save_as(tmp_path / "copy.toml")
+        assert editor.poll_disk() is False
+        editor.path.write_text('[dofs]\nfrom_the_new_file = "vhi.prediction.ring"\n')
+        import os
+        import time
+
+        stamp = time.time() + 10
+        os.utime(editor.path, (stamp, stamp))
+        assert editor.poll_disk() is True
+        assert [e["alias"] for e in editor._draft] == ["from_the_new_file"]
+
+    def test_an_invalid_draft_leaves_the_path_where_it_was(self, tmp_path):
+        """Save As shares Save's rule: it must not write a file that will not load."""
+        editor = _editor(tmp_path, GOOD)
+        original = editor.path
+        editor._draft[0]["alias"] = ""          # invalid: an alias is required
+        assert editor.save_as(tmp_path / "never.toml") is False
+        assert editor.path == original
+        assert not (tmp_path / "never.toml").exists()
+
+
+class TestTheAddressTree:
+    """The picker's shape, derived from the addresses rather than declared anywhere.
+
+    A flat list was fine for six controls. A keyboard exports two hundred, so the picker
+    became a tree — and the only thing it knows is that addresses are dotted, which the
+    control standard already guarantees. No target-specific code, which is why one
+    implementation organises a renderer and a keyboard identically.
+    """
+
+    def _tree(self, *addresses):
+        from myogestic.controls import Capability
+        from myogestic.widgets.vhi.control_map_editor import address_tree
+
+        return address_tree([Capability(a, "continuous") for a in addresses])
+
+    def test_each_dot_is_a_level(self):
+        tree = self._tree("vhi.prediction.index")
+        assert sorted(tree) == ["vhi"]
+        assert sorted(tree["vhi"]) == ["prediction"]
+        assert sorted(tree["vhi"]["prediction"]) == ["index"]
+
+    def test_siblings_share_a_branch(self):
+        tree = self._tree("vhi.prediction.index", "vhi.prediction.middle")
+        assert sorted(tree["vhi"]["prediction"]) == ["index", "middle"]
+
+    def test_two_targets_are_two_roots(self):
+        """The first segment namespaces the target, so the grouping is free."""
+        tree = self._tree("vhi.prediction.index", "keyboard.hold.letter.a")
+        assert sorted(tree) == ["keyboard", "vhi"]
+
+    def test_a_node_can_be_both_a_control_and_a_parent(self):
+        """`vhi.prediction.thumb` was exactly this before the rename, and another target
+        may do it again — so a branch must be able to carry its own capability."""
+        from myogestic.widgets.vhi.control_map_editor import _LEAF
+
+        tree = self._tree("vhi.prediction.thumb", "vhi.prediction.thumb.abduction")
+        thumb = tree["vhi"]["prediction"]["thumb"]
+        assert thumb[_LEAF].address == "vhi.prediction.thumb"
+        assert "abduction" in thumb
+
+    def test_a_leaf_holds_the_capability_itself(self):
+        from myogestic.widgets.vhi.control_map_editor import _LEAF
+
+        tree = self._tree("vhi.prediction.index")
+        assert tree["vhi"]["prediction"]["index"][_LEAF].address == "vhi.prediction.index"
+
+    def test_it_scales_to_a_whole_keyboard(self):
+        """214 addresses, four segments each — the case the tree exists for."""
+        from myogestic.keyboard import keyboard_capabilities
+        from myogestic.widgets.vhi.control_map_editor import address_tree
+
+        tree = address_tree(keyboard_capabilities())
+        assert sorted(tree) == ["keyboard"]
+        assert sorted(tree["keyboard"]) == ["hold", "tap"]
+        assert "letter" in tree["keyboard"]["hold"]
+        assert "a" in tree["keyboard"]["hold"]["letter"]
+
+
+class TestSeveralManifests:
+    def test_clients_are_merged_into_one_offering(self):
+        """One file may name controls on several targets; the picker must show them all."""
+        from myogestic.keyboard import KeyboardTarget
+
+        class Fake:
+            def capabilities(self):
+                return MANIFEST
+
+        editor = ControlMapEditor(
+            pathlib.Path("unused.toml"), clients=[Fake(), KeyboardTarget()]
+        )
+        editor._connect()
+        roots = {c.address.split(".")[0] for c in editor.capabilities}
+        assert roots == {"vhi", "keyboard"}
+
+    def test_a_silent_target_does_not_hide_the_others(self):
+        """Launching one target before the other is normal; the picker still works."""
+
+        class Silent:
+            def capabilities(self):
+                return None
+
+        class Fake:
+            def capabilities(self):
+                return MANIFEST
+
+        editor = ControlMapEditor(pathlib.Path("unused.toml"), clients=[Silent(), Fake()])
+        editor._connect()
+        assert editor.capabilities
+        # And says nothing about it. How many targets answered is plumbing; what matters is
+        # whether *this map* names an address nothing can vouch for, which `unanswered` says
+        # and only when it does.
+        assert editor._message == ""
+
+    def test_the_single_client_form_still_works(self):
+        class Fake:
+            def capabilities(self):
+                return MANIFEST
+
+        editor = ControlMapEditor(pathlib.Path("unused.toml"), client=Fake())
+        editor._connect()
+        assert editor.capabilities
+
+
+class TestTypingAnAddressTheTargetHasNotAdvertised:
+    """The picker must not lose free-text entry when a target answers.
+
+    Offline the control is a plain text field, so anything can be typed. Connected it
+    becomes a tree of what was advertised — and for a while that was *all* it was, so an
+    address you knew but nothing had published became unreachable precisely when the app
+    was working. The search box doubles as entry; this is the rule for when it offers.
+    """
+
+    def test_a_well_formed_unknown_address_is_offered(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        editor._filter = "keyboard.hold.letter.w"
+        assert editor._typed_offer() == "keyboard.hold.letter.w"
+
+    def test_surrounding_space_is_ignored(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        editor._filter = "  keyboard.tap.edit.space  "
+        assert editor._typed_offer() == "keyboard.tap.edit.space"
+
+    def test_an_advertised_address_is_not_offered(self, tmp_path):
+        """It is in the tree, where its declared kind and range are visible too."""
+        editor = _editor(tmp_path, GOOD)
+        editor._filter = "vhi.prediction.index"
+        assert editor._typed_offer() == ""
+
+    @pytest.mark.parametrize(
+        "text",
+        ["", "my_index", "Vhi.Prediction.Index", "vhi prediction index", "vhi.", ".index"],
+    )
+    def test_anything_the_loader_would_refuse_is_not_offered(self, tmp_path, text):
+        """Same rule as the loader's, not a second copy of it — see `is_address`."""
+        editor = _editor(tmp_path, GOOD)
+        editor._filter = text
+        assert editor._typed_offer() == ""
+
+    def test_a_partial_search_is_not_mistaken_for_an_address(self, tmp_path):
+        """`wrist` is how you search; it is not something to offer as a control."""
+        editor = _editor(tmp_path, GOOD)
+        editor._filter = "wrist"
+        assert editor._typed_offer() == ""
+
+
+class TestIsAddressIsTheOneRule:
+    def test_it_is_public(self):
+        """The editor validates typed input with it, so it is contract, not an internal."""
+        from myogestic.controls import is_address
+
+        assert is_address("vhi.prediction.index")
+        assert not is_address("my_index")
+
+    def test_the_editor_and_the_loader_agree(self):
+        """A second copy of the address rule is how the picker and the loader drift."""
+        from myogestic.controls import is_address, load_control_map
+
+        for text in ("vhi.prediction.index", "keyboard.tap.edit.space"):
+            assert is_address(text)
+            assert load_control_map({"dofs": {"a": text}}).bindings["a"].targets
+
+
+class TestARowSaysWhatTheControlAccepts:
+    """A count is never the useful fact. "2 states" tells a reader nothing about a key."""
+
+    @staticmethod
+    def _editor(tmp_path):
+        return ControlMapEditor(tmp_path / "m.toml")
+
+    def test_two_states_are_named(self, tmp_path):
+        key = Capability(
+            "keyboard.hold.letter.w", "discrete", states=("up", "down"),
+            rest_state="up", channel=-1,
+        )
+        assert self._editor(tmp_path)._detail(key).strip() == "up / down"
+
+    def test_many_states_are_counted(self, tmp_path):
+        """Seventeen names would push the row off the edge, so the count is right there."""
+        gesture = Capability(
+            "vhi.control.gesture", "discrete",
+            states=tuple(f"s{i}" for i in range(17)), rest_state="s0", channel=-1,
+        )
+        assert self._editor(tmp_path)._detail(gesture).strip() == "17 states"
+
+    def test_the_tooltip_names_them_too(self, tmp_path):
+        key = Capability(
+            "keyboard.tap.edit.space", "discrete", states=("up", "down"),
+            rest_state="up", channel=-1,
+        )
+        assert "up / down" in self._editor(tmp_path)._summary(key)
+
+    def test_a_continuous_row_is_unchanged(self, tmp_path):
+        """A signed control adds nothing; only an unusual range is worth a note."""
+        editor = self._editor(tmp_path)
+        signed = Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0, channel=2)
+        one_way = Capability("vhi.grip.force", "continuous", 0.0, 1.0, 0.0, channel=4)
+        assert editor._detail(signed) == ""
+        assert "+0.0..+1.0" in editor._detail(one_way)
+
+
+class TestSavingDoesNotDependOnWhatIsRunning:
+    """A TOML naming a Virtual Hand control is a valid TOML with no renderer running.
+
+    This regressed the moment a second target existed. `problems()` skipped its export check
+    when the manifest was empty, which with one target meant "nothing has answered". With a
+    keyboard target answering 214 addresses and VHI silent, the manifest was *not* empty, so
+    every `vhi.*` address was reported as unexportable and Save went dead — for a file that
+    was correct.
+    """
+
+    MIXED = """
+[dofs]
+close = [
+  { target = "vhi.prediction.thumb.flexion", weight = 0.6 },
+  { target = "vhi.prediction.index" },
+]
+walk = "keyboard.hold.letter.w"
+"""
+
+    @staticmethod
+    def _keyboard_only(tmp_path, body):
+        from myogestic.keyboard import KeyboardTarget
+
+        path = tmp_path / "m.toml"
+        path.write_text(body)
+        editor = ControlMapEditor(path, clients=[KeyboardTarget()], stream="output")
+        editor.load()
+        editor._connect()
+        return editor
+
+    def test_a_silent_targets_address_does_not_block_saving(self, tmp_path):
+        """The screenshot, as a test."""
+        editor = self._keyboard_only(tmp_path, self.MIXED)
+        assert editor._answered == frozenset({"keyboard"})
+        assert editor.problems() == []
+        assert editor.save() is True
+
+    def test_it_is_reported_as_unverifiable_not_as_wrong(self, tmp_path):
+        """One line per silent *namespace* — two `vhi.*` addresses are one fact, not two.
+
+        It used to be one line per address, so the panel said "nothing from 'vhi' has
+        answered" once for every address in the file: five identical sentences for a single
+        piece of news. The addresses are still available, keyed by the namespace that owes
+        them, for the tooltip to show on demand.
+        """
+        editor = self._keyboard_only(tmp_path, self.MIXED)
+        assert editor.unanswered() == {
+            "vhi": ["vhi.prediction.thumb.flexion", "vhi.prediction.index"]
+        }
+        assert editor.warnings() == [
+            "vhi has not answered — 2 addresses cannot be checked. Saves either way."
+        ]
+
+    def test_one_address_is_not_pluralised(self, tmp_path):
+        """The count is in the sentence, so it has to read for n = 1 too."""
+        editor = self._keyboard_only(tmp_path, '[dofs]\na = "vhi.prediction.index"\n')
+        assert editor.warnings() == [
+            "vhi has not answered — 1 address cannot be checked. Saves either way."
+        ]
+
+    def test_the_answered_targets_controls_are_still_checked(self, tmp_path):
+        """The keyboard *did* answer, so a bad keyboard address is still a problem."""
+        editor = self._keyboard_only(
+            tmp_path, '[dofs]\nwalk = "keyboard.hold.letter.nonesuch"\n'
+        )
+        assert any("does not export" in p for p in editor.problems())
+        assert editor.warnings() == []
+
+    def test_a_malformed_file_is_still_refused_with_nothing_connected(self, tmp_path):
+        """The split must not have made Save permissive — these need no manifest at all."""
+        path = tmp_path / "m.toml"
+        path.write_text('[dofs]\na = "vhi.prediction.index"\n')
+        editor = ControlMapEditor(path)
+        editor.load()
+        editor._draft.append(dict(editor._draft[0]))          # duplicate name
+        editor._draft[1]["targets"] = [["vhi.prediction.middle", 0.0]]   # zero weight
+        found = " ".join(editor.problems())
+        assert "used twice" in found
+        assert "outside [-1, 1] or zero" in found
+        assert editor.warnings(), "and the unverifiable address is still reported"
+
+    def test_an_unnamed_control_still_blocks(self, tmp_path):
+        editor = self._keyboard_only(tmp_path, self.MIXED)
+        editor._draft[0]["alias"] = ""
+        assert any("no name" in p for p in editor.problems())
+
+    def test_the_preview_says_why_rather_than_reporting_a_refusal(self, tmp_path):
+        """`resolve` would refuse a silent target's address, which reads as "your file is
+        wrong". The summary has to distinguish that from an actual refusal."""
+        editor = self._keyboard_only(tmp_path, self.MIXED)
+        summary = editor.resolved_summary()
+        assert "has answered" in summary
+        assert "still saveable" in summary
+
+    def test_nothing_connected_at_all_is_unchanged(self, tmp_path):
+        """Offline every address is unverifiable, and that was already the old behaviour.
+
+        Three addresses across two namespaces, so two lines — sorted, because the panel draws
+        them in order and an order that moves between frames is a flicker.
+        """
+        path = tmp_path / "m.toml"
+        path.write_text(self.MIXED)
+        editor = ControlMapEditor(path)
+        editor.load()
+        assert editor.problems() == []
+        assert sorted(editor.unanswered()) == ["keyboard", "vhi"]
+        assert editor.warnings() == [
+            "keyboard has not answered — 1 address cannot be checked. Saves either way.",
+            "vhi has not answered — 2 addresses cannot be checked. Saves either way.",
+        ]
+        assert editor.save() is True
+
+
+class TestAnUntitledMapIsARealState:
+    """You start on a blank map, so "no file yet" has to be ordinary rather than an error."""
+
+    def test_it_has_no_path_and_a_readable_label(self):
+        editor = ControlMapEditor()
+        editor.load()
+        assert editor.path is None
+        assert editor.label == "Untitled"
+
+    def test_saving_refuses_rather_than_inventing_a_location(self):
+        """A file the user cannot find again is worse than a save that did not happen."""
+        editor = ControlMapEditor()
+        editor.load()
+        editor.add_control()
+        editor._draft[0]["targets"] = [["vhi.prediction.index", 1.0]]
+        assert editor.save() is False
+        assert "Save as" in editor._message
+
+    def test_save_as_gives_it_a_name_and_writes(self, tmp_path):
+        editor = ControlMapEditor()
+        editor.load()
+        editor.add_control()
+        editor._draft[0]["targets"] = [["vhi.prediction.index", 1.0]]
+        target = tmp_path / "nested" / "mine.toml"
+        assert editor.save_as(target) is True
+        assert editor.path == target
+        assert editor.label == "mine.toml"
+        assert load_control_map(tomllib.loads(target.read_text())).bindings
+
+    def test_the_watch_does_not_fire_on_a_map_with_no_file(self):
+        """`poll_disk` runs every frame; an untitled map must not look like a change."""
+        editor = ControlMapEditor()
+        editor.load()
+        assert editor.poll_disk() is False
+        assert editor.poll_disk() is False
+
+    def test_it_reports_no_problems_when_empty(self):
+        """A blank map is not a broken one — it is where you start."""
+        editor = ControlMapEditor()
+        editor.load()
+        assert editor.problems() == []
+        assert editor.warnings() == []
+
+
+class TestTheHeaderDotReportsTheMapNotTheTarget:
+    """`CIRCLE` means "the live state of whatever *this panel* controls".
+
+    This panel controls a file. Wiring its one status channel to the renderer's
+    reachability would spend it on another panel's subject — and would put a green dot above
+    a red "changed on disk" banner. The target gets its own line beside Connect instead.
+
+    Grey unless something needs doing: a dot that is green whenever nothing is wrong is a dot
+    nobody looks at.
+    """
+
+    @staticmethod
+    def _editor(tmp_path, body='[dofs]\na = "vhi.prediction.index"\n'):
+        path = tmp_path / "m.toml"
+        path.write_text(body)
+        editor = ControlMapEditor(path)
+        editor.load()
+        return editor
+
+    def test_a_saved_valid_map_is_idle(self, tmp_path):
+        from myogestic.widgets.common import IDLE
+
+        colour, detail = self._editor(tmp_path)._status()
+        assert colour is IDLE
+        assert "matches the file" in detail
+
+    def test_being_disconnected_is_not_the_maps_problem(self, tmp_path):
+        """The judges' point: no client at all, and the map is still perfectly fine."""
+        from myogestic.widgets.common import IDLE
+
+        editor = self._editor(tmp_path)
+        assert editor._answered == frozenset()
+        assert editor._status()[0] is IDLE
+
+    def test_an_unsavable_map_warns(self, tmp_path):
+        from myogestic.widgets.common import WARNING
+
+        editor = self._editor(tmp_path)
+        editor.add_control()                      # a control pointing at nothing yet
+        colour, detail = editor._status()
+        assert colour is WARNING
+        assert "Cannot save yet" in detail
+
+    def test_unsaved_edits_warn(self, tmp_path):
+        from myogestic.widgets.common import WARNING
+
+        editor = self._editor(tmp_path)
+        editor._draft[0]["alias"] = "renamed"
+        colour, detail = editor._status()
+        assert colour is WARNING
+        assert "Unsaved" in detail
+
+    def test_a_conflict_outranks_an_unsavable_draft(self, tmp_path):
+        """Loudest first. A file that moved under unsaved edits is the worse news."""
+        from myogestic.widgets.common import DANGER
+
+        editor = self._editor(tmp_path)
+        editor.add_control()
+        editor._conflict = True
+        assert editor._status()[0] is DANGER
+
+    def test_an_unloadable_file_is_the_loudest(self, tmp_path):
+        from myogestic.widgets.common import DANGER
+
+        editor = self._editor(tmp_path, "[dofs]\nbroken = ")
+        assert editor._error
+        assert editor._status()[0] is DANGER
+
+    def test_the_path_is_never_lost_only_moved(self, tmp_path):
+        """It used to have a whole row. It has to still be somewhere a reader can get it."""
+        editor = self._editor(tmp_path)
+        assert str(editor.path) in editor._status()[1]
+
+    def test_an_untitled_map_says_so(self):
+        editor = ControlMapEditor()
+        editor.load()
+        assert "Untitled" in editor._status()[1]
+
+
+class TestConnectingHappensOnItsOwn:
+    """It used to need a click, and the reason was real but too broad.
+
+    Asking on the render thread was out, so the ask moved to a worker and the answer is
+    adopted on the next frame — the shape `poll_disk` and the Save-as dialog already use.
+    `KeyboardTarget.capabilities()` reads a local list and never needed a click at all.
+
+    The *stated* reason was that `capabilities()` blocks for the client's two-second RPC
+    timeout when nothing is listening, and that turns out to be false for the case it was
+    written about: a renderer that is not running refuses the connection, and the call is
+    back in about 7 ms. The two seconds need something holding the port without answering.
+    The worker is still right — 7 ms of a 16 ms frame is not free — but the number is why
+    this used to stop asking once everyone had answered, and that part was a bug.
+    """
+
+    class _Slow:
+        """A client that answers, slowly, and counts how often it was asked."""
+
+        def __init__(self, delay: float = 0.0, address: str = "vhi.prediction.index"):
+            self.asked = 0
+            self.delay = delay
+            self.address = address
+
+        def capabilities(self):
+            import time as _t
+
+            self.asked += 1
+            _t.sleep(self.delay)
+            return [
+                Capability(
+                    self.address, "continuous", -1.0, 1.0, 0.0,
+                    channel=2, stream_name="MyoGestic_Output",
+                )
+            ]
+
+    class _Silent:
+        """A target that is not running yet: asked, and says nothing."""
+
+        def __init__(self):
+            self.asked = 0
+
+        def capabilities(self):
+            self.asked += 1
+            return None
+
+    class _Togglable:
+        """A target that can be switched off, the way closing a renderer switches VHI off."""
+
+        def __init__(self):
+            self.asked = 0
+            self.up = True
+
+        def capabilities(self):
+            self.asked += 1
+            if not self.up:
+                return None
+            return [
+                Capability(
+                    "vhi.prediction.index", "continuous", -1.0, 1.0, 0.0,
+                    channel=2, stream_name="MyoGestic_Output",
+                )
+            ]
+
+    @staticmethod
+    def _settle(editor, tries: int = 200):
+        """Let the worker finish, then adopt on the (test's) render thread."""
+        import time as _t
+
+        for _ in range(tries):
+            if not editor._fetching:
+                break
+            _t.sleep(0.01)
+        editor.poll_connect()
+
+    def _editor(self, tmp_path, *clients):
+        path = tmp_path / "m.toml"
+        path.write_text('[dofs]\na = "vhi.prediction.index"\n')
+        editor = ControlMapEditor(path, clients=list(clients))
+        editor.load()
+        return editor
+
+    def test_the_picker_fills_with_no_click(self, tmp_path):
+        client = self._Slow()
+        editor = self._editor(tmp_path, client)
+        assert editor.capabilities == ()
+        editor.poll_connect()          # starts the worker
+        self._settle(editor)           # adopts its answer
+        assert editor._answered == frozenset({"vhi"})
+        assert len(editor.capabilities) == 1
+
+    def test_it_does_not_ask_every_frame(self, tmp_path):
+        """`_RETRY_EVERY_S` is the whole of the rate limit — five frames is not five asks.
+
+        This was called "it stops asking once everything answered", which is not what it
+        checks: five polls in a row all land inside the retry gap, so it passes either way.
+        The real stop was an early return in `poll_connect`, and it is gone — see
+        `test_it_keeps_asking_so_a_target_can_go_away`.
+        """
+        client = self._Slow()
+        editor = self._editor(tmp_path, client)
+        editor.poll_connect()
+        self._settle(editor)
+        for _ in range(5):
+            editor.poll_connect()
+        assert client.asked == 1
+
+    def test_one_target_answering_does_not_stop_the_asking(self, tmp_path):
+        """The bug: "VHI is running and I still cannot pick it".
+
+        Every test here used a single client, where "something answered" and "everything
+        answered" are the same sentence. The studio has two — a `KeyboardTarget`, which answers
+        instantly off a local list, and VHI, which answers only once it is up. The keyboard
+        filled `_answered` on the first frame, the retry read that as done, and VHI was never
+        asked again however long it ran.
+        """
+        vhi = self._Silent()                                  # not up yet
+        keys = self._Slow(address="keyboard.hold.letter.w")    # answers off a local list
+        editor = self._editor(tmp_path, vhi, keys)
+        editor.poll_connect()
+        self._settle(editor)
+        assert editor._answered == frozenset({"keyboard"}), "the fast one answered"
+        assert not editor._all_answered, "one client is still silent"
+
+        # Twenty frames inside the gap ask nobody; past it, the silent one is asked again.
+        for _ in range(20):
+            editor.poll_connect()
+        assert vhi.asked == 1
+        editor._last_attempt -= editor._RETRY_EVERY_S + 1
+        editor.poll_connect()
+        self._settle(editor)
+        assert vhi.asked == 2, "a target launched later is never asked again"
+
+    def test_it_keeps_asking_so_a_target_can_go_away(self, tmp_path):
+        """A manifest is not a fact that only ever arrives — a renderer can be closed.
+
+        It used to return early once every client had answered, on the reasoning that there
+        was nothing left to ask. So closing VHI mid-session left the picker offering its
+        controls and `unanswered` reporting nothing to check: not an empty panel, a wrong
+        one. Pick one of those dead controls and the refusal arrived from the bus instead.
+        """
+        vhi = self._Togglable()
+        keys = self._Slow(address="keyboard.hold.letter.w")
+        editor = self._editor(tmp_path, vhi, keys)
+        editor.poll_connect()
+        self._settle(editor)
+        assert editor._all_answered
+        assert len(editor.capabilities) == 2
+
+        vhi.up = False                                   # the renderer is closed
+        editor._last_attempt -= editor._RETRY_EVERY_S + 1
+        editor.poll_connect()
+        self._settle(editor)
+
+        assert vhi.asked == 2, "it never asked again, so it never noticed"
+        assert not editor._all_answered
+        assert [c.address for c in editor.capabilities] == ["keyboard.hold.letter.w"]
+        assert editor.unanswered() == {"vhi": ["vhi.prediction.index"]}
+
+    def test_a_press_that_reaches_no_renderer_says_so(self, tmp_path):
+        """The message tested `not merged` — "*nothing* answered" — which a keyboard prevents.
+
+        With two clients one of them always answers off a local list, so a Connect press
+        with the renderer closed cleared the message and looked like it had worked.
+        """
+        vhi = self._Silent()
+        keys = self._Slow(address="keyboard.hold.letter.w")
+        editor = self._editor(tmp_path, vhi, keys)
+        editor._refetch = True          # what pressing Connect sets
+        editor.poll_connect()
+        self._settle(editor)
+
+        assert "did not answer" in editor._message, "a press that reached nothing said nothing"
+
+    def test_one_raising_client_does_not_cost_the_others_their_answer(self, tmp_path):
+        """`_fetch` wrapped the whole loop in one `try`, so the first raiser ended the round."""
+
+        class _Angry:
+            def __init__(self):
+                self.asked = 0
+
+            def capabilities(self):
+                self.asked += 1
+                raise RuntimeError("this target is having a bad day")
+
+        angry = _Angry()
+        keys = self._Slow(address="keyboard.hold.letter.w")
+        editor = self._editor(tmp_path, angry, keys)     # the raiser is asked FIRST
+        editor.poll_connect()
+        self._settle(editor)
+
+        assert angry.asked == 1
+        assert [c.address for c in editor.capabilities] == ["keyboard.hold.letter.w"]
+        assert not editor._all_answered
+
+    def test_only_one_worker_is_ever_out(self, tmp_path):
+        """Otherwise a silent target spawns a thread per frame."""
+        client = self._Slow(delay=0.2)
+        editor = self._editor(tmp_path, client)
+        editor.poll_connect()
+        for _ in range(10):
+            editor.poll_connect()
+        assert client.asked == 1
+        self._settle(editor)
+
+    def test_a_silent_target_is_retried_but_not_hammered(self, tmp_path):
+        class Silent:
+            def __init__(self):
+                self.asked = 0
+
+            def capabilities(self):
+                self.asked += 1
+                return None
+
+        client = Silent()
+        editor = self._editor(tmp_path, client)
+        editor.poll_connect()
+        self._settle(editor)
+        for _ in range(20):
+            editor.poll_connect()          # inside the retry gap
+        assert client.asked == 1
+        editor._last_attempt -= editor._RETRY_EVERY_S + 1     # gap elapsed
+        editor.poll_connect()
+        self._settle(editor)
+        assert client.asked == 2
+
+    def test_the_button_skips_the_gap(self, tmp_path):
+        """Its whole use: you just launched the thing, do not make me wait five seconds."""
+        class Silent:
+            def __init__(self):
+                self.asked = 0
+
+            def capabilities(self):
+                self.asked += 1
+                return None
+
+        client = Silent()
+        editor = self._editor(tmp_path, client)
+        editor.poll_connect()
+        self._settle(editor)
+        editor._refetch = True
+        editor.poll_connect()
+        self._settle(editor)
+        assert client.asked == 2
+
+    def test_a_client_that_raises_does_not_take_the_app_down(self, tmp_path):
+        """It runs on a worker, so an exception there would be lost, not caught."""
+        class Angry:
+            def capabilities(self):
+                raise RuntimeError("no")
+
+        editor = self._editor(tmp_path, Angry())
+        editor.poll_connect()
+        self._settle(editor)
+        assert editor.capabilities == ()
+        assert editor._answered == frozenset()
+
+    def test_the_blocking_path_still_works(self, tmp_path):
+        """`_connect` is what the button used to do, and tests still drive it directly."""
+        editor = self._editor(tmp_path, self._Slow())
+        editor._connect()
+        assert len(editor.capabilities) == 1
+
+
+
+class TestTheSearchSurvivesTheOtherPickers:
+    """Typing in a picker's search box has to keep what you typed.
+
+    The bug, exactly: `_picker` recorded "was a popup open last frame" in **one bool for the
+    whole panel**, and every picker wrote it once per frame. A map with five target rows draws
+    five pickers, so the closed ones after the open one overwrote its `True`. Next frame the
+    open picker read "it was closed", took that for a fresh open, and cleared the search — every
+    frame, so the box stayed empty however fast you typed.
+
+    Driven through `_note_open` rather than a rendered popup: a headless ImGui has no mouse, so
+    `begin_combo` can never report open, and the failure needs a specific *order* of calls
+    within a frame. This is that order.
+    """
+
+    @staticmethod
+    def _frame(editor, open_index, count=5):
+        """One frame of `count` pickers, of which `open_index` has its popup open."""
+        return [editor._note_open(key=100 + i, opened=i == open_index) for i in range(count)]
+
+    def _editor(self, tmp_path):
+        editor = _editor(tmp_path, GOOD)
+        editor._filter = ""
+        return editor
+
+    def test_a_search_typed_into_the_open_picker_is_not_cleared(self, tmp_path):
+        editor = self._editor(tmp_path)
+        self._frame(editor, open_index=2)          # the user opens the third row's picker
+        editor._filter = "ind"                     # ...and types
+        for _ in range(10):                        # ten more frames go by
+            self._frame(editor, open_index=2)
+        assert editor._filter == "ind", "the search was cleared while the popup stayed open"
+
+    def test_only_the_opening_frame_reports_itself_as_new(self, tmp_path):
+        """`just_opened` drives the keyboard focus, so it must be true exactly once."""
+        editor = self._editor(tmp_path)
+        first = self._frame(editor, open_index=2)
+        assert first.count(True) == 1, "the opening frame should report one new popup"
+        for _ in range(5):
+            assert not any(self._frame(editor, open_index=2)), "reported new again"
+
+    def test_opening_a_different_picker_does_clear_it(self, tmp_path):
+        """The behaviour the shared flag was there for: a stale search must not hide the list."""
+        editor = self._editor(tmp_path)
+        self._frame(editor, open_index=2)
+        editor._filter = "ind"
+        opened = self._frame(editor, open_index=4)   # a different row's picker
+        assert opened.count(True) == 1
+        assert editor._filter == "", "a different picker inherited the last one's search"
+
+    def test_closing_and_reopening_the_same_picker_clears_it(self, tmp_path):
+        editor = self._editor(tmp_path)
+        self._frame(editor, open_index=0)
+        editor._filter = "ind"
+        self._frame(editor, open_index=None)         # all closed
+        assert self._frame(editor, open_index=0).count(True) == 1, "reopening is a fresh open"
+        assert editor._filter == ""
+
+
+class TestASilentTargetIsSaidOutLoud:
+    """The panel has to say a target is missing even when the map names none of it.
+
+    `warnings` is per *named* address by design — it answers "what does this map contain
+    that cannot be checked". On a blank map, or one that only uses the keyboard, that is
+    correctly nothing, and the panel therefore said nothing at all: the picker simply had
+    no branch for the renderer. Which reads as "this is the whole list of what is
+    possible", not "one target has not answered, and you can type its address anyway".
+    """
+
+    class _Answers:
+        def __init__(self, address="vhi.prediction.index"):
+            self.address = address
+
+        def capabilities(self):
+            return [
+                Capability(
+                    self.address, "continuous", -1.0, 1.0, 0.0,
+                    channel=2, stream_name="MyoGestic_Output",
+                )
+            ]
+
+    class _Silent:
+        def capabilities(self):
+            return None
+
+    @staticmethod
+    def _said(imgui_frame, monkeypatch, editor) -> list[str]:
+        """Every line the panel wrapped this frame. No draw-capture helper exists yet."""
+        from imgui_bundle import imgui
+
+        lines: list[str] = []
+        real = imgui.text_wrapped
+        monkeypatch.setattr(
+            imgui, "text_wrapped", lambda s, *a, **k: (lines.append(s), real(s, *a, **k))[1]
+        )
+        imgui_frame(editor.ui)
+        return lines
+
+    def _editor(self, tmp_path, *clients, body='[dofs]\n'):
+        path = tmp_path / "m.toml"
+        path.write_text(body)
+        editor = ControlMapEditor(path, clients=list(clients))
+        editor.load()
+        editor._connect()
+        return editor
+
+    def test_a_blank_map_still_reports_the_silent_target(self, imgui_frame, monkeypatch, tmp_path):
+        editor = self._editor(
+            tmp_path, self._Silent(), self._Answers("keyboard.hold.letter.w")
+        )
+        assert editor.unanswered() == {}, "the map names nothing, so nothing is per-address"
+        assert not editor._all_answered
+
+        said = self._said(imgui_frame, monkeypatch, editor)
+        assert any("has not answered" in line for line in said), said
+        assert any("search box" in line for line in said), "it must say what to do about it"
+
+    def test_it_is_not_said_twice_when_the_map_does_name_one(
+        self, imgui_frame, monkeypatch, tmp_path
+    ):
+        """The per-address line already covers that case, and says more."""
+        editor = self._editor(
+            tmp_path,
+            self._Silent(),
+            self._Answers("keyboard.hold.letter.w"),
+            body='[dofs]\nclose = "vhi.prediction.index"\n',
+        )
+        assert editor.unanswered() == {"vhi": ["vhi.prediction.index"]}
+
+        said = self._said(imgui_frame, monkeypatch, editor)
+        assert sum("has not answered" in line for line in said) == 1, said
+        assert not any("search box" in line for line in said)
+
+    def test_nothing_is_said_when_every_target_answered(
+        self, imgui_frame, monkeypatch, tmp_path
+    ):
+        editor = self._editor(tmp_path, self._Answers(), self._Answers("keyboard.tap.edit.space"))
+        assert editor._all_answered
+
+        said = self._said(imgui_frame, monkeypatch, editor)
+        assert not any("has not answered" in line for line in said), said
+
+
+class TestTheConnectMessageExpires:
+    """A press reports a press, and the retry now makes that report go stale.
+
+    Connecting used to be click-only, so "a target did not answer" stayed true until the
+    next click by construction. With the retry running, the target comes up on its own —
+    and the line sat there insisting the renderer was absent while its controls were
+    already in the picker. That is the reported bug inverted, which is worse than the bug.
+    """
+
+    class _Togglable:
+        def __init__(self):
+            self.up = False
+
+        def capabilities(self):
+            if not self.up:
+                return None
+            return [
+                Capability(
+                    "vhi.prediction.index", "continuous", -1.0, 1.0, 0.0,
+                    channel=2, stream_name="MyoGestic_Output",
+                )
+            ]
+
+    class _Answers:
+        def capabilities(self):
+            return [Capability("keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0,
+                               states=("up", "down"), channel=-1)]
+
+    def _editor(self, tmp_path, *clients):
+        path = tmp_path / "m.toml"
+        path.write_text("[dofs]\n")
+        editor = ControlMapEditor(path, clients=list(clients))
+        editor.load()
+        return editor
+
+    def test_the_retry_retires_what_the_press_reported(self, tmp_path):
+        vhi = self._Togglable()
+        editor = self._editor(tmp_path, vhi, self._Answers())
+
+        editor._asked = True                       # the press
+        editor._connect()
+        assert editor._message, "a press that reached nothing must say so"
+
+        vhi.up = True                              # the renderer starts
+        editor._connect()                          # what the timer's round does
+
+        assert editor._all_answered
+        assert not editor._message, "the panel still called a running renderer absent"
+
+    def test_a_background_round_does_not_wipe_a_save_confirmation(self, tmp_path):
+        """`_message` is shared, so the retry may only retire the line it is about."""
+        editor = self._editor(tmp_path, self._Answers())
+        editor._message = "Saved 3 control(s) to m.toml"
+        editor._connect()                          # everything answers; no press
+        assert editor._message == "Saved 3 control(s) to m.toml"
+
+
+def test_the_search_box_offers_typing_only_while_a_target_is_silent():
+    """It doubles as address entry, which is the way out of "the list has no vhi branch".
+
+    Silent about that once everything has answered: the tree below is then the whole of
+    what is possible, and telling someone to type an address is noise.
+    """
+    from myogestic.widgets.vhi.control_map_editor import _search_hint
+
+    assert "type an address" in _search_hint(False)
+    assert "type an address" not in _search_hint(True)
+    assert "search" in _search_hint(True), "it is still a search box"
