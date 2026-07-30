@@ -245,7 +245,7 @@ def step_6_commands():
   The contracts themselves:
       myogestic/controls.py                        the standard
       myogestic/_controls_map.py                   aliases, addresses, resolution
-      myogestic/vhi/_proto/myogestic_vhi.proto   the wire contract""")
+      myogestic/vhi/_proto/myogestic_vhi.proto     the wire contract""")
 
 
 def main() -> None:
