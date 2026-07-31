@@ -82,11 +82,11 @@ declaration format and the rules it enforces.
 
 Five DOFs keeps the regressor manageable on fake EMG, so thumb
 abduction is left out. Notice what is *absent*: no channel index, no
-sign convention, no mention of nine of anything. VHI's own recorded pose
-format did encode flexion as negative — but that was the hand's concern,
-not the declaration's: `VhiTarget` refuses a renderer too old to negotiate
-rather than adapting to it, and only `myogestic.vhi.legacy.decode_pose`
-still reads that convention, for archived sessions.
+sign convention, no mention of nine of anything. VHI's recorded pose format
+once encoded flexion as negative, the opposite of the stream it was compared
+against; both ends speak the standard now and the archives were converted
+once by `myogestic.tools.migrate_vhi_sessions`, so there is nothing left to
+decode.
 
 ## The output path
 
@@ -100,8 +100,8 @@ substitution comes first because `min(hi, max(lo, nan))` is `lo`, so a
 NaN prediction would otherwise arrive as a full-scale deflection; the
 second clip exists because a smoother undershoots on a falling edge.
 
-`VhiTarget` refuses at construction what it cannot render. Declare a
-`wrist.rotation` and it raises, listing the six DOFs a legacy hand does
+`VhiTarget` refuses at construction what it cannot render. Declare
+something this hand has no joint for and it raises, listing what it does
 have — because a silently dropped joint looks exactly like a joint that
 is working and holding still.
 
@@ -114,10 +114,10 @@ The training callback handles **two kinds of session** transparently:
 ```
 
 `iter_aligned_windows` walks every EMG window in the session and
-*time-aligns* a slice of the `vhi_control` stream to it. `decode_pose`
-then reads that recorded slice as control values, so the training
-target lands in exactly the space `predict` commands — one declaration
-serving both directions is what keeps train and serve from drifting.
+*time-aligns* a slice of the `vhi_control` stream to it. `split_pose`
+then names that slice's channels — the values are already in the space
+`predict` commands — so the training target and the command share one
+declaration, which is what keeps train and serve from drifting.
 This is the primary path: sessions with both EMG and kinematics.
 
 ```python

@@ -48,7 +48,7 @@ from myogestic.session import iter_aligned_windows, iter_labeled_windows, open_s
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import VhiTarget, virtual_hand
-from myogestic.vhi.legacy import decode_pose
+from myogestic.vhi.pose import split_pose
 from myogestic.widgets import (
     AppLogo,
     PostProcessor,
@@ -130,7 +130,7 @@ vhi_control = vhi.control_client()
 
 # Which control each of the network's five outputs drives. The aliases on the left are
 # ours and must match regression_raulnet.toml; the names on the right are what
-# `decode_pose` calls the channels of a recorded VHI_Control frame, i.e. the training
+# `split_pose` names the channels of a recorded VHI_Control frame, i.e. the training
 # target. There is no wrist on that wire at all — channel 0 is thumb flexion.
 DOF_TARGETS: dict[str, str] = {
     "thumb": "thumb.flexion",
@@ -263,10 +263,10 @@ def train(data: TrainingData) -> L.LightningModule:
         n_alignment_samples=10,
     ):
         X_list.append(sliding_rms(emg_window))
-        # decode_pose reads the recorded pose as control values, so the training
+        # A recorded pose is already control-standard, so this only names the training
         # target is in exactly the space `predict` commands. A signed negation, not
         # the old abs() — which folded extension into flexion of equal magnitude.
-        pose = decode_pose(aligned["vhi_control"])
+        pose = split_pose(aligned["vhi_control"])
         y_list.append(np.array([pose[DOF_TARGETS[n]] for n in DOF_NAMES], dtype=np.float64))
     if kin_paths:
         log.append(f"  kinematics: {len(X_list)} windows from {len(kin_paths)} sessions")

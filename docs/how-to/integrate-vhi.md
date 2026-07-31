@@ -184,15 +184,16 @@ Two corrections to what this page used to say, both verified rather than assumed
 
 * Channel 0 is thumb **flexion**, not thumb rotation, and channel 1 is thumb
   **abduction**, not thumb flexion. A recorded fist has channel 1 at exactly
-  `-1.0`, which is what settled it.
-* Channels 6-8 **do** drive the wrist. They read `0` in every reference
-  recording because no archived session predates wrist support — a fact about
-  that corpus, not about the renderer; see `myogestic.vhi.legacy` for the
-  reader that still has to account for it.
+  `-1.0` — the thumb comes *across* the fingers, which is adduction — and that
+  is what settled it.
+* Channels 6-8 **do** drive the wrist. They read `0` in archived sessions
+  because the recorder hardcoded them, not because the renderer ignores them;
+  see `myogestic.vhi.pose` for the layout.
 
-`0` is rest and `-1` is full flexion on this wire — the sign is the renderer's,
-not the standard's. Push every predict tick: `vhi_outlet` runs its own send
-thread at `hz`, so only the latest push is sent.
+`0` is rest and `+1` is full flexion on this wire, as everywhere else: the
+control standard is the only convention here. Push every predict tick:
+`vhi_outlet` runs its own send thread at `hz`, so only the latest push is
+sent.
 
 ```python
 @pipeline.predict

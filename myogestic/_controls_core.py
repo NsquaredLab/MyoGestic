@@ -348,7 +348,7 @@ def decode(controls: ControlSet, frame: Sequence[float]) -> dict[str, float]:
         raise ValueError(
             f"frame has {len(frame)} channels but {len(cont)} continuous DOFs are "
             f"declared ({[d.name for d in cont]}). `decode` is the exact inverse "
-            f"of `encode`; a wider legacy frame is a target concern, not a control-standard one."
+            f"of `encode`; a wider pose frame is a target concern, not a control-standard one."
         )
     return {dof.name: float(frame[i]) for i, dof in enumerate(cont)}
 

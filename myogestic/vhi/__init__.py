@@ -2,8 +2,8 @@
 
 Groups the output-interface registry (`interfaces`), the control target (`target`),
 the gRPC clients (`_control`, `_recording`), and the generated protobuf stubs
-(`_proto`) for driving the VHI. `legacy` is separate: it reads VHI's own recorded
-pose format for old sessions, and never touches the live control path.
+(`_proto`) for driving the VHI. `pose` is separate: it names the channels of a
+*recorded* session's hand, and never touches the live control path.
 """
 
 from myogestic.vhi.interfaces import InterfaceSpec, virtual_hand
