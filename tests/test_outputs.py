@@ -198,3 +198,42 @@ def test_flush_survives_a_dead_transport():
     out.push(np.array([1.0]))
     out.flush()  # logged once, not raised
     out.stop()
+
+
+def test_a_stopped_lsl_outlet_releases_the_stream():
+    """`stop` must drop the StreamOutlet, not just stop the thread feeding it.
+
+    liblsl keeps a stream discoverable for as long as its `StreamOutlet` object is
+    alive, not for as long as something pushes to it. A stopped-but-live outlet shares
+    its ``source_id`` with whatever replaced it, so a consumer sees two valid producers
+    of one stream and may resolve the dead one — reading a channel layout that no longer
+    matches. Rebuilding a control map is what creates the second one.
+
+    Asserted through a weak reference rather than by re-resolving the stream: discovery
+    is asynchronous and this repo already carries one LSL test that is flaky under load.
+    The object being collected is the fact that matters — liblsl tears the stream down
+    with it — and it is deterministic.
+    """
+    import weakref
+
+    from myogestic.outputs import LSLOutlet
+
+    outlet = LSLOutlet(name="test_release", n_channels=3, hz=32.0)
+    handle = weakref.ref(outlet._outlet)
+    assert handle() is not None, "nothing was constructed to release"
+
+    outlet.stop()
+
+    assert outlet._outlet is None, "stop kept the outlet alive"
+    assert handle() is None, "the StreamOutlet outlived stop — the stream stays up"
+
+
+def test_sending_after_stop_does_not_raise():
+    """The send thread checks `_running` between ticks, so one tick can be in flight."""
+    import numpy as np
+
+    from myogestic.outputs import LSLOutlet
+
+    outlet = LSLOutlet(name="test_after_stop", n_channels=3, hz=32.0)
+    outlet.stop()
+    outlet._send(np.zeros(3, dtype=np.float32))     # must be a no-op, not a traceback

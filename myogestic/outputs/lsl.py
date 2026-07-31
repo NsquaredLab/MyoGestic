@@ -85,9 +85,33 @@ class LSLOutlet(Output):
         self._n_channels = int(n_channels)
         super().__init__(hz=hz)
 
+    def stop(self) -> None:
+        """Stop the daemon thread and take the stream off the network.
+
+        Overridden because the base class only stops the thread, and an `LSLOutlet`
+        holds a resource: liblsl keeps a stream discoverable for as long as its
+        `StreamOutlet` is alive, not for as long as anything is pushing to it. Dropping
+        the reference and waiting for the collector is not enough either — the app
+        raises the GC threshold at startup, so a stopped outlet can stay resolvable for
+        a long time.
+
+        That matters because a stopped-but-live outlet is not inert. It shares its
+        ``source_id`` with the outlet that replaced it, so a consumer sees two equally
+        valid producers of one stream and may resolve the dead one — reading a layout
+        that no longer matches, silently, with every channel after the first change
+        shifted by one.
+        """
+        super().stop()
+        self._outlet = None
+
     def _send(self, data: np.ndarray) -> None:
         # Validate before push_sample - pylsl gives a cryptic error on
         # mismatch, and a silent push_chunk-then-noop is worse.
+        if self._outlet is None:
+            # `stop` released it while this tick was in flight. The send thread only
+            # checks `_running` between ticks, so without this the last one raises on a
+            # dropped outlet — a traceback for an orderly shutdown.
+            return
         if data.ndim != 1 or data.shape[0] != self._n_channels:
             raise ValueError(
                 f"LSLOutlet expected 1-D vector of length {self._n_channels}, "
