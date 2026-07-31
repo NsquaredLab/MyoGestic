@@ -26,7 +26,7 @@ import torch
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, load_control_map, resolve
+from myogestic.controls import ControlBus, connect_controls, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_regressor
@@ -113,8 +113,8 @@ PROCESSES = [
 # clip again -> hand it to every target. `VhiTarget` is what turns resolved aliases into
 # whatever this VHI renders on the wire.
 vhi_control = vhi.control_client()
-vhi_target = None
-bus = None
+vhi_target: VhiTarget | None = None
+bus: ControlBus | None = None
 controls = None
 # --8<-- [end:bus]
 
@@ -297,31 +297,15 @@ grid = Grid(
 
 # --8<-- [start:negotiate]
 def _ensure_vhi() -> None:
-    """Resolve the control map once VHI is up and can say what it exports.
-
-    Semantics come from the target, so nothing can be built at import time: the app
-    launches VHI from its own ProcessLauncher. Called from the UI handlers and the
-    training thread — never from the predict callback, because `capabilities` blocks
-    on an RPC. Cheap and idempotent once settled.
-    """
-    global bus, controls, vhi_target
+    """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
+    global bus, vhi_target
     if bus is not None:
         return
-    capabilities = vhi_control.capabilities()
-    if capabilities is None:
-        app.ctx.log("VHI not reachable yet — controls stay unresolved")
-        return
-    # Refuses an address this build does not export, naming the near misses.
-    controls = resolve(CONTROL_MAP, capabilities)
     vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
-    bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
-    # Recordings then carry the space they were made under: a bare -1 does not say
-    # whether it was a full excursion or out of range.
-    app.ctx.control_space = CONTROL_MAP
-    # `bind` ran inside the bus, and VHI already answered above, so the handshake is
-    # settled — `bind` would have raised otherwise.
-    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
-# --8<-- [end:negotiate]
+    bus = connect_controls(
+        CONTROL_MAP, [vhi_target], ctx=app.ctx, smoothing=output_filter, hz=32
+    )
+
 
 
 # --8<-- [start:gesture]

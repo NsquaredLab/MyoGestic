@@ -31,7 +31,7 @@ import tomllib
 import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, load_control_map, resolve
+from myogestic.controls import ControlBus, connect_controls, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
@@ -210,29 +210,19 @@ grid = Grid(
 
 
 def _ensure_vhi() -> None:
-    """Resolve the control map once VHI is up and can say what it exports.
+    """Bind the map once VHI can say what it exports. Idempotent; UI thread only.
 
-    Called from UI handlers only — never from the predict callback, because
-    `capabilities` blocks on an RPC and predict runs on its own thread.
+    Never from `predict`: asking a renderer costs an RPC, and that callback has its own
+    thread and a deadline.
     """
     global bus, vhi_target
     if bus is not None:
         return
-    capabilities = vhi_control.capabilities()
-    if capabilities is None:
-        app.ctx.log("VHI not reachable yet — controls stay unresolved")
-        return
-    controls = resolve(CONTROL_MAP, capabilities)
     vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
-    bus = ControlBus(
-        controls,
-        targets=[vhi_target],
-        smoothing=output_filter,
-        hz=pipeline.predict_hz,
+    bus = connect_controls(
+        CONTROL_MAP, [vhi_target], ctx=app.ctx, smoothing=output_filter, hz=pipeline.predict_hz
     )
-    # Recordings then record which mapping they were made under.
-    app.ctx.control_space = CONTROL_MAP
-    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
+
 
 
 def _select_gesture(state: str) -> None:

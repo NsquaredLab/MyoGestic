@@ -41,7 +41,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint, StochasticWeightAveragi
 from myoverse.models.raul_net.v17 import RaulNetV17
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, load_control_map, resolve
+from myogestic.controls import ControlBus, connect_controls, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.session import iter_aligned_windows, iter_labeled_windows, open_session_store
@@ -154,8 +154,8 @@ output_filter = PostProcessor(hz=32)
 # The bus is built lazily, in `_ensure_vhi`. Every semantic the map needs — whether an
 # address takes a number or a held state, its range, its states — is VHI's to declare, and
 # VHI does not exist yet: this app launches it from its own ProcessLauncher.
-vhi_target = None
-bus = None
+vhi_target: VhiTarget | None = None
+bus: ControlBus | None = None
 
 PROCESSES = [
     (
@@ -387,32 +387,15 @@ grid = Grid(
 
 
 def _ensure_vhi() -> None:
-    """Resolve the control map once VHI is up and can say what it exports."""
+    """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
     global bus, vhi_target
     if bus is not None:
         return
-    capabilities = vhi_control.capabilities()
-    if capabilities is None:
-        app.ctx.log("VHI not reachable yet — controls stay unresolved")
-        return
-    controls = resolve(CONTROL_MAP, capabilities)
-    unknown = [name for name in (*DOF_NAMES, GESTURE) if name not in controls.dofs]
-    if unknown:
-        # Caught here rather than as a hand that quietly holds rest: the bus substitutes
-        # rest for an alias it does not know, so a renamed alias would look like a model
-        # predicting nothing.
-        raise ValueError(
-            f"{CONTROL_FILE.name} does not declare {unknown}, but this example pushes "
-            f"those aliases. It declares: {sorted(controls.dofs)}."
-        )
     vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
-    # One bus owns the output path: substitute rest -> clip -> smooth -> clip again ->
-    # deliver. VhiTarget negotiates the space and refuses a VHI it cannot fully drive.
-    bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
-    # Recordings then carry the space they were made under: a bare -1 does not say
-    # whether it was a full excursion or out of range.
-    app.ctx.control_space = CONTROL_MAP
-    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
+    bus = connect_controls(
+        CONTROL_MAP, [vhi_target], ctx=app.ctx, smoothing=output_filter, hz=32
+    )
+
 
 
 def _on_gesture(i: int) -> None:

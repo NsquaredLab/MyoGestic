@@ -25,7 +25,7 @@ import tomllib
 from imgui_bundle import imgui
 
 from myogestic import App, Fr, Grid, Px
-from myogestic.controls import ControlBus, load_control_map, resolve
+from myogestic.controls import ControlBus, connect_controls, load_control_map
 from myogestic.vhi import VhiTarget, virtual_hand
 from myogestic.widgets import AppLogo, ProcessLauncher
 from myogestic.widgets.common import panel_header
@@ -66,21 +66,14 @@ grid = Grid(
 
 
 def _connect() -> None:
-    """Resolve the mapping once VHI is up and can say what it exports."""
+    """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
     global bus
     if bus is not None:
         return
-    capabilities = vhi_control.capabilities()
-    if capabilities is None:
-        app.ctx.log("VHI not reachable yet — launch it, then Connect again")
-        return
-    controls = resolve(CONTROL_MAP, capabilities)
     # `stream="control_pose"` is the whole point: it routes onto the control hand's
     # outlet and declares that stream, rather than the predicted hand's.
     target = VhiTarget(vhi.control_outlet(), client=vhi_control, stream="control_pose")
-    bus = ControlBus(controls, targets=[target], hz=32)
-    app.ctx.control_space = CONTROL_MAP
-    app.ctx.log(f"resolved {len(controls.dofs)} control-hand controls against VHI")
+    bus = connect_controls(CONTROL_MAP, [target], ctx=app.ctx, hz=32)
 
 
 @app.ui

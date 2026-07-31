@@ -34,7 +34,7 @@ here decides that.
 
 from __future__ import annotations
 
-from myogestic._controls_bus import ControlBus, Target
+from myogestic._controls_bus import ControlBus, Target, connect_controls
 from myogestic._controls_core import (
     STANDARD_VERSION,
     Continuous,
@@ -67,6 +67,7 @@ __all__ = [
     "Continuous",
     "ControlMap",
     "ControlBus",
+    "connect_controls",
     "ControlSet",
     "Discrete",
     "Dof",
