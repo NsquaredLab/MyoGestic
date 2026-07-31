@@ -7,9 +7,12 @@
 [dofs]
 
 # One output, fanned out to every finger.
+# A fist is not six flexions. The thumb comes *across* the fingers as it curls, and
+# across is adduction — the opposite of what the abduction DOF's name denotes — so it
+# rides along at -1. At +1 it splayed the thumb away from the palm on every fist.
 fist = [
   "vhi.prediction.thumb.flexion",
-  "vhi.prediction.thumb.abduction",
+  { target = "vhi.prediction.thumb.abduction", weight = -1.0 },
   "vhi.prediction.index",
   "vhi.prediction.middle",
   "vhi.prediction.ring",
