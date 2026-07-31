@@ -26,7 +26,7 @@ import pytest
 from myogestic.controls import ControlBus, ControlSet
 from myogestic.outputs.filters import GaussianFilter
 from myogestic.vhi._control import _QUEUE_DEPTH
-from myogestic.vhi.legacy import LEGACY_POSE_DOFS, LEGACY_POSE_WIDTH
+from myogestic.vhi.pose import POSE_DOFS, POSE_WIDTH
 from myogestic.vhi.target import VhiTarget
 
 from .conftest import build_controls
@@ -106,7 +106,7 @@ NINE = (
 
 #: The six controls VHI's pose transport actually renders. Channels 6-8 exist on the
 #: wire and are read by nothing, which is why a negotiated order can be shorter than it.
-POSE = LEGACY_POSE_DOFS
+POSE = POSE_DOFS
 
 
 def _client(order=POSE, **reply):
@@ -115,8 +115,8 @@ def _client(order=POSE, **reply):
 
 
 def _controls(*names: str, **entries: object):
-    """A pose configuration — all six legacy DOFs when no names are given."""
-    dofs: dict[str, object] = dict.fromkeys(names or LEGACY_POSE_DOFS, "continuous")
+    """A pose configuration — all nine pose DOFs when no names are given."""
+    dofs: dict[str, object] = dict.fromkeys(names or POSE_DOFS, "continuous")
     dofs.update(entries)
     return build_controls(dofs)
 
@@ -132,11 +132,11 @@ def _bound(*names: str, **entries: object) -> tuple[VhiTarget, FakeOutlet]:
 # --- bind: refuse what cannot be rendered -------------------------------------
 
 
-def test_bind_accepts_the_six_legacy_dofs():
+def test_bind_accepts_the_pose_dofs():
     target, outlet = _bound()
     assert outlet.frames == []
-    target.send(dict.fromkeys(LEGACY_POSE_DOFS, 0.0), {})
-    assert outlet.last.shape == (LEGACY_POSE_WIDTH,)
+    target.send(dict.fromkeys(POSE_DOFS, 0.0), {})
+    assert outlet.last.shape == (POSE_WIDTH,)
 
 
 def test_bind_accepts_a_subset():
@@ -152,10 +152,15 @@ def test_bind_refuses_an_empty_configuration():
 
 
 def test_bind_refuses_before_anything_is_pushed():
-    """Refusal happens at setup, so a rejected configuration never actuates."""
+    """Refusal happens at setup, so a rejected configuration never actuates.
+
+    `wrist.rotation` used to be the example of something this hand cannot render. It
+    renders now — all nine channels do — so the unrenderable name has to be one the
+    renderer genuinely never names.
+    """
     outlet = FakeOutlet()
     with pytest.raises(ValueError):
-        VhiTarget(outlet, client=_client()).bind(_controls("wrist.rotation"))
+        VhiTarget(outlet, client=_client()).bind(_controls("pinky.abduction"))
     assert outlet.frames == []
 
 
@@ -164,15 +169,24 @@ def test_bind_refuses_before_anything_is_pushed():
 
 def test_send_pushes_a_full_width_float32_frame():
     target, outlet = _bound()
-    target.send(dict.fromkeys(LEGACY_POSE_DOFS, 1.0), {})
-    assert outlet.last.shape == (LEGACY_POSE_WIDTH,)
+    target.send(dict.fromkeys(POSE_DOFS, 1.0), {})
+    assert outlet.last.shape == (POSE_WIDTH,)
     assert outlet.last.dtype == np.float32
 
 
-def test_send_zeroes_the_dead_channels():
+def test_send_carries_the_wrist_channels():
+    """6-8 were zeroed as dead. VHI renders the wrist on all three, so they carry."""
     target, outlet = _bound()
-    target.send(dict.fromkeys(LEGACY_POSE_DOFS, 1.0), {})
-    assert outlet.last[6:].tolist() == [0.0, 0.0, 0.0]
+    target.send(dict.fromkeys(POSE_DOFS, 1.0), {})
+    assert outlet.last.tolist() == [1.0] * POSE_WIDTH
+
+
+def test_send_leaves_unbound_channels_at_rest():
+    """A configuration naming one finger must not disturb the rest of the hand."""
+    target, outlet = _bound("index.flexion")
+    target.send({"index.flexion": 1.0}, {})
+    assert outlet.last[2] == 1.0
+    assert np.count_nonzero(outlet.last) == 1
 
 
 def test_send_ignores_a_name_it_was_not_bound_to():
@@ -203,7 +217,7 @@ def test_send_honours_a_declared_nonzero_rest_for_a_missing_name():
 def test_send_accepts_numpy_float32_values():
     """The library's prediction dtype — `isinstance(v, float)` is False for it."""
     target, outlet = _bound()
-    target.send({n: np.float32(1.0) for n in LEGACY_POSE_DOFS}, {})
+    target.send({n: np.float32(1.0) for n in POSE_DOFS}, {})
     assert outlet.last[:6].tolist() == [1.0] * 6
 
 
@@ -228,8 +242,8 @@ def test_a_routed_binding_clamps_to_the_range_the_target_declared():
 def test_send_ignores_the_changed_map():
     """No discrete DOFs can be bound, so there are never edges to deliver."""
     target, outlet = _bound()
-    target.send(dict.fromkeys(LEGACY_POSE_DOFS, 0.0), {"hand.grasp": "fist"})
-    assert outlet.last.tolist() == [0.0] * LEGACY_POSE_WIDTH
+    target.send(dict.fromkeys(POSE_DOFS, 0.0), {"hand.grasp": "fist"})
+    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
 
 
 def test_a_one_way_dof_never_emits_the_direction_it_excludes():
@@ -244,7 +258,7 @@ def test_every_send_pushes_exactly_one_frame():
     """Latest-wins downstream: a target that pushed twice would drop a tick."""
     target, outlet = _bound()
     for _ in range(5):
-        target.send(dict.fromkeys(LEGACY_POSE_DOFS, 0.0), {})
+        target.send(dict.fromkeys(POSE_DOFS, 0.0), {})
     assert len(outlet.frames) == 5
 
 
@@ -254,9 +268,9 @@ def test_every_send_pushes_exactly_one_frame():
 def test_stop_pushes_rest_and_flushes_it():
     """Pushing alone would leave the frame unsent in a paced slot at exit."""
     target, outlet = _bound()
-    target.send(dict.fromkeys(LEGACY_POSE_DOFS, 1.0), {})
+    target.send(dict.fromkeys(POSE_DOFS, 1.0), {})
     target.stop()
-    assert outlet.last.tolist() == [0.0] * LEGACY_POSE_WIDTH
+    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
     assert outlet.flushes == 1
 
 
@@ -272,7 +286,7 @@ def test_stop_is_idempotent():
     target, outlet = _bound()
     target.stop()
     target.stop()
-    assert outlet.last.tolist() == [0.0] * LEGACY_POSE_WIDTH
+    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
     assert outlet.flushes == 2
 
 
@@ -290,7 +304,7 @@ def test_stop_before_bind_does_not_raise():
 def test_the_bus_binds_the_target_at_construction():
     outlet = FakeOutlet()
     with pytest.raises(ValueError, match="has no place for them"):
-        ControlBus(_controls("wrist.rotation"), targets=[VhiTarget(outlet, client=_client())])
+        ControlBus(_controls("pinky.abduction"), targets=[VhiTarget(outlet, client=_client())])
     assert outlet.frames == []
 
 
@@ -312,7 +326,7 @@ def test_nan_reaches_the_wire_as_rest_not_full_deflection():
 def test_an_out_of_range_prediction_is_clipped_before_the_wire():
     outlet = FakeOutlet()
     bus = ControlBus(_controls(), targets=[VhiTarget(outlet, client=_client())])
-    bus.push(dict.fromkeys(LEGACY_POSE_DOFS, 40.0))
+    bus.push(dict.fromkeys(POSE_DOFS, 40.0))
     assert outlet.last.min() >= -1.0
 
 
@@ -337,10 +351,10 @@ def test_bus_stop_returns_the_hand_to_rest_and_flushes():
     """The whole safety chain: rest is delivered, then made to land, then stopped."""
     outlet = FakeOutlet()
     bus = ControlBus(_controls(), targets=[VhiTarget(outlet, client=_client())])
-    bus.push(dict.fromkeys(LEGACY_POSE_DOFS, 1.0))
+    bus.push(dict.fromkeys(POSE_DOFS, 1.0))
     assert outlet.last.max() == pytest.approx(1.0)
     bus.stop()
-    assert outlet.last.tolist() == [0.0] * LEGACY_POSE_WIDTH
+    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
     assert outlet.flushes == 1
 
 
@@ -536,7 +550,7 @@ def test_a_negotiated_order_shorter_than_the_wire_pads_the_tail():
     It will not name a channel it does not read — naming dead channels is how the four
     wrong pose tables came to exist — so a short order is normal, not a mismatch.
     """
-    six = LEGACY_POSE_DOFS
+    six = POSE_DOFS
     outlet = FakeOutlet()
     target = VhiTarget(
         outlet,
@@ -545,7 +559,7 @@ def test_a_negotiated_order_shorter_than_the_wire_pads_the_tail():
     target.bind(_controls(*six))
     assert target.negotiated is True
     target.send({**dict.fromkeys(six, 0.0), "little.flexion": 1.0}, {})
-    assert outlet.last.shape == (LEGACY_POSE_WIDTH,)
+    assert outlet.last.shape == (POSE_WIDTH,)
     assert outlet.last[5] == pytest.approx(1.0)
     assert outlet.last[6:].tolist() == [0.0, 0.0, 0.0]
 
@@ -598,7 +612,7 @@ def test_a_subset_of_the_negotiated_channels_is_legal():
     target = VhiTarget(
         outlet,
         client=FakeClient(
-            FakeReply(continuous_channel_order=LEGACY_POSE_DOFS)
+            FakeReply(continuous_channel_order=POSE_DOFS)
         ),
     )
     target.bind(_controls("index.flexion"))
@@ -754,12 +768,12 @@ def test_negotiate_is_idempotent_when_already_settled():
 
 def test_declaring_the_control_pose_stream_is_opt_in():
     """Default must not declare it — that is what keeps existing producers working."""
-    client = FakeClient(FakeReply(continuous_channel_order=LEGACY_POSE_DOFS))
+    client = FakeClient(FakeReply(continuous_channel_order=POSE_DOFS))
     VhiTarget(FakeOutlet(), client=client).bind(_controls("index.flexion"))
     assert client.declared[-1][1] is False, "the output target must not declare a control pose"
 
     client2 = FakeClient(
-        FakeReply(control_pose_channel_order=LEGACY_POSE_DOFS)
+        FakeReply(control_pose_channel_order=POSE_DOFS)
     )
     VhiTarget(FakeOutlet(), client=client2, stream="control_pose").bind(
         _controls("index.flexion")
@@ -836,7 +850,7 @@ def test_a_silent_renderer_that_appears_later_gets_negotiated():
     target.bind(_controls("index.flexion"))
     assert target.negotiated is False
 
-    client.reply = FakeReply(continuous_channel_order=LEGACY_POSE_DOFS)
+    client.reply = FakeReply(continuous_channel_order=POSE_DOFS)
     assert target.negotiate() is True
     assert target.negotiated is True
     assert target._pending is None
@@ -844,7 +858,7 @@ def test_a_silent_renderer_that_appears_later_gets_negotiated():
 
 def test_force_re_declares_after_a_settled_handshake():
     """A renderer restart loses VHI's side of the contract; force is the remedy."""
-    client = FakeClient(FakeReply(continuous_channel_order=LEGACY_POSE_DOFS))
+    client = FakeClient(FakeReply(continuous_channel_order=POSE_DOFS))
     target = VhiTarget(FakeOutlet(), client=client)
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
@@ -1003,7 +1017,7 @@ def test_stop_rests_every_routed_channel():
     )
     target.send({"fist": 1.0}, {})
     target.stop()
-    assert outlet.last.tolist() == [0.0] * LEGACY_POSE_WIDTH
+    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
     assert outlet.flushes == 1
 
 

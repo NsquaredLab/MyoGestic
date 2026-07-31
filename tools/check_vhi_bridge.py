@@ -33,7 +33,7 @@ import time
 
 from myogestic.controls import Continuous, ControlBus, ControlSet
 from myogestic.vhi import VhiTarget, virtual_hand
-from myogestic.vhi.legacy import LEGACY_POSE_DOFS
+from myogestic.vhi.pose import POSE_DOFS
 
 #: Seconds to hold each excursion. Long enough to look at, short enough to sit through.
 HOLD_S = 1.5
@@ -50,18 +50,18 @@ EXPECTED = {
 
 
 def main() -> None:
-    """Sweep every legacy DOF through both directions and print the checklist."""
+    """Sweep every pose DOF through both directions and print the checklist."""
     # Built directly rather than from a mapping file: this is a rig diagnostic, so the
-    # names ARE the legacy channels under test — there is no user vocabulary involved.
-    controls = ControlSet(dofs={n: Continuous(n) for n in LEGACY_POSE_DOFS})
+    # names ARE the pose channels under test — there is no user vocabulary involved.
+    controls = ControlSet(dofs={n: Continuous(n) for n in POSE_DOFS})
     outlet = virtual_hand().outlet()
     # No smoothing: a ramp would blur which frame produced which pose.
     bus = ControlBus(controls, targets=[VhiTarget(outlet)])
 
-    print(f"Driving {len(LEGACY_POSE_DOFS)} DOFs, one at a time. Watch the PREDICTED hand.\n")
+    print(f"Driving {len(POSE_DOFS)} DOFs, one at a time. Watch the PREDICTED hand.\n")
     observations: list[str] = []
     try:
-        for name in LEGACY_POSE_DOFS:
+        for name in POSE_DOFS:
             print(f"{name}  —  at +1, expect: {EXPECTED[name]}")
             for value in (1.0, -1.0):
                 print(f"    {value:+.0f} ...", flush=True)

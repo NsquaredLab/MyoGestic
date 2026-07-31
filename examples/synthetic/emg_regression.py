@@ -34,7 +34,7 @@ from myogestic.session import iter_aligned_windows, iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import VhiTarget, virtual_hand
-from myogestic.vhi.legacy import LEGACY_ADDRESS_CHANNELS, LEGACY_POSE_DOFS, decode_pose
+from myogestic.vhi.pose import ADDRESS_CHANNELS, POSE_DOFS, split_pose
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
@@ -175,13 +175,13 @@ def train(data: TrainingData):
         )
     aliases = controls.channel_labels()
     n_dof = len(aliases)
-    # The recorded control hand is VHI's legacy 9-channel pose, and `decode_pose` keys it
-    # by pose channel — so each alias finds its column through the address it routes to.
+    # The recorded control hand is VHI's 9-channel pose, and `split_pose` keys it by pose
+    # channel — so each alias finds its column through the address it routes to.
     # The aliases stay the vocabulary; the addresses only do the lookup. One route each
     # here; an alias fanned out to several controls would need a rule for which to learn
     # from, so this takes the first deliberately rather than by accident.
     pose_keys = [
-        LEGACY_POSE_DOFS[LEGACY_ADDRESS_CHANNELS[controls.routes[a][0].address]] for a in aliases
+        POSE_DOFS[ADDRESS_CHANNELS[controls.routes[a][0].address]] for a in aliases
     ]
     log.append(f"Training from {len(data.paths)} sessions, targets: {', '.join(aliases)}")
 
@@ -216,11 +216,9 @@ def train(data: TrainingData):
         HOP_MS,
         n_alignment_samples=10,
     ):
-        # decode_pose reads VHI's recorded pose as control values, so the
-        # training target is in exactly the space `predict` commands. It is a
-        # signed negation, not the old `abs()` - which folded any extension the
-        # operator did into flexion of the same magnitude.
-        pose = decode_pose(aligned["vhi_control"])
+        # A recorded pose is already in the space `predict` commands — both VHI
+        # streams speak the control standard — so this only names the channels.
+        pose = split_pose(aligned["vhi_control"])
         kin = np.array([pose[key] for key in pose_keys], dtype=np.float64)
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
