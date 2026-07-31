@@ -6,13 +6,13 @@ right asset for the host OS/arch, downloads it, unpacks it into the location
 ``virtual_hand()`` looks at, and drops a ``vhi-version.txt`` marker so a
 later install knows what's already there.
 
-MyoGestic 2.x drives VHI over the **v2 control contract**, asking the renderer what it
-exports. A pre-2.0 release cannot answer that, so this refuses to install one — see
-`MIN_VHI_TAG`.
+MyoGestic drives VHI over its control service, asking the renderer what it exports. A
+release older than `MIN_VHI_TAG` serves a different service under a different name, so
+this refuses to install one rather than leave it to fail at every launch.
 
 Usage:
     python -m myogestic.tools.install_vhi                # latest, default dest
-    python -m myogestic.tools.install_vhi --tag v2.0.0   # pinned version
+    python -m myogestic.tools.install_vhi --tag v3.0.0   # pinned version
     python -m myogestic.tools.install_vhi --dest /custom/path
     python -m myogestic.tools.install_vhi --force        # reinstall over existing
 
@@ -46,7 +46,13 @@ REPO = "NsquaredLab/MyoGestic-VHI"
 
 #: The oldest VHI this MyoGestic can drive. Below it there is no control manifest to
 #: negotiate against, so an older install would be refused at every launch.
-MIN_VHI_TAG = "v2.0.0"
+#:
+#: v3 because the control plane is one service now. A v2 renderer serves
+#: ``/myogestic.vhi.v2.VhiCanonicalControl/*`` and answers UNIMPLEMENTED to every RPC
+#: this MyoGestic sends — the package, the service and the method names all moved. That
+#: is not a degradation, it is no connection at all, which is exactly what this gate
+#: exists to catch before the download rather than at every launch afterwards.
+MIN_VHI_TAG = "v3.0.0"
 
 # (system, machine) → release asset. Darwin/x86_64 is absent: only an arm64
 # macOS build is shipped, and Rosetta translates x86_64 → arm64, NOT the
@@ -127,7 +133,7 @@ def _resolve_latest_tag() -> str | None:
 
 
 def _check_supported(tag: str) -> str:
-    """Refuse a release too old to speak v2. Returns the resolved tag.
+    """Refuse a release this MyoGestic cannot drive. Returns the resolved tag.
 
     Checked *before* the download: an old binary installs happily and is then refused
     by every `VhiTarget` at bind time, far from the command that put it there.
@@ -136,7 +142,7 @@ def _check_supported(tag: str) -> str:
     if resolved is None:
         print(
             f"  WARNING: could not resolve which release 'latest' points at. "
-            f"MyoGestic 2.x needs VHI {MIN_VHI_TAG} or newer; if this installs an "
+            f"This MyoGestic needs VHI {MIN_VHI_TAG} or newer; if this installs an "
             f"older one, every launch will refuse it.",
             file=sys.stderr,
         )
@@ -149,10 +155,10 @@ def _check_supported(tag: str) -> str:
     if version < minimum:
         print(
             f"VHI {resolved} is too old for this MyoGestic.\n"
-            f"  MyoGestic 2.x drives VHI over the v2 control contract — it asks the\n"
-            f"  renderer which controls it exports and refuses to guess. {resolved} has\n"
-            f"  no manifest to answer with, and the v1 bridge that used to cover for\n"
-            f"  that is gone, so the install would be unusable rather than limited.\n"
+            f"  This MyoGestic reaches VHI through one control service, and asks the\n"
+            f"  renderer which controls it exports rather than guessing. {resolved}\n"
+            f"  serves a different service under a different name, so every RPC would\n"
+            f"  come back UNIMPLEMENTED — unusable rather than limited.\n"
             f"\n"
             f"  Install {MIN_VHI_TAG} or newer:\n"
             f"    python -m myogestic.tools.install_vhi --tag {MIN_VHI_TAG}\n"

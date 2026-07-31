@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 #: installer pulls in typer, which launching a process should not require.
 log = logging.getLogger("myogestic.vhi")
 
-MIN_VHI_TAG = "v2.0.0"
+MIN_VHI_TAG = "v3.0.0"
 
 
 def _version_of(tag: str) -> tuple[int, ...] | None:
@@ -253,7 +253,7 @@ class InterfaceSpec:
                 f"  Or set $VHI_PATH to an existing VHI Godot project and "
                 f"$GODOT_BIN to a Godot 4.x binary for source-mode."
             )
-        self._refuse_a_pre_v2_install()
+        self._refuse_an_incompatible_install()
         return [(self.name, list(self.process))]
 
     def launchable(self) -> list[tuple[str, list[str]]]:
@@ -276,8 +276,8 @@ class InterfaceSpec:
             log.info("%s cannot be launched from this app: %s", self.name, exc)
             return []
 
-    def _refuse_a_pre_v2_install(self) -> None:
-        """Refuse to launch an installed release too old to speak v2.
+    def _refuse_an_incompatible_install(self) -> None:
+        """Refuse to launch an installed release this MyoGestic cannot drive.
 
         The marker `install_vhi` leaves behind is the only way to know what is on disk
         before starting it, so the check happens here rather than after the renderer
