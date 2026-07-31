@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import sys
 import threading
 import time
@@ -443,16 +442,6 @@ class Stream:
             if delay > 0:
                 time.sleep(delay)
 
-    async def _acquire_loop_async(self) -> None:
-        """Run the acquire loop in the browser, paced with ``asyncio.sleep``.
-
-        Same step body as [`_acquire_loop`][], but yields to the event
-        loop so it can hand control back to the frame renderer.
-        """
-        while self._running:
-            delay = self._acquire_step()
-            # asyncio.sleep(0) still yields, so a delay of 0 is not a hot loop.
-            await asyncio.sleep(delay)
 
     def _validate_chunk(self, data: np.ndarray, ts: np.ndarray) -> str | None:
         """Check that a chunk from `source.read()` matches the StreamInfo.

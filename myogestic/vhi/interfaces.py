@@ -36,8 +36,6 @@ from typing import TYPE_CHECKING
 from myogestic.outputs import LSLOutlet
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from myogestic.vhi._control import VhiControlClient
     from myogestic.vhi._recording import VhiRecordingClient
 
@@ -129,7 +127,6 @@ class InterfaceSpec:
         self,
         *,
         n_channels: int | None = None,
-        channel_names: Sequence[str] | None = None,
     ) -> LSLOutlet:
         """Construct an LSLOutlet matching this interface's output stream.
 
@@ -143,24 +140,12 @@ class InterfaceSpec:
             Override the interface's declared width — e.g. to carry only the
             controls one configuration drives, rather than the renderer's full
             pose layout.
-        channel_names
-            One **target control address** per channel, published in the stream's
-            description, so a consumer can map by name instead of by position.
-            See `myogestic.vhi.VhiTarget`, which fills it in from what it resolved.
-            Addresses, not the user's aliases: a fan-out sends one alias to several
-            channels, so an alias does not identify one.
 
-        Notes
-        -----
-        LSL fixes a stream's description when the outlet is constructed, so labels
-        cannot be added to a live outlet — a labelled stream has to be built *after*
-        the configuration is resolved.
         """
         return LSLOutlet(
             name=self.output_stream_name,
             n_channels=self.n_output_channels if n_channels is None else n_channels,
             hz=self.output_hz,
-            channel_names=channel_names,
             source_id=f"myogestic:{self.name}:{self.output_stream_name}",
         )
 
@@ -216,7 +201,6 @@ class InterfaceSpec:
         self,
         *,
         n_channels: int | None = None,
-        channel_names: Sequence[str] | None = None,
     ) -> LSLOutlet:
         """Construct an [`LSLOutlet`][] for streaming a continuous pose to the control hand.
 
@@ -225,7 +209,7 @@ class InterfaceSpec:
         Raises [`ValueError`][] if this interface has no control-pose stream
         configured.
 
-        `n_channels` and `channel_names` mean what they mean on `outlet`.
+        `n_channels` means what it means on `outlet`.
         """
         if self.control_pose_stream_name is None:
             raise ValueError(f"{self.name}: no control_pose_stream_name configured")
@@ -234,7 +218,6 @@ class InterfaceSpec:
             name=self.control_pose_stream_name,
             n_channels=default_width if n_channels is None else n_channels,
             hz=self.control_pose_hz or self.output_hz,
-            channel_names=channel_names,
             source_id=f"myogestic:{self.name}:{self.control_pose_stream_name}",
         )
 

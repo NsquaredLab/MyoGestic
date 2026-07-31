@@ -92,19 +92,21 @@ def test_the_positional_constructor_still_works():
 # --- the VHI pose stream describes itself ---------------------------------------
 
 
-def test_the_vhi_pose_stream_can_be_narrow_and_labelled():
-    """`InterfaceSpec.outlet` builds a stream carrying only what is driven.
+def test_the_vhi_pose_stream_is_the_renderers_full_width():
+    """`InterfaceSpec.outlet` builds an unlabelled stream at the renderer's pose width.
 
-    The loopback matters here for the same reason as above: `VhiTarget` computes the
-    labels and hands them to this factory, and tests with a fake interface prove the
-    hand-off but not that a two-channel `MyoGestic_Output` is something LSL will
-    actually publish and a consumer resolve.
+    The loopback matters here for the same reason as above: a fake interface proves the
+    hand-off but not that what it builds is something LSL will actually publish and a
+    consumer resolve.
+
+    It used to be narrow and labelled — a channel per driven control, named with its
+    address — so the renderer could put a compacted frame back together. A channel is an
+    address; nothing is compacted and nothing needs a label.
     """
     from myogestic.sources import LSLSource
     from myogestic.vhi import virtual_hand
 
-    addresses = ["vhi.prediction.index", "vhi.prediction.middle"]
-    outlet = virtual_hand().outlet(n_channels=2, channel_names=addresses)
+    outlet = virtual_hand().outlet(n_channels=9)
     try:
         source = LSLSource("MyoGestic_Output")
         try:
@@ -113,13 +115,4 @@ def test_the_vhi_pose_stream_can_be_narrow_and_labelled():
             source.disconnect()
     finally:
         outlet.stop()
-    assert info.n_channels == 2
-    assert info.channel_names == addresses
-
-
-def test_a_label_per_channel_or_none_at_all():
-    """A partial labelling would be worse than none: it reads as a full one."""
-    from myogestic.vhi import virtual_hand
-
-    with pytest.raises(ValueError, match="channel_names has 1 entries"):
-        virtual_hand().outlet(n_channels=2, channel_names=["vhi.prediction.index"])
+    assert info.n_channels == 9

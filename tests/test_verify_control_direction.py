@@ -58,16 +58,21 @@ class _Client:
         return self._reply
 
 
-FLEXED = [_Observation("WaveBone_7", -85.0), _Observation("WaveBone_8", -75.0)]
-EXTENDED = [_Observation("WaveBone_7", 85.0), _Observation("WaveBone_8", 75.0)]
+FLEXED = [_Observation("WaveBone_7", 85.0), _Observation("WaveBone_8", 75.0)]
+EXTENDED = [_Observation("WaveBone_7", -85.0), _Observation("WaveBone_8", -75.0)]
 
 
 # --- check 1: direction ---------------------------------------------------------
 
 
 def test_a_closing_hand_passes():
-    """Negative degrees is what `Movements.Fist` is, so this is the accepting case."""
-    assert "WaveBone_7 -85.0°" in verify.check_direction(_Client(_Reply(FLEXED)))
+    """Positive degrees is what a held `Movements.Fist` renders, so this is the pass.
+
+    Not what `MovementPoses` reads: `ApplyMovementPose` negates every row on the way to
+    the bone, so the table says -85 where the rig lands at +85. Asserting the table is
+    how this gate came to agree with a hand that bent backwards.
+    """
+    assert "WaveBone_7 +85.0°" in verify.check_direction(_Client(_Reply(FLEXED)))
 
 
 def test_an_opening_hand_is_refused():
@@ -78,13 +83,13 @@ def test_an_opening_hand_is_refused():
 
 def test_one_backwards_bone_out_of_two_is_refused():
     """A partly-inverted rig is not a pass — a mixed sign is worse than a clean flip."""
-    mixed = [_Observation("WaveBone_7", -85.0), _Observation("WaveBone_8", 75.0)]
+    mixed = [_Observation("WaveBone_7", 85.0), _Observation("WaveBone_8", -75.0)]
     with pytest.raises(verify.Failure, match="extended WaveBone_8"):
         verify.check_direction(_Client(_Reply(mixed)))
 
 
 def test_a_bone_resting_at_zero_is_refused():
-    """`>= 0` not `> 0`: a bone that did not move renders no direction at all."""
+    """`<= 0` not `< 0`: a bone that did not move renders no direction at all."""
     with pytest.raises(verify.Failure, match="extended"):
         verify.check_direction(_Client(_Reply([_Observation("WaveBone_7", 0.0)])))
 

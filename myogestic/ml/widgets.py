@@ -31,8 +31,7 @@ from myogestic.widgets.panels.log_box import (
 from myogestic.widgets.panels.recording import STATE_COLORS
 
 # Per-panel log UX state, keyed by widget_id (defaults to "ml"), so each panel
-# remembers its own autoscroll + popout across frames.
-_autoscroll: dict[str, bool] = {}
+# remembers its own popout state across frames.
 _popout_open: dict[str, bool] = {}
 
 # Register ml state colors on the core recording widget's state-pill dict.
@@ -87,8 +86,7 @@ def _render_training_log(
 ) -> None:
     if not pipeline.train_log:
         return
-    autoscroll = _autoscroll.setdefault(widget_id, True)
-    render_log(widget_id, pipeline.train_log, height=height, autoscroll=autoscroll)
+    render_log(widget_id, pipeline.train_log, height=height)
 
 
 def _render_save_model_button(
@@ -141,12 +139,10 @@ def _render_pipeline_panel(
     # Render any open popout first so it survives frames even when the surrounding
     # panel scrolls out of view (as in process_launcher._render_open_popouts).
     if _popout_open.get(widget_id, False):
-        autoscroll = _autoscroll.setdefault(widget_id, True)
         still_open = render_log_popout(
             widget_id,
             pipeline.train_log,
             title="Model training log",
-            autoscroll=autoscroll,
         )
         if not still_open:
             _popout_open[widget_id] = False
@@ -156,19 +152,17 @@ def _render_pipeline_panel(
     imgui.same_line()
     _render_predict_button(pipeline)
 
-    # The autoscroll + popout toggles only mean something once a log exists, so
+    # The popout toggle only means something once a log exists, so
     # they render inline above it rather than dangling on the Train/Predict row.
-    autoscroll = _autoscroll.setdefault(widget_id, True)
     popped = _popout_open.get(widget_id, False)
     if pipeline.train_log or popped:
         imgui.same_line()
-        autoscroll, popped = render_log_buttons(widget_id, autoscroll=autoscroll, popped_out=popped)
-        _autoscroll[widget_id] = autoscroll
+        popped = render_log_buttons(widget_id, popped_out=popped)
         _popout_open[widget_id] = popped
         if popped:
             imgui.text_disabled("(log popped out — see 'Model training log' window)")
         else:
-            render_log(widget_id, pipeline.train_log, height=log_height, autoscroll=autoscroll)
+            render_log(widget_id, pipeline.train_log, height=log_height)
 
 
 # --- Public widgets --------------------------------------------------------
@@ -217,9 +211,9 @@ class PredictButton:
 
 
 class TrainingLog:
-    """Read-only view of ``pipeline.train_log`` with smart autoscroll.
+    """Read-only view of ``pipeline.train_log``.
 
-    The autoscroll/popout *toggles* aren't drawn here — they live on
+    The popout *toggle* isn't drawn here — it lives on
     [`PipelinePanel`][]'s control row, next to Train/Predict.
 
     Examples
@@ -292,7 +286,7 @@ class PipelinePanel:
 
     Matches the visual style of [`RecordingControls`][myogestic.widgets.RecordingControls],
     [`SessionManager`][myogestic.widgets.SessionManager], and [`PostProcessor`][myogestic.widgets.PostProcessor]. The log inherits the
-    same autoscroll + popout UX as the process launcher's log.
+    same popout UX as the process launcher's log.
 
     Examples
     --------

@@ -100,7 +100,7 @@ class VhiTarget:
 
     __slots__ = (
         "_answered", "_client", "_discrete", "_dofs", "_interface",
-        "_negotiated", "_order", "_outlet", "_pending", "_routed", "_slots", "_stream",
+        "_negotiated", "_outlet", "_pending", "_routed", "_slots", "_stream",
         "_width",
     )
 
@@ -140,7 +140,6 @@ class VhiTarget:
         #: Names of the held states this target commands over gRPC once negotiated.
         self._discrete: tuple[str, ...] = ()
         #: Negotiated channel order.
-        self._order: tuple[str, ...] = ()
         #: Declared DOFs paired with the channel VHI put them on, for a name-declared
         #: configuration.
         self._slots: tuple[tuple[int, Continuous], ...] = ()
@@ -149,7 +148,7 @@ class VhiTarget:
         #: the alias cannot be, since a fan-out sends one alias to several channels.
         #: Non-empty when the configuration was resolved against a manifest.
         self._routed: tuple[tuple[int, str, float, float, float, str], ...] = ()
-        #: Tracked explicitly rather than inferred from `_order`: a configuration of
+        #: Tracked explicitly: a configuration of
         #: only discrete DOFs negotiates fine and has an empty channel order.
         self._negotiated = False
         #: Frame width. Fixed by the supplied outlet, or decided at `bind` from how many
@@ -186,7 +185,6 @@ class VhiTarget:
             an address it does not export, one it does not carry on this stream, or two
             aliases aimed at one control.
         """
-        self._order = ()
         self._slots = ()
         self._routed = ()
         self._discrete = ()
@@ -430,7 +428,6 @@ class VhiTarget:
                 else 0
             )
         self._routed = tuple(slots)
-        self._order = tuple(reply.continuous_channel_order)
         self._negotiated = True
         # Put the declared rest pose on the wire immediately: the hand should hold what
         # this configuration calls rest, and the renderer drops an inlet that has never
@@ -487,7 +484,6 @@ class VhiTarget:
             )
         self._dofs = controls.continuous
         self._discrete = tuple(dof.name for dof in controls.discrete)
-        self._order = order
         # Resolve each declared DOF to its negotiated channel once, here, rather than
         # looking names up per tick on the predict thread.
         self._slots = tuple((order.index(d.name), d) for d in controls.continuous)
