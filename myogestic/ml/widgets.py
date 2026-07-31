@@ -134,7 +134,7 @@ def _render_load_model_button(
 
 
 def _render_pipeline_panel(
-    pipeline: Pipeline, *, log_height: float = 80.0, widget_id: str = "ml"
+    pipeline: Pipeline, *, log_height: float = 0.0, widget_id: str = "ml"
 ) -> None:
     # Render any open popout first so it survives frames even when the surrounding
     # panel scrolls out of view (as in process_launcher._render_open_popouts).
@@ -152,17 +152,19 @@ def _render_pipeline_panel(
     imgui.same_line()
     _render_predict_button(pipeline)
 
-    # The popout toggle only means something once a log exists, so
-    # they render inline above it rather than dangling on the Train/Predict row.
+    # The popout toggle only means something once a log exists, so it renders beside
+    # Train/Predict rather than dangling there before anything has been logged.
     popped = _popout_open.get(widget_id, False)
     if pipeline.train_log or popped:
         imgui.same_line()
         popped = render_log_buttons(widget_id, popped_out=popped)
         _popout_open[widget_id] = popped
-        if popped:
-            imgui.text_disabled("(log popped out — see 'Model training log' window)")
-        else:
-            render_log(widget_id, pipeline.train_log, height=log_height)
+
+    # Same rule as `ProcessLauncher`: no inline log unless a caller asks for one. This
+    # panel was filling whatever height its cell gave it with output nobody had asked to
+    # see, and "Training complete" is one line that the popout shows better.
+    if log_height > 0 and not _popout_open.get(widget_id, False):
+        render_log(widget_id, pipeline.train_log, height=log_height)
 
 
 # --- Public widgets --------------------------------------------------------
@@ -285,8 +287,21 @@ class PipelinePanel:
     """Train + Predict + log as a single titled panel.
 
     Matches the visual style of [`RecordingControls`][myogestic.widgets.RecordingControls],
-    [`SessionManager`][myogestic.widgets.SessionManager], and [`PostProcessor`][myogestic.widgets.PostProcessor]. The log inherits the
-    same popout UX as the process launcher's log.
+    [`SessionManager`][myogestic.widgets.SessionManager], and [`PostProcessor`][myogestic.widgets.PostProcessor].
+
+    The log lives in the ``↗`` popout, the same way
+    [`ProcessLauncher`][myogestic.widgets.ProcessLauncher]'s does: a window you can move,
+    resize and leave open. Nothing is drawn inline unless you ask for a height — the panel
+    used to fill its whole cell with a box holding one line of output.
+
+    Parameters
+    ----------
+    pipeline
+        The [`Pipeline`][myogestic.Pipeline] to train and predict with.
+    log_height
+        Height in pixels of an **optional** inline log. ``<= 0`` (the default) draws none.
+    widget_id
+        Unique ID for this panel, so two of them keep separate popout state.
 
     Examples
     --------
@@ -296,7 +311,7 @@ class PipelinePanel:
     """
 
     def __init__(
-        self, pipeline: Pipeline, *, log_height: float = 80.0, widget_id: str = "ml"
+        self, pipeline: Pipeline, *, log_height: float = 0.0, widget_id: str = "ml"
     ) -> None:
         self._pipeline = pipeline
         self._log_height = log_height
