@@ -319,3 +319,64 @@ class ControlBus:
                 target.stop()
             except Exception as exc:  # noqa: BLE001 - teardown continues regardless
                 self._warn_once(f"stop:{type(target).__name__}", f"stop failed: {exc!r}")
+
+
+def connect_controls(
+    control_map: Any,
+    targets: Sequence[Any],
+    *,
+    ctx: Any = None,
+    hz: float = 32.0,
+    smoothing: Any = None,
+) -> ControlBus | None:
+    """Resolve a map against what `targets` export, and build the bus. `None` if they cannot say yet.
+
+    The bind every VHI application has to do, and had to write out: a control map names
+    *addresses*, and what an address means — number or held state, its range, its neutral
+    value — belongs to the target. So a map cannot be resolved until the targets can
+    answer, and an application that launches its own renderer has nobody to ask at import.
+
+    Call it from a UI handler, or anywhere that can afford to block, and call it again
+    until it returns something. **Never from a predict callback**: asking a renderer costs
+    an RPC, and stalling the control loop on it is worse than a frame with no bus.
+
+    Parameters
+    ----------
+    control_map
+        The parsed `~myogestic.controls.ControlMap`, from `~myogestic.controls.load_control_map`.
+    targets
+        Every target the map may name, already constructed. Each is asked what it exports;
+        one that answers `None` — a renderer that has not started — makes the whole call
+        return `None`, because a map resolved against a partial manifest would bind some
+        aliases and silently drop the rest.
+    ctx
+        The app's `~myogestic.Context`. Given one, the map is recorded as
+        ``ctx.control_space`` so a recording carries the mapping it was made under, and
+        the outcome is logged.
+    hz, smoothing
+        Passed to `ControlBus`.
+
+    Returns
+    -------
+    ControlBus or None
+        `None` while any target is unreachable. Try again later; nothing is left
+        half-built.
+    """
+    from myogestic._controls_map import resolve
+
+    merged: list[Any] = []
+    for target in targets:
+        fetch = getattr(target, "capabilities", None)
+        got = fetch() if callable(fetch) else None
+        if got is None:
+            if ctx is not None:
+                ctx.log(f"{type(target).__name__} not reachable yet — controls stay unresolved")
+            return None
+        merged.extend(got)
+
+    controls = resolve(control_map, merged)
+    bus = ControlBus(controls, targets=list(targets), smoothing=smoothing, hz=hz)
+    if ctx is not None:
+        ctx.control_space = control_map
+        ctx.log(f"resolved {len(controls.dofs)} control(s)")
+    return bus

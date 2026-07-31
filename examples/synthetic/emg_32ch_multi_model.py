@@ -36,7 +36,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, load_control_map, resolve
+from myogestic.controls import ControlBus, connect_controls, load_control_map
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
@@ -92,8 +92,8 @@ POSE_ALIASES = tuple(CONTROL_MAP.bindings)
 # values, and `VhiTarget` negotiates the space at bind time and refuses a VHI it cannot
 # fully drive rather than guessing.
 vhi_control = vhi.control_client()
-vhi_target = None
-bus = None
+vhi_target: VhiTarget | None = None
+bus: ControlBus | None = None
 
 # Per-class hand poses, in control values keyed by *our* aliases: +1 is the
 # direction the alias names, 0 is rest, and an alias left out of a pose rests.
@@ -408,24 +408,15 @@ grid = Grid(
 
 
 def _ensure_vhi() -> None:
-    """Resolve the control map once VHI is up and can say what it exports.
-
-    The map cannot be resolved at import: the semantics of every address — number or
-    held state, range, neutral value — come from VHI's manifest, and this app launches
-    VHI itself, so at import there is nobody to ask. Idempotent once resolved.
-    """
+    """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
     global bus, vhi_target
     if bus is not None:
         return
-    capabilities = vhi_control.capabilities()
-    if capabilities is None:
-        app.ctx.log("VHI not reachable yet — controls stay unresolved")
-        return
-    controls = resolve(CONTROL_MAP, capabilities)
     vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
-    bus = ControlBus(controls, targets=[vhi_target], smoothing=output_filter, hz=32)
-    app.ctx.control_space = CONTROL_MAP  # recordings record what they were made under
-    app.ctx.log(f"resolved {len(controls.dofs)} controls against VHI")
+    bus = connect_controls(
+        CONTROL_MAP, [vhi_target], ctx=app.ctx, smoothing=output_filter, hz=32
+    )
+
 
 
 def _on_gesture(i: int) -> None:

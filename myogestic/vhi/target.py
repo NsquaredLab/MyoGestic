@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from myogestic._controls_core import ControlSet
+    from myogestic._controls_map import Capability
 
 log = logging.getLogger("myogestic.vhi_target")
 
@@ -572,6 +573,18 @@ class VhiTarget:
         # nothing is streaming yet.
         self._outlet = build(n_channels=width)
         self._width = width
+
+    def capabilities(self) -> tuple[Capability, ...] | None:
+        """What the renderer exports, or `None` while it cannot be reached.
+
+        The same question `KeyboardTarget.capabilities` answers off a local list, so a
+        caller can ask a mixed set of targets what they render without knowing which of
+        them needs a live connection. `None` is the honest answer for a renderer that has
+        not started: not an empty manifest, which would read as "renders nothing".
+        """
+        fetch = getattr(self._client, "capabilities", None)
+        got = fetch() if callable(fetch) else None
+        return None if got is None else tuple(got)
 
     def stop(self) -> None:
         """Return the hand to its declared rest pose, and make sure that lands.
