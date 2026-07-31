@@ -541,9 +541,9 @@ def _keyboard_ui() -> None:
 def _typed_value_ui(alias: str, label: str) -> bool:
     """The double-clicked slider, as a field. True when a value was committed.
 
-    Enter commits, Escape or clicking away abandons — and the slider comes back either
-    way, because a field that stayed open would leave the control undraggable with no
-    obvious way out.
+    Enter commits, and so does clicking away having typed something; Escape abandons,
+    because ImGui restores the value it opened with. The slider comes back either way — a
+    field that stayed open would leave the control undraggable with no obvious way out.
     """
     if alias in focus_pending:
         imgui.set_keyboard_focus_here()
@@ -554,11 +554,15 @@ def _typed_value_ui(alias: str, label: str) -> bool:
     # active widget change type underneath itself and drops the field on the same frame it
     # appeared. The `##` suffix keeps the visible label identical while making the id new.
     field_id = f"{label}##{label}_typed" if not label.startswith("##") else f"{label}_typed"
-    entered, value = imgui.input_float(
-        field_id, typing[alias], 0.0, 0.0, "%.3f", imgui.InputTextFlags_.enter_returns_true
-    )
+    # No `enter_returns_true`: `input_float` is `InputScalar` underneath, and ImGui
+    # asserts that flag is *not* set on it — it is an `InputText` flag, and the scalar
+    # wrappers handle Enter themselves. Passing it raised out of the render callback and
+    # took the window down, on the one interaction the slider's tooltip advertises.
+    # `is_item_deactivated_after_edit` is the supported way to ask "did this commit", and
+    # it fires on Enter and on clicking away having changed the value.
+    _, value = imgui.input_float(field_id, typing[alias], 0.0, 0.0, "%.3f")
     typing[alias] = value
-    if entered:
+    if imgui.is_item_deactivated_after_edit():
         # Clamped to the same domain the slider offers. The bus clips anyway, so this is
         # about not *displaying* a value the hand will never render.
         levels[alias] = min(1.0, max(-1.0, value))
