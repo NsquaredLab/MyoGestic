@@ -47,7 +47,7 @@ def test_v10_is_newer_than_v2_not_older():
 class TestTheInstallerRefusesAnOldRelease:
     def test_a_pinned_old_tag_is_refused_before_downloading(self, capsys, monkeypatch):
         """Refused *before* the download: 150 MB then unusable is the worse outcome."""
-        monkeypatch.setattr(install_vhi, "_resolve_latest_tag", lambda: "v1.0.0")
+        monkeypatch.setattr(install_vhi, "_resolve_latest_tag", lambda: "v2.0.0")
         with pytest.raises(typer.Exit):
             install_vhi._check_supported("v1.0.0")
         err = capsys.readouterr().err
@@ -57,13 +57,13 @@ class TestTheInstallerRefusesAnOldRelease:
 
     def test_latest_is_resolved_before_it_is_judged(self, monkeypatch):
         """`latest` is a pointer; judging the literal string would never refuse."""
-        monkeypatch.setattr(install_vhi, "_resolve_latest_tag", lambda: "v1.0.0")
+        monkeypatch.setattr(install_vhi, "_resolve_latest_tag", lambda: "v2.0.0")
         with pytest.raises(typer.Exit):
             install_vhi._check_supported("latest")
 
     def test_a_new_enough_release_is_allowed_through(self, monkeypatch):
-        monkeypatch.setattr(install_vhi, "_resolve_latest_tag", lambda: "v2.3.0")
-        assert install_vhi._check_supported("latest") == "v2.3.0"
+        monkeypatch.setattr(install_vhi, "_resolve_latest_tag", lambda: "v3.1.0")
+        assert install_vhi._check_supported("latest") == "v3.1.0"
 
     def test_an_unresolvable_latest_warns_rather_than_blocking(self, capsys, monkeypatch):
         """Offline should not stop someone installing; it should tell them the risk."""
@@ -97,14 +97,14 @@ class TestTheLauncherRefusesAnOldInstall:
             spec.launcher()
 
     def test_the_refusal_says_how_to_fix_it(self, tmp_path):
-        spec = self._spec(tmp_path, "installed_tag=v1.0.0\n")
+        spec = self._spec(tmp_path, "installed_tag=v2.0.0\n")
         with pytest.raises(FileNotFoundError) as excinfo:
             spec.launcher()
         assert "--force" in str(excinfo.value), "upgrading over an install needs it"
         assert "VHI_PATH" in str(excinfo.value)
 
     def test_a_new_enough_marker_launches(self, tmp_path):
-        spec = self._spec(tmp_path, "installed_tag=v2.0.0\n")
+        spec = self._spec(tmp_path, "installed_tag=v3.0.0\n")
         assert spec.launcher() == [("VHI Hand", ["/does/not/matter"])]
 
     def test_no_marker_launches(self, tmp_path):
