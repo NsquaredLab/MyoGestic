@@ -372,8 +372,6 @@ class App:
             # Pack session folder → .session.zip in a daemon thread so the
             # UI stays responsive during finalization. Register with
             # session_manager only after pack succeeds.
-            import threading
-
             def _finalize() -> None:
                 try:
                     zip_path = session.pack_to_zip()
@@ -554,8 +552,6 @@ class App:
         # otherwise GLFW resets it during init. post_init runs at the right moment.
         if sys.platform == "darwin":
             runner_params.callbacks.post_init = _try_set_macos_dock_icon
-
-        import os
 
         os.makedirs(".imgui_state", exist_ok=True)
         runner_params.ini_filename_use_app_window_title = False
