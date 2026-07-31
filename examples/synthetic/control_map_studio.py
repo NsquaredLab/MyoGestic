@@ -454,9 +454,10 @@ def _sliders_ui() -> None:
         if not inline:
             imgui.text_unformatted(alias)
         label = alias if inline else f"##{alias}"
-        imgui.set_next_item_width(avail - (imgui.calc_text_size(alias).x + 12.0 if inline else 0.0))
+        width = avail - (imgui.calc_text_size(alias).x + 12.0 if inline else 0.0)
+        imgui.set_next_item_width(width)
         if alias in typing:
-            changed = _typed_value_ui(alias, label) or changed
+            changed = _typed_value_ui(alias, width, alias if inline else None) or changed
             continue
         before = levels[alias]
         edited, levels[alias] = imgui.slider_float(label, levels[alias], -1.0, 1.0)
@@ -538,7 +539,7 @@ def _keyboard_ui() -> None:
     imgui.pop_style_color()
 
 
-def _typed_value_ui(alias: str, label: str) -> bool:
+def _typed_value_ui(alias: str, width: float, label: str | None) -> bool:
     """The double-clicked slider, as a field. True when a value was committed.
 
     Enter commits, and so does clicking away having typed something; Escape abandons,
@@ -548,12 +549,26 @@ def _typed_value_ui(alias: str, label: str) -> bool:
     if alias in focus_pending:
         imgui.set_keyboard_focus_here()
         focus_pending.discard(alias)
+    # ImGui has no way to centre text inside an input — there is a style var for a button's
+    # label and a selectable's, and none for this. So the *field* is centred instead: sized
+    # to its number and placed in the middle of the span the slider filled, which keeps the
+    # digits where the eye left them. Full width would put them hard against the left edge,
+    # which is the jump this avoids.
+    start_x = imgui.get_cursor_pos_x()
+    style = imgui.get_style()
+    field_w = min(
+        width,
+        imgui.calc_text_size(f"{typing[alias]:.3f}").x + style.frame_padding.x * 2.0 + 8.0,
+    )
+    imgui.set_cursor_pos_x(start_x + (width - field_w) * 0.5)
+    imgui.set_next_item_width(field_w)
     # A **different ImGui id** from the slider it replaces, which is the whole reason this
     # works. An id identifies interaction state, and the mouse is still down from the
     # second click when this field first draws — handed the slider's id, ImGui sees the
     # active widget change type underneath itself and drops the field on the same frame it
-    # appeared. The `##` suffix keeps the visible label identical while making the id new.
-    field_id = f"{label}##{label}_typed" if not label.startswith("##") else f"{label}_typed"
+    # appeared. Hidden here, and the label redrawn below where the slider put it, so it
+    # does not ride along with the narrowed field.
+    field_id = f"##{alias}_typed"
     # No `enter_returns_true`: `input_float` is `InputScalar` underneath, and ImGui
     # asserts that flag is *not* set on it — it is an `InputText` flag, and the scalar
     # wrappers handle Enter themselves. Passing it raised out of the render callback and
@@ -561,14 +576,24 @@ def _typed_value_ui(alias: str, label: str) -> bool:
     # `is_item_deactivated_after_edit` is the supported way to ask "did this commit", and
     # it fires on Enter and on clicking away having changed the value.
     _, value = imgui.input_float(field_id, typing[alias], 0.0, 0.0, "%.3f")
+    # Read **before** anything else is submitted. `is_item_*` answers about the last item,
+    # so drawing the label first made both of these ask the label — which never
+    # deactivates, so the field committed nothing and never closed, and the slider never
+    # came back.
+    committed = imgui.is_item_deactivated_after_edit()
+    dismissed = imgui.is_item_deactivated()
     typing[alias] = value
-    if imgui.is_item_deactivated_after_edit():
+    if label is not None:
+        # Where `slider_float` would have drawn it: past the full span, not past the field.
+        imgui.same_line(start_x + width + style.item_inner_spacing.x)
+        imgui.text_unformatted(label)
+    if committed:
         # Clamped to the same domain the slider offers. The bus clips anyway, so this is
         # about not *displaying* a value the hand will never render.
         levels[alias] = min(1.0, max(-1.0, value))
         typing.pop(alias, None)
         return True
-    if imgui.is_item_deactivated():
+    if dismissed:
         typing.pop(alias, None)
     return False
 
