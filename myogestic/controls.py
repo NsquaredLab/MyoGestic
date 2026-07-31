@@ -4,10 +4,9 @@ MyoGestic defines the vocabulary; VHI, a keyboard, a cursor or a robotic hand ar
 *targets* that render some of it. There is no channel index, no pose vector, no
 movement name and no transport here.
 
-Three ideas:
+Two ideas:
 
 - a **DOF** is one named thing a user controls — `Continuous` or `Discrete`;
-- a **control** is one entry in ``[simultaneous]``, over one or more DOFs;
 - a **target** renders some DOFs — see `Target`, and `ControlBus` to drive them.
 
 Continuous DOFs are **signed and normalized**: ``[-1, 1]`` with ``0`` at rest. A

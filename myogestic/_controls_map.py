@@ -330,7 +330,6 @@ class Capability:
     states: tuple[str, ...] = ()
     rest_state: str = ""
     channel: int = -1
-    encoding: int = 0
     stream_name: str = ""
     activation_threshold: float = 0.0
     description: str = ""

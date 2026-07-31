@@ -124,8 +124,6 @@ class ControlSet:
     ----------
     dofs
         Resolved DOFs by alias, in declaration order.
-    simultaneous
-        Control name -> the DOFs it commands. Empty means no declared controls.
     standard_version
         The vocabulary-format version this configuration was written against.
         Recorded verbatim and **not** validated: what a version means is settled by
@@ -140,7 +138,6 @@ class ControlSet:
     """
 
     dofs: Mapping[str, Dof] = field(default_factory=dict)
-    simultaneous: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     standard_version: str = STANDARD_VERSION
     #: Alias -> the target control addresses its value is routed to, with per-target
     #: weights. Populated by `myogestic.controls.resolve`; empty for a configuration
@@ -157,11 +154,6 @@ class ControlSet:
     def discrete(self) -> tuple[Discrete, ...]:
         """The discrete DOFs, in declaration order."""
         return tuple(d for d in self.dofs.values() if isinstance(d, Discrete))
-
-    @property
-    def n_concurrent(self) -> int:
-        """How many controls this configuration declares simultaneous."""
-        return len(self.simultaneous)
 
     def channel_labels(self) -> tuple[str, ...]:
         """Continuous DOF names in wire order — the channel labels to publish."""
