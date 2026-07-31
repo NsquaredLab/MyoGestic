@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 #: installer pulls in typer, which launching a process should not require.
 log = logging.getLogger("myogestic.vhi")
 
-MIN_VHI_TAG = "v3.0.0"
+MIN_VHI_TAG = "v2.0.0"
 
 
 def _version_of(tag: str) -> tuple[int, ...] | None:
