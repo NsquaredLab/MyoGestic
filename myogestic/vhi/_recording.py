@@ -99,7 +99,10 @@ class VhiRecordingClient:
         )
 
     def stop_trajectory(self) -> bool:
-        """Stop any running trajectory and rest the hand. Safe to call unconditionally."""
+        """Stop any running trajectory, resting the hand only if one was running.
+
+        Safe to call unconditionally.
+        """
         return self._call(
             "StopRecordingTrajectory", pb2.StopRecordingTrajectoryRequest()
         )

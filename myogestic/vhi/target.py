@@ -551,10 +551,11 @@ class VhiTarget:
         """Build a stream carrying exactly these controls, labelled with their addresses.
 
         The renderer's channel index is an index into *its* full pose layout — nine wide,
-        three of them dead. The channels are renumbered into a compact frame and each one
-        labelled with the address it carries, so a consumer maps by name rather than by
-        position. A consumer that ignores labels cannot interpret the stream, which is
-        why the caller opts in by passing `interface=` instead of an outlet.
+        all nine rendered (channels 6-8 are the wrist). The channels are renumbered into
+        a compact frame and each one labelled with the address it carries, so a consumer
+        maps by name rather than by position. A consumer that ignores labels cannot
+        interpret the stream, which is why the caller opts in by passing `interface=`
+        instead of an outlet.
 
         Sorted by the renderer's own index so the layout is stable across runs.
         """
