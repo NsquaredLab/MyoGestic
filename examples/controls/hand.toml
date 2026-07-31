@@ -5,20 +5,12 @@
 # Full reference: docs/api/controls.md
 
 [dofs]
-
-# One output -> many controls, with an optional per-target weight.
-# Equal weights need no tables:  fist = ["vhi.prediction.index", "vhi.prediction.middle"]
-fist = [
+fist = { targets = [
   { target = "vhi.prediction.thumb.flexion", weight = 0.6 },
   { target = "vhi.prediction.index" },
   { target = "vhi.prediction.middle" },
   { target = "vhi.prediction.ring" },
   { target = "vhi.prediction.little" },
-]
-
-# The thumb's second axis. `...thumb` alone means flexion — signed, so +1 flexes
-# and -1 extends — and abduction is a different control, so it is named.
+] }
 thumb_spread = "vhi.prediction.thumb.abduction"
-
-# VHI declares this one discrete. `debounce_s` is yours: how long a state must hold.
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }

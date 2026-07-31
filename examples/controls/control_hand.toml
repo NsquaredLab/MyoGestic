@@ -5,17 +5,10 @@
 # Full reference: docs/api/controls.md
 
 [dofs]
-
-# The OPERATOR's hand (vhi.control.pose.*), not the model's
-# (vhi.prediction.*). Separate stream, so use
-#   VhiTarget(vhi.control_outlet(), client=client, stream="control_pose")
-# and declare it:  client.declare(controls, control_pose=True)
 setup_thumb = "vhi.control.pose.thumb.flexion"
 setup_index = "vhi.control.pose.index"
-
-# One output closing the operator's hand.
 setup_close = [
-  { target = "vhi.control.pose.middle", weight = 1.0 },
-  { target = "vhi.control.pose.ring" },
-  { target = "vhi.control.pose.little" },
+  "vhi.control.pose.middle",
+  "vhi.control.pose.ring",
+  "vhi.control.pose.little",
 ]

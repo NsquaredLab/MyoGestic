@@ -5,21 +5,15 @@
 # Full reference: docs/api/controls.md
 
 [dofs]
-
-# One output, fanned out to every finger.
 # A fist is not six flexions. The thumb comes *across* the fingers as it curls, and
 # across is adduction — the opposite of what the abduction DOF's name denotes — so it
 # rides along at -1. At +1 it splayed the thumb away from the palm on every fist.
-fist = [
-  "vhi.prediction.thumb.flexion",
+fist = { targets = [
+  { target = "vhi.prediction.thumb.flexion" },
   { target = "vhi.prediction.thumb.abduction", weight = -1.0 },
-  "vhi.prediction.index",
-  "vhi.prediction.middle",
-  "vhi.prediction.ring",
-  "vhi.prediction.little",
-]
-
-# The other kind. VHI declares this address discrete, so it takes a named state, not a
-# number — the right shape for a genuine event (a preset, a keypress), and the wrong one
-# for a joint. `debounce_s` is yours: how long a state must hold before it counts.
+  { target = "vhi.prediction.index" },
+  { target = "vhi.prediction.middle" },
+  { target = "vhi.prediction.ring" },
+  { target = "vhi.prediction.little" },
+] }
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
