@@ -62,7 +62,7 @@ def save_pickle(model: Any, path: str | Path, *, controls: ControlMap | None = N
     p.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, str(p))
     if controls is not None:
-        _sidecar(p).write_text(json.dumps(controls.as_dict(), indent=2))
+        _sidecar(p).write_text(json.dumps(controls.as_control_space(), indent=2))
     return str(p)
 
 

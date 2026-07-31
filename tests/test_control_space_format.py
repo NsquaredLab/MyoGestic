@@ -23,12 +23,12 @@ NEW = {"dofs": {"my_index": "vhi.prediction.index", "fist": ["vhi.prediction.mid
 
 def test_a_written_control_space_names_its_own_format():
     """Legible rather than inferred — a reader should not have to guess from the shape."""
-    persisted = load_control_map(NEW).as_dict()
+    persisted = load_control_map(NEW).as_control_space()
     assert persisted["format"] == CONTROL_SPACE_FORMAT
 
 
 def test_it_round_trips():
-    persisted = load_control_map(NEW).as_dict()
+    persisted = load_control_map(NEW).as_control_space()
     assert read_control_space(persisted).addresses() == (
         "vhi.prediction.index",
         "vhi.prediction.middle",
@@ -37,7 +37,7 @@ def test_it_round_trips():
 
 def test_it_survives_a_json_round_trip():
     """It is stored in meta.json, so the trip through JSON is the real one."""
-    persisted = json.loads(json.dumps(load_control_map(NEW).as_dict()))
+    persisted = json.loads(json.dumps(load_control_map(NEW).as_control_space()))
     assert read_control_space(persisted).bindings.keys() == {"my_index", "fist"}
 
 
@@ -72,7 +72,7 @@ def test_an_unknown_format_is_refused_by_name():
 
 def test_nothing_is_rewritten_on_read():
     """Reading must not mutate the archive it was handed."""
-    persisted = load_control_map(NEW).as_dict()
+    persisted = load_control_map(NEW).as_control_space()
     before = json.dumps(persisted, sort_keys=True)
     read_control_space(persisted)
     assert json.dumps(persisted, sort_keys=True) == before

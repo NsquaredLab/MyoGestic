@@ -462,15 +462,15 @@ class ControlMapEditor:
         if self._on_disk() is None:
             return False
         try:
-            on_disk = load_control_map(tomllib.loads(self._path.read_text())).as_dict()
+            on_disk = load_control_map(tomllib.loads(self._path.read_text())).as_control_space()
         except (OSError, tomllib.TOMLDecodeError, ValueError):
             return False
-        mine = (self.as_control_map() or ControlMap(bindings={})).as_dict()
+        mine = (self.as_control_map() or ControlMap(bindings={})).as_control_space()
         return on_disk == mine
 
     def _snapshot(self) -> dict[str, Any]:
         """The working copy in a comparable form."""
-        return (self.as_control_map() or ControlMap(bindings={})).as_dict()
+        return (self.as_control_map() or ControlMap(bindings={})).as_control_space()
 
     def _dirty(self) -> bool:
         """Whether reloading would throw away something the user typed.
