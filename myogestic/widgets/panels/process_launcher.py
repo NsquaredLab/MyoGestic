@@ -172,14 +172,9 @@ def _status_of(state: _ProcState) -> tuple[imgui.ImVec4, str]:
 _selected: dict[str, int] = {}  # label -> selected index
 _MIN_COMBO_W = 90.0  # below this the dropdown drops to its own row (see row 1)
 _popout_open: dict[tuple[str, str], bool] = {}  # (widget_id, proc_name) -> log popped out
-# Autoscroll defaults ON for every (widget_id, proc_name); flipped off when the
-# user clicks the autoscroll toggle so they can scroll back to inspect
-# earlier output without being yanked back to the tail.
-_autoscroll: dict[tuple[str, str], bool] = {}
-
 
 # Delegated to widgets/_log_box.render_log — same implementation shared
-# with pipeline_panel so the autoscroll + popout UX stays identical.
+# with pipeline_panel so the popout UX stays identical.
 
 
 class ProcessLauncher:
@@ -278,7 +273,7 @@ def _render_process_launcher(
     # the dot is attached to, and because colour on its own is not a readable answer.
     imgui.set_item_tooltip(detail)
 
-    # Row 1: dropdown + Launch/Stop + popout + autoscroll. Keep every control
+    # Row 1: dropdown + Launch/Stop + popout. Keep every control
     # reachable when the cell is narrow: the dropdown shares the row with the
     # button cluster only while a usable dropdown (>= _MIN_COMBO_W) still fits;
     # otherwise it takes its own full-width row and the buttons drop below it
@@ -291,7 +286,7 @@ def _render_process_launcher(
         + 2 * style.frame_padding.x
     )
     auto_w = imgui.calc_text_size(fa.ICON_FA_ANGLES_DOWN).x + 2 * style.frame_padding.x
-    cluster_w = launch_w + pop_w + auto_w + 2 * sp  # Launch + popout + autoscroll
+    cluster_w = launch_w + pop_w + auto_w + 2 * sp  # Launch + popout
     # ponytail: below ~cluster_w the icon cluster itself would clip; a third
     # row would fix it but no real cell is that narrow.
     inline = imgui.get_content_region_avail().x >= _MIN_COMBO_W + sp + cluster_w
@@ -329,14 +324,9 @@ def _render_process_launcher(
     # buttons look + feel identical to the model panel's log controls.
     imgui.same_line()
     pop_key = (widget_id, selected_name)
-    autoscroll_on = _autoscroll.setdefault(pop_key, True)
-    popped = _popout_open.get(pop_key, False)
-    autoscroll_on, popped = render_log_buttons(
-        f"{widget_id}_{selected_name}",
-        autoscroll=autoscroll_on,
-        popped_out=popped,
+    popped = render_log_buttons(
+        f"{widget_id}_{selected_name}", popped_out=_popout_open.get(pop_key, False)
     )
-    _autoscroll[pop_key] = autoscroll_on
     _popout_open[pop_key] = popped
 
     # No status row and no log: the state is the dot in the header, and the log is one click
@@ -349,7 +339,6 @@ def _render_process_launcher(
             f"{widget_id}_{selected_name}",
             state.log,
             height=log_height,
-            autoscroll=_autoscroll.get(pop_key, True),
         )
 
 
@@ -371,7 +360,6 @@ def _render_open_popouts(widget_id: str) -> None:
             f"{widget_id}_{name}",
             state.log,
             title=f"{name} log",
-            autoscroll=_autoscroll.get((widget_id, name), True),
         )
         if not still_open:
             _popout_open[(widget_id, name)] = False

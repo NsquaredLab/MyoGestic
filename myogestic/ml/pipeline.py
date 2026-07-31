@@ -33,7 +33,6 @@ and feature recipes. Model persistence lives here: `save_pickle` / `load_pickle`
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import sys
 import threading
@@ -313,12 +312,6 @@ class Pipeline:
         self._thread = threading.Thread(target=_loop, daemon=True, name="myogestic.ml.predict")
         self._thread.start()
         log.info("predict thread started")
-
-    async def _predict_loop_async(self, app: App) -> None:
-        """Browser predict loop. Same step body; asyncio pacing."""
-        while not self._stop.is_set():
-            delay = self._predict_step(app)
-            await asyncio.sleep(delay)
 
     def _cleanup(self, app: App) -> None:
         self._stop.set()

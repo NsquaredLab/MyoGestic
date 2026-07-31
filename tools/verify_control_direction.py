@@ -16,7 +16,7 @@ declared", has to be checked from this side.
 Four things are checked per run:
 
 1. **Direction.** A sweep of the index must bend the rig the way a closing hand bends:
-   negative degrees. This is the anchor — everything below is self-consistency.
+   positive degrees. This is the anchor — everything below is self-consistency.
 2. **Round-trip.** A control +1 pushed on `MyoGestic_Output` must read back as +1 on
    `VHI_Predict`, so the renderer is the identity rather than a sign flip.
 3. **Declaration independence.** The same input under three declarations — none,
@@ -59,8 +59,10 @@ from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.vhi import VhiTarget, virtual_hand
 
 #: The DOF driven throughout: the predicted hand's index, whose bare name denotes
-#: flexion. Its direction is therefore decidable against the rig's own movement library
-#: rather than being a matter of taste — a closing hand is what `Movements.Fist` is.
+#: flexion. Positive X is flexion on this rig — `MovementPoses` reads the other way round
+#: because `ApplyMovementPose` negates every row on the way to the bone, which is exactly
+#: the trap this check used to fall into: it asserted negative and so passed while the
+#: hand bent backwards.
 DOF = "vhi.prediction.index"
 
 #: The control hand's counterpart, declared alongside `DOF` in the third scenario.
@@ -164,7 +166,7 @@ def check_direction(client) -> str:
     if not reply.observed:
         raise Failure(f"sweep of {DOF} moved nothing — that is not a pass")
     observed = ", ".join(f"{o.element} {o.degrees_at_hi:+.1f}°" for o in reply.observed)
-    backwards = [o.element for o in reply.observed if o.degrees_at_hi >= 0.0]
+    backwards = [o.element for o in reply.observed if o.degrees_at_hi <= 0.0]
     if backwards:
         raise Failure(
             f"control +1 on {DOF} extended {', '.join(backwards)} instead of flexing "

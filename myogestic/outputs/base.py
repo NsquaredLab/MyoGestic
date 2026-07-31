@@ -6,7 +6,6 @@ they live in their own modules and are re-exported from [`myogestic.outputs`][].
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import sys
 import threading
@@ -135,12 +134,6 @@ class Output:
             delay = self._send_step()
             if delay > 0:
                 time.sleep(delay)
-
-    async def _send_loop_async(self) -> None:
-        """Browser variant - asyncio.sleep yields to the frame loop."""
-        while self._running:
-            delay = self._send_step()
-            await asyncio.sleep(delay)
 
     def _send(self, data: np.ndarray) -> None:
         """Transport-specific write. Override in subclass.

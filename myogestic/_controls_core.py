@@ -171,36 +171,8 @@ class ControlSet:
         """The neutral frame: every DOF at its declared rest."""
         return {d.name: d.rest for d in self.dofs.values()}
 
-    def as_dict(self) -> dict[str, Any]:
-        """A plain mapping describing these resolved DOFs, for a log or a diff."""
-        dofs: dict[str, Any] = {}
-        for d in self.dofs.values():
-            if isinstance(d, Continuous):
-                entry: dict[str, Any] = {
-                    "kind": "continuous",
-                    "range": [d.lo, d.hi],
-                    "rest": d.rest,
-                }
-            else:
-                entry = {
-                    "kind": "discrete",
-                    "states": list(d.states),
-                    "rest": d.rest,
-                    "debounce_s": d.debounce_s,
-                }
-            if d.label:
-                entry["label"] = d.label
-            dofs[d.name] = entry
-        return {
-            "standard_version": self.standard_version,
-            "dofs": dofs,
-            "simultaneous": {k: list(v) for k, v in self.simultaneous.items()},
-        }
 
 
-def _num(v: Any) -> bool:
-    """True for a real number that is not a bool. Configuration-time only."""
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
 def _as_float(v: Any, rest: float) -> tuple[float, bool]:

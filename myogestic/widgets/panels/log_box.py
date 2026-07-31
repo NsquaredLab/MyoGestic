@@ -1,11 +1,11 @@
 """Shared log-rendering primitives.
 
 Consumed by both ``process_launcher`` (subprocess stdout) and
-``pipeline_panel`` (ML training log) so the autoscroll + popout + tooltip
+``pipeline_panel`` (ML training log) so the popout + tooltip
 UX stays identical across the framework. Three thin functions:
 
 * [`render_log`][] — selectable, read-only console text box (mono, dark).
-* [`render_log_buttons`][] — autoscroll + popout toggle buttons (returns
+* [`render_log_buttons`][] — popout toggle button (returns
   the updated state to the caller — the panel owns the state, not us).
 * [`render_log_popout`][] — floating ``Begin``/``End`` window mirroring
   the inline log, returns whether the user has closed the popout.
@@ -27,7 +27,6 @@ def render_log(
     lines: Sequence[str],
     *,
     height: float = -1.0,
-    autoscroll: bool = True,
 ) -> None:
     """Render ``lines`` as a scrollable, read-only text box.
 
@@ -49,12 +48,7 @@ def render_log(
     height
         Pixel height of the box. ``-1`` (default) fills the
         remaining vertical space of the parent.
-    autoscroll
-        Accepted for call-site compatibility. The read-only box scrolls
-        natively; the previous forced stick-to-bottom tail-follow is no
-        longer applied (matches ``log_panel``).
     """
-    del autoscroll  # the read-only box scrolls natively (see docstring)
     text = "\n".join(list(lines))
     h = height if height > 0 else -1.0
     # Console styling on the selectable read-only box: a sunken dark surface
@@ -78,27 +72,18 @@ def render_log(
 def render_log_buttons(
     widget_id: str,
     *,
-    autoscroll: bool,
     popped_out: bool,
-) -> tuple[bool, bool]:
-    """Render the autoscroll + popout toggle buttons.
+) -> bool:
+    """Render the popout toggle button.
 
-    Returns the (possibly updated) ``(autoscroll, popped_out)`` state to
-    be persisted by the caller. Visual: double-chevron-down = autoscroll
-    ON; single arrow = OFF. Box-out icon = "pop out"; box-in icon = "dock
-    back inline".
+    Returns the (possibly updated) ``popped_out`` state to be persisted by the
+    caller. Box-out icon = "pop out"; box-in icon = "dock back inline".
+
+    There was an autoscroll toggle beside it. It set a flag that `render_log`
+    deleted on arrival — the read-only box scrolls natively — so the button
+    changed its own icon and a tooltip claiming the log would stick to the
+    bottom, and nothing else.
     """
-    icon = fa.ICON_FA_ANGLES_DOWN if autoscroll else fa.ICON_FA_ARROW_DOWN
-    if imgui.button(f"{icon}##{widget_id}_autoscroll"):
-        autoscroll = not autoscroll
-    imgui.set_item_tooltip(
-        "Autoscroll ON — log sticks to the bottom as new lines arrive "
-        "(pauses when you scroll up to inspect older lines)."
-        if autoscroll
-        else "Autoscroll OFF — log stays where you scrolled."
-    )
-
-    imgui.same_line()
     icon = (
         fa.ICON_FA_DOWN_LEFT_AND_UP_RIGHT_TO_CENTER
         if popped_out
@@ -109,7 +94,7 @@ def render_log_buttons(
     imgui.set_item_tooltip(
         "Dock the log back inline" if popped_out else "Pop the log out into a floating window"
     )
-    return autoscroll, popped_out
+    return popped_out
 
 
 def render_log_popout(
@@ -117,7 +102,6 @@ def render_log_popout(
     lines: Sequence[str],
     *,
     title: str,
-    autoscroll: bool,
 ) -> bool:
     """Render the floating popout window.
 
@@ -128,7 +112,7 @@ def render_log_popout(
     visible, still_open = imgui.begin(f"{title}##{widget_id}_popout_window", True)
     try:
         if visible:
-            render_log(f"{widget_id}_pop", lines, height=-1.0, autoscroll=autoscroll)
+            render_log(f"{widget_id}_pop", lines, height=-1.0)
     finally:
         imgui.end()
     # imgui.begin types still_open as bool | None, but passing p_open=True

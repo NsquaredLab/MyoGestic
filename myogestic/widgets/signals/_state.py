@@ -141,7 +141,6 @@ class ViewerState:
     # flips between streams restores each stream's own selection. Populated by
     # `resolve_enabled` whenever it moves `channels` to a new key.
     _channels_by_key: dict[tuple[str, int], set[int]] = field(default_factory=dict, repr=False)
-    last_hovered: int = -1
     selected_stream: str | None = None
     scale_mode: str = "auto"
     y_min: float = -1.0
