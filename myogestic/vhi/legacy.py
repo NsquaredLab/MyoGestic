@@ -30,11 +30,16 @@ Two consequences worth stating, because both contradict what the old docs implie
   all three as the wrist now — flexion, abduction and rotation on bone 0, which parents
   every digit. A *recording* still has nothing in any of them, so this reader still drops
   all three; it decodes an archive, not a live stream.
-- The **positive half renders**. VHI multiplies the sample by a per-bone gain with
-  no clamping, and the flexion gains are negative, so legacy ``-1`` is flexion and
-  ``+1`` simply rotates the other way. The positive half is missing from the
-  reference recordings because the operator never extended, **not** because VHI
-  cannot render it. Nothing here may treat its absence as a limit.
+- The **positive half renders**. The positive half is missing from the reference
+  recordings because the operator never extended, **not** because VHI cannot render it.
+  Nothing here may treat its absence as a limit.
+
+**This reads an archive, and only an archive.** A live ``VHI_Control`` now publishes
+standard values — a fist is ``+1`` on the flexion channels — and putting a current frame
+through `decode_pose` would flip it into nonsense. The conventions are distinguishable on
+the wire: VHI advertises ``pose_convention`` in the outlet's metadata and bumped its
+``source_id`` to ``control_hand_002_standard``. A recording that carries neither predates
+the change and is legacy; that is the assumption this module encodes.
 
 It is deliberately a *reader*. The control standard does not know these channels
 exist and nothing in it should learn: a live target is asked where its controls are
@@ -47,6 +52,16 @@ resolve; ``LEGACY_`` here means "the renderer's units", not "the removed v1 serv
 from __future__ import annotations
 
 import numpy as np
+
+#: Per-channel sign taking a legacy pose to the control standard.
+#:
+#: Not a blanket negation, which is what this was and what made it wrong on one channel.
+#: The five flexion channels ran the other way in the renderer's units, so they flip. Thumb
+#: abduction did not: the legacy readback divided by a *positive* Z gain while the fist's
+#: thumb Z is negative, so a recorded fist already reads ``-1`` there — adduction, which is
+#: what a fist does and what the standard calls ``-1``. Negating it turned every archived
+#: fist into a thumb held away from the palm.
+_TO_STANDARD = np.array([-1, 1, -1, -1, -1, -1], dtype=np.float32)
 
 #: Names for the six legacy pose channels VHI actually consumed, in wire
 #: order. Channels 6-8 are omitted because no consumer reads them.
@@ -123,5 +138,5 @@ def decode_pose(frame: np.ndarray) -> dict[str, np.ndarray]:
             f"a legacy VHI pose frame is {LEGACY_POSE_WIDTH} channels wide, got "
             f"{arr.shape[-1]}. Channels 6-8 are unused but still present on the wire."
         )
-    values = np.clip(-arr[..., : len(LEGACY_POSE_DOFS)], -1.0, 1.0)
+    values = np.clip(arr[..., : len(LEGACY_POSE_DOFS)] * _TO_STANDARD, -1.0, 1.0)
     return {name: values[..., i] for i, name in enumerate(LEGACY_POSE_DOFS)}

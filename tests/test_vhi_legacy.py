@@ -124,12 +124,19 @@ def test_decode_names_only_the_channels_vhi_consumed():
     assert len(decoded) == 6
 
 
-def test_decode_is_a_single_negation():
-    """Not a rescale: rescaling would invent an extension half and move rest."""
+def test_decode_is_a_sign_flip_per_channel_not_a_rescale():
+    """Exact and symmetric. Rescaling would invent an extension half and move rest.
+
+    Five channels flip and thumb abduction does not. It was a blanket negation once,
+    which is the same shape of error as the renderer bug it mirrors: getting five
+    channels right by a rule that gets the sixth backwards.
+    """
     pose = _pose(MOVED)
     decoded = decode_pose(pose)
+    expected_sign = {"thumb.abduction": 1.0}
     for i, name in enumerate(LEGACY_POSE_DOFS):
-        assert decoded[name] == pytest.approx(-pose[:, i], abs=1e-6)
+        sign = expected_sign.get(name, -1.0)
+        assert decoded[name] == pytest.approx(sign * pose[:, i], abs=1e-6), name
 
 
 def test_decoded_values_stay_inside_the_control_domain():
@@ -139,8 +146,8 @@ def test_decoded_values_stay_inside_the_control_domain():
         assert values.max() <= 1.0
 
 
-def test_the_recorded_corpus_only_reaches_the_positive_half():
-    """The operator only flexed, so control values never go negative.
+def test_the_recorded_flexion_only_reaches_the_positive_half():
+    """The operator only flexed, so the flexion channels never go negative.
 
     A property of the corpus, not of the target: VHI multiplies with no clamp, so
     the extension half renders fine. Nothing may read this as a limit.
@@ -148,25 +155,37 @@ def test_the_recorded_corpus_only_reaches_the_positive_half():
     Note the archive itself is a sustained fist — every one of its samples has
     channels 0-5 at full flexion, so the ``0.0`` that ``pose.max()`` reports comes
     from the three dead channels rather than from any rest frame.
+
+    Thumb abduction is excluded, and not as a convenience: a fist *ad*ducts the thumb,
+    so its own correct value here is negative. It shares the sign of extension without
+    being extension.
     """
-    stacked = np.stack(list(decode_pose(_pose(MOVED)).values()))
+    decoded = decode_pose(_pose(MOVED))
+    stacked = np.stack([v for k, v in decoded.items() if k != "thumb.abduction"])
     assert stacked.min() >= 0.0, "a negative value would mean recorded extension"
     assert stacked.max() == pytest.approx(1.0, abs=1e-6)
 
 
-def test_thumb_abduction_decodes_to_full_scale_in_a_fist():
-    """Channel 1 is exactly -1.0 recorded, so it decodes to exactly +1.0."""
+def test_thumb_abduction_decodes_to_adduction_in_a_fist():
+    """A fist brings the thumb *across* the fingers, which is standard -1.
+
+    This read +1 while the decoder negated all six channels — a fist with its thumb
+    held away from the palm, which is not a fist. It is the same off-by-one-channel the
+    renderer had, arrived at independently.
+    """
     pose = _pose(MOVED)
     decoded = decode_pose(pose[int(np.argmin(pose[:, 0]))])
-    assert float(decoded["thumb.abduction"]) == 1.0
+    assert float(decoded["thumb.abduction"]) == -1.0
 
 
-def test_all_six_dofs_are_identical_because_the_corpus_is_rank_one():
+def test_the_corpus_is_rank_one_up_to_the_abduction_sign():
+    """One sustained fist, so every channel is the same ramp — abduction inverted."""
     pose = _pose(MOVED)
     decoded = decode_pose(pose[pose[:, 0] < -0.5])
     reference = decoded["thumb.flexion"]
     for name, values in decoded.items():
-        assert values == pytest.approx(reference, abs=1e-6), name
+        sign = -1.0 if name == "thumb.abduction" else 1.0
+        assert values == pytest.approx(sign * reference, abs=1e-6), name
 
 
 def test_rest_frames_decode_to_control_rest():

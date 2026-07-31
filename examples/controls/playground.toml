@@ -5,12 +5,16 @@
 # Change a name or a weight, save, and press Reload in the app — or just press F5.
 
 [dofs]
-close = { targets = [
-  { target = "vhi.prediction.thumb.flexion", weight = 1.0 },
-  { target = "vhi.prediction.index", weight = 1.0 },
-  { target = "vhi.prediction.middle", weight = 1.0 },
-  { target = "vhi.prediction.ring", weight = 1.0 },
-  { target = "vhi.prediction.little", weight = 1.0 },
-] }
+# A fist is not five flexions. The thumb has to come *across* the fingers as it
+# curls, and "across" is adduction — the opposite of what the abduction DOF's name
+# denotes — so it rides along at weight -1.
+close = [
+  "vhi.prediction.thumb.flexion",
+  { target = "vhi.prediction.thumb.abduction", weight = -1.0 },
+  "vhi.prediction.index",
+  "vhi.prediction.middle",
+  "vhi.prediction.ring",
+  "vhi.prediction.little",
+]
 my_control_1 = { target = "keyboard.hold.function.f1", debounce_s = 0.41, threshold_fraction = 0.5 }
 my_control_2 = { target = "keyboard.tap.function.f1", threshold_fraction = 0.5 }
