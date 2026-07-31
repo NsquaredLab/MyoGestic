@@ -60,9 +60,9 @@ def declare_request(
     Parameters
     ----------
     control_pose
-        Opt in to driving the renderer's *second* pose stream. False (the default)
-        does not declare that stream at all, leaving an existing renderer-unit
-        producer working as before.
+        Opt in to also negotiating the renderer's *second* pose stream — the control
+        hand's. False (the default) does not declare that stream at all, so it says
+        nothing about whatever is already publishing to it.
     """
     if not hasattr(controls, "dofs"):
         # A ControlMap is the *unresolved* form and cannot be declared: a declaration
