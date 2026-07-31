@@ -326,11 +326,8 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
         return
     try:
         controls = resolve(bindable, capabilities)
-        # `interface=` rather than a prebuilt outlet: the target then publishes a stream
-        # carrying exactly the controls this file maps, each channel labelled with the
-        # address it holds. Map two controls and two floats go on the wire, not nine with
-        # seven commanding rest — and the labels are what let VHI place them, so the
-        # channel *order* stops being a shared secret.
+        # `interface=` rather than a prebuilt outlet: the target sizes and owns the stream
+        # so this file does not have to know how wide the renderer's pose is.
         target = VhiTarget(client=vhi_control, interface=vhi)
         # Both targets share one map. `ControlBus` checks that *someone* claims every
         # alias, so a keyboard address in a VHI-only app is caught here rather than

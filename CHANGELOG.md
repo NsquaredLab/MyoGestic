@@ -210,15 +210,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the keyboard from one map. The old name stopped being true the moment a second target
   existed.
 - **`VhiTarget` can build its own stream.** `VhiTarget(client=…, interface=…)` with no
-  outlet publishes one carrying exactly the controls the configuration resolved to, each
-  channel labelled with the **address** it holds — so a two-control app sends two floats
-  instead of nine with seven commanding rest, and the channel order stops being a secret
-  shared with the renderer. `VhiTarget(outlet, …)` is unchanged.
+  outlet publishes one as wide as the renderer's pose layout, so an application does not
+  have to know that width to construct an outlet. `VhiTarget(outlet, …)` is unchanged.
 
-  The labels are addresses, not aliases: a fan-out sends one alias to several channels, so
-  an alias is not a channel's identity. And they have to be set when the outlet is
-  constructed — LSL fixes a stream's description at that point — which is why the target
-  builds it at `bind`, after `resolve` has decided what goes where.
+  Values sit at the renderer's own channel indices, because a channel *is* an address: the
+  manifest says `vhi.prediction.index` is channel 2 and both ends read that from the same
+  table. An earlier version compacted the frame and labelled each channel so the receiver
+  could put it back — three floats a frame, paid for with a routing table at each end and
+  an LSL round-trip that crashed the renderer.
+
 - **`InterfaceSpec.outlet` / `control_outlet` take `n_channels` and `channel_names`**, for
   a caller that wants to build such a stream itself.
 - **`thumb` is `thumb.flexion`** in every shipped `examples/controls/*.toml`. VHI advertises
