@@ -908,6 +908,9 @@ MANIFEST = [
     _cap("vhi.control.gesture", -1, kind="discrete", states=("Rest", "Fist")),
 ]
 
+#: The pose width this manifest implies: highest advertised channel, plus one.
+MANIFEST_WIDTH = 5
+
 
 class ManifestClient(FakeClient):
     """A client that also answers the capability manifest."""
@@ -1250,12 +1253,13 @@ def test_a_target_that_does_not_report_claims_is_assumed_to_take_everything():
     bus.stop()
 
 
-# --- a target that builds its own labelled stream --------------------------------
+# --- a target that builds its own stream ------------------------------------------
 #
-# `interface=` instead of an outlet. The point is a stream carrying exactly the controls
-# one configuration drives, each channel labelled with the address it holds — so a
-# consumer maps by name rather than by position, and a two-control app stops sending nine
-# floats of which seven command rest.
+# `interface=` instead of an outlet: the caller gets a correctly-sized stream without
+# owning one. It carries the renderer's pose layout at the renderer's own channel
+# indices, because a channel *is* an address — the manifest says `vhi.prediction.index`
+# is channel 2 and both ends read that from the same table. It used to be compacted and
+# labelled, which bought three floats a frame and cost a routing table at each end.
 
 
 class FakeInterface:
@@ -1264,16 +1268,14 @@ class FakeInterface:
     def __init__(self) -> None:
         self.built: list[tuple[str, int, tuple[str, ...]]] = []
 
-    def outlet(self, *, n_channels=None, channel_names=None):
-        return self._build("output", n_channels, channel_names)
+    def outlet(self, *, n_channels=None):
+        return self._build("output", n_channels)
 
-    def control_outlet(self, *, n_channels=None, channel_names=None):
-        return self._build("control_pose", n_channels, channel_names)
+    def control_outlet(self, *, n_channels=None):
+        return self._build("control_pose", n_channels)
 
-    def _build(self, which, n_channels, channel_names):
-        names = tuple(channel_names or ())
-        assert len(names) == n_channels, "a label per channel, or the stream lies"
-        self.built.append((which, n_channels, names))
+    def _build(self, which, n_channels):
+        self.built.append((which, n_channels))
         return FakeOutlet()
 
 
@@ -1295,71 +1297,36 @@ def test_neither_an_outlet_nor_an_interface_is_refused():
         VhiTarget(client=_client())
 
 
-def test_the_stream_is_exactly_as_wide_as_the_controls_it_drives():
-    """Two controls, two channels — not the renderer's nine with seven at rest."""
-    _, interface = _owned(
-        {"a": "vhi.prediction.index", "b": "vhi.prediction.middle"}
-    )
-    which, width, labels = interface.built[0]
+def test_the_stream_is_the_renderers_full_pose_width():
+    """Two controls, but the renderer's whole layout — the undriven channels sit at rest.
+
+    Narrower would mean the receiver had to be told how to put the frame back, which is a
+    routing table on both sides to save three floats a frame.
+    """
+    _, interface = _owned({"a": "vhi.prediction.index", "b": "vhi.prediction.middle"})
+    which, width = interface.built[0]
     assert which == "output"
-    assert width == 2
-    assert labels == ("vhi.prediction.index", "vhi.prediction.middle")
+    assert width == MANIFEST_WIDTH
 
 
-def test_every_channel_is_labelled_with_its_address():
-    """Addresses, not aliases: the address is what a consumer can resolve."""
-    _, interface = _owned({"my_finger": "vhi.prediction.index"})
-    assert interface.built[0][2] == ("vhi.prediction.index",)
-
-
-def test_a_fan_out_labels_each_channel_it_reaches():
-    """One alias, three addresses, three labelled channels.
-
-    This is why the label cannot be the alias — `close` is not the identity of any one
-    of these channels, and labelling all three `close` would say nothing about which
-    finger each drives.
-    """
-    _, interface = _owned(
-        {
-            "close": [
-                {"target": "vhi.prediction.thumb", "weight": 0.6},
-                {"target": "vhi.prediction.index"},
-                {"target": "vhi.prediction.middle"},
-            ]
-        }
-    )
-    _, width, labels = interface.built[0]
-    assert width == 3
-    assert labels == (
-        "vhi.prediction.thumb",
-        "vhi.prediction.index",
-        "vhi.prediction.middle",
-    )
-
-
-def test_the_frame_is_compact_and_ordered_by_the_renderers_channels():
-    """Channel 2 of the manifest becomes channel 0 of a stream that carries only it.
-
-    The renderer's index decides the *order* so it is stable across runs; it no longer
-    decides the position, because the label carries the identity.
-    """
-    target, interface = _owned(
-        {"m": "vhi.prediction.middle", "i": "vhi.prediction.index"}
-    )
-    outlet = target._outlet
+def test_a_value_lands_on_the_renderers_own_channel():
+    """Channel 2 of the manifest is channel 2 of the stream. No renumbering."""
+    target, _ = _owned({"m": "vhi.prediction.middle", "i": "vhi.prediction.index"})
     target.send({"i": 1.0, "m": 0.5}, {})
-    # index is manifest channel 2, middle is 3 -> index first.
-    assert interface.built[0][2] == ("vhi.prediction.index", "vhi.prediction.middle")
-    assert outlet.last.tolist() == [1.0, 0.5]
+    frame = target._outlet.last.tolist()
+    assert frame[2] == 1.0, frame   # vhi.prediction.index
+    assert frame[3] == 0.5, frame   # vhi.prediction.middle
+    assert sum(1 for v in frame if v) == 2, frame
 
 
 def test_a_high_manifest_channel_is_no_longer_a_width_error():
     """The check that refused this is meaningless once the target sizes its own stream."""
     manifest = [*MANIFEST, _cap("vhi.prediction.far", 40)]
     target, interface = _owned({"a": "vhi.prediction.far"}, manifest=manifest)
-    assert interface.built[0][1] == 1
+    assert interface.built[0][1] == 41
     target.send({"a": 1.0}, {})
-    assert target._outlet.last.tolist() == [1.0]
+    frame = target._outlet.last.tolist()
+    assert frame[40] == 1.0 and sum(1 for v in frame if v) == 1, frame
 
 
 def test_a_supplied_outlet_still_refuses_a_channel_it_cannot_reach():

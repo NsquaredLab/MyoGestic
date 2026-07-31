@@ -387,9 +387,6 @@ class VhiTarget:
                         f"(the target reports no channel for it). Command it with "
                         f"SetControl instead of routing it onto the outlet."
                     )
-                # Only when the caller supplied the outlet. A target building its own
-                # renumbers the channels into a compact frame below, so the renderer's
-                # index is a routing key here rather than a wire position.
                 if self._interface is None and channel >= self._width:
                     raise ValueError(
                         f"{alias!r} -> {ref.address!r} is on channel {channel}, but this "
@@ -422,7 +419,17 @@ class VhiTarget:
         # covered.
         self._dofs = tuple(dof for dof in controls.continuous if dof.name in mine)
         self._discrete = tuple(dof.name for dof in controls.discrete if dof.name in mine)
-        self._routed = self._own_the_wire(slots) if self._interface else tuple(slots)
+        if self._interface is not None:
+            # As wide as the renderer's pose layout, taken from the manifest — the same
+            # table the renderer reads a channel back with. A zero-channel LSL outlet is
+            # not a thing, so a configuration driving nothing continuous goes without one
+            # and `send` skips the frame.
+            self._build_outlet(
+                max((cap.channel for cap in by_address.values()), default=-1) + 1
+                if slots
+                else 0
+            )
+        self._routed = tuple(slots)
         self._order = tuple(reply.continuous_channel_order)
         self._negotiated = True
         # Put the declared rest pose on the wire immediately: the hand should hold what
@@ -545,51 +552,30 @@ class VhiTarget:
             frame[channel] = each[dof.name]
         return frame
 
-    def _own_the_wire(
-        self, slots: list[tuple[int, str, float, float, float, str]]
-    ) -> tuple[tuple[int, str, float, float, float, str], ...]:
-        """Build a stream carrying exactly these controls, labelled with their addresses.
+    def _build_outlet(self, width: int) -> None:
+        """Build this target's own stream, `width` channels of the renderer's pose layout.
 
-        The renderer's channel index is an index into *its* full pose layout — nine wide,
-        all nine rendered (channels 6-8 are the wrist). The channels are renumbered into
-        a compact frame and each one labelled with the address it carries, so a consumer
-        maps by name rather than by position. A consumer that ignores labels cannot
-        interpret the stream, which is why the caller opts in by passing `interface=`
-        instead of an outlet.
-
-        Sorted by the renderer's own index so the layout is stable across runs.
+        The alternative to being handed one. It carries the renderer's channels at the
+        renderer's own indices — there is no compaction and nothing to label, because a
+        channel *is* an address: the manifest says `vhi.prediction.index` is channel 2, and
+        both ends read that from the same table. A narrower frame would only mean the
+        receiver had to be told how to put it back.
         """
-        ordered = sorted(slots, key=lambda slot: slot[0])
-        addresses = [slot[5] for slot in ordered]
-        renumbered = tuple(
-            (index, alias, weight, lo, hi, address)
-            for index, (_, alias, weight, lo, hi, address) in enumerate(ordered)
-        )
-        if not addresses:
-            # Every alias belonged to another stream, or the configuration is discrete
-            # only. A zero-channel LSL outlet is not a thing, so this target goes without
-            # one and `send` skips the frame.
+        if width == 0:
             self._outlet = None
             self._width = 0
             log.info("VhiTarget has no continuous control on %s; no stream", self._stream)
-            return renumbered
+            return
         build = (
             self._interface.control_outlet
             if self._stream == "control_pose"
             else self._interface.outlet
         )
-        # Replace rather than mutate: LSL fixes a stream's description at construction, so
-        # labelling means a new outlet. Any outlet from an earlier bind is dropped here —
-        # `bind` is a main-thread call and nothing is streaming yet.
-        self._outlet = build(n_channels=len(addresses), channel_names=addresses)
-        self._width = len(addresses)
-        log.info(
-            "VhiTarget built a %d-channel labelled %s stream: %s",
-            self._width,
-            self._stream,
-            addresses,
-        )
-        return renumbered
+        # Replace rather than mutate: LSL fixes a stream's description at construction. Any
+        # outlet from an earlier bind is dropped here — `bind` is a main-thread call and
+        # nothing is streaming yet.
+        self._outlet = build(n_channels=width)
+        self._width = width
 
     def stop(self) -> None:
         """Return the hand to its declared rest pose, and make sure that lands.
