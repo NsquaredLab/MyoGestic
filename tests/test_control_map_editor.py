@@ -95,17 +95,17 @@ class TestTheFileStaysTheSourceOfTruth:
     def test_saving_then_loading_changes_nothing(self, tmp_path):
         """The round trip that makes this an editor rather than a second store."""
         editor = _editor(tmp_path, GOOD)
-        before = editor.as_control_map().as_dict()
+        before = editor.as_control_map().as_control_space()
         assert editor.save() is True
         editor.load()
-        assert editor.as_control_map().as_dict() == before
+        assert editor.as_control_map().as_control_space() == before
 
     def test_what_it_writes_is_what_load_control_map_reads(self, tmp_path):
         editor = _editor(tmp_path, GOOD)
         editor.save()
         with editor.path.open("rb") as handle:
             reparsed = load_control_map(tomllib.load(handle))
-        assert reparsed.as_dict() == editor.as_control_map().as_dict()
+        assert reparsed.as_control_space() == editor.as_control_map().as_control_space()
 
     def test_an_absent_file_starts_an_empty_map_rather_than_failing(self, tmp_path):
         """Creating a map is the same act as editing one."""
@@ -437,9 +437,9 @@ class TestTheFileCanBeEditedAsText:
 
     def test_a_round_trip_through_the_text_changes_nothing(self, tmp_path):
         editor = _editor(tmp_path, GOOD)
-        before = editor.as_control_map().as_dict()
+        before = editor.as_control_map().as_control_space()
         assert editor.apply_raw(editor.raw_text())
-        assert editor.as_control_map().as_dict() == before
+        assert editor.as_control_map().as_control_space() == before
 
     def test_unparseable_text_on_disk_is_shown_so_it_can_be_fixed(self, tmp_path):
         """The editor has to be usable *on* a broken file, not just a good one."""

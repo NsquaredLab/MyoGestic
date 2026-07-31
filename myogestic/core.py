@@ -364,7 +364,7 @@ class App:
             session.save_meta(
                 self.name,
                 class_names=self.ctx.class_names or None,
-                control_space=controls.as_dict() if controls is not None else None,
+                control_space=controls.as_control_space() if controls is not None else None,
             )
             n = len(session.label_track)
             self.ctx.status_message = f"Saved {n} labels - finalizing…"

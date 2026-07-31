@@ -294,7 +294,7 @@ class Session:
             an external lookup.
         control_space
             Optional control configuration this recording was made under, as produced
-            by ``ControlMap.as_dict()``. Records what each number meant — the alias it
+            by ``ControlMap.as_control_space()``. Records what each number meant — the alias it
             came from and the target control it drove. Carries a ``format`` tag; read
             it back with `myogestic.controls.read_control_space`, which refuses a
             pre-alias control space by name instead of reinterpreting it.

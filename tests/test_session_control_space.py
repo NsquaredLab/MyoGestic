@@ -53,11 +53,11 @@ def _record(tmp_path, *, names, control_space=None, n=40):
 def test_control_space_round_trips(tmp_path):
     """What was recorded must rebuild the exact mapping it was recorded under."""
     path = _record(tmp_path, names=["my_index", "fist"],
-                   control_space=CONTROL_MAP.as_dict())
+                   control_space=CONTROL_MAP.as_control_space())
     meta = json.loads((path / "meta.json").read_text())
     assert meta["schema_version"] == 3
     rebuilt = read_control_space(meta["control_space"])
-    assert rebuilt.as_dict() == CONTROL_MAP.as_dict()
+    assert rebuilt.as_control_space() == CONTROL_MAP.as_control_space()
 
 
 def test_control_space_preserves_the_routing_and_its_weights(tmp_path):
@@ -67,7 +67,7 @@ def test_control_space_preserves_the_routing_and_its_weights(tmp_path):
     middle *and* 0.6 on the thumb — recoverable only because the mapping was persisted.
     """
     path = _record(tmp_path, names=["my_index", "fist"],
-                   control_space=CONTROL_MAP.as_dict())
+                   control_space=CONTROL_MAP.as_control_space())
     rebuilt = read_control_space(json.loads((path / "meta.json").read_text())["control_space"])
     refs = {r.address: r.weight for r in rebuilt.bindings["fist"].targets}
     assert refs == {"vhi.prediction.thumb": 0.6, "vhi.prediction.middle": 1.0}
@@ -79,7 +79,7 @@ def test_a_recording_says_which_control_space_format_it_used(tmp_path):
     from myogestic.controls import CONTROL_SPACE_FORMAT
 
     path = _record(tmp_path, names=["my_index", "fist"],
-                   control_space=CONTROL_MAP.as_dict())
+                   control_space=CONTROL_MAP.as_control_space())
     meta = json.loads((path / "meta.json").read_text())
     assert meta["control_space"]["format"] == CONTROL_SPACE_FORMAT
 

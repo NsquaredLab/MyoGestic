@@ -156,11 +156,16 @@ class ControlMap:
                 seen.setdefault(ref.address, None)
         return tuple(seen)
 
-    def as_dict(self) -> dict[str, Any]:
-        """A plain mapping that round-trips through `load_control_map`.
+    def as_control_space(self) -> dict[str, Any]:
+        """A persistable control space — the inverse of `read_control_space`.
 
-        Tagged with `CONTROL_SPACE_FORMAT` so a reader can name the format it found
-        rather than guess from the shape.
+        Tagged with `CONTROL_SPACE_FORMAT` so a reader can name the format it found rather
+        than guess from the shape. That tag is the whole difference between this and
+        `dump_control_map`, which writes the same bindings as TOML for a human to edit;
+        this writes them as a dict for a recording or a model sidecar to carry.
+
+        It was `as_dict`, which named the return type rather than the thing — nothing said
+        it paired with `read_control_space`, and the pair is the point.
         """
         dofs: dict[str, Any] = {}
         for binding in self.bindings.values():

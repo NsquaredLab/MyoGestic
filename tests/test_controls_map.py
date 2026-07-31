@@ -268,7 +268,7 @@ def test_a_missing_dofs_table_says_what_to_write():
         load_control_map({})
 
 
-def test_the_map_round_trips_through_as_dict():
+def test_the_map_round_trips_through_as_control_space():
     original = {
         "dofs": {
             "my_index": "vhi.prediction.index",
@@ -282,8 +282,8 @@ def test_the_map_round_trips_through_as_dict():
         }
     }
     once = load_control_map(original)
-    twice = load_control_map(once.as_dict())
-    assert once.as_dict() == twice.as_dict()
+    twice = load_control_map(once.as_control_space())
+    assert once.as_control_space() == twice.as_control_space()
 
 
 def test_routes_are_kept_beside_the_dofs_not_baked_into_names():
@@ -395,8 +395,8 @@ class TestTheProbabilityCutoffIsValidatedAsAFraction:
 
     def test_it_round_trips_under_its_new_name(self):
         once = load_control_map(self._spec(0.25))
-        assert once.as_dict()["dofs"]["fist"]["threshold_fraction"] == 0.25
-        assert load_control_map(once.as_dict()).as_dict() == once.as_dict()
+        assert once.as_control_space()["dofs"]["fist"]["threshold_fraction"] == 0.25
+        assert load_control_map(once.as_control_space()).as_control_space() == once.as_control_space()
 
 
 class TestTheFileCanBeWrittenBackOut:
@@ -469,7 +469,7 @@ class TestTheFileCanBeWrittenBackOut:
 
         original = load_control_map({"dofs": spec})
         reloaded = load_control_map(tomllib.loads(dump_control_map(original)))
-        assert reloaded.as_dict() == original.as_dict()
+        assert reloaded.as_control_space() == original.as_control_space()
 
     def test_a_dotted_alias_is_quoted_so_it_does_not_become_a_nested_table(self):
         """The one trap in the format: unquoted `a.b` reads back as a table."""
