@@ -91,6 +91,11 @@ def _read_bitmask(inlet: StreamInlet | None, n_dofs: int, mask: int) -> int:
 DEFAULT_CONTROL_STREAM = "EMG_Control"
 
 
+#: How often to look for the control stream while it is absent. Not every tick: the
+#: resolve blocks for its timeout, and a tick is only `chunk_size / fs` long.
+_CONTROL_PROBE_EVERY_S = 1.0
+
+
 def control_outlet(name: str = DEFAULT_CONTROL_STREAM) -> StreamOutlet:
     """LSL outlet for steering the EMG generator from another script.
 
@@ -192,12 +197,20 @@ def main(
     print("Generating rest signal...")
 
     rng = np.random.default_rng()
+    next_probe = 0.0
     try:
         while True:
             t0 = time.perf_counter()
 
-            if inlet is None:
-                streams = resolve_streams(timeout=0.1, name=control_stream_name)
+            if inlet is None and t0 >= next_probe:
+                # Once a second, not once a tick. `resolve_streams` blocks for its whole
+                # timeout when nothing answers, and a tick is `chunk_size / fs` — 15.6 ms
+                # at 32/2048. Probing every tick spent 100 ms of a 15.6 ms budget, so a
+                # generator whose control stream was never published ran at 15% rate:
+                # 320 Hz of a nominal 2048, which looks like a broken viewer rather than
+                # a starved producer.
+                next_probe = t0 + _CONTROL_PROBE_EVERY_S
+                streams = resolve_streams(timeout=0.05, name=control_stream_name)
                 if streams:
                     inlet = StreamInlet(streams[0])
                     print(f"Connected to control stream '{control_stream_name}'")
@@ -235,8 +248,11 @@ def main(
                 burst = rng.standard_normal((chunk_size, n_channels)).astype(np.float32) * pattern
                 samples = base + burst + ENVELOPE_GAIN * pattern
 
-            for sample in samples:
-                outlet.push_sample(sample)
+            # One call, not one per sample. Pushing a 32-sample chunk sample-by-sample
+            # is 32 LSL calls per tick, each marshalling an (n_channels,) array — fine
+            # at 8 channels and hopeless at 256, where it delivered 314 Hz of a nominal
+            # 2048 and the viewer drew the handful of samples that made it through.
+            outlet.push_chunk(samples)
 
             elapsed = time.perf_counter() - t0
             if elapsed < interval:
