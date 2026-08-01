@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The map picks the targets — `myogestic.vhi.vhi_targets`.** VHI renders two hands on
+  two streams, and an application used to have to say which one it drove *before* it had
+  read the map: `VhiTarget(vhi_outlet, client=…)` bound whichever hand the outlet was
+  built for, so a map naming the operator's hand rendered nowhere and the editor hid those
+  addresses to stop anyone writing one. `vhi_targets(control_map, vhi, client=…)` looks
+  the map's addresses up in the manifest and returns one target per stream that carries
+  them — one for an ordinary map, two for one driving both hands, each sizing and naming
+  its own outlet from the same answer. `None` while VHI is unreachable, like
+  `connect_controls`. An application no longer chooses a hand, and a user editing a map
+  sees every address their renderer offers.
+
 - **A control standard — `myogestic.controls`.** A control space is a *mapping*, written in
   a file: your name for a model output on the left, an address the target declares on the
   right (`my_index = "vhi.prediction.index"`). The left side is yours and arbitrary. The
@@ -98,6 +109,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it.
 
 ### Removed (breaking)
+
+- **`InterfaceSpec` no longer names a stream.** `output_stream_name`,
+  `control_pose_stream_name`, `n_control_pose_channels` and `control_pose_hz` are gone,
+  and `outlet()` / `control_outlet()` with them; one `stream_outlet(name, n_channels=…)`
+  replaces both, and the *caller* supplies the name. Which streams a renderer publishes,
+  and which controls each carries, is in the manifest it answers with — so MyoGestic
+  writes no stream name down anywhere except the one behind the editor's
+  pose-versus-movement warning, and a renderer that renames a stream, or ships a third,
+  needs no configuration at all. `VhiTarget(…, stream="output"|"control_pose")` is gone
+  for the same reason: pass `stream_name=` only to split one map across a target per
+  hand. `ControlMapEditor(…, stream=…)` is gone outright — the picker offers every
+  address every manifest reports, because hiding one hand made wanting it impossible to
+  express.
 
 - **The VHI 1.x bridge is gone. MyoGestic now requires VHI 2.0 or newer.** The v1 gRPC
   client, the vendored v1 `.proto` and its stubs, `InterfaceSpec.control_client()`, and
