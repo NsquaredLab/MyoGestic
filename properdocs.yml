@@ -138,6 +138,7 @@ nav:
           - Add a custom source: how-to/add-a-source.md
           - Add a custom output: how-to/add-an-output.md
           - Drive your own device: how-to/add-a-target.md
+          - Build a renderer: how-to/build-a-renderer.md
           - Add a custom widget: how-to/add-a-widget.md
           - Add a custom model: how-to/add-a-model.md
           - Enable on-disk recording: how-to/enable-recording.md
