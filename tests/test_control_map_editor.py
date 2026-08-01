@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pathlib
 import tomllib
+from dataclasses import replace
 
 import pytest
 
@@ -798,6 +799,36 @@ class TestOneWayToDriveTheControlHand:
         problems = editor.problems()
         assert any("one or the other" in p for p in problems), problems
         assert editor.save() is False
+
+    def test_it_is_refused_when_every_dof_has_its_own_stream(self, tmp_path):
+        """The shape VHI actually publishes: one stream per DOF, named after the address.
+
+        The refusal used to be found by comparing `stream_name` against one shared name.
+        A renderer that gives every DOF its own stream reports `stream_name` as the
+        address itself, so that comparison matched nothing and the warning silently
+        stopped firing — against the live renderer, while every test still passed,
+        because the fixture above is the *other* legal shape and kept the old name.
+        """
+        renamed = [
+            replace(cap, stream_name=cap.address, channel=0)
+            if cap.kind == "continuous"
+            else cap
+            for cap in MANIFEST
+        ]
+
+        class _PerDofClient:
+            def capabilities(self):
+                return renamed
+
+        path = tmp_path / "map.toml"
+        path.write_text(
+            '[dofs]\nposed = "vhi.control.pose.thumb"\nheld = "vhi.control.gesture"\n'
+        )
+        editor = ControlMapEditor(path, client=_PerDofClient())
+        editor.load()
+        editor._connect()
+        problems = editor.problems()
+        assert any("one or the other" in p for p in problems), problems
 
     def test_the_reason_names_both_sides(self, tmp_path):
         editor = self._editor(
