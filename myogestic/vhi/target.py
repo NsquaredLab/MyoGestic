@@ -34,13 +34,45 @@ log = logging.getLogger("myogestic.vhi_target")
 #: an application constructs it and may have made it wider.
 _POSE_WIDTH = 9
 
-#: Stream names to filter a manifest by when nothing else says. A fallback only — an
-#: `InterfaceSpec` is asked first, since it is what actually names the outlet and a
-#: configuration may have renamed either stream.
-_DEFAULT_STREAM_NAMES = {
-    "output": "MyoGestic_Output",
-    "control_pose": "MyoGestic_ControlPose",
-}
+
+def _addresses(controls: ControlSet) -> set[str]:
+    """Every renderer address this configuration names.
+
+    A resolved set carries routes; one built directly — a rig diagnostic, a test — has
+    none, and its DOF names *are* the addresses.
+    """
+    if controls.routes:
+        return {ref.address for refs in controls.routes.values() for ref in refs}
+    return set(controls.dofs)
+
+
+def _streams_carrying(addresses: set[str], capabilities: Any) -> list[str]:
+    """Which of the renderer's streams carry `addresses`, in name order.
+
+    **This is the whole of what decides which stream a target drives.** A control map
+    names addresses and nothing else; the manifest says which stream each one rides. So
+    no name is written down here, and no application has to choose a hand before it has
+    read the map.
+
+    Only *continuous* capabilities count: a held state travels over gRPC and so belongs
+    to no stream. One the renderer names no stream for is a wildcard rather than a stream
+    of its own, and contributes nothing.
+
+    A continuous capability the renderer names a stream for but gives **no channel** on
+    still counts, even though nothing can be routed onto it. It is the one that has to
+    reach `_negotiate` to be refused: dropped here, the stream it names would go
+    unclaimed and the address would read as some other target's business rather than as
+    the "exists, but is not on a stream" that it is.
+    """
+    return sorted(
+        {
+            cap.stream_name
+            for cap in capabilities
+            if cap.address in addresses
+            and getattr(cap, "kind", "") == "continuous"
+            and getattr(cap, "stream_name", "")
+        }
+    )
 
 
 class PoseSink(Protocol):
@@ -68,21 +100,24 @@ class VhiTarget:
     Parameters
     ----------
     outlet
-        Where pose frames go — normally ``virtual_hand().outlet()``. **User-owned**:
-        construct it yourself and register its ``stop`` with ``app.cleanup_hooks``.
-        Only `PoseSink.push` and `PoseSink.flush` are called on it.
+        Where pose frames go, for an application that owns the stream —
+        ``virtual_hand().stream_outlet(name, n_channels=…)``, a recorder, a test double.
+        **User-owned**: construct it yourself and register its ``stop`` with
+        ``app.cleanup_hooks``. Only `PoseSink.push` and `PoseSink.flush` are called on
+        it. Pass ``interface=`` instead and the target builds a correctly named,
+        correctly sized stream once negotiation has said which one it needs.
     client
         A `myogestic.vhi._control.VhiControlClient` — ``virtual_hand().control_client()``.
         Required: the control space is negotiated over it, and it carries discrete
         state, which the pose transport cannot express.
-    stream
-        Which of the renderer's pose streams this target drives: ``"output"`` (the
-        default — the predicted hand) or ``"control_pose"`` (the control hand). It
-        decides which channel order the target reads out of the handshake; the two
-        streams do not share one. The stream's *name* — what the manifest is filtered by
-        — comes from ``interface`` when one was given (``output_stream_name`` or
-        ``control_pose_stream_name``), so a renamed stream negotiates against the
-        capabilities that report the new name rather than the default.
+    stream_name
+        The renderer stream this target writes, named exactly as the manifest names it.
+        Leave it out and **the map decides**: the addresses the configuration names are
+        looked up in the manifest and the stream carrying them is the one this target
+        drives, so a configuration of control-pose addresses reaches the operator's hand
+        without anybody having chosen a hand in advance. Name it only to split one map
+        across a target per hand — a configuration naming two streams is refused
+        otherwise, since one target writes one stream.
 
     Notes
     -----
@@ -107,13 +142,18 @@ class VhiTarget:
     >>> client = vhi.control_client()
     >>> control_map = load_control_map({"dofs": {"my_index": "vhi.prediction.index"}})
     >>> controls = resolve(control_map, client.capabilities())   # needs VHI running
-    >>> bus = ControlBus(controls, targets=[VhiTarget(vhi.outlet(), client=client)])
+    >>> bus = ControlBus(controls, targets=[VhiTarget(client=client, interface=vhi)])
     >>> _ = bus.push({"my_index": 0.8})        # sanitised on the way to the wire
+
+    Or let the map pick the targets, which is what an application should do:
+
+    >>> from myogestic.vhi import vhi_targets
+    >>> targets = vhi_targets(control_map, vhi, client=client)   # None until VHI answers
     """
 
     __slots__ = (
         "_client", "_discrete", "_dofs", "_interface",
-        "_negotiated", "_outlet", "_pending", "_routed", "_stream",
+        "_negotiated", "_outlet", "_pending", "_routed", "_stream_name",
         "_width",
     )
 
@@ -122,13 +162,9 @@ class VhiTarget:
         outlet: PoseSink | None = None,
         *,
         client: Any = None,
-        stream: str = "output",
+        stream_name: str | None = None,
         interface: Any = None,
     ) -> None:
-        if stream not in ("output", "control_pose"):
-            raise ValueError(
-                f"stream must be 'output' or 'control_pose', got {stream!r}"
-            )
         if outlet is None and interface is None:
             raise ValueError(
                 "VhiTarget needs either an outlet to write to or an `interface=` to "
@@ -136,7 +172,8 @@ class VhiTarget:
                 "the controls this configuration drives, labelled with their addresses, "
                 "which it can only do once `bind` has resolved them."
             )
-        self._stream = stream
+        #: The stream named by the caller, or None to let the map decide at negotiation.
+        self._stream_name = stream_name
         #: Set at construction, or built at `bind` when only an `interface` was given.
         self._outlet = outlet
         #: The `InterfaceSpec` to build an outlet from, or None when one was supplied.
@@ -264,25 +301,31 @@ class VhiTarget:
             return True
         return False
 
-    def _wanted_stream(self) -> str:
+    def _wanted_stream(self, controls: ControlSet, capabilities: Any) -> str:
         """The LSL stream name this target's frames are published under.
 
         The manifest is filtered by it: a capability on another stream is another
         target's, and a channel index means nothing across streams.
 
-        Taken from the interface when there is one, because that is what names the
-        outlet — an `InterfaceSpec` that renamed a stream would otherwise publish to one
-        name while negotiation filtered against another, and every capability would be
-        dropped. Only the outlet-only construction path, where nothing says, falls back
-        to the names `virtual_hand()` uses.
+        Named by the caller only when one map is being split across a target per hand.
+        Otherwise the map decides — the manifest says which stream carries the addresses
+        this configuration names, and that is the stream. Nothing here knows a stream
+        name, so a renderer that renames one, or ships a third, needs no change.
+
+        Empty means the renderer named no stream for anything this configuration drives:
+        a wildcard, which is what a manifest that names no streams at all also gets.
         """
-        default = _DEFAULT_STREAM_NAMES[self._stream]
-        attribute = (
-            "control_pose_stream_name" if self._stream == "control_pose" else "output_stream_name"
-        )
-        # `control_pose_stream_name` is optional on an InterfaceSpec, so an interface
-        # that has none is the fallback case too.
-        return getattr(self._interface, attribute, None) or default
+        if self._stream_name is not None:
+            return self._stream_name
+        streams = _streams_carrying(_addresses(controls), capabilities)
+        if len(streams) > 1:
+            raise ValueError(
+                f"this configuration names controls on {len(streams)} of the renderer's "
+                f"streams ({', '.join(streams)}), and one target writes one stream. Use "
+                f"myogestic.vhi.vhi_targets(), which builds the one target per stream a "
+                f"map like this needs."
+            )
+        return streams[0] if streams else ""
 
     def _negotiate(self, controls: ControlSet) -> bool:
         """Try the handshake. False means "no answer yet", never a refusal.
@@ -299,7 +342,7 @@ class VhiTarget:
         # Only this stream's controls. A renderer publishes several, and a channel index
         # means nothing across them — an address from the wrong stream would put a value
         # on a same-numbered channel of a different hand.
-        wanted = self._wanted_stream()
+        wanted = self._wanted_stream(controls, capabilities)
         by_address = {
             cap.address: cap
             for cap in capabilities
@@ -396,7 +439,8 @@ class VhiTarget:
             self._build_outlet(
                 max((cap.channel for cap in by_address.values()), default=-1) + 1
                 if slots
-                else 0
+                else 0,
+                wanted,
             )
         self._routed = tuple(slots)
         self._negotiated = True
@@ -518,7 +562,7 @@ class VhiTarget:
             frame[channel] = min(hi, max(lo, weight * each.get(alias, 0.0)))
         return frame
 
-    def _build_outlet(self, width: int) -> None:
+    def _build_outlet(self, width: int, stream: str) -> None:
         """Build this target's own stream, `width` channels of the renderer's pose layout.
 
         The alternative to being handed one. It carries the renderer's channels at the
@@ -526,21 +570,19 @@ class VhiTarget:
         channel *is* an address: the manifest says `vhi.prediction.index` is channel 2, and
         both ends read that from the same table. A narrower frame would only mean the
         receiver had to be told how to put it back.
+
+        `stream` is the name negotiation settled on — the manifest's, so the outlet is
+        published under exactly the name the renderer said carries these controls.
         """
         if width == 0:
             self._outlet = None
             self._width = 0
-            log.info("VhiTarget has no continuous control on %s; no stream", self._stream)
+            log.info("VhiTarget has no continuous control to carry; no stream")
             return
-        build = (
-            self._interface.control_outlet
-            if self._stream == "control_pose"
-            else self._interface.outlet
-        )
         # Replace rather than mutate: LSL fixes a stream's description at construction. Any
         # outlet from an earlier bind is dropped here — `bind` is a main-thread call and
         # nothing is streaming yet.
-        self._outlet = build(n_channels=width)
+        self._outlet = self._interface.stream_outlet(stream, n_channels=width)
         self._width = width
 
     def capabilities(self) -> tuple[Capability, ...] | None:
@@ -573,4 +615,75 @@ class VhiTarget:
                 stop()
 
 
-__all__ = ["PoseSink", "VhiTarget"]
+def vhi_targets(
+    control_map: Any,
+    interface: Any,
+    *,
+    client: Any,
+    capabilities: Any = None,
+) -> list[VhiTarget] | None:
+    """The targets a control map needs — one per renderer stream the map names.
+
+    The bind an application used to have to guess at. `VhiTarget` writes one stream, so
+    something has to decide which; letting the *application* decide meant deciding before
+    the map had been read, and a map naming the operator's hand then rendered nowhere.
+    Here the map decides: its addresses are looked up in the manifest, and each stream
+    carrying any of them gets the target that drives it.
+
+    Hand the result straight to `myogestic.controls.connect_controls` or `ControlBus`,
+    alongside whatever non-VHI targets the same map names.
+
+    Parameters
+    ----------
+    control_map
+        The parsed `~myogestic.controls.ControlMap`. Only its addresses are read.
+    interface
+        The `~myogestic.vhi.interfaces.InterfaceSpec` to build streams from — each target
+        sizes and owns its own, so the application never states a width or a name.
+    client
+        The `myogestic.vhi._control.VhiControlClient` every target negotiates over, and
+        the one asked for the manifest when `capabilities` is not supplied. Shared, not
+        one per target: they negotiate against the same renderer.
+    capabilities
+        VHI's manifest, when the caller already has it. Supplying it skips a blocking
+        round trip — for a caller rebuilding off a manifest a background worker already
+        fetched, that RPC would be a second answer to a question already answered, on the
+        render thread.
+
+    Returns
+    -------
+    list of VhiTarget or None
+        `None` while VHI cannot be reached — the same answer
+        `~myogestic.controls.connect_controls` gives, and the same remedy: try again.
+        Never empty: a map naming nothing streamed still gets the one target its held
+        states are commanded over, and a target that renders none of a map is harmless —
+        `ControlBus` is what notices a control *no* target claimed.
+
+    Examples
+    --------
+    >>> from myogestic.controls import connect_controls, load_control_map
+    >>> from myogestic.vhi import virtual_hand, vhi_targets
+    >>>
+    >>> vhi = virtual_hand()
+    >>> client = vhi.control_client()
+    >>> control_map = load_control_map({"dofs": {"my_index": "vhi.prediction.index"}})
+    >>> targets = vhi_targets(control_map, vhi, client=client)
+    >>> bus = connect_controls(control_map, targets) if targets else None
+    """
+    if capabilities is None:
+        fetch = getattr(client, "capabilities", None)
+        got = fetch() if callable(fetch) else None
+        if got is None:
+            return None
+        capabilities = got
+    # `or [""]` — a wildcard rather than no target at all. A map of held states names no
+    # stream and still has to be commanded, and so does one whose addresses this renderer
+    # does not export, which must reach `bind` to be refused rather than vanish here.
+    streams = _streams_carrying(set(control_map.addresses()), capabilities) or [""]
+    return [
+        VhiTarget(client=client, interface=interface, stream_name=name)
+        for name in streams
+    ]
+
+
+__all__ = ["PoseSink", "VhiTarget", "vhi_targets"]

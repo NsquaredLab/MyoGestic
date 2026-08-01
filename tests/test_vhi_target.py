@@ -422,13 +422,14 @@ def test_the_vhi_outlet_advertises_a_stable_source_id():
     from myogestic.vhi import virtual_hand
 
     spec = virtual_hand()
-    first, second = spec.outlet(), spec.outlet()
+    first = spec.stream_outlet("MyoGestic_Output")
+    second = spec.stream_outlet("MyoGestic_Output")
     try:
         a = first._outlet.get_sinfo().source_id
         b = second._outlet.get_sinfo().source_id
         assert a, "an empty source_id is what makes the stream unrecoverable"
         assert a == b, "the id must be stable across restarts, not per-instance"
-        assert spec.output_stream_name in a
+        assert "MyoGestic_Output" in a, "the stream's name has to be part of the id"
     finally:
         first.stop()
         second.stop()
@@ -649,7 +650,7 @@ def test_the_vhi_package_still_rejects_unknown_attributes():
 
 
 def test_importing_the_vhi_package_does_not_require_grpc():
-    """A plain install calls virtual_hand().outlet() and must not pay for grpc."""
+    """A plain install calls virtual_hand().launcher() and must not pay for grpc."""
     import subprocess
     import sys
 
@@ -722,11 +723,23 @@ def test_negotiate_is_idempotent_when_already_settled():
 # --- the control-pose stream: a second stream, its own channel order -------------
 
 
-@pytest.mark.parametrize("bad", ["", "predicted", "Output", "control-pose"])
-def test_an_unknown_stream_name_is_refused_at_construction(bad):
-    """A typo here would silently drive the wrong hand with the wrong convention."""
-    with pytest.raises(ValueError, match="stream must be"):
-        VhiTarget(FakeOutlet(), stream=bad)
+def test_a_configuration_naming_two_streams_is_refused_and_says_what_to_use():
+    """One target writes one stream, so a map spanning both cannot be guessed at.
+
+    There is nothing to default to here — picking either hand would render half the map
+    and leave the other half looking like a control that works and holds still. The
+    refusal names `vhi_targets`, which is the thing that builds one target per stream.
+    """
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(
+        load_control_map(
+            {"dofs": {"a": "vhi.prediction.index", "b": "vhi.control.pose.index"}}
+        ),
+        TWO_STREAMS,
+    )
+    with pytest.raises(ValueError, match="vhi_targets"):
+        VhiTarget(FakeOutlet(), client=ManifestClient(TWO_STREAMS)).bind(controls)
 
 
 def test_a_by_name_binding_reads_its_own_streams_channel():
@@ -743,13 +756,15 @@ def test_a_by_name_binding_reads_its_own_streams_channel():
             pass
 
     out = FakeOutlet()
-    output = VhiTarget(out, client=TwoStreamClient())
+    output = VhiTarget(out, client=TwoStreamClient(), stream_name="MyoGestic_Output")
     output.bind(_controls("index.flexion"))
     output.send({"index.flexion": 1.0}, {})
     assert out.last[2] == pytest.approx(1.0)
 
     pose_out = FakeOutlet()
-    control_pose = VhiTarget(pose_out, client=TwoStreamClient(), stream="control_pose")
+    control_pose = VhiTarget(
+        pose_out, client=TwoStreamClient(), stream_name="MyoGestic_ControlPose"
+    )
     control_pose.bind(_controls("index.flexion"))
     control_pose.send({"index.flexion": 1.0}, {})
     assert pose_out.last[5] == pytest.approx(1.0)
@@ -1047,12 +1062,12 @@ TWO_STREAMS = [
 ]
 
 
-def test_an_output_target_ignores_control_pose_addresses():
-    """Channel 2 of one stream is not channel 2 of the other, so it routes nothing.
+def test_an_unnamed_target_follows_the_map_onto_the_operators_hand():
+    """No hand is chosen here — the map names one, and the manifest says which stream.
 
-    Left to the target that drives that stream rather than refused: a bus may hold one
-    target per hand and share a single map. `ControlBus` is what notices a control *no*
-    target claimed.
+    This used to route *nothing*: the target defaulted to the model's hand and left every
+    control-pose address to a target the application had not built, so a map like this
+    rendered nowhere at all.
     """
     from myogestic.controls import load_control_map, resolve
 
@@ -1061,18 +1076,25 @@ def test_an_output_target_ignores_control_pose_addresses():
     )
     target = VhiTarget(FakeOutlet(), client=ManifestClient(TWO_STREAMS))
     target.bind(controls)
-    assert target.claims == frozenset(), "it claims nothing on this stream"
-    assert target._routed == ()
+    assert target.claims == frozenset({"a"})
+    assert target._routed[0][0] == 2, "the operator's index, on its own stream"
 
 
-def test_a_control_pose_target_ignores_prediction_addresses():
+def test_a_named_target_still_leaves_the_other_hands_addresses_alone():
+    """Naming the stream is how one map is split across a target per hand.
+
+    Left to the target that drives that stream rather than refused: `ControlBus` is what
+    notices a control *no* target claimed.
+    """
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(
         load_control_map({"dofs": {"a": "vhi.prediction.index"}}), TWO_STREAMS
     )
     target = VhiTarget(
-        FakeOutlet(), client=ManifestClient(TWO_STREAMS), stream="control_pose"
+        FakeOutlet(),
+        client=ManifestClient(TWO_STREAMS),
+        stream_name="MyoGestic_ControlPose",
     )
     target.bind(controls)
     assert target.claims == frozenset()
@@ -1103,13 +1125,13 @@ def test_each_target_routes_its_own_stream():
     from myogestic.controls import load_control_map, resolve
 
     for stream, address in (
-        ("output", "vhi.prediction.middle"),
-        ("control_pose", "vhi.control.pose.middle"),
+        ("MyoGestic_Output", "vhi.prediction.middle"),
+        ("MyoGestic_ControlPose", "vhi.control.pose.middle"),
     ):
         controls = resolve(load_control_map({"dofs": {"a": address}}), TWO_STREAMS)
         outlet = FakeOutlet()
         target = VhiTarget(
-            outlet, client=ManifestClient(TWO_STREAMS), stream=stream
+            outlet, client=ManifestClient(TWO_STREAMS), stream_name=stream
         )
         target.bind(controls)
         assert target.negotiated is True, stream
@@ -1157,11 +1179,13 @@ def test_one_map_drives_both_hands_through_two_targets():
     """
     controls = _two_hand_controls()
     manifest = _two_hand_manifest()
-    predicted = VhiTarget(FakeOutlet(), client=ManifestClient(manifest))
+    predicted = VhiTarget(
+        FakeOutlet(), client=ManifestClient(manifest), stream_name="MyoGestic_Output"
+    )
     operator = VhiTarget(
         FakeOutlet(),
         client=ManifestClient(manifest),
-        stream="control_pose",
+        stream_name="MyoGestic_ControlPose",
     )
     bus = ControlBus(controls, targets=[predicted, operator], hz=32)
     assert "model_index" in predicted.claims
@@ -1176,9 +1200,11 @@ def test_each_hand_gets_only_its_own_values():
     controls = _two_hand_controls()
     manifest = _two_hand_manifest()
     left, right = FakeOutlet(), FakeOutlet()
-    predicted = VhiTarget(left, client=ManifestClient(manifest))
+    predicted = VhiTarget(
+        left, client=ManifestClient(manifest), stream_name="MyoGestic_Output"
+    )
     operator = VhiTarget(
-        right, client=ManifestClient(manifest), stream="control_pose"
+        right, client=ManifestClient(manifest), stream_name="MyoGestic_ControlPose"
     )
     bus = ControlBus(controls, targets=[predicted, operator], hz=32)
     bus.push({"model_index": 1.0, "operator_thumb": -1.0})
@@ -1192,7 +1218,9 @@ def test_each_hand_gets_only_its_own_values():
 def test_a_held_state_is_claimed_by_whichever_target_negotiated():
     controls = _two_hand_controls()
     manifest = _two_hand_manifest()
-    predicted = VhiTarget(FakeOutlet(), client=ManifestClient(manifest))
+    predicted = VhiTarget(
+        FakeOutlet(), client=ManifestClient(manifest), stream_name="MyoGestic_Output"
+    )
     predicted.bind(controls)
     assert "gesture" in predicted.claims
 
@@ -1205,7 +1233,9 @@ def test_a_control_no_target_claims_is_refused_by_the_bus():
     """
     controls = _two_hand_controls()
     manifest = _two_hand_manifest()
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(manifest))
+    target = VhiTarget(
+        FakeOutlet(), client=ManifestClient(manifest), stream_name="MyoGestic_Output"
+    )
     with pytest.raises(ValueError, match="no target renders"):
         ControlBus(controls, targets=[target], hz=32)
 
@@ -1242,7 +1272,9 @@ def test_a_target_that_does_not_report_claims_is_assumed_to_take_everything():
 
     controls = _two_hand_controls()
     manifest = _two_hand_manifest()
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(manifest))
+    target = VhiTarget(
+        FakeOutlet(), client=ManifestClient(manifest), stream_name="MyoGestic_Output"
+    )
     bus = ControlBus(controls, targets=[target, Recorder()], hz=32)
     bus.stop()
 
@@ -1259,39 +1291,26 @@ def test_a_target_that_does_not_report_claims_is_assumed_to_take_everything():
 class FakeInterface:
     """The slice of `InterfaceSpec` a target builds an outlet from.
 
-    It carries the two stream *names* as well as the two builders: they are what the
-    outlets it builds are published under, so they are also what the manifest has to be
-    filtered by.
+    One builder, and it is *told* the name — the manifest is what says which stream
+    carries a control, so an interface has no stream names of its own to disagree with.
     """
 
-    def __init__(
-        self,
-        output_stream_name="MyoGestic_Output",
-        control_pose_stream_name="MyoGestic_ControlPose",
-    ) -> None:
-        self.output_stream_name = output_stream_name
-        self.control_pose_stream_name = control_pose_stream_name
-        self.built: list[tuple[str, int, tuple[str, ...]]] = []
+    def __init__(self) -> None:
+        self.built: list[tuple[str, int]] = []
 
-    def outlet(self, *, n_channels=None):
-        return self._build("output", n_channels)
-
-    def control_outlet(self, *, n_channels=None):
-        return self._build("control_pose", n_channels)
-
-    def _build(self, which, n_channels):
-        self.built.append((which, n_channels))
+    def stream_outlet(self, name, *, n_channels=None):
+        self.built.append((name, n_channels))
         return FakeOutlet()
 
 
-def _owned(dofs, *, manifest=MANIFEST, stream="output", interface=None):
+def _owned(dofs, *, manifest=MANIFEST, stream_name=None, interface=None):
     """A bound target that built its own outlet from `dofs`."""
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(load_control_map({"dofs": dofs}), manifest)
     interface = FakeInterface() if interface is None else interface
     client = ManifestClient(manifest)
-    target = VhiTarget(client=client, interface=interface, stream=stream)
+    target = VhiTarget(client=client, interface=interface, stream_name=stream_name)
     target.bind(controls)
     return target, interface
 
@@ -1309,8 +1328,8 @@ def test_the_stream_is_the_renderers_full_pose_width():
     routing table on both sides to save three floats a frame.
     """
     _, interface = _owned({"a": "vhi.prediction.index", "b": "vhi.prediction.middle"})
-    which, width = interface.built[0]
-    assert which == "output"
+    name, width = interface.built[0]
+    assert name == "MyoGestic_Output"
     assert width == MANIFEST_WIDTH
 
 
@@ -1345,13 +1364,12 @@ def test_a_supplied_outlet_still_refuses_a_channel_it_cannot_reach():
         target.bind(controls)
 
 
-def test_the_control_pose_stream_is_built_from_the_control_outlet():
-    """Not the prediction one — the two hands are different streams."""
+def test_the_stream_it_builds_is_the_one_the_manifest_named():
+    """Not a hand this file chose — the two hands are different streams, and the map
+    is what says which of them a configuration is on."""
     manifest = [_cap("vhi.control.pose.index", 2, stream="MyoGestic_ControlPose")]
-    _, interface = _owned(
-        {"a": "vhi.control.pose.index"}, manifest=manifest, stream="control_pose"
-    )
-    assert interface.built[0][0] == "control_pose"
+    _, interface = _owned({"a": "vhi.control.pose.index"}, manifest=manifest)
+    assert interface.built[0][0] == "MyoGestic_ControlPose"
 
 
 def test_a_discrete_only_configuration_builds_no_stream_at_all():
@@ -1396,61 +1414,47 @@ def test_an_owned_outlet_is_stopped_but_a_supplied_one_is_not():
     assert built.stopped == 1
 
 
-# --- the stream name is configuration, not a literal ------------------------------
+# --- the stream name is the renderer's, and nothing else's ------------------------
 #
-# `InterfaceSpec` carries `output_stream_name` and `control_pose_stream_name`, so a
-# renamed stream is a supported configuration, not just a third-party renderer's
-# problem. Filtering the manifest by a hardcoded name would leave such a target
-# publishing to one name and negotiating against another — every capability dropped, and
-# the map refused with nothing pointing at the cause.
+# Nothing on this side writes a stream name down, so a renderer that renames one, or
+# ships a third, needs no configuration at all: the manifest names the stream carrying
+# each control, and both the filter and the outlet come off that one answer. There is no
+# way left for a target to publish under one name and negotiate against another.
 
 
-def test_a_renamed_output_stream_is_negotiated_under_its_configured_name():
+def test_a_renamed_stream_needs_no_configuration_at_all():
+    """The manifest says `RigA_Pose`, so that is what is negotiated *and* published."""
     manifest = [_cap("vhi.prediction.index", 2, stream="RigA_Pose")]
-    target, _ = _owned(
-        {"a": "vhi.prediction.index"},
-        manifest=manifest,
-        interface=FakeInterface(output_stream_name="RigA_Pose"),
-    )
-    target.send({"a": 1.0}, {})
-    assert target._outlet.last[2] == pytest.approx(1.0)
-
-
-def test_a_renamed_control_pose_stream_is_negotiated_under_its_configured_name():
-    manifest = [_cap("vhi.control.pose.index", 2, stream="RigA_ControlPose")]
-    target, _ = _owned(
-        {"a": "vhi.control.pose.index"},
-        manifest=manifest,
-        stream="control_pose",
-        interface=FakeInterface(control_pose_stream_name="RigA_ControlPose"),
-    )
+    target, interface = _owned({"a": "vhi.prediction.index"}, manifest=manifest)
+    assert interface.built == [("RigA_Pose", 3)]
     target.send({"a": 1.0}, {})
     assert target._outlet.last[2] == pytest.approx(1.0)
 
 
 def test_a_renamed_stream_is_honoured_on_the_by_name_path_too():
-    """A configuration without routes filters by the same name a routed one does.
+    """A configuration without routes finds its stream the same way a routed one does.
 
     It used to be a second implementation, which is how the two drifted apart; there is
     one now, and this pins that a routeless set reaches it with the right stream name.
     """
     client = ManifestClient([_cap("index.flexion", 2, stream="RigA_Pose")])
 
-    # No interface: the outlet-only fallback name applies, nothing matches — and the
-    # refusal says which stream it looked on, which is the whole diagnosis.
-    with pytest.raises(ValueError, match="MyoGestic_Output"):
-        VhiTarget(FakeOutlet(), client=client).bind(_controls("index.flexion"))
+    # A supplied outlet: no name is configured anywhere, and none is needed — the DOF
+    # name is looked up in the manifest and the stream carrying it is the one filtered
+    # for. This used to refuse, because it filtered by a default name nothing matched.
+    supplied = VhiTarget(FakeOutlet(), client=client)
+    supplied.bind(_controls("index.flexion"))
+    assert supplied._routed[0][0] == 2
 
-    # With one, the configured name is what the manifest is filtered by — and the outlet
-    # it builds is sized from the manifest it filtered, exactly as a routed binding's is.
-    # It used not to build one at all, so this bound, reported itself negotiated, and
-    # then rendered nothing.
-    interface = FakeInterface(output_stream_name="RigA_Pose")
+    # With an interface, the outlet it builds carries that same name, sized from the
+    # manifest it filtered — exactly as a routed binding's is. It used not to build one
+    # at all, so this bound, reported itself negotiated, and then rendered nothing.
+    interface = FakeInterface()
     target = VhiTarget(client=client, interface=interface)
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
     assert target._routed[0][0] == 2
-    assert interface.built == [("output", 3)], "no outlet means nothing renders"
+    assert interface.built == [("RigA_Pose", 3)], "no outlet means nothing renders"
     target.send({"index.flexion": 1.0}, {})
     assert target._outlet.last[2] == pytest.approx(1.0)
 
@@ -1668,3 +1672,102 @@ class TestTheControlQueueCannotGrowForever:
         assert left[-1] is None, "the sentinel must be last, or the worker never exits"
         assert len(left) == 2, f"the sentinel sat behind {len(left) - 1} stale frames"
         assert left[0].discrete["gesture"] == "Rest", "teardown dropped the rest frame"
+
+
+# --- the map picks the targets -----------------------------------------------------
+#
+# `vhi_targets` is the whole of what an application does now. It replaces the choice an
+# app used to make before it had read the map — which hand it drives — with an answer
+# read off the manifest, so a map naming the operator's hand gets a target that renders
+# it instead of one that silently does not.
+
+
+def _map(dofs):
+    from myogestic.controls import load_control_map
+
+    return load_control_map({"dofs": dofs})
+
+
+def test_a_map_naming_one_hand_gets_one_target_on_that_hand():
+    """No hand was chosen anywhere — the address named it."""
+    from myogestic.vhi import vhi_targets
+
+    client = ManifestClient(TWO_STREAMS)
+    targets = vhi_targets(_map({"a": "vhi.control.pose.index"}), FakeInterface(), client=client)
+    assert len(targets) == 1
+    targets[0].bind(_map_controls({"a": "vhi.control.pose.index"}, TWO_STREAMS))
+    assert targets[0].claims == frozenset({"a"})
+    assert targets[0]._routed[0][0] == 2
+
+
+def _map_controls(dofs, manifest):
+    from myogestic.controls import resolve
+
+    return resolve(_map(dofs), manifest)
+
+
+def test_a_map_naming_both_hands_gets_a_target_for_each():
+    """One map, two streams, two targets — and between them they claim all of it.
+
+    A single target cannot do this: channel 2 of one stream is not channel 2 of the
+    other, so one outlet carrying both would put the operator's index on the model's
+    hand.
+    """
+    from myogestic.vhi import vhi_targets
+
+    dofs = {"model": "vhi.prediction.index", "operator": "vhi.control.pose.index"}
+    client = ManifestClient(TWO_STREAMS)
+    interface = FakeInterface()
+    targets = vhi_targets(_map(dofs), interface, client=client)
+    assert len(targets) == 2
+    controls = _map_controls(dofs, TWO_STREAMS)
+    bus = ControlBus(controls, targets=targets, hz=32)   # refuses an unclaimed alias
+    claimed = set().union(*(t.claims for t in targets))
+    assert claimed == {"model", "operator"}
+    assert sorted(name for name, _ in interface.built) == [
+        "MyoGestic_ControlPose",
+        "MyoGestic_Output",
+    ]
+    bus.push({"model": 1.0, "operator": -1.0})
+    by_stream = {t._stream_name: t._outlet.last for t in targets}
+    assert by_stream["MyoGestic_Output"][2] == pytest.approx(1.0)
+    assert by_stream["MyoGestic_ControlPose"][2] == pytest.approx(-1.0)
+    bus.stop()
+
+
+def test_a_silent_renderer_gets_no_targets_rather_than_wrong_ones():
+    """Which targets a map needs is a question only the manifest answers."""
+    from myogestic.vhi import vhi_targets
+
+    class Silent:
+        def capabilities(self):
+            return None
+
+    assert vhi_targets(_map({"a": "vhi.prediction.index"}), FakeInterface(), client=Silent()) is None
+
+
+def test_a_manifest_already_in_hand_is_not_asked_for_again():
+    """A rebuild nobody clicked must not spend a blocking RPC on the render thread."""
+    from myogestic.vhi import vhi_targets
+
+    client = ManifestClient(TWO_STREAMS)
+    targets = vhi_targets(
+        _map({"a": "vhi.prediction.index"}),
+        FakeInterface(),
+        client=client,
+        capabilities=TWO_STREAMS,
+    )
+    assert client.capability_fetches == 0
+    assert len(targets) == 1
+
+
+def test_a_map_that_streams_nothing_still_gets_the_target_its_states_need():
+    """A held state travels over gRPC and names no stream — but still needs commanding."""
+    from myogestic.vhi import vhi_targets
+
+    client = ManifestClient()
+    targets = vhi_targets(_map({"g": "vhi.control.gesture"}), FakeInterface(), client=client)
+    assert len(targets) == 1
+    targets[0].bind(_map_controls({"g": "vhi.control.gesture"}, MANIFEST))
+    assert targets[0].claims == frozenset({"g"})
+    assert targets[0]._outlet is None, "nothing continuous, so no stream at all"
