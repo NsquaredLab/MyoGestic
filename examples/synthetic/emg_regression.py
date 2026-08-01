@@ -33,7 +33,7 @@ from myogestic.recipes.estimators import catboost_regressor
 from myogestic.session import iter_aligned_windows, iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import vhi_targets, virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
 from myogestic.vhi.pose import ADDRESS_CHANNELS, POSE_DOFS, split_pose
 from myogestic.widgets import (
     AppLogo,
@@ -300,16 +300,13 @@ def _ensure_vhi() -> None:
     global bus
     if bus is not None:
         return
-    # No hand and no stream is named here, and none is counted: `vhi_targets` looks this
-    # file's addresses up in VHI's manifest, groups them by the stream each one rides, and
-    # returns the target every group needs — one per DOF against a VHI, which publishes a
-    # stream per address, and one for the lot against a renderer that shares a stream.
-    # Each sizes and owns the outlet it publishes under.
-    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
-    if targets is None:
-        return                                # VHI is not up yet; the button stays
+    # No hand and no stream is named here: the target looks this file's addresses up in
+    # VHI's manifest and publishes one stream per address it drives, each named for that
+    # address and one channel wide. `connect_controls` returns None while VHI cannot say
+    # what it exports, which is the only reason this can fail.
+    target = VhiTarget(client=vhi_control, interface=vhi)
     bus = connect_controls(
-        CONTROL_MAP, targets, ctx=app.ctx, smoothing=output_filter, hz=32
+        CONTROL_MAP, [target], ctx=app.ctx, smoothing=output_filter, hz=32
     )
 
 
