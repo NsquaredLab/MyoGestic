@@ -54,7 +54,7 @@ Load it, and hand the result to a bus with a `VhiTarget`:
 import tomllib
 
 from myogestic.controls import connect_controls, load_control_map
-from myogestic.vhi import vhi_targets, virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
 
 vhi = virtual_hand()
 vhi_control = vhi.control_client()
@@ -70,14 +70,11 @@ def ensure_vhi() -> None:
     global bus
     if bus is not None:
         return
-    # No stream and no hand is named here. `vhi_targets` looks the file's addresses up in
-    # VHI's manifest, groups them by the stream each one rides, and returns the target
-    # every group needs — one per DOF against a VHI, one for the lot against a renderer
-    # that shares a stream. `None` while VHI is unreachable; try again later.
-    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
-    if targets is None:
-        return                                # not reachable yet; try again later
-    bus = connect_controls(CONTROL_MAP, targets, hz=32)
+    # No stream and no hand is named here. The target looks the file's addresses up in
+    # VHI's manifest and publishes one stream per address it drives, each named for that
+    # address. `connect_controls` returns None while VHI is unreachable.
+    target = VhiTarget(client=vhi_control, interface=vhi)
+    bus = connect_controls(CONTROL_MAP, [target], hz=32)
 ```
 
 The bus is built **lazily** because resolution needs a live target: VHI declares whether
@@ -85,13 +82,12 @@ each address is a number or a held state, and an app that launches VHI from its 
 necessarily starts before it exists. `capabilities()` blocks on an RPC, so call
 `ensure_vhi()` from a UI handler and let `predict` no-op while `bus is None`.
 
-Ask [`vhi_targets`][myogestic.vhi.vhi_targets] rather than building a `VhiTarget`
-yourself: **one target drives one stream**, and how many streams a map spans is the
-renderer's business, not yours. VHI gives one per DOF, a renderer sharing a stream gives
-one for the whole map, and a map naming *both* hands — sliders posing the operator's
-while a model drives the predicted one — is the same call again. Build a single
-`VhiTarget` by hand and it refuses a map spanning more than one stream, because it would
-otherwise have to guess which.
+**One target drives the whole map**, whatever is in it. A map naming *both* hands —
+sliders posing the operator's while a model drives the predicted one — is the same two
+lines: the target publishes one stream per address, named for that address, so the two
+hands are simply eighteen names rather than two layouts to keep apart. An application
+used to have to build one target per stream and could not know how many that was until
+it had read the map; there is nothing left to decide.
 
 That is the whole setup. `bus.push({"fist": 0.8})` from inside `@pipeline.predict` —
 using *your* alias, the left side of the file — and the target negotiates the wire,
@@ -106,9 +102,8 @@ encodes, and sends.
 !!! tip "Declare DOFs, don't push channels"
     The rest of this page shows the transport underneath, which is worth
     understanding when something misbehaves. But application code should not
-    contain channel indices or sign flips — that is what `VhiTarget` is for,
-    and the four wrong pose tables this project fixed all came from hand-written
-    channel maps.
+    contain stream names or sign flips — that is what `VhiTarget` is for, and the four
+    wrong pose tables this project fixed all came from hand-written channel maps.
 
 ![VHI dual-plane integration](../images/vhi-integration.svg){ align=center }
 
@@ -126,15 +121,13 @@ recording = vhi.recording_client()     # recording session gate + trajectory pla
 local git checkout in that order. It reads `$VHI_GRPC_HOST` /
 `$VHI_GRPC_PORT` for the control endpoint (defaults `127.0.0.1:50051`).
 
-What the returned `InterfaceSpec` does **not** know is a stream name. Which
-streams VHI publishes, how many there are, and which controls each carries, is
-in the manifest a *running* VHI answers with — so a target names its outlet
-from that answer, after negotiating, and nothing on this side has a table to
-go stale. That is why no outlet is built here: until the map has been read
-against the manifest, there is nothing that says which streams it needs or how
-wide each is. `vhi_targets` and the `interface=` it passes on are what do
-both, at `bind`. VHI's move to one stream per DOF needed no change on this
-side for exactly that reason.
+What the returned `InterfaceSpec` does **not** know is a stream name. Which controls VHI
+exports is in the manifest a *running* VHI answers with, and each control's stream is
+named for that control's own address — so a target names its outlets from that answer,
+after negotiating, and nothing on this side has a table to go stale. That is why no
+outlet is built here: until the map has been read against the manifest, there is nothing
+that says which streams it needs. `VhiTarget` and the `interface=` it is given are what
+do that, at `bind`.
 
 If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
 
@@ -181,8 +174,8 @@ except FileNotFoundError as e:
 !!! tip "Prefer the control standard"
     Everything below describes the transport underneath, which is worth knowing when
     something misbehaves. New work should declare DOFs by name and let
-    [`vhi_targets`](../api/controls.md) negotiate — then no stream name and no channel
-    number appears in your code at all.
+    [`VhiTarget`](../api/controls.md) negotiate — then no stream name appears in your
+    code at all.
 
 VHI subscribes to **one float32 stream per DOF, named after the address itself and one
 channel wide**: `vhi.prediction.index` is a stream called `vhi.prediction.index` carrying
@@ -191,10 +184,10 @@ channel wide**: `vhi.prediction.index` is a stream called `vhi.prediction.index`
 convention here.
 
 Each DOF is applied the moment its sample arrives. Nothing waits for a whole pose, so one
-nobody drives holds its last value and two processes can each own a finger. That is a
-property of *this* renderer, not of the contract: a renderer is equally free to carry
-several addresses on one wider stream, and MyoGestic drives either without being told —
-see [Build a renderer](build-a-renderer.md).
+nobody drives holds its last value and two processes can each own a finger. That is the
+contract rather than this renderer's preference — see
+[Build a renderer](build-a-renderer.md) — and VHI **refuses** a stream that is not exactly
+one channel wide rather than reading element zero of something wider.
 
 Which streams exist is the manifest's answer, never a table on this side. If you are
 debugging the transport, build the outlet for the one DOF you are chasing and push it
@@ -468,11 +461,10 @@ when VHI is running - the proto is at
 See the full **[Troubleshooting](../troubleshooting.md)** index for
 symptom-organised debugging.
 
-* **Building the wire frame by hand.** Map your names onto addresses and let
-  `vhi_targets` build the targets that encode. A hand-built frame hard-codes a stream
-  name and a channel number, and both are the renderer's to declare — VHI changed both
-  when it moved to one stream per DOF, and every application that had let the manifest
-  answer needed no edit at all.
+* **Publishing to a stream you named yourself.** Map your names onto addresses and let
+  `VhiTarget` publish. A hand-built outlet hard-codes a stream name, and that name is the
+  renderer's to declare — VHI changed every one of them when it moved to one stream per
+  DOF, and every application that had let the manifest answer needed no edit at all.
 * **Numerically filtering a discrete control.** It interpolates through states nobody
   selected. Declare `debounce_s` on the DOF instead; see the smoothing table above.
 * **Relying on renderer blending to steady a classifier.** It cannot. Blending changes
