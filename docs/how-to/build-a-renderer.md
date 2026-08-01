@@ -9,18 +9,20 @@ an in-process object a `ControlBus` calls directly, on the thread MyoGestic alre
 | you must | why |
 |---|---|
 | serve `GetControlManifest` | so a control map can resolve against you — the reply says which address sits on which channel |
-| read your pose stream | 9 × `float32`, standard values, positional: a channel *is* an address |
+| read your pose stream | N × `float32`, N being the width you declare — 9 for a VHI-shaped hand, standard values, positional: a channel *is* an address |
 
 | you may | for |
 |---|---|
 | serve `SetControl` | discrete DOFs — held states and gestures, which do not belong on a per-tick stream |
 | serve `SweepControl` | letting a client sweep one DOF and read back the degrees it produced, as a direction check |
-| serve `SetPresentation` | reporting whether you smooth incoming poses |
+| serve `SetPresentation` | for a client asking you to smooth incoming poses |
 | serve the four recording RPCs | driving a ground-truth hand through a capture session |
 
 ## The whole renderer
 
-The reference renderer, complete — every method is the real one; nothing is elided:
+The reference renderer, complete — every method is the real one; nothing is elided. It
+talks to the service defined in `myogestic/vhi/_proto/myogestic_vhi.proto`; generate
+stubs from that file for any language other than Python:
 
 ```python
 --8<-- "examples/synthetic/reference_renderer.py"
@@ -43,3 +45,8 @@ suite passed throughout.
 
 `Declare` no longer exists; the manifest is the contract, and a control hand is driven
 by publishing to its stream rather than by asking permission.
+
+## See also
+
+- [Integrate the Virtual Hand](integrate-vhi.md) — how MyoGestic is pointed at a renderer: `InterfaceSpec`, the outlet, the control client
+- [Drive your own device](add-a-target.md) — the in-process counterpart: a `Target` a `ControlBus` calls directly
