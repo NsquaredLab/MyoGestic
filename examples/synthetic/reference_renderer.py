@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import threading
 from concurrent import futures
+from contextlib import suppress
 
 import grpc
 import numpy as np
@@ -49,11 +50,12 @@ POSE_WIDTH = 9
 class ReferenceRenderer(pb2_grpc.VhiControlServicer):
     """A renderer in eighty lines. Holds the last pose it was sent."""
 
-    #: `stream` is load-bearing, not decoration: a client resolves a manifest against one
-    #: stream at a time and looks for `MyoGestic_Output` (or `MyoGestic_ControlPose` for a
-    #: control hand). A capability naming anything else is dropped from the negotiation and
-    #: the client refuses the map without saying why. Name yours one of those two, or leave
-    #: `stream_name` empty.
+    #: `stream` is load-bearing, not decoration: it names both the LSL stream this reads
+    #: and the `stream_name` the manifest reports, and a client resolves a manifest one
+    #: stream at a time. What it has to match is the name the *client* is configured to
+    #: publish under — `InterfaceSpec.output_stream_name`, which is `MyoGestic_Output` by
+    #: default (`control_pose_stream_name`, default `MyoGestic_ControlPose`, for a control
+    #: hand). Leaving `stream_name` empty matches whatever the client is looking for.
     def __init__(self, port: int = 50051, stream: str = "MyoGestic_Output") -> None:
         self.pose = np.zeros(POSE_WIDTH, dtype=np.float32)
         self._port = port
@@ -118,8 +120,15 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
             except Exception as exc:
                 print(f"reference renderer: lost the inlet ({type(exc).__name__}: {exc}), re-resolving")
                 if inlet is not None:
-                    inlet.close_stream()
+                    # Suppressed: closing a *broken* inlet is exactly the case that raises,
+                    # and a raise here would kill the thread this handler exists to keep
+                    # alive. There is nothing left to do about it either way.
+                    with suppress(Exception):
+                        inlet.close_stream()
                 inlet = None
+                # `resolve_streams` can raise too, and with no inlet to lose that is a
+                # tight loop printing once per iteration. Back off before retrying.
+                self._stop.wait(1.0)
 
 
 if __name__ == "__main__":
