@@ -7,6 +7,7 @@ Recipes for specific tasks. Each guide assumes you've worked through [Getting St
 - [Add a custom source](add-a-source.md) - implement the `Source` protocol for a new device, file format, or transport.
 - [Add a custom output](add-an-output.md) - push predictions to actuators, robots, or other processes.
 - [Drive your own device](add-a-target.md) - implement the `Target` protocol so a control map can render onto your hand, cursor, or prosthesis.
+- [Build a renderer](build-a-renderer.md) - a separate application MyoGestic drives, like the Virtual Hand: one RPC and a stream.
 - [Add a custom widget](add-a-widget.md) - write a stateless function that draws ImGui commands from `ctx`.
 - [Add a custom model](add-a-model.md) - wire `extract` / `train` / `predict` for any ML library.
 
