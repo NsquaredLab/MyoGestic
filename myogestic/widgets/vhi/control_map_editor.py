@@ -120,14 +120,19 @@ _GATE_LABELS = ("On at or above", "Steady for")
 _WEIGHT_READOUT = "+0.00"
 _PERCENT_READOUT = "100%"
 _SECONDS_READOUT = "0.00 s"
-#: The **last** stream name written down anywhere in MyoGestic, and it is not a filter.
-#: A map may name any address any target offers — which stream carries it is the target's
-#: business, settled from the manifest at bind time, so nothing here chooses a hand. But
-#: the renderer *refuses* one combination: streaming a pose to the operator's hand while
-#: also commanding it a movement drives that hand two ways, so it takes one or the other.
-#: That is a refusal, not a preference, and warning about it needs knowing which stream is
-#: the operator's. Nothing else here does.
-_CONTROL_POSE_STREAM = "MyoGestic_ControlPose"
+#: Which addresses pose the operator's hand — and it is not a filter. A map may name any
+#: address any target offers; which stream carries it is the target's business, settled
+#: from the manifest at bind time, so nothing here chooses a hand. But the renderer
+#: *refuses* one combination: streaming a pose to the operator's hand while also commanding
+#: it a movement drives that hand two ways, so it takes one or the other. That is a
+#: refusal, not a preference, and warning about it needs knowing which controls are the
+#: operator's. Nothing else here does.
+#:
+#: Matched on the address, not on a stream name. Each DOF is now carried by its own stream
+#: named after the address itself, so `stream_name` is `vhi.control.pose.index` rather than
+#: one shared name — a constant holding the old shared name silently matched nothing and
+#: the warning stopped firing.
+_CONTROL_POSE_PREFIX = "vhi.control.pose."
 
 #: The normalized signed domain a continuous control is expected to declare: `+1` is the
 #: direction the control denotes, rest is `0`. Shown in a row only when a target declares
@@ -764,7 +769,7 @@ class ControlMapEditor:
             for address, _ in entry["targets"]
             if (cap := by_address.get(address)) is not None
             and cap.kind == "continuous"
-            and getattr(cap, "stream_name", "") == _CONTROL_POSE_STREAM
+            and cap.address.startswith(_CONTROL_POSE_PREFIX)
         ]
         held = [
             entry["alias"]
