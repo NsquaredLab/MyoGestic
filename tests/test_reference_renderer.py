@@ -35,16 +35,20 @@ def test_a_control_bus_drives_the_reference_renderer(renderer_module):
     `uv run --extra grpc --extra dev pytest -m lsl_contention -q`. See CLAUDE.md.
     """
     from myogestic.controls import connect_controls, load_control_map
-    from myogestic.vhi import VhiTarget, virtual_hand
+    from myogestic.vhi import vhi_targets, virtual_hand
 
     renderer = renderer_module.ReferenceRenderer(port=50099)
     renderer.serve()
     try:
         vhi = virtual_hand(grpc_port=50099)
         client = vhi.control_client()
-        target = VhiTarget(vhi.outlet(), client=client)
         control_map = load_control_map({"dofs": {"close": "vhi.prediction.index"}})
-        bus = connect_controls(control_map, [target], hz=32)
+        # No stream is named on this side: the renderer's manifest says which one carries
+        # `vhi.prediction.index`, and the target publishes under exactly that name — which
+        # is the whole reason this end-to-end can find the other end at all.
+        targets = vhi_targets(control_map, vhi, client=client)
+        assert targets is not None, "the renderer did not answer GetControlManifest"
+        bus = connect_controls(control_map, targets, hz=32)
         assert bus is not None, "the renderer's manifest did not resolve"
 
         deadline = time.time() + 10.0

@@ -54,9 +54,12 @@ def main() -> None:
     # Built directly rather than from a mapping file: this is a rig diagnostic, so the
     # names ARE the pose channels under test — there is no user vocabulary involved.
     controls = ControlSet(dofs={n: Continuous(n) for n in POSE_DOFS})
-    outlet = virtual_hand().outlet()
+    vhi = virtual_hand()
+    # `interface=` rather than an outlet: the stream a target writes is the one the
+    # manifest says carries these controls, so it is not this file's to name or size.
     # No smoothing: a ramp would blur which frame produced which pose.
-    bus = ControlBus(controls, targets=[VhiTarget(outlet)])
+    target = VhiTarget(client=vhi.control_client(), interface=vhi)
+    bus = ControlBus(controls, targets=[target])
 
     print(f"Driving {len(POSE_DOFS)} DOFs, one at a time. Watch the PREDICTED hand.\n")
     observations: list[str] = []
@@ -73,9 +76,9 @@ def main() -> None:
             time.sleep(0.4)
             observations.append(name)
     finally:
-        # Rest the hand and make the frame land before the outlet's thread dies.
+        # Rest the hand and make the frame land before the outlet's thread dies. The
+        # target built the outlet, so stopping the bus is what releases it.
         bus.stop()
-        outlet.stop()
 
     print("\nThe hand should now be back at rest.\n")
     print("Answer these — any 'no' blocks the VHI v2 stage:\n")

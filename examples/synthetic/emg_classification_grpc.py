@@ -39,7 +39,7 @@ from myogestic.recipes.features import mav, rms, var, wl
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -55,7 +55,6 @@ from myogestic.widgets import (
 ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
 # The recording aid (session gate) and the control client.
 recording_aid = vhi.recording_client()
 vhi_control = vhi.control_client()
@@ -166,10 +165,10 @@ def train(data: TrainingData):
     return clf
 
 
-# Both are built by `_ensure_vhi` rather than here: the control file says *where* each
-# output goes, and VHI says what those addresses accept — so there is nothing to
-# resolve until VHI is running, and this app launches it from its own UI.
-vhi_target: VhiTarget | None = None
+# Built by `_ensure_vhi` rather than here: the control file says *where* each output
+# goes, and VHI says what those addresses accept — so there is nothing to resolve,
+# and no way to know which of VHI's streams this map needs, until VHI is running,
+# which this app launches from its own UI.
 bus: ControlBus | None = None
 
 
@@ -215,12 +214,17 @@ def _ensure_vhi() -> None:
     Never from `predict`: asking a renderer costs an RPC, and that callback has its own
     thread and a deadline.
     """
-    global bus, vhi_target
+    global bus
     if bus is not None:
         return
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
+    # The map picks the targets: `vhi_targets` looks this file's addresses up in VHI's
+    # manifest and builds one target per stream that carries them. Nothing here decides
+    # which hand the app drives before the map has been read.
+    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
+    if targets is None:
+        return                     # VHI has not answered yet — press again once it has
     bus = connect_controls(
-        CONTROL_MAP, [vhi_target], ctx=app.ctx, smoothing=output_filter, hz=pipeline.predict_hz
+        CONTROL_MAP, targets, ctx=app.ctx, smoothing=output_filter, hz=pipeline.predict_hz
     )
 
 
@@ -322,9 +326,9 @@ def main() -> None:
         recording_aid.set_recording_session(False)
         recording_aid.stop()
         vhi_control.stop()
-        # Both outlets are built at import time, before any UI callback runs, so a run
-        # that never opens the window still needs them released here.
-        vhi_outlet.stop()
+        # Built at import time, before any UI callback runs, so a run that never opens
+        # the window still needs it released here. The pose stream is not listed: the
+        # target builds it, so `bus.stop()` above is what releases it.
         ctrl_outlet = None  # a raw StreamOutlet has no .stop(); dropping it releases it
 
 

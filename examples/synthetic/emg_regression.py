@@ -33,7 +33,7 @@ from myogestic.recipes.estimators import catboost_regressor
 from myogestic.session import iter_aligned_windows, iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 from myogestic.vhi.pose import ADDRESS_CHANNELS, POSE_DOFS, split_pose
 from myogestic.widgets import (
     AppLogo,
@@ -51,7 +51,6 @@ CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
 
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
 # The v2 recording aid — the session gate and, if you want a swept trajectory
 # instead of held poses, trajectory playback. Not a control plane; see
 # `recording_client` for why that separation matters.
@@ -111,9 +110,9 @@ PROCESSES = [
 #
 # Once built, one bus owns the whole output path: substitute rest -> clip -> smooth ->
 # clip again -> hand it to every target. `VhiTarget` is what turns resolved aliases into
-# whatever this VHI renders on the wire.
+# whatever this VHI renders on the wire, and `vhi_targets` is what reads the map to see
+# how many of them this file needs.
 vhi_control = vhi.control_client()
-vhi_target: VhiTarget | None = None
 bus: ControlBus | None = None
 controls = None
 # --8<-- [end:bus]
@@ -298,12 +297,17 @@ grid = Grid(
 # --8<-- [start:negotiate]
 def _ensure_vhi() -> None:
     """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
-    global bus, vhi_target
+    global bus
     if bus is not None:
         return
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
+    # The map picks the targets: `vhi_targets` looks this file's addresses up in VHI's
+    # manifest and builds one target per stream that carries them. Nothing here decides
+    # which hand the app drives before the map has been read.
+    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
+    if targets is None:
+        return                     # VHI has not answered yet — press again once it has
     bus = connect_controls(
-        CONTROL_MAP, [vhi_target], ctx=app.ctx, smoothing=output_filter, hz=32
+        CONTROL_MAP, targets, ctx=app.ctx, smoothing=output_filter, hz=32
     )
 
 

@@ -52,7 +52,7 @@ Load it, and hand the result to a bus with a `VhiTarget`:
 import tomllib
 
 from myogestic.controls import ControlBus, load_control_map, resolve
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 
 vhi = virtual_hand()
 vhi_control = vhi.control_client()
@@ -72,8 +72,10 @@ def ensure_vhi() -> None:
     if capabilities is None:
         return                                # not reachable yet; try again later
     controls = resolve(CONTROL_MAP, capabilities)
-    target = VhiTarget(vhi.outlet(), client=vhi_control)
-    bus = ControlBus(controls, targets=[target], hz=32)
+    # One target per stream the *map* names — VHI renders two hands, and which of
+    # them this file drives is the file's answer, not this code's.
+    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control, capabilities=capabilities)
+    bus = ControlBus(controls, targets=targets, hz=32)
 ```
 
 The bus is built **lazily** because resolution needs a live target: VHI declares whether
@@ -106,7 +108,6 @@ encodes, and sends.
 from myogestic.vhi.interfaces import virtual_hand
 
 vhi = virtual_hand()                  # resolves install path + gRPC endpoint
-vhi_outlet = vhi.outlet()             # 9-ch LSL outlet @ 32 Hz
 vhi_control = vhi.control_client()   # negotiates the control space (v2)
 recording = vhi.recording_client()     # recording session gate + trajectory playback
 ```
@@ -114,9 +115,14 @@ recording = vhi.recording_client()     # recording session gate + trajectory pla
 `virtual_hand()` looks at `$VHI_PATH`, the per-user install root, and the
 local git checkout in that order. It reads `$VHI_GRPC_HOST` /
 `$VHI_GRPC_PORT` for the control endpoint (defaults `127.0.0.1:50051`).
-The returned `InterfaceSpec` knows everything - outlet name, channel
-count, send rate, gRPC target, launcher argv - so the example code stays
-boilerplate-free.
+
+What the returned `InterfaceSpec` does **not** know is a stream name. Which
+streams VHI publishes, and which controls each carries, is in the manifest a
+*running* VHI answers with — so a target names its outlet from that answer,
+after negotiating, and nothing on this side has a table to go stale. That is
+why the outlet is not built here: until the map has been read against the
+manifest, there is nothing that says which stream it needs or how wide it is.
+`vhi_targets()` is what does both.
 
 If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
 
@@ -191,9 +197,10 @@ Two corrections to what this page used to say, both verified rather than assumed
   see `myogestic.vhi.pose` for the layout.
 
 `0` is rest and `+1` is full flexion on this wire, as everywhere else: the
-control standard is the only convention here. Push every predict tick:
-`vhi_outlet` runs its own send thread at `hz`, so only the latest push is
-sent.
+control standard is the only convention here. To write it yourself, build the
+outlet yourself — `vhi.stream_outlet("MyoGestic_Output")` — and push every
+predict tick: it runs its own send thread at `hz`, so only the latest push is
+sent. Application code should not be doing this; see the tip above.
 
 ```python
 @pipeline.predict

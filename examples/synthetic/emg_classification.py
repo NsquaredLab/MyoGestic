@@ -25,7 +25,7 @@ from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -41,7 +41,6 @@ ctrl_outlet = control_outlet()
 
 # --8<-- [start:poses]
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
 
 # What this app controls, declared in a file: the left side is *ours*, the right side is
 # VHI's. Parsing needs no VHI; resolving does, so that waits until one is up (`_ensure_vhi`).
@@ -65,12 +64,12 @@ FIST_ALIASES = ("fist", "thumb_spread")
 output_filter = PostProcessor(hz=32)
 # --8<-- [end:filter]
 
-# The bus + target own the wire. VHI's continuous inlet takes control values, and
-# `VhiTarget` negotiates the space and refuses a VHI it cannot fully drive rather than
-# guessing. Both are built in `_ensure_vhi`, not here: the aliases above mean nothing
-# until VHI has said what its addresses do, and this script launches VHI itself.
+# The bus and its targets own the wire. VHI's continuous inlet takes control values,
+# and `VhiTarget` negotiates the space and refuses a VHI it cannot fully drive rather
+# than guessing. They are built in `_ensure_vhi`, not here: the aliases above mean
+# nothing until VHI has said what its addresses do, and this script launches VHI
+# itself — which is also why *which* targets the map needs cannot be known yet.
 vhi_control = vhi.control_client()
-vhi_target: VhiTarget | None = None
 bus: ControlBus | None = None
 
 
@@ -228,12 +227,17 @@ grid = Grid(
 
 def _ensure_vhi() -> None:
     """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
-    global bus, vhi_target
+    global bus
     if bus is not None:
         return
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
+    # The map picks the targets: `vhi_targets` looks this file's addresses up in VHI's
+    # manifest and builds one target per stream that carries them. Nothing here decides
+    # which hand the app drives before the map has been read.
+    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
+    if targets is None:
+        return                     # VHI has not answered yet — press again once it has
     bus = connect_controls(
-        CONTROL_MAP, [vhi_target], ctx=app.ctx, smoothing=output_filter, hz=32
+        CONTROL_MAP, targets, ctx=app.ctx, smoothing=output_filter, hz=32
     )
 
 

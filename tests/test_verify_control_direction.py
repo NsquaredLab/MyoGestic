@@ -138,7 +138,8 @@ class _Vhi:
     def __init__(self):
         self.control_outlets: list[_Stoppable] = []
 
-    def control_outlet(self):
+    def stream_outlet(self, name, *, n_channels=None):
+        assert name == verify.CONTROL_POSE_STREAM, name
         self.control_outlets.append(_Stoppable())
         return self.control_outlets[-1]
 
