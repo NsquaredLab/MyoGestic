@@ -136,9 +136,16 @@ def test_bind_accepts_the_pose_dofs():
 
 
 def test_bind_accepts_a_subset():
-    """Declaring one finger is legal; the rest of the hand simply stays neutral."""
-    _, outlet = _bound("index.flexion")
-    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
+    """Declaring one finger is legal; the rest of the hand simply stays neutral.
+
+    The finger's rest is deliberately not zero, or the rest frame `bind` pushes would be
+    indistinguishable from one that was never written.
+    """
+    _, outlet = _bound(
+        **{"index.flexion": {"kind": "continuous", "range": [0.0, 1.0], "rest": 0.25}}
+    )
+    assert outlet.last[2] == pytest.approx(0.25)
+    assert np.count_nonzero(outlet.last) == 1
 
 
 def test_bind_refuses_an_empty_configuration():
@@ -374,6 +381,22 @@ def test_a_broken_outlet_does_not_kill_the_predict_thread():
     assert any("VhiTarget" in w for w in warnings)
 
 
+def test_an_outlet_that_is_already_dead_at_bind_raises_out_of_the_bus():
+    """The other side of the line above: setup failures are not absorbed.
+
+    Settling a negotiation puts the declared rest pose on the wire, so a dead outlet is
+    found while a traceback is still visible rather than warned about once per tick for
+    the life of the session.
+    """
+
+    class Dead(FakeOutlet):
+        def push(self, data):
+            raise OSError("outlet closed")
+
+    with pytest.raises(OSError, match="outlet closed"):
+        ControlBus(_controls(), targets=[VhiTarget(Dead(), client=_client())])
+
+
 def test_two_targets_receive_the_same_frame():
     """One sanitised frame, fanned out — a recorder beside the hand."""
     a, b = FakeOutlet(), FakeOutlet()
@@ -461,6 +484,20 @@ def test_a_width_the_outlet_cannot_carry_is_refused():
     with pytest.raises(ValueError, match="outlet carries 9"):
         target.bind(_controls(*order))
     assert target.negotiated is False
+
+
+def test_a_manifest_wider_than_the_outlet_is_fine_if_the_configuration_fits():
+    """The rule is the channels declared, not the widest channel in the manifest.
+
+    VHI publishes its whole map, so a manifest wider than the outlet is ordinary. Only
+    a channel this configuration actually drives has to fit — the by-name path used to
+    measure the manifest instead and refuse a frame that fits.
+    """
+    client = FakeClient(FakeReply(continuous_channel_order=(*NINE, "extra.dof")))
+    target = VhiTarget(FakeOutlet(), client=client)
+    target.bind(_controls("index.flexion"))
+    assert target.negotiated is True
+    assert target._routed[0][0] == 2
 
 
 def test_discrete_edges_go_over_grpc_when_negotiated():
@@ -1391,7 +1428,11 @@ def test_a_renamed_control_pose_stream_is_negotiated_under_its_configured_name()
 
 
 def test_a_renamed_stream_is_honoured_on_the_by_name_path_too():
-    """Both paths filter by one name; the two implementations have drifted apart before."""
+    """A configuration without routes filters by the same name a routed one does.
+
+    It used to be a second implementation, which is how the two drifted apart; there is
+    one now, and this pins that a routeless set reaches it with the right stream name.
+    """
     client = ManifestClient([_cap("index.flexion", 2, stream="RigA_Pose")])
 
     # No interface: the outlet-only fallback name applies, nothing matches — and the
@@ -1401,12 +1442,16 @@ def test_a_renamed_stream_is_honoured_on_the_by_name_path_too():
 
     # With one, the configured name is what the manifest is filtered by — and the outlet
     # it builds is sized from the manifest it filtered, exactly as a routed binding's is.
-    target = VhiTarget(
-        client=client, interface=FakeInterface(output_stream_name="RigA_Pose")
-    )
+    # It used not to build one at all, so this bound, reported itself negotiated, and
+    # then rendered nothing.
+    interface = FakeInterface(output_stream_name="RigA_Pose")
+    target = VhiTarget(client=client, interface=interface)
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
     assert target._routed[0][0] == 2
+    assert interface.built == [("output", 3)], "no outlet means nothing renders"
+    target.send({"index.flexion": 1.0}, {})
+    assert target._outlet.last[2] == pytest.approx(1.0)
 
 
 def test_a_renderer_that_names_no_stream_is_read_anyway():
