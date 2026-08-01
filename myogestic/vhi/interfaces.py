@@ -82,7 +82,8 @@ class InterfaceSpec:
     control_pose_stream_name
         LSL *outlet* name for streaming a continuous pose TO the interface's
         control hand — opposite direction to ``control_stream_name``. Consumed
-        only when VHI is in STREAM control mode.
+        whenever something is publishing to it: the control hand follows the
+        stream's presence, so there is no mode to ask for first.
     n_control_pose_channels
         Channel count of the control-pose outlet.
     control_pose_hz
