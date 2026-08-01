@@ -60,6 +60,33 @@ class Target(Protocol):
         """Release whatever this target owns. Must be idempotent."""
         ...
 
+    # --- optional, and the bus asks for them by name -----------------------------
+    #
+    # Declared here because they were not, and a target only found out about them by
+    # reading `ControlBus`. Both are read with `getattr`, so leaving them off is legal
+    # and means something specific rather than nothing.
+
+    claims: frozenset[str]
+    """Which aliases this target renders, for the bus's coverage check.
+
+    Absent means "assume it takes everything" — right for a recorder or a test double
+    that does not know. But if *every* target reports and a control appears in none of
+    them, nothing renders it, which looks exactly like a control that works and holds
+    still. Report it if you can.
+    """
+
+    def capabilities(self) -> Sequence[Any] | None:
+        """What this target exports, as `myogestic.controls.Capability` values.
+
+        What `myogestic.controls.connect_controls` asks so it can resolve a map before
+        anything is bound. Return `None` — not an empty sequence — while the target
+        cannot answer, e.g. a renderer that has not started: empty reads as "renders
+        nothing" and would resolve to a bus that silently drives nothing.
+
+        Absent is fine for a target whose vocabulary is fixed and known to the caller.
+        """
+        ...
+
 
 class ControlBus:
     """Sanitise a frame once, then deliver it to every target.
