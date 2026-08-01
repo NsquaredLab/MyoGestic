@@ -442,7 +442,7 @@ class VhiTarget:
         widest = max((cap.channel for cap in by_address.values()), default=-1)
         if widest >= self._width:
             raise ValueError(
-                f"VHI negotiated {len(order)} channels but this outlet carries only "
+                f"VHI negotiated {widest + 1} channels but this outlet carries only "
                 f"{self._width}. Construct the outlet at least that wide."
             )
         self._dofs = controls.continuous

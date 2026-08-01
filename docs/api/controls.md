@@ -195,7 +195,7 @@ no table of channel numbers to fall back to.
 
 What it refuses, rather than half-rendering: an address the renderer does not export,
 one it does not carry on this stream, two aliases aimed at one control, a channel order
-with no place for a declared name, or a reply that will not state its wire encoding. A
+with no place for a declared name, or a channel past the end of this outlet. A
 partly-understood negotiation is worse than none — it would leave some controls believed
 rendered and others quietly dropped, and a dropped control is indistinguishable from one
 that is working and holding still.

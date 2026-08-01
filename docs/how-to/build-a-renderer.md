@@ -10,6 +10,7 @@ an in-process object a `ControlBus` calls directly, on the thread MyoGestic alre
 |---|---|
 | serve `GetControlManifest` | so a control map can resolve against you — the reply says which address sits on which channel |
 | read your pose stream | N × `float32`, N being the width you declare — 9 for a VHI-shaped hand, standard values, positional: a channel *is* an address |
+| name that stream `MyoGestic_Output` | a client resolves your manifest against one stream at a time, and it looks for that name — or `MyoGestic_ControlPose` for a control hand. A capability naming anything else is dropped from the negotiation, and the map is refused without saying why. Leaving `stream_name` empty works too |
 
 | you may | for |
 |---|---|
