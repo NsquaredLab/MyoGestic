@@ -229,7 +229,7 @@ def test_a_routed_binding_clamps_to_the_range_the_target_declared():
         load_control_map({"dofs": {"a": "vhi.prediction.index"}}), MANIFEST
     )
     outlet = FakeOutlet()
-    target = VhiTarget(outlet, client=ManifestClient(FakeReply()))
+    target = VhiTarget(outlet, client=ManifestClient())
     target.bind(controls)
     target.send({"a": 5.0}, {})
     assert outlet.last.max() <= 1.0
@@ -299,7 +299,7 @@ def test_stop_before_bind_does_not_raise():
 
 def test_the_bus_binds_the_target_at_construction():
     outlet = FakeOutlet()
-    with pytest.raises(ValueError, match="has no place for them"):
+    with pytest.raises(ValueError, match="has no place for"):
         ControlBus(_controls("pinky.abduction"), targets=[VhiTarget(outlet, client=_client())])
     assert outlet.frames == []
 
@@ -443,7 +443,7 @@ def test_a_channel_order_that_disagrees_is_refused():
     """Guessing a mapping is exactly what the standard exists to stop."""
     client = FakeClient(FakeReply(continuous_channel_order=("something.else",) * 9))
     target = VhiTarget(FakeOutlet(), client=client)
-    with pytest.raises(ValueError, match="has no place for them"):
+    with pytest.raises(ValueError, match="has no place for"):
         target.bind(_controls(*NINE))
     assert target.negotiated is False
 
@@ -583,7 +583,7 @@ def test_a_declared_dof_with_no_negotiated_channel_is_refused():
         FakeReply(continuous_channel_order=("index.flexion",))
     )
     target = VhiTarget(FakeOutlet(), client=client)
-    with pytest.raises(ValueError, match="has no place for them"):
+    with pytest.raises(ValueError, match="has no place for"):
         target.bind(_controls("index.flexion", **{"wrist.rotation": "continuous"}))
     assert target.negotiated is False
 
@@ -797,8 +797,19 @@ def _cap(
     hi=1.0,
     kind="continuous",
     states=(),
-    stream="",
+    stream=None,
 ):
+    """One capability, named the way a real manifest names it.
+
+    ``stream`` defaults to what VHI itself reports: the predicted hand's stream for a
+    capability that *is* on a stream, and nothing at all for one that is not (a discrete
+    control travels over gRPC and names no stream). That default matters — the target
+    filters the manifest by stream name, and a fixture that left every name empty would
+    only ever exercise the wildcard fallback. The wildcard is pinned on its own in
+    `test_a_renderer_that_names_no_stream_is_read_anyway`.
+    """
+    if stream is None:
+        stream = "MyoGestic_Output" if channel >= 0 else ""
     from myogestic.controls import Capability
 
     return Capability(
@@ -857,24 +868,26 @@ def test_a_target_binds_without_declaring():
 
 
 class ManifestClient(FakeClient):
-    """A client that also answers the capability manifest."""
+    """A client that answers a fixed manifest instead of synthesising one."""
 
-    def __init__(self, reply=None, manifest=MANIFEST):
-        super().__init__(reply)
+    def __init__(self, manifest=MANIFEST):
+        super().__init__()
         self.manifest = manifest
 
     def capabilities(self):
+        # Counted here too, or a `force`-refetch assertion made against this client
+        # would pass without the manifest ever being asked for a second time.
+        self.capability_fetches += 1
         return self.manifest
 
 
-def _routed_target(dofs, *, manifest=MANIFEST, order=()):
+def _routed_target(dofs, *, manifest=MANIFEST):
     """A bound target for an alias/address configuration."""
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(load_control_map({"dofs": dofs}), manifest)
     outlet = FakeOutlet()
-    client = ManifestClient(FakeReply(continuous_channel_order=order or ()), manifest)
-    target = VhiTarget(outlet, client=client)
+    target = VhiTarget(outlet, client=ManifestClient(manifest))
     target.bind(controls)
     return target, outlet, controls
 
@@ -932,7 +945,7 @@ def test_two_aliases_on_one_channel_are_refused_rather_than_racing():
         ),
         MANIFEST,
     )
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply()))
+    target = VhiTarget(FakeOutlet(), client=ManifestClient())
     with pytest.raises(ValueError, match="both map to"):
         target.bind(controls)
 
@@ -945,7 +958,7 @@ def test_an_unstreamed_capability_is_refused():
     controls = resolve(
         load_control_map({"dofs": {"a": "vhi.prediction.index"}}), off_stream
     )
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), off_stream))
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(off_stream))
     with pytest.raises(ValueError, match="not carried on a stream"):
         target.bind(controls)
 
@@ -973,12 +986,6 @@ def test_stop_rests_every_routed_channel():
 # vhi.prediction.* is the model-driven hand on MyoGestic_Output; vhi.control.pose.* is the
 # operator's hand on MyoGestic_ControlPose. They share channel numbers, so a target that
 # ignored stream_name would put a value on the wrong hand.
-
-TWO_STREAM_MANIFEST = [
-    _cap("vhi.prediction.index", 2),
-    _cap("vhi.control.pose.index", 2),
-]
-
 
 def _cap_on(address, channel, stream, **kw):
     from myogestic.controls import Capability
@@ -1009,7 +1016,7 @@ def test_an_output_target_ignores_control_pose_addresses():
     controls = resolve(
         load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
     )
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS))
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(TWO_STREAMS))
     target.bind(controls)
     assert target.claims == frozenset(), "it claims nothing on this stream"
     assert target._routed == ()
@@ -1022,7 +1029,7 @@ def test_a_control_pose_target_ignores_prediction_addresses():
         load_control_map({"dofs": {"a": "vhi.prediction.index"}}), TWO_STREAMS
     )
     target = VhiTarget(
-        FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS), stream="control_pose"
+        FakeOutlet(), client=ManifestClient(TWO_STREAMS), stream="control_pose"
     )
     target.bind(controls)
     assert target.claims == frozenset()
@@ -1041,7 +1048,7 @@ def test_the_refusal_names_both_namespaces():
         load_control_map({"dofs": {"a": "vhi.prediction.wrist"}}),
         [*TWO_STREAMS, _cap("vhi.prediction.wrist", -1, stream="MyoGestic_Output")],
     )
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), TWO_STREAMS))
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(TWO_STREAMS))
     with pytest.raises(ValueError) as excinfo:
         target.bind(controls)
     message = str(excinfo.value)
@@ -1059,7 +1066,7 @@ def test_each_target_routes_its_own_stream():
         controls = resolve(load_control_map({"dofs": {"a": address}}), TWO_STREAMS)
         outlet = FakeOutlet()
         target = VhiTarget(
-            outlet, client=ManifestClient(FakeReply(), TWO_STREAMS), stream=stream
+            outlet, client=ManifestClient(TWO_STREAMS), stream=stream
         )
         target.bind(controls)
         assert target.negotiated is True, stream
@@ -1107,10 +1114,10 @@ def test_one_map_drives_both_hands_through_two_targets():
     """
     controls = _two_hand_controls()
     manifest = _two_hand_manifest()
-    predicted = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), manifest))
+    predicted = VhiTarget(FakeOutlet(), client=ManifestClient(manifest))
     operator = VhiTarget(
         FakeOutlet(),
-        client=ManifestClient(FakeReply(), manifest),
+        client=ManifestClient(manifest),
         stream="control_pose",
     )
     bus = ControlBus(controls, targets=[predicted, operator], hz=32)
@@ -1126,9 +1133,9 @@ def test_each_hand_gets_only_its_own_values():
     controls = _two_hand_controls()
     manifest = _two_hand_manifest()
     left, right = FakeOutlet(), FakeOutlet()
-    predicted = VhiTarget(left, client=ManifestClient(FakeReply(), manifest))
+    predicted = VhiTarget(left, client=ManifestClient(manifest))
     operator = VhiTarget(
-        right, client=ManifestClient(FakeReply(), manifest), stream="control_pose"
+        right, client=ManifestClient(manifest), stream="control_pose"
     )
     bus = ControlBus(controls, targets=[predicted, operator], hz=32)
     bus.push({"model_index": 1.0, "operator_thumb": -1.0})
@@ -1142,7 +1149,7 @@ def test_each_hand_gets_only_its_own_values():
 def test_a_held_state_is_claimed_by_whichever_target_negotiated():
     controls = _two_hand_controls()
     manifest = _two_hand_manifest()
-    predicted = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), manifest))
+    predicted = VhiTarget(FakeOutlet(), client=ManifestClient(manifest))
     predicted.bind(controls)
     assert "gesture" in predicted.claims
 
@@ -1155,7 +1162,7 @@ def test_a_control_no_target_claims_is_refused_by_the_bus():
     """
     controls = _two_hand_controls()
     manifest = _two_hand_manifest()
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), manifest))
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(manifest))
     with pytest.raises(ValueError, match="no target renders"):
         ControlBus(controls, targets=[target], hz=32)
 
@@ -1175,7 +1182,7 @@ def test_an_address_no_stream_exports_is_still_refused():
     unstreamed = [
         cap for cap in manifest if cap.address != "vhi.prediction.index"
     ] + [_cap("vhi.prediction.index", -1, stream="MyoGestic_Output")]
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), unstreamed))
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(unstreamed))
     with pytest.raises(ValueError, match="not carried on a stream"):
         target.bind(bad)
 
@@ -1192,7 +1199,7 @@ def test_a_target_that_does_not_report_claims_is_assumed_to_take_everything():
 
     controls = _two_hand_controls()
     manifest = _two_hand_manifest()
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), manifest))
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(manifest))
     bus = ControlBus(controls, targets=[target, Recorder()], hz=32)
     bus.stop()
 
@@ -1207,9 +1214,20 @@ def test_a_target_that_does_not_report_claims_is_assumed_to_take_everything():
 
 
 class FakeInterface:
-    """The slice of `InterfaceSpec` a target builds an outlet from."""
+    """The slice of `InterfaceSpec` a target builds an outlet from.
 
-    def __init__(self) -> None:
+    It carries the two stream *names* as well as the two builders: they are what the
+    outlets it builds are published under, so they are also what the manifest has to be
+    filtered by.
+    """
+
+    def __init__(
+        self,
+        output_stream_name="MyoGestic_Output",
+        control_pose_stream_name="MyoGestic_ControlPose",
+    ) -> None:
+        self.output_stream_name = output_stream_name
+        self.control_pose_stream_name = control_pose_stream_name
         self.built: list[tuple[str, int, tuple[str, ...]]] = []
 
     def outlet(self, *, n_channels=None):
@@ -1223,13 +1241,13 @@ class FakeInterface:
         return FakeOutlet()
 
 
-def _owned(dofs, *, manifest=MANIFEST, stream="output"):
+def _owned(dofs, *, manifest=MANIFEST, stream="output", interface=None):
     """A bound target that built its own outlet from `dofs`."""
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(load_control_map({"dofs": dofs}), manifest)
-    interface = FakeInterface()
-    client = ManifestClient(FakeReply(), manifest)
+    interface = FakeInterface() if interface is None else interface
+    client = ManifestClient(manifest)
     target = VhiTarget(client=client, interface=interface, stream=stream)
     target.bind(controls)
     return target, interface
@@ -1279,7 +1297,7 @@ def test_a_supplied_outlet_still_refuses_a_channel_it_cannot_reach():
 
     manifest = [*MANIFEST, _cap("vhi.prediction.far", 40)]
     controls = resolve(load_control_map({"dofs": {"a": "vhi.prediction.far"}}), manifest)
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(FakeReply(), manifest))
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(manifest))
     with pytest.raises(ValueError, match="carries 9"):
         target.bind(controls)
 
@@ -1335,6 +1353,70 @@ def test_an_owned_outlet_is_stopped_but_a_supplied_one_is_not():
     assert built.stopped == 1
 
 
+# --- the stream name is configuration, not a literal ------------------------------
+#
+# `InterfaceSpec` carries `output_stream_name` and `control_pose_stream_name`, so a
+# renamed stream is a supported configuration, not just a third-party renderer's
+# problem. Filtering the manifest by a hardcoded name would leave such a target
+# publishing to one name and negotiating against another — every capability dropped, and
+# the map refused with nothing pointing at the cause.
+
+
+def test_a_renamed_output_stream_is_negotiated_under_its_configured_name():
+    manifest = [_cap("vhi.prediction.index", 2, stream="RigA_Pose")]
+    target, _ = _owned(
+        {"a": "vhi.prediction.index"},
+        manifest=manifest,
+        interface=FakeInterface(output_stream_name="RigA_Pose"),
+    )
+    target.send({"a": 1.0}, {})
+    assert target._outlet.last[2] == pytest.approx(1.0)
+
+
+def test_a_renamed_control_pose_stream_is_negotiated_under_its_configured_name():
+    manifest = [_cap("vhi.control.pose.index", 2, stream="RigA_ControlPose")]
+    target, _ = _owned(
+        {"a": "vhi.control.pose.index"},
+        manifest=manifest,
+        stream="control_pose",
+        interface=FakeInterface(control_pose_stream_name="RigA_ControlPose"),
+    )
+    target.send({"a": 1.0}, {})
+    assert target._outlet.last[2] == pytest.approx(1.0)
+
+
+def test_a_renamed_stream_is_honoured_on_the_by_name_path_too():
+    """Both paths filter by one name; the two implementations have drifted apart before."""
+    client = ManifestClient([_cap("index.flexion", 2, stream="RigA_Pose")])
+
+    # No interface: the outlet-only fallback name applies, nothing matches — and the
+    # refusal says which stream it looked on, which is the whole diagnosis.
+    with pytest.raises(ValueError, match="MyoGestic_Output"):
+        VhiTarget(FakeOutlet(), client=client).bind(_controls("index.flexion"))
+
+    # With one, the configured name is what the manifest is filtered by. This path reads
+    # the interface for that name only — it builds no outlet — so the binding is checked
+    # through the channel it resolved.
+    target = VhiTarget(
+        client=client, interface=FakeInterface(output_stream_name="RigA_Pose")
+    )
+    target.bind(_controls("index.flexion"))
+    assert target.negotiated is True
+    assert target._slots[0][0] == 2
+
+
+def test_a_renderer_that_names_no_stream_is_read_anyway():
+    """An empty `stream_name` stays a wildcard: a renderer need not name its streams."""
+    nameless = [_cap("vhi.prediction.index", 2, stream="")]
+    routed, _, _ = _routed_target({"a": "vhi.prediction.index"}, manifest=nameless)
+    routed.send({"a": 1.0}, {})
+    assert routed._routed[0][0] == 2
+
+    by_name = VhiTarget(FakeOutlet(), client=ManifestClient([_cap("index.flexion", 2, stream="")]))
+    by_name.bind(_controls("index.flexion"))
+    assert by_name.negotiated is True
+
+
 # --- one file, several targets ----------------------------------------------------
 
 
@@ -1377,9 +1459,7 @@ class TestItClaimsOnlyWhatVhiExports:
     @staticmethod
     def _vhi_only_client():
         # The target asks its *own* client, which knows nothing of a keyboard.
-        return ManifestClient(
-            FakeReply(),
-            [
+        return ManifestClient([
                 _cap("vhi.prediction.index", 2, stream="MyoGestic_Output"),
                 _cap("vhi.control.gesture", -1, kind="discrete", states=("Rest", "Fist")),
             ],
@@ -1450,7 +1530,7 @@ def test_a_foreign_edge_is_not_forwarded_to_vhi():
         ),
         manifest,
     )
-    client = ManifestClient(FakeReply(), [manifest[0]])
+    client = ManifestClient([manifest[0]])
     target = VhiTarget(FakeOutlet(), client=client)
     target.bind(controls)
     target.send({"grip": "Fist", "walk": "down"}, {"grip": "Fist", "walk": "down"})
@@ -1469,7 +1549,7 @@ def test_a_frame_of_only_foreign_edges_sends_nothing_at_all():
         ),
         [vhi_cap, key],
     )
-    client = ManifestClient(FakeReply(), [vhi_cap])
+    client = ManifestClient([vhi_cap])
     target = VhiTarget(FakeOutlet(), client=client)
     target.bind(controls)
     target.send({"close": 0.5, "walk": "down"}, {"walk": "down"})
