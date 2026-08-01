@@ -136,8 +136,9 @@ def step_4_drive(controls, client):
     for ref in controls.routes[alias]:
         print(f"    {ref.address:34s} weight {ref.weight}")
 
-    outlet = virtual_hand().outlet()
-    target = VhiTarget(outlet, client=client)
+    # `interface=` rather than an outlet: which stream carries these controls is in the
+    # manifest, so the target builds one under that name once it has negotiated.
+    target = VhiTarget(client=client, interface=virtual_hand())
     bus = ControlBus(controls, targets=[target], hz=32)
     settled = target.negotiate()
     channels = sorted({channel for channel, *_ in target._routed})
@@ -154,8 +155,8 @@ def step_4_drive(controls, client):
         print("  scales a value; it cannot push one past what the target accepts.")
     bus.stop()
     print("\n  bus.stop() delivered rest and flushed it, so the hand released rather")
-    print("  than freezing in its last pose.")
-    outlet.stop()
+    print("  than freezing in its last pose. The target built the stream, so that also")
+    print("  released it.")
 
 
 def _observe(bus, alias) -> list[tuple[int, float]] | None:

@@ -175,6 +175,8 @@ an ordering that is easy to get subtly wrong per-application.
 
 ::: myogestic.vhi.VhiTarget
 
+::: myogestic.vhi.vhi_targets
+
 ::: myogestic.vhi.PoseSink
 
 ### Negotiating with the target
@@ -184,8 +186,10 @@ control client and it **asks** at bind time, then encodes according to the answe
 
 ```python
 vhi = virtual_hand()
-target = VhiTarget(vhi.outlet(), client=vhi.control_client())
-bus = ControlBus(controls, targets=[target])
+client = vhi.control_client()
+# One target per stream the map names — the manifest says which stream carries each
+# address, so nothing here decides which of VHI's two hands this app drives.
+bus = ControlBus(controls, targets=vhi_targets(control_map, vhi, client=client))
 ```
 
 The client is **required**, because every channel, range and state comes from that

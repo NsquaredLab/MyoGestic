@@ -52,10 +52,10 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
 
     #: `stream` is load-bearing, not decoration: it names both the LSL stream this reads
     #: and the `stream_name` the manifest reports, and a client resolves a manifest one
-    #: stream at a time. What it has to match is the name the *client* is configured to
-    #: publish under — `InterfaceSpec.output_stream_name`, which is `MyoGestic_Output` by
-    #: default (`control_pose_stream_name`, default `MyoGestic_ControlPose`, for a control
-    #: hand). Leaving `stream_name` empty matches whatever the client is looking for.
+    #: stream at a time. Nothing has to be told to agree with it — a client publishes
+    #: under whatever name the manifest gives, so this is the *only* place the name is
+    #: decided. Leaving `stream_name` empty means the client publishes an outlet it
+    #: built itself, since there is then no name to build one from.
     def __init__(self, port: int = 50051, stream: str = "MyoGestic_Output") -> None:
         self.pose = np.zeros(POSE_WIDTH, dtype=np.float32)
         self._port = port

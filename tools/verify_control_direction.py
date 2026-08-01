@@ -73,6 +73,13 @@ from myogestic.vhi import VhiTarget, virtual_hand
 #: hand bent backwards.
 DOF = "vhi.prediction.index"
 
+#: The two stream names, written out here because this tool is a *wire* probe: it pushes
+#: raw frames onto the pose stream itself, alongside a `VhiTarget` sharing the same
+#: outlet, so it cannot let the target build and name one. Everywhere else the manifest
+#: names the stream and nothing in MyoGestic writes these down.
+OUTPUT_STREAM = "MyoGestic_Output"
+CONTROL_POSE_STREAM = "MyoGestic_ControlPose"
+
 #: The control hand's counterpart, driven alongside `DOF` in the fourth check.
 POSE_DOF = "vhi.control.pose.index"
 
@@ -213,9 +220,14 @@ def _negotiated_bus(client, outlet, *, control_outlet=None) -> ControlBus:
         raise Failure("VHI did not answer GetControlManifest")
     dofs = {"probe": DOF} | ({"pose": POSE_DOF} if control_outlet is not None else {})
     controls = resolve(load_control_map({"dofs": dofs}), capabilities)
-    targets = [VhiTarget(outlet, client=client)]
+    # Named explicitly, which is what splitting one map across a target per hand takes:
+    # left to itself each target reads the map to find its stream, and this map names
+    # both. Every other caller hands the whole thing to `vhi_targets` instead.
+    targets = [VhiTarget(outlet, client=client, stream_name=OUTPUT_STREAM)]
     if control_outlet is not None:
-        targets.append(VhiTarget(control_outlet, client=client, stream="control_pose"))
+        targets.append(
+            VhiTarget(control_outlet, client=client, stream_name=CONTROL_POSE_STREAM)
+        )
     bus = ControlBus(controls, targets=targets, hz=32)
     for target in targets:
         target.negotiate()
@@ -263,7 +275,7 @@ def check_round_trip(vhi, client, outlet, inlet: StreamInlet) -> dict[str, float
     # was handed, and one left streaming `MyoGestic_ControlPose` would hold the control
     # hand in Stream mode — and beat a later writer to the inlet — for every run after
     # this one.
-    control_outlet = vhi.control_outlet()
+    control_outlet = vhi.stream_outlet(CONTROL_POSE_STREAM)
     bus = _negotiated_bus(client, outlet, control_outlet=control_outlet)
     try:
         rendered["+ control hand"] = _measure("+ control hand", _through(bus), inlet)
@@ -318,7 +330,7 @@ def _one_run(run: int, total: int, vhi, inlet: StreamInlet) -> None:
     outlet = None
     try:
         print(f"  1. direction: {check_direction(client)}")
-        outlet = vhi.outlet()
+        outlet = vhi.stream_outlet(OUTPUT_STREAM)
         _await_binding(_raw(outlet), inlet)
         print("  2-4. round-trip, the client's own stack, and the control hand:")
         check_round_trip(vhi, client, outlet, inlet)

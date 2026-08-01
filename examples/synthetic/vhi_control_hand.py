@@ -6,9 +6,11 @@ a subject what to do. Two hands, two namespaces, two streams, one handshake.
 
 The distinction is not cosmetic: both namespaces number their channels from 0, so a
 control-pose address sent on the prediction stream would land on the *other* hand's
-channel. `VhiTarget(..., stream="control_pose")` is what keeps them apart. The renderer
-switches to reading `MyoGestic_ControlPose` instead of animating its own movements the
-moment that stream is present and publishing — nothing here has to ask for that.
+channel. Nothing in this file keeps them apart, though — `vhi_targets` reads the map,
+finds every address on the control hand's stream, and builds the target that writes it.
+Point the same file at `vhi.prediction.*` instead and this app drives the other hand,
+unchanged. The renderer follows whichever stream is present and publishing — nothing
+here has to ask for that.
 
 Run with:
     uv run --extra grpc python examples/synthetic/vhi_control_hand.py
@@ -26,7 +28,7 @@ from imgui_bundle import imgui
 
 from myogestic import App, Fr, Grid, Px
 from myogestic.controls import ControlBus, connect_controls, load_control_map
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 from myogestic.widgets import AppLogo, ProcessLauncher
 from myogestic.widgets.common import panel_header
 
@@ -70,10 +72,12 @@ def _connect() -> None:
     global bus
     if bus is not None:
         return
-    # `stream="control_pose"` is the whole point: it routes onto the control hand's
-    # outlet rather than the predicted hand's.
-    target = VhiTarget(vhi.control_outlet(), client=vhi_control, stream="control_pose")
-    bus = connect_controls(CONTROL_MAP, [target], ctx=app.ctx, hz=32)
+    # The map is the whole point: every address in it is on the control hand's stream,
+    # so that is the stream `vhi_targets` builds a target for. This file names no hand.
+    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
+    if targets is None:
+        return                     # VHI has not answered yet — press Connect again
+    bus = connect_controls(CONTROL_MAP, targets, ctx=app.ctx, hz=32)
 
 
 @app.ui

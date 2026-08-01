@@ -47,7 +47,7 @@ from myogestic.ml.widgets import PipelinePanel
 from myogestic.session import iter_aligned_windows, iter_labeled_windows, open_session_store
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 from myogestic.vhi.pose import split_pose
 from myogestic.widgets import (
     AppLogo,
@@ -123,7 +123,6 @@ def load_raulnet(path: str) -> L.LightningModule:
 ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
 # The recording aid (session gate, trajectory playback) and the control client.
 recording_aid = vhi.recording_client()
 vhi_control = vhi.control_client()
@@ -154,7 +153,6 @@ output_filter = PostProcessor(hz=32)
 # The bus is built lazily, in `_ensure_vhi`. Every semantic the map needs — whether an
 # address takes a number or a held state, its range, its states — is VHI's to declare, and
 # VHI does not exist yet: this app launches it from its own ProcessLauncher.
-vhi_target: VhiTarget | None = None
 bus: ControlBus | None = None
 
 PROCESSES = [
@@ -388,12 +386,17 @@ grid = Grid(
 
 def _ensure_vhi() -> None:
     """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
-    global bus, vhi_target
+    global bus
     if bus is not None:
         return
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
+    # The map picks the targets: `vhi_targets` looks this file's addresses up in VHI's
+    # manifest and builds one target per stream that carries them. Nothing here decides
+    # which hand the app drives before the map has been read.
+    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
+    if targets is None:
+        return                     # VHI has not answered yet — press again once it has
     bus = connect_controls(
-        CONTROL_MAP, [vhi_target], ctx=app.ctx, smoothing=output_filter, hz=32
+        CONTROL_MAP, targets, ctx=app.ctx, smoothing=output_filter, hz=32
     )
 
 

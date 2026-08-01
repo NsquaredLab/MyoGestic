@@ -49,7 +49,7 @@ from myogestic.recipes.estimators import (
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
@@ -73,7 +73,6 @@ HOP_MS = 100
 ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
 output_filter = PostProcessor(hz=32)
 
 # Which of this example's outputs drive which of VHI's controls. The left side of the
@@ -87,12 +86,11 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 #: this rather than from a second list that could drift out of step with the TOML.
 POSE_ALIASES = tuple(CONTROL_MAP.bindings)
 
-# Both stay None until `_ensure_vhi` — see its docstring. The bus + target own the wire
-# once built, and that matters more than it looks: VHI's continuous inlet takes control
-# values, and `VhiTarget` negotiates the space at bind time and refuses a VHI it cannot
-# fully drive rather than guessing.
+# The bus stays None until `_ensure_vhi` — see its docstring. It and its targets own the
+# wire once built, and that matters more than it looks: VHI's continuous inlet takes
+# control values, and `VhiTarget` negotiates the space at bind time and refuses a VHI it
+# cannot fully drive rather than guessing.
 vhi_control = vhi.control_client()
-vhi_target: VhiTarget | None = None
 bus: ControlBus | None = None
 
 # Per-class hand poses, in control values keyed by *our* aliases: +1 is the
@@ -409,12 +407,17 @@ grid = Grid(
 
 def _ensure_vhi() -> None:
     """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
-    global bus, vhi_target
+    global bus
     if bus is not None:
         return
-    vhi_target = VhiTarget(vhi_outlet, client=vhi_control)
+    # The map picks the targets: `vhi_targets` looks this file's addresses up in VHI's
+    # manifest and builds one target per stream that carries them. Nothing here decides
+    # which hand the app drives before the map has been read.
+    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
+    if targets is None:
+        return                     # VHI has not answered yet — press again once it has
     bus = connect_controls(
-        CONTROL_MAP, [vhi_target], ctx=app.ctx, smoothing=output_filter, hz=32
+        CONTROL_MAP, targets, ctx=app.ctx, smoothing=output_filter, hz=32
     )
 
 
