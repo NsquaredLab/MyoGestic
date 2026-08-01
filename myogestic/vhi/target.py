@@ -327,6 +327,29 @@ class VhiTarget:
             )
         return streams[0] if streams else ""
 
+    def _refuse_a_mismatched_outlet(self, wanted: str) -> None:
+        """Refuse a supplied outlet that publishes a different stream than `wanted`.
+
+        The one thing a caller-supplied outlet can get wrong that nothing else catches.
+        Both hands number their channels from 0, so a control-pose map negotiated onto a
+        prediction-stream outlet writes the operator's values onto the model's hand at
+        the same indices — no error anywhere, just the wrong hand moving.
+
+        Only a sink that *reports* a name is checked. A recorder or a test double is not
+        an LSL stream and has no name to disagree with, and a target that builds its own
+        outlet cannot disagree with itself.
+        """
+        published = getattr(self._outlet, "name", "")
+        if not published or not wanted or published == wanted:
+            return
+        raise ValueError(
+            f"this configuration's controls are carried on {wanted!r}, but the outlet "
+            f"it was given publishes {published!r}. Both streams number their channels "
+            f"from 0, so this would put these values on another hand's channels. Build "
+            f"the outlet for {wanted!r}, or pass `interface=` and let this target build "
+            f"the one the manifest asks for."
+        )
+
     def _negotiate(self, controls: ControlSet) -> bool:
         """Try the handshake. False means "no answer yet", never a refusal.
 
@@ -343,6 +366,7 @@ class VhiTarget:
         # means nothing across them — an address from the wrong stream would put a value
         # on a same-numbered channel of a different hand.
         wanted = self._wanted_stream(controls, capabilities)
+        self._refuse_a_mismatched_outlet(wanted)
         by_address = {
             cap.address: cap
             for cap in capabilities
@@ -658,6 +682,16 @@ def vhi_targets(
         Never empty: a map naming nothing streamed still gets the one target its held
         states are commanded over, and a target that renders none of a map is harmless —
         `ControlBus` is what notices a control *no* target claimed.
+
+    Raises
+    ------
+    ValueError
+        At `VhiTarget.bind`, not here, if the renderer reports **no** ``stream_name`` for
+        continuous controls this map names. There is then no name to publish an outlet
+        under and nothing this function could invent, so such a renderer has to be driven
+        through an outlet the application names — `InterfaceSpec.stream_outlet` and
+        ``VhiTarget(outlet, client=…)``. VHI names its streams; this is for a third-party
+        renderer that does not.
 
     Examples
     --------

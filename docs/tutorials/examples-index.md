@@ -205,11 +205,11 @@ docking with the `Grid` layout from
 The only example that drives `vhi.control.pose.*` instead of `vhi.prediction.*`: sliders
 pose the hand an operator sets up by hand, on its own stream. Both namespaces number
 channels from 0, so a control-pose address on the prediction stream would land on the
-other hand's channel — but nothing in the example says so. `vhi_targets()` reads the map,
-finds those addresses on the operator's stream in VHI's manifest, and builds the target
-that publishes it; the renderer reads a pose instead of animating its own movements for
-as long as that stream is present. Point the same file at `vhi.prediction.*` and the
-example drives the other hand, unchanged.
+other hand's channel — but nothing in the example says so. The target finds those
+addresses on the operator's stream in VHI's manifest and publishes there; the renderer
+reads a pose instead of animating its own movements for as long as that stream is
+present. Point the same file at `vhi.prediction.*` and the example drives the other
+hand, unchanged.
 
 ```bash
 uv run --extra grpc python examples/synthetic/vhi_control_hand.py

@@ -52,7 +52,7 @@ Load it, and hand the result to a bus with a `VhiTarget`:
 import tomllib
 
 from myogestic.controls import ControlBus, load_control_map, resolve
-from myogestic.vhi import vhi_targets, virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
 
 vhi = virtual_hand()
 vhi_control = vhi.control_client()
@@ -72,16 +72,22 @@ def ensure_vhi() -> None:
     if capabilities is None:
         return                                # not reachable yet; try again later
     controls = resolve(CONTROL_MAP, capabilities)
-    # One target per stream the *map* names — VHI renders two hands, and which of
-    # them this file drives is the file's answer, not this code's.
-    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control, capabilities=capabilities)
-    bus = ControlBus(controls, targets=targets, hz=32)
+    # No hand is named here. VHI renders two of them, on two streams, and which one
+    # this file drives is the *file's* answer: the target looks its addresses up in
+    # the manifest and drives the stream carrying them. `interface=` for the same
+    # reason — which stream, and how wide, are that same answer.
+    bus = ControlBus(controls, targets=[VhiTarget(client=vhi_control, interface=vhi)], hz=32)
 ```
 
 The bus is built **lazily** because resolution needs a live target: VHI declares whether
 each address is a number or a held state, and an app that launches VHI from its own UI
 necessarily starts before it exists. `capabilities()` blocks on an RPC, so call
 `ensure_vhi()` from a UI handler and let `predict` no-op while `bus is None`.
+
+One target drives one stream, which is all a map naming one hand needs. For a map naming
+**both** — sliders posing the operator's hand while a model drives the predicted one —
+[`vhi_targets`][myogestic.vhi.vhi_targets] reads the map and returns the target each
+stream needs, and `connect_controls` takes the list.
 
 That is the whole setup. `bus.push({"fist": 0.8})` from inside `@pipeline.predict` —
 using *your* alias, the left side of the file — and the target negotiates the wire,
@@ -122,7 +128,7 @@ streams VHI publishes, and which controls each carries, is in the manifest a
 after negotiating, and nothing on this side has a table to go stale. That is
 why the outlet is not built here: until the map has been read against the
 manifest, there is nothing that says which stream it needs or how wide it is.
-`vhi_targets()` is what does both.
+`VhiTarget(interface=vhi)` is what does both, at `bind`.
 
 If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
 
@@ -197,12 +203,14 @@ Two corrections to what this page used to say, both verified rather than assumed
   see `myogestic.vhi.pose` for the layout.
 
 `0` is rest and `+1` is full flexion on this wire, as everywhere else: the
-control standard is the only convention here. To write it yourself, build the
-outlet yourself — `vhi.stream_outlet("MyoGestic_Output")` — and push every
-predict tick: it runs its own send thread at `hz`, so only the latest push is
-sent. Application code should not be doing this; see the tip above.
+control standard is the only convention here. Application code should not be
+writing it — see the tip above — but if you are debugging the transport, build
+the outlet yourself and push every predict tick: it runs its own send thread at
+`hz`, so only the latest push is sent.
 
 ```python
+vhi_outlet = vhi.stream_outlet("MyoGestic_Output")   # the name VHI's manifest reports
+
 @pipeline.predict
 def predict(model, features):
     pose = model.compose_pose(features)            # np.float32, shape (9,)

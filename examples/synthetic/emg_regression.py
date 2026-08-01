@@ -33,7 +33,7 @@ from myogestic.recipes.estimators import catboost_regressor
 from myogestic.session import iter_aligned_windows, iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import vhi_targets, virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
 from myogestic.vhi.pose import ADDRESS_CHANNELS, POSE_DOFS, split_pose
 from myogestic.widgets import (
     AppLogo,
@@ -110,8 +110,8 @@ PROCESSES = [
 #
 # Once built, one bus owns the whole output path: substitute rest -> clip -> smooth ->
 # clip again -> hand it to every target. `VhiTarget` is what turns resolved aliases into
-# whatever this VHI renders on the wire, and `vhi_targets` is what reads the map to see
-# how many of them this file needs.
+# whatever this VHI renders on the wire, on whichever of its streams the map's addresses
+# turn out to be on.
 vhi_control = vhi.control_client()
 bus: ControlBus | None = None
 controls = None
@@ -300,14 +300,14 @@ def _ensure_vhi() -> None:
     global bus
     if bus is not None:
         return
-    # The map picks the targets: `vhi_targets` looks this file's addresses up in VHI's
-    # manifest and builds one target per stream that carries them. Nothing here decides
-    # which hand the app drives before the map has been read.
-    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
-    if targets is None:
-        return                     # VHI has not answered yet — press again once it has
+    # No hand is named here: the target reads the addresses this file's map uses out of
+    # VHI's manifest and drives the stream carrying them. `interface=` rather than an
+    # outlet for the same reason — which stream, and how wide, are the manifest's answer.
+    # (A map naming *both* hands needs a target each; `myogestic.vhi.vhi_targets` builds
+    # them. This file's does not.)
+    target = VhiTarget(client=vhi_control, interface=vhi)
     bus = connect_controls(
-        CONTROL_MAP, targets, ctx=app.ctx, smoothing=output_filter, hz=32
+        CONTROL_MAP, [target], ctx=app.ctx, smoothing=output_filter, hz=32
     )
 
 

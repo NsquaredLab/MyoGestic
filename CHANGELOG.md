@@ -123,6 +123,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   address every manifest reports, because hiding one hand made wanting it impossible to
   express.
 
+  An outlet you build and hand to `VhiTarget` is now **checked against the stream the map
+  resolved to** and refused if they disagree. That could not happen before, because both
+  came off `output_stream_name`; with the name on one side and the map on the other it
+  can, and both hands number their channels from 0, so the leak would be silent. `LSLOutlet`
+  grew a readable `name` for it; a sink that reports none — a recorder, a test double — is
+  not an LSL stream and is not checked.
+
 - **The VHI 1.x bridge is gone. MyoGestic now requires VHI 2.0 or newer.** The v1 gRPC
   client, the vendored v1 `.proto` and its stubs, `InterfaceSpec.control_client()`, and
   every fallback branch in `VhiTarget` — the legacy pose path, the address-to-channel
