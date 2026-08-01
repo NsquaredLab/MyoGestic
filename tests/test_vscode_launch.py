@@ -234,38 +234,17 @@ def test_no_absolute_machine_specific_paths(launch, tasks):
         assert not re.search(r'"/(Users|home)/', line), f"machine-specific path: {line}"
 
 
-class TestTheWalkthroughSaysWhichVhiProblemItHit:
-    """"Nothing is running" and "running, but pre-v2" need different actions.
+def test_a_silent_port_asks_for_a_renderer(capsys):
+    """No target answered — the only case left, now that a manifest is the whole ask."""
+    import tools.inspect_control as walkthrough
 
-    This matters most from the VS Code entries, where the prerequisite launches the
-    *installed* release — which is pre-v2. Reporting that as "no target answered" sends
-    a reader to launch a renderer that is already up and staring at them.
-    """
+    class Client:
+        def capabilities(self):
+            return None
 
-    @staticmethod
-    def _run(unimplemented: bool, capsys) -> str:
-        import tools.inspect_control as walkthrough  # noqa: PLC0415
-
-        class Client:
-            def __init__(self) -> None:
-                self.unimplemented = unimplemented
-
-            def capabilities(self):
-                return None
-
-        assert walkthrough.step_2_ask_the_target(Client()) is None
-        return capsys.readouterr().out
-
-    def test_a_pre_v2_build_is_named_as_such(self, capsys):
-        out = self._run(True, capsys)
-        assert "pre-v2" in out
-        assert "VHI_PATH" in out, "it must say how to get a v2 build"
-        assert "No target answered" not in out
-
-    def test_a_silent_port_asks_for_a_renderer(self, capsys):
-        out = self._run(False, capsys)
-        assert "No target answered" in out
-        assert "pre-v2" not in out
+    assert walkthrough.step_2_ask_the_target(Client()) is None
+    out = capsys.readouterr().out
+    assert "No target answered" in out
 
 
 class TestTheGenericEntriesComeFirstAndWork:

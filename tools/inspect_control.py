@@ -77,25 +77,13 @@ def step_2_ask_the_target(client):
     heading(2, "Ask the target what it exports")
     capabilities = client.capabilities()
     if capabilities is None:
-        # The client separates these two, and they call for different actions: a silent
-        # port means nothing is up, while UNIMPLEMENTED means something *is* up and does
-        # not speak v2. Reporting both as "no target" sends a reader to relaunch a
-        # renderer that is already running.
-        if getattr(client, "unimplemented", False):
-            print("  A Virtual Hand answered, but it does not export a manifest.")
-            print("   - That is a pre-v2 build. `VhiTarget.bind` refuses it outright and")
-            print("     raises, rather than guessing at a wire it cannot verify — there")
-            print("     is no vocabulary to resolve against, so steps 3 to 5 need a v2")
-            print("     build. Point $VHI_PATH and $GODOT_BIN at a VHI checkout to run")
-            print("     one from source.")
-        else:
-            print("  No target answered.")
-            print("   - So the mapping stays UNRESOLVED, and that is correct rather than a")
-            print("     failure: nothing here may invent what an address means.")
-            print("   - An application that launches its own renderer therefore resolves")
-            print("     *after* startup, not at import. Every shipped example does exactly")
-            print("     that — see _ensure_vhi() in examples/synthetic/*.py.")
-            print("\n  Launch a Virtual Hand and run this again to see steps 3 to 5.")
+        print("  No target answered.")
+        print("   - So the mapping stays UNRESOLVED, and that is correct rather than a")
+        print("     failure: nothing here may invent what an address means.")
+        print("   - An application that launches its own renderer therefore resolves")
+        print("     *after* startup, not at import. Every shipped example does exactly")
+        print("     that — see _ensure_vhi() in examples/synthetic/*.py.")
+        print("\n  Launch a Virtual Hand and run this again to see steps 3 to 5.")
         return None
 
     print(f"  This target exports {len(capabilities)} controls, and describes each:\n")
