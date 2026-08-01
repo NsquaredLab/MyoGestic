@@ -5,17 +5,18 @@ boilerplate — Godot path, pose width + sample rate, gRPC endpoint — behind a
 single call:
 
     from myogestic.controls import connect_controls
-    from myogestic.vhi import vhi_targets, virtual_hand
+    from myogestic.vhi import VhiTarget, virtual_hand
 
     vhi = virtual_hand()
     process_launcher(vhi.launcher())    # the packaged binary or `godot --path`
     client = vhi.control_client()       # gRPC control plane: discover, command, verify
-    targets = vhi_targets(control_map, vhi, client=client)   # one per stream it names
-    bus = connect_controls(control_map, targets)
+    target = VhiTarget(client=client, interface=vhi)   # one stream per control it drives
+    bus = connect_controls(control_map, [target])
 
-What it does *not* hold is a stream name: which streams the renderer has, and
-which controls each carries, comes from the manifest a running VHI answers with.
-The example still owns *what* to push — DOF mapping, sign flips, smoothing.
+What it does *not* hold is a stream name: which controls the renderer has comes
+from the manifest a running VHI answers with, and each control's stream is named
+for that control's own address. The example still owns *what* to push — DOF
+mapping, sign flips, smoothing.
 
 VHI ships in two ways and ``virtual_hand()`` accepts both:
 
@@ -114,11 +115,11 @@ class InterfaceSpec:
     def stream_outlet(self, name: str, *, n_channels: int | None = None) -> LSLOutlet:
         """Construct an LSLOutlet publishing the interface's stream called `name`.
 
-        **The name is the renderer's, not this spec's.** Which streams exist, and which
-        controls each carries, is in the manifest a running interface answers with — so a
-        stream is named where that answer is read (`myogestic.vhi.VhiTarget`, which calls
-        this once negotiation has settled), never guessed here. That is also why there is
-        no per-stream width or rate to configure: the manifest sizes the frame.
+        **The name is the renderer's, not this spec's.** Which controls exist is in the
+        manifest a running interface answers with, and a streamed control's stream is
+        named for that control's own address — so a stream is named where that answer is
+        read (`myogestic.vhi.VhiTarget`, which calls this once per address it drives,
+        after negotiation has settled), never guessed here.
 
         Carries a stable ``source_id`` so a consumer can re-resolve this stream after a
         restart. Without one, LSL cannot tell a restarted outlet from a new stream and a
@@ -129,25 +130,21 @@ class InterfaceSpec:
         name
             The stream's name, as the interface's manifest reports it.
         n_channels
-            Width. Defaults to the interface's full pose layout — pass the negotiated
-            width to carry only the controls one configuration drives.
+            Width. `~myogestic.vhi.VhiTarget` passes ``1``: one control per stream. The
+            default is the interface's full pose layout, for the whole-pose read-back a
+            recording consumes.
 
         Raises
         ------
         ValueError
-            If `name` is empty. An unnamed LSL stream cannot be resolved, so a renderer
-            whose manifest reports no ``stream_name`` for these controls cannot be
-            published to by a target that builds its own outlet — there is nothing to
-            build one under. Such a renderer has to be driven through an outlet the
-            application names and constructs.
+            If `name` is empty. An unnamed LSL stream cannot be resolved, so a nameless
+            control could never be found by the renderer that exports it.
         """
         if not name:
             raise ValueError(
-                f"{self.name}: cannot publish an unnamed stream. This renderer's manifest "
-                f"reports no stream_name for these controls, so there is no name to "
-                f"publish under. Build the outlet yourself — "
-                f"{self.name}.stream_outlet('<the stream it reads>', n_channels=…) — and "
-                f"pass it to VhiTarget positionally instead of `interface=`."
+                f"{self.name}: cannot publish an unnamed stream. A stream carrying one "
+                f"control is named for that control's address, so an empty name means "
+                f"the manifest reported a capability with no address at all."
             )
         return LSLOutlet(
             name=name,

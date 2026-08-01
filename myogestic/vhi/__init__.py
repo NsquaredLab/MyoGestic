@@ -7,7 +7,7 @@ the gRPC clients (`_control`, `_recording`), and the generated protobuf stubs
 """
 
 from myogestic.vhi.interfaces import InterfaceSpec, virtual_hand
-from myogestic.vhi.target import PoseSink, VhiTarget, vhi_targets
+from myogestic.vhi.target import PoseSink, VhiTarget
 
 #: The two gRPC clients are listed here but resolved lazily by ``__getattr__`` below.
 __all__ = [
@@ -16,7 +16,6 @@ __all__ = [
     "VhiControlClient",
     "VhiRecordingClient",
     "VhiTarget",
-    "vhi_targets",
     "virtual_hand",
 ]
 
