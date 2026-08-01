@@ -4,6 +4,21 @@ A **renderer** is a separate application MyoGestic drives — a process of its o
 reached over gRPC and read from over LSL. A [target](add-a-target.md) is the opposite:
 an in-process object a `ControlBus` calls directly, on the thread MyoGestic already owns.
 
+## Which way the streams run
+
+The names are written from MyoGestic's point of view, so they read backwards from
+yours. `MyoGestic_Output` is MyoGestic's *output* — for your renderer it is the input,
+the stream you read:
+
+```
+MyoGestic  --[ MyoGestic_Output ]------>  your renderer   (you read this)
+MyoGestic  --[ MyoGestic_ControlPose ]->  your control hand, if you have one
+```
+
+Publishing a read-back of your own is optional; VHI does it (`VHI_Predict`,
+`VHI_Control`) so a client can verify what actually rendered, which is how a sign error
+gets caught. Nothing requires it.
+
 ## The contract
 
 | you must | why |
