@@ -32,6 +32,31 @@ log = logging.getLogger("myogestic.vhi_control")
 
 _RPC_TIMEOUT_S = 2.0
 
+#: The oldest renderer vocabulary this client can drive.
+#:
+#: **Load-bearing.** MyoGestic and the renderer are separately installed applications, so
+#: "they were released together" does not mean any given pair of them is a matching pair.
+#: Vocabulary 2 is one LSL stream per DOF, named for the control's own address and one
+#: channel wide; vocabulary 1 was a manifest of ``stream_name``/``channel`` pairs and a
+#: renderer listening for one wide pose stream. A version-1 renderer paired with this
+#: client fails *silently* — it waits for a stream nobody publishes any more, logs
+#: nothing, and the hand simply never moves — which is why the mismatch is refused here,
+#: loudly, at the one call every bind makes.
+_MIN_VOCABULARY = 2
+
+
+def _vocabulary(reported: str) -> int:
+    """The manifest's vocabulary as an integer, or 0 when it does not state one.
+
+    Leading-integer, so a renderer that versions itself ``"2.1"`` compares as 2 rather
+    than as unversioned. Anything with no leading integer at all — including the empty
+    string a build predating the field leaves — is 0, and so is older than any minimum.
+    """
+    try:
+        return int(reported.strip().split(".", 1)[0])
+    except ValueError:
+        return 0
+
 #: How many un-sent control frames to hold before dropping the oldest. `set_control` is fed
 #: from the predict thread at ``predict_hz`` while `_send_loop` drains one *blocking* RPC at
 #: a time, so a VHI that accepts the connection without answering costs `_RPC_TIMEOUT_S` per
@@ -133,6 +158,13 @@ class VhiControlClient:
         list[Capability] or None
             ``None`` when VHI is unreachable or predates the manifest; the caller
             defers and retries once it is reachable, rather than guessing a vocabulary.
+
+        Raises
+        ------
+        ValueError
+            When the renderer answers with a vocabulary older than `_MIN_VOCABULARY`.
+            Deliberately not ``None``: unreachable means "try again", while too old means
+            "this pair will never work", and the two must not be handled the same way.
         """
         from myogestic.controls import Capability
 
@@ -146,11 +178,22 @@ class VhiControlClient:
             return None
         self.connected = True
         self._seen_errors.clear()
+        reported = manifest.vocabulary_version
+        if _vocabulary(reported) < _MIN_VOCABULARY:
+            raise ValueError(
+                f"{manifest.target_name or 'this renderer'} speaks control vocabulary "
+                f"{reported or '(none)'}, and MyoGestic needs {_MIN_VOCABULARY} or newer. "
+                f"Vocabulary {_MIN_VOCABULARY} publishes one LSL stream per control, named "
+                f"for that control's own address and one channel wide; vocabulary 1 read a "
+                f"single wide pose stream that MyoGestic no longer sends. Paired with this "
+                f"client such a renderer would report no error and never move. "
+                f"Update VHI."
+            )
         log.info(
             "VHI %s exports %d controls (vocabulary %s)",
             manifest.target_name,
             len(manifest.capabilities),
-            manifest.vocabulary_version,
+            reported,
         )
         return [
             Capability(
@@ -161,8 +204,6 @@ class VhiControlClient:
                 rest=cap.rest,
                 states=tuple(cap.states),
                 rest_state=cap.rest_state,
-                channel=cap.channel,
-                stream_name=cap.stream_name,
                 activation_threshold=cap.activation_threshold,
                 description=cap.description,
             )
