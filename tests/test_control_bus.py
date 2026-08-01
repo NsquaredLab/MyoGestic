@@ -10,6 +10,7 @@ target is torn down.
 from __future__ import annotations
 
 import math
+import types
 
 import numpy as np
 import pytest
@@ -408,3 +409,24 @@ def test_layer_3_is_not_represented_in_the_bus_at_all():
     params = set(inspect.signature(ControlBus.__init__).parameters)
     assert params & {"smoothing", "hysteresis", "dead_zone"}
     assert not {p for p in params if "blend" in p or "visual" in p or "present" in p}
+
+
+def test_connect_controls_reports_a_refusing_target_instead_of_raising():
+    """`_ensure_vhi()` is a button handler in every shipped example.
+
+    `capabilities()` gained a third outcome with the version gate — answered, silent, or
+    *refused* — and only the first two were handled, so an old renderer took the window
+    down. Loud beats silent, but fatal was never the intent: the caller can act on "got a
+    bus" and "did not", and the reason belongs in the log where it can be read.
+    """
+    from myogestic.controls import connect_controls, load_control_map
+
+    class TooOld:
+        def capabilities(self):
+            raise ValueError("speaks control vocabulary 1 ... Update the renderer.")
+
+    logged: list[str] = []
+    ctx = types.SimpleNamespace(log=logged.append, control_space=None)
+    control_map = load_control_map({"dofs": {"a": "vhi.prediction.index"}})
+    assert connect_controls(control_map, [TooOld()], ctx=ctx) is None
+    assert any("vocabulary 1" in line for line in logged), logged

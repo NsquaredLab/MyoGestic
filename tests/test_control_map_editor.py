@@ -363,6 +363,45 @@ class TestItWorksWithoutATarget:
         assert editor.capabilities == ()
         assert "did not answer" in editor._message
 
+    def test_a_refused_target_says_why_instead_of_reading_as_silence(self, tmp_path):
+        """A renderer that answered and was *rejected* is the opposite of one that is down.
+
+        The version gate raises out of `capabilities()`. Both fetch paths used to reduce
+        that to nothing — the worker to a DEBUG line, the press to a traceback out of a
+        click — and the panel then said "is it running?" about a renderer that is running,
+        answering, and telling you exactly what is wrong with it. That is the very silence
+        the gate was added to end, on the surface a user is most likely looking at.
+        """
+
+        class TooOld:
+            def capabilities(self):
+                raise ValueError("speaks control vocabulary 1 ... Update VHI.")
+
+        editor = ControlMapEditor(tmp_path / "c.toml", client=TooOld())
+        editor.load()
+        editor._asked = True
+        editor._connect()                       # the press must not raise
+        assert "vocabulary 1" in editor._message, editor._message
+        assert "did not answer" not in editor._message
+
+    def test_a_refusal_reaches_the_panel_from_the_background_worker_too(self, tmp_path):
+        """The timer is how most people meet it — the press is the rarer path."""
+        import time
+
+        class TooOld:
+            def capabilities(self):
+                raise ValueError("speaks control vocabulary 1 ... Update VHI.")
+
+        editor = ControlMapEditor(tmp_path / "c.toml", client=TooOld())
+        editor.load()
+        editor._refetch = True                  # what pressing Connect sets
+        editor.poll_connect()
+        deadline = time.monotonic() + 5.0
+        while editor._fetching and time.monotonic() < deadline:
+            time.sleep(0.01)
+        editor.poll_connect()                   # adopts what the worker published
+        assert "vocabulary 1" in editor._message, editor._message
+
     def test_the_background_retry_says_nothing(self, tmp_path):
         """Connecting is on a timer, so a report per round is a report forever.
 

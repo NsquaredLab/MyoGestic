@@ -187,7 +187,10 @@ class VhiControlClient:
                 f"for that control's own address and one channel wide; vocabulary 1 read a "
                 f"single wide pose stream that MyoGestic no longer sends. Paired with this "
                 f"client such a renderer would report no error and never move. "
-                f"Update VHI."
+                # Named, not "VHI": this client speaks to whatever serves the contract, and
+                # telling the author of a third-party renderer to update somebody else's
+                # program is advice they cannot act on.
+                f"Update {manifest.target_name or 'the renderer'}."
             )
         log.info(
             "VHI %s exports %d controls (vocabulary %s)",
