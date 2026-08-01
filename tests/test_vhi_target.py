@@ -323,6 +323,39 @@ def test_stop_rests_every_stream_flushes_it_and_takes_it_off_the_network():
         assert outlet.stops == 1, "nothing else can release these — the target built them"
 
 
+def test_stop_releases_every_outlet_even_when_one_of_them_is_dead():
+    """The path most likely to meet a dead outlet, so it must not abandon the rest.
+
+    A raise used to abort the loop: every outlet after the failure stayed published and
+    stayed in `_outlets`, so a retry double-stopped the ones already released. The error
+    still surfaces — teardown that swallows the reason a stream would not close is how a
+    leak becomes invisible — but only once they are all down.
+    """
+
+    class Sulky(FakeOutlet):
+        def flush(self):
+            raise OSError("outlet closed")
+
+    class OneBadOutlet(FakeInterface):
+        def stream_outlet(self, name, *, n_channels=None):
+            outlet = (Sulky if name == "middle.flexion" else FakeOutlet)(name)
+            self.built.append(outlet)
+            self.live[name] = outlet
+            return outlet
+
+    interface = OneBadOutlet()
+    target = VhiTarget(client=_client(), interface=interface)
+    target.bind(_controls())
+    with pytest.raises(OSError, match="outlet closed"):
+        target.stop()
+    assert all(o.stops == 1 for o in interface.built), (
+        "one dead outlet must not strand the others on the network"
+    )
+    assert target._outlets == {} and target._routed == ()
+    target.stop()   # and the retry is a no-op, not a second round of stops
+    assert all(o.stops == 1 for o in interface.built)
+
+
 def test_stop_rests_at_the_declared_rest_not_at_zero():
     target, interface = _bound(
         **{"index.flexion": {"kind": "continuous", "range": [0.0, 1.0], "rest": 0.5}}
@@ -403,6 +436,11 @@ def test_a_refused_rebind_leaves_no_stream_behind():
         target.bind(_controls("index.flexion"))
     assert first.stops == 1
     assert target._outlets == {}
+    assert target._routed == (), (
+        "routes key into `_outlets`, so leaving them would make `send` raise per tick"
+    )
+    assert target.claims == frozenset(), "and `claims` would over-report what is driven"
+    target.send({"index.flexion": 1.0}, {})   # must not raise
 
 
 def test_a_binding_that_renders_nothing_of_ours_publishes_nothing():
@@ -1129,7 +1167,12 @@ def test_a_held_state_is_claimed_alongside_the_streams():
 
 
 def test_an_address_no_renderer_exports_is_still_refused():
-    """"Not mine" must not swallow a typo."""
+    """"Not mine" must not swallow a typo, and the refusal names both namespaces.
+
+    A namespace mix-up is the likely mistake — `…index` on the wrong one moves the other
+    hand and nothing reports anything — so the sentence has to say which is which rather
+    than leaving the reader to work out that two hands exist at all.
+    """
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(
@@ -1137,8 +1180,10 @@ def test_an_address_no_renderer_exports_is_still_refused():
     )
     thinner = [cap for cap in TWO_HANDS if cap.address != "vhi.prediction.index"]
     target = VhiTarget(client=ManifestClient(thinner), interface=FakeInterface())
-    with pytest.raises(ValueError, match="no target can drive"):
+    with pytest.raises(ValueError, match="no target can drive") as excinfo:
         target.bind(controls)
+    message = str(excinfo.value)
+    assert "vhi.prediction" in message and "vhi.control.pose" in message, message
 
 
 def test_a_target_that_does_not_report_claims_is_assumed_to_take_everything():
