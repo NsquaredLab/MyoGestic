@@ -28,11 +28,16 @@ import myogestic.vhi.interfaces
 _EXAMPLES_ROOT = Path(__file__).resolve().parent.parent / "examples"
 # `panels/*.py` are single-widget demos; `panels/_fixtures.py` is a shared
 # helper, not an example, so underscore-prefixed files are skipped.
+#
+# `reference_renderer.py` is not a MyoGestic App: it is a renderer, the thing an App
+# drives. Its `__main__` serves forever (there is no `App.run` to stub), and
+# `tests/test_reference_renderer.py` already runs it for real, driven by a live
+# `ControlBus` — a stronger check than "does it wire up" ever gives the App examples.
 EXAMPLES = sorted(
     p
     for sub in ("synthetic", "panels")
     for p in (_EXAMPLES_ROOT / sub).glob("*.py")
-    if not p.name.startswith("_")
+    if not p.name.startswith("_") and p.name != "reference_renderer.py"
 )
 
 
