@@ -25,6 +25,15 @@ from myogestic.vhi._proto import myogestic_vhi_pb2_grpc as pb2_grpc
 #: `channel` is the position on the wire — a channel *is* an address, and this table is
 #: the only place that says so. `ControlCapability.channel` is field 11 and
 #: `stream_name` field 10; both are required for a client to place a value.
+#:
+#: `lo=-1.0, hi=1.0` is the range; the sign is a separate, settled convention this
+#: project does not let a renderer redefine: `+1` is always the direction the address
+#: name denotes, so `vhi.prediction.index` at `+1` is a flexed index, and a fist across
+#: this table is `[1, -1, 1, 1, 1, 1, 0, 0, 0]` (the last three channels are never
+#: claimed below, so they stay at rest). `POSE_WIDTH` is the *stream's* channel count —
+#: at least one more than the highest channel claimed here, not the number of
+#: addresses; this renderer copies VHI's own 9-channel layout so `virtual_hand()` can
+#: point straight at it, unmodified, the way `tests/test_reference_renderer.py` does.
 ADDRESSES = [
     ("vhi.prediction.thumb.flexion", 0),
     ("vhi.prediction.thumb.abduction", 1),
@@ -97,7 +106,9 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
                 chunk, _ = inlet.pull_chunk(timeout=0.5)
                 if chunk is not None and len(chunk):
                     self.pose = np.asarray(chunk[-1], dtype=np.float32)
-            except Exception:
+            except Exception as exc:
+                print(f"reference renderer: lost the inlet ({type(exc).__name__}: {exc}), re-resolving")
+                inlet.close_stream()
                 inlet = None
 
 
