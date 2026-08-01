@@ -43,3 +43,11 @@ jobs:
       # heavy `examples` extra (torch), keeping CI fast.
       - name: Tests + doc code blocks
         run: uv run --locked --extra dev --extra grpc --extra serial pytest -q
+
+      # Deselected from the run above (see the `lsl_contention` marker in
+      # pyproject.toml / CLAUDE.md): flaky under the LSL-multicast-contention that a
+      # long sequential local suite builds up. A GitHub runner starts this as a fresh
+      # process rather than piling onto the same one, so it may simply be reliable
+      # here — this step is how we find out, on both OSes, rather than never.
+      - name: Reference-renderer test (lsl_contention, excluded from the run above)
+        run: uv run --locked --extra dev --extra grpc pytest -m lsl_contention -q

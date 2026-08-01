@@ -41,7 +41,10 @@ a loud one render identically.
   (`addopts = "-m 'not lsl_contention'"` in `pyproject.toml`). It passes reliably every time run
   alone: `uv run --extra grpc --extra dev pytest -m lsl_contention -q`. Run it explicitly after
   touching `examples/synthetic/reference_renderer.py`, `myogestic/vhi/target.py`, or
-  `myogestic/_controls_bus.py::connect_controls`.
+  `myogestic/_controls_bus.py::connect_controls`. **CI does still run it** — a dedicated step in
+  `.github/workflows/tests.yml` runs `pytest -m lsl_contention` on its own, after the main suite,
+  so the deselection only skips it locally piled onto the same long-running process; a GitHub
+  runner gets a fresh process for it.
 - **Docs are tested.** `tests/test_docs.py` parses and *runs* Python blocks in `docs/`, so a code
   block in a doc page must actually work. New doc pages go in `properdocs.yml` and the relevant
   `index.md`.

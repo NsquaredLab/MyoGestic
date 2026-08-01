@@ -313,6 +313,7 @@ def demo_ui(ctx):
 
 
 def main() -> None:
+    global ctrl_outlet
     try:
         app.run()
     finally:
@@ -321,11 +322,10 @@ def main() -> None:
         recording_aid.set_recording_session(False)
         recording_aid.stop()
         vhi_control.stop()
-        # `vhi_outlet` is built at import time (line 58), before `_ensure_vhi` ever runs,
-        # so it needs stopping here even on a run where `bus` never got built — otherwise
-        # the un-stopped LSL stream stays resolvable by name and a later consumer (a test,
-        # another example) can resolve this dead outlet instead of a live one.
+        # Both outlets are built at import time, before any UI callback runs, so a run
+        # that never opens the window still needs them released here.
         vhi_outlet.stop()
+        ctrl_outlet = None  # a raw StreamOutlet has no .stop(); dropping it releases it
 
 
 if __name__ == "__main__":
