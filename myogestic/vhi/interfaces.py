@@ -1,18 +1,21 @@
 """Output interface registry — pre-wired (process, output stream, control).
 
 The ``InterfaceSpec`` dataclass and ``virtual_hand()`` constructor hold the VHI
-boilerplate — Godot path, outlet name + channel count + sample rate, control
-stream names — behind a single call:
+boilerplate — Godot path, pose width + sample rate, gRPC endpoint — behind a
+single call:
 
-    from myogestic.vhi.interfaces import virtual_hand
+    from myogestic.controls import connect_controls
+    from myogestic.vhi import vhi_targets, virtual_hand
 
     vhi = virtual_hand()
-    vhi_outlet = vhi.outlet()           # 9-ch LSLOutlet @ 32 Hz
     process_launcher(vhi.launcher())    # the packaged binary or `godot --path`
     client = vhi.control_client()       # gRPC control plane: discover, command, verify
+    targets = vhi_targets(control_map, vhi, client=client)   # one per stream it names
+    bus = connect_controls(control_map, targets)
 
-The example still owns *what* to push through the outlet — DOF mapping, sign
-flips, smoothing.
+What it does *not* hold is a stream name: which streams the renderer has, and
+which controls each carries, comes from the manifest a running VHI answers with.
+The example still owns *what* to push — DOF mapping, sign flips, smoothing.
 
 VHI ships in two ways and ``virtual_hand()`` accepts both:
 
@@ -68,10 +71,8 @@ class InterfaceSpec:
         argv to spawn the interface (passed to ``subprocess.Popen``).
         An empty list means "VHI not installed"; ``launcher()`` then raises
         pointing at ``install_vhi``.
-    output_stream_name
-        LSL outlet name the interface listens on.
     n_output_channels
-        Number of channels in the output vector.
+        Number of channels in the interface's full pose vector.
     output_hz
         Outlet send rate.
     control_stream_name
@@ -79,15 +80,6 @@ class InterfaceSpec:
         manually (used for regression targets). May be None.
     n_control_channels
         Channel count of the control stream, if known.
-    control_pose_stream_name
-        LSL *outlet* name for streaming a continuous pose TO the interface's
-        control hand — opposite direction to ``control_stream_name``. Consumed
-        whenever something is publishing to it: the control hand follows the
-        stream's presence, so there is no mode to ask for first.
-    n_control_pose_channels
-        Channel count of the control-pose outlet.
-    control_pose_hz
-        Send rate of the control-pose outlet.
     grpc_host
         VHI gRPC control-server host.
     grpc_port
@@ -102,7 +94,6 @@ class InterfaceSpec:
     >>> spec = InterfaceSpec(
     ...     name="Hand",
     ...     process=["vhi"],
-    ...     output_stream_name="Pose",
     ...     n_output_channels=9,
     ...     output_hz=32.0,
     ... )
@@ -112,42 +103,53 @@ class InterfaceSpec:
 
     name: str
     process: list[str]
-    output_stream_name: str
     n_output_channels: int
     output_hz: float
     control_stream_name: str | None = None
     n_control_channels: int | None = None
-    control_pose_stream_name: str | None = None
-    n_control_pose_channels: int | None = None
-    control_pose_hz: float | None = None
     grpc_host: str = "127.0.0.1"
     grpc_port: int = 50051
     install_root: Path | None = None
 
-    def outlet(
-        self,
-        *,
-        n_channels: int | None = None,
-    ) -> LSLOutlet:
-        """Construct an LSLOutlet matching this interface's output stream.
+    def stream_outlet(self, name: str, *, n_channels: int | None = None) -> LSLOutlet:
+        """Construct an LSLOutlet publishing the interface's stream called `name`.
 
-        Carries a stable ``source_id`` so a consumer can re-resolve this stream
-        after a restart. Without one, LSL cannot tell a restarted outlet from a
-        new stream and a consumer that resolved the old one keeps a dead inlet.
+        **The name is the renderer's, not this spec's.** Which streams exist, and which
+        controls each carries, is in the manifest a running interface answers with — so a
+        stream is named where that answer is read (`myogestic.vhi.VhiTarget`, which calls
+        this once negotiation has settled), never guessed here. That is also why there is
+        no per-stream width or rate to configure: the manifest sizes the frame.
+
+        Carries a stable ``source_id`` so a consumer can re-resolve this stream after a
+        restart. Without one, LSL cannot tell a restarted outlet from a new stream and a
+        consumer that resolved the old one keeps a dead inlet.
 
         Parameters
         ----------
+        name
+            The stream's name, as the interface's manifest reports it.
         n_channels
-            Override the interface's declared width — e.g. to carry only the
-            controls one configuration drives, rather than the renderer's full
-            pose layout.
+            Width. Defaults to the interface's full pose layout — pass the negotiated
+            width to carry only the controls one configuration drives.
 
+        Raises
+        ------
+        ValueError
+            If `name` is empty. An unnamed LSL stream cannot be resolved, so a renderer
+            whose manifest names no stream for these controls has to be given an outlet
+            built by the application instead.
         """
+        if not name:
+            raise ValueError(
+                f"{self.name}: cannot publish an unnamed stream. The manifest names no "
+                f"stream for these controls, so construct the outlet yourself and pass "
+                f"it to VhiTarget positionally."
+            )
         return LSLOutlet(
-            name=self.output_stream_name,
+            name=name,
             n_channels=self.n_output_channels if n_channels is None else n_channels,
             hz=self.output_hz,
-            source_id=f"myogestic:{self.name}:{self.output_stream_name}",
+            source_id=f"myogestic:{self.name}:{name}",
         )
 
     def control_client(self) -> VhiControlClient:
@@ -167,7 +169,7 @@ class InterfaceSpec:
         >>>
         >>> vhi = virtual_hand()
         >>> controls = ControlSet(dofs={"my_index": Continuous("my_index")})
-        >>> target = VhiTarget(vhi.outlet(), client=vhi.control_client())
+        >>> target = VhiTarget(client=vhi.control_client(), interface=vhi)
         >>> bus = ControlBus(controls, targets=[target])
         >>> target.negotiated          # True once VHI has answered, False until then
         False
@@ -197,30 +199,6 @@ class InterfaceSpec:
         from myogestic.vhi._recording import VhiRecordingClient
 
         return VhiRecordingClient(host=self.grpc_host, port=self.grpc_port)
-
-    def control_outlet(
-        self,
-        *,
-        n_channels: int | None = None,
-    ) -> LSLOutlet:
-        """Construct an [`LSLOutlet`][] for streaming a continuous pose to the control hand.
-
-        Consumed whenever this stream is present and publishing — the control hand
-        follows it, and stops following it about five seconds after it goes quiet.
-        There is nothing to declare or request. Raises [`ValueError`][] if this
-        interface has no control-pose stream configured.
-
-        `n_channels` means what it means on `outlet`.
-        """
-        if self.control_pose_stream_name is None:
-            raise ValueError(f"{self.name}: no control_pose_stream_name configured")
-        default_width = self.n_control_pose_channels or self.n_output_channels
-        return LSLOutlet(
-            name=self.control_pose_stream_name,
-            n_channels=default_width if n_channels is None else n_channels,
-            hz=self.control_pose_hz or self.output_hz,
-            source_id=f"myogestic:{self.name}:{self.control_pose_stream_name}",
-        )
 
     def launcher(self) -> list[tuple[str, list[str]]]:
         """Return the (name, argv) tuple list expected by `process_launcher`.
@@ -476,14 +454,10 @@ def virtual_hand(
     return InterfaceSpec(
         name="VHI Hand",
         process=process,
-        output_stream_name="MyoGestic_Output",
         n_output_channels=9,
         output_hz=32.0,
         control_stream_name="VHI_Control",
         n_control_channels=9,
-        control_pose_stream_name="MyoGestic_ControlPose",
-        n_control_pose_channels=9,
-        control_pose_hz=32.0,
         grpc_host=grpc_host,
         grpc_port=grpc_port,
         install_root=install_root,

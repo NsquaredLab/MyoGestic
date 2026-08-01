@@ -106,7 +106,7 @@ def test_the_vhi_pose_stream_is_the_renderers_full_width():
     from myogestic.sources import LSLSource
     from myogestic.vhi import virtual_hand
 
-    outlet = virtual_hand().outlet(n_channels=9)
+    outlet = virtual_hand().stream_outlet("MyoGestic_Output", n_channels=9)
     try:
         source = LSLSource("MyoGestic_Output")
         try:

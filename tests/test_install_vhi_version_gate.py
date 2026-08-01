@@ -84,7 +84,6 @@ class TestTheLauncherRefusesAnOldInstall:
             (tmp_path / "vhi-version.txt").write_text(marker)
         return interfaces.InterfaceSpec(
             name="VHI Hand",
-            output_stream_name="MyoGestic_Output",
             n_output_channels=9,
             output_hz=32.0,
             install_root=tmp_path,
@@ -121,7 +120,6 @@ class TestTheLauncherRefusesAnOldInstall:
         (tmp_path / "vhi-version.txt").mkdir()
         spec = interfaces.InterfaceSpec(
             name="VHI Hand",
-            output_stream_name="MyoGestic_Output",
             n_output_channels=9,
             output_hz=32.0,
             install_root=tmp_path,
