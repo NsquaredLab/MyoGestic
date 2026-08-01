@@ -22,8 +22,9 @@ from myogestic.widgets import ControlMapEditor
 
 FINGERS = ("thumb", "index", "middle", "ring", "little")
 
-#: What a VHI 2 build reports, mirrored: the short and axis forms of a digit are two
-#: addresses on one channel, which is what makes a collision possible at all.
+#: What a VHI 2 build reports, mirrored: one stream per address, named after it and one
+#: channel wide. The short and axis forms of a digit are two addresses on the *same*
+#: stream and channel, which is what makes a collision possible at all.
 MANIFEST = [
     *(
         Capability(
@@ -32,10 +33,10 @@ MANIFEST = [
             lo=-1.0,
             hi=1.0,
             rest=0.0,
-            channel=channel,
-            stream_name="MyoGestic_Output",
+            channel=0,
+            stream_name=f"vhi.prediction.{digit}",
         )
-        for channel, digit in enumerate(FINGERS)
+        for digit in FINGERS
         for form in (digit, f"{digit}.flexion")
     ),
     Capability(
@@ -44,8 +45,8 @@ MANIFEST = [
         lo=-1.0,
         hi=1.0,
         rest=0.0,
-        channel=1,
-        stream_name="MyoGestic_Output",
+        channel=0,
+        stream_name="vhi.prediction.thumb.abduction",
     ),
     Capability(
         "vhi.control.gesture",
