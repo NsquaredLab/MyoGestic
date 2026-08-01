@@ -205,10 +205,10 @@ class InterfaceSpec:
     ) -> LSLOutlet:
         """Construct an [`LSLOutlet`][] for streaming a continuous pose to the control hand.
 
-        Only consumed while VHI's control hand is in Stream mode, which it enters on
-        its own once this stream is present and publishing — nothing to declare or
-        request. Raises [`ValueError`][] if this interface has no control-pose stream
-        configured.
+        Consumed whenever this stream is present and publishing — the control hand
+        follows it, and stops following it about five seconds after it goes quiet.
+        There is nothing to declare or request. Raises [`ValueError`][] if this
+        interface has no control-pose stream configured.
 
         `n_channels` means what it means on `outlet`.
         """

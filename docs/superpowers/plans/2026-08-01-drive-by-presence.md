@@ -732,7 +732,7 @@ be started from — copy it, change ADDRESSES, render the numbers."
 
 Create `MyoGestic/docs/how-to/build-a-renderer.md`. It must contain, in this order:
 
-1. **What a renderer is** — a separate application that MyoGestic drives, as opposed to a [target](add-a-target.md), which is the in-process object a `ControlBus` calls. One sentence each, with the link.
+1. **What a renderer is** — a separate application that MyoGestic drives, as opposed to a [target](../../how-to/add-a-target.md), which is the in-process object a `ControlBus` calls. One sentence each, with the link.
 2. **The contract**, as a table stating exactly this:
 
 | you must | why |
