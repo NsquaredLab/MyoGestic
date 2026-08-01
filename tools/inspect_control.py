@@ -9,8 +9,9 @@ what a mapping is *before* a target has answered — which is the design, not a 
 mode. Launch a VHI first and the same script asks what it exports, resolves the mapping
 against that, and drives a weighted fan-out onto the hand.
 
-It creates one transient LSL outlet and, if a VHI is up, moves its hand. It writes no
-files, changes no configuration, and leaves the hand at rest.
+It creates a transient LSL outlet per stream the mapping names — one per DOF against a
+VHI — and, if a VHI is up, moves its hand. It writes no files, changes no configuration,
+and leaves the hand at rest.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ import tomllib
 import numpy as np
 
 from myogestic.controls import ControlBus, load_control_map, resolve, substitute_rest
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 
 #: The real file a user copies and edits.
 CONTROL_FILE = (
@@ -126,7 +127,7 @@ def step_3_resolve(control_map, capabilities):
     return controls
 
 
-def step_4_drive(controls, client):
+def step_4_drive(control_map, controls, client, capabilities):
     """A weighted fan-out on a real hand."""
     heading(4, "Drive it")
     fanned = [a for a, refs in controls.routes.items() if len(refs) > 1]
@@ -136,13 +137,23 @@ def step_4_drive(controls, client):
     for ref in controls.routes[alias]:
         print(f"    {ref.address:34s} weight {ref.weight}")
 
-    # `interface=` rather than an outlet: which stream carries these controls is in the
-    # manifest, so the target builds one under that name once it has negotiated.
-    target = VhiTarget(client=client, interface=virtual_hand())
-    bus = ControlBus(controls, targets=[target], hz=32)
-    settled = target.negotiate()
-    channels = sorted({channel for channel, *_ in target._routed})
-    print(f"\n  negotiate() -> {settled}    routed onto channels {channels}")
+    # `vhi_targets` rather than a target built here: one target writes one stream, and how
+    # many streams a map spans is the *renderer's* answer — a VHI publishes one per DOF,
+    # another renderer may carry the whole map on one wider stream. `capabilities=` because
+    # step 2 already asked, and asking twice would be a second answer to a settled question.
+    targets = vhi_targets(control_map, virtual_hand(), client=client, capabilities=capabilities)
+    bus = ControlBus(controls, targets=targets, hz=32)
+    settled = all(target.negotiate() for target in targets)
+    print(f"\n  vhi_targets() -> {len(targets)} target(s), one per stream; negotiate() -> {settled}")
+    for target in targets:
+        placed = ", ".join(
+            f"{address} on channel {channel}"
+            for channel, _alias, _weight, _lo, _hi, address in sorted(target._routed)
+        )
+        print(f"    {target._stream_name or '(no stream named)':38s} {placed or '—'}")
+    print("  Nothing above was written here: the names, the grouping and the channels are")
+    print("  all the manifest's, which is why a renderer can reshape its wire without this")
+    print("  side changing.")
 
     rendered = _observe(bus, alias)
     if rendered is None:
@@ -155,8 +166,8 @@ def step_4_drive(controls, client):
         print("  scales a value; it cannot push one past what the target accepts.")
     bus.stop()
     print("\n  bus.stop() delivered rest and flushed it, so the hand released rather")
-    print("  than freezing in its last pose. The target built the stream, so that also")
-    print("  released it.")
+    print("  than freezing in its last pose. Each target built its own stream, so that")
+    print("  released those too.")
 
 
 def _observe(bus, alias) -> list[tuple[int, float]] | None:
@@ -249,7 +260,7 @@ def main() -> None:
         capabilities = step_2_ask_the_target(client)
         if capabilities is not None:
             controls = step_3_resolve(control_map, capabilities)
-            step_4_drive(controls, client)
+            step_4_drive(control_map, controls, client, capabilities)
             step_5_classification(capabilities)
     finally:
         client.stop()

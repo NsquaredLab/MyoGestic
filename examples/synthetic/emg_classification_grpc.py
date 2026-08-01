@@ -1,7 +1,8 @@
 """Classification demo: fake EMG → numpy features → CatBoost → VHI two ways.
 
-A normal MyoGestic classification example — it streams the classified hand
-*pose* to VHI's predicted hand over LSL (``MyoGestic_Output``) — that ALSO
+A normal MyoGestic classification example — it streams the classified hand to VHI's
+predicted hand over LSL, on whichever streams the manifest says carry the addresses
+the control file names — that ALSO
 showcases the gRPC control plane: on each predicted-class *change* it sends a
 discrete ``SetMovement`` command to VHI's control hand. Same classification,
 output both ways — the continuous LSL stream and the discrete gRPC command.
@@ -39,7 +40,7 @@ from myogestic.recipes.features import mav, rms, var, wl
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -217,14 +218,16 @@ def _ensure_vhi() -> None:
     global bus
     if bus is not None:
         return
-    # No hand is named here: the target reads the addresses this file's map uses out of
-    # VHI's manifest and drives the stream carrying them. `interface=` rather than an
-    # outlet for the same reason — which stream, and how wide, are the manifest's answer.
-    # (A map naming *both* hands needs a target each; `myogestic.vhi.vhi_targets` builds
-    # them. This file's does not.)
-    target = VhiTarget(client=vhi_control, interface=vhi)
+    # No hand and no stream is named here, and none is counted: `vhi_targets` looks this
+    # file's addresses up in VHI's manifest, groups them by the stream each one rides, and
+    # returns the target every group needs — one per DOF against a VHI, which publishes a
+    # stream per address, and one for the lot against a renderer that shares a stream.
+    # Each sizes and owns the outlet it publishes under.
+    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
+    if targets is None:
+        return                                # VHI is not up yet; the button stays
     bus = connect_controls(
-        CONTROL_MAP, [target], ctx=app.ctx, smoothing=output_filter, hz=pipeline.predict_hz
+        CONTROL_MAP, targets, ctx=app.ctx, smoothing=output_filter, hz=pipeline.predict_hz
     )
 
 

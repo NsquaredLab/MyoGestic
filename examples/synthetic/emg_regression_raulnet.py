@@ -47,7 +47,7 @@ from myogestic.ml.widgets import PipelinePanel
 from myogestic.session import iter_aligned_windows, iter_labeled_windows, open_session_store
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 from myogestic.vhi.pose import split_pose
 from myogestic.widgets import (
     AppLogo,
@@ -389,14 +389,16 @@ def _ensure_vhi() -> None:
     global bus
     if bus is not None:
         return
-    # No hand is named here: the target reads the addresses this file's map uses out of
-    # VHI's manifest and drives the stream carrying them. `interface=` rather than an
-    # outlet for the same reason — which stream, and how wide, are the manifest's answer.
-    # (A map naming *both* hands needs a target each; `myogestic.vhi.vhi_targets` builds
-    # them. This file's does not.)
-    target = VhiTarget(client=vhi_control, interface=vhi)
+    # No hand and no stream is named here, and none is counted: `vhi_targets` looks this
+    # file's addresses up in VHI's manifest, groups them by the stream each one rides, and
+    # returns the target every group needs — one per DOF against a VHI, which publishes a
+    # stream per address, and one for the lot against a renderer that shares a stream.
+    # Each sizes and owns the outlet it publishes under.
+    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
+    if targets is None:
+        return                                # VHI is not up yet; the button stays
     bus = connect_controls(
-        CONTROL_MAP, [target], ctx=app.ctx, smoothing=output_filter, hz=32
+        CONTROL_MAP, targets, ctx=app.ctx, smoothing=output_filter, hz=32
     )
 
 
