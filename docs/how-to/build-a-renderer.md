@@ -25,7 +25,7 @@ gets caught. Nothing requires it.
 |---|---|
 | serve `GetControlManifest` | so a control map can resolve against you — the reply says which address sits on which channel |
 | read your pose stream | N × `float32`, N being the width you declare — 9 for a VHI-shaped hand, standard values, positional: a channel *is* an address |
-| report that stream's name in `stream_name` | a client resolves your manifest against one stream at a time, and it looks for the name it is configured to publish under — `MyoGestic_Output` by default, or `MyoGestic_ControlPose` for a control hand, both settable on its `InterfaceSpec`. A capability naming a *different* stream is left to whichever target drives that one. Leaving `stream_name` empty works too: it matches whatever the client is looking for |
+| report that stream's name in `stream_name` | **you name the stream, not the client.** MyoGestic reads the name off the capabilities its control map points at, and publishes under it — there is nothing to configure on the client side and nothing for the two of you to agree in advance. A capability naming a *different* stream is left to whichever target drives that one, which is how one map can drive two hands. Leave `stream_name` empty and there is no name to build an outlet from, so the application has to construct and hand over its own — supported, but it puts the name back in the client, which is the thing this contract exists to avoid |
 
 | you may | for |
 |---|---|
