@@ -142,7 +142,8 @@ def test_bind_accepts_a_subset():
     indistinguishable from one that was never written.
     """
     _, outlet = _bound(
-        **{"index.flexion": {"kind": "continuous", "range": [0.0, 1.0], "rest": 0.25}}
+        "index.flexion",
+        **{"index.flexion": {"range": [0.0, 1.0], "rest": 0.25}},
     )
     assert outlet.last[2] == pytest.approx(0.25)
     assert np.count_nonzero(outlet.last) == 1
