@@ -52,7 +52,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myogestic import App, Fr, Grid, Px
 from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.keyboard import KeyboardTarget
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import vhi_targets, virtual_hand
 from myogestic.widgets import AppLogo, ControlMapEditor, ProcessLauncher
 from myogestic.widgets.common import DANGER, SUCCESS, WARNING, muted, panel_header
 
@@ -100,17 +100,13 @@ failure = ""
 #: prevent, so it gets a line of text saying what is missing instead.
 waiting: dict[str, str] = {}
 
-# `stream="output"` is the default, and stating it is the point: this app drives the
-# model's hand, so the editor offers that hand's controls and refuses one from the
-# operator's before it can be saved. Without it the picker would offer all 23 and the
-# refusal would arrive from the bus, three layers from the click that caused it.
+# The picker offers every address both targets export — the model's hand, the operator's
+# hand and the keyboard — because which of them this app drives is the map's answer, not
+# this file's. Point a control at the operator's hand and `vhi_targets` builds the target
+# that renders it; there is no hand chosen up here for the picker to be filtered by.
 def _new_document(path=None) -> ControlMapEditor:
-    """One open map. `stream="output"` is stated on purpose: this app drives the model's
-    hand, so the picker offers that hand's controls and refuses one from the operator's
-    before it can be saved, rather than letting the bus refuse it three layers later."""
-    return ControlMapEditor(
-        path, clients=[vhi_control, keys], stream="output", title="EDIT THE MAP"
-    )
+    """One open map, offering everything both targets export."""
+    return ControlMapEditor(path, clients=[vhi_control, keys], title="EDIT THE MAP")
 
 
 #: Every open map, in tab order. The widget stays single-document — one class, one job —
@@ -327,16 +323,19 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
         return
     try:
         controls = resolve(bindable, capabilities)
-        # `interface=` rather than a prebuilt outlet: the target sizes and owns the stream
-        # so this file does not have to know how wide the renderer's pose is.
-        target = VhiTarget(client=vhi_control, interface=vhi)
-        # Both targets share one map. `ControlBus` checks that *someone* claims every
+        # The map picks the VHI targets: one per stream it names, sized and owned by the
+        # target, so this file states neither a hand nor a pose width. `capabilities=` is
+        # the manifest already in hand — a rebuild nobody clicked must not spend a
+        # blocking round trip on the render thread for an answer it was handed.
+        targets = vhi_targets(bindable, vhi, client=vhi_control, capabilities=capabilities)
+        # Every target shares one map. `ControlBus` checks that *someone* claims every
         # alias, so a keyboard address in a VHI-only app is caught here rather than
         # rendering nowhere and looking like a control that works and holds still.
-        new_bus = ControlBus(controls, targets=[target, keys], hz=32)
-        # Constructing the bus binds the target, which negotiates — but VHI may have
-        # come up between the two, so settle it explicitly rather than on the next tick.
-        target.negotiate()
+        new_bus = ControlBus(controls, targets=[*targets, keys], hz=32)
+        # Constructing the bus binds each target, which negotiates — but VHI may have
+        # come up between the two, so settle them explicitly rather than on the next tick.
+        for target in targets:
+            target.negotiate()
     except ValueError as exc:
         # A refusal is the useful case: it names the address it could not place, or the
         # two aliases aiming at one control. Show it instead of leaving a dead slider.

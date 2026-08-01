@@ -575,70 +575,48 @@ class TestOneMapDrivesOneHand:
     two hands even share channel numbers, so this is not a cosmetic mix-up.
     """
 
-    @pytest.mark.parametrize(
-        ("stream", "offered", "withheld"),
-        [
-            ("output", "vhi.prediction.thumb", "vhi.control.pose.thumb"),
-            ("control_pose", "vhi.control.pose.thumb", "vhi.prediction.thumb"),
-        ],
-    )
-    def test_only_its_own_hand_is_offered(self, tmp_path, stream, offered, withheld):
+    def test_every_hand_is_offered(self, tmp_path):
+        """Both hands, one list. Which stream carries an address is not the map's problem."""
         path = tmp_path / "controls.toml"
         path.write_text(GOOD)
-        editor = ControlMapEditor(path, client=_Client(), stream=stream)
+        editor = ControlMapEditor(path, client=_Client())
         editor.load()
         editor._connect()
         addresses = [cap.address for cap in editor._offered()]
-        assert offered in addresses
-        assert withheld not in addresses
+        assert "vhi.prediction.thumb" in addresses
+        assert "vhi.control.pose.thumb" in addresses
 
-    def test_a_held_state_is_offered_to_both(self, tmp_path):
-        """Discrete controls travel over gRPC, so they belong to neither hand."""
-        for stream in ("output", "control_pose"):
-            path = tmp_path / f"{stream}.toml"
-            path.write_text(GOOD)
-            editor = ControlMapEditor(path, client=_Client(), stream=stream)
-            editor.load()
-            editor._connect()
-            assert "vhi.control.gesture" in [c.address for c in editor._offered()]
-
-    def test_an_address_from_the_other_hand_blocks_the_save(self, tmp_path):
-        """The case from the screenshot: picked, saved, then refused by the bus."""
+    def test_a_held_state_is_offered_too(self, tmp_path):
+        """Discrete controls travel over gRPC, so they belong to no stream at all."""
         path = tmp_path / "controls.toml"
-        path.write_text('[dofs]\nmy_control = "vhi.control.pose.thumb"\n')
-        editor = ControlMapEditor(path, client=_Client(), stream="output")
+        path.write_text(GOOD)
+        editor = ControlMapEditor(path, client=_Client())
         editor.load()
         editor._connect()
-        problems = editor.problems()
-        assert any("one hand" in p for p in problems), problems
-        assert editor.save() is False
-        # And it says why a held state is *not* caught by the same rule.
-        assert any("gRPC" in p for p in problems), problems
+        assert "vhi.control.gesture" in [c.address for c in editor._offered()]
 
-    def test_the_reason_names_both_hands_in_plain_words(self, tmp_path):
-        """"not a streamed continuous control on 'MyoGestic_Output'" is not an answer."""
+    def test_the_operators_hand_alone_is_not_a_problem(self, tmp_path):
+        """The case from the screenshot, the other way up: it was refused for being on
+        the *other* hand, when wanting that hand is a perfectly ordinary thing to want."""
         path = tmp_path / "controls.toml"
         path.write_text('[dofs]\nmy_control = "vhi.control.pose.thumb"\n')
-        editor = ControlMapEditor(path, client=_Client(), stream="output")
-        editor.load()
-        editor._connect()
-        reason = next(p for p in editor.problems() if "one hand" in p)
-        assert "operator's hand" in reason
-        assert "model's hand" in reason
-
-    def test_the_same_file_is_fine_as_a_control_hand_map(self, tmp_path):
-        """Nothing is wrong with the address — only with which map it was put in."""
-        path = tmp_path / "controls.toml"
-        path.write_text('[dofs]\nmy_control = "vhi.control.pose.thumb"\n')
-        editor = ControlMapEditor(path, client=_Client(), stream="control_pose")
+        editor = ControlMapEditor(path, client=_Client())
         editor.load()
         editor._connect()
         assert editor.problems() == []
+        assert editor.save() is True
 
-    @pytest.mark.parametrize("bad", ["", "prediction", "Output", "control-pose"])
-    def test_an_unknown_stream_is_refused_at_construction(self, tmp_path, bad):
-        with pytest.raises(ValueError, match="stream must be one of"):
-            ControlMapEditor(tmp_path / "c.toml", stream=bad)
+    def test_a_map_naming_both_hands_saves(self, tmp_path):
+        """`vhi_targets` builds a target per stream, so a mixed map is drivable."""
+        path = tmp_path / "controls.toml"
+        path.write_text(
+            '[dofs]\nmodel = "vhi.prediction.thumb"\noperator = "vhi.control.pose.thumb"\n'
+        )
+        editor = ControlMapEditor(path, client=_Client())
+        editor.load()
+        editor._connect()
+        assert editor.problems() == []
+        assert editor.save() is True
 
 
 class TestAGateIsOnlyOfferedWhereItApplies:
@@ -674,7 +652,7 @@ class TestAGateIsOnlyOfferedWhereItApplies:
     def _entry(self, tmp_path, client, address, **gates):
         path = tmp_path / "controls.toml"
         path.write_text(f'[dofs]\nmine = "{address}"\n')
-        editor = ControlMapEditor(path, client=client, stream="output")
+        editor = ControlMapEditor(path, client=client)
         editor.load()
         editor._connect()
         editor._draft[0].update(gates)
@@ -719,7 +697,7 @@ class TestAGateIsOnlyOfferedWhereItApplies:
         """Offline, or an address the target does not export, is unknowable — allow it."""
         path = tmp_path / "controls.toml"
         path.write_text('[dofs]\nmine = { target = "some.other.thing", debounce_s = 0.2 }\n')
-        editor = ControlMapEditor(path, stream="output")   # no client at all
+        editor = ControlMapEditor(path)   # no client at all
         editor.load()
         assert editor._gate_rules(editor._draft[0]) == ("", "")
 
@@ -753,7 +731,7 @@ class TestAHeldStateOccupiesNoChannel:
     def _editor_with(self, tmp_path, client, body):
         path = tmp_path / "controls.toml"
         path.write_text(body)
-        editor = ControlMapEditor(path, client=client, stream="output")
+        editor = ControlMapEditor(path, client=client)
         editor.load()
         editor._connect()
         return editor
@@ -788,42 +766,6 @@ class TestAHeldStateOccupiesNoChannel:
         assert any("same control" in p for p in editor.problems())
 
 
-class TestAMapMayServeBothHands:
-    """An app with a target per hand shares one map, so the editor can serve that too."""
-
-    def test_both_offers_every_stream(self, tmp_path):
-        path = tmp_path / "controls.toml"
-        path.write_text(GOOD)
-        editor = ControlMapEditor(path, client=_Client(), stream="both")
-        editor.load()
-        editor._connect()
-        addresses = [cap.address for cap in editor._offered()]
-        assert "vhi.prediction.thumb" in addresses
-        assert "vhi.control.pose.thumb" in addresses
-
-    def test_both_does_not_call_a_mixed_map_a_problem(self, tmp_path):
-        path = tmp_path / "controls.toml"
-        path.write_text(
-            '[dofs]\nmodel = "vhi.prediction.thumb"\noperator = "vhi.control.pose.thumb"\n'
-        )
-        editor = ControlMapEditor(path, client=_Client(), stream="both")
-        editor.load()
-        editor._connect()
-        assert editor.problems() == []
-        assert editor.save() is True
-
-    def test_a_single_stream_editor_still_refuses_the_mix(self, tmp_path):
-        """The default stays strict: most apps have one target."""
-        path = tmp_path / "controls.toml"
-        path.write_text(
-            '[dofs]\nmodel = "vhi.prediction.thumb"\noperator = "vhi.control.pose.thumb"\n'
-        )
-        editor = ControlMapEditor(path, client=_Client(), stream="output")
-        editor.load()
-        editor._connect()
-        assert any("one hand" in p for p in editor.problems())
-
-
 class TestOneWayToDriveTheControlHand:
     """The renderer's own exclusion, restated where it can still be fixed.
 
@@ -832,16 +774,16 @@ class TestOneWayToDriveTheControlHand:
     declaration to refuse. It refuses at command time instead: while a control-pose stream
     is delivering, `SetControl` comes back with the movement in `ack.rejected`.
 
-    That makes this check worth more than it was, not less. A `stream="both"` map is where
-    the mix becomes reachable, and here it is a red line in the editor with the file still
-    open, rather than a gesture that silently stops working mid-session for as long as
-    something is publishing to that hand.
+    That makes this check worth more than it was, not less: with no stream filter left,
+    every map is where the mix becomes reachable. Here it is a red line in the editor with
+    the file still open, rather than a gesture that silently stops working mid-session for
+    as long as something is publishing to that hand.
     """
 
-    def _editor(self, tmp_path, body, stream="both"):
+    def _editor(self, tmp_path, body):
         path = tmp_path / "controls.toml"
         path.write_text(body)
-        editor = ControlMapEditor(path, client=_Client(), stream=stream)
+        editor = ControlMapEditor(path, client=_Client())
         editor.load()
         editor._connect()
         return editor
@@ -1308,7 +1250,7 @@ walk = "keyboard.hold.letter.w"
 
         path = tmp_path / "m.toml"
         path.write_text(body)
-        editor = ControlMapEditor(path, clients=[KeyboardTarget()], stream="output")
+        editor = ControlMapEditor(path, clients=[KeyboardTarget()])
         editor.load()
         editor._connect()
         return editor

@@ -1171,7 +1171,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
 
         fake_keys = _Keys()
         monkeypatch.setattr(studio, "keys", fake_keys)
-        monkeypatch.setattr(studio, "VhiTarget", lambda **kw: _Target())
+        monkeypatch.setattr(studio, "vhi_targets", lambda *a, **kw: [_Target()])
         monkeypatch.setattr(studio, "ControlBus", _Bus)
 
         path = tmp_path / "keys.toml"

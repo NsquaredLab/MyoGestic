@@ -120,14 +120,14 @@ _GATE_LABELS = ("On at or above", "Steady for")
 _WEIGHT_READOUT = "+0.00"
 _PERCENT_READOUT = "100%"
 _SECONDS_READOUT = "0.00 s"
-#: Which renderer stream a map's *numbers* go to, and what a target calls it. One control
-#: map is bound by one target, and a target streams a pose to one hand — so a map mixing
-#: the two pose namespaces is refused at bind time. Held states are exempt: they travel over
-#: gRPC rather than a pose stream, so they reach the control hand from either map. The
-#: editor knows which stream every control belongs to, so it can keep the mix from being
-#: written in the first place.
-_STREAM_NAMES = {"output": "MyoGestic_Output", "control_pose": "MyoGestic_ControlPose"}
-_STREAM_LABELS = {"output": "the model's hand", "control_pose": "the operator's hand"}
+#: The **last** stream name written down anywhere in MyoGestic, and it is not a filter.
+#: A map may name any address any target offers — which stream carries it is the target's
+#: business, settled from the manifest at bind time, so nothing here chooses a hand. But
+#: the renderer *refuses* one combination: streaming a pose to the operator's hand while
+#: also commanding it a movement drives that hand two ways, so it takes one or the other.
+#: That is a refusal, not a preference, and warning about it needs knowing which stream is
+#: the operator's. Nothing else here does.
+_CONTROL_POSE_STREAM = "MyoGestic_ControlPose"
 
 #: The normalized signed domain a continuous control is expected to declare: `+1` is the
 #: direction the control denotes, rest is `0`. Shown in a row only when a target declares
@@ -235,13 +235,6 @@ class ControlMapEditor:
         Called on **Connect** rather than every frame, because it blocks on an RPC.
         Without it the editor still opens the file and shows it; it just cannot offer a
         list to pick from or validate an address, and says so.
-    stream
-        Which renderer stream the map's *numbers* go to — ``"output"`` (the model's hand,
-        the default), ``"control_pose"`` (the operator's), or ``"both"``. Must match the
-        `myogestic.vhi.VhiTarget` set that will bind it: one target streams to one hand,
-        so with a single target the picker offers only that stream's controls and an
-        address from the other is a problem. An application with a target *per* hand
-        shares one map between them and passes ``"both"``.
     title
         Panel header text.
 
@@ -279,7 +272,7 @@ class ControlMapEditor:
         "_last_attempt", "_refetch", "_draft", "_error", "_filter", "_header",
         "_asked", "_baseline", "_clients", "_message", "_path", "_raw", "_raw_error", "_raw_open",
         "_all_answered", "_open_picker", "_save_as", "_stamp",
-        "_stream", "_title", "_loaded",
+        "_title", "_loaded",
     )
 
     def __init__(
@@ -288,13 +281,8 @@ class ControlMapEditor:
         *,
         client: Any = None,
         clients: Sequence[Any] | None = None,
-        stream: str = "output",
         title: str = "CONTROL MAP",
     ) -> None:
-        if stream not in (*_STREAM_NAMES, "both"):
-            raise ValueError(
-                f"stream must be one of {[*sorted(_STREAM_NAMES), 'both']}, got {stream!r}"
-            )
         self._path = path
         #: Every source of a manifest, in the order they were given. One target used to be
         #: the only possibility; a configuration can now name controls on several — a
@@ -304,7 +292,6 @@ class ControlMapEditor:
             c for c in ([client] if clients is None else list(clients)) if c is not None
         )
         self._client = self._clients[0] if self._clients else None
-        self._stream = stream
         self._title = title
         #: alias -> [(address, weight)], plus the gates. A plain structure rather than a
         #: ControlMap because a half-edited map is not a valid one, and `Binding` is
@@ -740,15 +727,6 @@ class ControlMapEditor:
                     # Its namespace answered and does not have it: a typo, or a map written
                     # for a newer build. Checkable, so it is caught.
                     found.append(f"{alias}: the target does not export {address!r}.")
-                other = self._wrong_stream(address)
-                if other is not None:
-                    found.append(
-                        f"{alias}: {address} streams to "
-                        f"{_STREAM_LABELS['control_pose' if self._stream == 'output' else 'output']}"
-                        f", but this map streams to {_STREAM_LABELS[self._stream]}. A map's "
-                        f"numbers all go to one hand — remove it, or put it in that hand's "
-                        f"map. (Held states are exempt: they travel over gRPC.)"
-                    )
                 if not -1.0 <= weight <= 1.0 or weight == 0.0:
                     found.append(
                         f"{alias}: weight {weight} is outside [-1, 1] or zero. A weight "
@@ -786,7 +764,7 @@ class ControlMapEditor:
             for address, _ in entry["targets"]
             if (cap := by_address.get(address)) is not None
             and cap.kind == "continuous"
-            and getattr(cap, "stream_name", "") == _STREAM_NAMES["control_pose"]
+            and getattr(cap, "stream_name", "") == _CONTROL_POSE_STREAM
         ]
         held = [
             entry["alias"]
@@ -1316,11 +1294,14 @@ class ControlMapEditor:
     def _offered(self, current: str = "") -> list[Capability]:
         """The controls worth offering: one row per *control*, not per name.
 
-        Three reductions, all so a reader never has to decode a transport detail:
+        Two reductions, both so a reader never has to decode a transport detail — and no
+        filter by stream: every address every manifest offers is on the list, because
+        which stream carries one is settled from the manifest when the map is bound, not
+        chosen here. Hiding the operator's hand made wanting it impossible to express.
 
-        * only this map's stream (plus the held states, which belong to neither hand);
-        * only controls the stream actually carries — one with no channel cannot be driven
-          this way, so offering it just earns a refusal later;
+        * only controls a stream actually carries (plus the held states, which belong to
+          no stream) — one with no channel cannot be driven this way, so offering it just
+          earns a refusal later;
         * **one row per channel.** A renderer *may* publish several addresses for one
           control — a short form and its explicit axis form, say — where picking either does
           exactly the same thing. VHI stopped advertising those, so for it this reduction is
@@ -1331,7 +1312,6 @@ class ControlMapEditor:
         opening the picker on a file that uses an axis form neither hides its value nor
         quietly rewrites it.
         """
-        wanted = None if self._stream == "both" else _STREAM_NAMES[self._stream]
         best: dict[tuple[str, int], Capability] = {}
         held: list[Capability] = []
         for cap in self._capabilities:
@@ -1339,8 +1319,6 @@ class ControlMapEditor:
                 held.append(cap)
                 continue
             stream = getattr(cap, "stream_name", "")
-            if wanted is not None and stream and stream != wanted:
-                continue
             if getattr(cap, "channel", -1) < 0:
                 continue
             slot = (stream, cap.channel)
@@ -1381,18 +1359,6 @@ class ControlMapEditor:
                 "",
             )
         return "", ""
-
-    def _wrong_stream(self, address: str) -> Capability | None:
-        """The capability for `address` if it belongs to the *other* hand."""
-        if self._stream == "both":
-            return None
-        wanted = _STREAM_NAMES[self._stream]
-        for cap in self._capabilities:
-            if cap.address == address and cap.kind == "continuous":
-                name = getattr(cap, "stream_name", "")
-                if name and name != wanted:
-                    return cap
-        return None
 
     def _note_open(self, key: int, opened: bool) -> bool:
         """Record which picker is open, clearing the search on the frame it opens.
