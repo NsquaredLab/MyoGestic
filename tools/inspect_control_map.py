@@ -154,44 +154,33 @@ def _resolve(control_map, capabilities) -> bool:
 def _check_for_collisions(controls, capabilities) -> bool:
     """Report two aliases landing on one physical control.
 
-    `resolve` cannot see this: it checks each address against the manifest and every
-    address here is real. The conflict is a *channel* fact — a target publishes the short
-    and axis forms of one control as two addresses on one channel — so it only surfaces
-    when something has to put both on a wire, which is at bind time, inside a running
-    application. Computed here from the manifest the target already sent, rather than by
-    declaring anything to it: a validator must not change what it inspects.
+    `resolve` cannot see this: it checks each address one at a time and every address
+    here is real. Two aliases reaching one address is a fact about the *set*, so it only
+    surfaces when something has to drive both at once, which is at bind time inside a
+    running application. Computed here from the manifest the target already sent, rather
+    than by declaring anything to it: a validator must not change what it inspects.
     """
-    where = {
-        cap.address: (getattr(cap, "stream_name", ""), cap.channel)
-        for cap in capabilities
-        if getattr(cap, "channel", -1) >= 0
+    rendered = {
+        cap.address for cap in capabilities if getattr(cap, "kind", "") == "continuous"
     }
-    claims: dict[tuple[str, int], list[tuple[str, str]]] = {}
+    claims: dict[str, set[str]] = {}
     for alias, refs in controls.routes.items():
         if hasattr(controls.dofs[alias], "states"):
-            continue  # a held state travels over gRPC, not on a numbered channel
+            continue  # a held state travels over gRPC, not on a stream
         for ref in refs:
-            slot = where.get(ref.address)
-            if slot is not None:
-                claims.setdefault(slot, []).append((alias, ref.address))
+            if ref.address in rendered:
+                claims.setdefault(ref.address, set()).add(alias)
 
-    clashes = {
-        slot: owners
-        for slot, owners in claims.items()
-        if len({alias for alias, _ in owners}) > 1
-    }
+    clashes = {address: owners for address, owners in claims.items() if len(owners) > 1}
     if not clashes:
         return True
 
     print("\n  But two aliases would land on the same control:\n", file=sys.stderr)
-    for (stream, channel), owners in sorted(clashes.items(), key=lambda kv: kv[0][1]):
-        listed = ", ".join(f"{alias!r} via {address}" for alias, address in owners)
-        origin = f"{stream} channel {channel}" if stream else f"channel {channel}"
-        print(f"  {origin}: {listed}", file=sys.stderr)
+    for address, owners in sorted(clashes.items()):
+        print(f"  {address}: {', '.join(repr(a) for a in sorted(owners))}", file=sys.stderr)
     print(
-        "\n  One control cannot take two outputs. Note that the short and axis forms of\n"
-        "  a control are two names for one channel, so this can happen without any\n"
-        "  address repeating. Remove one, or fan a single output out to several.",
+        "\n  One control cannot take two outputs. Remove one, or fan a single output\n"
+        "  out to several controls instead.",
         file=sys.stderr,
     )
     return False
