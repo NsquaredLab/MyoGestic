@@ -21,7 +21,7 @@ class GetControlManifestRequest(_message.Message):
     def __init__(self) -> None: ...
 
 class ControlCapability(_message.Message):
-    __slots__ = ("address", "kind", "lo", "hi", "rest", "states", "rest_state", "description", "stream_name", "activation_threshold", "channel")
+    __slots__ = ("address", "kind", "lo", "hi", "rest", "states", "rest_state", "description", "activation_threshold")
     ADDRESS_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     LO_FIELD_NUMBER: _ClassVar[int]
@@ -30,9 +30,7 @@ class ControlCapability(_message.Message):
     STATES_FIELD_NUMBER: _ClassVar[int]
     REST_STATE_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
-    STREAM_NAME_FIELD_NUMBER: _ClassVar[int]
     ACTIVATION_THRESHOLD_FIELD_NUMBER: _ClassVar[int]
-    CHANNEL_FIELD_NUMBER: _ClassVar[int]
     address: str
     kind: Kind
     lo: float
@@ -41,10 +39,8 @@ class ControlCapability(_message.Message):
     states: _containers.RepeatedScalarFieldContainer[str]
     rest_state: str
     description: str
-    stream_name: str
     activation_threshold: float
-    channel: int
-    def __init__(self, address: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., description: _Optional[str] = ..., stream_name: _Optional[str] = ..., activation_threshold: _Optional[float] = ..., channel: _Optional[int] = ...) -> None: ...
+    def __init__(self, address: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., description: _Optional[str] = ..., activation_threshold: _Optional[float] = ...) -> None: ...
 
 class ControlManifest(_message.Message):
     __slots__ = ("target_name", "vocabulary_version", "capabilities")

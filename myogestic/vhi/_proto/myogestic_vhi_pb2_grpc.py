@@ -29,10 +29,10 @@ class VhiControlStub(object):
     """Control plane between MyoGestic and the Virtual Hand Interface.
 
     GetControlManifest is the whole contract: it returns every control VHI exports, by
-    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range,
-    the states, and the channel a streamed value lands on — so neither side hard-codes a
-    channel index or a movement table. A client calls it unconditionally, once, before
-    sending anything; there is no per-client negotiation and nothing to declare.
+    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range
+    and the states — so neither side hard-codes a stream layout or a movement table. A
+    client calls it unconditionally, once, before sending anything; there is no per-client
+    negotiation and nothing to declare.
 
     Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
     movements, so the two never contend for one driver. SweepControl is the
@@ -40,9 +40,11 @@ class VhiControlStub(object):
     claims — that a named finger curls, in the direction its name claims — without a
     human watching the screen.
 
-    Continuous time-series still belongs on LSL, addressed by the channel the manifest
-    names. This service carries discrete state, low-rate continuous commands, and
-    verification.
+    Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
+    control's stream is named for the control's own address and is one channel wide, so
+    the manifest's address is also the stream name and there is nothing further to publish
+    about the transport. This service carries discrete state, low-rate continuous
+    commands, and verification.
     """
 
     def __init__(self, channel):
@@ -97,10 +99,10 @@ class VhiControlServicer(object):
     """Control plane between MyoGestic and the Virtual Hand Interface.
 
     GetControlManifest is the whole contract: it returns every control VHI exports, by
-    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range,
-    the states, and the channel a streamed value lands on — so neither side hard-codes a
-    channel index or a movement table. A client calls it unconditionally, once, before
-    sending anything; there is no per-client negotiation and nothing to declare.
+    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range
+    and the states — so neither side hard-codes a stream layout or a movement table. A
+    client calls it unconditionally, once, before sending anything; there is no per-client
+    negotiation and nothing to declare.
 
     Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
     movements, so the two never contend for one driver. SweepControl is the
@@ -108,9 +110,11 @@ class VhiControlServicer(object):
     claims — that a named finger curls, in the direction its name claims — without a
     human watching the screen.
 
-    Continuous time-series still belongs on LSL, addressed by the channel the manifest
-    names. This service carries discrete state, low-rate continuous commands, and
-    verification.
+    Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
+    control's stream is named for the control's own address and is one channel wide, so
+    the manifest's address is also the stream name and there is nothing further to publish
+    about the transport. This service carries discrete state, low-rate continuous
+    commands, and verification.
     """
 
     def SetControl(self, request, context):
@@ -238,10 +242,10 @@ class VhiControl(object):
     """Control plane between MyoGestic and the Virtual Hand Interface.
 
     GetControlManifest is the whole contract: it returns every control VHI exports, by
-    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range,
-    the states, and the channel a streamed value lands on — so neither side hard-codes a
-    channel index or a movement table. A client calls it unconditionally, once, before
-    sending anything; there is no per-client negotiation and nothing to declare.
+    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range
+    and the states — so neither side hard-codes a stream layout or a movement table. A
+    client calls it unconditionally, once, before sending anything; there is no per-client
+    negotiation and nothing to declare.
 
     Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
     movements, so the two never contend for one driver. SweepControl is the
@@ -249,9 +253,11 @@ class VhiControl(object):
     claims — that a named finger curls, in the direction its name claims — without a
     human watching the screen.
 
-    Continuous time-series still belongs on LSL, addressed by the channel the manifest
-    names. This service carries discrete state, low-rate continuous commands, and
-    verification.
+    Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
+    control's stream is named for the control's own address and is one channel wide, so
+    the manifest's address is also the stream name and there is nothing further to publish
+    about the transport. This service carries discrete state, low-rate continuous
+    commands, and verification.
     """
 
     @staticmethod
