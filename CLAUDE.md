@@ -35,6 +35,13 @@ a loud one render identically.
 - **Tests**: `uv run --extra dev pytest -q`. `tests/test_stream_lsl.py::test_stream_reconnect_swaps_buffers_atomically`
   is flaky under full-suite load (LSL multicast contention) and passes in isolation — it is not
   your change.
+- `tests/test_reference_renderer.py::test_a_control_bus_drives_the_reference_renderer` is the same
+  class of flakiness, bad enough (failed outright in 2 of 3 full-suite runs, retries included) that
+  it carries the `lsl_contention` marker and is **deselected by default**
+  (`addopts = "-m 'not lsl_contention'"` in `pyproject.toml`). It passes reliably every time run
+  alone: `uv run --extra grpc --extra dev pytest -m lsl_contention -q`. Run it explicitly after
+  touching `examples/synthetic/reference_renderer.py`, `myogestic/vhi/target.py`, or
+  `myogestic/_controls_bus.py::connect_controls`.
 - **Docs are tested.** `tests/test_docs.py` parses and *runs* Python blocks in `docs/`, so a code
   block in a doc page must actually work. New doc pages go in `properdocs.yml` and the relevant
   `index.md`.
