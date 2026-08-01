@@ -339,6 +339,12 @@ class VhiTarget:
         an LSL stream and has no name to disagree with, and a target that builds its own
         outlet cannot disagree with itself.
         """
+        if self._interface is not None:
+            # Ours, not the caller's: `_build_outlet` replaces it whenever the negotiated
+            # stream changes, which is exactly what `negotiate(force=True)` is for. Reading
+            # the outlet here would refuse a renderer that renamed its stream — the case
+            # the force exists to recover from.
+            return
         published = getattr(self._outlet, "name", "")
         if not published or not wanted or published == wanted:
             return
