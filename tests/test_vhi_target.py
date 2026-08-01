@@ -130,7 +130,7 @@ def _bound(*names: str, **entries: object) -> tuple[VhiTarget, FakeOutlet]:
 
 def test_bind_accepts_the_pose_dofs():
     target, outlet = _bound()
-    assert outlet.frames == []
+    assert len(outlet.frames) == 1, "binding puts the declared rest pose on the wire"
     target.send(dict.fromkeys(POSE_DOFS, 0.0), {})
     assert outlet.last.shape == (POSE_WIDTH,)
 
@@ -138,7 +138,7 @@ def test_bind_accepts_the_pose_dofs():
 def test_bind_accepts_a_subset():
     """Declaring one finger is legal; the rest of the hand simply stays neutral."""
     _, outlet = _bound("index.flexion")
-    assert outlet.frames == []
+    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
 
 
 def test_bind_refuses_an_empty_configuration():
@@ -253,9 +253,10 @@ def test_a_one_way_dof_never_emits_the_direction_it_excludes():
 def test_every_send_pushes_exactly_one_frame():
     """Latest-wins downstream: a target that pushed twice would drop a tick."""
     target, outlet = _bound()
+    bound = len(outlet.frames)   # binding pushed rest; count only what `send` adds
     for _ in range(5):
         target.send(dict.fromkeys(POSE_DOFS, 0.0), {})
-    assert len(outlet.frames) == 5
+    assert len(outlet.frames) - bound == 5
 
 
 # --- stop: rest has to actually land ------------------------------------------
@@ -358,8 +359,12 @@ def test_a_broken_outlet_does_not_kill_the_predict_thread():
     """The bus absorbs a target failure; a raise here would log on every tick."""
 
     class Broken(FakeOutlet):
+        """Intact for the rest pose `bind` pushes, closed for every frame after it."""
+
         def push(self, data):
-            raise OSError("outlet closed")
+            if self.frames:
+                raise OSError("outlet closed")
+            super().push(data)
 
     warnings: list[str] = []
     bus = ControlBus(
@@ -453,7 +458,7 @@ def test_a_width_the_outlet_cannot_carry_is_refused():
     order = (*NINE, "extra.dof")
     client = FakeClient(FakeReply(continuous_channel_order=order))
     target = VhiTarget(FakeOutlet(), client=client)
-    with pytest.raises(ValueError, match="carries only"):
+    with pytest.raises(ValueError, match="outlet carries 9"):
         target.bind(_controls(*order))
     assert target.negotiated is False
 
@@ -1394,15 +1399,14 @@ def test_a_renamed_stream_is_honoured_on_the_by_name_path_too():
     with pytest.raises(ValueError, match="MyoGestic_Output"):
         VhiTarget(FakeOutlet(), client=client).bind(_controls("index.flexion"))
 
-    # With one, the configured name is what the manifest is filtered by. This path reads
-    # the interface for that name only — it builds no outlet — so the binding is checked
-    # through the channel it resolved.
+    # With one, the configured name is what the manifest is filtered by — and the outlet
+    # it builds is sized from the manifest it filtered, exactly as a routed binding's is.
     target = VhiTarget(
         client=client, interface=FakeInterface(output_stream_name="RigA_Pose")
     )
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
-    assert target._slots[0][0] == 2
+    assert target._routed[0][0] == 2
 
 
 def test_a_renderer_that_names_no_stream_is_read_anyway():
