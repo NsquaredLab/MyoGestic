@@ -42,20 +42,30 @@ def test_a_control_bus_drives_the_reference_renderer(renderer_module):
     try:
         vhi = virtual_hand(grpc_port=50099)
         client = vhi.control_client()
-        control_map = load_control_map({"dofs": {"close": "vhi.prediction.index"}})
+        # Two addresses, and on this renderer that is two streams — so this also pins the
+        # thing `vhi_targets` exists for: the map is grouped by the `stream_name` the
+        # manifest reports, and each group gets the target that drives it.
+        control_map = load_control_map(
+            {"dofs": {"close": "vhi.prediction.index", "spread": "vhi.prediction.little"}}
+        )
         # No stream is named on this side: the renderer's manifest says which one carries
-        # `vhi.prediction.index`, and the target publishes under exactly that name — which
-        # is the whole reason this end-to-end can find the other end at all.
+        # each address, and each target publishes under exactly that name — which is the
+        # whole reason this end-to-end can find the other end at all.
         targets = vhi_targets(control_map, vhi, client=client)
         assert targets is not None, "the renderer did not answer GetControlManifest"
+        assert len(targets) == 2, "one target per stream the map names"
         bus = connect_controls(control_map, targets, hz=32)
         assert bus is not None, "the renderer's manifest did not resolve"
 
+        # Opposite signs, because a renderer applying each address as it arrives has to be
+        # caught writing one value onto both streams — which a matching pair would hide.
+        index, little = "vhi.prediction.index", "vhi.prediction.little"
         deadline = time.time() + 10.0
-        while time.time() < deadline and renderer.pose[2] < 0.9:
-            bus.push({"close": 1.0})
+        while time.time() < deadline and renderer.pose[index] < 0.9:
+            bus.push({"close": 1.0, "spread": -1.0})
             time.sleep(0.1)
-        assert renderer.pose[2] == pytest.approx(1.0, abs=0.05), renderer.pose
+        assert renderer.pose[index] == pytest.approx(1.0, abs=0.05), renderer.pose
+        assert renderer.pose[little] == pytest.approx(-1.0, abs=0.05), renderer.pose
         bus.stop()
         client.stop()
     finally:
