@@ -107,10 +107,7 @@ def _manifest():
     client = virtual_hand().control_client()
     capabilities = client.capabilities()
     if capabilities is None:
-        if getattr(client, "unimplemented", False):
-            print("  A target answered but exports no manifest — a pre-v2 build.")
-        else:
-            print("  No target is running, so there is nothing to resolve against.")
+        print("  No target is running, so there is nothing to resolve against.")
         print("  Everything above is still checked. What needs a target: whether each")
         print("  address exists, what kind it is, its range, and its states.")
         client.stop()
