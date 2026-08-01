@@ -11,7 +11,6 @@ in this file.
 
 from __future__ import annotations
 
-import dataclasses
 import logging
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -100,7 +99,7 @@ class VhiTarget:
     """
 
     __slots__ = (
-        "_answered", "_client", "_discrete", "_dofs", "_interface",
+        "_client", "_discrete", "_dofs", "_interface",
         "_negotiated", "_outlet", "_pending", "_routed", "_slots", "_stream",
         "_width",
     )
@@ -134,9 +133,6 @@ class VhiTarget:
         self._client = client
         #: The configuration still awaiting a reachable VHI, or None once settled.
         self._pending: ControlSet | None = None
-        #: Whether VHI has ever *answered* the handshake — a refusal is settled, silence
-        #: is not.
-        self._answered = False
         self._dofs: tuple[Continuous, ...] = ()
         #: Names of the held states this target commands over gRPC once negotiated.
         self._discrete: tuple[str, ...] = ()
@@ -181,21 +177,21 @@ class VhiTarget:
         Raises
         ------
         ValueError
-            When no client was given, when the renderer answers and does not speak the
-            v2 contract, or when it answers and the configuration cannot be rendered —
-            an address it does not export, one it does not carry on this stream, or two
-            aliases aimed at one control.
+            When no client was given, or when the renderer answers and the
+            configuration cannot be rendered — an address it does not export, one it
+            does not carry on this stream, or two aliases aimed at one control. A
+            renderer too old to answer `capabilities()` at all looks identical to one
+            that is simply not up yet, so that case is deferred, never raised.
         """
         self._slots = ()
         self._routed = ()
         self._discrete = ()
         self._pending = None
         self._negotiated = False
-        self._answered = False
         if not controls.dofs:
-            # Checked here rather than left to the handshake: a renderer accepts an empty
-            # declaration happily, leaving a target that is bound, negotiated, and
-            # renders nothing.
+            # Checked here rather than left to negotiation: resolving an empty
+            # configuration against the manifest succeeds trivially, leaving a target
+            # that is bound, negotiated, and renders nothing.
             raise ValueError(
                 "VhiTarget has nothing to render: the configuration declares no DOFs "
                 "at all."
@@ -208,14 +204,9 @@ class VhiTarget:
             )
         if self._negotiate(controls):
             return
-        if self._answered:
-            raise ValueError(
-                "this Virtual Hand does not serve the v2 control contract, so its "
-                "controls cannot be discovered. MyoGestic 2.x requires VHI 2.0 or "
-                "newer — upgrade the renderer (python -m myogestic.tools.install_vhi), "
-                "or run one from source with $VHI_PATH and $GODOT_BIN."
-            )
-        # Silent — decide nothing, and let `negotiate` settle it.
+        # Silent — decide nothing, and let `negotiate` settle it. A renderer too old to
+        # answer `capabilities()` at all looks identical to one that is simply not up
+        # yet, so there is no signal left here to raise on rather than defer.
         self._pending = controls
 
     def negotiate(self, *, force: bool = False) -> bool:
@@ -227,11 +218,10 @@ class VhiTarget:
         Parameters
         ----------
         force
-            Re-run the handshake even if one already succeeded. Needed after the
-            renderer restarts: VHI's side of the contract is *stateful* (declaring a
-            control-pose stream also puts its control hand into Stream mode), and a
-            restart loses that while this target still believes it is negotiated. There
-            is no automatic detection of that today.
+            Re-run the handshake even if one already succeeded. Useful after the
+            renderer restarts or its manifest changes — this target caches what it
+            resolved and does not notice on its own. There is no automatic detection
+            of that today.
 
         Returns
         -------
@@ -242,42 +232,33 @@ class VhiTarget:
         Raises
         ------
         ValueError
-            If the renderer answers and does not speak v2, or answers and the
-            configuration cannot be rendered. Call this from a setup path or a button
-            handler where a traceback is visible, never from the predict thread.
+            If the renderer answers and the configuration cannot be rendered. Call this
+            from a setup path or a button handler where a traceback is visible, never
+            from the predict thread.
         """
         if force and self._pending is None:
             # Re-arm from whatever is currently bound, so a caller does not have to
-            # remember the ControlSet to re-declare it.
+            # remember the ControlSet to re-negotiate it.
             rebuilt = self._rebound()
             if rebuilt is not None:
                 self._pending = rebuilt
                 self._negotiated = False
-                self._answered = False
         controls = self._pending
         if controls is None:
             return self._negotiated
         if self._negotiate(controls):
             self._pending = None
             return True
-        if self._answered:
-            raise ValueError(
-                "this Virtual Hand does not serve the v2 control contract, so its "
-                "controls cannot be discovered. MyoGestic 2.x requires VHI 2.0 or "
-                "newer — upgrade the renderer (python -m myogestic.tools.install_vhi), "
-                "or run one from source with $VHI_PATH and $GODOT_BIN."
-            )
         return False
 
     def _negotiate(self, controls: ControlSet) -> bool:
         """Try the handshake. False means "no answer yet", never a refusal."""
-        pose = self._stream == "control_pose"
         routes = getattr(controls, "routes", None) or {}
         if routes:
-            return self._negotiate_routed(controls, routes, pose)
-        return self._negotiate_by_name(controls, pose)
+            return self._negotiate_routed(controls, routes)
+        return self._negotiate_by_name(controls)
 
-    def _negotiate_routed(self, controls: ControlSet, routes: Mapping, pose: bool) -> bool:
+    def _negotiate_routed(self, controls: ControlSet, routes: Mapping) -> bool:
         """Resolve alias -> address -> channel through the renderer's own manifest.
 
         The addresses come from the configuration; the channels and ranges come from the
@@ -285,9 +266,6 @@ class VhiTarget:
         """
         fetch = getattr(self._client, "capabilities", None)
         capabilities = fetch() if callable(fetch) else None
-        self._answered = capabilities is not None or getattr(
-            self._client, "unimplemented", False
-        )
         if capabilities is None:
             return False
         # Only this stream's controls. A renderer publishes several, and a channel index
@@ -310,10 +288,10 @@ class VhiTarget:
             if getattr(cap, "stream_name", "") and cap.stream_name != wanted
         }
 
-        # Which of these aliases are *this* target's, decided before anything is declared:
-        # `Declare` is all-or-nothing, so a `keyboard.*` control sharing the file would
-        # take the VHI controls down with it. Matched by **namespace**, not exact address
-        # — a `vhi.*` address this build does not export is still refused below.
+        # Which of these aliases are *this* target's, matched by **namespace**, not exact
+        # address — a `vhi.*` address this build does not export is still refused below.
+        # A `keyboard.*` control sharing the file is in no VHI namespace at all, so it
+        # is filtered out here rather than raising when nothing renders it.
         namespaces = {
             address.split(".", 1)[0] for address in (*by_address, *elsewhere)
         }
@@ -333,25 +311,9 @@ class VhiTarget:
             self._routed = ()
             self._negotiated = True
             return True
-        declaring = (
-            controls
-            if len(mine) == len(controls.dofs)
-            else dataclasses.replace(
-                controls,
-                dofs={a: d for a, d in controls.dofs.items() if a in mine},
-                routes={a: r for a, r in routes.items() if a in mine},
-            )
-        )
-        reply = self._client.declare(declaring, client_name="myogestic", control_pose=pose)
-        if reply is None:
-            return False
-        if not reply.accepted:
-            refused = {v.name: v.message for v in reply.verdicts if not v.renderable}
-            raise ValueError(
-                f"this target declined part of the control space: {refused}. Rendering "
-                f"only what it accepted would leave the rest looking like controls that "
-                f"work and hold still."
-            )
+        # No declaration: the manifest above is the contract. Every check the reply
+        # carried is made below against `by_address` — an address this stream does not
+        # carry raises there, naming the address, which is what a verdict said.
 
         slots: list[tuple[int, str, float, float, float, str]] = []
         taken: dict[int, str] = {}
@@ -413,7 +375,7 @@ class VhiTarget:
                     )
                 )
 
-        # Filtered the same way the declaration was: `claims` has to report the truth, or
+        # Filtered the same way `mine` was: `claims` has to report the truth, or
         # `ControlBus`'s every-alias-is-claimed check would see a foreign control as
         # covered.
         self._dofs = tuple(dof for dof in controls.continuous if dof.name in mine)
@@ -442,35 +404,34 @@ class VhiTarget:
         )
         return True
 
-    def _negotiate_by_name(self, controls: ControlSet, pose: bool) -> bool:
-        """Declare a set whose DOF *names* are the renderer's addresses.
+    def _negotiate_by_name(self, controls: ControlSet) -> bool:
+        """Resolve a set whose DOF *names* are the renderer's addresses.
 
         The path a directly-built `ControlSet` takes — a rig diagnostic, a test — where
         there is no mapping file.
         """
-        reply = self._client.declare(controls, client_name="myogestic", control_pose=pose)
-        # "Answered" includes an explicit UNIMPLEMENTED: that server is reachable and
-        # will never speak v2. Only silence leaves the question open.
-        self._answered = reply is not None or getattr(self._client, "unimplemented", False)
-        if reply is None:
+        capabilities = self.capabilities()
+        if capabilities is None:
             return False
-        if not reply.accepted:
-            refused = {v.name: v.message for v in reply.verdicts if not v.renderable}
-            raise ValueError(
-                f"this target declined part of the control space: {refused}. Rendering "
-                f"only what it accepted would leave the rest looking like controls that "
-                f"work and hold still."
-            )
-        # Each stream carries its own order; reading the wrong one leaves a frame
-        # correct on one stream and empty on the other.
-        if self._stream == "control_pose":
-            order = tuple(reply.control_pose_channel_order)
-        else:
-            order = tuple(reply.continuous_channel_order)
+        # Each stream carries its own channel numbering; reading the wrong one leaves a
+        # frame correct on one stream and empty on the other.
+        wanted = (
+            "MyoGestic_ControlPose" if self._stream == "control_pose" else "MyoGestic_Output"
+        )
+        # Keyed by address rather than reduced straight to a name tuple: the *position*
+        # of an address in a sorted list is not its channel unless every channel below
+        # it is also present on this stream, and nothing here guarantees that.
+        by_address = {
+            cap.address: cap
+            for cap in capabilities
+            if cap.channel >= 0
+            and (not getattr(cap, "stream_name", "") or cap.stream_name == wanted)
+        }
+        order = tuple(cap.address for cap in sorted(by_address.values(), key=lambda c: c.channel))
         declared = controls.channel_labels()
-        # The negotiated order is VHI's channel *map*, not a demand that the client
-        # command every channel on it: a configuration may declare a subset and leave
-        # the rest at rest. A declared DOF with no channel would silently never render.
+        # The order is VHI's channel *map*, not a demand that the client command every
+        # channel on it: a configuration may name a subset and leave the rest at rest.
+        # A named DOF with no channel would silently never render.
         missing = [name for name in declared if name not in order]
         if missing:
             raise ValueError(
@@ -478,7 +439,8 @@ class VhiTarget:
                 f"place for them. Rendering the rest would leave these looking like "
                 f"controls that work and hold still."
             )
-        if len(order) > self._width:
+        widest = max((cap.channel for cap in by_address.values()), default=-1)
+        if widest >= self._width:
             raise ValueError(
                 f"VHI negotiated {len(order)} channels but this outlet carries only "
                 f"{self._width}. Construct the outlet at least that wide."
@@ -487,13 +449,13 @@ class VhiTarget:
         self._discrete = tuple(dof.name for dof in controls.discrete)
         # Resolve each declared DOF to its negotiated channel once, here, rather than
         # looking names up per tick on the predict thread.
-        self._slots = tuple((order.index(d.name), d) for d in controls.continuous)
+        self._slots = tuple((by_address[d.name].channel, d) for d in controls.continuous)
         self._negotiated = True
         log.info("VHI negotiated %s", list(order))
         return True
 
     def _rebound(self) -> ControlSet | None:
-        """The configuration currently bound, for a forced re-declaration."""
+        """The configuration currently bound, for a forced re-negotiation."""
         from myogestic._controls_core import ControlSet
 
         dofs: dict = {d.name: d for d in self._dofs}

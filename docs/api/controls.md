@@ -189,8 +189,9 @@ bus = ControlBus(controls, targets=[target])
 ```
 
 The client is **required**, because every channel, range and state comes from that
-answer. A Virtual Hand older than 2.0 has no manifest to answer with and is reported as
-unsupported — MyoGestic 2.x has no fallback and no table of channel numbers.
+answer. A Virtual Hand older than 2.0 has no manifest to answer with, so it is never
+distinguishable from one that is simply not up yet — MyoGestic 2.x has no fallback and
+no table of channel numbers to fall back to.
 
 What it refuses, rather than half-rendering: an address the renderer does not export,
 one it does not carry on this stream, two aliases aimed at one control, a channel order
@@ -202,7 +203,9 @@ that is working and holding still.
 One case is **deferred** rather than refused: a renderer that has not answered *at all*.
 An application that launches VHI from its own button binds before VHI exists, so nothing
 is decided until [`negotiate`][myogestic.vhi.VhiTarget.negotiate] settles it. A renderer
-that answers and does not speak v2 is a settled fact and raises.
+old enough to have no manifest looks identical to one that is simply not up yet — both
+answer `capabilities()` with `None` — so it is deferred the same way, retried forever
+rather than refused outright.
 
 ::: myogestic.vhi.interfaces.InterfaceSpec.control_client
 

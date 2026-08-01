@@ -112,25 +112,11 @@ class _Outlet:
     def stop(self) -> None: ...
 
 
-class _Reply:
-    """An accepted declaration. Channels come from the manifest, so nothing else is read."""
-
-    accepted = True
-    verdicts = ()
-    continuous_channel_order = ()
-    standard_version = "1"
-    control_pose_stream_name = ""
-    control_pose_channel_order = ()
-
-
 class _Client:
-    """A control client that answers the manifest and accepts every declaration."""
+    """A control client that answers the manifest — the whole contract now."""
 
     def capabilities(self):
         return VHI_MANIFEST
-
-    def declare(self, controls, client_name="", control_pose=False):
-        return _Reply()
 
     def set_control(self, continuous=None, discrete=None) -> None: ...
 

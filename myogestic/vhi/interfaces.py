@@ -9,7 +9,7 @@ stream names — behind a single call:
     vhi = virtual_hand()
     vhi_outlet = vhi.outlet()           # 9-ch LSLOutlet @ 32 Hz
     process_launcher(vhi.launcher())    # the packaged binary or `godot --path`
-    client = vhi.control_client()       # gRPC control plane: declare, command, discover
+    client = vhi.control_client()       # gRPC control plane: discover, command, verify
 
 The example still owns *what* to push through the outlet — DOF mapping, sign
 flips, smoothing.
@@ -204,9 +204,9 @@ class InterfaceSpec:
     ) -> LSLOutlet:
         """Construct an [`LSLOutlet`][] for streaming a continuous pose to the control hand.
 
-        Only consumed when VHI is put in STREAM control mode via a declared
-        control-pose stream (`control_client().declare(..., control_pose=True)`).
-        Raises [`ValueError`][] if this interface has no control-pose stream
+        Only consumed while VHI's control hand is in Stream mode, which it enters on
+        its own once this stream is present and publishing — nothing to declare or
+        request. Raises [`ValueError`][] if this interface has no control-pose stream
         configured.
 
         `n_channels` means what it means on `outlet`.

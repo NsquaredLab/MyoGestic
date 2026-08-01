@@ -6,9 +6,9 @@ a subject what to do. Two hands, two namespaces, two streams, one handshake.
 
 The distinction is not cosmetic: both namespaces number their channels from 0, so a
 control-pose address sent on the prediction stream would land on the *other* hand's
-channel. `VhiTarget(..., stream="control_pose")` is what keeps them apart, and it also
-declares the stream during negotiation, which is how the renderer knows to read its pose
-from `MyoGestic_ControlPose` instead of animating its own movements.
+channel. `VhiTarget(..., stream="control_pose")` is what keeps them apart. The renderer
+switches to reading `MyoGestic_ControlPose` instead of animating its own movements the
+moment that stream is present and publishing — nothing here has to ask for that.
 
 Run with:
     uv run --extra grpc python examples/synthetic/vhi_control_hand.py
@@ -71,7 +71,7 @@ def _connect() -> None:
     if bus is not None:
         return
     # `stream="control_pose"` is the whole point: it routes onto the control hand's
-    # outlet and declares that stream, rather than the predicted hand's.
+    # outlet rather than the predicted hand's.
     target = VhiTarget(vhi.control_outlet(), client=vhi_control, stream="control_pose")
     bus = connect_controls(CONTROL_MAP, [target], ctx=app.ctx, hz=32)
 
