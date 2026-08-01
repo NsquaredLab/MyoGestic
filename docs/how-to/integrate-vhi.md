@@ -5,7 +5,9 @@ visualisation that ships alongside MyoGestic. It can be driven on two
 planes at once:
 
 * **LSL data plane** - high-rate continuous values. Continuous DOFs stream
-  every tick; VHI renders them on the *predicted hand*.
+  every tick; VHI renders them on the *predicted hand*. VHI publishes one
+  stream per DOF, named after the address and one channel wide, and applies
+  each the moment its sample arrives.
 * **gRPC control plane** - the manifest, discrete state, and verification.
   `GetControlManifest` reports every control VHI exports by *address*,
   `SetControl` carries held states, and a separate recording aid gates a
@@ -51,8 +53,8 @@ Load it, and hand the result to a bus with a `VhiTarget`:
 ```python
 import tomllib
 
-from myogestic.controls import ControlBus, load_control_map, resolve
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.controls import connect_controls, load_control_map
+from myogestic.vhi import vhi_targets, virtual_hand
 
 vhi = virtual_hand()
 vhi_control = vhi.control_client()
@@ -68,15 +70,14 @@ def ensure_vhi() -> None:
     global bus
     if bus is not None:
         return
-    capabilities = vhi_control.capabilities()
-    if capabilities is None:
+    # No stream and no hand is named here. `vhi_targets` looks the file's addresses up in
+    # VHI's manifest, groups them by the stream each one rides, and returns the target
+    # every group needs — one per DOF against a VHI, one for the lot against a renderer
+    # that shares a stream. `None` while VHI is unreachable; try again later.
+    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
+    if targets is None:
         return                                # not reachable yet; try again later
-    controls = resolve(CONTROL_MAP, capabilities)
-    # No hand is named here. VHI renders two of them, on two streams, and which one
-    # this file drives is the *file's* answer: the target looks its addresses up in
-    # the manifest and drives the stream carrying them. `interface=` for the same
-    # reason — which stream, and how wide, are that same answer.
-    bus = ControlBus(controls, targets=[VhiTarget(client=vhi_control, interface=vhi)], hz=32)
+    bus = connect_controls(CONTROL_MAP, targets, hz=32)
 ```
 
 The bus is built **lazily** because resolution needs a live target: VHI declares whether
@@ -84,10 +85,13 @@ each address is a number or a held state, and an app that launches VHI from its 
 necessarily starts before it exists. `capabilities()` blocks on an RPC, so call
 `ensure_vhi()` from a UI handler and let `predict` no-op while `bus is None`.
 
-One target drives one stream, which is all a map naming one hand needs. For a map naming
-**both** — sliders posing the operator's hand while a model drives the predicted one —
-[`vhi_targets`][myogestic.vhi.vhi_targets] reads the map and returns the target each
-stream needs, and `connect_controls` takes the list.
+Ask [`vhi_targets`][myogestic.vhi.vhi_targets] rather than building a `VhiTarget`
+yourself: **one target drives one stream**, and how many streams a map spans is the
+renderer's business, not yours. VHI gives one per DOF, a renderer sharing a stream gives
+one for the whole map, and a map naming *both* hands — sliders posing the operator's
+while a model drives the predicted one — is the same call again. Build a single
+`VhiTarget` by hand and it refuses a map spanning more than one stream, because it would
+otherwise have to guess which.
 
 That is the whole setup. `bus.push({"fist": 0.8})` from inside `@pipeline.predict` —
 using *your* alias, the left side of the file — and the target negotiates the wire,
@@ -123,12 +127,14 @@ local git checkout in that order. It reads `$VHI_GRPC_HOST` /
 `$VHI_GRPC_PORT` for the control endpoint (defaults `127.0.0.1:50051`).
 
 What the returned `InterfaceSpec` does **not** know is a stream name. Which
-streams VHI publishes, and which controls each carries, is in the manifest a
-*running* VHI answers with — so a target names its outlet from that answer,
-after negotiating, and nothing on this side has a table to go stale. That is
-why the outlet is not built here: until the map has been read against the
-manifest, there is nothing that says which stream it needs or how wide it is.
-`VhiTarget(interface=vhi)` is what does both, at `bind`.
+streams VHI publishes, how many there are, and which controls each carries, is
+in the manifest a *running* VHI answers with — so a target names its outlet
+from that answer, after negotiating, and nothing on this side has a table to
+go stale. That is why no outlet is built here: until the map has been read
+against the manifest, there is nothing that says which streams it needs or how
+wide each is. `vhi_targets` and the `interface=` it passes on are what do
+both, at `bind`. VHI's move to one stream per DOF needed no change on this
+side for exactly that reason.
 
 If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
 
@@ -170,17 +176,70 @@ except FileNotFoundError as e:
     PROCESSES = base       # demo still runs; VHI button just absent
 ```
 
-## Plane 1 - continuous pose over LSL
+## Plane 1 - continuous values over LSL
 
 !!! tip "Prefer the control standard"
-    Everything below describes the **legacy** wire, kept for builds that predate
-    the v2 contract. New work should declare DOFs by name and let
-    [`VhiTarget`](../api/controls.md) negotiate — then none of these channel
-    numbers appear in your code at all.
+    Everything below describes the transport underneath, which is worth knowing when
+    something misbehaves. New work should declare DOFs by name and let
+    [`vhi_targets`](../api/controls.md) negotiate — then no stream name and no channel
+    number appears in your code at all.
 
-VHI subscribes to a 9-channel float32 outlet, interpreted in `[-1, 1]`. The
-mapping below was read out of VHI's own consumer (`PredictedHandSkeleton`) and
-confirmed against recorded sessions:
+VHI subscribes to **one float32 stream per DOF, named after the address itself and one
+channel wide**: `vhi.prediction.index` is a stream called `vhi.prediction.index` carrying
+`vhi.prediction.index` on channel 0. Values are interpreted in `[-1, 1]`, `0` is rest and
+`+1` is the direction the address name denotes — the control standard is the only
+convention here.
+
+Each DOF is applied the moment its sample arrives. Nothing waits for a whole pose, so one
+nobody drives holds its last value and two processes can each own a finger. That is a
+property of *this* renderer, not of the contract: a renderer is equally free to carry
+several addresses on one wider stream, and MyoGestic drives either without being told —
+see [Build a renderer](build-a-renderer.md).
+
+Which streams exist is the manifest's answer, never a table on this side. If you are
+debugging the transport, build the outlet for the one DOF you are chasing and push it
+every predict tick — it runs its own send thread at `hz`, so only the latest push is
+sent:
+
+```python
+index = vhi.stream_outlet("vhi.prediction.index", n_channels=1)  # the manifest's name
+
+@pipeline.predict
+def predict(model, features):
+    closed = model.how_closed(features)            # np.float32, shape (1,)
+    index.push(closed)
+    return {"index": float(closed[0])}
+```
+
+Pair it with a smoothing filter - raw model output looks twitchy on a
+60 fps render:
+
+```python
+from myogestic.widgets import PostProcessor
+import time
+
+pose_filter = PostProcessor(hz=20.0)
+
+@pipeline.predict
+def predict(model, features):
+    closed = pose_filter(model.how_closed(features), timestamp=time.monotonic())
+    index.push(closed)
+    return {"index": float(closed[0])}
+
+@app.ui
+def ui(ctx):
+    with grid[6, 0]:
+        pose_filter.ui()
+```
+
+### The nine channels of a recorded pose
+
+VHI's **read-backs** — `VHI_Predict` and `VHI_Control`, the streams it publishes so a
+client can see what actually rendered — are unchanged by any of the above: nine
+positional float32 channels, standard values. That is also the layout a recorded session
+carries, which is why the table still matters even though nothing writes it any more. It
+was read out of VHI's own consumer (`PredictedHandSkeleton`) and confirmed against
+recorded sessions:
 
 | Index | Joint            | Notes                                    |
 |-------|------------------|------------------------------------------|
@@ -201,43 +260,6 @@ Two corrections to what this page used to say, both verified rather than assumed
 * Channels 6-8 **do** drive the wrist. They read `0` in archived sessions
   because the recorder hardcoded them, not because the renderer ignores them;
   see `myogestic.vhi.pose` for the layout.
-
-`0` is rest and `+1` is full flexion on this wire, as everywhere else: the
-control standard is the only convention here. Application code should not be
-writing it — see the tip above — but if you are debugging the transport, build
-the outlet yourself and push every predict tick: it runs its own send thread at
-`hz`, so only the latest push is sent.
-
-```python
-vhi_outlet = vhi.stream_outlet("MyoGestic_Output")   # the name VHI's manifest reports
-
-@pipeline.predict
-def predict(model, features):
-    pose = model.compose_pose(features)            # np.float32, shape (9,)
-    vhi_outlet.push(pose)
-    return {"pose": pose}
-```
-
-Pair it with a smoothing filter - raw model output looks twitchy on a
-60 fps render:
-
-```python
-from myogestic.widgets import PostProcessor
-import time
-
-pose_filter = PostProcessor(hz=20.0)
-
-@pipeline.predict
-def predict(model, features):
-    pose = pose_filter(model.compose_pose(features), timestamp=time.monotonic())
-    vhi_outlet.push(pose)
-    return {"pose": pose}
-
-@app.ui
-def ui(ctx):
-    with grid[6, 0]:
-        pose_filter.ui()
-```
 
 See [Post-process predictions](post-process-output.md) for filter tuning.
 
@@ -435,7 +457,8 @@ def predict(model, features):
     return {"pose": pose}
 ```
 
-Or attach `pylsl`'s `lslviewer.py` to the `MyoGestic_Output` stream. For
+Or attach `pylsl`'s `lslviewer.py` to one of the streams — `vhi.prediction.index`
+for a single DOF going out, `VHI_Predict` for all nine coming back. For
 the gRPC plane, the standard `grpcurl` works against the local server
 when VHI is running - the proto is at
 `myogestic/vhi/_proto/myogestic_vhi.proto`.
@@ -446,9 +469,10 @@ See the full **[Troubleshooting](../troubleshooting.md)** index for
 symptom-organised debugging.
 
 * **Building the wire frame by hand.** Map your names onto addresses and let
-  `VhiTarget` encode. A hand-built frame hard-codes a channel number and a sign, and
-  both are the renderer's to declare — the two pose streams do not even share a
-  convention, so one hand-built frame is silently inverted on one of them.
+  `vhi_targets` build the targets that encode. A hand-built frame hard-codes a stream
+  name and a channel number, and both are the renderer's to declare — VHI changed both
+  when it moved to one stream per DOF, and every application that had let the manifest
+  answer needed no edit at all.
 * **Numerically filtering a discrete control.** It interpolates through states nobody
   selected. Declare `debounce_s` on the DOF instead; see the smoothing table above.
 * **Relying on renderer blending to steady a classifier.** It cannot. Blending changes

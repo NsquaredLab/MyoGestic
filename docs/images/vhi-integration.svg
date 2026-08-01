@@ -5,15 +5,16 @@
   <title id="mg-vhi-title">MyoGestic ↔ VHI dual-plane integration</title>
   <desc id="mg-vhi-desc">
     Two lanes. MyoGestic (Python) on the left contains the Pipeline,
-    an LSL outlet, and the gRPC VhiControlClient. Virtual Hand Interface
-    on the right contains the Predicted hand and the Control hand. The
-    Pipeline pushes a 9-channel pose to the MyoGestic_Output LSL outlet,
-    which the Predicted hand subscribes to. The Pipeline also calls
+    the LSL outlets vhi_targets builds, and the gRPC VhiControlClient.
+    Virtual Hand Interface on the right contains the Predicted hand and
+    the Control hand. The Pipeline pushes control values onto one outlet
+    per DOF, each named after the address it carries, and the Predicted
+    hand subscribes to the vhi.prediction.* ones. The Pipeline also calls
     SetMovement on the VhiControlClient, which the Control hand consumes.
-    Optionally a MyoGestic_ControlPose LSL outlet streams a continuous
-    pose to the Control hand when VHI is in STREAM mode. VHI publishes
-    state and current movement back to MyoGestic via get_state RPC and
-    VHI_Control / VHI_Predict LSL outlets.
+    Publishing the vhi.control.pose.* streams drives the Control hand
+    continuously instead. VHI publishes state and current movement back
+    to MyoGestic via get_state RPC and the nine-channel VHI_Control and
+    VHI_Predict LSL outlets.
   </desc>
   <defs>
     <style>
@@ -47,8 +48,8 @@
   <rect class="accent" x="30" y="80" width="260" height="48" rx="8"/>
   <text class="text-strong" x="160" y="110" font-size="15" text-anchor="middle">Pipeline · @predict</text>
   <rect class="node" x="30" y="148" width="260" height="48" rx="8"/>
-  <text class="text-strong" x="160" y="170" font-size="14" text-anchor="middle">vhi.outlet()</text>
-  <text class="text-faint"  x="160" y="186" font-size="11" text-anchor="middle">9-ch LSL @ 32 Hz</text>
+  <text class="text-strong" x="160" y="170" font-size="14" text-anchor="middle">vhi_targets(...)</text>
+  <text class="text-faint"  x="160" y="186" font-size="11" text-anchor="middle">one LSL outlet per DOF</text>
   <rect class="node" x="30" y="216" width="260" height="48" rx="8"/>
   <text class="text-strong" x="160" y="238" font-size="14" text-anchor="middle">VhiControlClient</text>
   <text class="text-faint"  x="160" y="254" font-size="11" text-anchor="middle">gRPC · fire-and-forget</text>
@@ -65,8 +66,8 @@
 
   <!-- Data plane: outlet → Predicted hand -->
   <path class="edge" d="M290 172 L590 172" marker-end="url(#mgv-arrow)"/>
-  <text class="text-body"  x="440" y="160" font-size="13" text-anchor="middle">MyoGestic_Output</text>
-  <text class="text-faint" x="440" y="189" font-size="11" text-anchor="middle">continuous pose · LSL</text>
+  <text class="text-body"  x="440" y="160" font-size="13" text-anchor="middle">vhi.prediction.*</text>
+  <text class="text-faint" x="440" y="189" font-size="11" text-anchor="middle">one stream per DOF · LSL</text>
 
   <!-- Control plane: gRPC client → Control hand -->
   <path class="edge" d="M290 240 L590 240" marker-end="url(#mgv-arrow)"/>
@@ -75,7 +76,7 @@
 
   <!-- Optional STREAM mode: control_outlet -> Control hand (dashed) -->
   <path class="edge-dash" d="M290 270 C 400 296, 480 296, 590 256" marker-end="url(#mgv-arrow-faint)"/>
-  <text class="text-faint" x="440" y="296" font-size="11" text-anchor="middle">opt. MyoGestic_ControlPose (STREAM mode)</text>
+  <text class="text-faint" x="440" y="296" font-size="11" text-anchor="middle">opt. vhi.control.pose.* — publish it and the hand follows</text>
 
   <!-- Return: VHI → MyoGestic state (dashed) -->
   <path class="edge-dash" d="M590 124 L290 124" marker-end="url(#mgv-arrow-faint)"/>

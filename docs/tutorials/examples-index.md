@@ -110,7 +110,8 @@ To see it with no renderer at all:
 
 The simplest end-to-end loop: 8-channel synthetic EMG → MyoVerse RMS+MAV
 features → CatBoost binary classifier → smoothed control values to the VHI
-predicted hand via the `MyoGestic_Output` LSL outlet. No gRPC. This is
+predicted hand over LSL, on whichever streams its manifest says carry the
+addresses the control file names. No discrete gRPC commands. This is
 the reference first read, and its line-by-line companion is the
 [EMG classification tutorial](emg-classification.md).
 

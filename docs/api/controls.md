@@ -29,8 +29,9 @@ separate on purpose — a held state delivered on change is not the same thing a
       continuous address expresses.
 
     A renderer is free to publish one control under several addresses — `…index` and
-    `…index.flexion` on one channel, say — and the manifest's `channel` field is what tells
-    you two names are one control. VHI advertises each of its controls once.
+    `…index.flexion` on one stream and one channel, say — and the manifest's `stream_name`
+    and `channel` together are what tell you two names are one control. VHI advertises each
+    of its controls once.
 
 !!! tip "See it work before reading further"
     There is a narrated walkthrough that runs the whole path — declaration, the two
@@ -182,25 +183,28 @@ an ordering that is easy to get subtly wrong per-application.
 ### Negotiating with the target
 
 A target does not have to guess what an application can render. Hand `VhiTarget` a
-control client and it **asks** at bind time, then encodes according to the answer:
+control client and it **asks** at bind time, then encodes according to the answer.
+
+**One target drives one stream**, and how many streams a map spans is the renderer's
+business — VHI publishes one per DOF, another renderer may carry the whole map on one.
+So ask [`vhi_targets`][myogestic.vhi.vhi_targets]: it reads the map, groups its addresses
+by the `stream_name` the manifest reports, and returns the one target each group needs
+(or `None` while VHI is unreachable, so check before passing it on):
 
 ```python
 vhi = virtual_hand()
 client = vhi.control_client()
-# `interface=` rather than an outlet: which of VHI's two hands this drives, and how wide
-# its stream is, are the manifest's answer — read once `bind` has something to ask about.
-bus = ControlBus(controls, targets=[VhiTarget(client=client, interface=vhi)])
-```
-
-One target drives one stream. For a map naming controls on **both** hands, ask
-[`vhi_targets`][myogestic.vhi.vhi_targets] instead — it reads the map, and returns the
-one target per stream that map needs (or `None` while VHI is unreachable, so check
-before passing it on):
-
-```python
+# No stream is named and none is counted. `interface=`, which vhi_targets passes on to
+# every target it builds, is why: which stream each drives and how wide it is are the
+# manifest's answer, read once `bind` has something to ask about.
 targets = vhi_targets(control_map, vhi, client=client)
 bus = ControlBus(controls, targets=targets) if targets is not None else None
 ```
+
+Constructing a single `VhiTarget(client=client, interface=vhi)` yourself is still
+supported and is what a map confined to one stream needs, but it **refuses** a map
+spanning more than one rather than guessing which — so it is a narrower answer to the
+same question, not a simpler one.
 
 The client is **required**, because every channel, range and state comes from that
 answer. A Virtual Hand older than 2.0 has no manifest to answer with, so it is never
