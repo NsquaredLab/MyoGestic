@@ -300,6 +300,10 @@ class VhiTarget:
                 with suppress(Exception):
                     outlet.stop()
             self._outlets = {}
+            # The routes go with them. They key into `_outlets`, so leaving them would
+            # make `send` raise a KeyError per tick — and `claims` would keep reporting
+            # aliases nothing drives, which is the exact check `ControlBus` uses it for.
+            self._routed = ()
             raise
 
     def _settle(self, controls: ControlSet) -> bool:
@@ -321,7 +325,7 @@ class VhiTarget:
             log.info("VHI renders none of %d configured control(s)", len(controls.dofs))
             self._dofs = ()
             self._discrete = ()
-            self._publish((), {})
+            self._publish((), {a: float(c.rest) for a, c in exported.items()})
             self._routed = ()
             self._negotiated = True
             return True
@@ -408,13 +412,14 @@ class VhiTarget:
         for address, outlet in list(self._outlets.items()):
             if address not in addresses:
                 _retire(outlet, rests.get(address, 0.0))
-        kept = {a: o for a, o in self._outlets.items() if a in addresses}
-        self._outlets = {
-            address: kept[address]
-            if address in kept
-            else self._interface.stream_outlet(address, n_channels=1)
-            for address in addresses
-        }
+        # Assigned before the loop rather than after it, so a `stream_outlet` that raises
+        # partway leaves every outlet built so far reachable from `self`. `_negotiate`'s
+        # handler is what releases them; a local dict would have hidden them from it and
+        # leaked exactly what this method exists to prevent.
+        self._outlets = {a: o for a, o in self._outlets.items() if a in addresses}
+        for address in addresses:
+            if address not in self._outlets:
+                self._outlets[address] = self._interface.stream_outlet(address, n_channels=1)
 
     @staticmethod
     def _scope_or_refuse(
@@ -502,15 +507,20 @@ class VhiTarget:
                 ours,
             )
 
-    def _push(self, values: Mapping[str, float | str]) -> None:
-        """Send one value to each control's own stream, in the negotiated ranges."""
+    def _sample_values(self, values: Mapping[str, float | str]) -> dict[str, float]:
+        """What each driven address's stream should carry, keyed by address."""
         each = {dof.name: float(values.get(dof.name, dof.rest)) for dof in self._dofs}
-        for alias, weight, lo, hi, address in self._routed:
+        return {
+            address: min(hi, max(lo, weight * each.get(alias, 0.0)))
             # Weight first, then the target's own range — a gain must not be able to
             # push a value past what the target said it accepts.
-            self._outlets[address].push(
-                _sample(min(hi, max(lo, weight * each.get(alias, 0.0))))
-            )
+            for alias, weight, lo, hi, address in self._routed
+        }
+
+    def _push(self, values: Mapping[str, float | str]) -> None:
+        """Send one value to each control's own stream, in the negotiated ranges."""
+        for address, value in self._sample_values(values).items():
+            self._outlets[address].push(_sample(value))
 
     def capabilities(self) -> tuple[Capability, ...] | None:
         """What the renderer exports, or `None` while it cannot be reached.
@@ -528,15 +538,28 @@ class VhiTarget:
         """Return the hand to its declared rest pose, and take every stream down.
 
         Each outlet is this target's own — it built them all — so each is stopped here.
-        Nothing else can: see `_retire`.
+        Nothing else can: see `_retire`, which every one of them goes through.
+
+        **Per outlet, not per target.** Teardown is the path most likely to meet an outlet
+        that is already dead, and a single push or flush raising used to abandon every
+        outlet after it — still published, still discoverable, and still in `_outlets`, so
+        a retry double-stopped the ones it had already released. Each is rested and
+        released on its own now, the state is cleared up front so a second `stop` is a
+        genuine no-op, and the first failure is re-raised once they are all down.
         """
-        if self._routed:
-            self._push({dof.name: dof.rest for dof in self._dofs})
-        for outlet in self._outlets.values():
-            outlet.flush()
-            outlet.stop()
-        self._outlets = {}
+        rests = self._sample_values({dof.name: dof.rest for dof in self._dofs})
+        outlets, self._outlets = self._outlets, {}
         self._routed = ()
+        failures: list[Exception] = []
+        for address, outlet in outlets.items():
+            try:
+                _retire(outlet, rests.get(address, 0.0))
+            except Exception as exc:  # noqa: BLE001 - every outlet must still be released
+                failures.append(exc)
+        if failures:
+            # The first, not a group: this is what the caller used to get, and a teardown
+            # error is read for "which outlet was dead", not enumerated.
+            raise failures[0]
 
 
 __all__ = ["PoseSink", "VhiTarget"]
