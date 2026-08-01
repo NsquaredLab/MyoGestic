@@ -128,10 +128,8 @@ _SECONDS_READOUT = "0.00 s"
 #: refusal, not a preference, and warning about it needs knowing which controls are the
 #: operator's. Nothing else here does.
 #:
-#: Matched on the address, not on a stream name. Each DOF is now carried by its own stream
-#: named after the address itself, so `stream_name` is `vhi.control.pose.index` rather than
-#: one shared name — a constant holding the old shared name silently matched nothing and
-#: the warning stopped firing.
+#: Matched on the address, which is the only name there is: each control is carried by its
+#: own stream, named after the address itself.
 _CONTROL_POSE_PREFIX = "vhi.control.pose."
 
 #: The normalized signed domain a continuous control is expected to declare: `+1` is the
@@ -702,10 +700,11 @@ class ControlMapEditor:
         found: list[str] = []
         seen: dict[str, int] = {}
         exported = {cap.address for cap in self._capabilities}
-        # Two aliases on one *channel* is the conflict a target refuses, and the short
-        # and axis forms of a control share a channel — so this is keyed on the channel
-        # the manifest reports, not on the address text.
-        channels: dict[tuple[str, int], list[str]] = {}
+        # Two aliases on one control is the conflict a target refuses. Keyed on the
+        # address, which *is* the physical control's identity: a renderer advertises one
+        # spelling per control and gives each its own stream, so two addresses are two
+        # controls and one address is one control, with nothing to collapse first.
+        controls: dict[str, list[str]] = {}
         by_address = {cap.address: cap for cap in self._capabilities}
 
         for entry in self._draft:
@@ -739,17 +738,10 @@ class ControlMapEditor:
                         f"needs a target that declares signed motion."
                     )
                 cap = by_address.get(address)
-                if (
-                    cap is not None
-                    and cap.kind == "continuous"
-                    and getattr(cap, "channel", -1) >= 0
-                ):
-                    # Continuous only: a held state occupies no pose channel. Keyed on kind
-                    # rather than on the number, because a target that omits `channel` for a
-                    # discrete control reports proto3's default of 0 — indistinguishable from
-                    # pose channel 0, which made two held states collide with each other.
-                    slot = (getattr(cap, "stream_name", ""), cap.channel)
-                    channels.setdefault(slot, []).append(alias)
+                if cap is not None and cap.kind == "continuous":
+                    # Continuous only: two aliases holding one *state* is a different
+                    # thing, gated by the pose-versus-movement check below.
+                    controls.setdefault(cap.address, []).append(alias)
 
             fraction = entry["threshold_fraction"]
             if fraction is not None and not 0.0 <= fraction <= 1.0:
@@ -784,12 +776,11 @@ class ControlMapEditor:
                 f"renderer accepts one or the other — keep the pose, or keep the movement."
             )
 
-        for (stream, channel), owners in channels.items():
+        for address, owners in controls.items():
             distinct = sorted(set(owners))
             if len(distinct) > 1:
-                where = f"{stream} channel {channel}" if stream else f"channel {channel}"
                 found.append(
-                    f"{' and '.join(distinct)} both reach the same control ({where}). "
+                    f"{' and '.join(distinct)} both reach the same control ({address}). "
                     f"One control cannot take two outputs."
                 )
         return found
@@ -1297,44 +1288,20 @@ class ControlMapEditor:
         return destructive_button(fa.ICON_FA_XMARK, tooltip="Remove this target.")
 
     def _offered(self, current: str = "") -> list[Capability]:
-        """The controls worth offering: one row per *control*, not per name.
+        """The controls worth offering: every address every connected manifest exports.
 
-        Two reductions, both so a reader never has to decode a transport detail — and no
-        filter by stream: every address every manifest offers is on the list, because
-        which stream carries one is settled from the manifest when the map is bound, not
-        chosen here. Hiding the operator's hand made wanting it impossible to express.
+        No reduction and no filtering. There used to be two of each — drop a continuous
+        control the manifest gave no channel, and collapse several addresses that shared
+        one channel down to the shortest — and both are gone with the fields they read.
+        A renderer advertises one spelling per control and gives each its own stream, so
+        every address on this list is a distinct thing a map can point at, and an address
+        that is not on it is not exported at all.
 
-        * only controls a stream actually carries (plus the held states, which belong to
-          no stream) — one with no channel cannot be driven this way, so offering it just
-          earns a refusal later;
-        * **one row per channel.** A renderer *may* publish several addresses for one
-          control — a short form and its explicit axis form, say — where picking either does
-          exactly the same thing. VHI stopped advertising those, so for it this reduction is
-          now a no-op; it stays because the manifest is the target's to write and another one
-          may still alias. The shortest name wins; the others are in the row's tooltip.
-
-        `current` is always included even if it would otherwise be collapsed away, so
-        opening the picker on a file that uses an axis form neither hides its value nor
-        quietly rewrites it.
+        `current` is accepted and unused: nothing is collapsed away, so there is no longer
+        anything for it to rescue. Kept so the picker's call site does not have to know
+        that.
         """
-        best: dict[tuple[str, int], Capability] = {}
-        held: list[Capability] = []
-        for cap in self._capabilities:
-            if cap.kind != "continuous":
-                held.append(cap)
-                continue
-            stream = getattr(cap, "stream_name", "")
-            if getattr(cap, "channel", -1) < 0:
-                continue
-            slot = (stream, cap.channel)
-            winner = best.get(slot)
-            if (
-                winner is None
-                or cap.address == current
-                or (winner.address != current and len(cap.address) < len(winner.address))
-            ):
-                best[slot] = cap
-        return [*best.values(), *held]
+        return list(self._capabilities)
 
     def _gate_rules(self, entry: dict[str, Any]) -> tuple[str, str]:
         """Why `threshold_fraction` / `debounce_s` cannot apply to this entry, or "".
@@ -1533,11 +1500,7 @@ class ControlMapEditor:
         """
         selected, _ = imgui.selectable(f"{segment}{self._detail(cap)}", cap.address == address)
         if imgui.is_item_hovered():
-            peers = self._peers(cap)
-            imgui.set_tooltip(
-                f"{cap.address}\n{self._summary(cap)}"
-                + ("\n\nalso addressable as:\n  " + "\n  ".join(peers) if peers else "")
-            )
+            imgui.set_tooltip(f"{cap.address}\n{self._summary(cap)}")
         if selected:
             pair[0] = cap.address
 
@@ -1563,10 +1526,8 @@ class ControlMapEditor:
         it means `vhi.prediction.thumb` in the file. One name, the real one, and the list
         reads the way the file does.
 
-        No channel number. A wire index is not something a reader should decode to pick a
-        finger, and there is nothing left for it to disambiguate: `_offered` gives one row
-        per control, and the two addresses that used to share a channel are no longer both
-        advertised.
+        No wire detail either. There is none left to show: a control's stream is named for
+        its address, so the address on this row is the whole of the transport.
 
         The range appears only when it is *not* the signed `[-1, +1]` every control here
         declares (see `_SIGNED`), because a fact repeated on every row is one nobody reads.
@@ -1574,29 +1535,11 @@ class ControlMapEditor:
         """
         return f"{cap.address}{self._detail(cap)}"
 
-    def _peers(self, cap: Capability) -> list[str]:
-        """Other addresses that land on the same control as this one.
-
-        Continuous only, for the reason in `problems`: a held state occupies no channel,
-        and a target that omits the field reports 0 rather than -1.
-        """
-        if cap.kind != "continuous" or getattr(cap, "channel", -1) < 0:
-            return []
-        return [
-            other.address
-            for other in self._capabilities
-            if other.address != cap.address
-            and other.kind == "continuous"
-            and getattr(other, "channel", -1) == cap.channel
-            and getattr(other, "stream_name", "") == getattr(cap, "stream_name", "")
-        ]
-
     @staticmethod
     def _summary(cap: Capability) -> str:
         """What the target declared about the chosen control."""
         if cap.kind == "continuous":
-            where = f"channel {cap.channel}" if cap.channel >= 0 else "not streamed"
-            return f"number {cap.lo:+.1f}..{cap.hi:+.1f}, {where}"
+            return f"number {cap.lo:+.1f}..{cap.hi:+.1f}, on its own stream"
         if 0 < len(cap.states) <= 3:
             # The names are the whole story at this size, so say them rather than counting
             # them: a reader who sees "2 states" still has to go and find out which two.
