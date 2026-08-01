@@ -1,15 +1,16 @@
 """gRPC client for VHI's control service.
 
-Two calls, two shapes:
+Three calls, three shapes:
 
+- `VhiControlClient.capabilities` is the manifest — the whole contract `VhiTarget`
+  resolves against, with no separate handshake. Synchronous, and asked once at bind.
 - `VhiControlClient.set_control` is fire-and-forget on a worker thread: it may be
   called from the predict thread and must never block it.
 - `VhiControlClient.sweep` is synchronous and slow — it drives a joint through its
   range. For verification tools, never for a running app.
 
-`VhiControlClient.capabilities` is the manifest — the whole contract `VhiTarget`
-resolves against, with no separate handshake. Continuous per-tick values still go
-over LSL; this carries the manifest, discrete state, and verification.
+Continuous per-tick values still go over LSL; this carries the manifest, discrete
+state, and verification.
 """
 
 from __future__ import annotations

@@ -32,6 +32,14 @@ log = logging.getLogger("myogestic.vhi_target")
 #: an application constructs it and may have made it wider.
 _POSE_WIDTH = 9
 
+#: Stream names to filter a manifest by when nothing else says. A fallback only — an
+#: `InterfaceSpec` is asked first, since it is what actually names the outlet and a
+#: configuration may have renamed either stream.
+_DEFAULT_STREAM_NAMES = {
+    "output": "MyoGestic_Output",
+    "control_pose": "MyoGestic_ControlPose",
+}
+
 
 class PoseSink(Protocol):
     """The slice of `myogestic.outputs.Output` a `VhiTarget` uses.
@@ -69,7 +77,10 @@ class VhiTarget:
         Which of the renderer's pose streams this target drives: ``"output"`` (the
         default — the predicted hand) or ``"control_pose"`` (the control hand). It
         decides which channel order the target reads out of the handshake; the two
-        streams do not share one.
+        streams do not share one. The stream's *name* — what the manifest is filtered by
+        — comes from ``interface`` when one was given (``output_stream_name`` or
+        ``control_pose_stream_name``), so a renamed stream negotiates against the
+        capabilities that report the new name rather than the default.
 
     Notes
     -----
@@ -251,6 +262,26 @@ class VhiTarget:
             return True
         return False
 
+    def _wanted_stream(self) -> str:
+        """The LSL stream name this target's frames are published under.
+
+        The manifest is filtered by it: a capability on another stream is another
+        target's, and a channel index means nothing across streams.
+
+        Taken from the interface when there is one, because that is what names the
+        outlet — an `InterfaceSpec` that renamed a stream would otherwise publish to one
+        name while negotiation filtered against another, and every capability would be
+        dropped. Only the outlet-only construction path, where nothing says, falls back
+        to the names `virtual_hand()` uses.
+        """
+        default = _DEFAULT_STREAM_NAMES[self._stream]
+        attribute = (
+            "control_pose_stream_name" if self._stream == "control_pose" else "output_stream_name"
+        )
+        # `control_pose_stream_name` is optional on an InterfaceSpec, so an interface
+        # that has none is the fallback case too.
+        return getattr(self._interface, attribute, None) or default
+
     def _negotiate(self, controls: ControlSet) -> bool:
         """Try the handshake. False means "no answer yet", never a refusal."""
         routes = getattr(controls, "routes", None) or {}
@@ -271,9 +302,7 @@ class VhiTarget:
         # Only this stream's controls. A renderer publishes several, and a channel index
         # means nothing across them — an address from the wrong stream would put a value
         # on a same-numbered channel of a different hand.
-        wanted = (
-            "MyoGestic_ControlPose" if self._stream == "control_pose" else "MyoGestic_Output"
-        )
+        wanted = self._wanted_stream()
         by_address = {
             cap.address: cap
             for cap in capabilities
@@ -415,9 +444,7 @@ class VhiTarget:
             return False
         # Each stream carries its own channel numbering; reading the wrong one leaves a
         # frame correct on one stream and empty on the other.
-        wanted = (
-            "MyoGestic_ControlPose" if self._stream == "control_pose" else "MyoGestic_Output"
-        )
+        wanted = self._wanted_stream()
         # Keyed by address rather than reduced straight to a name tuple: the *position*
         # of an address in a sorted list is not its channel unless every channel below
         # it is also present on this stream, and nothing here guarantees that.
@@ -435,8 +462,8 @@ class VhiTarget:
         missing = [name for name in declared if name not in order]
         if missing:
             raise ValueError(
-                f"VHI accepted {missing} but its channel order {list(order)} has no "
-                f"place for them. Rendering the rest would leave these looking like "
+                f"VHI's {wanted} channel order {list(order)} has no place for "
+                f"{missing}. Rendering the rest would leave these looking like "
                 f"controls that work and hold still."
             )
         widest = max((cap.channel for cap in by_address.values()), default=-1)
