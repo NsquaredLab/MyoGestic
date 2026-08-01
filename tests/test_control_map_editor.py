@@ -565,14 +565,16 @@ class TestTheRangeIsOnlyShownWhenItIsNews:
         assert "channel 2" in summary
 
 
-class TestOneMapDrivesOneHand:
-    """The picker must not offer a control the map's own target cannot drive.
+class TestTheMapPicksTheHand:
+    """The picker offers every address, because the map is what chooses between them.
 
-    A `VhiTarget` drives one hand, so a map mixing `vhi.prediction.*` with
-    `vhi.control.pose.*` cannot bind. The editor knew each control's stream all along and
-    ignored it: it offered all 23, validated a cross-hand pick as fine, enabled Save, wrote
-    the file — and the refusal then arrived from the bus, three layers from the click. The
-    two hands even share channel numbers, so this is not a cosmetic mix-up.
+    It used to offer one hand's, chosen by the application before the file was opened —
+    so a user who wanted the operator's hand could not express it, and the same file was
+    called invalid in one app and fine in another. Which stream carries an address is
+    settled from the manifest when the map is *bound* (`myogestic.vhi.vhi_targets` builds
+    a target per stream a map names), so there is nothing here to filter by and no
+    cross-hand pick to refuse. The one combination the renderer itself refuses — a pose
+    and a movement on the same hand — is `TestOneWayToDriveTheControlHand`, below.
     """
 
     def test_every_hand_is_offered(self, tmp_path):

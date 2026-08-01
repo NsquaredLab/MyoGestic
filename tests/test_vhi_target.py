@@ -26,6 +26,7 @@ import pytest
 from myogestic.controls import ControlBus, ControlSet
 from myogestic.outputs.filters import GaussianFilter
 from myogestic.vhi._control import _QUEUE_DEPTH
+from myogestic.vhi.interfaces import InterfaceSpec
 from myogestic.vhi.pose import POSE_DOFS, POSE_WIDTH
 from myogestic.vhi.target import VhiTarget
 
@@ -33,11 +34,17 @@ from .conftest import build_controls
 
 
 class FakeOutlet:
-    """A `PoseSink` that records what reached the wire."""
+    """A `PoseSink` that records what reached the wire.
 
-    def __init__(self) -> None:
+    Nameless by default, like a recorder or any other sink that is not an LSL stream —
+    `LSLOutlet` is what reports a `name`, and a target only checks a sink that does.
+    """
+
+    def __init__(self, name: str = "") -> None:
         self.frames: list[np.ndarray] = []
         self.flushes = 0
+        if name:
+            self.name = name
 
     def push(self, data: np.ndarray) -> None:
         self.frames.append(np.array(data, copy=True))
@@ -1074,7 +1081,9 @@ def test_an_unnamed_target_follows_the_map_onto_the_operators_hand():
     controls = resolve(
         load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
     )
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(TWO_STREAMS))
+    target = VhiTarget(
+        FakeOutlet("MyoGestic_ControlPose"), client=ManifestClient(TWO_STREAMS)
+    )
     target.bind(controls)
     assert target.claims == frozenset({"a"})
     assert target._routed[0][0] == 2, "the operator's index, on its own stream"
@@ -1771,3 +1780,98 @@ def test_a_map_that_streams_nothing_still_gets_the_target_its_states_need():
     targets[0].bind(_map_controls({"g": "vhi.control.gesture"}, MANIFEST))
     assert targets[0].claims == frozenset({"g"})
     assert targets[0]._outlet is None, "nothing continuous, so no stream at all"
+
+
+# --- a supplied outlet has to be the stream the map resolved to --------------------
+#
+# The one thing the map deciding could get wrong that nothing else catches. Both hands
+# number their channels from 0, so an outlet publishing the model's hand handed a map of
+# the operator's would write the operator's values onto the model's channels — no error
+# anywhere, just the wrong hand moving. It used to be impossible: outlet and filter both
+# came off `InterfaceSpec.output_stream_name`, so they could not disagree.
+
+
+def test_an_outlet_publishing_another_stream_is_refused():
+    """The silent leak, made loud. It names both streams, because either could be wrong."""
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(
+        load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
+    )
+    target = VhiTarget(
+        FakeOutlet("MyoGestic_Output"), client=ManifestClient(TWO_STREAMS)
+    )
+    with pytest.raises(ValueError) as excinfo:
+        target.bind(controls)
+    message = str(excinfo.value)
+    assert "MyoGestic_ControlPose" in message and "MyoGestic_Output" in message
+
+
+def test_a_named_stream_that_disagrees_with_its_outlet_is_refused_too():
+    """Naming the stream explicitly is not a way to opt out of the check."""
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(
+        load_control_map({"dofs": {"a": "vhi.prediction.index"}}), TWO_STREAMS
+    )
+    target = VhiTarget(
+        FakeOutlet("MyoGestic_ControlPose"),
+        client=ManifestClient(TWO_STREAMS),
+        stream_name="MyoGestic_Output",
+    )
+    with pytest.raises(ValueError, match="another hand's channels"):
+        target.bind(controls)
+
+
+def test_a_sink_that_reports_no_name_is_not_checked():
+    """A recorder or a test double is not an LSL stream and has nothing to disagree with."""
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(
+        load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
+    )
+    target = VhiTarget(FakeOutlet(), client=ManifestClient(TWO_STREAMS))
+    target.bind(controls)
+    assert target.negotiated is True
+
+
+def test_a_real_outlet_reports_the_name_the_check_needs():
+    """The check is only worth anything if the outlet an application builds answers it."""
+    from myogestic.vhi import virtual_hand
+
+    outlet = virtual_hand().stream_outlet("MyoGestic_Output", n_channels=2)
+    try:
+        assert outlet.name == "MyoGestic_Output"
+    finally:
+        outlet.stop()
+
+
+def test_a_renderer_that_names_no_stream_cannot_be_published_to_by_an_owned_outlet():
+    """There is no name to build one under, and nothing may be invented in its place.
+
+    The wildcard path works fine with a *supplied* outlet — the application named it —
+    so the refusal has to say that rather than leaving `stream_outlet("")` to fail with
+    advice a target building its own stream cannot follow.
+    """
+    from myogestic.controls import load_control_map, resolve
+
+    nameless = [_cap("vhi.prediction.index", 2, stream="")]
+    controls = resolve(load_control_map({"dofs": {"a": "vhi.prediction.index"}}), nameless)
+    spec = InterfaceSpec(name="probe", process=[], n_output_channels=9, output_hz=32.0)
+    target = VhiTarget(client=ManifestClient(nameless), interface=spec)
+    with pytest.raises(ValueError, match="no stream_name"):
+        target.bind(controls)
+
+
+def test_vhi_targets_defers_that_refusal_to_bind_rather_than_hiding_it():
+    """It still hands back a target: the diagnosis belongs where the map is bound."""
+    from myogestic.controls import load_control_map
+    from myogestic.vhi import vhi_targets
+
+    nameless = [_cap("vhi.prediction.index", 2, stream="")]
+    targets = vhi_targets(
+        load_control_map({"dofs": {"a": "vhi.prediction.index"}}),
+        InterfaceSpec(name="probe", process=[], n_output_channels=9, output_hz=32.0),
+        client=ManifestClient(nameless),
+    )
+    assert len(targets) == 1

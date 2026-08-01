@@ -187,9 +187,19 @@ control client and it **asks** at bind time, then encodes according to the answe
 ```python
 vhi = virtual_hand()
 client = vhi.control_client()
-# One target per stream the map names — the manifest says which stream carries each
-# address, so nothing here decides which of VHI's two hands this app drives.
-bus = ControlBus(controls, targets=vhi_targets(control_map, vhi, client=client))
+# `interface=` rather than an outlet: which of VHI's two hands this drives, and how wide
+# its stream is, are the manifest's answer — read once `bind` has something to ask about.
+bus = ControlBus(controls, targets=[VhiTarget(client=client, interface=vhi)])
+```
+
+One target drives one stream. For a map naming controls on **both** hands, ask
+[`vhi_targets`][myogestic.vhi.vhi_targets] instead — it reads the map, and returns the
+one target per stream that map needs (or `None` while VHI is unreachable, so check
+before passing it on):
+
+```python
+targets = vhi_targets(control_map, vhi, client=client)
+bus = ControlBus(controls, targets=targets) if targets is not None else None
 ```
 
 The client is **required**, because every channel, range and state comes from that

@@ -136,14 +136,18 @@ class InterfaceSpec:
         ------
         ValueError
             If `name` is empty. An unnamed LSL stream cannot be resolved, so a renderer
-            whose manifest names no stream for these controls has to be given an outlet
-            built by the application instead.
+            whose manifest reports no ``stream_name`` for these controls cannot be
+            published to by a target that builds its own outlet — there is nothing to
+            build one under. Such a renderer has to be driven through an outlet the
+            application names and constructs.
         """
         if not name:
             raise ValueError(
-                f"{self.name}: cannot publish an unnamed stream. The manifest names no "
-                f"stream for these controls, so construct the outlet yourself and pass "
-                f"it to VhiTarget positionally."
+                f"{self.name}: cannot publish an unnamed stream. This renderer's manifest "
+                f"reports no stream_name for these controls, so there is no name to "
+                f"publish under. Build the outlet yourself — "
+                f"{self.name}.stream_outlet('<the stream it reads>', n_channels=…) — and "
+                f"pass it to VhiTarget positionally instead of `interface=`."
             )
         return LSLOutlet(
             name=name,
