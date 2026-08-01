@@ -5,11 +5,11 @@ files nobody here wrote. Two things matter: its exit status has to be trustworth
 usable in a hook or in CI — and a verdict of "usable" has to mean the map really would
 bind, not merely that every address exists.
 
-That second point is the interesting one. `resolve` cannot see two aliases landing on one
-physical control, because a target publishes the short and axis forms of a control as two
-addresses sharing a channel; only something putting both on a wire finds out. The
-validator reproduces that check from the manifest rather than declaring anything to a
-live target, and these tests are what keep the two verdicts in agreement.
+That second point is the interesting one. `resolve` checks addresses one at a time, so it
+cannot see two aliases landing on one control — that is a fact about the *set*, and only
+something driving all of them at once finds out. The validator reproduces that check from
+the manifest rather than declaring anything to a live target, and these tests are what
+keep the two verdicts in agreement.
 """
 
 from __future__ import annotations
@@ -25,31 +25,14 @@ import inspect_control_map as tool  # noqa: E402
 
 from myogestic.controls import Capability  # noqa: E402
 
-#: A stand-in for VHI's manifest, with the aliasing that makes collisions possible:
-#: `vhi.prediction.thumb` and `...thumb.flexion` are one channel under two names.
+#: A stand-in for VHI's manifest: one address per control, on both hands.
 MANIFEST = [
-    Capability(
-        "vhi.prediction.thumb", "continuous", -1.0, 1.0, 0.0, channel=0,
-        stream_name="MyoGestic_Output",
-    ),
-    Capability(
-        "vhi.prediction.thumb.flexion", "continuous", -1.0, 1.0, 0.0, channel=0,
-        stream_name="MyoGestic_Output",
-    ),
-    Capability(
-        "vhi.prediction.index", "continuous", -1.0, 1.0, 0.0, channel=2,
-        stream_name="MyoGestic_Output",
-    ),
-    Capability(
-        "vhi.prediction.middle", "continuous", -1.0, 1.0, 0.0, channel=3,
-        stream_name="MyoGestic_Output",
-    ),
-    # A different hand, numbering from 0 again — so a channel number means nothing
-    # without its stream.
-    Capability(
-        "vhi.control.pose.thumb", "continuous", -1.0, 1.0, 0.0, channel=0,
-        stream_name="MyoGestic_ControlPose",
-    ),
+    Capability("vhi.prediction.thumb.flexion", "continuous", -1.0, 1.0, 0.0),
+    Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0),
+    Capability("vhi.prediction.middle", "continuous", -1.0, 1.0, 0.0),
+    # The other hand. A separate namespace, and separate controls — driving one of each
+    # is a perfectly good map.
+    Capability("vhi.control.pose.thumb.flexion", "continuous", -1.0, 1.0, 0.0),
     Capability(
         "vhi.control.gesture", "discrete", states=("Rest", "Fist"), rest_state="Rest",
     ),
@@ -99,31 +82,36 @@ class TestTheVerdictIsTrustworthy:
     def test_a_map_that_would_not_bind_fails_even_though_resolve_accepts_it(
         self, tmp_path, target, capsys
     ):
-        """The whole reason this check exists: two names, one channel."""
+        """The whole reason this check exists: two aliases, one control."""
         from myogestic.controls import load_control_map, resolve  # noqa: PLC0415
 
-        body = '[dofs]\na = "vhi.prediction.thumb"\nb = "vhi.prediction.thumb.flexion"\n'
-        # resolve() is happy — both addresses are real.
+        body = (
+            '[dofs]\n'
+            'a = "vhi.prediction.index"\n'
+            'b = [{ target = "vhi.prediction.index", weight = 0.5 }]\n'
+        )
+        # resolve() is happy — the address is real and each alias names it once.
         resolve(load_control_map({"dofs": {
-            "a": "vhi.prediction.thumb", "b": "vhi.prediction.thumb.flexion",
+            "a": "vhi.prediction.index",
+            "b": [{"target": "vhi.prediction.index", "weight": 0.5}],
         }}), MANIFEST)
         # The validator is not.
         assert tool.main([_write(tmp_path, body)]) == 1
         assert "same control" in capsys.readouterr().err
 
-    def test_the_same_channel_on_two_different_streams_is_not_a_collision(
+    def test_the_same_finger_on_two_different_hands_is_not_a_collision(
         self, tmp_path, target
     ):
-        """Both hands number from 0; conflating them would refuse a valid map."""
+        """Two hands, two controls. Matching on anything but the address would refuse this."""
         body = (
             '[dofs]\n'
-            'predicted = "vhi.prediction.thumb"\n'
-            'operator = "vhi.control.pose.thumb"\n'
+            'predicted = "vhi.prediction.thumb.flexion"\n'
+            'operator = "vhi.control.pose.thumb.flexion"\n'
         )
         assert tool.main([_write(tmp_path, body)]) == 0
 
-    def test_a_discrete_alias_does_not_collide_with_a_channel(self, tmp_path, target):
-        """A held state travels over gRPC, so it claims no channel."""
+    def test_a_discrete_alias_does_not_collide_with_a_streamed_one(self, tmp_path, target):
+        """A held state travels over gRPC, so it drives no stream."""
         body = (
             '[dofs]\n'
             'grip = "vhi.prediction.index"\n'
@@ -138,7 +126,7 @@ class TestTheVerdictIsTrustworthy:
             "[dofs\nbroken = \n",  # not TOML
             "[dofs]\n",  # nothing declared
             '[dofs]\nx = "wrist"\n',  # not an address
-            '[dofs]\nmy.thumb = "vhi.prediction.thumb"\n',  # TOML's nested-key trap
+            '[dofs]\nmy.thumb = "vhi.prediction.thumb.flexion"\n',  # TOML's nested-key trap
         ],
         ids=["no-dofs", "malformed", "empty", "not-an-address", "nested-key"],
     )
@@ -166,7 +154,7 @@ class TestItReportsWhatTheUserAskedToSee:
     @pytest.fixture
     def report(self, tmp_path, target, capsys) -> str:
         body = GOOD + (
-            'squeeze = { target = "vhi.prediction.thumb", threshold_fraction = 0.4 }\n'
+            'squeeze = { target = "vhi.prediction.thumb.flexion", threshold_fraction = 0.4 }\n'
             'gesture = { target = "vhi.control.gesture", debounce_s = 0.25 }\n'
         )
         assert tool.main([_write(tmp_path, body)]) == 0

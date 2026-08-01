@@ -14,43 +14,36 @@ from __future__ import annotations
 
 import pathlib
 import tomllib
-from dataclasses import replace
 
 import pytest
 
 from myogestic.controls import Capability, load_control_map
 from myogestic.widgets import ControlMapEditor
 
-#: A stand-in for VHI's manifest, including the aliasing that makes collisions possible:
-#: `vhi.prediction.thumb` and `...thumb.flexion` are one channel under two names.
+#: The nine DOFs VHI advertises, spelled the one way it spells them. There is no bare
+#: `vhi.prediction.thumb` and no `vhi.prediction.index.flexion`: a renderer publishes
+#: exactly one address per physical control, so two addresses are always two controls.
+_DOFS = (
+    "thumb.flexion",
+    "thumb.abduction",
+    "index",
+    "middle",
+    "ring",
+    "little",
+    "wrist.flexion",
+    "wrist.abduction",
+    "wrist.rotation",
+)
+
+#: A stand-in for VHI's manifest: the model-driven hand, the operator's hand, and the one
+#: held state. Each continuous control travels on its own one-channel LSL stream named for
+#: its own address, which is why nothing here carries a stream name or a channel index —
+#: the address *is* the transport, and a second field could only repeat it.
 MANIFEST = [
-    Capability(
-        "vhi.prediction.thumb", "continuous", -1.0, 1.0, 0.0, channel=0,
-        stream_name="MyoGestic_Output",
-    ),
-    Capability(
-        "vhi.prediction.thumb.flexion", "continuous", -1.0, 1.0, 0.0, channel=0,
-        stream_name="MyoGestic_Output",
-    ),
-    # The thumb's second axis: its own channel, so it is a different control rather than
-    # another name for one. Without it here, the "not collapsed away" test had nothing to
-    # assert against.
-    Capability(
-        "vhi.prediction.thumb.abduction", "continuous", -1.0, 1.0, 0.0, channel=1,
-        stream_name="MyoGestic_Output",
-    ),
-    Capability(
-        "vhi.prediction.index", "continuous", -1.0, 1.0, 0.0, channel=2,
-        stream_name="MyoGestic_Output",
-    ),
-    Capability(
-        "vhi.prediction.middle", "continuous", -1.0, 1.0, 0.0, channel=3,
-        stream_name="MyoGestic_Output",
-    ),
-    # A second hand, numbering from 0 again — a channel means nothing without its stream.
-    Capability(
-        "vhi.control.pose.thumb", "continuous", -1.0, 1.0, 0.0, channel=0,
-        stream_name="MyoGestic_ControlPose",
+    *(
+        Capability(f"vhi.{namespace}.{dof}", "continuous", -1.0, 1.0, 0.0)
+        for namespace in ("prediction", "control.pose")
+        for dof in _DOFS
     ),
     Capability(
         "vhi.control.gesture", "discrete", states=("Rest", "Fist", "Pointing"),
@@ -151,7 +144,7 @@ class TestSaveIsBlockedWhileTheMapIsWrong:
 
     def test_two_aliases_with_one_name_are_refused(self, tmp_path):
         editor = _editor(tmp_path, GOOD)
-        editor.add_control("grip", "vhi.prediction.thumb")
+        editor.add_control("grip", "vhi.prediction.thumb.flexion")
         editor._draft[-1]["alias"] = "grip"
         assert any("used twice" in p for p in editor.problems())
         assert editor.as_control_map() is None
@@ -168,29 +161,40 @@ class TestSaveIsBlockedWhileTheMapIsWrong:
         assert any("points at nothing" in p for p in editor.problems())
 
     def test_an_address_the_target_does_not_export_is_refused(self, tmp_path):
+        """A near miss rather than nonsense: the wrist has three axes and no bare form, so
+        `vhi.prediction.wrist` is exactly the plausible thing someone would type."""
         editor = _editor(tmp_path, None)
         editor.add_control("my_wrist", "vhi.prediction.wrist")
         assert any("does not export" in p for p in editor.problems())
 
-    def test_two_aliases_on_one_channel_are_refused_even_under_two_names(self, tmp_path):
-        """The conflict `resolve` cannot see: one channel, two addresses naming it."""
+    def test_two_aliases_reaching_one_control_are_refused(self, tmp_path):
+        """The conflict `resolve` cannot see: one control, two outputs driving it.
+
+        Two aliases both naming `vhi.prediction.index` is a map that would have the bus
+        write two different values into one finger, last one wins. Refused here, with the
+        file still open, rather than discovered as a twitching hand.
+        """
         editor = _editor(tmp_path, None)
-        editor.add_control("a", "vhi.prediction.thumb")
-        editor.add_control("b", "vhi.prediction.thumb.flexion")
+        editor.add_control("a", "vhi.prediction.index")
+        editor.add_control("b", "vhi.prediction.index")
         problems = editor.problems()
         assert any("same control" in p for p in problems), problems
         assert editor.save() is False
 
-    def test_the_same_channel_on_two_streams_is_not_a_collision(self, tmp_path):
-        """Both hands number from 0, and conflating them would be the wrong diagnosis.
+    def test_two_different_controls_are_not_a_collision(self, tmp_path):
+        """One address is one control, so two addresses can never be the same one.
 
-        Mixing the hands in one map *is* refused — see `TestOneMapDrivesOneHand` — but as
-        "one map controls one hand", not as "these two reach the same control". The channel
-        numbers matching is a coincidence of two hands both counting from zero.
+        This used to be "the same channel on two streams", from when a collision was keyed
+        on a `(stream, channel)` pair and both hands numbered their channels from zero, so
+        the model's index and the operator's index looked identical to the check. There is
+        no channel left to coincide. Naming both hands in one map is fine outright — see
+        `TestTheMapPicksTheHand` — and the one combination that *is* refused is a pose and
+        a movement on the operator's hand, which is `TestOneWayToDriveTheControlHand` and
+        is a different refusal with a different sentence.
         """
         editor = _editor(tmp_path, None)
-        editor.add_control("predicted", "vhi.prediction.thumb")
-        editor.add_control("operator", "vhi.control.pose.thumb")
+        editor.add_control("predicted", "vhi.prediction.index")
+        editor.add_control("operator", "vhi.control.pose.index")
         assert not any("same control" in p for p in editor.problems())
 
     def test_one_alias_fanning_out_to_several_controls_is_fine(self, tmp_path):
@@ -229,8 +233,8 @@ class TestSaveIsBlockedWhileTheMapIsWrong:
         """The point of all of the above: the file on disk stays loadable."""
         editor = _editor(tmp_path, GOOD)
         original = editor.path.read_text()
-        editor.add_control("a", "vhi.prediction.thumb")
-        editor.add_control("b", "vhi.prediction.thumb.flexion")
+        editor.add_control("a", "vhi.prediction.thumb.flexion")
+        editor.add_control("b", "vhi.prediction.thumb.flexion")   # the same control twice
         assert editor.save() is False
         assert editor.path.read_text() == original
 
@@ -278,7 +282,7 @@ class TestEditing:
     def test_reload_discards_unsaved_edits(self, tmp_path):
         """The working copy is not a store: nothing survives that the file does not."""
         editor = _editor(tmp_path, GOOD)
-        editor.add_control("scratch", "vhi.prediction.thumb")
+        editor.add_control("scratch", "vhi.prediction.thumb.flexion")
         editor.load()
         assert [e["alias"] for e in editor._draft] == ["grip"]
 
@@ -396,16 +400,16 @@ class TestTheFileCanBeEditedAsText:
     def test_it_renders_from_the_fields_once_they_have_diverged(self, tmp_path):
         """Stale text beside live fields is worse than losing the comments."""
         editor = _editor(tmp_path, GOOD)
-        editor.add_control("extra", "vhi.prediction.thumb")
+        editor.add_control("extra", "vhi.prediction.thumb.flexion")
         assert "extra" in editor.raw_text()
 
     def test_valid_text_replaces_the_working_copy(self, tmp_path):
         editor = _editor(tmp_path, GOOD)
         assert editor.apply_raw(
-            '[dofs]\ngrip = { target = "vhi.prediction.thumb", weight = 0.5 }\n'
+            '[dofs]\ngrip = { target = "vhi.prediction.thumb.flexion", weight = 0.5 }\n'
         )
         assert [e["alias"] for e in editor._draft] == ["grip"]
-        assert editor._draft[0]["targets"] == [["vhi.prediction.thumb", 0.5]]
+        assert editor._draft[0]["targets"] == [["vhi.prediction.thumb.flexion", 0.5]]
 
     @pytest.mark.parametrize(
         ("text", "expected"),
@@ -426,11 +430,11 @@ class TestTheFileCanBeEditedAsText:
         assert editor._draft == before, "a refused apply must change nothing"
 
     def test_text_that_parses_but_would_not_bind_still_blocks_the_save(self, tmp_path):
-        """Two aliases on one channel: valid TOML, valid addresses, unusable map."""
+        """Two aliases on one control: valid TOML, a valid address, unusable map."""
         editor = _editor(tmp_path, GOOD)
         original = editor.path.read_text()
         assert editor.apply_raw(
-            '[dofs]\na = "vhi.prediction.thumb"\nb = "vhi.prediction.thumb.flexion"\n'
+            '[dofs]\na = "vhi.prediction.thumb.flexion"\nb = "vhi.prediction.thumb.flexion"\n'
         ), "the text itself is valid, so applying it succeeds"
         assert editor.problems(), "but the map is not usable"
         assert editor.save() is False
@@ -454,10 +458,11 @@ class TestTheFileCanBeEditedAsText:
 class TestThePickerRowsAreReadable:
     """What a row says is the only thing standing between a user and the address syntax.
 
-    The list has one genuine surprise in it: a renderer publishes the short and the
-    explicit-axis form of a control as two addresses on **one** channel, so eleven rows
-    can mean six controls. A row that hides that invites someone to map two of their
-    outputs onto the same finger and only find out at the save.
+    There is no surprise left in the list: one row is one control, and picking two rows
+    picks two controls. It used to hold the short and the explicit-axis form of a control
+    as two addresses on one channel, so eleven rows could mean six controls and a row that
+    said only its address was actively misleading. A row is now just its address and what
+    it accepts, because that is now the whole truth about it.
     """
 
     @pytest.fixture
@@ -467,33 +472,29 @@ class TestThePickerRowsAreReadable:
     @pytest.mark.parametrize(
         "address",
         [
-            "vhi.prediction.thumb",
             "vhi.prediction.thumb.flexion",
-            "vhi.control.pose.thumb",
+            "vhi.prediction.thumb.abduction",
+            "vhi.control.pose.thumb.flexion",
             "vhi.control.gesture",
         ],
     )
     def test_a_row_shows_the_address_the_file_uses(self, editor, address):
         """No prettier short form. A shortened name is a second vocabulary for the same
         thing: you would read `thumb` in the picker and have to know it means
-        `vhi.prediction.thumb` in the TOML."""
+        `vhi.prediction.thumb.flexion` in the TOML."""
         cap = next(c for c in MANIFEST if c.address == address)
         assert editor._describe(cap).startswith(address)
 
-    def test_a_row_carries_no_channel_number(self, editor):
-        """A wire index is not something a reader should decode to pick a finger, and with
-        one row per control there is nothing left for it to disambiguate."""
-        cap = next(c for c in MANIFEST if c.address == "vhi.prediction.index")
-        assert editor._describe(cap) == "vhi.prediction.index"
-
-    def test_an_unstreamed_control_is_not_offered_at_all(self, editor):
-        """It cannot be driven this way, so offering it only earns a refusal later."""
-        off = Capability(
-            "vhi.grip.force", "continuous", 0.0, 1.0, 0.0, channel=-1,
-            stream_name="MyoGestic_Output",
-        )
-        editor._capabilities = (*editor._capabilities, off)
-        assert "vhi.grip.force" not in [c.address for c in editor._offered()]
+    # Removed: `test_a_row_carries_no_channel_number`. A `Capability` has no channel to
+    # leak into a row, so the only way to fail it would be to invent one. The assertion it
+    # actually made — a row is the address and nothing else — is made below by
+    # `test_a_row_carries_the_address_and_nothing_it_does_not_need`, and again by
+    # `TestTheRangeIsOnlyShownWhenItIsNews.test_the_signed_default_is_left_unsaid`.
+    #
+    # Removed: `test_an_unstreamed_control_is_not_offered_at_all`. "Unstreamed" was
+    # `channel = -1`, a continuous control the manifest named but no pose channel carried.
+    # Every continuous control now has its own stream by construction, so a manifest cannot
+    # advertise one that is not reachable and `_offered` has nothing left to filter out.
 
     def test_a_discrete_row_names_the_states_it_accepts(self, editor):
         """Named rather than counted, while they fit. "3 states" makes a reader go and look
@@ -502,21 +503,12 @@ class TestThePickerRowsAreReadable:
         described = editor._describe(cap)
         assert " / ".join(cap.states) in described
 
-    def test_the_aliased_forms_of_one_control_are_reported_as_peers(self, editor):
-        """`thumb` and `thumb.flexion` are one channel; a user has to be able to see it."""
-        thumb = next(c for c in MANIFEST if c.address == "vhi.prediction.thumb")
-        assert editor._peers(thumb) == ["vhi.prediction.thumb.flexion"]
-        # Reported as addresses too, for the same reason the rows are.
-        assert all(peer.startswith("vhi.") for peer in editor._peers(thumb))
-
-    def test_a_control_with_its_own_channel_has_no_peers(self, editor):
-        alone = next(c for c in MANIFEST if c.address == "vhi.prediction.index")
-        assert editor._peers(alone) == []
-
-    def test_the_same_channel_on_another_stream_is_not_a_peer(self, editor):
-        """Both hands number from 0 — conflating them would claim two hands are one."""
-        predicted = next(c for c in MANIFEST if c.address == "vhi.prediction.thumb")
-        assert "vhi.control.pose.thumb" not in editor._peers(predicted)
+    # Removed with `_peers` itself: `test_the_aliased_forms_of_one_control_are_reported_as_peers`,
+    # `test_a_control_with_its_own_channel_has_no_peers` and
+    # `test_the_same_channel_on_another_stream_is_not_a_peer`. A peer was another address
+    # for the row's own control, found by matching `(stream_name, channel)`. A renderer now
+    # advertises one spelling per control, so no address has a peer and the question "which
+    # other names reach this same thing" has no answer to give.
 
     def test_a_row_carries_the_address_and_nothing_it_does_not_need(self, editor):
         for cap in MANIFEST:
@@ -545,25 +537,24 @@ class TestTheRangeIsOnlyShownWhenItIsNews:
         assert described == "vhi.prediction.index", "the address, and nothing else"
 
     def test_a_one_way_range_is_called_out(self, editor):
-        one_way = Capability(
-            "vhi.grip.force", "continuous", 0.0, 1.0, 0.0, channel=7,
-            stream_name="MyoGestic_Output",
-        )
+        one_way = Capability("vhi.grip.force", "continuous", 0.0, 1.0, 0.0)
         assert "[+0.0..+1.0]" in editor._describe(one_way)
 
     def test_an_asymmetric_range_is_called_out(self, editor):
-        odd = Capability(
-            "vhi.wrist.rotation", "continuous", -0.5, 1.0, 0.0, channel=8,
-            stream_name="MyoGestic_Output",
-        )
+        odd = Capability("vhi.grip.torque", "continuous", -0.5, 1.0, 0.0)
         assert "[-0.5..+1.0]" in editor._describe(odd)
 
     def test_the_full_facts_are_still_available_on_the_selected_control(self, editor):
-        """Nothing is lost by leaving the usual case unsaid — `_summary` is the tooltip."""
+        """Nothing is lost by leaving the usual case unsaid — `_summary` is the tooltip.
+
+        The tooltip used to end with the channel the control rode on. It says "on its own
+        stream" instead, which is the same fact once every control has one: there is no
+        index to quote, because there is nothing to be an index *into*.
+        """
         cap = next(c for c in MANIFEST if c.address == "vhi.prediction.index")
         summary = editor._summary(cap)
         assert "-1.0" in summary and "+1.0" in summary
-        assert "channel 2" in summary
+        assert "on its own stream" in summary
 
 
 class TestTheMapPicksTheHand:
@@ -572,10 +563,9 @@ class TestTheMapPicksTheHand:
     It used to offer one hand's, chosen by the application before the file was opened —
     so a user who wanted the operator's hand could not express it, and the same file was
     called invalid in one app and fine in another. Which stream carries an address is
-    settled from the manifest when the map is *bound* (`myogestic.vhi.vhi_targets` builds
-    a target per stream a map names), so there is nothing here to filter by and no
-    cross-hand pick to refuse. The one combination the renderer itself refuses — a pose
-    and a movement on the same hand — is `TestOneWayToDriveTheControlHand`, below.
+    settled by the address itself, so there is nothing here to filter by and no cross-hand
+    pick to refuse. The one combination the renderer itself refuses — a pose and a movement
+    on the same hand — is `TestOneWayToDriveTheControlHand`, below.
     """
 
     def test_every_hand_is_offered(self, tmp_path):
@@ -586,8 +576,19 @@ class TestTheMapPicksTheHand:
         editor.load()
         editor._connect()
         addresses = [cap.address for cap in editor._offered()]
-        assert "vhi.prediction.thumb" in addresses
-        assert "vhi.control.pose.thumb" in addresses
+        assert "vhi.prediction.thumb.flexion" in addresses
+        assert "vhi.control.pose.thumb.flexion" in addresses
+
+    def test_nothing_the_manifest_exports_is_held_back(self, tmp_path):
+        """Every address, unreduced — the whole of what `_offered` now does.
+
+        It used to drop and collapse: a continuous control with no channel was dropped as
+        undrivable, and several addresses sharing a channel were folded down to the
+        shortest. Both read a field that is gone, and both were answering a question that
+        can no longer be asked, so the list is now the manifest itself.
+        """
+        editor = _editor(tmp_path, GOOD)
+        assert [c.address for c in editor._offered()] == [c.address for c in MANIFEST]
 
     def test_a_held_state_is_offered_too(self, tmp_path):
         """Discrete controls travel over gRPC, so they belong to no stream at all."""
@@ -602,7 +603,7 @@ class TestTheMapPicksTheHand:
         """The case from the screenshot, the other way up: it was refused for being on
         the *other* hand, when wanting that hand is a perfectly ordinary thing to want."""
         path = tmp_path / "controls.toml"
-        path.write_text('[dofs]\nmy_control = "vhi.control.pose.thumb"\n')
+        path.write_text('[dofs]\nmy_control = "vhi.control.pose.thumb.flexion"\n')
         editor = ControlMapEditor(path, client=_Client())
         editor.load()
         editor._connect()
@@ -610,10 +611,10 @@ class TestTheMapPicksTheHand:
         assert editor.save() is True
 
     def test_a_map_naming_both_hands_saves(self, tmp_path):
-        """`vhi_targets` builds a target per stream, so a mixed map is drivable."""
+        """`VhiTarget` drives whatever addresses the map names, so a mixed map is fine."""
         path = tmp_path / "controls.toml"
         path.write_text(
-            '[dofs]\nmodel = "vhi.prediction.thumb"\noperator = "vhi.control.pose.thumb"\n'
+            '[dofs]\nmodel = "vhi.prediction.thumb.flexion"\noperator = "vhi.control.pose.thumb.flexion"\n'
         )
         editor = ControlMapEditor(path, client=_Client())
         editor.load()
@@ -705,25 +706,25 @@ class TestAGateIsOnlyOfferedWhereItApplies:
         assert editor._gate_rules(editor._draft[0]) == ("", "")
 
 
-class TestAHeldStateOccupiesNoChannel:
-    """A discrete control shares no pose channel, whatever number it reports.
+class TestAHeldStateDrivesNoStream:
+    """A discrete control is commanded, not streamed, so the collision rule skips it.
 
-    A target that leaves `channel` unset for a held state reports proto3's default of **0**,
-    which is indistinguishable from pose channel 0 — so two held states looked like one
-    control, and a held state looked like the thumb. Keyed on `kind` now, so the client is
-    right regardless of what the target omits. (VHI was also fixed to declare -1.)
+    This class was `TestAHeldStateOccupiesNoChannel`, and the bug it was written for was a
+    proto3 default: a target that left `channel` unset for a held state reported **0**,
+    indistinguishable from pose channel 0, so two held states looked like one control and a
+    held state looked like the thumb. There is no channel to default any more. What is left
+    is the rule that fixed it and still stands on its own — `problems()` gates the collision
+    check on `kind == "continuous"`, because two aliases holding one *state* is a different
+    question, answered by the pose-versus-movement exclusion in
+    `TestOneWayToDriveTheControlHand`.
     """
 
-    UNSET = Capability(
-        "vhi.control.a", "discrete", states=("Rest", "On"), rest_state="Rest", channel=0
-    )
-    ALSO_UNSET = Capability(
-        "vhi.control.b", "discrete", states=("Rest", "On"), rest_state="Rest", channel=0
-    )
+    HELD_A = Capability("vhi.control.a", "discrete", states=("Rest", "On"), rest_state="Rest")
+    HELD_B = Capability("vhi.control.b", "discrete", states=("Rest", "On"), rest_state="Rest")
 
     @pytest.fixture
     def client(self):
-        caps = [*MANIFEST, self.UNSET, self.ALSO_UNSET]
+        caps = [*MANIFEST, self.HELD_A, self.HELD_B]
 
         class Client:
             def capabilities(self):
@@ -739,7 +740,7 @@ class TestAHeldStateOccupiesNoChannel:
         editor._connect()
         return editor
 
-    def test_two_held_states_reporting_channel_zero_do_not_collide(self, tmp_path, client):
+    def test_two_held_states_do_not_collide(self, tmp_path, client):
         editor = self._editor_with(
             tmp_path,
             client,
@@ -747,24 +748,21 @@ class TestAHeldStateOccupiesNoChannel:
         )
         assert not any("same control" in p for p in editor.problems()), editor.problems()
 
-    def test_a_held_state_does_not_collide_with_pose_channel_zero(self, tmp_path, client):
+    def test_a_held_state_does_not_collide_with_a_streamed_control(self, tmp_path, client):
         editor = self._editor_with(
             tmp_path,
             client,
-            '[dofs]\nheld = "vhi.control.a"\nthumb = "vhi.prediction.thumb"\n',
+            '[dofs]\nheld = "vhi.control.a"\nthumb = "vhi.prediction.thumb.flexion"\n',
         )
         assert editor.problems() == [], editor.problems()
 
-    def test_a_held_state_has_no_peers(self, tmp_path, client):
-        editor = self._editor_with(tmp_path, client, '[dofs]\na = "vhi.control.a"\n')
-        assert editor._peers(self.UNSET) == []
-
-    def test_two_numbers_on_one_channel_still_collide(self, tmp_path, client):
+    def test_two_numbers_on_one_control_still_collide(self, tmp_path, client):
         """The rule that must survive the fix."""
         editor = self._editor_with(
             tmp_path,
             client,
-            '[dofs]\na = "vhi.prediction.thumb"\nb = "vhi.prediction.thumb.flexion"\n',
+            '[dofs]\na = "vhi.prediction.thumb.flexion"\n'
+            'b = "vhi.prediction.thumb.flexion"\n',
         )
         assert any("same control" in p for p in editor.problems())
 
@@ -794,46 +792,24 @@ class TestOneWayToDriveTheControlHand:
     def test_a_pose_and_a_movement_on_the_same_hand_are_refused(self, tmp_path):
         editor = self._editor(
             tmp_path,
-            '[dofs]\nposed = "vhi.control.pose.thumb"\nheld = "vhi.control.gesture"\n',
+            '[dofs]\nposed = "vhi.control.pose.thumb.flexion"\nheld = "vhi.control.gesture"\n',
         )
         problems = editor.problems()
         assert any("one or the other" in p for p in problems), problems
         assert editor.save() is False
 
-    def test_it_is_refused_when_every_dof_has_its_own_stream(self, tmp_path):
-        """The shape VHI actually publishes: one stream per DOF, named after the address.
-
-        The refusal used to be found by comparing `stream_name` against one shared name.
-        A renderer that gives every DOF its own stream reports `stream_name` as the
-        address itself, so that comparison matched nothing and the warning silently
-        stopped firing — against the live renderer, while every test still passed,
-        because the fixture above is the *other* legal shape and kept the old name.
-        """
-        renamed = [
-            replace(cap, stream_name=cap.address, channel=0)
-            if cap.kind == "continuous"
-            else cap
-            for cap in MANIFEST
-        ]
-
-        class _PerDofClient:
-            def capabilities(self):
-                return renamed
-
-        path = tmp_path / "map.toml"
-        path.write_text(
-            '[dofs]\nposed = "vhi.control.pose.thumb"\nheld = "vhi.control.gesture"\n'
-        )
-        editor = ControlMapEditor(path, client=_PerDofClient())
-        editor.load()
-        editor._connect()
-        problems = editor.problems()
-        assert any("one or the other" in p for p in problems), problems
+    # Removed: `test_it_is_refused_when_every_dof_has_its_own_stream`. It re-ran the test
+    # above against a second manifest whose caps had been rewritten to `stream_name =
+    # address`, because the refusal used to be found by comparing `stream_name` against one
+    # shared name and silently stopped firing on a renderer that gave every DOF its own
+    # stream. One stream per DOF is now the only shape there is — it is what the fixture
+    # above already describes — and the refusal is keyed on the address prefix, so the two
+    # tests would differ in nothing at all.
 
     def test_the_reason_names_both_sides(self, tmp_path):
         editor = self._editor(
             tmp_path,
-            '[dofs]\nposed = "vhi.control.pose.thumb"\nheld = "vhi.control.gesture"\n',
+            '[dofs]\nposed = "vhi.control.pose.thumb.flexion"\nheld = "vhi.control.gesture"\n',
         )
         reason = next(p for p in editor.problems() if "one or the other" in p)
         assert "posed" in reason and "held" in reason
@@ -843,7 +819,7 @@ class TestOneWayToDriveTheControlHand:
         which is exactly what emg_classification_grpc does."""
         editor = self._editor(
             tmp_path,
-            '[dofs]\nmodel = "vhi.prediction.thumb"\nheld = "vhi.control.gesture"\n',
+            '[dofs]\nmodel = "vhi.prediction.thumb.flexion"\nheld = "vhi.control.gesture"\n',
         )
         assert editor.problems() == [], editor.problems()
 
@@ -851,55 +827,26 @@ class TestOneWayToDriveTheControlHand:
         """The case that works, and the one this whole change was about."""
         editor = self._editor(
             tmp_path,
-            '[dofs]\nmodel = "vhi.prediction.thumb"\noperator = "vhi.control.pose.thumb"\n',
+            '[dofs]\nmodel = "vhi.prediction.thumb.flexion"\noperator = "vhi.control.pose.thumb.flexion"\n',
         )
         assert editor.problems() == [], editor.problems()
 
 
-class TestOneRowPerControlNotPerName:
-    """Eleven names for six controls made the list need a channel column to explain itself.
-
-    A renderer publishes the short and the explicit-axis form of a control as two addresses
-    on one channel, and picking either does the same thing. Collapsing them is what let the
-    channel number — a wire detail — leave the UI.
-    """
-
-    @pytest.fixture
-    def editor(self, tmp_path):
-        return _editor(tmp_path, GOOD)
-
-    def test_the_aliased_forms_collapse_to_one_row(self, editor):
-        addresses = [cap.address for cap in editor._offered()]
-        assert "vhi.prediction.thumb" in addresses
-        assert "vhi.prediction.thumb.flexion" not in addresses
-
-    def test_the_shortest_name_is_the_one_offered(self, editor):
-        """`thumb` reads better than `thumb.flexion`, and means the same."""
-        thumb = [a for a in (c.address for c in editor._offered()) if "thumb" in a]
-        assert "vhi.prediction.thumb" in thumb
-
-    def test_a_control_with_its_own_channel_is_not_collapsed_away(self, editor):
-        """The thumb's second axis is a different control, not another name for one."""
-        assert "vhi.prediction.thumb.abduction" in [c.address for c in editor._offered()]
-
-    def test_the_value_a_file_already_uses_is_still_offered(self, editor):
-        """Otherwise opening the picker would hide the current value, or silently swap it
-        for the shortest name — a diff nobody asked for."""
-        addresses = [
-            cap.address
-            for cap in editor._offered(current="vhi.prediction.thumb.flexion")
-        ]
-        assert "vhi.prediction.thumb.flexion" in addresses
-        assert addresses.count("vhi.prediction.thumb") == 0, "and not both"
-
-    def test_the_alternatives_are_still_reachable_on_hover(self, editor):
-        thumb = next(
-            c for c in editor._offered() if c.address == "vhi.prediction.thumb"
-        )
-        assert editor._peers(thumb) == ["vhi.prediction.thumb.flexion"]
-
-    def test_held_states_survive_the_collapse(self, editor):
-        assert "vhi.control.gesture" in [c.address for c in editor._offered()]
+# Removed in full: `TestOneRowPerControlNotPerName`, six tests about collapsing eleven
+# names onto six channels.
+#
+# A renderer used to publish the short and the explicit-axis form of a control as two
+# addresses on one channel — `vhi.prediction.thumb` and `vhi.prediction.thumb.flexion`
+# being one finger under two names — so a flat list of addresses had more rows than the
+# hand had controls, and the only honest way to draw it was a channel column. `_offered`
+# collapsed each channel to its shortest name to get rid of that column, kept the
+# `current=` value from being collapsed out from under an open picker, and `_peers` offered
+# the folded-away names on hover.
+#
+# VHI now advertises exactly one spelling per control, each on its own stream. There is no
+# second name for a finger to collapse, nothing for `current=` to rescue, and no peer to
+# hover for. What is left of the class's subject — every exported address is offered and
+# none is held back — is `TestTheMapPicksTheHand.test_nothing_the_manifest_exports_is_held_back`.
 
 
 class TestTheFileIsWatched:
@@ -1089,8 +1036,10 @@ class TestTheAddressTree:
         assert sorted(tree) == ["keyboard", "vhi"]
 
     def test_a_node_can_be_both_a_control_and_a_parent(self):
-        """`vhi.prediction.thumb` was exactly this before the rename, and another target
-        may do it again — so a branch must be able to carry its own capability."""
+        """VHI published a bare `vhi.prediction.thumb` beside `...thumb.abduction` until it
+        settled on one spelling per control, and another target may do it again — so a
+        branch must be able to carry its own capability. Nothing in `address_tree` is
+        VHI-specific; these two are just the shortest example of the shape."""
         from myogestic.widgets.vhi.control_map_editor import _LEAF
 
         tree = self._tree("vhi.prediction.thumb", "vhi.prediction.thumb.abduction")
@@ -1229,8 +1178,7 @@ class TestARowSaysWhatTheControlAccepts:
 
     def test_two_states_are_named(self, tmp_path):
         key = Capability(
-            "keyboard.hold.letter.w", "discrete", states=("up", "down"),
-            rest_state="up", channel=-1,
+            "keyboard.hold.letter.w", "discrete", states=("up", "down"), rest_state="up"
         )
         assert self._editor(tmp_path)._detail(key).strip() == "up / down"
 
@@ -1238,22 +1186,21 @@ class TestARowSaysWhatTheControlAccepts:
         """Seventeen names would push the row off the edge, so the count is right there."""
         gesture = Capability(
             "vhi.control.gesture", "discrete",
-            states=tuple(f"s{i}" for i in range(17)), rest_state="s0", channel=-1,
+            states=tuple(f"s{i}" for i in range(17)), rest_state="s0",
         )
         assert self._editor(tmp_path)._detail(gesture).strip() == "17 states"
 
     def test_the_tooltip_names_them_too(self, tmp_path):
         key = Capability(
-            "keyboard.tap.edit.space", "discrete", states=("up", "down"),
-            rest_state="up", channel=-1,
+            "keyboard.tap.edit.space", "discrete", states=("up", "down"), rest_state="up"
         )
         assert "up / down" in self._editor(tmp_path)._summary(key)
 
     def test_a_continuous_row_is_unchanged(self, tmp_path):
         """A signed control adds nothing; only an unusual range is worth a note."""
         editor = self._editor(tmp_path)
-        signed = Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0, channel=2)
-        one_way = Capability("vhi.grip.force", "continuous", 0.0, 1.0, 0.0, channel=4)
+        signed = Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0)
+        one_way = Capability("vhi.grip.force", "continuous", 0.0, 1.0, 0.0)
         assert editor._detail(signed) == ""
         assert "+0.0..+1.0" in editor._detail(one_way)
 
@@ -1523,10 +1470,7 @@ class TestConnectingHappensOnItsOwn:
             self.asked += 1
             _t.sleep(self.delay)
             return [
-                Capability(
-                    self.address, "continuous", -1.0, 1.0, 0.0,
-                    channel=2, stream_name="MyoGestic_Output",
-                )
+                Capability(self.address, "continuous", -1.0, 1.0, 0.0)
             ]
 
     class _Silent:
@@ -1551,10 +1495,7 @@ class TestConnectingHappensOnItsOwn:
             if not self.up:
                 return None
             return [
-                Capability(
-                    "vhi.prediction.index", "continuous", -1.0, 1.0, 0.0,
-                    channel=2, stream_name="MyoGestic_Output",
-                )
+                Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0)
             ]
 
     @staticmethod
@@ -1832,10 +1773,7 @@ class TestASilentTargetIsSaidOutLoud:
 
         def capabilities(self):
             return [
-                Capability(
-                    self.address, "continuous", -1.0, 1.0, 0.0,
-                    channel=2, stream_name="MyoGestic_Output",
-                )
+                Capability(self.address, "continuous", -1.0, 1.0, 0.0)
             ]
 
     class _Silent:
@@ -1917,16 +1855,17 @@ class TestTheConnectMessageExpires:
             if not self.up:
                 return None
             return [
-                Capability(
-                    "vhi.prediction.index", "continuous", -1.0, 1.0, 0.0,
-                    channel=2, stream_name="MyoGestic_Output",
-                )
+                Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0)
             ]
 
     class _Answers:
         def capabilities(self):
-            return [Capability("keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0,
-                               states=("up", "down"), channel=-1)]
+            return [
+                Capability(
+                    "keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0,
+                    states=("up", "down"),
+                )
+            ]
 
     def _editor(self, tmp_path, *clients):
         path = tmp_path / "m.toml"

@@ -1,21 +1,25 @@
-"""`VhiTarget` — control values in, pose frames out, on a contract it negotiated.
+"""`VhiTarget` — control values in, one stream per control out, on a negotiated contract.
 
-The target is the only place that knows VHI counts channels, which channel a control
-sits on, or which way the renderer's units run. Since the v2 cutover it learns all of
-that by *asking*: there is no table of channels and no fallback, so a configuration it
-cannot place is refused while a human is still reading the traceback rather than
+The target is the only place that knows how a control reaches the renderer. Since the v2
+cutover it learns that by *asking*: there is no table and no fallback, so a configuration
+it cannot place is refused while a human is still reading the traceback rather than
 half-rendered later.
 
-These pin both halves of that: what `bind` refuses, and what reaches the wire per tick.
-Every test runs against a recording `PoseSink` and a fake client, so the whole target is
-verified without a hand running. What that deliberately cannot prove is that VHI
-*renders* these frames as intended — that needs the binary, and the recorded pose format
-itself is pinned in `test_vhi_legacy.py`.
+**One stream per DOF.** A control's stream is named for the control's own address and is
+one channel wide, so a target driving nine controls owns nine outlets. There is no frame,
+no width and no channel index anywhere in here — the manifest carries an address and the
+outlet is named after it, which is why a renderer that grows a control needs no change on
+this side.
+
+These pin both halves: what `bind` refuses, and what reaches each stream per tick. Every
+test runs against a recording interface and a fake client, so the whole target is verified
+without a hand running. What that deliberately cannot prove is that VHI *renders* these
+values as intended — that needs the binary, and the recorded pose format itself is pinned
+in `test_vhi_legacy.py`.
 """
 
 from __future__ import annotations
 
-import dataclasses
 import queue
 import threading
 import types
@@ -23,39 +27,66 @@ import types
 import numpy as np
 import pytest
 
-from myogestic.controls import ControlBus, ControlSet
+from myogestic.controls import Capability, ControlBus, ControlSet
 from myogestic.outputs.filters import GaussianFilter
 from myogestic.vhi._control import _QUEUE_DEPTH
-from myogestic.vhi.interfaces import InterfaceSpec
-from myogestic.vhi.pose import POSE_DOFS, POSE_WIDTH
+from myogestic.vhi.pose import POSE_DOFS
 from myogestic.vhi.target import VhiTarget
 
 from .conftest import build_controls
 
 
 class FakeOutlet:
-    """A `PoseSink` that records what reached the wire.
-
-    Nameless by default, like a recorder or any other sink that is not an LSL stream —
-    `LSLOutlet` is what reports a `name`, and a target only checks a sink that does.
-    """
+    """One control's sink, recording every sample that reached its stream."""
 
     def __init__(self, name: str = "") -> None:
-        self.frames: list[np.ndarray] = []
+        self.name = name
+        self.samples: list[float] = []
         self.flushes = 0
-        if name:
-            self.name = name
+        self.stops = 0
 
     def push(self, data: np.ndarray) -> None:
-        self.frames.append(np.array(data, copy=True))
+        sample = np.asarray(data)
+        assert sample.shape == (1,), f"one control, one channel — got {sample.shape}"
+        assert sample.dtype == np.float32, f"the wire is float32 — got {sample.dtype}"
+        self.samples.append(float(sample[0]))
 
     def flush(self) -> None:
         self.flushes += 1
 
+    def stop(self) -> None:
+        self.stops += 1
+
     @property
-    def last(self) -> np.ndarray:
-        assert self.frames, "nothing was ever pushed"
-        return self.frames[-1]
+    def last(self) -> float:
+        assert self.samples, f"nothing was ever pushed to {self.name!r}"
+        return self.samples[-1]
+
+
+class FakeInterface:
+    """Stands in for `virtual_hand()`: hands out one outlet per address.
+
+    The target is *told* the name — the address it resolved — so an interface has no
+    stream names of its own to disagree with. `built` is every outlet ever handed out, in
+    order, which is what the lifecycle tests read; `live` is the newest per address.
+    """
+
+    def __init__(self) -> None:
+        self.built: list[FakeOutlet] = []
+        self.live: dict[str, FakeOutlet] = {}
+
+    def stream_outlet(self, name: str, *, n_channels: int | None = None) -> FakeOutlet:
+        assert name, "an unnamed stream cannot be resolved"
+        assert n_channels == 1, f"one control per stream — asked for {n_channels}"
+        outlet = FakeOutlet(name)
+        self.built.append(outlet)
+        self.live[name] = outlet
+        return outlet
+
+    @property
+    def names(self) -> list[str]:
+        """Every address an outlet was built for, in build order."""
+        return [outlet.name for outlet in self.built]
 
 
 # --- the fake renderer every binding negotiates against -------------------------
@@ -64,57 +95,45 @@ class FakeOutlet:
 # through `Capability`-shaped objects, which keeps these tests free of the grpc extra.
 
 
-@dataclasses.dataclass
-class FakeReply:
-    """The channel order a fake renderer's manifest implies, in declaration order.
+class FakeClient:
+    """A `VhiControlClient` stand-in: answers the manifest a bind resolves against.
 
-    Index i of ``continuous_channel_order`` becomes channel i of `FakeClient`'s
-    synthesised manifest — the same wire order VHI itself assigns.
+    ``addresses`` is what this renderer exports as numbers, each on a stream of its own.
+    ``None`` is a renderer that has not started — silence, which is not an empty manifest.
     """
 
-    continuous_channel_order: tuple[str, ...] = ()
-
-
-class FakeClient:
-    """A `VhiControlClient` stand-in: answers the manifest a bind resolves against."""
-
-    def __init__(self, reply=None) -> None:
-        self.reply = reply
+    def __init__(self, addresses: tuple[str, ...] | None = ()) -> None:
+        self.addresses = addresses
         self.sent: list[tuple[dict | None, dict | None]] = []
         #: How many times `capabilities()` was actually asked — `force` re-asks it.
         self.capability_fetches = 0
 
     def capabilities(self):
         self.capability_fetches += 1
-        if self.reply is None:
+        if self.addresses is None:
             return None
-        return [_cap(name, i) for i, name in enumerate(self.reply.continuous_channel_order)]
+        return [_cap(address) for address in self.addresses]
 
     def set_control(self, continuous=None, discrete=None):
         self.sent.append((continuous, discrete))
 
 
-NINE = (
-    "thumb.flexion",
-    "thumb.abduction",
-    "index.flexion",
-    "middle.flexion",
-    "ring.flexion",
-    "little.flexion",
-    "wrist.flexion",
-    "wrist.abduction",
-    "wrist.rotation",
-)
+def _cap(address, *, lo=-1.0, hi=1.0, rest=0.0, kind="continuous", states=()):
+    """One capability, carrying exactly what a manifest carries: no transport at all."""
+    return Capability(
+        address=address,
+        kind=kind,
+        lo=lo,
+        hi=hi,
+        rest=rest,
+        states=tuple(states),
+        rest_state=states[0] if states else "",
+    )
 
 
-#: The six controls VHI's pose transport actually renders. Channels 6-8 exist on the
-#: wire and are read by nothing, which is why a negotiated order can be shorter than it.
-POSE = POSE_DOFS
-
-
-def _client(order=POSE, **reply):
-    """A renderer that accepts a by-name declaration in control units."""
-    return FakeClient(FakeReply(continuous_channel_order=order, **reply))
+def _client(order=POSE_DOFS):
+    """A renderer that exports the nine pose controls under their own DOF names."""
+    return FakeClient(order)
 
 
 def _controls(*names: str, **entries: object):
@@ -124,112 +143,132 @@ def _controls(*names: str, **entries: object):
     return build_controls(dofs)
 
 
-def _bound(*names: str, **entries: object) -> tuple[VhiTarget, FakeOutlet]:
-    """A target bound to a renderer that names the six pose controls by address."""
-    outlet = FakeOutlet()
-    target = VhiTarget(outlet, client=_client())
+def _bound(*names: str, **entries: object) -> tuple[VhiTarget, FakeInterface]:
+    """A target bound to a renderer that names the nine pose controls by address."""
+    interface = FakeInterface()
+    target = VhiTarget(client=_client(), interface=interface)
     target.bind(_controls(*names, **entries))
-    return target, outlet
+    return target, interface
 
 
 # --- bind: refuse what cannot be rendered -------------------------------------
 
 
 def test_bind_accepts_the_pose_dofs():
-    target, outlet = _bound()
-    assert len(outlet.frames) == 1, "binding puts the declared rest pose on the wire"
-    target.send(dict.fromkeys(POSE_DOFS, 0.0), {})
-    assert outlet.last.shape == (POSE_WIDTH,)
+    _, interface = _bound()
+    assert sorted(interface.names) == sorted(POSE_DOFS)
+    for outlet in interface.built:
+        assert outlet.samples == [0.0], "binding puts each declared rest on its stream"
+
+
+def test_bind_builds_one_stream_per_control_named_for_its_address():
+    """The whole shape, in one assertion: address in, stream of that name out."""
+    _, interface = _bound("index.flexion", "middle.flexion")
+    assert interface.names == ["index.flexion", "middle.flexion"]
 
 
 def test_bind_accepts_a_subset():
-    """Declaring one finger is legal; the rest of the hand simply stays neutral.
+    """Declaring one finger is legal; the rest of the hand simply gets no stream.
 
-    The finger's rest is deliberately not zero, or the rest frame `bind` pushes would be
+    The finger's rest is deliberately not zero, or the rest value `bind` pushes would be
     indistinguishable from one that was never written.
     """
-    _, outlet = _bound(
+    _, interface = _bound(
         "index.flexion",
         **{"index.flexion": {"range": [0.0, 1.0], "rest": 0.25}},
     )
-    assert outlet.last[2] == pytest.approx(0.25)
-    assert np.count_nonzero(outlet.last) == 1
+    assert interface.names == ["index.flexion"]
+    assert interface.live["index.flexion"].last == pytest.approx(0.25)
 
 
 def test_bind_refuses_an_empty_configuration():
     """`ControlSet()` directly, because there is no parser to refuse it first."""
     with pytest.raises(ValueError, match="no DOFs at all"):
-        VhiTarget(FakeOutlet()).bind(ControlSet())
+        VhiTarget(interface=FakeInterface()).bind(ControlSet())
 
 
-def test_bind_refuses_before_anything_is_pushed():
+def test_bind_refuses_before_anything_is_published():
     """Refusal happens at setup, so a rejected configuration never actuates.
 
-    `wrist.rotation` used to be the example of something this hand cannot render. It
-    renders now — all nine channels do — so the unrenderable name has to be one the
-    renderer genuinely never names.
+    Nothing may be left on the network either: a stream published for a binding that was
+    then refused would be a name nobody drives, which resolves exactly like one that works.
     """
-    outlet = FakeOutlet()
+    interface = FakeInterface()
     with pytest.raises(ValueError):
-        VhiTarget(outlet, client=_client()).bind(_controls("pinky.abduction"))
-    assert outlet.frames == []
+        VhiTarget(client=_client(), interface=interface).bind(_controls("pinky.abduction"))
+    assert interface.built == []
 
 
-# --- send: the wire frame -----------------------------------------------------
+def test_a_target_with_no_interface_is_refused_at_construction():
+    """There has to be somewhere to publish. Refused early, not at the first send."""
+    with pytest.raises(ValueError, match="needs an `interface="):
+        VhiTarget(client=_client())
 
 
-def test_send_pushes_a_full_width_float32_frame():
-    target, outlet = _bound()
+# --- send: one value per stream -----------------------------------------------
+
+
+def test_send_pushes_one_float32_sample_per_driven_control():
+    target, interface = _bound()
+    before = {name: len(o.samples) for name, o in interface.live.items()}
     target.send(dict.fromkeys(POSE_DOFS, 1.0), {})
-    assert outlet.last.shape == (POSE_WIDTH,)
-    assert outlet.last.dtype == np.float32
+    for name, outlet in interface.live.items():
+        assert len(outlet.samples) == before[name] + 1
+        assert outlet.last == pytest.approx(1.0)
 
 
-def test_send_carries_the_wrist_channels():
-    """6-8 were zeroed as dead. VHI renders the wrist on all three, so they carry."""
-    target, outlet = _bound()
+def test_send_carries_the_wrist_controls():
+    """The wrist used to be zeroed as dead. VHI renders all three, so they carry."""
+    target, interface = _bound()
     target.send(dict.fromkeys(POSE_DOFS, 1.0), {})
-    assert outlet.last.tolist() == [1.0] * POSE_WIDTH
+    for axis in ("wrist.flexion", "wrist.abduction", "wrist.rotation"):
+        assert interface.live[axis].last == pytest.approx(1.0)
 
 
-def test_send_leaves_unbound_channels_at_rest():
-    """A configuration naming one finger must not disturb the rest of the hand."""
-    target, outlet = _bound("index.flexion")
+def test_send_leaves_undriven_controls_alone_by_publishing_nothing_for_them():
+    """A configuration naming one finger must not disturb the rest of the hand.
+
+    Not "writes zero to them" — it does not publish them at all, so whatever else drives
+    them keeps driving them and whatever nothing drives holds its last value. That is the
+    capability the split-up transport exists for.
+    """
+    target, interface = _bound("index.flexion")
     target.send({"index.flexion": 1.0}, {})
-    assert outlet.last[2] == 1.0
-    assert np.count_nonzero(outlet.last) == 1
+    assert interface.names == ["index.flexion"]
+    assert interface.live["index.flexion"].last == pytest.approx(1.0)
 
 
 def test_send_ignores_a_name_it_was_not_bound_to():
-    """A stray key must not reach a channel — bind is the whole authority."""
-    target, outlet = _bound("index.flexion")
+    """A stray key must not reach a stream — bind is the whole authority."""
+    target, interface = _bound("index.flexion")
     target.send({"index.flexion": 1.0, "thumb.flexion": 1.0}, {})
-    assert outlet.last[0] == 0.0
-    assert outlet.last[2] == pytest.approx(1.0)
+    assert "thumb.flexion" not in interface.live
+    assert interface.live["index.flexion"].last == pytest.approx(1.0)
 
 
 def test_send_falls_back_to_rest_for_a_missing_name():
     """`send` runs on the predict thread: a KeyError there would hold the last pose."""
-    target, outlet = _bound()
+    target, interface = _bound()
     target.send({"index.flexion": 1.0}, {})
-    assert outlet.last.tolist() == [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    assert interface.live["index.flexion"].last == pytest.approx(1.0)
+    assert interface.live["thumb.flexion"].last == 0.0
 
 
 def test_send_honours_a_declared_nonzero_rest_for_a_missing_name():
     """The fallback is the DOF's own rest, not a hardcoded zero."""
-    target, outlet = _bound(
+    target, interface = _bound(
         "index.flexion",
         **{"thumb.flexion": {"kind": "continuous", "range": [0.0, 1.0], "rest": 0.5}},
     )
     target.send({"index.flexion": 0.0}, {})
-    assert outlet.last[0] == pytest.approx(0.5)
+    assert interface.live["thumb.flexion"].last == pytest.approx(0.5)
 
 
 def test_send_accepts_numpy_float32_values():
     """The library's prediction dtype — `isinstance(v, float)` is False for it."""
-    target, outlet = _bound()
+    target, interface = _bound()
     target.send({n: np.float32(1.0) for n in POSE_DOFS}, {})
-    assert outlet.last[:6].tolist() == [1.0] * 6
+    assert all(o.last == pytest.approx(1.0) for o in interface.live.values())
 
 
 def test_a_routed_binding_clamps_to_the_range_the_target_declared():
@@ -238,152 +277,251 @@ def test_a_routed_binding_clamps_to_the_range_the_target_declared():
     The two are not the same bound — a weight is applied between them — so the target's
     own range is the last word before the wire.
     """
-    from myogestic.controls import load_control_map, resolve
-
-    controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.prediction.index"}}), MANIFEST
-    )
-    outlet = FakeOutlet()
-    target = VhiTarget(outlet, client=ManifestClient())
-    target.bind(controls)
+    target, interface, _ = _routed_target({"a": "vhi.prediction.index"})
     target.send({"a": 5.0}, {})
-    assert outlet.last.max() <= 1.0
+    assert interface.live["vhi.prediction.index"].last == pytest.approx(1.0)
 
 
 def test_send_ignores_the_changed_map():
-    """No discrete DOFs can be bound, so there are never edges to deliver."""
-    target, outlet = _bound()
+    """No discrete DOFs are bound here, so there are never edges to deliver."""
+    target, interface = _bound()
     target.send(dict.fromkeys(POSE_DOFS, 0.0), {"hand.grasp": "fist"})
-    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
+    assert all(o.last == 0.0 for o in interface.live.values())
 
 
 def test_a_one_way_dof_never_emits_the_direction_it_excludes():
-    target, outlet = _bound(**{"index.flexion": {"kind": "continuous", "range": [0.0, 1.0]}})
+    target, interface = _bound(
+        **{"index.flexion": {"kind": "continuous", "range": [0.0, 1.0]}}
+    )
+    index = interface.live["index.flexion"]
     target.send({"index.flexion": 1.0}, {})
-    assert outlet.last[2] == pytest.approx(1.0)
+    assert index.last == pytest.approx(1.0)
     target.send({"index.flexion": 0.0}, {})
-    assert outlet.last[2] == 0.0
+    assert index.last == 0.0
 
 
-def test_every_send_pushes_exactly_one_frame():
+def test_every_send_pushes_exactly_one_sample_per_stream():
     """Latest-wins downstream: a target that pushed twice would drop a tick."""
-    target, outlet = _bound()
-    bound = len(outlet.frames)   # binding pushed rest; count only what `send` adds
+    target, interface = _bound()
+    bound = len(interface.live["index.flexion"].samples)   # bind pushed rest
     for _ in range(5):
         target.send(dict.fromkeys(POSE_DOFS, 0.0), {})
-    assert len(outlet.frames) - bound == 5
+    assert len(interface.live["index.flexion"].samples) - bound == 5
 
 
 # --- stop: rest has to actually land ------------------------------------------
 
 
-def test_stop_pushes_rest_and_flushes_it():
-    """Pushing alone would leave the frame unsent in a paced slot at exit."""
-    target, outlet = _bound()
+def test_stop_rests_every_stream_flushes_it_and_takes_it_off_the_network():
+    """Pushing alone would leave the value unsent in a paced slot at exit."""
+    target, interface = _bound()
     target.send(dict.fromkeys(POSE_DOFS, 1.0), {})
     target.stop()
-    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
-    assert outlet.flushes == 1
+    for outlet in interface.built:
+        assert outlet.last == 0.0
+        assert outlet.flushes == 1
+        assert outlet.stops == 1, "nothing else can release these — the target built them"
 
 
 def test_stop_rests_at_the_declared_rest_not_at_zero():
-    target, outlet = _bound(
+    target, interface = _bound(
         **{"index.flexion": {"kind": "continuous", "range": [0.0, 1.0], "rest": 0.5}}
     )
     target.stop()
-    assert outlet.last[2] == pytest.approx(0.5)
+    assert interface.live["index.flexion"].last == pytest.approx(0.5)
 
 
-def test_stop_is_idempotent():
-    target, outlet = _bound()
+def test_stop_is_idempotent_and_does_not_reuse_a_stopped_outlet():
+    """The second call is a no-op, not a second rest onto streams already released."""
+    target, interface = _bound()
     target.stop()
     target.stop()
-    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
-    assert outlet.flushes == 2
+    for outlet in interface.built:
+        assert outlet.stops == 1
+        assert outlet.flushes == 1
 
 
 def test_stop_before_bind_does_not_raise():
     """Teardown runs even when setup failed — that is when it matters most."""
-    outlet = FakeOutlet()
-    VhiTarget(outlet, client=_client()).stop()
-    assert outlet.frames == []
-    assert outlet.flushes == 1
+    interface = FakeInterface()
+    VhiTarget(client=_client(), interface=interface).stop()
+    assert interface.built == []
+
+
+# --- the outlets are the target's, and replacing them is transactional ----------
+#
+# One outlet became N, so the old "just overwrite the field on a rebind" became N leaks
+# per rebind. liblsl keeps a stream discoverable for as long as its StreamOutlet object
+# is alive, so an abandoned one stays resolvable and shares a source_id with whatever
+# replaced it — a consumer may resolve the corpse.
+
+
+def test_a_rebind_keeps_the_outlet_of_an_address_it_still_drives():
+    """Losing and regaining an unchanged stream is a visible stall on the hand."""
+    interface = FakeInterface()
+    target = VhiTarget(client=_client(), interface=interface)
+    target.bind(_controls("index.flexion", "middle.flexion"))
+    kept = interface.live["index.flexion"]
+
+    target.bind(_controls("index.flexion", "ring.flexion"))
+    assert interface.live["index.flexion"] is kept, "an unchanged address was churned"
+    assert kept.stops == 0
+
+
+def test_a_rebind_rests_and_stops_the_outlet_of_an_address_it_has_dropped():
+    interface = FakeInterface()
+    target = VhiTarget(client=_client(), interface=interface)
+    target.bind(_controls("index.flexion", "middle.flexion"))
+    dropped = interface.live["middle.flexion"]
+    target.send({"index.flexion": 1.0, "middle.flexion": 1.0}, {})
+    assert dropped.last == pytest.approx(1.0)
+
+    target.bind(_controls("index.flexion"))
+    assert dropped.last == 0.0, "a stream being taken down must be rested first"
+    assert dropped.flushes == 1, "a paced push would never have left the queue"
+    assert dropped.stops == 1, "and it must actually come off the network"
+
+
+def test_a_rebind_builds_a_stream_for_an_address_it_has_gained():
+    interface = FakeInterface()
+    target = VhiTarget(client=_client(), interface=interface)
+    target.bind(_controls("index.flexion"))
+    target.bind(_controls("index.flexion", "ring.flexion"))
+    assert interface.names == ["index.flexion", "ring.flexion"]
+    assert interface.live["ring.flexion"].samples == [0.0]
+
+
+def test_a_refused_rebind_leaves_no_stream_behind():
+    """Nothing drives them any more, and a live outlet keeps republishing regardless."""
+    interface = FakeInterface()
+    target = VhiTarget(client=_client(), interface=interface)
+    target.bind(_controls("index.flexion"))
+    first = interface.live["index.flexion"]
+
+    target._client.addresses = ()   # the renderer came back exporting nothing
+    with pytest.raises(ValueError, match="has no place for"):
+        target.bind(_controls("index.flexion"))
+    assert first.stops == 1
+    assert target._outlets == {}
+
+
+def test_a_binding_that_renders_nothing_of_ours_publishes_nothing():
+    """A map entirely on another target: not an error, but not a stream either."""
+    from myogestic.controls import load_control_map, resolve
+
+    key = _cap("keyboard.hold.letter.w", kind="discrete", states=("up", "down"))
+    controls = resolve(load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [key])
+    interface = FakeInterface()
+    target = VhiTarget(client=ManifestClient(), interface=interface)
+    target.bind(controls)
+    assert target.negotiated is True
+    assert interface.built == []
+
+
+def test_a_discrete_only_configuration_publishes_no_stream_at_all():
+    """Nothing continuous to carry, so nothing to publish — but it must still bind.
+
+    A target that raised here would make a perfectly valid gesture-only configuration
+    unusable, and its held states still have to reach the renderer over gRPC.
+    """
+    target, interface = _owned({"g": "vhi.control.gesture"})
+    assert interface.built == []
+    assert target.negotiated is True
+    target.send({"g": "Fist"}, {"g": "Fist"})
+    assert target._client.sent == [(None, {"g": "Fist"})]
+
+
+def test_stop_without_a_stream_does_not_raise():
+    target, _ = _owned({"g": "vhi.control.gesture"})
+    target.stop()
 
 
 # --- through a real ControlBus ------------------------------------------------
 
 
 def test_the_bus_binds_the_target_at_construction():
-    outlet = FakeOutlet()
+    interface = FakeInterface()
     with pytest.raises(ValueError, match="has no place for"):
-        ControlBus(_controls("pinky.abduction"), targets=[VhiTarget(outlet, client=_client())])
-    assert outlet.frames == []
+        ControlBus(
+            _controls("pinky.abduction"),
+            targets=[VhiTarget(client=_client(), interface=interface)],
+        )
+    assert interface.built == []
 
 
 def test_a_bus_frame_reaches_the_wire():
-    outlet = FakeOutlet()
-    bus = ControlBus(_controls(), targets=[VhiTarget(outlet, client=_client())])
+    interface = FakeInterface()
+    bus = ControlBus(_controls(), targets=[VhiTarget(client=_client(), interface=interface)])
     bus.push({"index.flexion": 0.5})
-    assert outlet.last[2] == pytest.approx(0.5)
+    assert interface.live["index.flexion"].last == pytest.approx(0.5)
 
 
 def test_nan_reaches_the_wire_as_rest_not_full_deflection():
     """`min(hi, max(lo, nan))` is `lo` — the bus substitutes rest before clipping."""
-    outlet = FakeOutlet()
-    bus = ControlBus(_controls(), targets=[VhiTarget(outlet, client=_client())])
+    interface = FakeInterface()
+    bus = ControlBus(_controls(), targets=[VhiTarget(client=_client(), interface=interface)])
     bus.push({"index.flexion": float("nan")})
-    assert outlet.last[2] == 0.0
+    assert interface.live["index.flexion"].last == 0.0
 
 
 def test_an_out_of_range_prediction_is_clipped_before_the_wire():
-    outlet = FakeOutlet()
-    bus = ControlBus(_controls(), targets=[VhiTarget(outlet, client=_client())])
+    interface = FakeInterface()
+    bus = ControlBus(_controls(), targets=[VhiTarget(client=_client(), interface=interface)])
     bus.push(dict.fromkeys(POSE_DOFS, 40.0))
-    assert outlet.last.min() >= -1.0
+    assert all(o.last <= 1.0 for o in interface.live.values())
 
 
 def test_smoothing_cannot_push_a_value_out_of_range():
     """The bug the ordering fixes: clip-then-smooth lets the filter overshoot out."""
-    outlet = FakeOutlet()
+    interface = FakeInterface()
     bus = ControlBus(
         _controls(**{"index.flexion": {"kind": "continuous", "range": [0.0, 1.0]}}),
-        targets=[VhiTarget(outlet, client=_client())],
+        targets=[VhiTarget(client=_client(), interface=interface)],
         smoothing=GaussianFilter(sigma=1.0),
     )
-    for _ in range(40):
-        bus.push({"index.flexion": 1.0})
-    for _ in range(40):
-        bus.push({"index.flexion": 0.0})
-    stacked = np.stack(outlet.frames)
-    assert stacked[:, 2].min() >= 0.0
-    assert stacked[:, 2].max() <= 1.0
+    for value in (1.0, 0.0):
+        for _ in range(40):
+            bus.push({"index.flexion": value})
+    seen = interface.live["index.flexion"].samples
+    assert min(seen) >= 0.0
+    assert max(seen) <= 1.0
 
 
 def test_bus_stop_returns_the_hand_to_rest_and_flushes():
     """The whole safety chain: rest is delivered, then made to land, then stopped."""
-    outlet = FakeOutlet()
-    bus = ControlBus(_controls(), targets=[VhiTarget(outlet, client=_client())])
+    interface = FakeInterface()
+    bus = ControlBus(_controls(), targets=[VhiTarget(client=_client(), interface=interface)])
     bus.push(dict.fromkeys(POSE_DOFS, 1.0))
-    assert outlet.last.max() == pytest.approx(1.0)
+    assert interface.live["index.flexion"].last == pytest.approx(1.0)
     bus.stop()
-    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
-    assert outlet.flushes == 1
+    for outlet in interface.built:
+        assert outlet.last == 0.0
+        assert outlet.flushes == 1
 
 
 def test_a_broken_outlet_does_not_kill_the_predict_thread():
     """The bus absorbs a target failure; a raise here would log on every tick."""
 
     class Broken(FakeOutlet):
-        """Intact for the rest pose `bind` pushes, closed for every frame after it."""
+        """Intact for the rest value `bind` pushes, closed for every sample after it."""
 
         def push(self, data):
-            if self.frames:
+            if self.samples:
                 raise OSError("outlet closed")
             super().push(data)
 
+    class BrokenInterface(FakeInterface):
+        def stream_outlet(self, name, *, n_channels=None):
+            outlet = Broken(name)
+            self.built.append(outlet)
+            self.live[name] = outlet
+            return outlet
+
     warnings: list[str] = []
     bus = ControlBus(
-        _controls(), targets=[VhiTarget(Broken(), client=_client())], on_warn=warnings.append
+        _controls(),
+        targets=[VhiTarget(client=_client(), interface=BrokenInterface())],
+        on_warn=warnings.append,
     )
     bus.push({"index.flexion": 1.0})
     assert any("VhiTarget" in w for w in warnings)
@@ -392,27 +530,41 @@ def test_a_broken_outlet_does_not_kill_the_predict_thread():
 def test_an_outlet_that_is_already_dead_at_bind_raises_out_of_the_bus():
     """The other side of the line above: setup failures are not absorbed.
 
-    Settling a negotiation puts the declared rest pose on the wire, so a dead outlet is
-    found while a traceback is still visible rather than warned about once per tick for
-    the life of the session.
+    Settling a negotiation puts each declared rest on the wire, so a dead outlet is found
+    while a traceback is still visible rather than warned about once per tick for the life
+    of the session.
     """
 
     class Dead(FakeOutlet):
         def push(self, data):
             raise OSError("outlet closed")
 
+    class DeadInterface(FakeInterface):
+        def stream_outlet(self, name, *, n_channels=None):
+            outlet = Dead(name)
+            self.built.append(outlet)
+            return outlet
+
+    interface = DeadInterface()
     with pytest.raises(OSError, match="outlet closed"):
-        ControlBus(_controls(), targets=[VhiTarget(Dead(), client=_client())])
+        ControlBus(_controls(), targets=[VhiTarget(client=_client(), interface=interface)])
+    assert all(o.stops == 1 for o in interface.built), (
+        "a bind that died mid-publish still has to release what it had published"
+    )
 
 
 def test_two_targets_receive_the_same_frame():
     """One sanitised frame, fanned out — a recorder beside the hand."""
-    a, b = FakeOutlet(), FakeOutlet()
+    a, b = FakeInterface(), FakeInterface()
     bus = ControlBus(
-        _controls(), targets=[VhiTarget(a, client=_client()), VhiTarget(b, client=_client())]
+        _controls(),
+        targets=[
+            VhiTarget(client=_client(), interface=a),
+            VhiTarget(client=_client(), interface=b),
+        ],
     )
     bus.push({"middle.flexion": 0.5})
-    assert a.last.tolist() == b.last.tolist()
+    assert a.live["middle.flexion"].last == b.live["middle.flexion"].last
 
 
 # --- the outlet the target is normally handed -----------------------------------
@@ -429,84 +581,73 @@ def test_the_vhi_outlet_advertises_a_stable_source_id():
     from myogestic.vhi import virtual_hand
 
     spec = virtual_hand()
-    first = spec.stream_outlet("MyoGestic_Output")
-    second = spec.stream_outlet("MyoGestic_Output")
+    first = spec.stream_outlet("vhi.prediction.index", n_channels=1)
+    second = spec.stream_outlet("vhi.prediction.index", n_channels=1)
     try:
         a = first._outlet.get_sinfo().source_id
         b = second._outlet.get_sinfo().source_id
         assert a, "an empty source_id is what makes the stream unrecoverable"
         assert a == b, "the id must be stable across restarts, not per-instance"
-        assert "MyoGestic_Output" in a, "the stream's name has to be part of the id"
+        assert "vhi.prediction.index" in a, "the stream's name has to be part of the id"
     finally:
         first.stop()
         second.stop()
 
 
-def test_a_negotiated_binding_uses_the_declared_order():
-    outlet = FakeOutlet()
-    target = VhiTarget(outlet, client=FakeClient(FakeReply(continuous_channel_order=NINE)))
-    target.bind(_controls(*NINE))
-    assert target.negotiated is True
-    target.send({**dict.fromkeys(NINE, 0.0), "wrist.rotation": 1.0}, {})
-    assert outlet.last[8] == pytest.approx(1.0)
+def test_an_unnamed_stream_is_refused_rather_than_published():
+    """An LSL stream with no name cannot be resolved, so it renders nothing, silently."""
+    from myogestic.vhi import virtual_hand
+
+    with pytest.raises(ValueError, match="unnamed stream"):
+        virtual_hand().stream_outlet("", n_channels=1)
+
+
+# --- negotiation ---------------------------------------------------------------
 
 
 def test_a_negotiated_binding_does_not_negate():
     """The sign flip was a property of the old wire, never of the standard."""
-    outlet = FakeOutlet()
-    target = VhiTarget(outlet, client=FakeClient(FakeReply(continuous_channel_order=NINE)))
-    target.bind(_controls(*NINE))
-    target.send({**dict.fromkeys(NINE, 0.0), "index.flexion": 1.0}, {})
-    assert outlet.last[2] == pytest.approx(+1.0)
+    target, interface = _bound()
+    target.send({**dict.fromkeys(POSE_DOFS, 0.0), "index.flexion": 1.0}, {})
+    assert interface.live["index.flexion"].last == pytest.approx(+1.0)
 
 
 def test_a_value_reaches_the_wire_with_the_sign_it_was_given():
     """There is one encoding now, so nothing may flip a value on the way out."""
-    outlet = FakeOutlet()
-    controls = _controls("index.flexion")
-    target = VhiTarget(outlet, client=FakeClient(FakeReply(
-        continuous_channel_order=("index.flexion",),
-    )))
-    target.bind(controls)
+    target, interface = _bound("index.flexion")
+    index = interface.live["index.flexion"]
     target.send({"index.flexion": 1.0}, {})
-
-    assert outlet.last[0] == pytest.approx(1.0), "the value was negated on the way out"
-
+    assert index.last == pytest.approx(1.0), "the value was negated on the way out"
     target.send({"index.flexion": -1.0}, {})
-    assert outlet.last[0] == pytest.approx(-1.0)
+    assert index.last == pytest.approx(-1.0)
 
 
-def test_a_channel_order_that_disagrees_is_refused():
+def test_an_address_vocabulary_that_disagrees_is_refused():
     """Guessing a mapping is exactly what the standard exists to stop."""
-    client = FakeClient(FakeReply(continuous_channel_order=("something.else",) * 9))
-    target = VhiTarget(FakeOutlet(), client=client)
+    target = VhiTarget(client=FakeClient(("something.else",)), interface=FakeInterface())
     with pytest.raises(ValueError, match="has no place for"):
-        target.bind(_controls(*NINE))
+        target.bind(_controls(*POSE_DOFS))
     assert target.negotiated is False
 
 
-def test_a_width_the_outlet_cannot_carry_is_refused():
-    """The outlet's channel count is fixed at construction; a wider frame cannot fit."""
-    order = (*NINE, "extra.dof")
-    client = FakeClient(FakeReply(continuous_channel_order=order))
-    target = VhiTarget(FakeOutlet(), client=client)
-    with pytest.raises(ValueError, match="outlet carries 9"):
-        target.bind(_controls(*order))
+def test_a_declared_dof_the_renderer_does_not_export_is_refused():
+    """The case that must still fail: a DOF with nowhere to go renders nothing."""
+    target = VhiTarget(client=FakeClient(("index.flexion",)), interface=FakeInterface())
+    with pytest.raises(ValueError, match="has no place for"):
+        target.bind(_controls("index.flexion", **{"wrist.rotation": "continuous"}))
     assert target.negotiated is False
 
 
-def test_a_manifest_wider_than_the_outlet_is_fine_if_the_configuration_fits():
-    """The rule is the channels declared, not the widest channel in the manifest.
+def test_a_subset_of_what_the_renderer_exports_is_legal():
+    """VHI reports its whole vocabulary; a client may drive part of it.
 
-    VHI publishes its whole map, so a manifest wider than the outlet is ordinary. Only
-    a channel this configuration actually drives has to fit — the by-name path used to
-    measure the manifest instead and refuse a frame that fits.
+    Requiring an exact set match made every subset configuration fall back, even though
+    the renderer had accepted it.
     """
-    client = FakeClient(FakeReply(continuous_channel_order=(*NINE, "extra.dof")))
-    target = VhiTarget(FakeOutlet(), client=client)
-    target.bind(_controls("index.flexion"))
+    target, interface = _bound("index.flexion")
     assert target.negotiated is True
-    assert target._routed[0][0] == 2
+    target.send({"index.flexion": 1.0}, {})
+    assert interface.names == ["index.flexion"]
 
 
 def test_discrete_edges_go_over_grpc_when_negotiated():
@@ -516,74 +657,43 @@ def test_discrete_edges_go_over_grpc_when_negotiated():
     — the edge was forwarded because `send` passed on everything the bus handed it, which
     also meant forwarding another target's edges on a shared map.
     """
-    client = FakeClient(FakeReply(continuous_channel_order=NINE))
-    target = VhiTarget(FakeOutlet(), client=client)
-    target.bind(_controls(*NINE, **{"hand.grasp": ["rest", "fist"]}))
-    target.send(dict.fromkeys(NINE, 0.0), {"hand.grasp": "fist"})
+    client = _client()
+    target = VhiTarget(client=client, interface=FakeInterface())
+    target.bind(_controls(*POSE_DOFS, **{"hand.grasp": ["rest", "fist"]}))
+    target.send(dict.fromkeys(POSE_DOFS, 0.0), {"hand.grasp": "fist"})
     assert client.sent == [(None, {"hand.grasp": "fist"})]
 
 
 def test_no_edge_means_no_rpc():
-    """A pose is re-sent every tick; a state change is not."""
-    client = FakeClient(FakeReply(continuous_channel_order=NINE))
-    target = VhiTarget(FakeOutlet(), client=client)
-    target.bind(_controls(*NINE))
+    """A value is re-sent every tick; a state change is not."""
+    client = _client()
+    target = VhiTarget(client=client, interface=FakeInterface())
+    target.bind(_controls(*POSE_DOFS))
     for _ in range(5):
-        target.send(dict.fromkeys(NINE, 0.0), {})
+        target.send(dict.fromkeys(POSE_DOFS, 0.0), {})
     assert client.sent == []
 
 
-def test_stop_rests_in_the_negotiated_order_and_flushes():
-    outlet = FakeOutlet()
-    target = VhiTarget(outlet, client=FakeClient(FakeReply(continuous_channel_order=NINE)))
-    target.bind(_controls(*NINE))
-    target.send(dict.fromkeys(NINE, 1.0), {})
-    target.stop()
-    assert outlet.last.tolist() == [0.0] * 9
-    assert outlet.flushes == 1
-
-
 def test_rebinding_re_negotiates_rather_than_keeping_the_old_verdict():
-    """A reconnect can land on a different VHI; a stale mode would encode wrongly."""
-    client = FakeClient(FakeReply(continuous_channel_order=NINE))
-    target = VhiTarget(FakeOutlet(), client=client)
-    target.bind(_controls(*NINE))
+    """A reconnect can land on a different VHI; a stale verdict would encode wrongly."""
+    client = _client()
+    target = VhiTarget(client=client, interface=FakeInterface())
+    target.bind(_controls(*POSE_DOFS))
     assert target.negotiated is True
-    client.reply = None
+    client.addresses = None
     target.bind(_controls())
     assert target.negotiated is False
-
-
-def test_a_negotiated_order_shorter_than_the_wire_pads_the_tail():
-    """VHI names six channels on a nine-float transport; the tail stays at rest.
-
-    It will not name a channel it does not read — naming dead channels is how the four
-    wrong pose tables came to exist — so a short order is normal, not a mismatch.
-    """
-    six = POSE_DOFS
-    outlet = FakeOutlet()
-    target = VhiTarget(
-        outlet,
-        client=FakeClient(FakeReply(continuous_channel_order=six)),
-    )
-    target.bind(_controls(*six))
-    assert target.negotiated is True
-    target.send({**dict.fromkeys(six, 0.0), "little.flexion": 1.0}, {})
-    assert outlet.last.shape == (POSE_WIDTH,)
-    assert outlet.last[5] == pytest.approx(1.0)
-    assert outlet.last[6:].tolist() == [0.0, 0.0, 0.0]
 
 
 def test_a_discrete_only_configuration_negotiates_and_delivers():
     """The bug tracking negotiation explicitly fixes.
 
-    A discrete-only config has an empty continuous channel order, so inferring
-    "negotiated" from that order left the target believing it was on the legacy path
-    — which refuses discrete DOFs and would have rendered nothing at all.
+    A discrete-only config drives no stream at all, so inferring "negotiated" from what
+    was published left the target believing it had never settled — and it then refused
+    every discrete DOF it was handed.
     """
-    client = FakeClient(FakeReply(continuous_channel_order=()))
-    outlet = FakeOutlet()
-    target = VhiTarget(outlet, client=client)
+    client = FakeClient(())
+    target = VhiTarget(client=client, interface=FakeInterface())
     target.bind(build_controls({"hand.grasp": ["rest", "fist"]}))
     assert target.negotiated is True
     target.send({"hand.grasp": "fist"}, {"hand.grasp": "fist"})
@@ -591,52 +701,17 @@ def test_a_discrete_only_configuration_negotiates_and_delivers():
 
 
 def test_a_mixed_configuration_negotiates_both_kinds():
-    """v2 lifts v1's exclusivity: a pose and a held state travel together."""
-    client = FakeClient(
-        FakeReply(continuous_channel_order=("index.flexion",))
-    )
-    outlet = FakeOutlet()
-    target = VhiTarget(outlet, client=client)
+    """v2 lifts v1's exclusivity: a number and a held state travel together."""
+    client = FakeClient(("index.flexion",))
+    interface = FakeInterface()
+    target = VhiTarget(client=client, interface=interface)
     target.bind(
         build_controls({"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]})
     )
     assert target.negotiated is True
     target.send({"index.flexion": 1.0, "hand.grasp": "fist"}, {"hand.grasp": "fist"})
-    assert outlet.last[0] == pytest.approx(1.0)
+    assert interface.live["index.flexion"].last == pytest.approx(1.0)
     assert client.sent == [(None, {"hand.grasp": "fist"})]
-
-
-def test_a_subset_of_the_negotiated_channels_is_legal():
-    """VHI reports its whole channel map; a client may command part of it.
-
-    Requiring an exact set match made every subset configuration fall back, even
-    though Declare had accepted it — and the negotiated order is a channel map, not a
-    demand that the client drive every channel on it.
-    """
-    outlet = FakeOutlet()
-    target = VhiTarget(
-        outlet,
-        client=FakeClient(
-            FakeReply(continuous_channel_order=POSE_DOFS)
-        ),
-    )
-    target.bind(_controls("index.flexion"))
-    assert target.negotiated is True
-    target.send({"index.flexion": 1.0}, {})
-    # Placed at the channel VHI named, not at position 0 of the declaration.
-    assert outlet.last[2] == pytest.approx(1.0)
-    assert outlet.last[0] == 0.0
-
-
-def test_a_declared_dof_with_no_negotiated_channel_is_refused():
-    """The case that must still fail: a DOF with nowhere to go renders nothing."""
-    client = FakeClient(
-        FakeReply(continuous_channel_order=("index.flexion",))
-    )
-    target = VhiTarget(FakeOutlet(), client=client)
-    with pytest.raises(ValueError, match="has no place for"):
-        target.bind(_controls("index.flexion", **{"wrist.rotation": "continuous"}))
-    assert target.negotiated is False
 
 
 def test_the_control_client_is_publicly_importable():
@@ -681,7 +756,7 @@ class Deaf(FakeClient):
     """A renderer that is not up yet: silent."""
 
     def __init__(self) -> None:
-        super().__init__(reply=None)
+        super().__init__(addresses=None)
 
 
 def test_an_unreachable_vhi_defers_instead_of_failing_the_configuration():
@@ -690,7 +765,7 @@ def test_an_unreachable_vhi_defers_instead_of_failing_the_configuration():
     "No answer" cannot be read as "bad configuration" at that point — the renderer
     simply is not there yet, and the same configuration will be fine in a second.
     """
-    target = VhiTarget(FakeOutlet(), client=Deaf())
+    target = VhiTarget(client=Deaf(), interface=FakeInterface())
     target.bind(build_controls({"g": ["rest", "fist"]}))   # must not raise
     assert target.negotiated is False
 
@@ -698,7 +773,7 @@ def test_an_unreachable_vhi_defers_instead_of_failing_the_configuration():
 def test_a_deferred_edge_is_dropped_loudly_rather_than_raising():
     """`send` runs on the predict thread, where a raise would log every tick."""
     client = Deaf()
-    target = VhiTarget(FakeOutlet(), client=client)
+    target = VhiTarget(client=client, interface=FakeInterface())
     target.bind(build_controls({"g": ["rest", "fist"]}))
     target.send({"g": "fist"}, {"g": "fist"})   # must not raise
     assert client.sent == []
@@ -706,75 +781,25 @@ def test_a_deferred_edge_is_dropped_loudly_rather_than_raising():
 
 def test_negotiate_settles_once_vhi_appears():
     client = Deaf()
-    target = VhiTarget(FakeOutlet(), client=client)
+    target = VhiTarget(client=client, interface=FakeInterface())
     target.bind(build_controls({"g": ["rest", "fist"]}))
     assert target.negotiate() is False
-    client.reply = FakeReply(continuous_channel_order=())
+    client.addresses = ()
     assert target.negotiate() is True
     target.send({"g": "fist"}, {"g": "fist"})
     assert client.sent == [(None, {"g": "fist"})]
 
 
 def test_a_target_with_no_client_is_refused_at_bind():
-    """Every channel comes from the manifest, so there is nothing to render without one."""
+    """Every address comes from the manifest, so there is nothing to render without one."""
     with pytest.raises(ValueError, match="needs a control client"):
-        VhiTarget(FakeOutlet()).bind(_controls("index.flexion"))
+        VhiTarget(interface=FakeInterface()).bind(_controls("index.flexion"))
 
 
 def test_negotiate_is_idempotent_when_already_settled():
     target, _ = _bound("index.flexion")
     assert target.negotiate() is True
     assert target.negotiate() is True
-
-
-# --- the control-pose stream: a second stream, its own channel order -------------
-
-
-def test_a_configuration_naming_two_streams_is_refused_and_says_what_to_use():
-    """One target writes one stream, so a map spanning both cannot be guessed at.
-
-    There is nothing to default to here — picking either hand would render half the map
-    and leave the other half looking like a control that works and holds still. The
-    refusal names `vhi_targets`, which is the thing that builds one target per stream.
-    """
-    from myogestic.controls import load_control_map, resolve
-
-    controls = resolve(
-        load_control_map(
-            {"dofs": {"a": "vhi.prediction.index", "b": "vhi.control.pose.index"}}
-        ),
-        TWO_STREAMS,
-    )
-    with pytest.raises(ValueError, match="vhi_targets"):
-        VhiTarget(FakeOutlet(), client=ManifestClient(TWO_STREAMS)).bind(controls)
-
-
-def test_a_by_name_binding_reads_its_own_streams_channel():
-    """The same DOF name can sit on both pose streams; each target reads only its own."""
-
-    class TwoStreamClient:
-        def capabilities(self):
-            return [
-                _cap("index.flexion", 2, stream="MyoGestic_Output"),
-                _cap("index.flexion", 5, stream="MyoGestic_ControlPose"),
-            ]
-
-        def set_control(self, continuous=None, discrete=None):
-            pass
-
-    out = FakeOutlet()
-    output = VhiTarget(out, client=TwoStreamClient(), stream_name="MyoGestic_Output")
-    output.bind(_controls("index.flexion"))
-    output.send({"index.flexion": 1.0}, {})
-    assert out.last[2] == pytest.approx(1.0)
-
-    pose_out = FakeOutlet()
-    control_pose = VhiTarget(
-        pose_out, client=TwoStreamClient(), stream_name="MyoGestic_ControlPose"
-    )
-    control_pose.bind(_controls("index.flexion"))
-    control_pose.send({"index.flexion": 1.0}, {})
-    assert pose_out.last[5] == pytest.approx(1.0)
 
 
 # --- deferral must not commit to a convention while VHI is silent -----------------
@@ -798,7 +823,7 @@ def test_a_continuous_only_config_keeps_retrying_while_vhi_is_silent():
     joint then rendered inverted, because the target had settled on the legacy sign.
     Continuous-only is the common case, so this was the common case.
     """
-    target = VhiTarget(FakeOutlet(), client=Silent())
+    target = VhiTarget(client=Silent(), interface=FakeInterface())
     target.bind(_controls("index.flexion"))
     assert target.negotiated is False
     assert target.negotiate() is False, "unsettled: VHI has not answered"
@@ -817,19 +842,19 @@ def test_a_silent_renderer_does_not_fail_a_v2_only_configuration():
         build_controls({"hand.gesture": ["rest", "fist"]}),
         _controls("wrist.rotation"),
     ):
-        target = VhiTarget(FakeOutlet(), client=Silent())
+        target = VhiTarget(client=Silent(), interface=FakeInterface())
         target.bind(controls)  # must not raise
         assert target._pending is not None
 
 
 def test_a_silent_renderer_that_appears_later_gets_negotiated():
     """The whole point of deferring: the app launches VHI after the bus is built."""
-    client = FakeClient(reply=None)
-    target = VhiTarget(FakeOutlet(), client=client)
+    client = FakeClient(addresses=None)
+    target = VhiTarget(client=client, interface=FakeInterface())
     target.bind(_controls("index.flexion"))
     assert target.negotiated is False
 
-    client.reply = FakeReply(continuous_channel_order=POSE_DOFS)
+    client.addresses = POSE_DOFS
     assert target.negotiate() is True
     assert target.negotiated is True
     assert target._pending is None
@@ -837,8 +862,8 @@ def test_a_silent_renderer_that_appears_later_gets_negotiated():
 
 def test_force_re_fetches_the_manifest_after_a_settled_negotiation():
     """A renderer restart can hand back a different manifest; force is the remedy."""
-    client = FakeClient(FakeReply(continuous_channel_order=POSE_DOFS))
-    target = VhiTarget(FakeOutlet(), client=client)
+    client = _client()
+    target = VhiTarget(client=client, interface=FakeInterface())
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
     before = client.capability_fetches
@@ -848,72 +873,29 @@ def test_force_re_fetches_the_manifest_after_a_settled_negotiation():
     assert client.capability_fetches == before + 1, "force must re-fetch the manifest"
 
 
-# --- address routing: alias -> address -> channel ---------------------------------
+# --- address routing: alias -> address -> its own stream ---------------------------
 #
 # The routed path is what makes a user-owned alias drive a target-owned control. It is
 # keyed on what the *target* published, so these fakes carry a manifest.
 
 
-def _cap(
-    address,
-    channel,
-    *,
-    lo=-1.0,
-    hi=1.0,
-    kind="continuous",
-    states=(),
-    stream=None,
-):
-    """One capability, named the way a real manifest names it.
-
-    ``stream`` defaults to what VHI itself reports: the predicted hand's stream for a
-    capability that *is* on a stream, and nothing at all for one that is not (a discrete
-    control travels over gRPC and names no stream). That default matters — the target
-    filters the manifest by stream name, and a fixture that left every name empty would
-    only ever exercise the wildcard fallback. The wildcard is pinned on its own in
-    `test_a_renderer_that_names_no_stream_is_read_anyway`.
-    """
-    if stream is None:
-        stream = "MyoGestic_Output" if channel >= 0 else ""
-    from myogestic.controls import Capability
-
-    return Capability(
-        address=address,
-        kind=kind,
-        lo=lo,
-        hi=hi,
-        rest=0.0,
-        states=tuple(states),
-        rest_state=states[0] if states else "",
-        channel=channel,
-        stream_name=stream,
-    )
-
-
 MANIFEST = [
-    _cap("vhi.prediction.thumb", 0),
-    _cap("vhi.prediction.index", 2),
-    _cap("vhi.prediction.middle", 3),
-    _cap("vhi.grip.force", 4, lo=0.0, hi=1.0),
-    _cap("vhi.control.gesture", -1, kind="discrete", states=("Rest", "Fist")),
+    _cap("vhi.prediction.thumb.flexion"),
+    _cap("vhi.prediction.index"),
+    _cap("vhi.prediction.middle"),
+    _cap("vhi.grip.force", lo=0.0, hi=1.0),
+    _cap("vhi.control.gesture", kind="discrete", states=("Rest", "Fist")),
 ]
-
-#: The pose width this manifest implies: highest advertised channel, plus one.
-MANIFEST_WIDTH = 5
 
 
 def test_a_target_binds_without_declaring():
     """The manifest is the whole contract. A client that cannot Declare still binds.
 
-    Declare's reply was accepted/verdicts plus a channel order. The order is the
-    manifest sorted by channel; the verdicts were validation this target already does
-    against `by_address` (for a routed alias) or the order itself (for a by-name one),
-    raising its own error for an address no capability carries.
-
     `ManifestOnlyClient` implements *only* `capabilities`: no `declare`, no
     `set_control`. If `bind` reached for either, this would raise `AttributeError`
     before the assertion below runs.
     """
+
     class ManifestOnlyClient:
         """A renderer that serves GetControlManifest and nothing else."""
 
@@ -923,13 +905,13 @@ def test_a_target_binds_without_declaring():
         def capabilities(self):
             return self.manifest
 
-    outlet = FakeOutlet()
-    # By-name, like `_client()`: address == alias, at the pose channel it names.
-    manifest = [_cap(name, channel) for channel, name in enumerate(POSE)]
-    target = VhiTarget(outlet, client=ManifestOnlyClient(manifest))
+    interface = FakeInterface()
+    # By-name: address == alias, exactly as `_client()` synthesises it.
+    manifest = [_cap(name) for name in POSE_DOFS]
+    target = VhiTarget(client=ManifestOnlyClient(manifest), interface=interface)
     target.bind(_controls("index.flexion"))
     target.send({"index.flexion": 1.0}, {})
-    assert outlet.last[2] == 1.0
+    assert interface.live["index.flexion"].last == pytest.approx(1.0)
 
 
 class ManifestClient(FakeClient):
@@ -951,215 +933,125 @@ def _routed_target(dofs, *, manifest=MANIFEST):
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(load_control_map({"dofs": dofs}), manifest)
-    outlet = FakeOutlet()
-    target = VhiTarget(outlet, client=ManifestClient(manifest))
+    interface = FakeInterface()
+    target = VhiTarget(client=ManifestClient(manifest), interface=interface)
     target.bind(controls)
-    return target, outlet, controls
+    return target, interface, controls
 
 
-def test_an_alias_lands_on_the_channel_the_target_published():
-    """Not on its position in the declaration — on the channel the manifest names."""
-    target, outlet, _ = _routed_target({"my_index": "vhi.prediction.index"})
+def _owned(dofs, **kwargs):
+    """`_routed_target` without the resolved set — every target owns its streams now."""
+    target, interface, _ = _routed_target(dofs, **kwargs)
+    return target, interface
+
+
+def test_an_alias_lands_on_the_stream_named_for_the_address_it_points_at():
+    """Not on a channel of a shared frame — on a stream of that control's own name."""
+    target, interface, _ = _routed_target({"my_index": "vhi.prediction.index"})
     assert target.negotiated is True
+    assert interface.names == ["vhi.prediction.index"]
     target.send({"my_index": 1.0}, {})
-    assert outlet.last[2] == pytest.approx(1.0), "channel 2, per the manifest"
-    assert outlet.last[0] == 0.0
+    assert interface.live["vhi.prediction.index"].last == pytest.approx(1.0)
 
 
-def test_a_fan_out_reaches_every_listed_channel():
-    target, outlet, _ = _routed_target(
+def test_a_fan_out_reaches_every_listed_control():
+    target, interface, _ = _routed_target(
         {"fist": ["vhi.prediction.index", "vhi.prediction.middle"]}
     )
     target.send({"fist": 1.0}, {})
-    assert outlet.last[2] == pytest.approx(1.0)
-    assert outlet.last[3] == pytest.approx(1.0)
+    assert interface.live["vhi.prediction.index"].last == pytest.approx(1.0)
+    assert interface.live["vhi.prediction.middle"].last == pytest.approx(1.0)
 
 
 def test_a_weight_scales_one_member_of_a_fan_out():
-    target, outlet, _ = _routed_target(
+    target, interface, _ = _routed_target(
         {
             "fist": [
-                {"target": "vhi.prediction.thumb", "weight": 0.6},
+                {"target": "vhi.prediction.thumb.flexion", "weight": 0.6},
                 "vhi.prediction.index",
             ]
         }
     )
     target.send({"fist": 1.0}, {})
-    assert outlet.last[0] == pytest.approx(0.6), "thumb gets 0.6x"
-    assert outlet.last[2] == pytest.approx(1.0), "index gets the full value"
+    assert interface.live["vhi.prediction.thumb.flexion"].last == pytest.approx(0.6)
+    assert interface.live["vhi.prediction.index"].last == pytest.approx(1.0)
 
 
 def test_a_weight_cannot_push_a_value_past_the_targets_range():
     """Weight applies first, then the target's own range — the gain is not an escape."""
-    target, outlet, _ = _routed_target(
+    target, interface, _ = _routed_target(
         {"a": [{"target": "vhi.grip.force", "weight": 1.0}]}
     )
     target.send({"a": 5.0}, {})
-    assert outlet.last[4] == pytest.approx(1.0), "clamped to the declared hi"
+    assert interface.live["vhi.grip.force"].last == pytest.approx(1.0)
 
 
-def test_two_aliases_on_one_channel_are_refused_rather_than_racing():
+def test_two_aliases_on_one_control_are_refused_rather_than_racing():
     """Whichever wrote last would win silently, and the other would look broken."""
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(
         load_control_map(
-            {"a": "x", "b": "y"}
-            if False
-            else {"dofs": {"a": "vhi.prediction.index", "b": "vhi.prediction.index"}}
+            {"dofs": {"a": "vhi.prediction.index", "b": "vhi.prediction.index"}}
         ),
         MANIFEST,
     )
-    target = VhiTarget(FakeOutlet(), client=ManifestClient())
+    target = VhiTarget(client=ManifestClient(), interface=FakeInterface())
     with pytest.raises(ValueError, match="both map to"):
         target.bind(controls)
 
 
-def test_an_unstreamed_capability_is_refused():
-    """A control with no channel cannot be driven over the stream — say so."""
+def test_an_address_the_renderer_does_not_export_as_a_number_is_refused():
+    """A held state cannot be driven as a number — say so rather than dropping it."""
     from myogestic.controls import load_control_map, resolve
 
-    off_stream = [_cap("vhi.prediction.index", -1)]
     controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.prediction.index"}}), off_stream
+        load_control_map({"dofs": {"a": {"target": "vhi.control.gesture"}}}), MANIFEST
     )
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(off_stream))
-    with pytest.raises(ValueError, match="not carried on a stream"):
-        target.bind(controls)
+    target = VhiTarget(client=ManifestClient(), interface=FakeInterface())
+    target.bind(controls)
+    # A discrete alias is not routed onto a stream at all; it is commanded over gRPC.
+    assert target._routed == ()
+    assert "a" in target.claims
 
 
-def test_a_discrete_alias_is_not_routed_onto_the_stream():
-    """Held states travel over gRPC; only continuous aliases occupy channels."""
-    target, outlet, _ = _routed_target(
+def test_a_discrete_alias_is_not_routed_onto_a_stream():
+    """Held states travel over gRPC; only continuous aliases get a stream."""
+    target, interface, _ = _routed_target(
         {"g": {"target": "vhi.control.gesture", "debounce_s": 0.1}}
     )
-    assert target._routed == (), "a discrete alias claims no channel"
+    assert target._routed == (), "a discrete alias drives no stream"
+    assert interface.built == []
 
 
-def test_stop_rests_every_routed_channel():
-    target, outlet, _ = _routed_target(
+def test_stop_rests_every_stream_it_routed():
+    target, interface, _ = _routed_target(
         {"fist": ["vhi.prediction.index", "vhi.prediction.middle"]}
     )
     target.send({"fist": 1.0}, {})
     target.stop()
-    assert outlet.last.tolist() == [0.0] * POSE_WIDTH
-    assert outlet.flushes == 1
+    for outlet in interface.built:
+        assert outlet.last == 0.0
+        assert outlet.flushes == 1
+        assert outlet.stops == 1
 
 
-# --- two namespaces, two streams -------------------------------------------------
+# --- two hands, one target ---------------------------------------------------------
 #
-# vhi.prediction.* is the model-driven hand on MyoGestic_Output; vhi.control.pose.* is the
-# operator's hand on MyoGestic_ControlPose. They share channel numbers, so a target that
-# ignored stream_name would put a value on the wrong hand.
-
-def _cap_on(address, channel, stream, **kw):
-    from myogestic.controls import Capability
-
-    return Capability(
-        address=address, kind="continuous", lo=-1.0, hi=1.0, rest=0.0,
-        channel=channel, stream_name=stream, **kw
-    )
+# vhi.prediction.* is the model-driven hand; vhi.control.pose.* is the operator's. They
+# used to be two streams whose channels both numbered from zero, which is why a target
+# drove exactly one of them and an application had to build one per hand. Every control
+# has its own stream now, so the two hands are simply eighteen addresses and one target
+# drives whichever of them a map names.
 
 
-TWO_STREAMS = [
-    _cap_on("vhi.prediction.index", 2, "MyoGestic_Output"),
-    _cap_on("vhi.prediction.middle", 3, "MyoGestic_Output"),
-    _cap_on("vhi.control.pose.index", 2, "MyoGestic_ControlPose"),
-    _cap_on("vhi.control.pose.middle", 3, "MyoGestic_ControlPose"),
+TWO_HANDS = [
+    _cap("vhi.prediction.index"),
+    _cap("vhi.prediction.thumb.flexion"),
+    _cap("vhi.control.pose.index"),
+    _cap("vhi.control.pose.thumb.flexion"),
+    _cap("vhi.control.gesture", kind="discrete", states=("Rest", "Fist")),
 ]
-
-
-def test_an_unnamed_target_follows_the_map_onto_the_operators_hand():
-    """No hand is chosen here — the map names one, and the manifest says which stream.
-
-    This used to route *nothing*: the target defaulted to the model's hand and left every
-    control-pose address to a target the application had not built, so a map like this
-    rendered nowhere at all.
-    """
-    from myogestic.controls import load_control_map, resolve
-
-    controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
-    )
-    target = VhiTarget(
-        FakeOutlet("MyoGestic_ControlPose"), client=ManifestClient(TWO_STREAMS)
-    )
-    target.bind(controls)
-    assert target.claims == frozenset({"a"})
-    assert target._routed[0][0] == 2, "the operator's index, on its own stream"
-
-
-def test_a_named_target_still_leaves_the_other_hands_addresses_alone():
-    """Naming the stream is how one map is split across a target per hand.
-
-    Left to the target that drives that stream rather than refused: `ControlBus` is what
-    notices a control *no* target claimed.
-    """
-    from myogestic.controls import load_control_map, resolve
-
-    controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.prediction.index"}}), TWO_STREAMS
-    )
-    target = VhiTarget(
-        FakeOutlet(),
-        client=ManifestClient(TWO_STREAMS),
-        stream_name="MyoGestic_ControlPose",
-    )
-    target.bind(controls)
-    assert target.claims == frozenset()
-    assert target._routed == ()
-
-
-def test_the_refusal_names_both_namespaces():
-    """A namespace mix-up is the likely mistake, so the error should say which is which.
-
-    A *known* other-stream address is now another target's business; this is the refusal
-    that remains, for an address no stream exports at all.
-    """
-    from myogestic.controls import load_control_map, resolve
-
-    controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.prediction.wrist"}}),
-        [*TWO_STREAMS, _cap("vhi.prediction.wrist", -1, stream="MyoGestic_Output")],
-    )
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(TWO_STREAMS))
-    with pytest.raises(ValueError) as excinfo:
-        target.bind(controls)
-    message = str(excinfo.value)
-    assert "vhi.prediction" in message and "vhi.control.pose" in message
-
-
-def test_each_target_routes_its_own_stream():
-    """The same alias name, two targets, two hands — each lands on its own stream."""
-    from myogestic.controls import load_control_map, resolve
-
-    for stream, address in (
-        ("MyoGestic_Output", "vhi.prediction.middle"),
-        ("MyoGestic_ControlPose", "vhi.control.pose.middle"),
-    ):
-        controls = resolve(load_control_map({"dofs": {"a": address}}), TWO_STREAMS)
-        outlet = FakeOutlet()
-        target = VhiTarget(
-            outlet, client=ManifestClient(TWO_STREAMS), stream_name=stream
-        )
-        target.bind(controls)
-        assert target.negotiated is True, stream
-        target.send({"a": 1.0}, {})
-        assert outlet.last[3] == pytest.approx(1.0), stream
-
-
-# --- two hands at once: one map, one target per stream ----------------------------
-
-
-def _two_hand_manifest():
-    """A renderer that carries both pose streams, as VHI does."""
-    return [
-        _cap("vhi.prediction.index", 2, stream="MyoGestic_Output"),
-        _cap("vhi.prediction.thumb", 0, stream="MyoGestic_Output"),
-        _cap("vhi.control.pose.thumb", 0, stream="MyoGestic_ControlPose"),
-        _cap("vhi.control.pose.index", 2, stream="MyoGestic_ControlPose"),
-        _cap("vhi.control.gesture", -1, kind="discrete", states=("Rest", "Fist")),
-    ]
 
 
 def _two_hand_controls():
@@ -1170,103 +1062,83 @@ def _two_hand_controls():
             {
                 "dofs": {
                     "model_index": "vhi.prediction.index",
-                    "operator_thumb": "vhi.control.pose.thumb",
+                    "operator_thumb": "vhi.control.pose.thumb.flexion",
                     "gesture": "vhi.control.gesture",
                 }
             }
         ),
-        _two_hand_manifest(),
+        TWO_HANDS,
     )
 
 
-def test_one_map_drives_both_hands_through_two_targets():
-    """The natural way to drive both: a target per stream, sharing one control space.
+def test_one_target_follows_the_map_onto_the_operators_hand():
+    """No hand is chosen here — the map names one, and its addresses say which.
 
-    Each target used to *refuse* the other's addresses, so this could not bind at all —
-    the map had to be split in two. A control on another stream is now simply not this
-    target's, which is a different thing from an address nothing exports.
+    This used to route *nothing*: a target defaulted to the model's hand and left every
+    control-pose address to a target the application had not built, so a map like this
+    rendered nowhere at all.
+    """
+    from myogestic.controls import load_control_map, resolve
+
+    controls = resolve(
+        load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_HANDS
+    )
+    interface = FakeInterface()
+    target = VhiTarget(client=ManifestClient(TWO_HANDS), interface=interface)
+    target.bind(controls)
+    assert target.claims == frozenset({"a"})
+    assert interface.names == ["vhi.control.pose.index"]
+
+
+def test_one_target_drives_both_hands_from_one_map():
+    """The whole point of dropping the split: one map, one target, all of it claimed.
+
+    Two targets used to be mandatory here, because one outlet carrying both hands would
+    have put the operator's index on the model's channel 2.
     """
     controls = _two_hand_controls()
-    manifest = _two_hand_manifest()
-    predicted = VhiTarget(
-        FakeOutlet(), client=ManifestClient(manifest), stream_name="MyoGestic_Output"
-    )
-    operator = VhiTarget(
-        FakeOutlet(),
-        client=ManifestClient(manifest),
-        stream_name="MyoGestic_ControlPose",
-    )
-    bus = ControlBus(controls, targets=[predicted, operator], hz=32)
-    assert "model_index" in predicted.claims
-    assert "operator_thumb" not in predicted.claims
-    assert "operator_thumb" in operator.claims
-    assert "model_index" not in operator.claims
+    interface = FakeInterface()
+    target = VhiTarget(client=ManifestClient(TWO_HANDS), interface=interface)
+    bus = ControlBus(controls, targets=[target], hz=32)   # refuses an unclaimed alias
+    assert target.claims == {"model_index", "operator_thumb", "gesture"}
+    bus.push({"model_index": 1.0, "operator_thumb": -1.0})
+    assert interface.live["vhi.prediction.index"].last == pytest.approx(1.0)
+    assert interface.live["vhi.control.pose.thumb.flexion"].last == pytest.approx(-1.0)
     bus.stop()
 
 
 def test_each_hand_gets_only_its_own_values():
-    """Both streams number channels from 0, so a leak would be silent, not loud."""
+    """A leak between the hands would be silent, not loud — so pin it by name."""
     controls = _two_hand_controls()
-    manifest = _two_hand_manifest()
-    left, right = FakeOutlet(), FakeOutlet()
-    predicted = VhiTarget(
-        left, client=ManifestClient(manifest), stream_name="MyoGestic_Output"
-    )
-    operator = VhiTarget(
-        right, client=ManifestClient(manifest), stream_name="MyoGestic_ControlPose"
-    )
-    bus = ControlBus(controls, targets=[predicted, operator], hz=32)
+    interface = FakeInterface()
+    target = VhiTarget(client=ManifestClient(TWO_HANDS), interface=interface)
+    bus = ControlBus(controls, targets=[target], hz=32)
     bus.push({"model_index": 1.0, "operator_thumb": -1.0})
-    assert left.last[2] == pytest.approx(1.0), "the model's index, on channel 2"
-    assert left.last[0] == 0.0, "the operator's thumb must not reach the model's hand"
-    assert right.last[0] == pytest.approx(-1.0), "the operator's thumb, on channel 0"
-    assert right.last[2] == 0.0
+    assert interface.names == ["vhi.prediction.index", "vhi.control.pose.thumb.flexion"], (
+        "only the two controls the map names may be published — a stream for the model's "
+        "thumb or the operator's index would be a name nobody drives"
+    )
     bus.stop()
 
 
-def test_a_held_state_is_claimed_by_whichever_target_negotiated():
+def test_a_held_state_is_claimed_alongside_the_streams():
     controls = _two_hand_controls()
-    manifest = _two_hand_manifest()
-    predicted = VhiTarget(
-        FakeOutlet(), client=ManifestClient(manifest), stream_name="MyoGestic_Output"
-    )
-    predicted.bind(controls)
-    assert "gesture" in predicted.claims
+    target = VhiTarget(client=ManifestClient(TWO_HANDS), interface=FakeInterface())
+    target.bind(controls)
+    assert "gesture" in target.claims
 
 
-def test_a_control_no_target_claims_is_refused_by_the_bus():
-    """The hazard of "not mine": with one target, the other hand's control renders nowhere.
-
-    Skipping it silently is the failure this whole layer exists to prevent, so the bus
-    checks the union of what its targets claim.
-    """
-    controls = _two_hand_controls()
-    manifest = _two_hand_manifest()
-    target = VhiTarget(
-        FakeOutlet(), client=ManifestClient(manifest), stream_name="MyoGestic_Output"
-    )
-    with pytest.raises(ValueError, match="no target renders"):
-        ControlBus(controls, targets=[target], hz=32)
-
-
-def test_an_address_no_stream_exports_is_still_refused():
+def test_an_address_no_renderer_exports_is_still_refused():
     """"Not mine" must not swallow a typo."""
     from myogestic.controls import load_control_map, resolve
 
-    manifest = _two_hand_manifest()
-    # The same address, but declared with no channel — as a control that exists and is not
-    # streamed. "Not mine" must not swallow that.
-    bad = resolve(
-        load_control_map({"dofs": {"a": "vhi.prediction.index"}}),
-        [cap for cap in manifest if cap.address != "vhi.prediction.index"]
-        + [_cap("vhi.prediction.index", -1, stream="MyoGestic_Output")],
+    controls = resolve(
+        load_control_map({"dofs": {"a": "vhi.prediction.index"}}), TWO_HANDS
     )
-    unstreamed = [
-        cap for cap in manifest if cap.address != "vhi.prediction.index"
-    ] + [_cap("vhi.prediction.index", -1, stream="MyoGestic_Output")]
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(unstreamed))
-    with pytest.raises(ValueError, match="not carried on a stream"):
-        target.bind(bad)
+    thinner = [cap for cap in TWO_HANDS if cap.address != "vhi.prediction.index"]
+    target = VhiTarget(client=ManifestClient(thinner), interface=FakeInterface())
+    with pytest.raises(ValueError, match="no target can drive"):
+        target.bind(controls)
 
 
 def test_a_target_that_does_not_report_claims_is_assumed_to_take_everything():
@@ -1280,212 +1152,60 @@ def test_a_target_that_does_not_report_claims_is_assumed_to_take_everything():
         def stop(self) -> None: ...
 
     controls = _two_hand_controls()
-    manifest = _two_hand_manifest()
-    target = VhiTarget(
-        FakeOutlet(), client=ManifestClient(manifest), stream_name="MyoGestic_Output"
-    )
+    target = VhiTarget(client=ManifestClient(TWO_HANDS), interface=FakeInterface())
     bus = ControlBus(controls, targets=[target, Recorder()], hz=32)
     bus.stop()
 
 
-# --- a target that builds its own stream ------------------------------------------
-#
-# `interface=` instead of an outlet: the caller gets a correctly-sized stream without
-# owning one. It carries the renderer's pose layout at the renderer's own channel
-# indices, because a channel *is* an address — the manifest says `vhi.prediction.index`
-# is channel 2 and both ends read that from the same table. It used to be compacted and
-# labelled, which bought three floats a frame and cost a routing table at each end.
-
-
-class FakeInterface:
-    """The slice of `InterfaceSpec` a target builds an outlet from.
-
-    One builder, and it is *told* the name — the manifest is what says which stream
-    carries a control, so an interface has no stream names of its own to disagree with.
-    """
-
-    def __init__(self) -> None:
-        self.built: list[tuple[str, int]] = []
-
-    def stream_outlet(self, name, *, n_channels=None):
-        self.built.append((name, n_channels))
-        return FakeOutlet()
-
-
-def _owned(dofs, *, manifest=MANIFEST, stream_name=None, interface=None):
-    """A bound target that built its own outlet from `dofs`."""
+def test_a_control_no_target_claims_is_refused_by_the_bus():
+    """Skipping a control silently is the failure this whole layer exists to prevent."""
     from myogestic.controls import load_control_map, resolve
 
-    controls = resolve(load_control_map({"dofs": dofs}), manifest)
-    interface = FakeInterface() if interface is None else interface
-    client = ManifestClient(manifest)
-    target = VhiTarget(client=client, interface=interface, stream_name=stream_name)
-    target.bind(controls)
-    return target, interface
+    key = _cap("keyboard.hold.letter.w", kind="discrete", states=("up", "down"))
+    controls = resolve(
+        load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [key]
+    )
+    target = VhiTarget(client=ManifestClient(TWO_HANDS), interface=FakeInterface())
+    with pytest.raises(ValueError, match="no target renders"):
+        ControlBus(controls, targets=[target], hz=32)
 
 
-def test_neither_an_outlet_nor_an_interface_is_refused():
-    """There has to be somewhere to write. Refused at construction, not at first send."""
-    with pytest.raises(ValueError, match="either an outlet .* or an `interface="):
-        VhiTarget(client=_client())
-
-
-def test_the_stream_is_the_renderers_full_pose_width():
-    """Two controls, but the renderer's whole layout — the undriven channels sit at rest.
-
-    Narrower would mean the receiver had to be told how to put the frame back, which is a
-    routing table on both sides to save three floats a frame.
-    """
-    _, interface = _owned({"a": "vhi.prediction.index", "b": "vhi.prediction.middle"})
-    name, width = interface.built[0]
-    assert name == "MyoGestic_Output"
-    assert width == MANIFEST_WIDTH
-
-
-def test_a_value_lands_on_the_renderers_own_channel():
-    """Channel 2 of the manifest is channel 2 of the stream. No renumbering."""
-    target, _ = _owned({"m": "vhi.prediction.middle", "i": "vhi.prediction.index"})
-    target.send({"i": 1.0, "m": 0.5}, {})
-    frame = target._outlet.last.tolist()
-    assert frame[2] == 1.0, frame   # vhi.prediction.index
-    assert frame[3] == 0.5, frame   # vhi.prediction.middle
-    assert sum(1 for v in frame if v) == 2, frame
-
-
-def test_a_high_manifest_channel_is_no_longer_a_width_error():
-    """The check that refused this is meaningless once the target sizes its own stream."""
-    manifest = [*MANIFEST, _cap("vhi.prediction.far", 40)]
-    target, interface = _owned({"a": "vhi.prediction.far"}, manifest=manifest)
-    assert interface.built[0][1] == 41
-    target.send({"a": 1.0}, {})
-    frame = target._outlet.last.tolist()
-    assert frame[40] == 1.0 and sum(1 for v in frame if v) == 1, frame
-
-
-def test_a_supplied_outlet_still_refuses_a_channel_it_cannot_reach():
-    """The positional path is unchanged: its width is fixed and cannot be renumbered."""
-    from myogestic.controls import load_control_map, resolve
-
-    manifest = [*MANIFEST, _cap("vhi.prediction.far", 40)]
-    controls = resolve(load_control_map({"dofs": {"a": "vhi.prediction.far"}}), manifest)
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(manifest))
-    with pytest.raises(ValueError, match="carries 9"):
-        target.bind(controls)
-
-
-def test_the_stream_it_builds_is_the_one_the_manifest_named():
-    """Not a hand this file chose — the two hands are different streams, and the map
-    is what says which of them a configuration is on."""
-    manifest = [_cap("vhi.control.pose.index", 2, stream="MyoGestic_ControlPose")]
-    _, interface = _owned({"a": "vhi.control.pose.index"}, manifest=manifest)
-    assert interface.built[0][0] == "MyoGestic_ControlPose"
-
-
-def test_a_discrete_only_configuration_builds_no_stream_at_all():
-    """Nothing continuous to carry, and a zero-channel LSL outlet is not a thing.
-
-    It must still bind and still deliver its held states over gRPC — a target that
-    raised here would make a perfectly valid gesture-only configuration unusable.
-    """
-    target, interface = _owned({"g": "vhi.control.gesture"})
-    assert interface.built == []
-    assert target.negotiated is True
-    target.send({"g": "Fist"}, {"g": "Fist"})
-    assert target._client.sent == [(None, {"g": "Fist"})]
-
-
-def test_stop_without_a_stream_does_not_raise():
-    target, _ = _owned({"g": "vhi.control.gesture"})
-    target.stop()
-
-
-def test_an_owned_outlet_is_stopped_but_a_supplied_one_is_not():
-    """Whoever built it stops it. An application's outlet may still be in use."""
-
-    class Stoppable(FakeOutlet):
-        def __init__(self) -> None:
-            super().__init__()
-            self.stopped = 0
-
-        def stop(self) -> None:
-            self.stopped += 1
-
-    supplied = Stoppable()
-    target, _, _ = _routed_target({"a": "vhi.prediction.index"})
-    target._outlet = supplied
-    target.stop()
-    assert supplied.stopped == 0
-
-    owned, interface = _owned({"a": "vhi.prediction.index"})
-    built = Stoppable()
-    owned._outlet = built
-    owned.stop()
-    assert built.stopped == 1
-
-
-# --- the stream name is the renderer's, and nothing else's ------------------------
+# --- the stream name is the address, and nothing else ------------------------------
 #
-# Nothing on this side writes a stream name down, so a renderer that renames one, or
-# ships a third, needs no configuration at all: the manifest names the stream carrying
-# each control, and both the filter and the outlet come off that one answer. There is no
-# way left for a target to publish under one name and negotiate against another.
+# Nothing on this side writes a stream name down, and there is no longer a field that
+# could: a renderer that renames a control, or ships a new one, needs no configuration at
+# all, because the name it publishes under is the address it advertises.
 
 
-def test_a_renamed_stream_needs_no_configuration_at_all():
-    """The manifest says `RigA_Pose`, so that is what is negotiated *and* published."""
-    manifest = [_cap("vhi.prediction.index", 2, stream="RigA_Pose")]
-    target, interface = _owned({"a": "vhi.prediction.index"}, manifest=manifest)
-    assert interface.built == [("RigA_Pose", 3)]
+def test_a_renamed_control_needs_no_configuration_at_all():
+    """The manifest says `rig.a.index`, so that is what is negotiated *and* published."""
+    manifest = [_cap("rig.a.index")]
+    target, interface = _owned({"a": "rig.a.index"}, manifest=manifest)
+    assert interface.names == ["rig.a.index"]
     target.send({"a": 1.0}, {})
-    assert target._outlet.last[2] == pytest.approx(1.0)
+    assert interface.live["rig.a.index"].last == pytest.approx(1.0)
 
 
-def test_a_renamed_stream_is_honoured_on_the_by_name_path_too():
+def test_a_renamed_control_is_honoured_on_the_by_name_path_too():
     """A configuration without routes finds its stream the same way a routed one does.
 
     It used to be a second implementation, which is how the two drifted apart; there is
-    one now, and this pins that a routeless set reaches it with the right stream name.
+    one now, and this pins that a routeless set reaches it with the right name.
     """
-    client = ManifestClient([_cap("index.flexion", 2, stream="RigA_Pose")])
-
-    # A supplied outlet: no name is configured anywhere, and none is needed — the DOF
-    # name is looked up in the manifest and the stream carrying it is the one filtered
-    # for. This used to refuse, because it filtered by a default name nothing matched.
-    supplied = VhiTarget(FakeOutlet(), client=client)
-    supplied.bind(_controls("index.flexion"))
-    assert supplied._routed[0][0] == 2
-
-    # With an interface, the outlet it builds carries that same name, sized from the
-    # manifest it filtered — exactly as a routed binding's is. It used not to build one
-    # at all, so this bound, reported itself negotiated, and then rendered nothing.
+    client = ManifestClient([_cap("index.flexion")])
     interface = FakeInterface()
     target = VhiTarget(client=client, interface=interface)
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
-    assert target._routed[0][0] == 2
-    assert interface.built == [("RigA_Pose", 3)], "no outlet means nothing renders"
+    assert interface.names == ["index.flexion"]
     target.send({"index.flexion": 1.0}, {})
-    assert target._outlet.last[2] == pytest.approx(1.0)
-
-
-def test_a_renderer_that_names_no_stream_is_read_anyway():
-    """An empty `stream_name` stays a wildcard: a renderer need not name its streams."""
-    nameless = [_cap("vhi.prediction.index", 2, stream="")]
-    routed, _, _ = _routed_target({"a": "vhi.prediction.index"}, manifest=nameless)
-    routed.send({"a": 1.0}, {})
-    assert routed._routed[0][0] == 2
-
-    by_name = VhiTarget(FakeOutlet(), client=ManifestClient([_cap("index.flexion", 2, stream="")]))
-    by_name.bind(_controls("index.flexion"))
-    assert by_name.negotiated is True
+    assert interface.live["index.flexion"].last == pytest.approx(1.0)
 
 
 # --- one file, several targets ----------------------------------------------------
 
 
-KEY = _cap(
-    "keyboard.hold.letter.w", -1, kind="discrete", states=("up", "down")
-)
+KEY = _cap("keyboard.hold.letter.w", kind="discrete", states=("up", "down"))
 
 
 class TestItClaimsOnlyWhatVhiExports:
@@ -1502,8 +1222,8 @@ class TestItClaimsOnlyWhatVhiExports:
         from myogestic.controls import load_control_map, resolve
 
         manifest = [
-            _cap("vhi.prediction.index", 2, stream="MyoGestic_Output"),
-            _cap("vhi.control.gesture", -1, kind="discrete", states=("Rest", "Fist")),
+            _cap("vhi.prediction.index"),
+            _cap("vhi.control.gesture", kind="discrete", states=("Rest", "Fist")),
             KEY,
         ]
         return resolve(
@@ -1523,31 +1243,31 @@ class TestItClaimsOnlyWhatVhiExports:
     def _vhi_only_client():
         # The target asks its *own* client, which knows nothing of a keyboard.
         return ManifestClient([
-                _cap("vhi.prediction.index", 2, stream="MyoGestic_Output"),
-                _cap("vhi.control.gesture", -1, kind="discrete", states=("Rest", "Fist")),
-            ],
-        )
+            _cap("vhi.prediction.index"),
+            _cap("vhi.control.gesture", kind="discrete", states=("Rest", "Fist")),
+        ])
 
     def test_a_foreign_control_is_not_claimed(self):
         """`ControlBus` trusts `claims` to catch an alias nothing renders. Over-claiming
         would make a genuinely orphaned control look covered."""
-        target = VhiTarget(FakeOutlet(), client=self._vhi_only_client())
+        target = VhiTarget(client=self._vhi_only_client(), interface=FakeInterface())
         target.bind(self._mixed())
         assert "walk" not in target.claims
         assert {"close", "grip"} <= target.claims
 
     def test_vhis_own_discrete_control_is_still_claimed(self):
         """The filter must not over-reach: a gRPC-only VHI control is genuinely VHI's."""
-        target = VhiTarget(FakeOutlet(), client=self._vhi_only_client())
+        target = VhiTarget(client=self._vhi_only_client(), interface=FakeInterface())
         target.bind(self._mixed())
         assert "grip" in target.claims
 
     def test_the_vhi_controls_still_bind(self):
-        target = VhiTarget(FakeOutlet(), client=self._vhi_only_client())
+        interface = FakeInterface()
+        target = VhiTarget(client=self._vhi_only_client(), interface=interface)
         target.bind(self._mixed())
         assert target.negotiated is True
         target.send({"close": 1.0, "grip": "Fist", "walk": "down"}, {})
-        assert target._outlet.last[2] == pytest.approx(1.0)
+        assert interface.live["vhi.prediction.index"].last == pytest.approx(1.0)
 
     def test_a_map_with_nothing_of_ours_binds_and_claims_nothing(self):
         """A keyboard-only file in an app that also holds a VhiTarget. Not an error: the
@@ -1557,7 +1277,7 @@ class TestItClaimsOnlyWhatVhiExports:
         controls = resolve(
             load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [KEY]
         )
-        target = VhiTarget(FakeOutlet(), client=self._vhi_only_client())
+        target = VhiTarget(client=self._vhi_only_client(), interface=FakeInterface())
         target.bind(controls)
         assert target.claims == frozenset()
         assert target.negotiated is True
@@ -1569,7 +1289,7 @@ class TestItClaimsOnlyWhatVhiExports:
         controls = resolve(
             load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [KEY]
         )
-        target = VhiTarget(FakeOutlet(), client=self._vhi_only_client())
+        target = VhiTarget(client=self._vhi_only_client(), interface=FakeInterface())
         with pytest.raises(ValueError, match="no target renders"):
             ControlBus(controls, targets=[target], hz=32)
 
@@ -1584,8 +1304,8 @@ def test_a_foreign_edge_is_not_forwarded_to_vhi():
     from myogestic.controls import load_control_map, resolve
 
     manifest = [
-        _cap("vhi.control.gesture", -1, kind="discrete", states=("Rest", "Fist")),
-        _cap("keyboard.hold.letter.w", -1, kind="discrete", states=("up", "down")),
+        _cap("vhi.control.gesture", kind="discrete", states=("Rest", "Fist")),
+        _cap("keyboard.hold.letter.w", kind="discrete", states=("up", "down")),
     ]
     controls = resolve(
         load_control_map(
@@ -1594,7 +1314,7 @@ def test_a_foreign_edge_is_not_forwarded_to_vhi():
         manifest,
     )
     client = ManifestClient([manifest[0]])
-    target = VhiTarget(FakeOutlet(), client=client)
+    target = VhiTarget(client=client, interface=FakeInterface())
     target.bind(controls)
     target.send({"grip": "Fist", "walk": "down"}, {"grip": "Fist", "walk": "down"})
     assert client.sent == [(None, {"grip": "Fist"})]
@@ -1604,8 +1324,8 @@ def test_a_frame_of_only_foreign_edges_sends_nothing_at_all():
     """Not an empty gRPC call — no call. A round trip per keystroke for nothing."""
     from myogestic.controls import load_control_map, resolve
 
-    key = _cap("keyboard.hold.letter.w", -1, kind="discrete", states=("up", "down"))
-    vhi_cap = _cap("vhi.prediction.index", 2, stream="MyoGestic_Output")
+    key = _cap("keyboard.hold.letter.w", kind="discrete", states=("up", "down"))
+    vhi_cap = _cap("vhi.prediction.index")
     controls = resolve(
         load_control_map(
             {"dofs": {"close": "vhi.prediction.index", "walk": "keyboard.hold.letter.w"}}
@@ -1613,7 +1333,7 @@ def test_a_frame_of_only_foreign_edges_sends_nothing_at_all():
         [vhi_cap, key],
     )
     client = ManifestClient([vhi_cap])
-    target = VhiTarget(FakeOutlet(), client=client)
+    target = VhiTarget(client=client, interface=FakeInterface())
     target.bind(controls)
     target.send({"close": 0.5, "walk": "down"}, {"walk": "down"})
     assert client.sent == []
@@ -1681,197 +1401,3 @@ class TestTheControlQueueCannotGrowForever:
         assert left[-1] is None, "the sentinel must be last, or the worker never exits"
         assert len(left) == 2, f"the sentinel sat behind {len(left) - 1} stale frames"
         assert left[0].discrete["gesture"] == "Rest", "teardown dropped the rest frame"
-
-
-# --- the map picks the targets -----------------------------------------------------
-#
-# `vhi_targets` is the whole of what an application does now. It replaces the choice an
-# app used to make before it had read the map — which hand it drives — with an answer
-# read off the manifest, so a map naming the operator's hand gets a target that renders
-# it instead of one that silently does not.
-
-
-def _map(dofs):
-    from myogestic.controls import load_control_map
-
-    return load_control_map({"dofs": dofs})
-
-
-def test_a_map_naming_one_hand_gets_one_target_on_that_hand():
-    """No hand was chosen anywhere — the address named it."""
-    from myogestic.vhi import vhi_targets
-
-    client = ManifestClient(TWO_STREAMS)
-    targets = vhi_targets(_map({"a": "vhi.control.pose.index"}), FakeInterface(), client=client)
-    assert len(targets) == 1
-    targets[0].bind(_map_controls({"a": "vhi.control.pose.index"}, TWO_STREAMS))
-    assert targets[0].claims == frozenset({"a"})
-    assert targets[0]._routed[0][0] == 2
-
-
-def _map_controls(dofs, manifest):
-    from myogestic.controls import resolve
-
-    return resolve(_map(dofs), manifest)
-
-
-def test_a_map_naming_both_hands_gets_a_target_for_each():
-    """One map, two streams, two targets — and between them they claim all of it.
-
-    A single target cannot do this: channel 2 of one stream is not channel 2 of the
-    other, so one outlet carrying both would put the operator's index on the model's
-    hand.
-    """
-    from myogestic.vhi import vhi_targets
-
-    dofs = {"model": "vhi.prediction.index", "operator": "vhi.control.pose.index"}
-    client = ManifestClient(TWO_STREAMS)
-    interface = FakeInterface()
-    targets = vhi_targets(_map(dofs), interface, client=client)
-    assert len(targets) == 2
-    controls = _map_controls(dofs, TWO_STREAMS)
-    bus = ControlBus(controls, targets=targets, hz=32)   # refuses an unclaimed alias
-    claimed = set().union(*(t.claims for t in targets))
-    assert claimed == {"model", "operator"}
-    assert sorted(name for name, _ in interface.built) == [
-        "MyoGestic_ControlPose",
-        "MyoGestic_Output",
-    ]
-    bus.push({"model": 1.0, "operator": -1.0})
-    by_stream = {t._stream_name: t._outlet.last for t in targets}
-    assert by_stream["MyoGestic_Output"][2] == pytest.approx(1.0)
-    assert by_stream["MyoGestic_ControlPose"][2] == pytest.approx(-1.0)
-    bus.stop()
-
-
-def test_a_silent_renderer_gets_no_targets_rather_than_wrong_ones():
-    """Which targets a map needs is a question only the manifest answers."""
-    from myogestic.vhi import vhi_targets
-
-    class Silent:
-        def capabilities(self):
-            return None
-
-    assert vhi_targets(_map({"a": "vhi.prediction.index"}), FakeInterface(), client=Silent()) is None
-
-
-def test_a_manifest_already_in_hand_is_not_asked_for_again():
-    """A rebuild nobody clicked must not spend a blocking RPC on the render thread."""
-    from myogestic.vhi import vhi_targets
-
-    client = ManifestClient(TWO_STREAMS)
-    targets = vhi_targets(
-        _map({"a": "vhi.prediction.index"}),
-        FakeInterface(),
-        client=client,
-        capabilities=TWO_STREAMS,
-    )
-    assert client.capability_fetches == 0
-    assert len(targets) == 1
-
-
-def test_a_map_that_streams_nothing_still_gets_the_target_its_states_need():
-    """A held state travels over gRPC and names no stream — but still needs commanding."""
-    from myogestic.vhi import vhi_targets
-
-    client = ManifestClient()
-    targets = vhi_targets(_map({"g": "vhi.control.gesture"}), FakeInterface(), client=client)
-    assert len(targets) == 1
-    targets[0].bind(_map_controls({"g": "vhi.control.gesture"}, MANIFEST))
-    assert targets[0].claims == frozenset({"g"})
-    assert targets[0]._outlet is None, "nothing continuous, so no stream at all"
-
-
-# --- a supplied outlet has to be the stream the map resolved to --------------------
-#
-# The one thing the map deciding could get wrong that nothing else catches. Both hands
-# number their channels from 0, so an outlet publishing the model's hand handed a map of
-# the operator's would write the operator's values onto the model's channels — no error
-# anywhere, just the wrong hand moving. It used to be impossible: outlet and filter both
-# came off `InterfaceSpec.output_stream_name`, so they could not disagree.
-
-
-def test_an_outlet_publishing_another_stream_is_refused():
-    """The silent leak, made loud. It names both streams, because either could be wrong."""
-    from myogestic.controls import load_control_map, resolve
-
-    controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
-    )
-    target = VhiTarget(
-        FakeOutlet("MyoGestic_Output"), client=ManifestClient(TWO_STREAMS)
-    )
-    with pytest.raises(ValueError) as excinfo:
-        target.bind(controls)
-    message = str(excinfo.value)
-    assert "MyoGestic_ControlPose" in message and "MyoGestic_Output" in message
-
-
-def test_a_named_stream_that_disagrees_with_its_outlet_is_refused_too():
-    """Naming the stream explicitly is not a way to opt out of the check."""
-    from myogestic.controls import load_control_map, resolve
-
-    controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.prediction.index"}}), TWO_STREAMS
-    )
-    target = VhiTarget(
-        FakeOutlet("MyoGestic_ControlPose"),
-        client=ManifestClient(TWO_STREAMS),
-        stream_name="MyoGestic_Output",
-    )
-    with pytest.raises(ValueError, match="another hand's channels"):
-        target.bind(controls)
-
-
-def test_a_sink_that_reports_no_name_is_not_checked():
-    """A recorder or a test double is not an LSL stream and has nothing to disagree with."""
-    from myogestic.controls import load_control_map, resolve
-
-    controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_STREAMS
-    )
-    target = VhiTarget(FakeOutlet(), client=ManifestClient(TWO_STREAMS))
-    target.bind(controls)
-    assert target.negotiated is True
-
-
-def test_a_real_outlet_reports_the_name_the_check_needs():
-    """The check is only worth anything if the outlet an application builds answers it."""
-    from myogestic.vhi import virtual_hand
-
-    outlet = virtual_hand().stream_outlet("MyoGestic_Output", n_channels=2)
-    try:
-        assert outlet.name == "MyoGestic_Output"
-    finally:
-        outlet.stop()
-
-
-def test_a_renderer_that_names_no_stream_cannot_be_published_to_by_an_owned_outlet():
-    """There is no name to build one under, and nothing may be invented in its place.
-
-    The wildcard path works fine with a *supplied* outlet — the application named it —
-    so the refusal has to say that rather than leaving `stream_outlet("")` to fail with
-    advice a target building its own stream cannot follow.
-    """
-    from myogestic.controls import load_control_map, resolve
-
-    nameless = [_cap("vhi.prediction.index", 2, stream="")]
-    controls = resolve(load_control_map({"dofs": {"a": "vhi.prediction.index"}}), nameless)
-    spec = InterfaceSpec(name="probe", process=[], n_output_channels=9, output_hz=32.0)
-    target = VhiTarget(client=ManifestClient(nameless), interface=spec)
-    with pytest.raises(ValueError, match="no stream_name"):
-        target.bind(controls)
-
-
-def test_vhi_targets_defers_that_refusal_to_bind_rather_than_hiding_it():
-    """It still hands back a target: the diagnosis belongs where the map is bound."""
-    from myogestic.controls import load_control_map
-    from myogestic.vhi import vhi_targets
-
-    nameless = [_cap("vhi.prediction.index", 2, stream="")]
-    targets = vhi_targets(
-        load_control_map({"dofs": {"a": "vhi.prediction.index"}}),
-        InterfaceSpec(name="probe", process=[], n_output_channels=9, output_hz=32.0),
-        client=ManifestClient(nameless),
-    )
-    assert len(targets) == 1

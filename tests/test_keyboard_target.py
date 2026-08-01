@@ -82,9 +82,17 @@ class TestWhatItAdvertises:
         assert cap.states == ("up", "down")
         assert cap.rest_state == "up"
 
-    def test_no_key_claims_a_stream_or_a_channel(self):
-        """A key is not on a pose wire; a channel would invite something to route it onto one."""
-        assert all(cap.channel == -1 and not cap.stream_name for cap in CAPS)
+    def test_no_key_is_a_number(self):
+        """A key is a held state, and a held state drives no stream.
+
+        Kind is the whole of what keeps a key off a wire now. There used to be a second
+        signal — `channel = -1` and an empty `stream_name` — but a manifest no longer
+        describes transport at all: a streamed control's stream is named for its address,
+        so a control that is not a number has nothing to name.
+        """
+        assert all(cap.kind == "discrete" for cap in CAPS)
+        assert not hasattr(CAPS[0], "channel"), "a capability carries no transport"
+        assert not hasattr(CAPS[0], "stream_name")
 
     def test_a_scalar_activates_at_the_declared_threshold(self):
         """Wiring, not arithmetic: the rule lives in the core and is tested there.
