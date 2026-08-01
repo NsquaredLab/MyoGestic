@@ -6,10 +6,10 @@ planes at once:
 
 * **LSL data plane** - high-rate continuous values. Continuous DOFs stream
   every tick; VHI renders them on the *predicted hand*.
-* **gRPC control plane** - the negotiation, discrete state, and verification.
-  `Declare` agrees a control space by *name*, `SetControl` carries held
-  states, and a separate recording aid gates a session and drives training
-  trajectories.
+* **gRPC control plane** - the manifest, discrete state, and verification.
+  `GetControlManifest` reports every control VHI exports by *address*,
+  `SetControl` carries held states, and a separate recording aid gates a
+  session and drives training trajectories.
 
 You don't have to pick one, and mostly you don't choose at all: declare what
 you control and hand it to a
@@ -322,7 +322,7 @@ the renderer starts:
 
 | Call | Effect |
 |---|---|
-| `control_client().declare(controls)` | Negotiate. Returns `None` when VHI has not answered; `VhiTarget` defers and retries. A build that answers without the v2 service is refused. |
+| `control_client().capabilities()` | The manifest — every control VHI exports. Returns `None` when VHI has not answered; `VhiTarget` defers and retries. `resolve()` and `VhiTarget.bind` are what validate a configuration against it. |
 | `control_client().set_control(...)` | Command a frame. Fire-and-forget; safe from the predict thread. |
 | `control_client().sweep(name)` | Drive one DOF across its range and report which bones moved, in signed degrees. Verification only — it animates a joint. |
 | `control_client().set_presentation(blend=...)` | Renderer blending. Appearance only. |
@@ -330,7 +330,7 @@ the renderer starts:
 | `recording.start_trajectory(movement, frequency_hz=...)` | Cycle the control hand to generate a training trajectory. |
 | `recording.state()` | Movements, current movement, whether a trajectory is running. |
 
-`declare`, `sweep` and the aid's calls are **synchronous** — they are setup, teardown
+`capabilities`, `sweep` and the aid's calls are **synchronous** — they are setup, teardown
 and verification, and a caller needs the answer. `set_control` is fire-and-forget on a
 worker thread, so it never blocks a 60 fps render loop.
 

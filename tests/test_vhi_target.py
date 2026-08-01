@@ -53,39 +53,35 @@ class FakeOutlet:
 
 # --- the fake renderer every binding negotiates against -------------------------
 #
-# The reply is duck-typed rather than a real protobuf message: VhiTarget reads four
-# fields off it, and pinning those four keeps these tests free of the grpc extra.
-# `test_declare_request_maps_the_control_set` covers the real message separately.
-
-
-@dataclasses.dataclass
-class FakeVerdict:
-    name: str
-    renderable: bool = True
-    message: str = ""
+# The manifest is duck-typed rather than a real protobuf message: VhiTarget reads it
+# through `Capability`-shaped objects, which keeps these tests free of the grpc extra.
 
 
 @dataclasses.dataclass
 class FakeReply:
-    accepted: bool = True
+    """The channel order a fake renderer's manifest implies, in declaration order.
+
+    Index i of ``continuous_channel_order`` becomes channel i of `FakeClient`'s
+    synthesised manifest — the same wire order VHI itself assigns.
+    """
+
     continuous_channel_order: tuple[str, ...] = ()
-    verdicts: tuple[FakeVerdict, ...] = ()
-    standard_version: str = "1"
-    control_pose_stream_name: str = ""
-    control_pose_channel_order: tuple[str, ...] = ()
 
 
 class FakeClient:
-    """A `VhiControlClient` stand-in recording what the target asked of it."""
+    """A `VhiControlClient` stand-in: answers the manifest a bind resolves against."""
 
     def __init__(self, reply=None) -> None:
         self.reply = reply
-        self.declared: list[object] = []
         self.sent: list[tuple[dict | None, dict | None]] = []
+        #: How many times `capabilities()` was actually asked — `force` re-asks it.
+        self.capability_fetches = 0
 
-    def declare(self, controls, client_name="", control_pose=False):
-        self.declared.append((controls, control_pose))
-        return self.reply
+    def capabilities(self):
+        self.capability_fetches += 1
+        if self.reply is None:
+            return None
+        return [_cap(name, i) for i, name in enumerate(self.reply.continuous_channel_order)]
 
     def set_control(self, continuous=None, discrete=None):
         self.sent.append((continuous, discrete))
@@ -443,21 +439,6 @@ def test_a_value_reaches_the_wire_with_the_sign_it_was_given():
     assert outlet.last[0] == pytest.approx(-1.0)
 
 
-def test_a_partial_acceptance_is_refused_outright():
-    """Rendering only the accepted DOFs would hide the refused ones as held joints."""
-    client = FakeClient(
-        FakeReply(
-            accepted=False,
-            continuous_channel_order=NINE,
-            verdicts=(FakeVerdict("wrist.rotation", renderable=False, message="no wrist"),),
-        )
-    )
-    target = VhiTarget(FakeOutlet(), client=client)
-    with pytest.raises(ValueError, match="declined part of the control space"):
-        target.bind(_controls(*NINE))
-    assert target.negotiated is False
-
-
 def test_a_channel_order_that_disagrees_is_refused():
     """Guessing a mapping is exactly what the standard exists to stop."""
     client = FakeClient(FakeReply(continuous_channel_order=("something.else",) * 9))
@@ -522,28 +503,6 @@ def test_rebinding_re_negotiates_rather_than_keeping_the_old_verdict():
     assert target.negotiated is False
 
 
-def test_declare_request_maps_the_control_set():
-    """The real protobuf message, including declaration order and both kinds."""
-    pytest.importorskip("grpc")
-    from myogestic.vhi._control import declare_request
-
-    controls = build_controls(
-        {
-            "index.flexion": "continuous",
-            "grip.force": {"range": [0.0, 1.0]},
-            "hand.grasp": ["rest", "fist"],
-        }
-    )
-    request = declare_request(controls, "probe")
-    assert request.client_name == "probe"
-    assert [d.name for d in request.dofs] == ["index.flexion", "grip.force", "hand.grasp"]
-    index, grip, grasp = request.dofs
-    assert (index.lo, index.hi, index.rest) == (-1.0, 1.0, 0.0)
-    assert (grip.lo, grip.hi) == (0.0, 1.0)
-    assert list(grasp.states) == ["rest", "fist"]
-    assert grasp.rest_state == "rest"
-
-
 def test_a_negotiated_order_shorter_than_the_wire_pads_the_tail():
     """VHI names six channels on a nine-float transport; the tail stays at rest.
 
@@ -571,12 +530,7 @@ def test_a_discrete_only_configuration_negotiates_and_delivers():
     "negotiated" from that order left the target believing it was on the legacy path
     — which refuses discrete DOFs and would have rendered nothing at all.
     """
-    client = FakeClient(
-        FakeReply(
-            continuous_channel_order=(),
-            verdicts=(FakeVerdict("hand.grasp"),),
-        )
-    )
+    client = FakeClient(FakeReply(continuous_channel_order=()))
     outlet = FakeOutlet()
     target = VhiTarget(outlet, client=client)
     target.bind(build_controls({"hand.grasp": ["rest", "fist"]}))
@@ -673,15 +627,10 @@ def test_importing_the_vhi_package_does_not_require_grpc():
 
 
 class Deaf(FakeClient):
-    """A renderer that is not up yet: silent, and never says it will not speak v2."""
-
-    unimplemented = False
+    """A renderer that is not up yet: silent."""
 
     def __init__(self) -> None:
         super().__init__(reply=None)
-
-    def capabilities(self):
-        return None
 
 
 def test_an_unreachable_vhi_defers_instead_of_failing_the_configuration():
@@ -715,42 +664,6 @@ def test_negotiate_settles_once_vhi_appears():
     assert client.sent == [(None, {"g": "fist"})]
 
 
-def test_a_renderer_that_answers_and_does_not_speak_v2_is_refused():
-    """The cutover: a pre-2.0 build is a settled fact, and it is not driveable.
-
-    It used to be driven on a table of channel numbers. That table is gone, so the
-    alternative to refusing is guessing where a control lives — which is how the first
-    end-to-end run made a hand extend when it was told to flex.
-    """
-
-    class PreV2(FakeClient):
-        unimplemented = True
-
-        def capabilities(self):
-            return None
-
-    target = VhiTarget(FakeOutlet(), client=PreV2(reply=None))
-    with pytest.raises(ValueError, match="does not serve the v2 control contract"):
-        target.bind(_controls("index.flexion"))
-
-
-def test_the_refusal_says_how_to_get_a_v2_build():
-    """A refusal a user cannot act on is only half a refusal."""
-
-    class PreV2(FakeClient):
-        unimplemented = True
-
-        def capabilities(self):
-            return None
-
-    target = VhiTarget(FakeOutlet(), client=PreV2(reply=None))
-    with pytest.raises(ValueError) as excinfo:
-        target.bind(_controls("index.flexion"))
-    message = str(excinfo.value)
-    assert "install_vhi" in message
-    assert "VHI_PATH" in message
-
-
 def test_a_target_with_no_client_is_refused_at_bind():
     """Every channel comes from the manifest, so there is nothing to render without one."""
     with pytest.raises(ValueError, match="needs a control client"):
@@ -766,21 +679,6 @@ def test_negotiate_is_idempotent_when_already_settled():
 # --- the control-pose stream: a second stream, its own channel order -------------
 
 
-def test_declaring_the_control_pose_stream_is_opt_in():
-    """Default must not declare it — that is what keeps existing producers working."""
-    client = FakeClient(FakeReply(continuous_channel_order=POSE_DOFS))
-    VhiTarget(FakeOutlet(), client=client).bind(_controls("index.flexion"))
-    assert client.declared[-1][1] is False, "the output target must not declare a control pose"
-
-    client2 = FakeClient(
-        FakeReply(control_pose_channel_order=POSE_DOFS)
-    )
-    VhiTarget(FakeOutlet(), client=client2, stream="control_pose").bind(
-        _controls("index.flexion")
-    )
-    assert client2.declared[-1][1] is True
-
-
 @pytest.mark.parametrize("bad", ["", "predicted", "Output", "control-pose"])
 def test_an_unknown_stream_name_is_refused_at_construction(bad):
     """A typo here would silently drive the wrong hand with the wrong convention."""
@@ -788,27 +686,43 @@ def test_an_unknown_stream_name_is_refused_at_construction(bad):
         VhiTarget(FakeOutlet(), stream=bad)
 
 
-def test_declare_request_carries_control_pose():
-    """The real protobuf message, opting the second pose stream in or out."""
-    pytest.importorskip("grpc")
-    from myogestic.vhi._control import declare_request
+def test_a_by_name_binding_reads_its_own_streams_channel():
+    """The same DOF name can sit on both pose streams; each target reads only its own."""
 
-    controls = build_controls({"index.flexion": "continuous"})
-    assert declare_request(controls).control_pose is False
-    assert declare_request(controls, control_pose=True).control_pose is True
+    class TwoStreamClient:
+        def capabilities(self):
+            return [
+                _cap("index.flexion", 2, stream="MyoGestic_Output"),
+                _cap("index.flexion", 5, stream="MyoGestic_ControlPose"),
+            ]
+
+        def set_control(self, continuous=None, discrete=None):
+            pass
+
+    out = FakeOutlet()
+    output = VhiTarget(out, client=TwoStreamClient())
+    output.bind(_controls("index.flexion"))
+    output.send({"index.flexion": 1.0}, {})
+    assert out.last[2] == pytest.approx(1.0)
+
+    pose_out = FakeOutlet()
+    control_pose = VhiTarget(pose_out, client=TwoStreamClient(), stream="control_pose")
+    control_pose.bind(_controls("index.flexion"))
+    control_pose.send({"index.flexion": 1.0}, {})
+    assert pose_out.last[5] == pytest.approx(1.0)
 
 
 # --- deferral must not commit to a convention while VHI is silent -----------------
 
 
 class Silent:
-    """A client whose renderer never answers — 'old build' and 'not up' look the same."""
+    """A client whose renderer never answers."""
 
-    def declare(self, controls, client_name="", control_pose=False):
+    def capabilities(self):
         return None
 
     def set_control(self, continuous=None, discrete=None):
-        raise AssertionError("must not be called before a handshake")
+        raise AssertionError("must not be called before negotiation")
 
 
 def test_a_continuous_only_config_keeps_retrying_while_vhi_is_silent():
@@ -856,17 +770,17 @@ def test_a_silent_renderer_that_appears_later_gets_negotiated():
     assert target._pending is None
 
 
-def test_force_re_declares_after_a_settled_handshake():
-    """A renderer restart loses VHI's side of the contract; force is the remedy."""
+def test_force_re_fetches_the_manifest_after_a_settled_negotiation():
+    """A renderer restart can hand back a different manifest; force is the remedy."""
     client = FakeClient(FakeReply(continuous_channel_order=POSE_DOFS))
     target = VhiTarget(FakeOutlet(), client=client)
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
-    before = len(client.declared)
+    before = client.capability_fetches
     assert target.negotiate() is True
-    assert len(client.declared) == before, "settled means no further RPC"
+    assert client.capability_fetches == before, "settled means no further fetch"
     assert target.negotiate(force=True) is True
-    assert len(client.declared) == before + 1, "force must re-declare"
+    assert client.capability_fetches == before + 1, "force must re-fetch the manifest"
 
 
 # --- address routing: alias -> address -> channel ---------------------------------
@@ -910,6 +824,36 @@ MANIFEST = [
 
 #: The pose width this manifest implies: highest advertised channel, plus one.
 MANIFEST_WIDTH = 5
+
+
+def test_a_target_binds_without_declaring():
+    """The manifest is the whole contract. A client that cannot Declare still binds.
+
+    Declare's reply was accepted/verdicts plus a channel order. The order is the
+    manifest sorted by channel; the verdicts were validation this target already does
+    against `by_address` (for a routed alias) or the order itself (for a by-name one),
+    raising its own error for an address no capability carries.
+
+    `ManifestOnlyClient` implements *only* `capabilities`: no `declare`, no
+    `set_control`. If `bind` reached for either, this would raise `AttributeError`
+    before the assertion below runs.
+    """
+    class ManifestOnlyClient:
+        """A renderer that serves GetControlManifest and nothing else."""
+
+        def __init__(self, manifest):
+            self.manifest = manifest
+
+        def capabilities(self):
+            return self.manifest
+
+    outlet = FakeOutlet()
+    # By-name, like `_client()`: address == alias, at the pose channel it names.
+    manifest = [_cap(name, channel) for channel, name in enumerate(POSE)]
+    target = VhiTarget(outlet, client=ManifestOnlyClient(manifest))
+    target.bind(_controls("index.flexion"))
+    target.send({"index.flexion": 1.0}, {})
+    assert outlet.last[2] == 1.0
 
 
 class ManifestClient(FakeClient):
@@ -1402,10 +1346,10 @@ KEY = _cap(
 class TestItClaimsOnlyWhatVhiExports:
     """A map may name controls on other targets. VHI must ignore them, not refuse them.
 
-    `Declare` is all-or-nothing by contract — one unrenderable DOF refuses the whole
-    declaration — so declaring a `keyboard.*` control that happens to share the file took
-    the VHI controls down with it. Since a key resolves to a *discrete* DOF, and this target
-    used to claim every discrete DOF unconditionally, a mixed map could not bind at all.
+    Since a key resolves to a *discrete* DOF, and this target used to claim every
+    discrete DOF unconditionally, a mixed map made it over-claim a `keyboard.*`
+    control that happened to share the file — reporting it as covered when nothing
+    here actually renders it.
     """
 
     @staticmethod
@@ -1440,14 +1384,6 @@ class TestItClaimsOnlyWhatVhiExports:
                 _cap("vhi.control.gesture", -1, kind="discrete", states=("Rest", "Fist")),
             ],
         )
-
-    def test_a_foreign_control_is_not_declared(self):
-        client = self._vhi_only_client()
-        target = VhiTarget(FakeOutlet(), client=client)
-        target.bind(self._mixed())
-        declared = tuple(client.declared[-1][0].dofs)
-        assert "walk" not in declared
-        assert declared == ("close", "grip")
 
     def test_a_foreign_control_is_not_claimed(self):
         """`ControlBus` trusts `claims` to catch an alias nothing renders. Over-claiming

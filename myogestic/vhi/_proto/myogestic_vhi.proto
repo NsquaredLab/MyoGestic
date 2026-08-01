@@ -4,9 +4,11 @@ package myogestic.vhi;
 
 // Control plane between MyoGestic and the Virtual Hand Interface.
 //
-// An application declares what it controls by address (e.g. "vhi.prediction.index"),
-// and VHI answers per DOF with what it can render — the kind, the range, the states —
-// so neither side hard-codes a channel index or a movement table.
+// GetControlManifest is the whole contract: it returns every control VHI exports, by
+// address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range,
+// the states, and the channel a streamed value lands on — so neither side hard-codes a
+// channel index or a movement table. A client calls it unconditionally, once, before
+// sending anything; there is no per-client negotiation and nothing to declare.
 //
 // Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
 // movements, so the two never contend for one driver. SweepControl is the
@@ -14,14 +16,10 @@ package myogestic.vhi;
 // claims — that a named finger curls, in the direction its name claims — without a
 // human watching the screen.
 //
-// Continuous time-series still belongs on LSL. This service carries the
-// negotiation, discrete state, and verification.
+// Continuous time-series still belongs on LSL, addressed by the channel the manifest
+// names. This service carries discrete state, low-rate continuous commands, and
+// verification.
 service VhiControl {
-  // Negotiate a control space. The client declares every DOF it intends to
-  // command; VHI answers per DOF, and names the LSL layout it will read
-  // continuous values from. Call before streaming anything.
-  rpc Declare (DeclareRequest) returns (DeclareReply);
-
   // Command one control frame. Intended for discrete DOFs and low-rate
   // continuous updates; a per-tick continuous stream belongs on LSL.
   rpc SetControl (SetControlRequest) returns (ControlAck);
@@ -36,7 +34,7 @@ service VhiControl {
   rpc SetPresentation (SetPresentationRequest) returns (ControlAck);
 
   // What can this target be told to do? Returns every control VHI exports, with the
-  // semantics VHI itself declares for each. Call it before Declare.
+  // semantics VHI itself declares for each. Call it first.
   rpc GetControlManifest (GetControlManifestRequest) returns (ControlManifest);
 
   // --- recording session ---------------------------------------------------
@@ -179,106 +177,6 @@ enum Kind {
   DISCRETE = 2;
 }
 
-// One DOF the client intends to command.
-message DofDeclaration {
-  // The client's own name for this output — an alias it owns, e.g. "my_index" or
-  // "fist". Echoed back in the verdict so a client can match answers to its own
-  // configuration. VHI does not interpret it and must never require a shape for it.
-  string name = 1;
-  Kind kind = 2;
-  // CONTINUOUS only. Defaults to [-1, 1] when both are zero.
-  float lo = 3;
-  float hi = 4;
-  // CONTINUOUS only: the value meaning "no command". Must lie in [lo, hi].
-  float rest = 5;
-  // DISCRETE only: at least two unique state names.
-  repeated string states = 6;
-  // DISCRETE only: the neutral state; must appear in states.
-  string rest_state = 7;
-
-  // The target-owned control address this alias maps to, from GetControlManifest —
-  // e.g. "vhi.prediction.index". This is what VHI resolves; `name` is the client's
-  // label for it.
-  //
-  // When empty, VHI falls back to treating `name` as the address, which is what a
-  // client written before the manifest existed sends. That fallback is why this field
-  // is additive rather than breaking.
-  string address = 8;
-
-  // For a grouped mapping: the gain this alias applies to THIS address before VHI's own
-  // range conversion. Defaults to 1.0 when zero-or-unset, so a client that sends no
-  // weight is unchanged. One alias fanning out to several addresses sends one
-  // declaration per address, each with its own weight.
-  float weight = 9;
-}
-
-message DeclareRequest {
-  // The standard vocabulary version the client was written against. VHI records
-  // it and reports its own; deciding what a mismatch means is this handshake's
-  // job, not the loader's.
-  string standard_version = 1;
-  repeated DofDeclaration dofs = 2;
-  // Optional client identifier for VHI's log — an app name, not an identity.
-  string client_name = 3;
-
-  // Whether this client also drives the control hand's pose stream. False releases it:
-  // a client that stops declaring the stream gives it back, which is what lets a later
-  // client take it. Separate from the DOF list because the two hands are separate.
-  bool control_pose = 4;
-}
-
-// What VHI can do with one declared DOF.
-message DofVerdict {
-  // The client's alias, echoed verbatim.
-  string name = 1;
-  // The address it resolved to, so a client can see what VHI actually matched.
-  string address = 5;
-  // true: VHI will render this DOF. false: it will not, and says why. A DOF that
-  // is declared but not renderable must never be silently ignored — an ignored
-  // joint looks exactly like a joint that is working and holding still.
-  bool renderable = 2;
-  // Human-readable reason when renderable == false.
-  string message = 3;
-  // The rig element this DOF drives, for the record (e.g. "thumb bones 1-3, X
-  // axis"). Informational: clients must not parse it.
-  string renders_as = 4;
-}
-
-message DeclareReply {
-  // true only if every declared DOF is renderable.
-  bool accepted = 1;
-  repeated DofVerdict verdicts = 2;
-  // VHI's own standard version.
-  string standard_version = 3;
-  // Reserved: was `ContinuousEncoding continuous_encoding = 6`, dropped with the
-  // encoding enum — there is one encoding now, so nothing is left to negotiate.
-  reserved 6;
-  // The LSL stream VHI will read continuous values from, and the channel order
-  // it expects on it. Order is authoritative: index i of this list is channel i,
-  // and a client is expected to build its frame *from* this list rather than from
-  // its own configuration — which is what makes the two unable to disagree.
-  //
-  // Publishing these as LSL channel labels is good practice, but note that VHI does
-  // not read them back today: since the frame layout is derived from this reply, a
-  // label check could not fail. It becomes worth adding if a client ever lays out
-  // its frame independently of the negotiation.
-  string continuous_stream_name = 4;
-  repeated string continuous_channel_order = 5;
-  // Whether the renderer currently blends between commanded values (layer 3, see
-  // SetPresentationRequest). Reported so a client can *see* that visual smoothing is
-  // on — never so it can treat that as a substitute for its own debounce.
-  bool blends_presentation = 7;
-
-  // The control-hand pose stream, populated only when the request declared
-  // control_pose. Same contract as the continuous fields above: the order is
-  // authoritative.
-  string control_pose_stream_name = 8;
-  repeated string control_pose_channel_order = 9;
-  // Echoes what was granted: may differ from what was requested if VHI could not
-  // honour it, so read it rather than assuming the request was accepted.
-  bool control_pose = 10;
-}
-
 message SetControlRequest {
   // Continuous DOF values by control name. Each must be finite and inside the
   // range declared for it.
@@ -288,8 +186,8 @@ message SetControlRequest {
   // a number are not the same kind of command.
   //
   // A state is resolved against the renderer's own vocabulary — for VHI, the
-  // movement names it currently offers, matched case-insensitively. Declare reports
-  // the resolution up front (see DofVerdict.renders_as) so a client never has to
+  // movement names it currently offers, matched case-insensitively. An unresolved
+  // state is refused by name in ControlAck.rejected, so a client never has to
   // guess whether "fist" means anything here.
   map<string, string> discrete = 2;
 }

@@ -1,18 +1,15 @@
 """gRPC client for VHI's control service.
 
-Three calls, three shapes:
+Two calls, two shapes:
 
-- `VhiControlClient.declare` is a **synchronous handshake**. It runs once at bind
-  time and its answer decides how everything afterwards is encoded, so a caller has
-  to wait for it. It returns ``None`` rather than raising when VHI does not speak the
-  control contract (an older build answers ``UNIMPLEMENTED``).
 - `VhiControlClient.set_control` is fire-and-forget on a worker thread: it may be
   called from the predict thread and must never block it.
 - `VhiControlClient.sweep` is synchronous and slow — it drives a joint through its
   range. For verification tools, never for a running app.
 
-Continuous per-tick values still go over LSL. This carries the negotiation, discrete
-state, and verification.
+`VhiControlClient.capabilities` is the manifest — the whole contract `VhiTarget`
+resolves against, with no separate handshake. Continuous per-tick values still go
+over LSL; this carries the manifest, discrete state, and verification.
 """
 
 from __future__ import annotations
@@ -24,14 +21,11 @@ from typing import TYPE_CHECKING, Any
 
 import grpc
 
-from myogestic._controls_core import Continuous, Discrete
 from myogestic.vhi._proto import myogestic_vhi_pb2 as pb2
 from myogestic.vhi._proto.myogestic_vhi_pb2_grpc import VhiControlStub
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from myogestic.controls import ControlSet
 
 log = logging.getLogger("myogestic.vhi_control")
 
@@ -49,66 +43,6 @@ _QUEUE_DEPTH = 64
 _SWEEP_SLACK_S = 5.0
 
 
-def declare_request(
-    controls: ControlSet, client_name: str = "", *, control_pose: bool = False
-) -> pb2.DeclareRequest:
-    """A `DeclareRequest` describing ``controls``, in declaration order.
-
-    Order is the wire order: VHI echoes it back as the channel layout it expects, so a
-    reordered configuration must rename channels rather than silently remap them.
-
-    Parameters
-    ----------
-    control_pose
-        Opt in to also negotiating the renderer's *second* pose stream — the control
-        hand's. False (the default) does not declare that stream at all, so it says
-        nothing about whatever is already publishing to it.
-    """
-    if not hasattr(controls, "dofs"):
-        # A ControlMap is the *unresolved* form and cannot be declared: a declaration
-        # carries each control's kind and range, and only the target can supply those.
-        # Raised, not swallowed — None here would read as "this target is unreachable".
-        raise TypeError(
-            f"declare() needs a resolved ControlSet, got {type(controls).__name__}. "
-            f"Resolve first: resolve(control_map, client.capabilities())."
-        )
-
-    request = pb2.DeclareRequest(
-        standard_version=controls.standard_version,
-        client_name=client_name,
-        control_pose=control_pose,
-    )
-    routes = getattr(controls, "routes", {}) or {}
-    for dof in controls.dofs.values():
-        # One declaration per (alias, address) pair: a grouped mapping fans out, so it
-        # declares each address separately with that address's own weight. An unresolved
-        # set has no routes and sends the alias as the address.
-        refs = routes.get(dof.name) or [None]
-        for ref in refs:
-            address = getattr(ref, "address", "") if ref is not None else ""
-            weight = getattr(ref, "weight", 1.0) if ref is not None else 1.0
-            if isinstance(dof, Continuous):
-                request.dofs.add(
-                    name=dof.name,
-                    kind=pb2.CONTINUOUS,
-                    lo=dof.lo,
-                    hi=dof.hi,
-                    rest=dof.rest,
-                    address=address,
-                    weight=weight,
-                )
-            elif isinstance(dof, Discrete):
-                request.dofs.add(
-                    name=dof.name,
-                    kind=pb2.DISCRETE,
-                    states=list(dof.states),
-                    rest_state=dof.rest,
-                    address=address,
-                    weight=weight,
-                )
-    return request
-
-
 class VhiControlClient:
     """Client for VHI's control service.
 
@@ -119,11 +53,10 @@ class VhiControlClient:
 
     Examples
     --------
-    >>> from myogestic.controls import Continuous, ControlSet
     >>> from myogestic.vhi._control import VhiControlClient
     >>> client = VhiControlClient()
-    >>> reply = client.declare(ControlSet(dofs={"my_index": Continuous("my_index")}))
-    >>> reply is None      # None means this VHI is unreachable
+    >>> capabilities = client.capabilities()
+    >>> capabilities is None      # None means this VHI is unreachable
     True
     """
 
@@ -141,60 +74,12 @@ class VhiControlClient:
         self._dropped = 0
         self._seen_errors: set[tuple[str, str]] = set()
         self.connected = False
-        #: True once a server has answered `Declare` with ``UNIMPLEMENTED``, i.e. it is
-        #: reachable but predates v2. Distinguishing that from "nothing is listening"
-        #: lets a caller stop retrying a build that will never answer differently.
-        self.unimplemented = False
 
         self._running = True
         self._thread = threading.Thread(
             target=self._send_loop, name="VhiControlClient", daemon=True
         )
         self._thread.start()
-
-    # --- the handshake -------------------------------------------------------
-
-    def declare(
-        self,
-        controls: ControlSet,
-        *,
-        client_name: str = "",
-        control_pose: bool = False,
-    ) -> pb2.DeclareReply | None:
-        """Negotiate ``controls`` with VHI, or return ``None`` if it cannot.
-
-        Returns
-        -------
-        DeclareReply or None
-            ``None`` when VHI does not implement v2, is unreachable, or errors. The
-            caller (`myogestic.vhi.VhiTarget`) defers until VHI answers, unless it has
-            already answered and does not speak v2 — then it raises rather than guess.
-
-            A reply with ``accepted == False`` is **not** ``None``: VHI answered,
-            and its per-DOF verdicts say what it refused and why.
-
-        Other Parameters
-        ----------------
-        control_pose
-            Declare the renderer's second pose stream too — see `declare_request`.
-            Omitted by default.
-        """
-        request = declare_request(controls, client_name, control_pose=control_pose)
-        try:
-            reply = self._stub.Declare(request, timeout=_RPC_TIMEOUT_S)
-        except Exception as e:  # noqa: BLE001 - absence is an answer here
-            self.connected = False
-            # UNIMPLEMENTED means a server *is* there and does not serve v2 — settled.
-            # Anything else (UNAVAILABLE, a deadline) just means not reached yet, so
-            # it is worth retrying.
-            code = e.code().name if isinstance(e, grpc.Call) else ""
-            self.unimplemented = code == "UNIMPLEMENTED"
-            self._log_failure("declare", e, level=logging.DEBUG)
-            return None
-        self.connected = True
-        self.unimplemented = False
-        self._seen_errors.clear()
-        return reply
 
     # --- fire-and-forget -----------------------------------------------------
 
@@ -388,4 +273,4 @@ class VhiControlClient:
         log.log(level, "%s.%s failed — %s", type(self).__name__, operation, detail)
 
 
-__all__ = ["VhiControlClient", "declare_request"]
+__all__ = ["VhiControlClient"]

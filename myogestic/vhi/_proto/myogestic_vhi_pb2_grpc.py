@@ -28,9 +28,11 @@ if _version_not_supported:
 class VhiControlStub(object):
     """Control plane between MyoGestic and the Virtual Hand Interface.
 
-    An application declares what it controls by address (e.g. "vhi.prediction.index"),
-    and VHI answers per DOF with what it can render — the kind, the range, the states —
-    so neither side hard-codes a channel index or a movement table.
+    GetControlManifest is the whole contract: it returns every control VHI exports, by
+    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range,
+    the states, and the channel a streamed value lands on — so neither side hard-codes a
+    channel index or a movement table. A client calls it unconditionally, once, before
+    sending anything; there is no per-client negotiation and nothing to declare.
 
     Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
     movements, so the two never contend for one driver. SweepControl is the
@@ -38,8 +40,9 @@ class VhiControlStub(object):
     claims — that a named finger curls, in the direction its name claims — without a
     human watching the screen.
 
-    Continuous time-series still belongs on LSL. This service carries the
-    negotiation, discrete state, and verification.
+    Continuous time-series still belongs on LSL, addressed by the channel the manifest
+    names. This service carries discrete state, low-rate continuous commands, and
+    verification.
     """
 
     def __init__(self, channel):
@@ -48,11 +51,6 @@ class VhiControlStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Declare = channel.unary_unary(
-                '/myogestic.vhi.VhiControl/Declare',
-                request_serializer=myogestic__vhi__pb2.DeclareRequest.SerializeToString,
-                response_deserializer=myogestic__vhi__pb2.DeclareReply.FromString,
-                _registered_method=True)
         self.SetControl = channel.unary_unary(
                 '/myogestic.vhi.VhiControl/SetControl',
                 request_serializer=myogestic__vhi__pb2.SetControlRequest.SerializeToString,
@@ -98,9 +96,11 @@ class VhiControlStub(object):
 class VhiControlServicer(object):
     """Control plane between MyoGestic and the Virtual Hand Interface.
 
-    An application declares what it controls by address (e.g. "vhi.prediction.index"),
-    and VHI answers per DOF with what it can render — the kind, the range, the states —
-    so neither side hard-codes a channel index or a movement table.
+    GetControlManifest is the whole contract: it returns every control VHI exports, by
+    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range,
+    the states, and the channel a streamed value lands on — so neither side hard-codes a
+    channel index or a movement table. A client calls it unconditionally, once, before
+    sending anything; there is no per-client negotiation and nothing to declare.
 
     Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
     movements, so the two never contend for one driver. SweepControl is the
@@ -108,18 +108,10 @@ class VhiControlServicer(object):
     claims — that a named finger curls, in the direction its name claims — without a
     human watching the screen.
 
-    Continuous time-series still belongs on LSL. This service carries the
-    negotiation, discrete state, and verification.
+    Continuous time-series still belongs on LSL, addressed by the channel the manifest
+    names. This service carries discrete state, low-rate continuous commands, and
+    verification.
     """
-
-    def Declare(self, request, context):
-        """Negotiate a control space. The client declares every DOF it intends to
-        command; VHI answers per DOF, and names the LSL layout it will read
-        continuous values from. Call before streaming anything.
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
 
     def SetControl(self, request, context):
         """Command one control frame. Intended for discrete DOFs and low-rate
@@ -148,7 +140,7 @@ class VhiControlServicer(object):
 
     def GetControlManifest(self, request, context):
         """What can this target be told to do? Returns every control VHI exports, with the
-        semantics VHI itself declares for each. Call it before Declare.
+        semantics VHI itself declares for each. Call it first.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -194,11 +186,6 @@ class VhiControlServicer(object):
 
 def add_VhiControlServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Declare': grpc.unary_unary_rpc_method_handler(
-                    servicer.Declare,
-                    request_deserializer=myogestic__vhi__pb2.DeclareRequest.FromString,
-                    response_serializer=myogestic__vhi__pb2.DeclareReply.SerializeToString,
-            ),
             'SetControl': grpc.unary_unary_rpc_method_handler(
                     servicer.SetControl,
                     request_deserializer=myogestic__vhi__pb2.SetControlRequest.FromString,
@@ -250,9 +237,11 @@ def add_VhiControlServicer_to_server(servicer, server):
 class VhiControl(object):
     """Control plane between MyoGestic and the Virtual Hand Interface.
 
-    An application declares what it controls by address (e.g. "vhi.prediction.index"),
-    and VHI answers per DOF with what it can render — the kind, the range, the states —
-    so neither side hard-codes a channel index or a movement table.
+    GetControlManifest is the whole contract: it returns every control VHI exports, by
+    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range,
+    the states, and the channel a streamed value lands on — so neither side hard-codes a
+    channel index or a movement table. A client calls it unconditionally, once, before
+    sending anything; there is no per-client negotiation and nothing to declare.
 
     Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
     movements, so the two never contend for one driver. SweepControl is the
@@ -260,36 +249,10 @@ class VhiControl(object):
     claims — that a named finger curls, in the direction its name claims — without a
     human watching the screen.
 
-    Continuous time-series still belongs on LSL. This service carries the
-    negotiation, discrete state, and verification.
+    Continuous time-series still belongs on LSL, addressed by the channel the manifest
+    names. This service carries discrete state, low-rate continuous commands, and
+    verification.
     """
-
-    @staticmethod
-    def Declare(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/myogestic.vhi.VhiControl/Declare',
-            myogestic__vhi__pb2.DeclareRequest.SerializeToString,
-            myogestic__vhi__pb2.DeclareReply.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
 
     @staticmethod
     def SetControl(request,

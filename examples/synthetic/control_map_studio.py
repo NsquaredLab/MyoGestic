@@ -273,9 +273,10 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
         editor's worker fetched seconds ago. Omitted by every caller that *is* a click,
         where asking again is the point of pressing the button.
 
-    Binding still costs a `declare` RPC either way — fast against a renderer that is up,
-    and fast against one that is not, since a refused connection comes back at once. The
-    client's full two-second deadline needs something holding the port without answering.
+    Binding still costs a `capabilities()` RPC either way — fast against a renderer that
+    is up, and fast against one that is not, since a refused connection comes back at
+    once. The client's full two-second deadline needs something holding the port
+    without answering.
     """
     global bus, levels, states, status, failure, waiting, keyboard_error
     failure = ""
