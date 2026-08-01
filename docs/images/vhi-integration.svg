@@ -5,7 +5,7 @@
   <title id="mg-vhi-title">MyoGestic ↔ VHI dual-plane integration</title>
   <desc id="mg-vhi-desc">
     Two lanes. MyoGestic (Python) on the left contains the Pipeline,
-    the LSL outlets vhi_targets builds, and the gRPC VhiControlClient.
+    the LSL outlets VhiTarget builds, and the gRPC VhiControlClient.
     Virtual Hand Interface on the right contains the Predicted hand and
     the Control hand. The Pipeline pushes control values onto one outlet
     per DOF, each named after the address it carries, and the Predicted
@@ -48,7 +48,7 @@
   <rect class="accent" x="30" y="80" width="260" height="48" rx="8"/>
   <text class="text-strong" x="160" y="110" font-size="15" text-anchor="middle">Pipeline · @predict</text>
   <rect class="node" x="30" y="148" width="260" height="48" rx="8"/>
-  <text class="text-strong" x="160" y="170" font-size="14" text-anchor="middle">vhi_targets(...)</text>
+  <text class="text-strong" x="160" y="170" font-size="14" text-anchor="middle">VhiTarget(...)</text>
   <text class="text-faint"  x="160" y="186" font-size="11" text-anchor="middle">one LSL outlet per DOF</text>
   <rect class="node" x="30" y="216" width="260" height="48" rx="8"/>
   <text class="text-strong" x="160" y="238" font-size="14" text-anchor="middle">VhiControlClient</text>

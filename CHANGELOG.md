@@ -9,16 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **The map picks the targets — `myogestic.vhi.vhi_targets`.** VHI renders two hands on
-  two streams, and an application used to have to say which one it drove *before* it had
-  read the map: `VhiTarget(vhi_outlet, client=…)` bound whichever hand the outlet was
-  built for, so a map naming the operator's hand rendered nowhere and the editor hid those
-  addresses to stop anyone writing one. `vhi_targets(control_map, vhi, client=…)` looks
-  the map's addresses up in the manifest and returns one target per stream that carries
-  them — one for an ordinary map, two for one driving both hands, each sizing and naming
-  its own outlet from the same answer. `None` while VHI is unreachable, like
-  `connect_controls`. An application no longer chooses a hand, and a user editing a map
-  sees every address their renderer offers.
+- **One target drives the whole map.** VHI used to render its two hands on two wide
+  streams, and an application had to say which one it drove *before* it had read the map:
+  `VhiTarget(vhi_outlet, client=…)` bound whichever hand the outlet was built for, so a
+  map naming the operator's hand rendered nowhere and the editor hid those addresses to
+  stop anyone writing one. Now every control has a stream of its own, named for its own
+  address, and one `VhiTarget(client=…, interface=vhi)` owns one outlet per address the
+  map names — both hands included. An application no longer chooses a hand, there is
+  nothing left for it to count, and a user editing a map sees every address their
+  renderer offers.
+
+- **A version gate on the renderer.** `ControlManifest.vocabulary_version` is load-bearing
+  rather than logged: MyoGestic declares the oldest vocabulary it can drive and **refuses**
+  anything older, by name, at bind. These are separately installed applications, so
+  shipping the two together does not make any given pair a matching pair — and the
+  mismatch it catches is otherwise silent, because a renderer waiting for a stream nobody
+  publishes any more reports no error at all and the hand simply never moves.
 
 - **A control standard — `myogestic.controls`.** A control space is a *mapping*, written in
   a file: your name for a model output on the left, an address the target declares on the
@@ -37,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asks the renderer what it exports and lets a control be *picked* rather than typed,
   with weights, fan-out, and `threshold_fraction` in plain words. It refuses a map the
   renderer would reject before it can be saved, including two aliases that would land on
-  one channel under two different addresses. The TOML stays the source of truth: the
+  one control. The TOML stays the source of truth: the
   editor reads and writes that file through `dump_control_map` and keeps no state of its
   own.
 - **`dump_control_map`** — render a `ControlMap` back to TOML that `load_control_map`
@@ -155,6 +161,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (breaking)
 
+- **`ControlCapability.stream_name` and `.channel` are gone, and so is the shape they
+  described.** A streamed control's LSL stream is named for the control's own address and
+  is one channel wide, so both fields could only ever repeat what `address` already said.
+  Field numbers 10 and 11 and both field *names* are reserved in the proto — the names as
+  well, so a later field cannot inherit either spelling in JSON or text format.
+  `myogestic.controls.Capability` loses the two attributes to match, and with them go the
+  width computation, the outlet/stream mismatch refusal, the channel map, and the
+  by-address/elsewhere split inside `VhiTarget`. A renderer still serving them reports
+  vocabulary 1 and is refused by version.
+- **`myogestic.vhi.vhi_targets` is gone.** It existed to build one target per stream a map
+  spanned; there is one target now. `[VhiTarget(client=client, interface=vhi)]`.
+- **`VhiTarget` takes no outlet and no `stream_name`.** It owns one outlet per address it
+  drives and builds every one of them, so the only sink parameter is `interface=` — the
+  thing they are built from, called once per address as
+  `stream_outlet(address, n_channels=1)`. A recorder or a test double substitutes there
+  rather than as a single supplied outlet, because one sink can no longer stand for a
+  whole binding. Replacing that set on a rebind is **transactional**: the addresses that
+  survive keep the outlets they had, the ones that leave are rested, flushed and stopped,
+  and the mapping is swapped last — an abandoned LSL outlet stays discoverable and shares
+  a `source_id` with whatever replaced it, so what used to be one leak per rebind would
+  have become one per address.
 - **`load_dofs` and its kind/range/state grammar are gone.** A control space is declared by
   mapping your alias onto a target-owned address; `load_control_map` + `resolve` replace it.
   The old grammar let a *mapping* claim a control was signed, or discrete, or ranged — facts

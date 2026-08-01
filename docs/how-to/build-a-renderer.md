@@ -6,24 +6,23 @@ an in-process object a `ControlBus` calls directly, on the thread MyoGestic alre
 
 ## Which way the streams run
 
-MyoGestic writes, you read. **You name the streams** — your manifest is where every name
-is decided, and MyoGestic publishes under whatever `stream_name` you report:
+MyoGestic writes, you read. **One stream per DOF**, named for the DOF's own address and
+one channel wide:
 
 ```
-MyoGestic  --[ a stream you named ]-->  your renderer   (you read this)
+MyoGestic  --[ vhi.prediction.index, 1 channel ]-->  your renderer   (you read this)
 ```
 
-*How many* streams is yours too, and both shapes are supported:
+There is one shape and it needs no describing. The address you advertise in your manifest
+*is* the stream name, so nothing further is published about the transport, there is no
+width to declare and no positional layout for the two of you to agree on. A DOF applies
+the moment its sample arrives, and the DOFs that did not deliver hold whatever they were
+last commanded to — which is what these DOFs actually are: independently actuated,
+possibly driven by different processes at different rates. Two programs can each own a
+finger.
 
-| shape | what it looks like | who does this |
-|---|---|---|
-| **one stream per DOF** | a 1-channel stream named after the address — `vhi.prediction.index` carries `vhi.prediction.index` on channel 0 | the Virtual Hand, and the reference renderer below. The simplest thing to write: no width to declare, no layout to agree, and a DOF applies the moment its sample arrives, so two processes can each own a finger |
-| **one stream, many channels** | one wider stream carrying several addresses, each on the `channel` you gave it | a renderer that wants a whole pose to land in one sample, or one already built around a fixed frame |
-
-Neither is deprecated and MyoGestic needs telling neither way round: it groups a control
-map's addresses by the `stream_name` each capability reports and builds one target per
-group — a shared stream gets one target, nine separate streams get nine. That is
-[`vhi_targets`](../api/controls.md), and an application calls it identically either way.
+MyoGestic drives all of it with one [`VhiTarget`](../api/controls.md), which publishes one
+outlet per address the map names.
 
 Publishing a read-back of your own is optional; VHI does it (`VHI_Predict`,
 `VHI_Control`, nine positional channels each whatever the inbound shape) so a client can
@@ -34,9 +33,10 @@ it.
 
 | you must | why |
 |---|---|
-| serve `GetControlManifest` | so a control map can resolve against you — the reply says which stream carries which address, and on which channel of it |
-| read the streams you named | `float32`, standard values. One channel per stream is the simplest shape; several addresses on one stream, each at the `channel` you reported, works the same |
-| report `stream_name` and `channel` on every continuous capability | **you name the streams, not the client.** MyoGestic reads the name off the capabilities its control map points at, and publishes under it — there is nothing to configure on the client side and nothing for the two of you to agree in advance. It also *groups* by that name, which is the whole of how the two shapes above are told apart. A capability naming a stream this map does not reach is left to whichever target drives that one, which is how one map can drive two hands. Leave `stream_name` empty and there is no name to build an outlet from, so the application has to construct and hand over its own — supported, but it puts the name back in the client, which is the thing this contract exists to avoid |
+| serve `GetControlManifest` | so a control map can resolve against you — the reply is the whole contract: every address, its kind, its range, its states |
+| report `vocabulary_version` `"2"` or newer | the compatibility gate. MyoGestic refuses an older renderer **by name at bind**, because these are separately installed applications and a mismatch is otherwise silent: a renderer waiting for a stream nobody publishes reports nothing at all, and the hand just never moves |
+| advertise **one address per control** | the address is the control's identity *and* its stream name. Two spellings of one control is a second vocabulary to keep in step by hand, and it makes "these two aliases collide" undecidable from the manifest |
+| read one stream per address, exactly one `float32` channel wide | that is the contract, so **refuse anything else** rather than reading element zero of it. A nine-channel whole-pose outlet from an out-of-date client would otherwise render its first value on every DOF and say nothing |
 
 | you may | for |
 |---|---|
@@ -76,9 +76,15 @@ suite passed throughout.
 by publishing to its stream rather than by asking permission.
 
 VHI moved from two nine-channel positional streams (`MyoGestic_Output`,
-`MyoGestic_ControlPose`) to one stream per DOF. That was a renderer's choice, not a rule
-— the wide shape is still supported — and the client end needed no change to follow it,
-because nothing on that side ever wrote a stream name down.
+`MyoGestic_ControlPose`) to one stream per DOF, and that is now the contract rather than
+one renderer's choice. `ControlCapability.stream_name` (field 10) and `channel` (field 11)
+are **gone** — both numbers and both names are reserved in the proto — because with the
+address naming the stream they could only repeat it. A renderer serving them is a
+vocabulary-1 renderer and is refused by version.
+
+An application no longer picks its targets either: `vhi_targets()` existed to build one
+target per stream a map spanned, and one target now drives the whole map. It is
+`[VhiTarget(client=…, interface=vhi)]`.
 
 ## See also
 

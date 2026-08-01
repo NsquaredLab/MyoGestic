@@ -28,10 +28,10 @@ separate on purpose — a held state delivered on change is not the same thing a
       preset commands a whole-hand pose in one held state — a compound shape no single
       continuous address expresses.
 
-    A renderer is free to publish one control under several addresses — `…index` and
-    `…index.flexion` on one stream and one channel, say — and the manifest's `stream_name`
-    and `channel` together are what tell you two names are one control. VHI advertises each
-    of its controls once.
+    **One address per control**, always: the address is the control's identity and also
+    the name of the one-channel LSL stream that carries it. A renderer that advertised two
+    spellings of one control would make "these two aliases collide" impossible to decide
+    from a manifest, so it is not allowed to.
 
 !!! tip "See it work before reading further"
     There is a narrated walkthrough that runs the whole path — declaration, the two
@@ -176,8 +176,6 @@ an ordering that is easy to get subtly wrong per-application.
 
 ::: myogestic.vhi.VhiTarget
 
-::: myogestic.vhi.vhi_targets
-
 ::: myogestic.vhi.PoseSink
 
 ### Negotiating with the target
@@ -185,38 +183,32 @@ an ordering that is easy to get subtly wrong per-application.
 A target does not have to guess what an application can render. Hand `VhiTarget` a
 control client and it **asks** at bind time, then encodes according to the answer.
 
-**One target drives one stream**, and how many streams a map spans is the renderer's
-business — VHI publishes one per DOF, another renderer may carry the whole map on one.
-So ask [`vhi_targets`][myogestic.vhi.vhi_targets]: it reads the map, groups its addresses
-by the `stream_name` the manifest reports, and returns the one target each group needs
-(or `None` while VHI is unreachable, so check before passing it on):
+**One target drives the whole map.** It owns one LSL outlet per address it drives, each
+named for that address and one channel wide, all built after negotiation has resolved
+which addresses those are:
 
 ```python
 vhi = virtual_hand()
 client = vhi.control_client()
-# No stream is named and none is counted. `interface=`, which vhi_targets passes on to
-# every target it builds, is why: which stream each drives and how wide it is are the
-# manifest's answer, read once `bind` has something to ask about.
-targets = vhi_targets(control_map, vhi, client=client)
-bus = ControlBus(controls, targets=targets) if targets is not None else None
+# No stream is named here and none is counted. `interface=` is why: which controls exist
+# is the manifest's answer, and each one's stream is named for its own address, so both
+# facts arrive together once `bind` has something to ask.
+target = VhiTarget(client=client, interface=vhi)
+bus = connect_controls(control_map, [target])   # None while VHI is unreachable
 ```
 
-Constructing a single `VhiTarget(client=client, interface=vhi)` yourself is still
-supported and is what a map confined to one stream needs, but it **refuses** a map
-spanning more than one rather than guessing which — so it is a narrower answer to the
-same question, not a simpler one.
-
-The client is **required**, because every channel, range and state comes from that
+The client is **required**, because every address, range and state comes from that
 answer. A Virtual Hand older than 2.0 has no manifest to answer with, so it is never
 distinguishable from one that is simply not up yet — MyoGestic 2.x has no fallback and
-no table of channel numbers to fall back to.
+no table to fall back to. One that *does* answer but reports an older
+`vocabulary_version` is refused by name, since it would be listening for a stream layout
+this client no longer publishes and would report nothing while the hand stayed still.
 
-What it refuses, rather than half-rendering: an address the renderer does not export,
-one it does not carry on this stream, two aliases aimed at one control, a channel order
-with no place for a declared name, or a channel past the end of this outlet. A
-partly-understood negotiation is worse than none — it would leave some controls believed
-rendered and others quietly dropped, and a dropped control is indistinguishable from one
-that is working and holding still.
+What it refuses, rather than half-rendering: a renderer too old for the vocabulary this
+client speaks, an address the renderer does not export, one it does not export as a
+number, and two aliases aimed at one control. A partly-understood negotiation is worse
+than none — it would leave some controls believed rendered and others quietly dropped,
+and a dropped control is indistinguishable from one that is working and holding still.
 
 One case is **deferred** rather than refused: a renderer that has not answered *at all*.
 An application that launches VHI from its own button binds before VHI exists, so nothing
