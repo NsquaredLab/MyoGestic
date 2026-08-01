@@ -381,8 +381,8 @@ class TestItWorksWithoutATarget:
         editor.load()
         editor._asked = True
         editor._connect()                       # the press must not raise
-        assert "vocabulary 1" in editor._message, editor._message
-        assert "did not answer" not in editor._message
+        assert "vocabulary 1" in editor._refusal, editor._refusal
+        assert "did not answer" not in editor._refusal
 
     def test_a_refusal_reaches_the_panel_from_the_background_worker_too(self, tmp_path):
         """The timer is how most people meet it — the press is the rarer path."""
@@ -400,7 +400,55 @@ class TestItWorksWithoutATarget:
         while editor._fetching and time.monotonic() < deadline:
             time.sleep(0.01)
         editor.poll_connect()                   # adopts what the worker published
-        assert "vocabulary 1" in editor._message, editor._message
+        assert "vocabulary 1" in editor._refusal, editor._refusal
+
+
+    def test_a_refusal_stops_being_said_once_the_renderer_is_updated(self, tmp_path):
+        """Otherwise the panel tells someone who has just updated VHI to update VHI.
+
+        A refusal is a standing fact, so it was written straight into the line the panel
+        renders. But a rendered line is something an event leaves behind, and this one had
+        no way to retire: the timer clears only the transients it knows by value. Read the
+        fact live instead of copying it into a message.
+        """
+        import time
+
+        class Upgradable:
+            """Refuses once, then answers — a renderer being updated under the editor."""
+
+            def __init__(self):
+                self.refuse = True
+
+            def capabilities(self):
+                if self.refuse:
+                    raise ValueError("speaks control vocabulary 1 ... Update VHI.")
+                return [Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0)]
+
+        def settle(editor, *, pressed):
+            """One round. `pressed` is a click; otherwise it is the timer coming round."""
+            if pressed:
+                editor._refetch = True
+            else:
+                # What the timer does: nobody asked, the interval simply elapsed.
+                editor._asked = False
+                editor._last_attempt = 0.0
+            editor.poll_connect()
+            deadline = time.monotonic() + 5.0
+            while editor._fetching and time.monotonic() < deadline:
+                time.sleep(0.01)
+            editor.poll_connect()
+
+        client = Upgradable()
+        editor = ControlMapEditor(tmp_path / "c.toml", client=client)
+        editor.load()
+        settle(editor, pressed=True)
+        assert "vocabulary 1" in editor._refusal
+
+        # The renderer is updated and the *timer* notices — nobody presses anything.
+        client.refuse = False
+        settle(editor, pressed=False)
+        assert editor._refusal == "", editor._refusal
+        assert "vocabulary" not in editor._message.lower(), editor._message
 
     def test_the_background_retry_says_nothing(self, tmp_path):
         """Connecting is on a timer, so a report per round is a report forever.

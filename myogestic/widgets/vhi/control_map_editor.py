@@ -924,11 +924,15 @@ class ControlMapEditor:
 
         if self._conflict:
             saved = self._conflict_ui() or saved
-        if self._error or self._message:
+        # `_refusal` is read live rather than copied into `_message`, because it is a
+        # standing fact about the pair of programs and not a line an event left behind:
+        # copied, it outlived the thing it reported, and the panel went on telling someone
+        # who had just updated their renderer to update their renderer.
+        if self._error or self._refusal or self._message:
             imgui.push_style_color(
                 imgui.Col_.text, DANGER if self._error else muted()
             )
-            imgui.text_wrapped(self._error or self._message)
+            imgui.text_wrapped(self._error or self._refusal or self._message)
             imgui.pop_style_color()
 
         imgui.separator()
@@ -1164,12 +1168,7 @@ class ControlMapEditor:
         # "did not answer" is a running commentary on a background retry. What is worth
         # saying — this map names a target that has not answered, so it cannot be checked —
         # is said by `unanswered`, once, and only when the map actually names one.
-        if self._refusal:
-            # Always, press or timer. A refusal is a standing fact about the pair of
-            # programs rather than a transient the next retry may clear, and it names what
-            # to do about it — so it outranks both the silence line and the quiet timer.
-            self._message = self._refusal
-        elif self._all_answered and (self._asked or self._message in _TRANSIENT):
+        if self._all_answered and (self._asked or self._message in _TRANSIENT):
             # Retired by the *timer*, not only by the next press. The retry is what notices a
             # target coming up, so without this the line a press left behind outlived the
             # fact it reported: the picker offered the renderer's controls, the warning above
