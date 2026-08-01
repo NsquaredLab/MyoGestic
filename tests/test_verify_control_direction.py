@@ -120,28 +120,25 @@ def test_a_missing_reply_is_refused():
 
 
 class _Stoppable:
-    """A bus or an outlet: `stop()` is the whole of what the tool calls on either."""
+    """A bus or an outlet: `stop()` is the whole of what the tool calls on either.
 
-    def __init__(self):
+    Records *when* it was stopped in a shared log, because on the per-DOF wire the
+    ordering is the property under test: the raw outlet and a negotiated target publish
+    the same stream name and the same `source_id`, so the second one to appear is not a
+    swap until the first is gone.
+    """
+
+    def __init__(self, events: list[str], label: str):
         self.stopped = False
+        self._events = events
+        self._label = label
 
     def push(self, values):
         """Only ever wrapped by `_through`; `_hold` is stubbed out, so never called."""
 
     def stop(self):
         self.stopped = True
-
-
-class _Vhi:
-    """The one thing `check_round_trip` asks an interface for, and what it handed out."""
-
-    def __init__(self):
-        self.control_outlets: list[_Stoppable] = []
-
-    def stream_outlet(self, name, *, n_channels=None):
-        assert name == verify.CONTROL_POSE_STREAM, name
-        self.control_outlets.append(_Stoppable())
-        return self.control_outlets[-1]
+        self._events.append(f"{self._label} stopped")
 
 
 @pytest.fixture
@@ -150,13 +147,22 @@ def producers(monkeypatch):
 
     def run(*per_producer):
         frames = list(per_producer)
-        monkeypatch.setattr(verify, "_negotiated_bus", lambda *a, **k: _Stoppable())
+
+        def negotiated_bus(*_args, **_kwargs):
+            run.events.append("bus built")
+            run.buses.append(_Stoppable(run.events, "bus"))
+            return run.buses[-1]
+
+        monkeypatch.setattr(verify, "_negotiated_bus", negotiated_bus)
+        monkeypatch.setattr(verify, "_await_binding", lambda *a, **k: None)
         monkeypatch.setattr(
             verify, "_hold", lambda *a, **k: frames.pop(0) if frames else []
         )
-        return verify.check_round_trip(run.vhi, None, None, None)
+        return verify.check_round_trip(None, None, run.raw, None)
 
-    run.vhi = _Vhi()
+    run.events = []
+    run.buses = []
+    run.raw = _Stoppable(run.events, "raw outlet")
     return run
 
 
@@ -203,12 +209,27 @@ def test_a_producer_dependent_direction_is_refused(producers):
         producers([low] * 12, HELD, [high] * 12)
 
 
-def test_the_control_hands_outlet_is_stopped_even_when_a_check_fails(producers):
-    """One left streaming `MyoGestic_ControlPose` beats the next run's writer to it."""
+def test_the_control_hands_bus_is_stopped_even_when_a_check_fails(producers):
+    """Its targets own the outlets they built, so only `bus.stop()` retires them.
+
+    One left streaming a control-pose DOF holds that hand in Stream mode and beats the
+    next run's writer to the inlet.
+    """
     with pytest.raises(verify.Failure):
         producers(HELD, HELD, [0.0] * 12)
-    made = producers.vhi.control_outlets
-    assert made and made[-1].stopped, "the control-pose outlet outlived the failure"
+    assert producers.buses and producers.buses[-1].stopped, "the bus outlived the failure"
+
+
+def test_the_raw_outlet_is_retired_before_any_negotiated_producer(producers):
+    """The raw outlet and a negotiated target publish one name and one `source_id`.
+
+    Left overlapping, VHI goes on reading whichever it resolved first and the negotiated
+    frames land nowhere — which reads as three producers agreeing, because it is the raw
+    outlet's held value being measured three times.
+    """
+    producers(HELD, HELD, HELD)
+    assert producers.raw.stopped
+    assert producers.events.index("raw outlet stopped") < producers.events.index("bus built")
 
 
 def test_too_few_frames_is_refused(producers):
