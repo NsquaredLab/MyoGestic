@@ -294,6 +294,10 @@ class Capability:
     Built from a target's manifest — for VHI, from its ``GetControlManifest`` reply.
     Nothing in MyoGestic invents these values.
 
+    There is no transport here on purpose. A streamed control's LSL stream is named for
+    the control's own address and is one channel wide, so the address *is* the transport
+    and a separate ``stream_name``/``channel`` pair could only ever repeat it.
+
     Attributes
     ----------
     address
@@ -304,16 +308,6 @@ class Capability:
         Continuous only: the domain and the neutral value.
     states, rest_state
         Discrete only: the accepted states and the neutral one.
-    channel
-        Which channel of the target's stream carries this control, or ``-1`` when it is
-        not streamed — a held state travels over gRPC and occupies none. Published per
-        capability, so a target may publish its controls in any order and leave gaps.
-    encoding
-        Reserved. There is one wire encoding now, so nothing sets this to anything
-        but its default.
-    stream_name
-        Which stream carries it. A channel number is meaningless without this — channel
-        2 of one stream is not channel 2 of another.
     activation_threshold
         Discrete only: the level at which a client emitting a probability should select
         the non-rest state. ``0.0`` means the target has no opinion.
@@ -334,8 +328,6 @@ class Capability:
     rest: float = 0.0
     states: tuple[str, ...] = ()
     rest_state: str = ""
-    channel: int = -1
-    stream_name: str = ""
     activation_threshold: float = 0.0
     description: str = ""
 

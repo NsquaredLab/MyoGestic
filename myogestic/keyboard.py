@@ -133,8 +133,8 @@ def keyboard_capabilities() -> tuple[Capability, ...]:
     Returns
     -------
     tuple[myogestic.controls.Capability, ...]
-        Discrete, two-state, `channel` ``-1`` and no `stream_name`: a key is not carried
-        on a pose wire, so nothing may try to route it onto one.
+        Discrete and two-state. A held state travels over its target's own command
+        channel, never on a stream, so nothing may try to route one onto a wire.
 
     Examples
     --------
@@ -156,8 +156,6 @@ def keyboard_capabilities() -> tuple[Capability, ...]:
                         kind="discrete",
                         states=(_UP, _DOWN),
                         rest_state=_UP,
-                        channel=-1,
-                        stream_name="",
                         activation_threshold=ACTIVATION_THRESHOLD,
                         description=f"{category} key {key!r}, {held}",
                     )
