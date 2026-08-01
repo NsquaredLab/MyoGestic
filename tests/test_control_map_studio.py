@@ -72,3 +72,29 @@ def test_the_typed_field_draws_without_a_label(studio, imgui_frame):
         studio.typing.pop("close", None)
         studio.levels.pop("close", None)
     assert seen, "the field did not draw"
+
+
+def test_connect_reports_a_refusing_renderer_instead_of_taking_the_window_down(
+    studio, tmp_path, monkeypatch
+):
+    """`_manifests()` asks the renderer, and asking can now be refused as well as unheard.
+
+    It was called *outside* the `try` that exists for exactly this reason, so the version
+    gate raised straight out of a click handler — the failure the comment on that `try`
+    says must not happen. The refusal is worth showing; it is not worth the window.
+    """
+
+    class TooOld:
+        def capabilities(self):
+            raise ValueError("speaks control vocabulary 1 ... Update the renderer.")
+
+    path = tmp_path / "map.toml"
+    path.write_text('[dofs]\nclose = "vhi.prediction.index"\n')
+    monkeypatch.setattr(studio, "TARGETS", [("vhi", TooOld())])
+    monkeypatch.setattr(studio, "documents", [studio._new_document(path)])
+    monkeypatch.setattr(studio, "active", 0)
+
+    studio._connect()                                   # must not raise
+
+    assert "vocabulary 1" in studio.failure, studio.failure
+    assert studio.bus is None

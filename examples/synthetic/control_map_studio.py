@@ -313,15 +313,20 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
         failure = str(exc)
         status = f"{path.name} could not be read."
         return
-    # Every target, not just VHI. `KeyboardTarget.capabilities()` answers from local data,
-    # so a keyboard-only map resolves with nothing launched at all — the gate that used to
-    # sit here made testing a key wait on a renderer it never needed.
-    capabilities, absent = _manifests() if known is None else known
-    bindable, waiting = _split(control_map, capabilities, absent)
-    if not bindable.bindings:
-        status = "Nothing in this file can be driven yet."
-        return
     try:
+        # Every target, not just VHI. `KeyboardTarget.capabilities()` answers from local
+        # data, so a keyboard-only map resolves with nothing launched at all — the gate
+        # that used to sit here made testing a key wait on a renderer it never needed.
+        #
+        # Inside the `try`, because asking can now be *refused* as well as unanswered: a
+        # renderer too old for this client's vocabulary raises rather than going quiet, and
+        # this runs from a click, where an escaping exception takes the window down instead
+        # of the tab.
+        capabilities, absent = _manifests() if known is None else known
+        bindable, waiting = _split(control_map, capabilities, absent)
+        if not bindable.bindings:
+            status = "Nothing in this file can be driven yet."
+            return
         controls = resolve(bindable, capabilities)
         # One VHI target for the whole map: it publishes a stream per address it drives,
         # each named for that address, so this file states neither a hand nor a width.
@@ -334,8 +339,9 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
         # come up between the two, so settle it explicitly rather than on the next tick.
         vhi_target.negotiate()
     except ValueError as exc:
-        # A refusal is the useful case: it names the address it could not place, or the
-        # two aliases aiming at one control. Show it instead of leaving a dead slider.
+        # A refusal is the useful case: it names the address it could not place, the two
+        # aliases aiming at one control, or a renderer too old to drive at all. Show it
+        # instead of leaving a dead slider.
         failure = str(exc)
         status = "That map cannot be rendered by this VHI."
         return

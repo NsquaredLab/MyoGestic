@@ -107,7 +107,10 @@ def test_a_renderer_reporting_an_older_vocabulary_is_refused_by_name(renderer_mo
     # leaves the reader to guess which side is behind.
     assert "vocabulary 1" in message, message
     assert "needs 2 or newer" in message, message
-    assert message.endswith("Update VHI."), message
+    # Named, so the instruction is one the reader can act on. The reference renderer calls
+    # itself "reference"; telling its author to update VHI would be advice about a
+    # different program.
+    assert message.endswith("Update reference."), message
 
 
 def test_the_reference_renderer_reports_the_vocabulary_this_client_needs(renderer_module):

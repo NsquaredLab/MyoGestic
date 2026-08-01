@@ -94,6 +94,11 @@ def _search_hint(all_answered: bool) -> str:
 #: compares it by value to retire it once the target turns up.
 _NO_ANSWER = "A target did not answer — is it running?"
 
+#: Messages a background round may clear on its own, because each reports a condition that
+#: round just re-tested. Anything else in `_message` is the user's own ("Saved 3
+#: control(s)…") and is not a retry's to wipe.
+_TRANSIENT = (_NO_ANSWER,)
+
 #: What a new alias is called before the user renames it. Numbered on collision.
 _NEW_ALIAS = "my_control"
 
@@ -274,6 +279,7 @@ class ControlMapEditor:
         "_answered", "_capabilities", "_client", "_conflict", "_fetched", "_fetching",
         "_last_attempt", "_refetch", "_draft", "_error", "_filter", "_header",
         "_asked", "_baseline", "_clients", "_message", "_path", "_raw", "_raw_error", "_raw_open",
+        "_refusal",
         "_all_answered", "_open_picker", "_save_as", "_stamp",
         "_title", "_loaded",
     )
@@ -312,6 +318,10 @@ class ControlMapEditor:
         self._raw = ""
         self._raw_open = False
         self._raw_error = ""
+        #: Why a target that *did* answer was rejected — a version mismatch, say. Kept
+        #: apart from silence because they are opposite diagnoses that used to render as
+        #: one line: "is it running?" about a renderer that is running and answering.
+        self._refusal = ""
         #: The comment block the file opened with, kept so a save does not erase what
         #: whoever wrote it was explaining. Only the *leading* block survives — comments
         #: interleaved with entries would need a comment-preserving TOML writer, and
@@ -1068,6 +1078,7 @@ class ControlMapEditor:
     def _fetch(self) -> None:
         """Ask every client, on a worker thread. Never touches UI state."""
         answers: list[Sequence[Capability]] = []
+        refusals: list[str] = []
         try:
             for client in self._clients:
                 # One `try` per client, not one around the loop. It used to wrap the whole
@@ -1077,6 +1088,14 @@ class ControlMapEditor:
                 try:
                     fetch = getattr(client, "capabilities", None)
                     got = fetch() if callable(fetch) else None
+                except ValueError as exc:
+                    # A refusal, not an absence. The renderer answered and was rejected —
+                    # a vocabulary older than this client speaks, say — and swallowing that
+                    # into a DEBUG line rendered it as "is it running?", which is the exact
+                    # silence the gate was added to abolish, on the surface a user is most
+                    # likely looking at.
+                    refusals.append(str(exc))
+                    continue
                 except Exception:  # noqa: BLE001 - a worker may not take the app down
                     log.debug("a target raised while reporting its manifest", exc_info=True)
                     continue
@@ -1084,6 +1103,7 @@ class ControlMapEditor:
                     answers.append(got)
         finally:
             # Always, or `_fetching` stays True and the editor never asks anything again.
+            self._refusal = " ".join(refusals)
             self._fetched = answers
             self._fetching = False
 
@@ -1099,11 +1119,22 @@ class ControlMapEditor:
         manifest rather than something to arbitrate here.
         """
         answers: list[Sequence[Capability]] = []
+        refusals: list[str] = []
         for client in self._clients:
             fetch = getattr(client, "capabilities", None)
-            got = fetch() if callable(fetch) else None
+            try:
+                got = fetch() if callable(fetch) else None
+            except ValueError as exc:
+                # A target that answered and was *refused* — the version gate, say. Held
+                # rather than raised: this runs from a click, so a raise takes the window
+                # down; and held rather than dropped, because reporting a renderer that is
+                # up and talking as one that "did not answer" is precisely the silent
+                # failure the refusal exists to end.
+                refusals.append(str(exc))
+                continue
             if got:
                 answers.append(got)
+        self._refusal = " ".join(refusals)
         self._adopt(answers)
 
     def _adopt(self, answers: list[Sequence[Capability]]) -> None:
@@ -1133,7 +1164,12 @@ class ControlMapEditor:
         # "did not answer" is a running commentary on a background retry. What is worth
         # saying — this map names a target that has not answered, so it cannot be checked —
         # is said by `unanswered`, once, and only when the map actually names one.
-        if self._all_answered and (self._asked or self._message == _NO_ANSWER):
+        if self._refusal:
+            # Always, press or timer. A refusal is a standing fact about the pair of
+            # programs rather than a transient the next retry may clear, and it names what
+            # to do about it — so it outranks both the silence line and the quiet timer.
+            self._message = self._refusal
+        elif self._all_answered and (self._asked or self._message in _TRANSIENT):
             # Retired by the *timer*, not only by the next press. The retry is what notices a
             # target coming up, so without this the line a press left behind outlived the
             # fact it reported: the picker offered the renderer's controls, the warning above

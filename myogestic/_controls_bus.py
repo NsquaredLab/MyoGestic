@@ -7,6 +7,7 @@ Private implementation of `myogestic.controls.Target` and
 
 from __future__ import annotations
 
+import logging
 import math
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Protocol
@@ -15,6 +16,8 @@ import numpy as np
 
 from myogestic._controls_core import Continuous, ControlSet, Discrete, clip, encode, substitute_rest
 from myogestic.outputs.edge_trigger import EdgeTrigger
+
+log = logging.getLogger("myogestic.controls")
 
 if TYPE_CHECKING:
     from myogestic.outputs.filters import VectorFilter
@@ -394,7 +397,19 @@ def connect_controls(
     merged: list[Any] = []
     for target in targets:
         fetch = getattr(target, "capabilities", None)
-        got = fetch() if callable(fetch) else None
+        try:
+            got = fetch() if callable(fetch) else None
+        except ValueError as exc:
+            # A target that answered and refused the answer — a renderer too old for the
+            # vocabulary this client speaks, say. Reported and retried rather than raised:
+            # this is called from a button handler, so a raise takes the window down, and
+            # the two outcomes a caller can act on are "got a bus" and "did not". The
+            # message is the useful half and it says what to do, so it is logged in full
+            # rather than reduced to "not reachable".
+            if ctx is not None:
+                ctx.log(f"{type(target).__name__} refused: {exc}")
+            log.warning("%s refused the handshake: %s", type(target).__name__, exc)
+            return None
         if got is None:
             if ctx is not None:
                 ctx.log(f"{type(target).__name__} not reachable yet — controls stay unresolved")
