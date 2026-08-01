@@ -16,9 +16,11 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
-# Imported at runtime, not just for typing: the routed path needs isinstance checks to
-# tell a streamed continuous alias from a discrete one.
+# Imported at runtime, not just for typing: negotiation needs isinstance checks to tell a
+# streamed continuous alias from a discrete one, and `TargetRef` to give a configuration
+# that carries no routes the ones its DOF names imply.
 from myogestic._controls_core import Continuous
+from myogestic._controls_map import TargetRef
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -111,7 +113,7 @@ class VhiTarget:
 
     __slots__ = (
         "_client", "_discrete", "_dofs", "_interface",
-        "_negotiated", "_outlet", "_pending", "_routed", "_slots", "_stream",
+        "_negotiated", "_outlet", "_pending", "_routed", "_stream",
         "_width",
     )
 
@@ -147,14 +149,9 @@ class VhiTarget:
         self._dofs: tuple[Continuous, ...] = ()
         #: Names of the held states this target commands over gRPC once negotiated.
         self._discrete: tuple[str, ...] = ()
-        #: Negotiated channel order.
-        #: Declared DOFs paired with the channel VHI put them on, for a name-declared
-        #: configuration.
-        self._slots: tuple[tuple[int, Continuous], ...] = ()
-        #: Address-routed slots: (channel, alias, weight, lo, hi, address). The
+        #: Negotiated channel order: (channel, alias, weight, lo, hi, address). The
         #: address rides along as the channel's *label* on a self-describing stream —
         #: the alias cannot be, since a fan-out sends one alias to several channels.
-        #: Non-empty when the configuration was resolved against a manifest.
         self._routed: tuple[tuple[int, str, float, float, float, str], ...] = ()
         #: Tracked explicitly: a configuration of
         #: only discrete DOFs negotiates fine and has an empty channel order.
@@ -171,11 +168,9 @@ class VhiTarget:
         drives all of it. `ControlBus` reads this to check that every control was
         claimed by *someone*.
         """
-        routed = {alias for _, alias, *_ in self._routed}
-        by_name = {dof.name for _, dof in self._slots}
         # Held states go over gRPC, so a negotiated target claims them whichever pose
         # stream it drives.
-        return frozenset(routed | by_name | set(self._discrete))
+        return frozenset({alias for _, alias, *_ in self._routed} | set(self._discrete))
 
     @property
     def negotiated(self) -> bool:
@@ -194,7 +189,6 @@ class VhiTarget:
             renderer too old to answer `capabilities()` at all looks identical to one
             that is simply not up yet, so that case is deferred, never raised.
         """
-        self._slots = ()
         self._routed = ()
         self._discrete = ()
         self._pending = None
@@ -283,20 +277,15 @@ class VhiTarget:
         return getattr(self._interface, attribute, None) or default
 
     def _negotiate(self, controls: ControlSet) -> bool:
-        """Try the handshake. False means "no answer yet", never a refusal."""
-        routes = getattr(controls, "routes", None) or {}
-        if routes:
-            return self._negotiate_routed(controls, routes)
-        return self._negotiate_by_name(controls)
+        """Try the handshake. False means "no answer yet", never a refusal.
 
-    def _negotiate_routed(self, controls: ControlSet, routes: Mapping) -> bool:
-        """Resolve alias -> address -> channel through the renderer's own manifest.
-
-        The addresses come from the configuration; the channels and ranges come from the
-        renderer.
+        Resolves alias -> address -> channel through the renderer's own manifest: the
+        addresses come from the configuration, the channels and ranges from the
+        renderer. A configuration that carries no routes is handed the ones its DOF
+        names imply and travels this same path, so there is one resolution here rather
+        than one per kind of `ControlSet`.
         """
-        fetch = getattr(self._client, "capabilities", None)
-        capabilities = fetch() if callable(fetch) else None
+        capabilities = self.capabilities()
         if capabilities is None:
             return False
         # Only this stream's controls. A renderer publishes several, and a channel index
@@ -316,21 +305,7 @@ class VhiTarget:
             for cap in capabilities
             if getattr(cap, "stream_name", "") and cap.stream_name != wanted
         }
-
-        # Which of these aliases are *this* target's, matched by **namespace**, not exact
-        # address — a `vhi.*` address this build does not export is still refused below.
-        # A `keyboard.*` control sharing the file is in no VHI namespace at all, so it
-        # is filtered out here rather than raising when nothing renders it.
-        namespaces = {
-            address.split(".", 1)[0] for address in (*by_address, *elsewhere)
-        }
-        mine = {
-            alias
-            for alias, refs in routes.items()
-            if any(
-                getattr(ref, "address", "").split(".", 1)[0] in namespaces for ref in refs
-            )
-        }
+        routes, mine = self._scope(controls, wanted, by_address, elsewhere)
         if not mine:
             # Nothing in this file is ours. Not an error: `ControlBus` checks that
             # *someone* claims every alias, so an unrendered alias is still caught.
@@ -340,10 +315,6 @@ class VhiTarget:
             self._routed = ()
             self._negotiated = True
             return True
-        # No declaration: the manifest above is the contract. Every check the reply
-        # carried is made below against `by_address` — an address this stream does not
-        # carry raises there, naming the address, which is what a verdict said.
-
         slots: list[tuple[int, str, float, float, float, str]] = []
         taken: dict[int, str] = {}
         for alias, refs in routes.items():
@@ -433,53 +404,60 @@ class VhiTarget:
         )
         return True
 
-    def _negotiate_by_name(self, controls: ControlSet) -> bool:
-        """Resolve a set whose DOF *names* are the renderer's addresses.
+    def _scope(
+        self,
+        controls: ControlSet,
+        wanted: str,
+        by_address: Mapping[str, Capability],
+        elsewhere: Mapping[str, str],
+    ) -> tuple[Mapping[str, tuple[Any, ...]], set[str]]:
+        """What to route onto channels, and which aliases are this target's.
 
-        The path a directly-built `ControlSet` takes — a rig diagnostic, a test — where
-        there is no mapping file.
+        The one thing the two kinds of configuration disagree about — the resolution
+        itself is shared.
+
+        A **resolved** set carries routes and may be shared with a second target, so
+        ownership goes by **namespace**, not exact address: a `vhi.*` address this build
+        does not export is still refused by `_negotiate`, while a `keyboard.*` control
+        sharing the file is in no VHI namespace and is simply not ours.
+
+        A set built **directly** — a rig diagnostic, a test — carries no routes: its DOF
+        names *are* the addresses, nothing upstream checked them, and there is no second
+        target to leave anything to. So every name must be exported on this stream, and
+        that has to be checked here: the tolerance above would read an unexported name
+        as somebody else's rather than as the typo it is.
         """
-        capabilities = self.capabilities()
-        if capabilities is None:
-            return False
-        # Each stream carries its own channel numbering; reading the wrong one leaves a
-        # frame correct on one stream and empty on the other.
-        wanted = self._wanted_stream()
-        # Keyed by address rather than reduced straight to a name tuple: the *position*
-        # of an address in a sorted list is not its channel unless every channel below
-        # it is also present on this stream, and nothing here guarantees that.
-        by_address = {
-            cap.address: cap
-            for cap in capabilities
-            if cap.channel >= 0
-            and (not getattr(cap, "stream_name", "") or cap.stream_name == wanted)
-        }
-        order = tuple(cap.address for cap in sorted(by_address.values(), key=lambda c: c.channel))
-        declared = controls.channel_labels()
-        # The order is VHI's channel *map*, not a demand that the client command every
-        # channel on it: a configuration may name a subset and leave the rest at rest.
-        # A named DOF with no channel would silently never render.
-        missing = [name for name in declared if name not in order]
+        if controls.routes:
+            namespaces = {
+                address.split(".", 1)[0] for address in (*by_address, *elsewhere)
+            }
+            return controls.routes, {
+                alias
+                for alias, refs in controls.routes.items()
+                if any(
+                    getattr(ref, "address", "").split(".", 1)[0] in namespaces
+                    for ref in refs
+                )
+            }
+        # Address -> channel rather than a name tuple: an address's *position* in a
+        # sorted list is not its channel unless every channel below it is on this stream
+        # too, and nothing guarantees that. A name with no channel never renders, but the
+        # map may name a subset and leave the rest of the hand at rest.
+        streamed = {a: cap.channel for a, cap in by_address.items() if cap.channel >= 0}
+        missing = [name for name in controls.channel_labels() if name not in streamed]
         if missing:
+            order = sorted(streamed, key=streamed.__getitem__)
             raise ValueError(
-                f"VHI's {wanted} channel order {list(order)} has no place for "
+                f"VHI's {wanted} channel order {order} has no place for "
                 f"{missing}. Rendering the rest would leave these looking like "
                 f"controls that work and hold still."
             )
-        widest = max((cap.channel for cap in by_address.values()), default=-1)
-        if widest >= self._width:
-            raise ValueError(
-                f"VHI negotiated {widest + 1} channels but this outlet carries only "
-                f"{self._width}. Construct the outlet at least that wide."
-            )
-        self._dofs = controls.continuous
-        self._discrete = tuple(dof.name for dof in controls.discrete)
-        # Resolve each declared DOF to its negotiated channel once, here, rather than
-        # looking names up per tick on the predict thread.
-        self._slots = tuple((by_address[d.name].channel, d) for d in controls.continuous)
-        self._negotiated = True
-        log.info("VHI negotiated %s", list(order))
-        return True
+        # Weight 1.0 and the name as its own address: exactly what `resolve` would have
+        # produced had there been a map to resolve.
+        return (
+            {dof.name: (TargetRef(dof.name),) for dof in controls.continuous},
+            set(controls.dofs),
+        )
 
     def _rebound(self) -> ControlSet | None:
         """The configuration currently bound, for a forced re-negotiation."""
@@ -522,20 +500,14 @@ class VhiTarget:
     def _frame(self, values: Mapping[str, float | str]) -> np.ndarray:
         """The wire frame for this binding, in the negotiated order."""
         each = {d.name: float(values.get(d.name, d.rest)) for d in self._dofs}
+        # The negotiated channels are a *subset* of the transport, not its full width:
+        # the outlet's channel count is fixed at construction and VHI will not name a
+        # channel it does not read. Everything unrouted stays at zero.
         frame = np.zeros(self._width, dtype=np.float32)
-        if self._routed:
-            for channel, alias, weight, lo, hi, _address in self._routed:
-                # Weight first, then the target's own range — a gain must not be able to
-                # push a value past what the target said it accepts.
-                value = weight * each.get(alias, 0.0)
-                frame[channel] = min(hi, max(lo, value))
-            return frame
-        # The negotiated order is a *prefix* of the transport, not its full width: the
-        # outlet's channel count is fixed at construction and VHI will not name a channel
-        # it does not read. The tail stays at zero because the frame width is what the
-        # outlet validates against.
-        for channel, dof in self._slots:
-            frame[channel] = each[dof.name]
+        for channel, alias, weight, lo, hi, _address in self._routed:
+            # Weight first, then the target's own range — a gain must not be able to
+            # push a value past what the target said it accepts.
+            frame[channel] = min(hi, max(lo, weight * each.get(alias, 0.0)))
         return frame
 
     def _build_outlet(self, width: int) -> None:
