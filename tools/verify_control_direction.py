@@ -31,14 +31,13 @@ Four things are checked per run:
 2. **Round-trip.** A control +1 pushed raw on the DOF's own one-channel stream must read
    back as +1 on `VHI_Predict`, so the renderer is the identity rather than a sign flip
    — and *every* frame of the hold must read the same, not only the last.
-3. **The client's own stack.** The same +1 driven through `vhi_targets` and a
+3. **The client's own stack.** The same +1 driven through a `VhiTarget` and a
    `ControlBus` must render identically to that raw frame. A different producer, not a
-   different declaration: the stream name, the channel and the range all come from the
-   renderer's manifest rather than from a constant in this file, so this is the check
-   that catches those two disagreeing. With one channel per stream there is no longer a
-   channel index to get wrong — the *name* is what a manifest and a renderer can now
-   disagree about, so that is what the raw frame writes down and the negotiated one
-   reads.
+   different declaration: the stream name and the range both come from the renderer's
+   manifest rather than from a constant in this file, so this is the check that catches
+   those two disagreeing. There is no channel index left to get wrong — the *name* is
+   the only thing a manifest and a renderer can now disagree about, so that is what the
+   raw frame writes down and the negotiated one reads.
 4. **The control hand does not disturb the predicted one.** Publishing a control-pose
    stream is the only thing that puts the control hand into Stream mode — there is no
    handshake — so a second inlet binding mid-run is a live event on the renderer, and
@@ -83,7 +82,7 @@ import numpy as np
 from mne_lsl.lsl import StreamInlet, resolve_streams
 
 from myogestic.controls import ControlBus, load_control_map, resolve
-from myogestic.vhi import vhi_targets, virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
 
 #: The DOF driven throughout: the predicted hand's index, whose bare name denotes
 #: flexion. Positive X is flexion on this rig — `MovementPoses` reads the other way round
@@ -226,27 +225,22 @@ def check_direction(client) -> str:
 
 
 def _negotiated_bus(vhi, client, *, control_hand: bool = False) -> ControlBus:
-    """A bus whose targets `vhi_targets` built against the live manifest.
+    """A bus whose target resolved its streams against the live manifest.
 
-    Nothing here names a stream, and nothing here counts them. `vhi_targets` groups the
-    map's addresses by whatever `stream_name` the manifest reports and returns the target
-    each group needs — one per DOF on this wire, one for the lot on a renderer that
-    carries several addresses on a shared stream — and each target builds and owns the
-    outlet it publishes under. That is the whole reason this check is worth running
-    beside the raw one.
+    Nothing here names a stream. The target looks the map's addresses up in the manifest
+    and publishes one stream per address it drives, named for that address and one
+    channel wide, and it owns every one of them. That is the whole reason this check is
+    worth running beside the raw one.
     """
     capabilities = client.capabilities()
     if capabilities is None:
         raise Failure("VHI did not answer GetControlManifest")
     dofs = {"probe": DOF} | ({"pose": POSE_DOF} if control_hand else {})
     control_map = load_control_map({"dofs": dofs})
-    targets = vhi_targets(control_map, vhi, client=client, capabilities=capabilities)
-    if not targets:
-        raise Failure(f"vhi_targets built no target for {sorted(dofs.values())}")
-    bus = ControlBus(resolve(control_map, capabilities), targets=targets, hz=32)
-    for target in targets:
-        if not target.negotiate():
-            raise Failure("a target never settled its contract with VHI")
+    target = VhiTarget(client=client, interface=vhi)
+    bus = ControlBus(resolve(control_map, capabilities), targets=[target], hz=32)
+    if not target.negotiate():
+        raise Failure("the target never settled its contract with VHI")
     return bus
 
 
@@ -273,8 +267,8 @@ def _measure(label: str, push, inlet: StreamInlet) -> float:
 def check_round_trip(vhi, client, outlet, inlet: StreamInlet) -> dict[str, float]:
     """2-4. Identity and frame stability, from producers that genuinely differ.
 
-    A raw frame this file wrote onto the DOF's own stream; the same value through
-    `vhi_targets` and a `ControlBus`, where the stream name and the range come from the
+    A raw frame this file wrote onto the DOF's own stream; the same value through a
+    `VhiTarget` and a `ControlBus`, where the stream name and the range come from the
     manifest instead; and that again while the control hand's stream is also being
     published. The three must agree — they vary who writes the frame and what else the
     renderer is reading, never what it was told, because there is nothing left to tell it.

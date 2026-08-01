@@ -23,17 +23,12 @@ from myogestic.vhi._proto import myogestic_vhi_pb2_grpc as pb2_grpc
 #: What this renderer exports. The address is yours to name; its first segment is the
 #: namespace, so `vhi.*` here means a map written for a Virtual Hand drives this too.
 #:
-#: **One stream per address, named after the address, one channel wide.** That is what
-#: the Virtual Hand publishes and it is the simplest thing to write: no width to declare,
-#: no positional layout for the two ends to agree on, and each address is applied the
-#: moment its sample arrives rather than when a whole pose does — one nobody drives just
-#: keeps its last value. `ControlCapability.stream_name` is field 10 and `channel` field
-#: 11; both are still required, `channel` is simply always 0 here.
-#:
-#: One stream carrying *several* addresses on distinct channels is equally legal and
-#: sometimes what you want — see `_read`. MyoGestic needs telling neither way round: it
-#: groups a map's addresses by whatever `stream_name` you report and builds one target
-#: per group, so a shared stream gets one and nine separate ones get nine.
+#: **One stream per address, named after the address, one channel wide.** That is the
+#: whole transport, and it is not one option among several: there is no width to declare,
+#: no positional layout for the two ends to agree on, and nothing in the manifest that
+#: describes a wire. Each address is applied the moment its sample arrives rather than
+#: when a whole pose does — one nobody drives just keeps its last value. A client reads
+#: the address and publishes under exactly that name.
 #:
 #: `lo=-1.0, hi=1.0` is the range; the sign is a separate, settled convention this
 #: project does not let a renderer redefine: `+1` is always the direction the address
@@ -65,14 +60,17 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
     def GetControlManifest(self, request, context):
         """What this renderer exports. The only thing a client must be able to ask.
 
-        `stream_name` is load-bearing, not decoration: it names both the LSL stream
-        `_read` reads and the stream a client publishes under, and a client resolves a
-        manifest one stream at a time. Nothing has to be told to agree with it — this
-        reply is the *only* place a stream name is decided. Report it empty and the
-        client publishes an outlet it built itself, since there is then no name to build
-        one from.
+        The address is load-bearing twice over: it is what a map points at, and it is
+        the name of the one-channel LSL stream both `_read` and the client use. There is
+        no separate transport field to keep in step with it, which is the point — there
+        is nothing here that can disagree with anything.
+
+        `vocabulary_version` is the compatibility gate, and it is not decoration either:
+        a client refuses a renderer reporting less than the vocabulary it speaks, by
+        name, at bind. Report ``"2"`` — one stream per DOF — or a current MyoGestic
+        refuses this renderer instead of driving it.
         """
-        manifest = pb2.ControlManifest(target_name="reference", vocabulary_version="1")
+        manifest = pb2.ControlManifest(target_name="reference", vocabulary_version="2")
         for address in ADDRESSES:
             manifest.capabilities.append(
                 pb2.ControlCapability(
@@ -81,8 +79,6 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
                     lo=-1.0,
                     hi=1.0,
                     rest=0.0,
-                    channel=0,
-                    stream_name=address,
                 )
             )
         return manifest
@@ -109,9 +105,9 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
         whole network; several running at once cost far more than they buy, and one sweep
         already answers for every stream still missing an inlet.
 
-        One channel per stream, so there is nothing to unpack. Carrying several addresses
-        on one stream instead means opening one inlet and reading `chunk[-1][channel]`
-        per address off it — the same loop with a channel table beside it.
+        One channel per stream, so there is nothing to unpack: `chunk[-1][0]` is the
+        whole sample. A stream that turns up wider than that is not this contract and a
+        renderer should say so rather than read element zero of something unexpected.
         """
         inlets: dict[str, StreamInlet] = {}
         while not self._stop.is_set():
@@ -126,9 +122,20 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
                     found = {s.name: s for s in resolve_streams(timeout=1.0)}
                     for address in missing:
                         info = found.get(address)
-                        if info is not None:
-                            inlets[address] = StreamInlet(info)
-                            inlets[address].open_stream()
+                        if info is None:
+                            continue
+                        if info.n_channels != 1:
+                            # Refused, not tolerated. Reading element zero of a wider
+                            # stream would render *something* for every address and say
+                            # nothing — the failure this contract exists to make loud.
+                            print(
+                                f"reference renderer: {address} is published "
+                                f"{info.n_channels} channels wide, and this contract is "
+                                f"one address per stream, one channel. Not opening it."
+                            )
+                            continue
+                        inlets[address] = StreamInlet(info)
+                        inlets[address].open_stream()
                 for address, inlet in inlets.items():
                     chunk, _ = inlet.pull_chunk(timeout=0.0)
                     if chunk is not None and len(chunk):

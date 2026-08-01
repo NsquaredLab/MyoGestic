@@ -23,7 +23,7 @@ import tomllib
 import numpy as np
 
 from myogestic.controls import ControlBus, load_control_map, resolve, substitute_rest
-from myogestic.vhi import vhi_targets, virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
 
 #: The real file a user copies and edits.
 CONTROL_FILE = (
@@ -67,9 +67,9 @@ def step_1_the_file():
 
     print("\n  LEFT is yours: these aliases are your model's output names. Nothing")
     print("  prescribes them and nothing reads meaning out of them.")
-    print("  RIGHT belongs to the target. Note what is absent: no channel numbers, and no")
-    print("  kinds or ranges — whether an address takes a number or a held state is the")
-    print("  target's to declare, so a mapping alone cannot say.")
+    print("  RIGHT belongs to the target. Note what is absent: no transport at all, and")
+    print("  no kinds or ranges — whether an address takes a number or a held state is")
+    print("  the target's to declare, so a mapping alone cannot say.")
     return control_map
 
 
@@ -90,8 +90,7 @@ def step_2_ask_the_target(client):
     print(f"  This target exports {len(capabilities)} controls, and describes each:\n")
     for cap in capabilities:
         if cap.kind == "continuous":
-            where = f"channel {cap.channel}" if cap.channel >= 0 else "not streamed"
-            print(f"    {cap.address:34s} number [{cap.lo:+.1f},{cap.hi:+.1f}]  {where}")
+            print(f"    {cap.address:34s} number [{cap.lo:+.1f},{cap.hi:+.1f}]  own stream")
         else:
             print(f"    {cap.address:34s} held state, {len(cap.states)} of them")
     print("\n  Every semantic fact above came from the target. MyoGestic hard-codes none")
@@ -137,23 +136,16 @@ def step_4_drive(control_map, controls, client, capabilities):
     for ref in controls.routes[alias]:
         print(f"    {ref.address:34s} weight {ref.weight}")
 
-    # `vhi_targets` rather than a target built here: one target writes one stream, and how
-    # many streams a map spans is the *renderer's* answer — a VHI publishes one per DOF,
-    # another renderer may carry the whole map on one wider stream. `capabilities=` because
-    # step 2 already asked, and asking twice would be a second answer to a settled question.
-    targets = vhi_targets(control_map, virtual_hand(), client=client, capabilities=capabilities)
-    bus = ControlBus(controls, targets=targets, hz=32)
-    settled = all(target.negotiate() for target in targets)
-    print(f"\n  vhi_targets() -> {len(targets)} target(s), one per stream; negotiate() -> {settled}")
-    for target in targets:
-        placed = ", ".join(
-            f"{address} on channel {channel}"
-            for channel, _alias, _weight, _lo, _hi, address in sorted(target._routed)
-        )
-        print(f"    {target._stream_name or '(no stream named)':38s} {placed or '—'}")
-    print("  Nothing above was written here: the names, the grouping and the channels are")
-    print("  all the manifest's, which is why a renderer can reshape its wire without this")
-    print("  side changing.")
+    # One target for the whole map: it owns one stream per control it drives, each named
+    # for that control's own address, all built after negotiation says which those are.
+    target = VhiTarget(client=client, interface=virtual_hand())
+    bus = ControlBus(controls, targets=[target], hz=32)
+    settled = target.negotiate()
+    print(f"\n  one VhiTarget for the whole map; negotiate() -> {settled}")
+    for _alias, _weight, _lo, _hi, address in sorted(target._routed, key=lambda r: r[4]):
+        print(f"    {address:38s} its own stream, one channel wide")
+    print("  Nothing above was written here: the names are all the manifest's, which is")
+    print("  why a renderer can grow a control without this side changing.")
 
     rendered = _observe(bus, alias)
     if rendered is None:
@@ -166,8 +158,8 @@ def step_4_drive(control_map, controls, client, capabilities):
         print("  scales a value; it cannot push one past what the target accepts.")
     bus.stop()
     print("\n  bus.stop() delivered rest and flushed it, so the hand released rather")
-    print("  than freezing in its last pose. Each target built its own stream, so that")
-    print("  released those too.")
+    print("  than freezing in its last pose. The target built every one of those streams,")
+    print("  so it took them off the network too.")
 
 
 def _observe(bus, alias) -> list[tuple[int, float]] | None:

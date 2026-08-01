@@ -6,8 +6,8 @@ a subject what to do. Two hands, two namespaces, one handshake.
 
 The distinction is not cosmetic: an address is only ever a name, so `…index` on the wrong
 namespace moves the *other* hand and nothing anywhere reports an error. Nothing in this
-file keeps them apart, though — `vhi_targets` reads the map's addresses out of VHI's
-manifest and builds the target for each stream carrying them. Point the same file at
+file keeps them apart, though — the target reads the map's addresses out of VHI's
+manifest and publishes a stream named for each one. Point the same file at
 `vhi.prediction.*` instead and this app drives the other hand, unchanged. The renderer
 follows whichever streams are present and publishing — nothing here has to ask for that.
 
@@ -27,7 +27,7 @@ from imgui_bundle import imgui
 
 from myogestic import App, Fr, Grid, Px
 from myogestic.controls import ControlBus, connect_controls, load_control_map
-from myogestic.vhi import vhi_targets, virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
 from myogestic.widgets import AppLogo, ProcessLauncher
 from myogestic.widgets.common import panel_header
 
@@ -73,13 +73,10 @@ def _connect() -> None:
         return
     # The map is the whole point: every address in it belongs to the control hand, so
     # that is the hand this ends up driving. The file names no hand and neither does this
-    # line — `vhi_targets` looks the addresses up in the manifest, groups them by the
-    # stream each one rides, and hands back the target every group needs, each building
-    # the outlet the manifest asked for.
-    targets = vhi_targets(CONTROL_MAP, vhi, client=vhi_control)
-    if targets is None:
-        return                                # VHI is not up yet; the button stays
-    bus = connect_controls(CONTROL_MAP, targets, ctx=app.ctx, hz=32)
+    # line — the target looks the addresses up in the manifest and publishes a stream
+    # named for each one. `None` while VHI cannot yet say what it exports.
+    target = VhiTarget(client=vhi_control, interface=vhi)
+    bus = connect_controls(CONTROL_MAP, [target], ctx=app.ctx, hz=32)
 
 
 @app.ui

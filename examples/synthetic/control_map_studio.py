@@ -52,7 +52,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myogestic import App, Fr, Grid, Px
 from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.keyboard import KeyboardTarget
-from myogestic.vhi import vhi_targets, virtual_hand
+from myogestic.vhi import VhiTarget, virtual_hand
 from myogestic.widgets import AppLogo, ControlMapEditor, ProcessLauncher
 from myogestic.widgets.common import DANGER, SUCCESS, WARNING, muted, panel_header
 
@@ -102,8 +102,8 @@ waiting: dict[str, str] = {}
 
 # The picker offers every address both targets export — the model's hand, the operator's
 # hand and the keyboard — because which of them this app drives is the map's answer, not
-# this file's. Point a control at the operator's hand and `vhi_targets` builds the target
-# that renders it; there is no hand chosen up here for the picker to be filtered by.
+# this file's. Point a control at the operator's hand and the VHI target publishes the
+# stream that renders it; there is no hand chosen up here for the picker to be filtered by.
 def _new_document(path=None) -> ControlMapEditor:
     """One open map, offering everything both targets export."""
     return ControlMapEditor(path, clients=[vhi_control, keys], title="EDIT THE MAP")
@@ -323,19 +323,16 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
         return
     try:
         controls = resolve(bindable, capabilities)
-        # The map picks the VHI targets: one per stream it names, sized and owned by the
-        # target, so this file states neither a hand nor a pose width. `capabilities=` is
-        # the manifest already in hand — a rebuild nobody clicked must not spend a
-        # blocking round trip on the render thread for an answer it was handed.
-        targets = vhi_targets(bindable, vhi, client=vhi_control, capabilities=capabilities)
-        # Every target shares one map. `ControlBus` checks that *someone* claims every
+        # One VHI target for the whole map: it publishes a stream per address it drives,
+        # each named for that address, so this file states neither a hand nor a width.
+        vhi_target = VhiTarget(client=vhi_control, interface=vhi)
+        # Both targets share one map. `ControlBus` checks that *someone* claims every
         # alias, so a keyboard address in a VHI-only app is caught here rather than
         # rendering nowhere and looking like a control that works and holds still.
-        new_bus = ControlBus(controls, targets=[*targets, keys], hz=32)
+        new_bus = ControlBus(controls, targets=[vhi_target, keys], hz=32)
         # Constructing the bus binds each target, which negotiates — but VHI may have
-        # come up between the two, so settle them explicitly rather than on the next tick.
-        for target in targets:
-            target.negotiate()
+        # come up between the two, so settle it explicitly rather than on the next tick.
+        vhi_target.negotiate()
     except ValueError as exc:
         # A refusal is the useful case: it names the address it could not place, or the
         # two aliases aiming at one control. Show it instead of leaving a dead slider.
