@@ -111,85 +111,113 @@ def test_a_missing_reply_is_refused():
         verify.check_direction(_Client(None))
 
 
-# --- checks 2-4: round-trip, declaration independence, frame stability ---------
+# --- checks 2-4: round-trip, the client's own stack, the control hand -----------
+#
+# The three producers are a raw frame, the same value through a negotiated `VhiTarget`,
+# and that again while the control hand's stream is published too. They used to be three
+# *declarations*, which since `Declare` was removed were the same thing measured three
+# times — a cross-check comparing a value against itself.
 
 
-@pytest.fixture
-def scenarios(monkeypatch):
-    """Drive `check_scenarios` off canned read-backs, one list per scenario."""
-
-    def run(*per_scenario):
-        frames = list(per_scenario)
-        monkeypatch.setattr(verify, "_declared", lambda *a, **k: _Bus())
-        monkeypatch.setattr(
-            verify, "_hold", lambda *a, **k: frames.pop(0) if frames else []
-        )
-        return verify.check_scenarios(None, None, None, None)
-
-    return run
-
-
-class _Bus:
-    """A bus the scenario stops when it is done with it."""
+class _Stoppable:
+    """A bus or an outlet: `stop()` is the whole of what the tool calls on either."""
 
     def __init__(self):
         self.stopped = False
+
+    def push(self, values):
+        """Only ever wrapped by `_through`; `_hold` is stubbed out, so never called."""
 
     def stop(self):
         self.stopped = True
 
 
+class _Vhi:
+    """The one thing `check_round_trip` asks an interface for, and what it handed out."""
+
+    def __init__(self):
+        self.control_outlets: list[_Stoppable] = []
+
+    def control_outlet(self):
+        self.control_outlets.append(_Stoppable())
+        return self.control_outlets[-1]
+
+
+@pytest.fixture
+def producers(monkeypatch):
+    """Drive `check_round_trip` off canned read-backs, one list per producer."""
+
+    def run(*per_producer):
+        frames = list(per_producer)
+        monkeypatch.setattr(verify, "_negotiated_bus", lambda *a, **k: _Stoppable())
+        monkeypatch.setattr(
+            verify, "_hold", lambda *a, **k: frames.pop(0) if frames else []
+        )
+        return verify.check_round_trip(run.vhi, None, None, None)
+
+    run.vhi = _Vhi()
+    return run
+
+
 HELD = [1.0] * 12
 
 
-def test_three_agreeing_scenarios_pass(scenarios):
-    assert scenarios(HELD, HELD, HELD) == {
-        "undeclared": 1.0,
-        "predicted-only": 1.0,
-        "predicted+control-pose": 1.0,
+def test_three_agreeing_producers_pass(producers):
+    assert producers(HELD, HELD, HELD) == {
+        "raw frame": 1.0,
+        "through a VhiTarget": 1.0,
+        "+ control hand": 1.0,
     }
 
 
-def test_an_inverted_read_back_is_refused(scenarios):
+def test_an_inverted_read_back_is_refused(producers):
     """Sent +1, read -1: exactly what a renderer negating on ingest reports."""
     with pytest.raises(verify.Failure, match="not the identity"):
-        scenarios([-1.0] * 12, HELD, HELD)
+        producers([-1.0] * 12, HELD, HELD)
 
 
-def test_a_zero_read_back_is_refused(scenarios):
+def test_a_zero_read_back_is_refused(producers):
     """A dead inlet reads zero, and zero is not +1. It must not pass as "no movement"."""
     with pytest.raises(verify.Failure, match="not the identity"):
-        scenarios([0.0] * 12, HELD, HELD)
+        producers([0.0] * 12, HELD, HELD)
 
 
-def test_a_read_back_that_drifts_while_held_is_refused(scenarios):
+def test_a_read_back_that_drifts_while_held_is_refused(producers):
     """Frame stability: the input was constant, so the output may not wander."""
     with pytest.raises(verify.Failure, match="moved while the input was held"):
-        scenarios([1.0, 1.0, 0.4, 1.0], HELD, HELD)
+        producers([1.0, 1.0, 0.4, 1.0], HELD, HELD)
 
 
-def test_a_declaration_dependent_direction_is_refused(scenarios):
-    """The finding that started this: same +1, different render per declaration.
+def test_a_producer_dependent_direction_is_refused(producers):
+    """A raw frame and a negotiated client must land the same value on the same channel.
 
     The band this fires in is deliberately narrow, and worth being clear about: a gross
-    disagreement — say undeclared reading -1 while declared reads +1 — trips the identity
-    check first, on the scenario that is wrong. What is left for the cross-check is a
-    drift that every scenario passes on its own, which is why both values here sit just
-    inside tolerance of +1 while being further than that from each other.
+    disagreement — a raw frame reading -1 while the client reads +1 — trips the identity
+    check first, on the producer that is wrong. What is left for the cross-check is a
+    drift every producer passes on its own, which is why both values here sit just inside
+    tolerance of +1 while being further than that from each other.
     """
     low, high = 1.0 - 0.9 * verify.TOL, 1.0 + 0.9 * verify.TOL
-    with pytest.raises(verify.Failure, match="depends on what was declared"):
-        scenarios([low] * 12, HELD, [high] * 12)
+    with pytest.raises(verify.Failure, match="differently per producer"):
+        producers([low] * 12, HELD, [high] * 12)
 
 
-def test_too_few_frames_is_refused(scenarios):
+def test_the_control_hands_outlet_is_stopped_even_when_a_check_fails(producers):
+    """One left streaming `MyoGestic_ControlPose` beats the next run's writer to it."""
+    with pytest.raises(verify.Failure):
+        producers(HELD, HELD, [0.0] * 12)
+    made = producers.vhi.control_outlets
+    assert made and made[-1].stopped, "the control-pose outlet outlived the failure"
+
+
+def test_too_few_frames_is_refused(producers):
     """One sample cannot show stability, so it is not allowed to stand in for it."""
     with pytest.raises(verify.Failure, match="need frames"):
-        scenarios([1.0], HELD, HELD)
+        producers([1.0], HELD, HELD)
 
 
-def test_the_tolerance_is_not_wide_enough_to_hide_a_sign(scenarios):
+def test_the_tolerance_is_not_wide_enough_to_hide_a_sign(producers):
     """Guards the constant itself: `TOL` must reject -1 against +1 by a wide margin."""
     assert verify.TOL < 0.5
     with pytest.raises(verify.Failure):
-        scenarios([-1.0] * 12, HELD, HELD)
+        producers([-1.0] * 12, HELD, HELD)

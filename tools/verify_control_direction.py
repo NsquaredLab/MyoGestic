@@ -10,23 +10,31 @@ Why this exists as a tool and not only as a test: VHI's own contract suite prove
 *direction* from its rig — a sweep reports bone degrees, checked against the movement
 library's `Fist` pose — but it cannot drive the LSL inlet, because liblsl is only
 vendored into the packaged build. The inlet is the path every real client uses, so the
-claim that mattered most here, "the same +1 renders the same way whatever the client
-declared", has to be checked from this side.
+claim that matters most, "a control +1 flexes, all the way through", has to be checked
+from this side.
 
 Four things are checked per run:
 
 1. **Direction.** A sweep of the index must bend the rig the way a closing hand bends:
-   positive degrees. This is the anchor — everything below is self-consistency.
-2. **Round-trip.** A control +1 pushed on `MyoGestic_Output` must read back as +1 on
-   `VHI_Predict`, so the renderer is the identity rather than a sign flip.
-3. **Declaration independence.** The same input under three declarations — none,
-   predicted-only, and predicted-plus-control-pose — must render identically. A
-   conversion gated behind the handshake fails here.
-4. **Frame stability.** Every frame of the hold reads the same, not only the last.
+   positive degrees. This is the anchor, and the only check made from *outside* the
+   renderer's own read-back loop — everything below is self-consistency, which a
+   renderer and its read-back agree on whichever way they point.
+2. **Round-trip.** A control +1 pushed raw on `MyoGestic_Output` must read back as +1 on
+   `VHI_Predict`, so the renderer is the identity rather than a sign flip — and *every*
+   frame of the hold must read the same, not only the last.
+3. **The client's own stack.** The same +1 driven through a negotiated `ControlBus` and
+   `VhiTarget` must render identically to that raw frame. A different producer, not a
+   different declaration: the channel and the range come from the renderer's manifest
+   rather than from a constant in this file, so this is the check that catches those two
+   disagreeing.
+4. **The control hand does not disturb the predicted one.** Publishing
+   `MyoGestic_ControlPose` is now the only thing that puts the control hand into Stream
+   mode — there is no handshake — so a second inlet binding mid-run is a live event on
+   the renderer, and the predicted hand must read back unchanged through it.
 
-The undeclared scenario runs first and is only meaningful on a VHI that has not been
-declared to yet: the renderer keeps a declaration for the life of its process. So it
-proves its point on the first run, and on every run under `--restart`.
+There is nothing to declare any more: a renderer's whole contract is
+`GetControlManifest` plus the stream it reads. What used to be three scenarios varying
+what the client had declared is now checks 2-4, which vary who writes the frame.
 
 Two ordering rules, both learned the hard way and both properties of the renderer rather
 than of this tool:
@@ -36,9 +44,9 @@ than of this tool:
   still-streaming outlet beats `SweepControl`'s own commands and the sweep reports the
   stream's value instead of its own. Held at -0.5, an index sweep reports `+42.5°` and
   looks like a direction bug.
-- **One outlet is shared by all three scenarios.** A fresh outlet per scenario made VHI
-  read zeros: it re-resolves by name only while it has no inlet at all, so a replaced
-  producer is recovered through the outlet's stable `source_id`, not immediately.
+- **One outlet is shared by every check.** A fresh outlet per check made VHI read zeros:
+  it re-resolves by name only while it has no inlet at all, so a replaced producer is
+  recovered through the outlet's stable `source_id`, not immediately.
 
 Together those are why a control +1 could appear to render either way earlier: a stale
 outlet left streaming by a previous process still wins the single `MyoGestic_Output`
@@ -65,12 +73,12 @@ from myogestic.vhi import VhiTarget, virtual_hand
 #: hand bent backwards.
 DOF = "vhi.prediction.index"
 
-#: The control hand's counterpart, declared alongside `DOF` in the third scenario.
+#: The control hand's counterpart, driven alongside `DOF` in the fourth check.
 POSE_DOF = "vhi.control.pose.index"
 
-#: Where the index sits on the pose streams. This is the *rig's* layout, not the
-#: declaration's: `VHI_Predict` publishes the same nine channels in the same order
-#: whatever a client declared, which is why the undeclared scenario can read it too.
+#: Where the index sits on the pose streams. This is the *rig's* layout: `VHI_Predict`
+#: publishes the same nine channels in the same order for every client, which is why a
+#: raw frame written by this file can be read back without negotiating anything.
 INDEX_CHANNEL = 2
 
 #: The value under test. +1 is the direction the DOF's name denotes.
@@ -109,23 +117,40 @@ def _predict_inlet() -> StreamInlet:
     raise Failure("VHI_Predict is not being published — is a VHI 2 running?")
 
 
-def _hold(
-    outlet, inlet: StreamInlet, value: float = PLUS_ONE, seconds: float = 1.2
-) -> list[float]:
+def _raw(outlet):
+    """Write the index channel straight onto the pose stream, bypassing every client.
+
+    The counterpart to `_through`: the channel number comes from this file rather than
+    from the manifest, so the two together tell a renderer that is wrong from a client
+    that resolved it to the wrong channel.
+    """
+
+    def push(value: float) -> None:
+        sample = np.zeros(9, np.float32)
+        sample[INDEX_CHANNEL] = value
+        outlet.push(sample)
+
+    return push
+
+
+def _through(bus: ControlBus):
+    """Write the same value through the client's own stack — bus, target, manifest."""
+    return lambda value: bus.push({"probe": value})
+
+
+def _hold(push, inlet: StreamInlet, value: float = PLUS_ONE, seconds: float = 1.2) -> list[float]:
     """Hold one control value on the pose stream, then read what the rig made of it."""
-    sample = np.zeros(9, np.float32)
-    sample[INDEX_CHANNEL] = value
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        outlet.push(sample)
+        push(value)
         time.sleep(0.02)
     inlet.flush()
-    outlet.push(sample)
+    push(value)
     time.sleep(0.2)
     return _read_back(inlet)
 
 
-def _follows(outlet, inlet: StreamInlet) -> bool:
+def _follows(push, inlet: StreamInlet) -> bool:
     """Report whether the read-back tracks two different commanded values.
 
     Not "is it non-zero": the rig *holds* its last pose, so a non-zero read-back can be
@@ -134,13 +159,13 @@ def _follows(outlet, inlet: StreamInlet) -> bool:
     zero as though the direction were wrong.
     """
     for probe in (0.0, -0.5):
-        seen = _hold(outlet, inlet, value=probe, seconds=0.5)
+        seen = _hold(push, inlet, value=probe, seconds=0.5)
         if not seen or abs(seen[-1] - probe) > TOL:
             return False
     return True
 
 
-def _await_binding(outlet, inlet: StreamInlet) -> None:
+def _await_binding(push, inlet: StreamInlet) -> None:
     """Wait until VHI's inlet is reading this outlet and the read-back follows it.
 
     Not an assertion: a replaced outlet takes a moment to be recovered — VHI re-resolves
@@ -149,7 +174,7 @@ def _await_binding(outlet, inlet: StreamInlet) -> None:
     """
     deadline = time.monotonic() + 30.0
     while time.monotonic() < deadline:
-        if _follows(outlet, inlet):
+        if _follows(push, inlet):
             return
         time.sleep(0.5)
     raise Failure(
@@ -175,67 +200,89 @@ def check_direction(client) -> str:
     return observed
 
 
-def _declared(vhi, client, outlet, *, with_control_pose: bool) -> ControlBus:
-    """A bus that has declared `DOF`, and optionally the control hand's pose too.
+def _negotiated_bus(client, outlet, *, control_outlet=None) -> ControlBus:
+    """A bus whose targets have resolved `DOF` against the live manifest.
 
-    The target is bound to the *shared* outlet rather than a fresh one. Two outlets named
-    `MyoGestic_Output` would leave which one VHI reads up to resolution order, and the
-    declaration — not the transport — is what this scenario is meant to vary.
+    The predicted target is bound to the *shared* outlet rather than a fresh one: two
+    outlets named `MyoGestic_Output` would leave which one VHI reads up to resolution
+    order. `control_outlet`, when given, publishes the control hand's stream — which is
+    the whole of what puts that hand into Stream mode.
     """
     capabilities = client.capabilities()
     if capabilities is None:
         raise Failure("VHI did not answer GetControlManifest")
-    dofs = {"probe": DOF} | ({"pose": POSE_DOF} if with_control_pose else {})
+    dofs = {"probe": DOF} | ({"pose": POSE_DOF} if control_outlet is not None else {})
     controls = resolve(load_control_map({"dofs": dofs}), capabilities)
     targets = [VhiTarget(outlet, client=client)]
-    if with_control_pose:
-        targets.append(VhiTarget(vhi.control_outlet(), client=client, stream="control_pose"))
+    if control_outlet is not None:
+        targets.append(VhiTarget(control_outlet, client=client, stream="control_pose"))
     bus = ControlBus(controls, targets=targets, hz=32)
     for target in targets:
         target.negotiate()
     return bus
 
 
-def check_scenarios(vhi, client, outlet, inlet: StreamInlet) -> dict[str, float]:
-    """2-4. Round-trip, declaration independence, and per-frame stability.
+def _measure(label: str, push, inlet: StreamInlet) -> float:
+    """Hold +1 through `push` and check every frame of the read-back is +1."""
+    seen = _hold(push, inlet)
+    if len(seen) < 2:
+        raise Failure(f"{label}: VHI_Predict returned {len(seen)} sample(s), need frames")
+    spread = max(seen) - min(seen)
+    if spread > TOL:
+        raise Failure(
+            f"{label}: the read-back moved while the input was held — "
+            f"{min(seen):+.3f} to {max(seen):+.3f} over {len(seen)} frames"
+        )
+    if abs(seen[-1] - PLUS_ONE) > TOL:
+        raise Failure(
+            f"{label}: sent {PLUS_ONE:+.1f}, read back {seen[-1]:+.3f} — the renderer "
+            f"is not the identity on this path"
+        )
+    print(f"    {label:26s} {seen[-1]:+.3f} over {len(seen)} frames (spread {spread:.3f})")
+    return seen[-1]
 
-    The pose is pushed on the shared `outlet` in every scenario, so the only thing that
-    differs is what was declared over gRPC — which is exactly the variable under test.
+
+def check_round_trip(vhi, client, outlet, inlet: StreamInlet) -> dict[str, float]:
+    """2-4. Identity and frame stability, from producers that genuinely differ.
+
+    A raw frame this file wrote; the same value through the client's own negotiated
+    stack, where the channel comes from the manifest instead; and that again while the
+    control hand's stream is also being published. The three must agree — they vary who
+    writes the frame and what else the renderer is reading, never what it was told,
+    because there is nothing left to tell it.
     """
-    rendered: dict[str, float] = {}
-    for label in ("undeclared", "predicted-only", "predicted+control-pose"):
-        bus = None
-        if label != "undeclared":
-            bus = _declared(
-                vhi, client, outlet, with_control_pose=label.endswith("control-pose")
-            )
-        try:
-            seen = _hold(outlet, inlet)
-        finally:
-            if bus is not None:
-                bus.stop()
-        if len(seen) < 2:
-            raise Failure(f"{label}: VHI_Predict returned {len(seen)} sample(s), need frames")
-        spread = max(seen) - min(seen)
-        if spread > TOL:
-            raise Failure(
-                f"{label}: the read-back moved while the input was held — "
-                f"{min(seen):+.3f} to {max(seen):+.3f} over {len(seen)} frames"
-            )
-        if abs(seen[-1] - PLUS_ONE) > TOL:
-            raise Failure(
-                f"{label}: sent {PLUS_ONE:+.1f}, read back {seen[-1]:+.3f} — the renderer "
-                f"is not the identity on this path"
-            )
-        rendered[label] = seen[-1]
-        print(f"    {label:24s} {seen[-1]:+.3f} over {len(seen)} frames (spread {spread:.3f})")
+    rendered = {"raw frame": _measure("raw frame", _raw(outlet), inlet)}
+
+    bus = _negotiated_bus(client, outlet)
+    try:
+        rendered["through a VhiTarget"] = _measure("through a VhiTarget", _through(bus), inlet)
+    finally:
+        bus.stop()
+
+    # Owned here, not by the bus: a `VhiTarget` deliberately does not stop an outlet it
+    # was handed, and one left streaming `MyoGestic_ControlPose` would hold the control
+    # hand in Stream mode — and beat a later writer to the inlet — for every run after
+    # this one.
+    control_outlet = vhi.control_outlet()
+    bus = _negotiated_bus(client, outlet, control_outlet=control_outlet)
+    try:
+        rendered["+ control hand"] = _measure("+ control hand", _through(bus), inlet)
+    finally:
+        bus.stop()
+        control_outlet.stop()
+
     if max(rendered.values()) - min(rendered.values()) > TOL:
-        raise Failure(f"direction depends on what was declared: {rendered}")
+        raise Failure(f"the same +1 rendered differently per producer: {rendered}")
     return rendered
 
 
 def _relaunch() -> None:
-    """Stop any VHI and start a fresh one, so a run cannot inherit a declaration."""
+    """Stop any VHI and start a fresh one, so a run cannot inherit renderer state.
+
+    Nothing is declared any more, but a renderer still carries state a run can inherit:
+    the hand it was last left holding, and whichever inlet it has already bound. A cold
+    process re-proves that an outlet is picked up from nothing.
+    """
     subprocess.run(["pkill", "-f", "Godot --path"], check=False, capture_output=True)
     time.sleep(2.0)
     # `launchable` reports rows of (label, argv) for a UI's Launch button, so a tool that
@@ -263,7 +310,7 @@ def _one_run(run: int, total: int, vhi, inlet: StreamInlet) -> None:
     """Everything one run checks, in the one order that measures what it claims to.
 
     The sweep first, with no outlet in existence, so `SweepControl` owns the rig; then an
-    outlet, which every scenario shares. Creating and dropping it per run is deliberate:
+    outlet, which every check shares. Creating and dropping it per run is deliberate:
     each run re-proves that a restarted producer is picked up at all.
     """
     print(f"\n{RULE}\nrun {run} of {total}\n{RULE}")
@@ -272,9 +319,9 @@ def _one_run(run: int, total: int, vhi, inlet: StreamInlet) -> None:
     try:
         print(f"  1. direction: {check_direction(client)}")
         outlet = vhi.outlet()
-        _await_binding(outlet, inlet)
-        print("  2-4. round-trip, declaration independence, frame stability:")
-        check_scenarios(vhi, client, outlet, inlet)
+        _await_binding(_raw(outlet), inlet)
+        print("  2-4. round-trip, the client's own stack, and the control hand:")
+        check_round_trip(vhi, client, outlet, inlet)
     finally:
         if outlet is not None:
             outlet.stop()
@@ -317,8 +364,8 @@ def main() -> int:
             return 1
 
     print(f"\n{RULE}")
-    print("✓ control +1 flexes, reads back as +1, and does so identically under every")
-    print(f"  declaration, across {args.runs} run(s).")
+    print("✓ control +1 flexes, reads back as +1, and does so identically whether the")
+    print(f"  frame is written raw or by a negotiated client, across {args.runs} run(s).")
     return 0
 
 
