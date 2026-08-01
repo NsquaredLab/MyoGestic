@@ -37,23 +37,10 @@ WIDTHS = (320, 420, 560, 720, 1000, 1600)
 FINGERS = ("thumb", "index", "middle", "ring", "little")
 MANIFEST = [
     *(
-        Capability(
-            f"vhi.prediction.{digit}", "continuous", -1.0, 1.0, 0.0, channel=channel,
-            stream_name="MyoGestic_Output",
-        )
-        for channel, digit in enumerate(FINGERS)
+        Capability(f"vhi.prediction.{digit}", "continuous", -1.0, 1.0, 0.0)
+        for digit in FINGERS
     ),
-    Capability(
-        "vhi.prediction.thumb.abduction", "continuous", -1.0, 1.0, 0.0, channel=1,
-        stream_name="MyoGestic_Output",
-    ),
-    # The aliased name of channel 0, so a test that means to provoke the *collision* gets
-    # one. Without it, adding `...thumb.flexion` raised "the target does not export" and the
-    # collision test passed on the wrong error.
-    Capability(
-        "vhi.prediction.thumb.flexion", "continuous", -1.0, 1.0, 0.0, channel=0,
-        stream_name="MyoGestic_Output",
-    ),
+    Capability("vhi.prediction.thumb.abduction", "continuous", -1.0, 1.0, 0.0),
     Capability(
         "vhi.control.gesture", "discrete", states=("Rest", "Fist"), rest_state="Rest",
     ),
@@ -161,10 +148,10 @@ class TestTheEditorFitsTheWidthItIsGiven:
         """The longest strings in the widget, and they only appear when something is
         wrong — which is the worst moment for them to be cut off."""
         editor = _editor(tmp_path)
-        editor.add_control("clash", "vhi.prediction.thumb.flexion")
-        # `thumb` is already mapped by BUSY, and `...thumb.flexion` is its other name on
-        # channel 0 — so this is the collision, not an unknown address. Asserting the
-        # *reason* is what stops this passing on the wrong error again.
+        editor.add_control("clash", "vhi.prediction.thumb")
+        # `thumb` is already mapped by BUSY, so a second alias reaching it is the
+        # collision, not an unknown address. Asserting the *reason* is what stops this
+        # passing on the wrong error.
         assert any("same control" in problem for problem in editor.problems()), (
             editor.problems()
         )
@@ -1064,10 +1051,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
         assert len(calls) == 1, "it rebuilt on a frame where nothing had changed"
 
         studio.documents[0]._capabilities = (
-            Capability(
-                "vhi.prediction.index", "continuous", -1.0, 1.0, 0.0,
-                channel=2, stream_name="MyoGestic_Output",
-            ),
+            Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0),
         )
         studio._rebuild_if_the_manifest_changed()
         assert len(calls) == 2, "a renderer that came up did not reach the sliders"
@@ -1151,7 +1135,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
             def capabilities(self):
                 return [
                     Capability("keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0,
-                               states=("up", "down"), channel=-1)
+                               states=("up", "down"))
                 ]
 
         class _Target:
@@ -1171,7 +1155,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
 
         fake_keys = _Keys()
         monkeypatch.setattr(studio, "keys", fake_keys)
-        monkeypatch.setattr(studio, "vhi_targets", lambda *a, **kw: [_Target()])
+        monkeypatch.setattr(studio, "VhiTarget", lambda **kw: _Target())
         monkeypatch.setattr(studio, "ControlBus", _Bus)
 
         path = tmp_path / "keys.toml"
@@ -1232,7 +1216,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
 
         studio.documents[0]._capabilities = (
             Capability("keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0,
-                       states=("up", "down"), channel=-1),
+                       states=("up", "down")),
         )
         capabilities, absent = studio._editor_manifest()
         assert [c.address for c in capabilities] == ["keyboard.hold.letter.w"]

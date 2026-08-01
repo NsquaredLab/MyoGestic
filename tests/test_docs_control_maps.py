@@ -28,15 +28,18 @@ from myogestic.vhi import VhiTarget
 
 DOCS = pathlib.Path(__file__).resolve().parent.parent / "docs"
 
-#: VHI's manifest with its **channels**, which is the part that matters here: the short
-#: and axis forms of a digit are two addresses on one channel, so a mapping can name two
-#: distinct addresses and still be a conflict. Kept in step by tests/test_v2_contract.py.
-CHANNELS = {"thumb": 0, "thumb.abduction": 1, "index": 2, "middle": 3, "ring": 4, "little": 5}
+#: VHI's manifest, one address per control — exactly the spellings it advertises, and
+#: nothing else. There is no second name for any of these: the bare digit where a digit
+#: bends one way, an explicit axis where it does not. Kept in step by
+#: tests/test_v2_contract.py.
+ADDRESSES = (
+    "thumb.flexion", "thumb.abduction", "index", "middle", "ring", "little",
+    "wrist.flexion", "wrist.abduction", "wrist.rotation",
+)
 VHI_MANIFEST = [
     *(
-        Capability(f"vhi.prediction.{form}", "continuous", -1.0, 1.0, 0.0, channel=channel)
-        for digit, channel in CHANNELS.items()
-        for form in ({digit, f"{digit}.flexion"} if "." not in digit else {digit})
+        Capability(f"vhi.prediction.{address}", "continuous", -1.0, 1.0, 0.0)
+        for address in ADDRESSES
     ),
     Capability(
         "vhi.control.gesture",
@@ -93,7 +96,7 @@ def test_a_documented_mapping_loads_resolves_and_routes(page, line, block):
     # aliases without any way to press anything, so this suite cannot type.
     bus = ControlBus(
         controls,
-        targets=[VhiTarget(_Outlet(), client=_Client()), KeyboardTarget()],
+        targets=[VhiTarget(client=_Client(), interface=_Interface()), KeyboardTarget()],
         hz=50,
     )
     bus.stop()
@@ -101,15 +104,20 @@ def test_a_documented_mapping_loads_resolves_and_routes(page, line, block):
 
 
 class _Outlet:
-    """Stands in for an LSL outlet: enough for a target to bind and rest."""
+    """Stands in for one control's LSL outlet: enough for a target to bind and rest."""
 
-    n_channels = 9
-
-    def push(self, frame) -> None: ...
+    def push(self, sample) -> None: ...
 
     def flush(self) -> None: ...
 
     def stop(self) -> None: ...
+
+
+class _Interface:
+    """Stands in for `virtual_hand()`: hands out one sink per address."""
+
+    def stream_outlet(self, name, *, n_channels=None) -> _Outlet:
+        return _Outlet()
 
 
 class _Client:
@@ -134,21 +142,12 @@ def test_the_check_would_have_caught_the_defect_it_was_written_for():
     }
     controls = resolve(load_control_map(shipped), VHI_MANIFEST)
     with pytest.raises(ValueError, match="both map to"):
-        ControlBus(controls, targets=[VhiTarget(_Outlet(), client=_Client())], hz=50)
+        ControlBus(controls, targets=[VhiTarget(client=_Client(), interface=_Interface())], hz=50)
 
 
-def test_a_conflict_between_the_short_and_axis_form_is_caught_too():
-    """`vhi.prediction.thumb` and `vhi.prediction.thumb.flexion` are one channel.
-
-    Two different addresses, so only a channel-aware check sees it — which is why the
-    manifest above carries channels rather than just names.
-    """
-    aliased = {
-        "dofs": {
-            "a": "vhi.prediction.thumb",
-            "b": "vhi.prediction.thumb.flexion",
-        }
-    }
-    controls = resolve(load_control_map(aliased), VHI_MANIFEST)
-    with pytest.raises(ValueError, match="both map to"):
-        ControlBus(controls, targets=[VhiTarget(_Outlet(), client=_Client())], hz=50)
+# There used to be a second conflict case here: `vhi.prediction.thumb` and
+# `vhi.prediction.thumb.flexion` were two advertised names for one control, so a map could
+# collide without any address repeating. That is gone at the source — a renderer
+# advertises one spelling per control and gives each its own stream — so two aliases
+# reaching one control now always means two aliases naming one address, which is what the
+# test above checks.

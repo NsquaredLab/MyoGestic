@@ -35,26 +35,23 @@ def test_a_control_bus_drives_the_reference_renderer(renderer_module):
     `uv run --extra grpc --extra dev pytest -m lsl_contention -q`. See CLAUDE.md.
     """
     from myogestic.controls import connect_controls, load_control_map
-    from myogestic.vhi import vhi_targets, virtual_hand
+    from myogestic.vhi import VhiTarget, virtual_hand
 
     renderer = renderer_module.ReferenceRenderer(port=50099)
     renderer.serve()
     try:
         vhi = virtual_hand(grpc_port=50099)
         client = vhi.control_client()
-        # Two addresses, and on this renderer that is two streams — so this also pins the
-        # thing `vhi_targets` exists for: the map is grouped by the `stream_name` the
-        # manifest reports, and each group gets the target that drives it.
+        # Two addresses, and on this renderer that is two streams — one per control,
+        # named for the control.
         control_map = load_control_map(
             {"dofs": {"close": "vhi.prediction.index", "spread": "vhi.prediction.little"}}
         )
-        # No stream is named on this side: the renderer's manifest says which one carries
-        # each address, and each target publishes under exactly that name — which is the
-        # whole reason this end-to-end can find the other end at all.
-        targets = vhi_targets(control_map, vhi, client=client)
-        assert targets is not None, "the renderer did not answer GetControlManifest"
-        assert len(targets) == 2, "one target per stream the map names"
-        bus = connect_controls(control_map, targets, hz=32)
+        # No stream is named on this side and there is no field that could name one: a
+        # control's stream is its address, and the target publishes under exactly that —
+        # which is the whole reason this end-to-end can find the other end at all.
+        target = VhiTarget(client=client, interface=vhi)
+        bus = connect_controls(control_map, [target], hz=32)
         assert bus is not None, "the renderer's manifest did not resolve"
 
         # Opposite signs, because a renderer applying each address as it arrives has to be
@@ -70,3 +67,52 @@ def test_a_control_bus_drives_the_reference_renderer(renderer_module):
         client.stop()
     finally:
         renderer.stop()
+
+
+def test_a_renderer_reporting_an_older_vocabulary_is_refused_by_name(renderer_module):
+    """The gate that makes a version-skewed pair say so instead of just not moving.
+
+    MyoGestic and the renderer are installed separately, so an upgrade on one side is not
+    an upgrade on both. A vocabulary-1 renderer listens for a wide pose stream nothing
+    publishes any more and reports nothing at all — the hand simply never moves. This is
+    the one place that turns that into a sentence.
+
+    No LSL here: the refusal is on the manifest, so this is a gRPC round trip and nothing
+    else, and it runs in the default suite.
+    """
+    from myogestic.vhi import virtual_hand
+
+    class Antique(renderer_module.ReferenceRenderer):
+        """The same renderer, still claiming the vocabulary it served before the split."""
+
+        def GetControlManifest(self, request, context):   # noqa: N802 - gRPC's spelling
+            manifest = super().GetControlManifest(request, context)
+            manifest.vocabulary_version = "1"
+            return manifest
+
+    renderer = Antique(port=50098)
+    renderer.serve()
+    try:
+        client = virtual_hand(grpc_port=50098).control_client()
+        try:
+            with pytest.raises(ValueError) as excinfo:
+                client.capabilities()
+        finally:
+            client.stop()
+    finally:
+        renderer.stop()
+
+    message = str(excinfo.value)
+    # Both versions by name, and the remedy: a refusal that says only "incompatible"
+    # leaves the reader to guess which side is behind.
+    assert "vocabulary 1" in message, message
+    assert "needs 2 or newer" in message, message
+    assert message.endswith("Update VHI."), message
+
+
+def test_the_reference_renderer_reports_the_vocabulary_this_client_needs(renderer_module):
+    """The example renderers ship must be one a current MyoGestic will actually drive."""
+    from myogestic.vhi._control import _MIN_VOCABULARY, _vocabulary
+
+    manifest = renderer_module.ReferenceRenderer(port=0).GetControlManifest(None, None)
+    assert _vocabulary(manifest.vocabulary_version) >= _MIN_VOCABULARY
