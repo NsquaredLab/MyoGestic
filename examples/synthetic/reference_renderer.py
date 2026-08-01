@@ -49,6 +49,11 @@ POSE_WIDTH = 9
 class ReferenceRenderer(pb2_grpc.VhiControlServicer):
     """A renderer in eighty lines. Holds the last pose it was sent."""
 
+    #: `stream` is load-bearing, not decoration: a client resolves a manifest against one
+    #: stream at a time and looks for `MyoGestic_Output` (or `MyoGestic_ControlPose` for a
+    #: control hand). A capability naming anything else is dropped from the negotiation and
+    #: the client refuses the map without saying why. Name yours one of those two, or leave
+    #: `stream_name` empty.
     def __init__(self, port: int = 50051, stream: str = "MyoGestic_Output") -> None:
         self.pose = np.zeros(POSE_WIDTH, dtype=np.float32)
         self._port = port
@@ -71,7 +76,6 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
                     rest=0.0,
                     channel=channel,
                     stream_name=self._stream,
-                    description=f"{address}, signed and normalised",
                 )
             )
         return manifest
@@ -95,20 +99,26 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
         """Read the pose stream. Positional: a channel is an address."""
         inlet = None
         while not self._stop.is_set():
-            if inlet is None:
-                found = [s for s in resolve_streams(timeout=1.0) if s.name == self._stream]
-                if not found:
-                    continue
-                inlet = StreamInlet(found[0])
-                inlet.open_stream()
-                continue
+            # Resolving is inside the try too: the outlet can vanish between the resolve
+            # and the open, and `open_stream` raises when it does. Outside, that ordinary
+            # race would kill this thread while the gRPC server kept answering the
+            # manifest — a client would bind successfully against a renderer that never
+            # reads another sample, which is the one failure this project refuses to ship.
             try:
+                if inlet is None:
+                    found = [s for s in resolve_streams(timeout=1.0) if s.name == self._stream]
+                    if not found:
+                        continue
+                    inlet = StreamInlet(found[0])
+                    inlet.open_stream()
+                    continue
                 chunk, _ = inlet.pull_chunk(timeout=0.5)
                 if chunk is not None and len(chunk):
                     self.pose = np.asarray(chunk[-1], dtype=np.float32)
             except Exception as exc:
                 print(f"reference renderer: lost the inlet ({type(exc).__name__}: {exc}), re-resolving")
-                inlet.close_stream()
+                if inlet is not None:
+                    inlet.close_stream()
                 inlet = None
 
 

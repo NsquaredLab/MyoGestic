@@ -825,16 +825,17 @@ class TestAMapMayServeBothHands:
 
 
 class TestOneWayToDriveTheControlHand:
-    """The renderer's own exclusion, and it taught it to us by refusing a declaration.
+    """The renderer's own exclusion, restated where it can still be fixed.
 
     Streaming a pose to the operator's hand and commanding it a movement would both drive
-    that hand, so VHI accepts one or the other:
+    that hand, so VHI takes one or the other. It no longer says so up front — there is no
+    declaration to refuse. It refuses at command time instead: while a control-pose stream
+    is delivering, `SetControl` comes back with the movement in `ack.rejected`.
 
-        a discrete DOF and a control-pose stream would both drive the control hand —
-        declare one or the other
-
-    A `stream="both"` map is where this becomes reachable, so it is caught before the
-    handshake rather than by it.
+    That makes this check worth more than it was, not less. A `stream="both"` map is where
+    the mix becomes reachable, and here it is a red line in the editor with the file still
+    open, rather than a gesture that silently stops working mid-session for as long as
+    something is publishing to that hand.
     """
 
     def _editor(self, tmp_path, body, stream="both"):
