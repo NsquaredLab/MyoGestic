@@ -188,6 +188,11 @@ class VhiTarget:
             does not carry on this stream, or two aliases aimed at one control. A
             renderer too old to answer `capabilities()` at all looks identical to one
             that is simply not up yet, so that case is deferred, never raised.
+        Exception
+            Whatever the outlet raises: a settled negotiation puts the declared rest
+            pose on the wire, so an outlet that is already dead fails here rather than
+            per tick. Deliberate — this is a main-thread setup call where a traceback is
+            visible, and a target that cannot write at bind will not write later either.
         """
         self._routed = ()
         self._discrete = ()
@@ -240,6 +245,9 @@ class VhiTarget:
             If the renderer answers and the configuration cannot be rendered. Call this
             from a setup path or a button handler where a traceback is visible, never
             from the predict thread.
+        Exception
+            Whatever the outlet raises when the rest pose that settles a negotiation is
+            pushed onto a dead one — the same reason `bind` can, and the same remedy.
         """
         if force and self._pending is None:
             # Re-arm from whatever is currently bound, so a caller does not have to
@@ -305,7 +313,7 @@ class VhiTarget:
             for cap in capabilities
             if getattr(cap, "stream_name", "") and cap.stream_name != wanted
         }
-        routes, mine = self._scope(controls, wanted, by_address, elsewhere)
+        routes, mine = self._scope_or_refuse(controls, wanted, by_address, elsewhere)
         if not mine:
             # Nothing in this file is ours. Not an error: `ControlBus` checks that
             # *someone* claims every alias, so an unrendered alias is still caught.
@@ -404,17 +412,17 @@ class VhiTarget:
         )
         return True
 
-    def _scope(
-        self,
+    @staticmethod
+    def _scope_or_refuse(
         controls: ControlSet,
         wanted: str,
         by_address: Mapping[str, Capability],
         elsewhere: Mapping[str, str],
     ) -> tuple[Mapping[str, tuple[Any, ...]], set[str]]:
-        """What to route onto channels, and which aliases are this target's.
+        """What to route onto channels and which aliases are this target's — or raise.
 
-        The one thing the two kinds of configuration disagree about — the resolution
-        itself is shared.
+        The one thing the two kinds of configuration disagree about, strictness
+        included; the resolution itself is shared.
 
         A **resolved** set carries routes and may be shared with a second target, so
         ownership goes by **namespace**, not exact address: a `vhi.*` address this build
