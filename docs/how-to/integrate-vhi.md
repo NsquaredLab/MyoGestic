@@ -25,6 +25,9 @@ puts continuous values on LSL, and sends discrete states over gRPC.
 
 ## Start with a control file
 
+New to control maps, addresses and aliases? [Concepts ›
+Controls](../concepts/controls.md) explains the system this guide applies.
+
 Declare what your application controls in a TOML file. Copy
 [`examples/controls/hand.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/hand.toml)
 and edit it:
