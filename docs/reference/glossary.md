@@ -1,6 +1,6 @@
 # Glossary
 
-Terms that mean different things in different parts of the codebase. The "common mistakes" callouts in concept pages reference back here when ambiguity bites.
+Terms that mean different things in different parts of the codebase. The "common mistakes" callouts in concept pages link back here where a term is ambiguous.
 
 ### Filter
 
