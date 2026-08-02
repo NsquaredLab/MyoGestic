@@ -265,8 +265,8 @@ assert link.bus is None  # and read this from the predict thread
   much cheaper than a stalled control loop.
 
 A device that answers `None` is distinct from one that answers with an empty list: `None` means
-"cannot say yet", and an empty manifest would mean "drives nothing", which would resolve happily
-into a bus that silently drives nothing.
+"cannot say yet", and an empty manifest would mean "drives nothing", which resolves without
+error into a bus that drives nothing.
 
 ## Common mistakes
 
