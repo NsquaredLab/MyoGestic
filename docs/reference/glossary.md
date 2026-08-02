@@ -33,9 +33,9 @@ One labelled segment of a recorded session - the data between two consecutive la
 
 One `app.start_recording()` → `app.stop_recording()` cycle. Persisted as a folder during capture, packed to a `.session.zip` archive on stop. Both layouts loadable via `myogestic.session.open_session_store(path)`.
 
-### DoF
+### DOF
 
-A "degree of freedom" in the controlled output - e.g. one finger joint, or one axis of a robot. A multi-DoF model predicts several at once and composes them into a single output vector.
+A "degree of freedom" in the controlled output - e.g. one finger joint, or one axis of a robot. A multi-DOF model predicts several at once and composes them into a single output vector.
 
 ### Pose
 

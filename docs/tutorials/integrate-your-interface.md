@@ -20,14 +20,14 @@ page](#the-finished-files):
 
 | file | side | what it is |
 |---|---|---|
-| `my_renderer.py` | yours | your device's process — the manifest, the inlets, the held state |
+| `my_renderer.py` | yours | the renderer — the manifest, the inlets, the held state |
 | `my-rig.toml` | shared | the map, pairing your model's output names with the rig's addresses |
 | `drive.py` | MyoGestic's | the producer — a stand-in for your application, which is what actually publishes |
 
 Two of them are processes, and from stage 3 on you need **both running, in two terminals**:
 
 ```bash
-uv run --extra grpc python my_renderer.py      # terminal 1 — your device
+uv run --extra grpc python my_renderer.py      # terminal 1 — your renderer
 uv run --extra grpc python drive.py            # terminal 2 — MyoGestic
 ```
 
@@ -35,7 +35,7 @@ Running only the renderer publishes nothing, so nothing moves. That is not a fau
 the shape of the system. MyoGestic writes and your renderer reads.
 
 !!! tip "liblsl is chatty"
-    Anything touching LSL prints interface enumeration and multicast-bind warnings to
+    Anything touching LSL prints network-interface enumeration and multicast-bind warnings to
     **stderr** on startup — `Could not bind multicast responder …`, `netif 'utun0' …`. They
     are noise on a laptop with VPN interfaces up, not failures. Every output quoted on this
     page is stdout; add `2>/dev/null` if you want to see only that.
@@ -229,7 +229,8 @@ Restart without `--antique` before going on.
 ## Stage 2 — The map, and a typo
 
 The map pairs your model's output names with the addresses the rig declared. Left side yours,
-right side the device's.
+right side the device's. Each line under `[dofs]` declares one **DOF** — one [degree of
+freedom](../reference/glossary.md#dof).
 
 ```toml
 # my-rig.toml
@@ -1022,7 +1023,7 @@ assert mode.debounce_s == 0.1              # this one the map did say
 ### Checkpoint
 
 Add this to `drive.py` **inside the same `if bus is not None:` block**, after the `for`
-loop — eight spaces of indent, not four. At the end of the `try:` but outside the guard it
+loop — eight spaces of indent, not four. At the end of the `try:` but outside the guard, it
 would call `select` on `None` every time you run it with the renderer down, which is the
 one case the guard exists for:
 

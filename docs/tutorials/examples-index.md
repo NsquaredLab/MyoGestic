@@ -142,7 +142,7 @@ name to `(class_name, intensity_bin)` for hysteresis on multiple fields.
 
 ### `emg_regression.py` - continuous-target regression
 
-CatBoost regressor maps EMG features to a 5-DoF kinematic target.
+CatBoost regressor maps EMG features to a 5-DOF kinematic target.
 Recorded with a discrete DOF — a held state — so VHI snaps to and *holds* each movement's
 end pose - regression needs the trainee to physically reach and hold the
 target, not sweep through a cycle. RMS + MAV + waveform length features.
@@ -151,14 +151,14 @@ target, not sweep through a cycle. RMS + MAV + waveform length features.
 uv run python examples/synthetic/emg_regression.py
 ```
 
-**What to tweak:** add or remove DoFs in the kinematic target; swap
+**What to tweak:** add or remove DOFs in the kinematic target; swap
 CatBoost for sklearn's `MultiOutputRegressor` to compare model families.
 
 ### `emg_regression_raulnet.py` - RaulNet via Lightning
 
 Same regression flow but with **RaulNetV17** - a PyTorch Lightning CNN
 that takes a sliding-RMS feature stack `(channels, time)` and predicts
-5-DoF kinematics. Trains with `Trainer(precision="32-true")`
+5-DOF kinematics. Trains with `Trainer(precision="32-true")`
 (TorchScript backward has hard-coded fp32 checks; mixed-precision
 fails), SWA, ModelCheckpoint, and per-epoch log lines streamed to the
 pipeline panel's autoscroll-and-popout log box.

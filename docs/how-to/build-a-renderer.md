@@ -12,15 +12,16 @@ interface](../tutorials/integrate-your-interface.md) instead.
 
 ## Which way the streams run
 
-MyoGestic writes, you read. **One stream per DOF**, named for the DOF's own address and
-one channel wide:
+MyoGestic writes, you read. **One stream per DOF** — one [degree of
+freedom](../reference/glossary.md#dof) — named for the DOF's own address and one channel
+wide:
 
 ```
 MyoGestic  --[ vhi.prediction.index, 1 channel ]-->  your renderer   (you read this)
 ```
 
 There is one shape and it needs no describing. The address you advertise in your manifest
-*is* the stream name, so nothing further is published about the transport, there is no
+*is* the stream name, so nothing further is published about the transport: there is no
 width to declare and no positional layout for the two of you to agree on. A DOF applies
 the moment its sample arrives, and the DOFs that did not deliver hold whatever they were
 last commanded to — which is what these DOFs actually are: independently actuated,
@@ -30,8 +31,8 @@ finger.
 MyoGestic drives all of it with one [`RendererTarget`](../api/controls.md), which publishes one
 outlet per address the map names.
 
-Publishing a read-back of your own is optional; VHI does it (`VHI_Predict`,
-`VHI_Control`, nine positional channels each whatever the inbound shape) so a client can
+Publishing a read-back of your own is optional; VHI does it (`VHI_Predict` and
+`VHI_Control`, nine positional channels each, whatever the inbound shape) so a client can
 verify what actually rendered, which is how a sign error gets caught. Nothing requires
 it.
 

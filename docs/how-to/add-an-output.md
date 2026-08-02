@@ -36,7 +36,7 @@ from myogestic.outputs import Output
 
 
 class ROSPoseOutput(Output):
-    """Publish a 9-DoF pose as a ROS Float32MultiArray."""
+    """Publish a 9-DOF pose as a ROS Float32MultiArray."""
 
     def __init__(self, topic: str, hz: float = 50.0):
         super().__init__(hz=hz)

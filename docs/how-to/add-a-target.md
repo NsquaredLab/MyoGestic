@@ -1,7 +1,7 @@
 # Drive your own device
 
-A **target** is anything a control map can render onto — a hand, a cursor, a prosthesis, a
-motor controller. MyoGestic ships two ([`RendererTarget`][myogestic.renderer.RendererTarget] and
+A **target** is a Python object that renders a control map onto something — a hand, a
+cursor, a prosthesis, a motor controller. MyoGestic ships two ([`RendererTarget`][myogestic.renderer.RendererTarget] and
 [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget]); this is how you write a third.
 
 There is one way to do it. A target is a plain object with three methods, you hand it to a
