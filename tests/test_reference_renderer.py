@@ -113,6 +113,100 @@ def test_a_renderer_reporting_an_older_vocabulary_is_refused_by_name(renderer_mo
     assert message.endswith("Update reference."), message
 
 
+def test_two_discrete_controls_are_told_apart_by_address(renderer_module):
+    """The case a state-keyed contract could not express at all.
+
+    Both controls declare a state called ``hold``, so the state says nothing about which
+    of them a command is for. A `SetControl` keyed by the client's *alias* leaves the
+    renderer two ways to guess and no way to know: match the key against the addresses it
+    advertised and every command is rejected, or resolve on the state alone and the two
+    controls are indistinguishable. Keyed by address, there is nothing to guess.
+
+    No LSL: a discrete-only configuration drives no stream at all, so this is a gRPC round
+    trip and runs in the default suite.
+    """
+    from myogestic.controls import load_control_map, resolve
+    from myogestic.vhi import VhiTarget, virtual_hand
+
+    pb2 = renderer_module.pb2
+
+    class TwoModes(renderer_module.ReferenceRenderer):
+        """The reference renderer plus two discrete controls that share a vocabulary."""
+
+        #: Address -> its states. `hold` belongs to both, which is the whole point.
+        DISCRETE = {
+            "rig.mode.gripper": ("open", "hold"),
+            "rig.mode.wrist": ("open", "hold"),
+        }
+
+        def __init__(self, port):
+            super().__init__(port)
+            self.state = {a: s[0] for a, s in self.DISCRETE.items()}
+
+        def GetControlManifest(self, request, context):  # noqa: N802 - gRPC's spelling
+            manifest = super().GetControlManifest(request, context)
+            for address, states in self.DISCRETE.items():
+                manifest.capabilities.append(
+                    pb2.ControlCapability(
+                        address=address,
+                        kind=pb2.DISCRETE,
+                        states=states,
+                        rest_state=states[0],
+                    )
+                )
+            return manifest
+
+        def SetControl(self, request, context):  # noqa: N802 - gRPC's spelling
+            """Resolve the control from the key and the state from the value."""
+            rejected = {}
+            for address, state in request.discrete.items():
+                states = self.DISCRETE.get(address)
+                if states is None:
+                    rejected[address] = f"{address!r} is not a control this renderer exports"
+                elif state not in states:
+                    rejected[address] = f"{state!r} is not one of {list(states)}"
+                else:
+                    self.state[address] = state
+            return pb2.ControlAck(applied=not rejected, rejected=rejected)
+
+        def _read(self):
+            """No inlets. Nothing here is streamed, and a resolve loop this test does not
+            need is exactly the LSL contention the default suite must not carry."""
+            self._stop.wait()
+
+    renderer = TwoModes(port=50097)
+    renderer.serve()
+    try:
+        vhi = virtual_hand(grpc_port=50097)
+        client = vhi.control_client()
+        try:
+            # Aliases deliberately unlike the addresses: whatever reaches the renderer had
+            # to have been translated, and only the address translates.
+            controls = resolve(
+                load_control_map(
+                    {"dofs": {"grip": "rig.mode.gripper", "twist": "rig.mode.wrist"}}
+                ),
+                client.capabilities(),
+            )
+            target = VhiTarget(client=client, interface=vhi)
+            target.bind(controls)
+            assert target.negotiated is True
+            target.send({}, {"twist": "hold"})
+
+            deadline = time.time() + 5.0
+            while time.time() < deadline and renderer.state["rig.mode.wrist"] == "open":
+                time.sleep(0.02)
+        finally:
+            client.stop()
+    finally:
+        renderer.stop()
+
+    assert renderer.state["rig.mode.wrist"] == "hold", renderer.state
+    # The one that matters: `hold` is a state of this control too, so a renderer that had
+    # only the state to go on could just as well have moved this one.
+    assert renderer.state["rig.mode.gripper"] == "open", renderer.state
+
+
 def test_the_reference_renderer_reports_the_vocabulary_this_client_needs(renderer_module):
     """The example renderers ship must be one a current MyoGestic will actually drive."""
     from myogestic.vhi._control import _MIN_VOCABULARY, _vocabulary
