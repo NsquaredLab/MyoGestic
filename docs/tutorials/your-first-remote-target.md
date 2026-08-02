@@ -1,31 +1,39 @@
 # Your first remote target
 
-You have a device (a gripper, a prosthesis, a robot arm, a game) and you want MyoGestic to
-drive it. This builds the thing that makes that happen, in seven stages, each ending in
-something you run and watch.
+!!! danger "Most devices do not need this page"
+    This builds a **separate program** that MyoGestic reaches over gRPC and LSL. You need it
+    only if your device already is its own program — a game, a simulator, something in another
+    language, something on another machine.
 
-!!! note "This page is about a **remote** target"
-    A remote target is a **separate application**, reached over gRPC for its manifest and
-    LSL for its values. If your device is a Python object you can `import` (a motor
-    prosthesis on a serial port, a cursor, a library), you want an **in-process** target
-    instead: three methods, no processes, no wire, and rather less of this page. See [Drive
-    your own device](../how-to/add-a-target.md). [Concepts ›
-    Controls](../concepts/controls.md) explains the fork if you have not taken it yet.
+    **If you can `import` your device and call it from Python** — a prosthesis on a serial
+    port, a motor controller, a cursor, a vendor library — you want
+    **[Drive your own device](../how-to/add-a-target.md)** instead: three methods, one
+    process, no wire, and a copyable example that runs in a few seconds.
 
-The device here is a two-axis rig: a gripper that closes and opens, and a wrist that rotates.
-Substitute your own. Nothing below depends on what the axes *are*. There is exactly one method
-where a value becomes motion, and it is marked.
+This builds a remote target in seven stages, each ending in something you run and watch. The
+device is a two-axis rig: a gripper that closes and opens, and a wrist that rotates.
 
-You will end with **three** files, and they are listed in full at [the end of this
-page](#the-finished-files):
+**Everything happens in a MyoGestic checkout**, because the stages call `tools/` scripts by
+relative path:
+
+```bash
+git clone https://github.com/NsquaredLab/MyoGestic && cd MyoGestic
+uv sync --extra grpc          # `grpc` because a remote target speaks gRPC
+```
+
+Create your files in that directory. You will write **five**, of which three are the result and
+two are throwaway probes:
 
 | file | side | what it is |
 |---|---|---|
 | `my_target.py` | yours | the target: the manifest, the inlets, the held state |
 | `my-rig.toml` | shared | the map, pairing your model's output names with the rig's addresses |
-| `drive.py` | MyoGestic's | the producer: a stand-in for your application, the thing that really publishes |
+| `drive.py` | MyoGestic's | the producer: a stand-in for your application, the thing that publishes |
+| `probe.py` | throwaway | stage 1, asks the target what it exports |
+| `wide.py` | throwaway | stage 4, publishes a deliberately wrong stream |
 
-Two of them are processes, and from stage 3 on you need **both running, in two terminals**:
+The three that matter are listed in full at [the end of the page](#the-finished-files). From
+stage 3 on, two of them run at once, in two terminals:
 
 ```bash
 uv run --extra grpc python my_target.py        # terminal 1 — your target
@@ -34,6 +42,16 @@ uv run --extra grpc python drive.py            # terminal 2 — MyoGestic
 
 MyoGestic writes and your target reads, so running only the target publishes nothing and
 nothing moves.
+
+### Making it your device
+
+The rig is a stand-in. To drive your own hardware you change these, and nothing else:
+
+| | what | where |
+|---|---|---|
+| **1** | the addresses your device exports | `ADDRESSES`, and the right-hand side of `my-rig.toml` |
+| **2** | **the one line where a value becomes motion** | in `_apply`, marked with a comment |
+| **3** | the device's name, used to find its streams again after a restart | `target_name=` and `InterfaceSpec(name=…)` — the *same* string in both, and see the warning in stage 5 before you change it |
 
 ## First, the wiring
 
@@ -61,6 +79,8 @@ restart. Stage 5 is where changing it breaks reconnection.
 
 A remote target's one obligation is `GetControlManifest`. Serve that and nothing else, and a
 client can already learn everything about your device. No LSL yet.
+
+**Save this as `my_target.py`:**
 
 ```python
 """my_target.py — stage 1."""
@@ -132,7 +152,12 @@ class Antique(Rig):
 
 
 if __name__ == "__main__":
-    rig = Antique() if "--antique" in sys.argv else Rig()
+    # `--rest-after 1.0` arms the liveness policy in stage 5; without it the rig holds its
+    # last commanded value for ever, which is the default and the other valid choice.
+    rest_after = None
+    if "--rest-after" in sys.argv:
+        rest_after = float(sys.argv[sys.argv.index("--rest-after") + 1])
+    rig = Antique() if "--antique" in sys.argv else Rig(rest_after_s=rest_after)
     print(f"{type(rig).__name__} on 127.0.0.1:50051 — Ctrl-C to stop")
     rig.serve()
     try:
@@ -155,7 +180,13 @@ closed and `rig.wrist.pronation` at `+1` is pronated.
 
 ### Checkpoint
 
-Leave it running in one terminal. In another, ask it what it exports, using the real client so
+Start it, and leave it running:
+
+```bash
+uv run --extra grpc python my_target.py
+```
+
+In a second terminal, ask it what it exports, using the real client so
 the answer you see is the one MyoGestic will get:
 
 ```python
@@ -395,9 +426,10 @@ link = ControlLink(control_map, [target], ctx=ctx, hz=32)
 Now the half that moves. MyoGestic publishes **one LSL stream per address, named for that
 address, one channel wide**.
 
-`my_target.py` gains some imports, five fields, and five methods. **The methods belong to the
-`Rig` class you already have**: they join `GetControlManifest`, `serve` and `stop` instead of
-replacing them, so do not start a second `class` statement. If anything below lands
+`my_target.py` gains imports, five fields, and seven methods, all inside the **`Rig` class you
+already have** — do not start a second `class` statement. `_open`, `_apply`, `_read`,
+`_status` and `_watch` are new; **`serve` and `stop` replace the stage-1 versions**, because
+both now start and stop the reader thread as well as the gRPC server. If anything below lands
 ambiguously, [the finished file](#my_targetpy) is at the end of the page.
 
 New imports:
@@ -779,8 +811,14 @@ sample is accepted (`_apply` already does, in `self._fresh`) and add an optional
                             self.pose[address] = REST
 ```
 
-`Rig(rest_after_s=1.0)`, a producer `SIGKILL`ed mid-grip, and the rig lets go on
-its own about a second later:
+Restart the rig with the policy armed, then kill the producer mid-grip:
+
+```bash
+uv run --extra grpc python my_target.py --rest-after 1.0    # terminal 1
+uv run --extra grpc python drive.py                          # terminal 2, then Ctrl-C it
+```
+
+The rig lets go on its own about a second later:
 
 ```
 rig: gripper.closure=+1.00  wrist.pronation=-1.00
@@ -1244,7 +1282,12 @@ class Antique(Rig):
 
 
 if __name__ == "__main__":
-    rig = Antique() if "--antique" in sys.argv else Rig()
+    # `--rest-after 1.0` arms the liveness policy in stage 5; without it the rig holds its
+    # last commanded value for ever, which is the default and the other valid choice.
+    rest_after = None
+    if "--rest-after" in sys.argv:
+        rest_after = float(sys.argv[sys.argv.index("--rest-after") + 1])
+    rig = Antique() if "--antique" in sys.argv else Rig(rest_after_s=rest_after)
     print(f"{type(rig).__name__} on 127.0.0.1:50051 — Ctrl-C to stop")
     rig.serve()
     try:
