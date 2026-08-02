@@ -46,10 +46,11 @@ from myogestic.recipes.estimators import (
     sklearn_extra_trees_classifier,
     sklearn_logistic_classifier,
 )
+from myogestic.renderer import RendererTarget
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
@@ -161,13 +162,13 @@ pipeline.load_model = load_pickle
 
 # `link.bus` stays None until `link.ensure()` succeeds. The link and its target own the
 # wire once bound, and that matters more than it looks: VHI's continuous inlet takes
-# control values, and `VhiTarget` negotiates the space at bind time and refuses a VHI it
+# control values, and `RendererTarget` negotiates the space at bind time and refuses a VHI it
 # cannot fully drive rather than guessing. No hand and no stream is named here — the
 # target looks this file's addresses up in VHI's manifest and publishes one stream per
 # address it drives, named for that address.
 link = ControlLink(
     CONTROL_MAP,
-    [VhiTarget(client=vhi_control, interface=vhi)],
+    [RendererTarget(client=vhi_control, interface=vhi)],
     ctx=app.ctx,
     smoothing=output_filter,
     hz=32,

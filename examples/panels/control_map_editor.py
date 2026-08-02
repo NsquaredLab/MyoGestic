@@ -60,7 +60,7 @@ SCRATCH.write_text(
 
 
 class _FakeTarget:
-    """Stand-in for VhiControlClient — no gRPC, always answers."""
+    """Stand-in for RendererClient — no gRPC, always answers."""
 
     def capabilities(self):
         return MANIFEST

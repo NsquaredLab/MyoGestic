@@ -57,7 +57,7 @@ def test_example_wires_up(path, monkeypatch):
     # unless the VHI binary is installed (an environment dep, not part of the API
     # surface). Stub the env check to []; a renamed/removed `launcher` method would
     # still raise AttributeError and fail the test.
-    monkeypatch.setattr(myogestic.vhi.interfaces.InterfaceSpec, "launcher", lambda self: [])
+    monkeypatch.setattr(myogestic.renderer.InterfaceSpec, "launcher", lambda self: [])
     try:
         runpy.run_path(str(path), run_name="__main__")
     except (ImportError, ModuleNotFoundError) as e:
@@ -82,7 +82,7 @@ def test_example_draws_a_frame(path, monkeypatch, implot_frame):
     """
     monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
     monkeypatch.syspath_prepend(str(path.parent))
-    monkeypatch.setattr(myogestic.vhi.interfaces.InterfaceSpec, "launcher", lambda self: [])
+    monkeypatch.setattr(myogestic.renderer.InterfaceSpec, "launcher", lambda self: [])
     try:
         namespace = runpy.run_path(str(path), run_name="__main__")
     except (ImportError, ModuleNotFoundError) as e:
@@ -134,7 +134,7 @@ def test_examples_survive_an_unlaunchable_renderer(monkeypatch):
         raise FileNotFoundError(f"{self.name}: the installed release is v1.0.0")
 
     monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
-    monkeypatch.setattr(myogestic.vhi.interfaces.InterfaceSpec, "launcher", refuse)
+    monkeypatch.setattr(myogestic.renderer.InterfaceSpec, "launcher", refuse)
 
     vhi_examples = [
         path

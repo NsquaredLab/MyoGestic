@@ -1,4 +1,4 @@
-"""Tests for myogestic.vhi.interfaces — InterfaceSpec + virtual_hand registry."""
+"""The generic `InterfaceSpec` and the one VHI-shaped instance of it, `virtual_hand`."""
 
 from __future__ import annotations
 
@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from myogestic.vhi.interfaces import InterfaceSpec, virtual_hand
+from myogestic.renderer import InterfaceSpec
+from myogestic.vhi import virtual_hand
 
 
 def test_virtual_hand_default_paths(monkeypatch):

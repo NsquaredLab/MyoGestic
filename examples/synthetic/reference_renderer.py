@@ -1,7 +1,7 @@
 """The smallest thing MyoGestic can drive.
 
 Serve one RPC, read your streams. That is the whole contract — everything else in
-`myogestic_vhi.proto` is an extra a renderer may offer and a client may use.
+`renderer_control.proto` is an extra a renderer may offer and a client may use.
 
 Run it, then point any control map at `vhi.prediction.*`:
 
@@ -17,8 +17,8 @@ from contextlib import suppress
 import grpc
 from mne_lsl.lsl import StreamInlet, resolve_streams
 
-from myogestic.vhi._proto import myogestic_vhi_pb2 as pb2
-from myogestic.vhi._proto import myogestic_vhi_pb2_grpc as pb2_grpc
+from myogestic.renderer._proto import renderer_control_pb2 as pb2
+from myogestic.renderer._proto import renderer_control_pb2_grpc as pb2_grpc
 
 #: What this renderer exports. The address is yours to name; its first segment is the
 #: namespace, so `vhi.*` here means a map written for a Virtual Hand drives this too.
@@ -44,7 +44,7 @@ ADDRESSES = [
 ]
 
 
-class ReferenceRenderer(pb2_grpc.VhiControlServicer):
+class ReferenceRenderer(pb2_grpc.RendererControlServicer):
     """A renderer in eighty lines. Holds the last value it was sent, per address."""
 
     def __init__(self, port: int = 50051) -> None:
@@ -88,7 +88,7 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
     def serve(self) -> None:
         """Start the gRPC server and the inlet reader."""
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
-        pb2_grpc.add_VhiControlServicer_to_server(self, self._server)
+        pb2_grpc.add_RendererControlServicer_to_server(self, self._server)
         self._server.add_insecure_port(f"127.0.0.1:{self._port}")
         self._server.start()
         threading.Thread(target=self._read, name="reference-inlet", daemon=True).start()

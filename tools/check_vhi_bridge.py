@@ -1,7 +1,7 @@
 """Live check that VHI renders control DOFs as their names claim.
 
-This is the one thing no offline test can prove. ``tests/test_vhi_target.py`` pins
-exactly what `myogestic.vhi.VhiTarget` puts on the wire, and
+This is the one thing no offline test can prove. ``tests/test_renderer_target.py`` pins
+exactly what `myogestic.renderer.RendererTarget` puts on the wire, and
 ``tests/test_vhi_legacy.py`` pins those wire values against two real recorded
 sessions — but both stop at the wire. Whether channel 2 at ``-1`` curls the *index*
 finger, and curls rather than extends it, is a fact about VHI's renderer that only
@@ -32,7 +32,8 @@ from __future__ import annotations
 import time
 
 from myogestic.controls import Continuous, ControlBus, ControlSet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.renderer import RendererTarget
+from myogestic.vhi import virtual_hand
 from myogestic.vhi.pose import POSE_DOFS
 
 #: Seconds to hold each excursion. Long enough to look at, short enough to sit through.
@@ -58,7 +59,7 @@ def main() -> None:
     # `interface=` rather than an outlet: the stream a target writes is the one the
     # manifest says carries these controls, so it is not this file's to name or size.
     # No smoothing: a ramp would blur which frame produced which pose.
-    target = VhiTarget(client=vhi.control_client(), interface=vhi)
+    target = RendererTarget(client=vhi.control_client(), interface=vhi)
     bus = ControlBus(controls, targets=[target])
 
     print(f"Driving {len(POSE_DOFS)} DOFs, one at a time. Watch the PREDICTED hand.\n")

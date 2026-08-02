@@ -1,6 +1,6 @@
 """The v2-only gate: MyoGestic 2.x cannot drive a pre-2.0 renderer, so it says so early.
 
-There is no bridge any more. A `VhiTarget` asks the renderer which controls it exports
+There is no bridge any more. A `RendererTarget` asks the renderer which controls it exports
 and refuses to guess, so a 1.x build is not degraded — it does not work. The failure that
 matters is therefore not "it broke", it is *where* it breaks: installing or launching an
 old binary succeeds, and the refusal then surfaces at bind time, three layers from the
@@ -9,9 +9,12 @@ command that caused it. These pin the two places that catch it first.
 
 from __future__ import annotations
 
+from functools import partial
+
 import pytest
 import typer
 
+from myogestic.renderer import InterfaceSpec
 from myogestic.tools import install_vhi
 from myogestic.vhi import interfaces
 
@@ -79,15 +82,21 @@ class TestTheInstallerRefusesAnOldRelease:
 
 class TestTheLauncherRefusesAnOldInstall:
     @staticmethod
-    def _spec(tmp_path, marker: str | None):
+    def _spec(tmp_path, marker: str | None, process=("/does/not/matter",)):
+        """A spec gated exactly as `virtual_hand` gates its own.
+
+        The gate is VHI's, not `InterfaceSpec`'s: it reads a marker only VHI's installer
+        leaves behind, so the generic spec only knows to *call* it.
+        """
         if marker is not None:
             (tmp_path / "vhi-version.txt").write_text(marker)
-        return interfaces.InterfaceSpec(
+        return InterfaceSpec(
             name="VHI Hand",
             n_output_channels=9,
             output_hz=32.0,
             install_root=tmp_path,
-            process=("/does/not/matter",),
+            process=process,
+            version_gate=partial(interfaces._refuse_an_incompatible_install, tmp_path),
         )
 
     def test_an_old_marker_stops_the_launch(self, tmp_path):
@@ -118,11 +127,5 @@ class TestTheLauncherRefusesAnOldInstall:
     def test_an_unreadable_marker_launches(self, tmp_path):
         """Never let a diagnostic become the thing that stops the app."""
         (tmp_path / "vhi-version.txt").mkdir()
-        spec = interfaces.InterfaceSpec(
-            name="VHI Hand",
-            n_output_channels=9,
-            output_hz=32.0,
-            install_root=tmp_path,
-            process=("/x",),
-        )
+        spec = self._spec(tmp_path, None, process=("/x",))
         assert spec.launcher() == [("VHI Hand", ["/x"])]

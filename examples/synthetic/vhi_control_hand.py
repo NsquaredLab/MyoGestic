@@ -27,7 +27,8 @@ from imgui_bundle import imgui
 
 from myogestic import App, Fr, Grid, Px
 from myogestic.controls import ControlLink, load_control_map
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.renderer import RendererTarget
+from myogestic.vhi import virtual_hand
 from myogestic.widgets import AppLogo, ProcessLauncher
 from myogestic.widgets.common import panel_header
 
@@ -55,7 +56,7 @@ app = App("VHI control hand")
 # one. `link.bus` stays None until VHI can say what it exports.
 link = ControlLink(
     CONTROL_MAP,
-    [VhiTarget(client=vhi_control, interface=vhi)],
+    [RendererTarget(client=vhi_control, interface=vhi)],
     ctx=app.ctx,
     hz=32,
 )
