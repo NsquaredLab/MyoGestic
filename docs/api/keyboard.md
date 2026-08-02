@@ -1,7 +1,7 @@
 # Keyboard
 
-Press keys when a control is active. The second target this library ships, and the one that
-shows the [control standard](controls.md) was not built around a hand.
+Press keys when a control is active. The second target this library ships, and the proof
+that the [control standard](controls.md) reaches past a hand.
 
 ```toml
 [dofs]
@@ -26,11 +26,11 @@ over 0.5" already existed:
 | ignore a chattering signal | `debounce_s` on the binding |
 | know when it *changed* | `ControlBus` delivers discrete edges, not levels |
 
-That is why this module is small: it maps an edge onto a key press and nothing else.
+So this module is small: it maps an edge onto a key press and nothing else.
 
 ## Addresses
 
-`keyboard.<mode>.<category>.<key>`, mode first, around 220 of them — every key in both
+`keyboard.<mode>.<category>.<key>`, mode first, around 220 of them: every key in both
 modes. The dots are what the editor's picker builds its tree from, so the address shape is
 also the shape you navigate.
 
@@ -50,7 +50,7 @@ keyboard
    └─ (the same categories)
 ```
 
-`hold` is right for movement — walking, aiming, push-to-talk. `tap` is right for commands,
+`hold` is right for movement: walking, aiming, push-to-talk. `tap` is right for commands,
 where one gesture should mean one keystroke however long you hold it.
 
 !!! danger "This types into whatever window has focus"
@@ -63,13 +63,13 @@ where one gesture should mean one keystroke however long you hold it.
     no teardown runs on `SIGKILL`.
 
 !!! note "Installing, and the macOS permission"
-    Needs the `keyboard` extra: `uv sync --extra keyboard`. That is
-    [`pynput`](https://pynput.readthedocs.io) — *not* the PyPI package called `keyboard`,
+    Needs the `keyboard` extra: `uv sync --extra keyboard`. That installs
+    [`pynput`](https://pynput.readthedocs.io), *not* the PyPI package called `keyboard`,
     which needs root on macOS and Linux and is effectively unmaintained.
 
     On macOS the process also needs **Accessibility** permission, under System Settings ›
     Privacy & Security › Accessibility. Without it `pynput` reports success and nothing
-    happens, which is indistinguishable from a broken map — so `arm` says so rather than
+    happens, indistinguishable from a broken map, so `arm` checks and says so rather than
     letting you hunt for it.
 
 ## Reference

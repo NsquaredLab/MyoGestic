@@ -1,0 +1,105 @@
+# MyoGestic
+
+> MyoGestic turns a short Python script into a live biosignal experiment. A `Source` wraps a
+> device, file or transport; a `Stream` buffers it; an optional ML `Pipeline` adds a predict
+> thread and three decorated functions (`extract` / `train` / `predict`); imgui/implot widgets
+> render it in a `Grid`; recording appends to a Zarr `.session.zip`; and a TOML **control map**
+> drives a prosthesis, the Godot Virtual Hand Interface, a keyboard or a cursor. There are no
+> base classes, no inheritance, no registration and no config files: a widget is a class with a
+> `.ui()` method, a source is three methods, a target is three more.
+
+Two things readers get wrong most often:
+
+- **`+1` is the direction the control's own name denotes.** `vhi.prediction.thumb.flexion` at
+  `+1` flexes and at `-1` extends, and there is no second address for the other direction. A
+  sign error survives every test a device and its own read-back can agree on, because they
+  agree whichever way they point; the only check that catches it is a person watching the
+  device. See [The one convention a device may not redefine](https://nsquaredlab.github.io/MyoGestic/concepts/controls/#the-one-convention-a-device-may-not-redefine).
+- **Nothing attaches itself.** A `Stream` is inert until `app.streams(...)` registers it, and a
+  control map drives nothing until `connect_controls()` (or `ControlLink.ensure()`) binds it
+  against a target that has answered with a manifest. Binding before the target is up returns
+  `None` rather than raising. See [Anatomy of an app](https://nsquaredlab.github.io/MyoGestic/anatomy/)
+  and [Binding is deferred, not decided](https://nsquaredlab.github.io/MyoGestic/concepts/controls/#binding-is-deferred-not-decided).
+
+## Start here
+
+- [Anatomy of an app](https://nsquaredlab.github.io/MyoGestic/anatomy/): one 35-line app read line by line in the order you write it - imports, `App`, `Stream`, `Pipeline`, the three decorators, `@app.ui`, `app.run()`. The single best page for "how does a MyoGestic app fit together".
+- [Home](https://nsquaredlab.github.io/MyoGestic/): what the framework is, the top-level data flow diagram, and a complete 15-line example.
+- [Getting started](https://nsquaredlab.github.io/MyoGestic/getting-started/): install with `uv`, run the synthetic-EMG demo with no hardware, and what the demo you just ran was doing.
+- [Troubleshooting](https://nsquaredlab.github.io/MyoGestic/troubleshooting/): symptom-first index across every subsystem - empty buffers, frozen acquisition, predict thread not firing, truncated sessions, twitchy Virtual Hand.
+- [Widget gallery](https://nsquaredlab.github.io/MyoGestic/widget-gallery/): a screenshot of every public widget rendered in isolation.
+
+## Concepts
+
+- [Concepts index](https://nsquaredlab.github.io/MyoGestic/concepts/): the runtime model, with a one-line pointer into each page below.
+- [Architecture](https://nsquaredlab.github.io/MyoGestic/concepts/architecture/): the three orthogonal concerns - acquisition threads, the predict thread, the render thread - and where outputs sit.
+- [Streams](https://nsquaredlab.github.io/MyoGestic/concepts/streams/): the fixed-memory ring buffer, `window_ms` vs `buffer_ms`, and the shape contract - sources return `(n_samples, n_channels)`, `get_window()` returns channels-first.
+- [Pipeline](https://nsquaredlab.github.io/MyoGestic/concepts/pipeline/): the `@extract` / `@train` / `@predict` decorators, `TrainingData`, the idle/recording/training/predicting state machine, and the stale-tick guard.
+- [Controls](https://nsquaredlab.github.io/MyoGestic/concepts/controls/): what a control map is, the signed `[-1, 1]` standard, continuous values vs held discrete states, and choosing between an in-process and a remote target.
+- [Recording](https://nsquaredlab.github.io/MyoGestic/concepts/recording/): recording as "start appending to Zarr", with labels kept as a separate timestamped event track.
+- [Widgets](https://nsquaredlab.github.io/MyoGestic/concepts/widgets/): the widget contract - construct the class once with its configuration, call `.ui(...)` every frame with live inputs.
+- [Grid layout](https://nsquaredlab.github.io/MyoGestic/concepts/grid-layout/): the only two track types, `Px(n)` and `Fr(n)`, and how panels are placed inside `@app.ui`.
+- [Edge trigger](https://nsquaredlab.github.io/MyoGestic/concepts/edge-trigger/): running a side effect only on the rising edge, so a per-tick class index does not re-fire an RPC 60 times a second.
+- [Threading](https://nsquaredlab.github.io/MyoGestic/concepts/threading/): what runs on which thread, stdlib `threading` only, and why bridges are the one subprocess case.
+- [Design principles](https://nsquaredlab.github.io/MyoGestic/concepts/design-principles/): the eight rules the codebase keeps to, the *code* contract for anyone extending it.
+- [Visual language](https://nsquaredlab.github.io/MyoGestic/concepts/visual-language/): the theme tokens and rules every widget follows - type, colour, panel headers, state cues, icons, plot styling, units.
+
+## The control system
+
+The control map is the largest moving part: a TOML file mapping your model's output names onto
+addresses a device declares, resolved against that device's live manifest.
+
+- [Controls (concept)](https://nsquaredlab.github.io/MyoGestic/concepts/controls/): start here - the two vocabularies on one line, the sign convention, continuous vs discrete, deferred binding.
+- [Control standard (API)](https://nsquaredlab.github.io/MyoGestic/api/controls/): the reference - the TOML grammar (bare string, fan-out array, explicit table with `weight` / `debounce_s` / `threshold_fraction`), `load_control_map`, `resolve`, `ControlBus`, `connect_controls`, `ControlLink`, `RemoteTarget`, what negotiation refuses, and the three separate layers of smoothing.
+- [Drive your own device](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-target/): implement `bind` / `send` / `stop` plus a `Capability` list so a control map drives your prosthesis on a serial port, your cursor, or your own hand. The simpler of the two routes.
+- [Drive a remote target](https://nsquaredlab.github.io/MyoGestic/how-to/drive-a-remote-target/): wire MyoGestic to a device that is already its own program, over gRPC for the manifest and LSL for continuous values.
+- [Your first remote target](https://nsquaredlab.github.io/MyoGestic/tutorials/your-first-remote-target/): build one end to end in seven stages, each ending in something you run and watch.
+- [Integrate the Virtual Hand](https://nsquaredlab.github.io/MyoGestic/how-to/integrate-vhi/): the shipped remote target - where VHI is installed, how it is launched, what it calls its controls, and how to drive its control hand while recording.
+- [Install the Virtual Hand](https://nsquaredlab.github.io/MyoGestic/how-to/install-vhi/): download the platform-specific Godot release binary so `virtual_hand()` finds it.
+- [Keyboard](https://nsquaredlab.github.io/MyoGestic/api/keyboard/): the second shipped target - `keyboard.hold.*` and `keyboard.tap.*` addresses, why it starts disarmed, and the macOS Accessibility permission.
+- [Post-process predictions](https://nsquaredlab.github.io/MyoGestic/how-to/post-process-output/): smooth the prediction output vector with OneEuro or Gaussian filters before it leaves the app.
+- [Edge trigger](https://nsquaredlab.github.io/MyoGestic/concepts/edge-trigger/): fire a discrete side effect once per change instead of once per tick.
+
+## How-to guides
+
+- [How-to index](https://nsquaredlab.github.io/MyoGestic/how-to/): every recipe, grouped into extending the framework, recording and post-processing, the Virtual Hand, and operations.
+- [Add a custom source](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-source/): implement the three-method `Source` protocol for a new device, file format or transport.
+- [Add a custom output](https://nsquaredlab.github.io/MyoGestic/how-to/add-an-output/): subclass `Output` to push predictions to an actuator, a robot or another process on its own send thread.
+- [Add a custom widget](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-widget/): write a class with a `.ui()` method and call it from `@app.ui`.
+- [Add a custom model](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-model/): plug sklearn, CatBoost, PyTorch, a state machine or a lookup table into `@pipeline.train`, including custom `save_model` / `load_model`.
+- [Enable on-disk recording](https://nsquaredlab.github.io/MyoGestic/how-to/enable-recording/): capture every registered stream to a Zarr-backed `.session.zip`, from the GUI button or headlessly, plus the on-disk layout and the read-back API.
+- [Record and replay](https://nsquaredlab.github.io/MyoGestic/how-to/record-and-replay/): capture sessions, browse them in `SessionManager`, train on them, then replay one as a `Source` to debug the predict path offline.
+- [Record good training data](https://nsquaredlab.github.io/MyoGestic/how-to/record-good-training-data/): cycle-style recording, why one-click sessions produce bad models, and how to check your data before training.
+- [Feature-extraction cookbook](https://nsquaredlab.github.io/MyoGestic/how-to/feature-extraction-cookbook/): copy-paste `@pipeline.extract` recipes - RMS+MAV, scipy bandpass and envelope, FFT spectral features, sliding RMS, onset detection, multi-stream concatenation.
+- [Use the recipe feature set](https://nsquaredlab.github.io/MyoGestic/how-to/use-recipe-features/): the five classic time-domain EMG features shipped in `myogestic.recipes.features`.
+- [Keep state between pipeline stages](https://nsquaredlab.github.io/MyoGestic/how-to/inter-stage-state/): the four patterns for carrying data across predict ticks, since `extract` and `predict` get no implicit context.
+- [Run headless (no GUI)](https://nsquaredlab.github.io/MyoGestic/how-to/headless-mode/): `App.run(mode="headless")` for unattended recordings, scripted experiments and integration tests, driving the recording state machine yourself.
+
+## Tutorials
+
+- [Tutorials index](https://nsquaredlab.github.io/MyoGestic/tutorials/): what each walkthrough teaches and which `examples/` file it reads.
+- [EMG classification](https://nsquaredlab.github.io/MyoGestic/tutorials/emg-classification/): `examples/synthetic/emg_classification.py` line by line - synthetic 8-channel EMG, RMS+MAV features, a CatBoost binary classifier, a smoothed pose to the Virtual Hand. The best first tutorial.
+- [EMG regression with the Virtual Hand](https://nsquaredlab.github.io/MyoGestic/tutorials/emg-regression-with-vhi/): a multi-output CatBoost regressor driving five continuous DOFs through a `ControlBus` and a `RemoteTarget`, with kinematics recorded from VHI's control hand.
+- [Your first remote target](https://nsquaredlab.github.io/MyoGestic/tutorials/your-first-remote-target/): build a gRPC + LSL remote target for a device of your own, in seven stages with a checkpoint each.
+- [Examples directory](https://nsquaredlab.github.io/MyoGestic/tutorials/examples-index/): every runnable example under `examples/synthetic/`, the command that runs it, and what is worth tweaking. All hardware-free.
+
+## API reference
+
+- [API index](https://nsquaredlab.github.io/MyoGestic/api/): one page per subpackage, generated from the docstrings.
+- [Core](https://nsquaredlab.github.io/MyoGestic/api/core/): `App`, `Context`, `Stream`, `StreamInfo`, `TrainingData`, the `Grid` / `Px` / `Fr` layout units, `EdgeTrigger`, the shipped feature recipes, and `virtual_hand()`.
+- [ML pipeline](https://nsquaredlab.github.io/MyoGestic/api/ml/): `Pipeline` and its three decorators, `save_pickle` / `load_pickle`, and the train/predict UI widgets including `PipelinePanel`.
+- [Control standard](https://nsquaredlab.github.io/MyoGestic/api/controls/): the control map format, resolution, the bus, targets and the wire-level encode/decode helpers.
+- [Keyboard](https://nsquaredlab.github.io/MyoGestic/api/keyboard/): `KeyboardTarget` and its ~220 addresses.
+- [Sources](https://nsquaredlab.github.io/MyoGestic/api/sources/): the `Source` protocol plus the built-in `LSLSource`, `ReplaySource` and `SerialSource`.
+- [Outputs](https://nsquaredlab.github.io/MyoGestic/api/outputs/): the `Output` base class and the built-in LSL, UDP and serial outputs.
+- [Bridges](https://nsquaredlab.github.io/MyoGestic/api/bridges/): subprocess acquisition for heavy data that does not fit the LSL pull model, such as a webcam writing frames straight to Zarr.
+- [Widgets](https://nsquaredlab.github.io/MyoGestic/api/widgets/): every public widget class with its screenshot - signal viewers, scatter/line/heatmap plots, recording controls, `SessionManager`, `ProcessLauncher`, `FeatureSelector`, output post-processing, log and status panels.
+- [Estimator recipes](https://nsquaredlab.github.io/MyoGestic/api/models/): constructor recipes for CatBoost, scikit-learn and zero-dependency dummy estimators, with lazy optional imports and a clear `ImportError` naming the extra to install.
+- [Session](https://nsquaredlab.github.io/MyoGestic/api/session/): read a recording back - `open_session_store`, `iter_labeled_windows`, aligned-window iteration.
+- [Filters](https://nsquaredlab.github.io/MyoGestic/api/filters/): the `VectorFilter` protocol and the built-in OneEuro, Gaussian and identity output filters.
+
+## Reference
+
+- [Reference index](https://nsquaredlab.github.io/MyoGestic/reference/): what to look up where.
+- [API cheatsheet](https://nsquaredlab.github.io/MyoGestic/reference/api-cheatsheet/): the most-used public symbols on one page, signatures only, each linking to its full entry.
+- [Glossary](https://nsquaredlab.github.io/MyoGestic/reference/glossary/): terms that mean different things in different parts of the codebase - "filter", "source", "trial", "DOF".
