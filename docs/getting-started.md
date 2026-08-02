@@ -78,6 +78,6 @@ The minimum closed-loop experiment is ~40 lines. Open `examples/synthetic/emg_cl
 
 ## Next steps
 
-- Browse the [tutorials](tutorials/index.md) for end-to-end walkthroughs.
+- Browse the [guides](how-to/index.md) - end-to-end walkthroughs first, then task recipes by job.
 - Read [Concepts](concepts/index.md) to understand streams, the pipeline, and the threading model.
 - Skim the [API cheatsheet](reference/api-cheatsheet.md) when you need a quick lookup.

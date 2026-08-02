@@ -3,8 +3,9 @@
 End-to-end walkthrough of
 [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py):
 8-channel synthetic EMG → MyoVerse RMS+MAV+WL features →
-**multi-output CatBoost regressor** → 5-DOF kinematics → expanded
-9-vec → smoothed pose pushed to the Virtual Hand.
+**multi-output CatBoost regressor** → five control DOFs → a
+`ControlBus` that sanitises and smooths them → a `RemoteTarget` that
+drives them on the Virtual Hand.
 
 Why regression and not classification? Two reasons it's the next thing
 to learn after `emg_classification.py`:
@@ -13,15 +14,16 @@ to learn after `emg_classification.py`:
   hand's *kinematic value at the end of each movement*, not a class
   index. That changes both the recorder setup and the training-data
   iterator.
-* **The dual-plane idiom is unavoidable.** The example uses gRPC
-  (`SetMovement`, `SetSessionActive`) to drive the control hand to
-  static end poses *and* LSL to read the resulting kinematics *and* LSL
-  to push the predicted pose back. Three streams, three roles.
+* **The dual-plane idiom is unavoidable.** The example commands a
+  *discrete DOF* over gRPC to drive the control hand to static
+  end poses, uses the *recording aid* to gate the session, reads the
+  resulting kinematics over LSL, and pushes the predicted pose back over
+  LSL. Three streams, three roles.
 
-If you haven't yet, read
-[Integrate the Virtual Hand](../how-to/integrate-vhi.md) first - that
-page explains the dual-plane architecture in general; this one walks the
-specific script.
+If you haven't yet, read [Drive a remote target](../how-to/drive-a-remote-target.md) for the
+dual-plane architecture in general and
+[Integrate the Virtual Hand](../how-to/integrate-vhi.md) for what VHI calls its own
+controls; this page walks the specific script.
 
 ## Run it first
 
@@ -41,44 +43,67 @@ button click.** The flow:
 
 1. Click **Launch** on EMG Generator and VHI Hand.
 2. Click a gesture button (Rest / Fist). Two things happen:
-   * `vhi_client.set_movement(name, cycle=False)` - VHI animates the
-     control hand to the *end pose* of that movement and **holds it**.
-     The `cycle=False` is load-bearing: regression needs the hand to
-     reach and hold the target, not sweep through an open/close cycle.
+   * `bus.select("gesture", name)` - the gesture is a
+     **discrete DOF**, a *held state*: the control hand snaps to that
+     pose and stays there. That it holds rather than sweeps is
+     load-bearing here — regression needs the hand to reach and hold the
+     target, so `VHI_Control` settles to a static kinematic value the
+     regressor can map back from EMG amplitude. (If you *want* a swept
+     trajectory instead, that is `recording_aid.start_trajectory(...)`, a
+     recording aid rather than a control command.)
    * `ctrl_outlet.push_sample([CTRL_VALUES[i]])` - the EMG generator
      switches to the corresponding amplitude pattern.
-3. Click **Record**. `vhi_client.set_session_active(True)` disables
+3. Click **Record**. `recording_aid.set_recording_session(True)` disables
    VHI's local keyboard so the *only* movement source for this session
    is your gesture buttons. The session captures EMG samples
    *and* the `VHI_Control` 9-channel kinematics stream side by side.
-4. Click **Stop Rec**. The session ends; `set_session_active(False)`
+   It returns `False` if this VHI has no recording aid, which the example
+   surfaces — an ungated recording can pick up stray keyboard movements.
+4. Click **Stop Rec**. The session ends; `set_recording_session(False)`
    restores VHI's local control.
 
 That's the loop. Repeat for every gesture you want the model to
 regress; pick the recorded sessions in the session manager; click
 **Train**.
 
-## The five DoFs
+## The five DOFs
+
+The app declares *what it controls*, by name — not which channel of
+which application receives it:
 
 ```python
 --8<-- "examples/synthetic/emg_regression.py:dofs"
 ```
 
-VHI's `VHI_Control` outlet is the full 9-channel pose (see the table in
-[Integrate the Virtual Hand](../how-to/integrate-vhi.md#plane-1-continuous-pose-over-lsl)).
-For a fake-EMG demo you don't want the regressor to wrestle with the
-3-DoF wrist - five DoFs (wrist rotation + four fingers, indices 0, 2,
-3, 4, 5) is the right starter target.
+Each is **signed and normalized**: `+1` is the direction the name says
+(full flexion), `-1` is the opposite, `0` is rest. That is the whole
+control vocabulary; see [Control standard](../api/controls.md) for the
+declaration format and the rules it enforces.
 
-The expansion back to 9-DoF for `vhi_outlet.push()` zero-fills the
-unselected channels:
+Five DOFs keeps the regressor manageable on fake EMG, so thumb
+abduction is left out. Notice what is *absent*: no channel index, no
+sign convention, no mention of nine of anything. VHI's recorded pose format
+once encoded flexion as negative, the opposite of the stream it was compared
+against; both ends speak the standard now and the archives were converted
+once by `myogestic.tools.migrate_vhi_sessions`, so there is nothing left to
+decode.
+
+## The output path
 
 ```python
---8<-- "examples/synthetic/emg_regression.py:expand"
+--8<-- "examples/synthetic/emg_regression.py:bus"
 ```
 
-The sign flip aligns the regressor's `[0, 1]` magnitude with VHI's
-flexion convention (`-1` = full flex).
+The bus owns the ordering that must not be re-derived per app:
+substitute rest → clip → smooth → **clip again** → deliver. Rest
+substitution comes first because `min(hi, max(lo, nan))` is `lo`, so a
+NaN prediction would otherwise arrive as a full-scale deflection; the
+second clip exists because a smoother undershoots on a falling edge.
+
+`RemoteTarget` refuses at construction what it cannot drive. Declare
+something this hand has no joint for and it raises, listing what it does
+have — because a silently dropped joint looks exactly like a joint that
+is working and holding still.
 
 ## Training: two iterators, one model
 
@@ -89,9 +114,11 @@ The training callback handles **two kinds of session** transparently:
 ```
 
 `iter_aligned_windows` walks every EMG window in the session and
-*time-aligns* a slice of the `vhi_control` stream to it. The kinematics
-slice becomes the regression target. This is the primary path -
-sessions with both EMG and kinematics.
+*time-aligns* a slice of the `vhi_control` stream to it. `split_pose`
+then names that slice's channels — the values are already in the space
+`predict` commands — so the training target and the command share one
+declaration, which is what keeps train and serve from drifting.
+This is the primary path: sessions with both EMG and kinematics.
 
 ```python
 --8<-- "examples/synthetic/emg_regression.py:label_loop"
@@ -100,7 +127,9 @@ sessions with both EMG and kinematics.
 `iter_labeled_windows` is the fallback for sessions that were recorded
 *before* VHI was wired up (no `vhi_control` store). The script
 synthesises a 5-vec target from the class index - `Fist → all 1s`,
-`Rest → all 0s`. Useful for mixing pre-VHI data into a new training set
+`Rest → all 0s`. Those are the same numbers as before the switch to
+control values, but now for a stated reason rather than by accident: `+1`
+*is* flexion. Useful for mixing pre-VHI data into a new training set
 without re-recording.
 
 The labeled fallback honours the class chips the user un-ticked in the
@@ -112,22 +141,29 @@ The model is a single
 [`catboost_regressor(loss_function="MultiRMSE")`](../api/models.md) fit
 to the stacked `(X, y)`.
 
-## Prediction: smoothed, expanded, pushed
+## Prediction: name the DOFs, hand them over
 
 ```python
 --8<-- "examples/synthetic/emg_regression.py:predict"
 ```
 
-Three steps:
+Two steps: regress five numbers, label them, push. Everything else —
+range enforcement, the live-tunable
+[`PostProcessor`](../how-to/post-process-output.md) (one-euro at 32 Hz
+by default), the encode to VHI's wire layout — belongs to the bus and
+its target.
 
-1. Predict 5 DOFs, clamp to `[0, 1]`.
-2. Expand to a 9-vec with the sign flip.
-3. Apply the live-tunable
-   [`PostProcessor`](../how-to/post-process-output.md) (defaults to
-   one-euro at 32 Hz) and push to the LSL outlet.
+There is deliberately **no `np.clip` here**. Each DOF's declared range
+is the authority, and clipping *before* the smoother is a bug rather
+than a safeguard: the filter then overshoots straight back out of the
+range you just enforced. `bus.push` returns the frame it actually
+delivered, which is what feeds `pipeline.predictions`.
 
-The returned dict feeds `pipeline.predictions` so widgets like
-`PredictionLabel` (when configured) can render the current 5-vec.
+`bus.stop()` runs in the example's `finally`, and it does two things
+that matter on a real limb: it delivers the rest frame *before* tearing
+the targets down, and it **flushes** it. An outlet sends on a paced
+thread, so a pose pushed as the process exits would otherwise never
+leave — leaving the hand holding its last commanded position.
 
 ## Layout - six rows, three columns
 

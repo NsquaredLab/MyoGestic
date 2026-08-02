@@ -23,7 +23,12 @@ CLASSES = ["Rest", "Fist", "Open", "Pinch"]
 REC_DIR = tempfile.mkdtemp(prefix="panel_recording_")
 
 app = App("panel: recording_controls")
-app.streams(Stream("emg", source=SyntheticSource(n_channels=8), window_ms=250))
+# Nothing attaches a stream on its own — see `Stream.reconnect`. This source is
+# synthetic and in-process, so there is no other producer to pick up by mistake,
+# and no operator to press the button: the script attaches its own.
+stream = Stream("emg", source=SyntheticSource(n_channels=8), window_ms=250)
+stream.reconnect()
+app.streams(stream)
 
 controls = RecordingControls(
     CLASSES,

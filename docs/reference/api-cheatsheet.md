@@ -47,16 +47,39 @@ ReplaySource(session_path, stream_name, speed=1.0) # accepts .session.zip
 SerialSource(port, baud, n_channels, fs)  # extras:[serial]; from myogestic.sources.serial_source import SerialSource
 ```
 
-## Outputs
+## Targets
 
-[`LSLOutlet`][myogestic.outputs.LSLOutlet] · [`UDPOutput`][myogestic.outputs.UDPOutput] · [`SerialOutput`][myogestic.outputs.serial_output.SerialOutput]
+Anything that *moves* is a target. Three methods, any transport.
+
+[`Target`][myogestic.controls.Target] · [`Capability`][myogestic.controls.Capability] · [`ControlBus`][myogestic.controls.ControlBus] · [`ControlLink`][myogestic.controls.ControlLink] · [`RemoteTarget`][myogestic.remote.RemoteTarget] · [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget]
+
+<!--docs:skip-->
+```python
+# The protocol you implement — no base class, no registration.
+bind(controls: ControlSet) -> None      # main thread, may raise: refuse a bad map here
+send(values, changed) -> None           # predict thread, must not raise
+stop() -> None                          # idempotent
+claims: frozenset[str]                  # optional: which aliases you drive
+capabilities() -> Sequence[Capability]  # optional: what you export
+
+Capability(address, kind, lo=-1.0, hi=1.0, rest=0.0, states=(), rest_state="")
+
+load_control_map(mapping) -> ControlMap          # a Mapping, not a path
+resolve(control_map, capabilities) -> ControlSet # needs a live target's answer
+ControlBus(controls, targets=[...], smoothing=None, hz=50, on_warn=None)
+  .push(values) -> dict    .select(name, state) -> bool    .stop() -> None
+connect_controls(control_map, targets, ...) -> ControlBus | None  # None while unreachable
+```
+
+## Outlets
+
+[`LSLOutlet`][myogestic.outputs.LSLOutlet] — a paced sender, for telemetry or as a target's
+transport. It drives nothing on its own: no aliases, no range, no rest-on-stop.
 
 <!--docs:skip-->
 ```python
 LSLOutlet(name, n_channels, hz=50)
-UDPOutput(host, port, hz=50)
-SerialOutput(port, baud=115200, hz=10)  # extras:[serial]; from myogestic.outputs.serial_output import SerialOutput
-  .push(data) -> None                              # all outputs
+  .push(data) -> None    .flush() -> None    .stop() -> None
 ```
 
 ## ML pipeline

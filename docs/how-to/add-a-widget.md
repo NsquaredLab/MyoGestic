@@ -66,7 +66,7 @@ class ChannelRmsBar:
 
 ## When you need state
 
-Persistent UI state — selected channels, scroll offset, popup open/closed — lives as instance attributes. Because you construct the widget once and keep the instance, the state survives across frames for free:
+Persistent UI state — selected channels, scroll offset, popup open/closed — lives as instance attributes. Because you construct the widget once and keep the instance, the state survives across frames without any work on your part:
 
 ```python
 class ChannelPicker:

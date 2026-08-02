@@ -29,9 +29,9 @@ from mne_lsl.lsl import StreamInfo, StreamInlet, StreamOutlet, resolve_streams
 # suppress them from Python. Ignore them in the terminal.
 
 # Synthetic-signal amplitudes (arbitrary units, hand-tuned to look EMG-like).
-REST_NOISE = np.float32(0.02)  # idle noise floor: rest, or no DoF active
+REST_NOISE = np.float32(0.02)  # idle noise floor: rest, or no DOF active
 ACTIVE_NOISE = np.float32(0.15)  # background noise while a gesture is active
-ENVELOPE_GAIN = np.float32(0.15)  # strength of the per-DoF activation envelope
+ENVELOPE_GAIN = np.float32(0.15)  # strength of the per-DOF activation envelope
 
 
 def _class_pattern(class_idx: int, n_classes: int, n_channels: int) -> np.ndarray:
@@ -70,7 +70,7 @@ def _read_mode(inlet: StreamInlet | None, n_classes: int, mode_idx: int) -> int:
 
 
 def _read_bitmask(inlet: StreamInlet | None, n_dofs: int, mask: int) -> int:
-    """Pull latest control sample and return it as a DoF bitmask (n_dofs bits).
+    """Pull latest control sample and return it as a DOF bitmask (n_dofs bits).
 
     Used by --multi-dof mode. Inverse of `_read_mode`; the same control-stream
     sample value is interpreted as ``int(round(value))`` and masked to keep
@@ -89,6 +89,11 @@ def _read_bitmask(inlet: StreamInlet | None, n_dofs: int, mask: int) -> int:
 
 
 DEFAULT_CONTROL_STREAM = "EMG_Control"
+
+
+#: How often to look for the control stream while it is absent. Not every tick: the
+#: resolve blocks for its timeout, and a tick is only `chunk_size / fs` long.
+_CONTROL_PROBE_EVERY_S = 1.0
 
 
 def control_outlet(name: str = DEFAULT_CONTROL_STREAM) -> StreamOutlet:
@@ -143,10 +148,10 @@ def main(
         typer.Option(
             "--multi-dof",
             help=(
-                "Interpret control-stream value as a *bitmask* over DoFs: bit i "
-                "set => DoF i active. Each active DoF contributes its class-1+i "
+                "Interpret control-stream value as a *bitmask* over DOFs: bit i "
+                "set => DOF i active. Each active DOF contributes its class-1+i "
                 "Gaussian pattern additively, so control=5 (0b101) activates "
-                "DoFs 0 and 2 simultaneously. Number of DoFs = `classes - 1` "
+                "DOFs 0 and 2 simultaneously. Number of DOFs = `classes - 1` "
                 "(class 0 is rest)."
             ),
         ),
@@ -182,22 +187,30 @@ def main(
 
     inlet: StreamInlet | None = None
     mode_idx = 0  # legacy single-class mode
-    mask = 0  # multi-DoF mode (bitmask over `n_classes - 1` DoFs)
+    mask = 0  # multi-DOF mode (bitmask over `n_classes - 1` DOFs)
     n_dofs = max(1, n_classes - 1)  # only used when --multi-dof is set
 
     interval = chunk_size / fs
-    mode_label = "multi-DoF bitmask" if multi_dof else "class index"
+    mode_label = "multi-DOF bitmask" if multi_dof else "class index"
     print(f"EMG generator: {name} · {n_channels} ch · {fs} Hz · {n_classes} classes ({mode_label})")
     print(f"Listening for control on '{control_stream_name}' (sample value = {mode_label})")
     print("Generating rest signal...")
 
     rng = np.random.default_rng()
+    next_probe = 0.0
     try:
         while True:
             t0 = time.perf_counter()
 
-            if inlet is None:
-                streams = resolve_streams(timeout=0.1, name=control_stream_name)
+            if inlet is None and t0 >= next_probe:
+                # Once a second, not once a tick. `resolve_streams` blocks for its whole
+                # timeout when nothing answers, and a tick is `chunk_size / fs` — 15.6 ms
+                # at 32/2048. Probing every tick spent 100 ms of a 15.6 ms budget, so a
+                # generator whose control stream was never published ran at 15% rate:
+                # 320 Hz of a nominal 2048, which looks like a broken viewer rather than
+                # a starved producer.
+                next_probe = t0 + _CONTROL_PROBE_EVERY_S
+                streams = resolve_streams(timeout=0.05, name=control_stream_name)
                 if streams:
                     inlet = StreamInlet(streams[0])
                     print(f"Connected to control stream '{control_stream_name}'")
@@ -212,7 +225,7 @@ def main(
 
             noise = rng.standard_normal((chunk_size, n_channels)).astype(np.float32)
             if multi_dof:
-                # Sum patterns of all set bits. Each active DoF i contributes
+                # Sum patterns of all set bits. Each active DOF i contributes
                 # the class-(i+1) Gaussian (class 0 reserved for rest).
                 if mask == 0:
                     samples = noise * REST_NOISE
@@ -235,8 +248,11 @@ def main(
                 burst = rng.standard_normal((chunk_size, n_channels)).astype(np.float32) * pattern
                 samples = base + burst + ENVELOPE_GAIN * pattern
 
-            for sample in samples:
-                outlet.push_sample(sample)
+            # One call, not one per sample. Pushing a 32-sample chunk sample-by-sample
+            # is 32 LSL calls per tick, each marshalling an (n_channels,) array — fine
+            # at 8 channels and hopeless at 256, where it delivered 314 Hz of a nominal
+            # 2048 and the viewer drew the handful of samples that made it through.
+            outlet.push_chunk(samples)
 
             elapsed = time.perf_counter() - t0
             if elapsed < interval:

@@ -48,7 +48,7 @@ class _FixedSource:
 def _connect_stream(stream: Stream) -> None:
     """Drive one acquire step so the stream connects + allocates buffers
     (the first step connects and returns without reading)."""
-    stream._acquire_step()
+    stream.reconnect()
     assert stream._connected
 
 
@@ -119,6 +119,7 @@ def test_clear_after_detach_does_not_crash_acquire_loop():
     try:
         with tempfile.TemporaryDirectory() as tmp:
             stream = Stream("emg", source=_FixedSource(), window_ms=100, buffer_ms=2000)
+            stream.reconnect()   # the loop never attaches on its own
             stream.start()
             time.sleep(0.05)  # let it connect + stream
             assert stream.info is not None

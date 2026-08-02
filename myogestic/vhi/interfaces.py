@@ -1,23 +1,25 @@
-"""Output interface registry — pre-wired (process, output stream, control).
+"""Where the Virtual Hand is, how to start it, and whether this MyoGestic can drive it.
 
-Each example used to repeat the same VHI boilerplate (Godot path, output
-outlet name + channel count + sample rate, control stream name). The
-``InterfaceSpec`` dataclass and ``virtual_hand()`` constructor pull that
-boilerplate behind a single call:
+``virtual_hand()`` is a `myogestic.remote.InterfaceSpec` with VHI's numbers filled in
+— the Godot path or packaged binary, the nine-channel pose read-back, the gRPC endpoint
+— so an application never states any of them:
 
-    from myogestic.vhi.interfaces import virtual_hand
+    from myogestic.controls import connect_controls
+    from myogestic.remote import RemoteTarget
+    from myogestic.vhi import virtual_hand
 
     vhi = virtual_hand()
-    vhi_outlet = vhi.outlet()           # 9-ch LSLOutlet @ 32 Hz
     process_launcher(vhi.launcher())    # the packaged binary or `godot --path`
-    client = vhi.control_client()       # gRPC fire-and-forget control client
+    client = vhi.control_client()       # gRPC control plane: discover, command, verify
+    target = RemoteTarget(client=client, interface=vhi)  # one stream per control driven
+    bus = connect_controls(control_map, [target])
 
-The example still owns *what* to push through the outlet — DOF mapping,
-sign flips, smoothing — only the wiring moves into the registry.
+Everything past that call is generic — nothing in `myogestic.remote` knows a hand from
+a robot arm, and the example still owns *what* to push.
 
-VHI ships in two ways and ``virtual_hand()`` accepts both transparently:
+VHI ships in two ways and ``virtual_hand()`` accepts both:
 
-* **Packaged binary** (the default, end-user friendly), installed by
+* **Packaged binary** (the default), installed by
   ``python -m myogestic.tools.install_vhi`` or the ``myogestic-install-vhi``
   console script. Launched directly.
 * **Godot source project** (for VHI development). Launched via
@@ -28,136 +30,78 @@ from __future__ import annotations
 
 import os
 import platform
-from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from shutil import which
-from typing import TYPE_CHECKING
 
-from myogestic.outputs import LSLOutlet
+from myogestic.remote import InterfaceSpec
 
-if TYPE_CHECKING:
-    from myogestic.vhi._client import VhiControlClient
+#: Kept in step with `myogestic.tools.install_vhi.MIN_VHI_TAG` (asserted equal by
+#: tests/test_install_vhi_version_gate.py). Duplicated rather than imported: the
+#: installer pulls in typer, which launching a process should not require.
+MIN_VHI_TAG = "v2.0.0"
+
+#: Appended to `myogestic.remote.InterfaceSpec.launcher`'s "not installed" error.
+#: How VHI is installed is VHI's business; the generic spec has nothing to say about it.
+_INSTALL_HINT = (
+    f"\n  Run `python -m myogestic.tools.install_vhi` to fetch a release "
+    f"for this platform ({MIN_VHI_TAG} or newer).\n"
+    f"  Or set $VHI_PATH to an existing VHI Godot project and "
+    f"$GODOT_BIN to a Godot 4.x binary for source-mode."
+)
 
 
-@dataclass
-class InterfaceSpec:
-    """Description of an external visual-feedback interface (e.g. VHI).
+def _version_of(tag: str) -> tuple[int, ...] | None:
+    """The numeric part of a release tag, or None if it is not a version at all."""
+    cleaned = tag.lstrip("vV").split("-")[0].split("+")[0]
+    parts = cleaned.split(".")
+    if not parts or not all(part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)
 
-    Attributes
+
+def _refuse_an_incompatible_install(install_root: Path | None) -> None:
+    """Refuse to launch an installed release this MyoGestic cannot drive.
+
+    The marker `install_vhi` leaves behind is the only way to know what is on disk
+    before starting it, so the check happens at launch rather than after VHI
+    comes up and every `myogestic.remote.RemoteTarget` refuses it.
+
+    Silent when there is no marker: a source-mode checkout has none, and neither
+    does a hand-placed build.
+
+    Parameters
     ----------
-    name
-        Human label, used as the process_launcher row title.
-    process
-        argv to spawn the interface (passed to ``subprocess.Popen``).
-        An empty list means "VHI not installed" — ``launcher()`` surfaces
-        a friendly error pointing at ``install_vhi`` rather than letting
-        Popen fail mysteriously.
-    output_stream_name
-        LSL outlet name the interface listens on.
-    n_output_channels
-        Number of channels in the output vector.
-    output_hz
-        Outlet send rate.
-    control_stream_name
-        LSL inlet name the interface publishes when the user
-        drives it manually (used for regression targets). May be None.
-    n_control_channels
-        Channel count of the control stream, if known.
-    control_pose_stream_name
-        LSL *outlet* name for streaming a continuous pose
-        TO the interface's control hand (opt-in; consumed only when VHI is
-        in STREAM control mode). Opposite direction to ``control_stream_name``.
-    n_control_pose_channels
-        Channel count of the control-pose outlet.
-    control_pose_hz
-        Send rate of the control-pose outlet.
-    grpc_host
-        VHI gRPC control-server host.
-    grpc_port
-        VHI gRPC control-server port.
     install_root
-        The directory we resolved ``process`` from. Carried so the
-        "not installed" error can quote it.
+        Where the release was unpacked, or ``None`` when nothing installed it.
 
-    Examples
-    --------
-    >>> from myogestic.vhi.interfaces import InterfaceSpec
-    >>> spec = InterfaceSpec(
-    ...     name="Hand",
-    ...     process=["vhi"],
-    ...     output_stream_name="Pose",
-    ...     n_output_channels=9,
-    ...     output_hz=32.0,
-    ... )
-    >>> spec.launcher()
-    [('Hand', ['vhi'])]
+    Raises
+    ------
+    FileNotFoundError
+        When the marker names a release older than `MIN_VHI_TAG`.
     """
-
-    name: str
-    process: list[str]
-    output_stream_name: str
-    n_output_channels: int
-    output_hz: float
-    control_stream_name: str | None = None
-    n_control_channels: int | None = None
-    control_pose_stream_name: str | None = None
-    n_control_pose_channels: int | None = None
-    control_pose_hz: float | None = None
-    grpc_host: str = "127.0.0.1"
-    grpc_port: int = 50051
-    install_root: Path | None = None
-
-    def outlet(self) -> LSLOutlet:
-        """Construct an LSLOutlet matching this interface's output stream."""
-        return LSLOutlet(
-            name=self.output_stream_name,
-            n_channels=self.n_output_channels,
-            hz=self.output_hz,
-        )
-
-    def control_client(self) -> VhiControlClient:
-        """Construct a gRPC control client for this interface.
-
-        Imported lazily so a plain install (no ``[grpc]`` extra) can still use
-        ``outlet()`` / ``launcher()`` without grpcio present.
-        """
-        from myogestic.vhi._client import VhiControlClient
-
-        return VhiControlClient(host=self.grpc_host, port=self.grpc_port)
-
-    def control_outlet(self) -> LSLOutlet:
-        """Construct an [`LSLOutlet`][] for streaming a continuous pose to the control hand.
-
-        Opt-in: only consumed when VHI is put in STREAM control mode via
-        ``control_client().set_control_mode("STREAM")``. Raises
-        [`ValueError`][] if this interface has no control-pose stream
-        configured.
-        """
-        if self.control_pose_stream_name is None:
-            raise ValueError(f"{self.name}: no control_pose_stream_name configured")
-        return LSLOutlet(
-            name=self.control_pose_stream_name,
-            n_channels=self.n_control_pose_channels or self.n_output_channels,
-            hz=self.control_pose_hz or self.output_hz,
-        )
-
-    def launcher(self) -> list[tuple[str, list[str]]]:
-        """Return the (name, argv) tuple list expected by `process_launcher`.
-
-        Raises ``FileNotFoundError`` with an ``install_vhi`` hint when VHI
-        is not installed at the resolved location — better than a silent
-        ``Popen`` failure on first run.
-        """
-        if not self.process:
-            location = f" at {self.install_root}" if self.install_root else ""
-            raise FileNotFoundError(
-                f"{self.name}: not installed{location}.\n"
-                f"  Run `python -m myogestic.tools.install_vhi` to fetch the "
-                f"latest release for this platform.\n"
-                f"  Or set $VHI_PATH to an existing VHI Godot project and "
-                f"$GODOT_BIN to a Godot 4.x binary for source-mode."
-            )
-        return [(self.name, list(self.process))]
+    if not install_root:
+        return
+    marker = Path(install_root) / "vhi-version.txt"
+    try:
+        text = marker.read_text(encoding="utf-8")
+    except OSError:
+        return
+    tag = ""
+    for line in text.splitlines():
+        if line.startswith("installed_tag="):
+            tag = line.partition("=")[2].strip()
+    version = _version_of(tag)
+    if version is None or version >= _version_of(MIN_VHI_TAG):
+        return
+    raise FileNotFoundError(
+        f"VHI Hand: the installed release is {tag}, which does not serve the v2 "
+        f"control contract.\n"
+        f"  MyoGestic 2.x asks the target which controls it exports and refuses "
+        f"to guess, so this build cannot be driven at all.\n"
+        f"  Upgrade: python -m myogestic.tools.install_vhi --tag {MIN_VHI_TAG} --force\n"
+        f"  Or run a checkout from source: set $VHI_PATH and $GODOT_BIN."
+    )
 
 
 # --- Launch resolution -------------------------------------------------------
@@ -166,10 +110,9 @@ class InterfaceSpec:
 def _user_data_root() -> Path:
     """Per-user data root for VHI when not in a writable git checkout.
 
-    Uses ``platformdirs`` when available (preferred — well-known dirs:
-    ``~/Library/Application Support`` on macOS, ``%LOCALAPPDATA%`` on Windows,
-    ``$XDG_DATA_HOME`` / ``~/.local/share`` on Linux). Hand-rolled fallback
-    keeps this importable without the dep so error messages still work.
+    Uses ``platformdirs`` when available: ``~/Library/Application Support`` on
+    macOS, ``%LOCALAPPDATA%`` on Windows, ``$XDG_DATA_HOME`` / ``~/.local/share``
+    on Linux. The hand-rolled fallback keeps this importable without the dep.
     """
     try:
         import platformdirs
@@ -285,7 +228,7 @@ def _resolve_vhi_launch(install_root: Path, godot_bin: str | None, mode: str) ->
     return [str(binary)] if binary else []
 
 
-# --- Concrete interfaces ----------------------------------------------------
+# --- The Virtual Hand -------------------------------------------------------
 
 
 def virtual_hand(
@@ -320,13 +263,12 @@ def virtual_hand(
 
     Returns
     -------
-    An ``InterfaceSpec`` with the resolved argv, ready to wire into
-    ``process_launcher()``. If VHI isn't installed yet, ``launcher()`` raises
-    a ``FileNotFoundError`` pointing at ``install_vhi``.
+    A `myogestic.remote.InterfaceSpec` with the resolved argv, ready to wire into
+    ``process_launcher()``.
 
     Examples
     --------
-    >>> from myogestic.vhi.interfaces import virtual_hand
+    >>> from myogestic.vhi import virtual_hand
     >>> vhi = virtual_hand()
     >>> vhi.n_output_channels
     9
@@ -344,18 +286,16 @@ def virtual_hand(
     return InterfaceSpec(
         name="VHI Hand",
         process=process,
-        output_stream_name="MyoGestic_Output",
         n_output_channels=9,
         output_hz=32.0,
         control_stream_name="VHI_Control",
         n_control_channels=9,
-        control_pose_stream_name="MyoGestic_ControlPose",
-        n_control_pose_channels=9,
-        control_pose_hz=32.0,
         grpc_host=grpc_host,
         grpc_port=grpc_port,
         install_root=install_root,
+        install_hint=_INSTALL_HINT,
+        version_gate=partial(_refuse_an_incompatible_install, install_root),
     )
 
 
-__all__ = ["InterfaceSpec", "virtual_hand"]
+__all__ = ["virtual_hand"]

@@ -33,9 +33,7 @@ def _is_mac_dark() -> bool:
     return result.stdout.strip() == "Dark"
 
 
-# Programmatic UI-scale override, set by App(ui_scale=...). The
-# $MYOGESTIC_UI_SCALE env var still wins over it — a per-machine display
-# override should beat an example's hardcoded value.
+# Programmatic UI-scale override, set by App(ui_scale=...). See set_ui_scale.
 _UI_SCALE_OVERRIDE: float | None = None
 
 
@@ -43,8 +41,8 @@ def set_ui_scale(scale: float | None) -> None:
     """Set the global UI scale programmatically — used by ``App(ui_scale=...)``.
 
     Call before the GUI loop starts. ``None`` clears the override (falls back
-    to ``$MYOGESTIC_UI_SCALE`` then ``1.0``). The env var, when set, still
-    takes precedence — a per-machine display override beats an example default.
+    to ``$MYOGESTIC_UI_SCALE`` then ``1.0``). ``$MYOGESTIC_UI_SCALE``, when set,
+    still takes precedence.
     """
     global _UI_SCALE_OVERRIDE
     _UI_SCALE_OVERRIDE = scale
@@ -59,8 +57,7 @@ def _ui_scale() -> float:
     """Resolve the global UI scale: ``$MYOGESTIC_UI_SCALE`` > ``App(ui_scale=)`` > ``1.0``.
 
     Scales both the font size (``load_fonts``) and imgui's style metrics —
-    padding, spacing, rounding (``apply_theme`` → ``scale_all_sizes``) — for
-    displays where the default sizing is too large or small (e.g. a 14" MacBook).
+    padding, spacing, rounding (``apply_theme`` → ``scale_all_sizes``).
     """
     raw = os.environ.get("MYOGESTIC_UI_SCALE", "").strip()
     if raw:
@@ -160,8 +157,7 @@ def apply_theme() -> None:
         imgui.Col_.slider_grab_active: accent_hi,
         imgui.Col_.button: control_bg,
         imgui.Col_.button_hovered: control_hi,
-        # Neutral pressed state — accent is reserved for selection / primary
-        # action / focus, not a flash on every button press.
+        # Neutral pressed: accent is reserved for selection / primary action / focus.
         imgui.Col_.button_active: control_hi,
         imgui.Col_.header: header,
         imgui.Col_.header_hovered: control_hi,
@@ -176,9 +172,8 @@ def apply_theme() -> None:
         imgui.Col_.tab_hovered: control_hi,
         imgui.Col_.plot_lines: accent,
         imgui.Col_.plot_histogram: accent,
-        # Fill the slots HelloImGui otherwise leaves at stock defaults, so
-        # tables, tabs, text selection, nav focus and docking match the theme
-        # instead of leaking a foreign blue-gray.
+        # Slots HelloImGui otherwise leaves at stock defaults, which leak a foreign
+        # blue-gray into tables, tabs, text selection, nav focus and docking.
         imgui.Col_.tab_selected: control_hi,
         imgui.Col_.tab_selected_overline: accent,
         imgui.Col_.tab_dimmed: control_bg,
@@ -198,8 +193,8 @@ def apply_theme() -> None:
     for key, value in colors.items():
         style.set_color_(key, value)
 
-    # Global UI scale (opt-in via $MYOGESTIC_UI_SCALE). Applied last so it
-    # scales the custom metrics set above; the font is scaled in load_fonts().
+    # Applied last so it scales the custom metrics set above; the font is scaled
+    # in load_fonts().
     scale = _ui_scale()
     if scale != 1.0:
         style.scale_all_sizes(scale)
@@ -233,9 +228,8 @@ def load_fonts() -> None:
             "fonts/Roboto/Roboto-Regular.ttf", size
         )
 
-    # Instrument Serif (OFL) — a display face for hero text (the prediction
-    # readout). Found in myogestic/assets/fonts via the asset search path;
-    # best-effort, so a missing asset just falls back to the body font.
+    # Instrument Serif (OFL) — display face for hero text. Best-effort: a missing
+    # asset just falls back to the body font.
     try:
         _DISPLAY_FONT = hello_imgui.load_font(
             "fonts/InstrumentSerif-Regular.ttf", 28.0 * _ui_scale(), hello_imgui.FontLoadingParams()

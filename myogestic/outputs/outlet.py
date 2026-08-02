@@ -1,12 +1,17 @@
-"""The [`Output`][] base class — the send-side counterpart to ``Source``.
+"""The [`Outlet`][] base class — the send-side counterpart to ``Source``.
 
-Concrete outputs (``LSLOutlet``, ``UDPOutput``, ``SerialOutput``) subclass this;
-they live in their own modules and are re-exported from [`myogestic.outputs`][].
+[`LSLOutlet`][myogestic.outputs.LSLOutlet] subclasses this; so does any sink you
+write for a transport of your own.
+
+This is a *paced sender*, not a way to drive a device. Anything that moves is a
+[`myogestic.controls.Target`][] — three methods, and the control map's declared
+ranges, clamping and rest-on-teardown come with it. A target may write *through*
+one of these: [`myogestic.remote.RemoteTarget`][] builds one
+[`LSLOutlet`][myogestic.outputs.LSLOutlet] per control it drives.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import sys
 import threading
@@ -22,7 +27,7 @@ log = logging.getLogger("myogestic.outputs")
 _IS_BROWSER = sys.platform == "emscripten"
 
 
-class Output:
+class Outlet:
     """Base class for "send the latest pushed vector at ``hz``" outputs.
 
     Subclass to define a new transport: override `_send` with the
@@ -30,13 +35,13 @@ class Output:
     RPC, ...). The base class handles everything else:
 
     - A daemon **output thread** is started in ``__init__`` and runs
-      for the lifetime of the Output. Each tick it reads the latest
+      for the lifetime of the outlet. Each tick it reads the latest
       pushed vector and calls `_send`.
     - [`push`][] is the caller-facing API: write the latest value to
       an atomic slot (CPython's GIL guarantees atomic reference
       assignment). It is **latest-wins, not queued** - if you push
       faster than ``hz``, intermediate values are overwritten and
-      never sent. That's the contract.
+      never sent.
     - Exceptions raised by `_send` are caught, deduplicated per
       ``(error class, message)`` pair, and logged once. A flapping
       destination logs one line per failure mode and the send thread
@@ -51,7 +56,7 @@ class Output:
        ``data`` as read-only; validate shape; raise on misuse rather
        than silently mis-sending.
     3. Override [`stop`][] if you need to close a resource (see
-       [`UDPOutput`][myogestic.outputs.UDPOutput] for an example).
+       [`LSLOutlet.stop`][myogestic.outputs.LSLOutlet.stop] for an example).
 
     Outputs are **user-owned**: instantiate them at module scope, call
     ``.push(data)`` from inside ``@pipeline.predict``. Do not register
@@ -66,10 +71,10 @@ class Output:
 
     Examples
     --------
-    >>> from myogestic.outputs import Output
+    >>> from myogestic.outputs import Outlet
     >>> import socket, numpy as np
     >>>
-    >>> class MyOutput(Output):
+    >>> class MyOutlet(Outlet):
     ...     def __init__(self, addr, hz=50):
     ...         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     ...         self._addr = addr
@@ -83,9 +88,7 @@ class Output:
         self._latest: np.ndarray | None = None
         self._hz = hz
         self._running = True
-        # Dedup key per (exception class name, str(exception)) - log the
-        # first occurrence per kind, suppress subsequent ones so a noisy
-        # disconnect does not spam the log.
+        # Dedup key per (exception class name, str(exception)).
         self._seen_send_errors: set[tuple[str, str]] = set()
         if _IS_BROWSER:
             # Pyodide: no threads, and asyncio tasks don't dispatch while
@@ -108,20 +111,17 @@ class Output:
         self._latest = data  # GIL guarantees atomic ref assignment
 
     def _send_step(self) -> float:
-        """Run one send-loop iteration. Returns seconds-to-sleep.
+        """Run one send-loop iteration and return seconds-to-sleep.
 
-        Shared between the threaded and async loop variants so the
-        send logic stays in one place; only the pacing primitive
-        (time.sleep vs await asyncio.sleep) differs at the call site.
+        Shared by the threaded and async loop variants; only the pacing
+        primitive differs at the call site.
         """
         t_start = time.perf_counter()
         if self._latest is not None:
             try:
                 self._send(self._latest)
             except Exception as e:
-                # Never crash the send loop; log first occurrence per
-                # (error class, message) pair so a noisy disconnect
-                # does not flood the log.
+                # Never crash the send loop.
                 key = (type(e).__name__, str(e))
                 if key not in self._seen_send_errors:
                     self._seen_send_errors.add(key)
@@ -141,12 +141,6 @@ class Output:
             if delay > 0:
                 time.sleep(delay)
 
-    async def _send_loop_async(self) -> None:
-        """Browser variant - asyncio.sleep yields to the frame loop."""
-        while self._running:
-            delay = self._send_step()
-            await asyncio.sleep(delay)
-
     def _send(self, data: np.ndarray) -> None:
         """Transport-specific write. Override in subclass.
 
@@ -156,6 +150,19 @@ class Output:
         ``(error class, message)`` pair and keep the thread running.
         """
         raise NotImplementedError
+
+    def flush(self) -> None:
+        """Send the latest pushed value **now**, instead of on the next tick.
+
+        The send loop is paced, so a value pushed immediately before teardown is
+        normally never sent at all: the thread is mid-sleep, and [`stop`][] ends the
+        loop before it wakes. Anything guaranteeing rest-on-stop - the neutral
+        "release everything" frame - must flush rather than push.
+
+        Errors are swallowed and logged exactly as on a normal tick, and a flush
+        before the first [`push`][] does nothing.
+        """
+        self._send_step()
 
     def stop(self) -> None:
         """Stop the send thread.

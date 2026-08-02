@@ -10,22 +10,36 @@ Workflow:
        so the gesture buttons are the sole movement source → Stop Rec
     4. Select sessions → Train (regression on kinematics)
     5. Predict → VHI predicted hand mirrors control hand
+
+The control space lives in `examples/controls/regression.toml`: the aliases on its left
+are this script's own vocabulary, the addresses on its right are VHI's. It cannot be
+resolved before VHI runs — VHI is what declares what those addresses accept — so the
+bus is built on the first click that needs it.
 """
 
+import pathlib
 import sys
+import tomllib
 
 import numpy as np
 import torch
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_regressor
-from myogestic.session import iter_aligned_windows, iter_labeled_windows
+from myogestic.remote import RemoteTarget
+from myogestic.session import (
+    iter_aligned_windows,
+    iter_labeled_windows,
+    split_sessions_by_stream,
+)
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import virtual_hand
+from myogestic.vhi.pose import ADDRESS_CHANNELS, POSE_DOFS, split_pose
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
@@ -42,19 +56,45 @@ CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
 
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
-vhi_client = vhi.control_client()
+# The v2 recording aid — the session gate and, if you want a swept trajectory
+# instead of held poses, trajectory playback. Not a control plane; see
+# `recording_client` for why that separation matters.
+recording_aid = vhi.recording_client()
 
-# Output-side smoothing applied to the 9-DOF hand vector before pushing
-# to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
+# Output-side smoothing, applied by the control bus to the control vector.
+# Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
-# Mosaic-2.0 registry indices; selecting these from VHI_Control during
-# training gives a 5-DOF target (WristRot + 4 fingers) instead of the full
-# 9-DOF vector, which keeps the regressor manageable for a fake-EMG demo.
+# The control space this app commands, as a *mapping* rather than a declaration: five
+# continuous aliases for the digits plus one discrete gesture, each pointed at an address
+# VHI declares. What an address means — number or held state, its range, its states — is
+# VHI's to say, so this stays unresolved until VHI answers (see `link` below).
+#
+# No VHI channel number appears here, and none should: `RemoteTarget` owns the
+# translation to whatever the hand happens to want on the wire.
 # --8<-- [start:dofs]
-VHI_DOF_INDICES = [0, 2, 3, 4, 5]
-N_DOF = len(VHI_DOF_INDICES)
+CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "regression.toml"
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
+
+# Which recorded column each alias learns from, worked out from the map alone.
+#
+# Training reads sessions off a disk. It used to demand a running VHI first — not for
+# anything the target does, but to be told which aliases were continuous, and the map
+# already says which addresses they point at. So a model could not be trained from
+# recordings without launching the thing the recordings were made with, and the check
+# never passed anyway, because the global it tested was left behind by an earlier
+# refactor and nothing assigned it.
+#
+# `ADDRESS_CHANNELS` is the recorded pose layout — offline knowledge, which is the whole
+# reason it is a table and not a manifest lookup. An address that is not a pose channel
+# (the discrete `gesture`) is not a regression target and drops out here.
+DOF_TARGETS: dict[str, str] = {
+    alias: POSE_DOFS[ADDRESS_CHANNELS[binding.targets[0].address]]
+    for alias, binding in CONTROL_MAP.bindings.items()
+    if binding.targets and binding.targets[0].address in ADDRESS_CHANNELS
+}
+DOF_NAMES = tuple(DOF_TARGETS)
 # --8<-- [end:dofs]
 
 # MyoVerse transforms — preferred over hand-rolled numpy here so the feature
@@ -80,10 +120,14 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
-    # vhi.launcher() returns a [(name, argv)] entry; splat it so EMG
-    # Generator and VHI Hand share a single launcher panel.
-    *vhi.launcher(),
+    # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
+    # Hand share one launcher panel. `launchable` rather than `launcher` because an
+    # unlaunchable target must not stop this app from opening — a running one needs no
+    # button, and the reason is logged either way.
+    *vhi.launchable(),
 ]
+
+vhi_control = vhi.control_client()
 
 app = App("EMG Regression", ui_scale=0.85)
 app.streams(
@@ -96,6 +140,26 @@ app.streams(
     ),
 )
 pipeline = Pipeline(app)
+
+# --8<-- [start:bus]
+# The bus cannot exist yet. Resolving the control file needs VHI to say what its
+# addresses accept, and VHI is launched from this app's own ProcessLauncher — so
+# `link.bus` stays None until `link.ensure()` succeeds, on the first click that needs it.
+#
+# Once built, one bus owns the whole output path: substitute rest -> clip -> smooth ->
+# clip again -> hand it to every target. `RemoteTarget` is what turns resolved aliases into
+# whatever this VHI drives on the wire, on whichever of its streams the map's addresses
+# turn out to be on. No hand and no stream is named here: the target looks this file's
+# addresses up in VHI's manifest and publishes one stream per address it drives, each
+# named for that address and one channel wide.
+link = ControlLink(
+    CONTROL_MAP,
+    [RemoteTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=32,
+)
+# --8<-- [end:bus]
 
 
 def extract_features(emg: np.ndarray) -> np.ndarray:
@@ -118,7 +182,7 @@ HOP_MS = 100
 
 @pipeline.train
 def train(data: TrainingData):
-    """Train CatBoost regressor: EMG features → 5-DOF kinematics.
+    """Train CatBoost regressor: EMG features → one column per continuous alias.
 
     For sessions with `vhi_control` kinematics: use iter_aligned_windows
     (EMG window → kinematics target via timestamp alignment).
@@ -130,28 +194,22 @@ def train(data: TrainingData):
     """
     log = pipeline.train_log
     log.clear()
-    log.append(f"Training from {len(data.paths)} sessions...")
+
+    aliases = DOF_NAMES
+    n_dof = len(aliases)
+    pose_keys = [DOF_TARGETS[a] for a in aliases]
+    log.append(f"Training from {len(data.paths)} sessions, targets: {', '.join(aliases)}")
 
     all_X: list[np.ndarray] = []
     all_y: list[np.ndarray] = []
 
-    # Sessions with kinematics — primary input EMG, regress to kinematics
-    kin_paths = []
-    label_paths = []
-    for p in data.paths:
-        try:
-            from myogestic.session import open_session_store
-
-            sess = open_session_store(p)
-        except Exception as e:
-            log.append(f"  skip {p}: {e}")
-            continue
-        has_kin = "vhi_control" in sess.stores
-        sess.close()  # only needed the store list — release the .session.zip handle
-        if has_kin:
-            kin_paths.append(p)
-        else:
-            label_paths.append(p)
+    # Sessions with kinematics — primary input EMG, regress to kinematics. The rest fall
+    # back to synthetic targets below. Sessions that will not open at all come back as
+    # `unreadable` rather than being logged inside the helper, so the skip lands in *this*
+    # app's log where the user is looking.
+    kin_paths, label_paths, unreadable = split_sessions_by_stream(data.paths, "vhi_control")
+    for p, e in unreadable:
+        log.append(f"  skip {p}: {e}")
 
     # Kinematics path
     # --8<-- [start:kin_loop]
@@ -163,7 +221,10 @@ def train(data: TrainingData):
         HOP_MS,
         n_alignment_samples=10,
     ):
-        kin = np.abs(aligned["vhi_control"][VHI_DOF_INDICES])
+        # A recorded pose is already in the space `predict` commands — both VHI
+        # streams speak the control standard — so this only names the channels.
+        pose = split_pose(aligned["vhi_control"])
+        kin = np.array([pose[key] for key in pose_keys], dtype=np.float64)
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
     # --8<-- [end:kin_loop]
@@ -182,7 +243,9 @@ def train(data: TrainingData):
         HOP_MS,
         classes=data.classes if data.classes else None,
     ):
-        kin = np.ones(5, dtype=np.float64) if ci == 1 else np.zeros(5, dtype=np.float64)
+        # +1 is flexion under the control standard, so a Fist target is all 1s
+        # and Rest is all 0s - the same numbers as before, now for a stated reason.
+        kin = np.ones(n_dof, dtype=np.float64) if ci == 1 else np.zeros(n_dof, dtype=np.float64)
         all_X.append(extract_features(emg_window))
         all_y.append(kin)
     # --8<-- [end:label_loop]
@@ -209,20 +272,18 @@ def train(data: TrainingData):
 # --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
-    """Regress 5-DOF → expand to 9-DOF → smooth → push to VHI."""
-    pred_5dof = model.predict(features.reshape(1, -1))[0]
-    pred_5dof = np.clip(pred_5dof, 0, 1)
-
-    # Expand to 9-DOF and negate for VHI
-    # --8<-- [start:expand]
-    pred_9dof = np.zeros(9, dtype=np.float32)
-    for i, vhi_idx in enumerate(VHI_DOF_INDICES):
-        pred_9dof[vhi_idx] = -pred_5dof[i]
-    # --8<-- [end:expand]
-
-    pred_9dof = output_filter(pred_9dof).astype(np.float32)
-    vhi_outlet.push(pred_9dof)
-    return {"dof": pred_5dof, "hand": pred_9dof}
+    """Regress the continuous aliases and hand them to the bus."""
+    # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this callback runs
+    # on the predict thread, where a stall is worse than a frame with no bus.
+    bus = link.bus
+    if bus is None:
+        return None  # nothing resolved yet, so there is nothing to command
+    pred = model.predict(features.reshape(1, -1))[0]
+    # Still the model's own vocabulary: the bus is keyed by alias, and the routing to
+    # VHI's addresses travels with the resolved set. The bus sanitises, smooths and
+    # drives. No clip here: each alias's resolved range is the authority, and clipping
+    # before the smoother would let the filter overshoot straight back out of it.
+    return {"dof": bus.push(dict(zip(DOF_NAMES, pred, strict=True)))}
 
 
 # --8<-- [end:predict]
@@ -242,26 +303,40 @@ grid = Grid(
 # --8<-- [end:grid]
 
 
+# --8<-- [start:gesture]
 def _on_gesture(i: int) -> None:
-    # cycle=False: snap to the movement's end pose and hold it. VHI_Control
-    # settles to a static kinematic value per gesture (e.g. all-flexed for
-    # Fist, all-zero for Rest), which the regressor learns to map back from
-    # the corresponding EMG amplitude. CLASSES names are sent verbatim to
-    # VHI; unknown names are rejected harmlessly (client logs the ack).
+    # A held state, commanded by name through the same bus the continuous DOFs go
+    # through. The control hand snaps to that pose and holds it, so VHI_Control
+    # settles to a static kinematic value per gesture, which the regressor learns to
+    # map back from the corresponding EMG amplitude.
+    #
+    # `bus.select` bypasses the debounce because this is a deliberate click, not a
+    # noisy prediction, and rebases the trigger so the next push does not re-fire it.
+    bus = link.ensure()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
-    vhi_client.set_movement(CLASSES[i], cycle=False)
+    if bus is not None:
+        # The state names are VHI's own movements, straight out of its manifest — the
+        # class names here match them, and `select` returns False if one ever does not.
+        bus.select("gesture", CLASSES[i])
+# --8<-- [end:gesture]
 
 
+# --8<-- [start:record]
 def _on_record() -> None:
-    # While recording, VHI ignores its local keyboard so MyoGestic's gesture
-    # buttons are the sole movement source for the session.
+    # The recording aid, not a control command: it gates VHI's local keyboard so the
+    # gesture buttons are the session's only movement source. Returns False if this
+    # VHI has no v2 aid, which is worth surfacing — an ungated recording can pick up
+    # stray keyboard movements and nothing downstream could tell.
+    link.ensure()
     app.start_recording()
-    vhi_client.set_session_active(True)
+    if not recording_aid.set_recording_session(True):
+        app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
 
 
 def _on_stop() -> None:
     app.stop_recording()
-    vhi_client.set_session_active(False)
+    recording_aid.set_recording_session(False)
+# --8<-- [end:record]
 
 
 viewer = SignalViewer("emg", selectable=True)
@@ -313,7 +388,14 @@ def main() -> None:
     try:
         app.run()
     finally:
-        vhi_client.stop()
+        # Rest the hand first, and make that frame land: the outlet sends on a
+        # paced thread, so a pose pushed at exit would otherwise never go out
+        # and the hand would hold its last commanded position.
+        link.stop()
+        recording_aid.stop_trajectory()      # no-op unless a trajectory was started
+        recording_aid.set_recording_session(False)
+        recording_aid.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

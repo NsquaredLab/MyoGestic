@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import gc
 import logging
+import os
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -14,6 +17,78 @@ from typing import Any
 from myogestic._platform import _register_assets_folder, _try_set_macos_dock_icon
 from myogestic.session import Session
 from myogestic.stream import Stream
+
+#: GLFW's Cocoa backend logs this once or twice *per frame* (~90 lines a second), burying
+#: everything the application prints.
+#:
+#: Cause: a **mirrored display**. GLFW builds its monitor list from CoreGraphics' *online*
+#: displays, which includes a mirror slave; macOS gives a mirror slave no `NSScreen`, so
+#: every work-area query for it fails. Switching mirroring to Extended silences it.
+#:
+#: Not fixable here — it reproduces in a bare imgui_bundle app, and GLFW's error callback is
+#: unreachable because imgui_bundle links GLFW statically. Rendering is unaffected.
+_GLFW_MONITOR_SPAM = b"Cannot query workarea without screen"
+
+
+@contextlib.contextmanager
+def _collapse_glfw_monitor_spam():
+    """Show that GLFW error once, count the rest, and pass everything else through.
+
+    Works at the file-descriptor level: GLFW writes to fd 2 from C, where a Python-level
+    `sys.stderr` wrapper never sees it.
+
+    A no-op in the browser. Pyodide has no threads, so the pump below cannot start, and the
+    warning this collapses is a macOS multi-monitor artefact that cannot arise there anyway.
+    """
+    from myogestic._browser import IS_BROWSER
+
+    if IS_BROWSER:
+        yield
+        return
+    try:
+        saved = os.dup(2)
+    except OSError:  # pragma: no cover - no stderr to redirect (embedded, some sandboxes)
+        yield
+        return
+    read_fd, write_fd = os.pipe()
+    suppressed = 0
+    sys.stderr.flush()
+    os.dup2(write_fd, 2)
+    os.close(write_fd)
+
+    def pump() -> None:
+        nonlocal suppressed
+        seen_once = False
+        with os.fdopen(read_fd, "rb", 0) as pipe:
+            for line in pipe:
+                if _GLFW_MONITOR_SPAM in line:
+                    if seen_once:
+                        suppressed += 1
+                        continue
+                    seen_once = True
+                os.write(saved, line)
+
+    pump_thread = threading.Thread(target=pump, name="stderr-filter", daemon=True)
+    pump_thread.start()
+    try:
+        yield
+    finally:
+        sys.stderr.flush()
+        # Restoring fd 2 drops the last reference to the pipe's write end, so `pump`
+        # reaches EOF and finishes on its own.
+        os.dup2(saved, 2)
+        pump_thread.join(timeout=2.0)
+        if suppressed:
+            # The saved descriptor, not `sys.stderr` — not always the same object.
+            os.write(
+                saved,
+                f"({suppressed} more identical GLFW monitor warnings suppressed. Usual "
+                f"cause: a mirrored display, which macOS gives no NSScreen while GLFW "
+                f"still lists it. Switch mirroring to Extended to silence it at the "
+                f"source.)\n".encode(),
+            )
+        os.close(saved)
+
 
 log = logging.getLogger("myogestic")
 
@@ -44,11 +119,10 @@ TRANSITIONS: dict[str, set[str]] = {
 
 # --- Docking integration (experimental) -----------------------------------
 #
-# `popout_panel(...)` (myogestic.widgets.panels.popout) appends `DockableWindow`
-# objects here. `App._gui_loop` drains the list into the active
-# `RunnerParams.docking_params.dockable_windows` before launching the
-# render loop. List + flag live at module scope so the widget can resolve
-# the active App lazily without circular imports.
+# `popout_panel(...)` (myogestic.widgets.panels.popout) appends `DockableWindow` objects
+# here; `App._gui_loop` drains them into `RunnerParams.docking_params.dockable_windows`
+# before launching. Module scope so the widget can resolve the active App lazily without
+# circular imports.
 
 _pending_popouts: list[Any] = []  # list[hello_imgui.DockableWindow]
 _active_app: App | None = None
@@ -84,6 +158,10 @@ class Context:
     state: str = AppState.IDLE
     session: Session | None = None
     class_names: list[str] = field(default_factory=list)
+    #: Optional `myogestic.controls.ControlSet` this app commands. Set once at setup
+    #: (``app.ctx.control_space = CONTROLS``); every recording then stores the space it
+    #: was made under.
+    control_space: Any = None
     current_label: int = -1
     status_message: str = ""
     logs: list[str] = field(default_factory=list)
@@ -115,11 +193,9 @@ class App:
     `app.before_run_hooks` / `app.cleanup_hooks` - user code rarely
     needs to touch those lists directly.
 
-    On desktop, ImGui **multi-viewport** is enabled by default: floating
-    windows (e.g. the signal viewer's channel-grid ``Edit…`` window) open as
-    their own native OS windows and can be dragged outside the app / onto
-    another monitor. It's skipped in the browser (no backend for extra OS
-    windows). Detached windows are square-cornered with an opaque background.
+    On desktop, ImGui **multi-viewport** is on by default: floating windows (e.g. the
+    signal viewer's channel-grid ``Edit…`` window) open as their own native OS windows,
+    square-cornered and opaque. Skipped in the browser (no backend for extra OS windows).
 
     Parameters
     ----------
@@ -130,18 +206,14 @@ class App:
         Apply MyoGestic's built-in ImGui theme. Set ``False`` to
         keep the Dear ImGui defaults.
     docking
-        Experimental - enable ImGui docking (a full-screen dockspace) so
-        panels registered via ``app.popout(...)`` become tearable
-        DockableWindows. Multi-viewport itself is already on by default on
-        desktop (see above); this adds the dockspace on top. macOS Retina
-        viewport sizing of detached windows can be wrong on initial draw;
-        treat as experimental.
+        Experimental - enable ImGui docking (a full-screen dockspace) so panels
+        registered via ``app.popout(...)`` become tearable DockableWindows. macOS
+        Retina viewport sizing of detached windows can be wrong on the first draw.
     ui_scale
-        Global UI zoom factor - scales the font and imgui's style
-        metrics (padding, spacing, rounding). ``None`` uses
-        ``$MYOGESTIC_UI_SCALE`` then ``1.0``. The env var, if set,
-        overrides this - a per-machine display fix beats the example's
-        value. Clamped to ``[0.5, 2.0]``. Has no effect when ``theme=False``.
+        Global UI zoom factor - scales the font and imgui's style metrics (padding,
+        spacing, rounding). ``None`` uses ``$MYOGESTIC_UI_SCALE`` then ``1.0``; the
+        env var overrides an explicit value. Clamped to ``[0.5, 2.0]``. No effect
+        when ``theme=False``.
 
     Examples
     --------
@@ -161,10 +233,6 @@ class App:
         self._ui_fn: Callable[[Context], None] | None = None
         self._theme_enabled = theme
         self._ui_scale = ui_scale
-        # Experimental: when True, _gui_loop enables ImGui docking +
-        # multi-viewport so widgets wrapped in `popout_panel(...)` become
-        # tearable, dock-able windows. macOS Metal/Retina caveats apply
-        # - see the README "Status" note.
         self._docking = docking
         self._running = False
         # Extensions register here (e.g. myogestic.ml.attach_pipeline).
@@ -193,12 +261,13 @@ class App:
     def bridges(self, *bridges: Any) -> None:
         """Register one or more Bridge subprocesses with the app.
 
-        Bridges run in their own process (webcam, ultrasound, depth
-        camera, …) and publish an LSL clock stream the main app
-        subscribes to. The cockpit's ``process_launcher`` widget shows
-        their start/stop state. Mirrors [`streams`][] exactly: each
-        bridge is keyed by its ``.name`` into ``ctx.bridges``; calling
-        with the same name overwrites the previous registration.
+        Bridges run in their own process (webcam, ultrasound, depth camera, …) and
+        publish an LSL clock stream the main app subscribes to. Registering does not
+        start them — call ``bridge.start()`` yourself, unlike [`streams`][]. Each
+        bridge goes into ``ctx.bridges`` under its ``.name``; the same name overwrites.
+
+        Nothing renders a bridge for you: ``bridge.status`` and ``bridge.alive`` are
+        there if you want to show them.
 
         Parameters
         ----------
@@ -231,9 +300,8 @@ class App:
     ) -> None:
         """Register a dockable window before `run()`.
 
-        This is the preferred path for examples/apps using `App(docking=True)`.
-        It gives Hello ImGui the complete DockableWindow list before launch,
-        instead of discovering windows on the first render frame.
+        Preferred over calling `popout_panel(...)` inside `@app.ui`: Hello ImGui gets
+        the complete DockableWindow list before launch rather than on the first frame.
         """
         self._popout_specs = [spec for spec in self._popout_specs if spec[0] != title]
         self._popout_specs.append((title, gui_fn, default_open, can_be_closed, remember_is_visible))
@@ -261,9 +329,7 @@ class App:
                 f"Cannot start recording: state is {self.ctx.state!r}, expected 'idle'."
             )
             return
-        # Only record from streams that have connected - a stream with info=None
-        # has no zarr schema and would fail on append. Disconnected streams are
-        # skipped; if they connect later they won't be retroactively captured.
+        # A stream with info=None has no zarr schema and would fail on append.
         self.ctx.state = AppState.RECORDING
         self.ctx.session = Session(base_path=base_path)
         n_ready = 0
@@ -295,23 +361,27 @@ class App:
             )
             return
         self.ctx.state = AppState.IDLE
-        # Detach every stream *before* finalising/packing the session.
-        # detach_session() waits for any in-flight append on the acquire
-        # thread, so the daemon pack thread below can clear the Zarr stores
-        # without racing the acquire loop (was: KeyError mid-append).
+        # Detach every stream *before* finalising/packing. detach_session() waits for
+        # any in-flight append on the acquire thread, so the daemon pack thread below
+        # can clear the Zarr stores without racing the acquire loop.
         for stream in self.ctx.streams.values():
             stream.detach_session()
         if self.ctx.session is not None:
             session = self.ctx.session
-            session.save_meta(self.name, class_names=self.ctx.class_names or None)
+            controls = self.ctx.control_space
+            session.save_meta(
+                self.name,
+                class_names=self.ctx.class_names or None,
+                control_space=controls.as_control_space() if controls is not None else None,
+            )
             n = len(session.label_track)
             self.ctx.status_message = f"Saved {n} labels - finalizing…"
+
+            from myogestic._browser import IS_BROWSER
 
             # Pack session folder → .session.zip in a daemon thread so the
             # UI stays responsive during finalization. Register with
             # session_manager only after pack succeeds.
-            import threading
-
             def _finalize() -> None:
                 try:
                     zip_path = session.pack_to_zip()
@@ -337,7 +407,13 @@ class App:
                     except Exception:
                         pass
 
-            threading.Thread(target=_finalize, daemon=True).start()
+            if IS_BROWSER:
+                # Pyodide is single-threaded. Zipping inline blocks the frame, which for a
+                # short recording is a hitch rather than a hang — and the alternative is
+                # `RuntimeError: can't start new thread` and a session left unpacked.
+                _finalize()
+            else:
+                threading.Thread(target=_finalize, daemon=True).start()
 
     # --- Run ---
 
@@ -425,10 +501,9 @@ class App:
             raise
 
         if IS_BROWSER:
-            # In Pyodide, immapp.run returns immediately and the
-            # browser's requestAnimationFrame drives the GUI from here.
-            # Skipping cleanup keeps the app alive after this function
-            # returns; tab unload is the implicit teardown.
+            # In Pyodide, immapp.run returns immediately and requestAnimationFrame
+            # drives the GUI from here. Skipping cleanup keeps the app alive after
+            # this function returns; tab unload is the implicit teardown.
             return
 
         _do_cleanup()
@@ -455,10 +530,9 @@ class App:
 
         ui_fn = self._ui_fn or (lambda _ctx: None)
 
-        # In browser (Pyodide) mode the per-frame scheduler drives every
-        # long-lived loop (Stream acquisition, Output sending, Pipeline
-        # predict) - no threads, no asyncio. The desktop path uses real
-        # daemon threads and the tick is a no-op.
+        # In browser (Pyodide) mode the per-frame scheduler drives every long-lived
+        # loop (Stream acquisition, Output sending, Pipeline predict) - no threads, no
+        # asyncio. On desktop those are daemon threads and the tick is a no-op.
         from myogestic._browser import IS_BROWSER, tick_all
 
         if IS_BROWSER:
@@ -473,35 +547,27 @@ class App:
 
         runner_params = hello_imgui.RunnerParams()
         runner_params.fps_idling.enable_idling = False
-        # Multi-viewport (native pop-out windows) on by default on desktop, so a
-        # tear-off window like the signal viewer's channel grid opens as its own
-        # OS window. Emscripten has no backend for sibling OS windows, so skip it
-        # in the browser (it would silently stay merged there anyway).
+        # Emscripten has no backend for sibling OS windows, so multi-viewport (native
+        # pop-out windows) is desktop-only.
         if not IS_BROWSER:
             runner_params.imgui_window_params.enable_viewports = True
         runner_params.callbacks.show_gui = gui_callback
         runner_params.app_window_params.window_title = self.name
         runner_params.app_window_params.window_geometry.size = window_size
         if fullscreen:
-            # Maximise to the monitor work area (keeps menu bar / dock visible),
-            # rather than exclusive fullscreen. This is what users typically
-            # mean by "fullscreen" for screenshot captures of an example.
+            # Maximise to the monitor work area (menu bar / dock stay visible) rather
+            # than exclusive fullscreen.
             runner_params.app_window_params.window_geometry.full_screen_mode = (
                 hello_imgui.FullScreenMode.full_monitor_work_area
             )
 
-        # Tell HelloImGui where to find our shipped assets - used by the
-        # `app_logo` widget (myogestic_logo.png) and by HelloImGui's window
-        # icon convention (app_settings/icon.png, picked up automatically on
-        # Linux/Windows).
+        # Shipped assets: the `app_logo` widget (myogestic_logo.png) and HelloImGui's
+        # window-icon convention (app_settings/icon.png, automatic on Linux/Windows).
         _register_assets_folder(hello_imgui)
-        # macOS dock icon must be set AFTER the backend (GLFW) creates the
-        # NSApplication - otherwise GLFW resets it during init. post_init
-        # runs at the right moment.
+        # The macOS dock icon must be set AFTER GLFW creates the NSApplication -
+        # otherwise GLFW resets it during init. post_init runs at the right moment.
         if sys.platform == "darwin":
             runner_params.callbacks.post_init = _try_set_macos_dock_icon
-
-        import os
 
         os.makedirs(".imgui_state", exist_ok=True)
         runner_params.ini_filename_use_app_window_title = False
@@ -515,10 +581,9 @@ class App:
             runner_params.callbacks.load_additional_fonts = load_fonts
             runner_params.callbacks.setup_imgui_style = apply_theme
 
-        # Detached viewport windows are real, rectangular OS windows, so square
-        # off the corners and force an opaque window bg — otherwise the theme's
-        # rounded / translucent bg shows the desktop through a detached window's
-        # corners. Chained after the theme's setup so it overrides the rounding.
+        # Detached viewport windows are real, rectangular OS windows: square off the
+        # corners and force an opaque bg, or the theme's rounded/translucent bg shows
+        # the desktop through their corners. Chained after the theme's setup.
         if not IS_BROWSER:
             _prev_style = runner_params.callbacks.setup_imgui_style
 
@@ -542,9 +607,9 @@ class App:
             params.default_imgui_window_type = (
                 hello_imgui.DefaultImGuiWindowType.provide_full_screen_dock_space
             )
-            # Drain anything popout_panel() registered before run() (the
-            # widget can also be called from inside @app.ui - that path
-            # registers on the first frame, see widgets/popout.py).
+            # Drain anything popout_panel() registered before run(). Called from
+            # inside @app.ui it registers on the first frame instead - see
+            # widgets/popout.py.
             from myogestic.widgets.panels.popout import _make_dockable_window
 
             dp = hello_imgui.DockingParams()
@@ -568,9 +633,8 @@ class App:
             dp.dockable_windows = dockable_windows
             runner_params.docking_params = dp
 
-            # Enable the actual docking + tear-off-into-OS-window behavior.
-            # `setup_imgui_style` runs after ImGui::CreateContext, which is
-            # when ConfigFlags can be safely set.
+            # `setup_imgui_style` runs after ImGui::CreateContext, which is when
+            # ConfigFlags can be safely set.
             prev_setup = runner_params.callbacks.setup_imgui_style
 
             def _setup_with_docking() -> None:
@@ -592,15 +656,14 @@ class App:
             addons.with_implot = True
             addons.with_implot3d = True
 
-            immapp.run(runner_params=runner_params, add_ons_params=addons)
+            with _collapse_glfw_monitor_spam():
+                immapp.run(runner_params=runner_params, add_ons_params=addons)
         finally:
             _active_app = None
             self._runner_params = None
             _pending_popouts.clear()
-            # Drop the per-title registration cache so a subsequent App in
-            # the same process (with overlapping panel titles) re-registers
-            # cleanly. Without this, the second App's popout_panel calls
-            # would short-circuit and never queue their DockableWindows.
+            # Drop the per-title registration cache, or a second App in the same
+            # process with overlapping panel titles never queues its DockableWindows.
             from myogestic.widgets.panels.popout import _reset_registry
 
             _reset_registry()

@@ -10,19 +10,23 @@ Workflow:
     4. Select sessions → Train → Predict → VHI hand moves
 """
 
+import pathlib
 import sys
+import tomllib
 
 import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
 from myogestic.recipes.features import mav, rms, var, wl, zc
+from myogestic.remote import RemoteTarget
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -38,9 +42,21 @@ ctrl_outlet = control_outlet()
 
 # --8<-- [start:poses]
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
-HAND_REST = np.zeros(9, dtype=np.float32)
-HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
+
+# What this app controls, declared in a file: the left side is *ours*, the right side is
+# VHI's. Parsing needs no VHI; resolving does, so that waits until one is up (`link.ensure`).
+CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification.toml"
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
+
+# Classification reaches the hand the *same way regression does*. The classifier gives an
+# activation, not a pose: both aliases below declare a `threshold_fraction` in the file,
+# so a probability is gated to exactly 0 or 1 and from there is an ordinary control value —
+# fanned out and weighted like a regressor's. `fist` reaches all five digits and
+# `thumb_spread` abducts the thumb, so a whole-hand pose is these two numbers rather than
+# a channel vector, and VHI receives continuous per-control values either way.
+FIST_ALIASES = ("fist", "thumb_spread")
+
 # --8<-- [end:poses]
 
 # Output-side smoothing applied to the hand pose vector before pushing
@@ -48,6 +64,9 @@ HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
 # --8<-- [start:filter]
 output_filter = PostProcessor(hz=32)
 # --8<-- [end:filter]
+
+vhi_control = vhi.control_client()
+
 
 # Reference RMS / MAV / WL / VAR / ZC live in myogestic.recipes.features; mix
 # with your own callables here — feature engineering is user code, this is
@@ -89,6 +108,22 @@ app = App("EMG Classification", ui_scale=0.85)
 app.streams(Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 # --8<-- [end:setup]
+
+# The link and its target own the wire. VHI's continuous inlet takes control values, and
+# `RemoteTarget` negotiates the space and refuses a VHI it cannot fully drive rather than
+# guessing. Nothing is resolved here: the aliases above mean nothing until VHI has said
+# what its addresses do, and this script launches VHI itself. `link.ensure()` binds on
+# the first click that finds VHI up, and `link.bus` is None until then.
+link = ControlLink(
+    CONTROL_MAP,
+    # No hand and no stream is named: the target looks this file's addresses up in VHI's
+    # manifest and publishes one stream per address it drives, each named for that
+    # address and one channel wide.
+    [RemoteTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=32,
+)
 
 
 # --8<-- [start:extract]
@@ -161,16 +196,24 @@ def train(data: TrainingData):
 # --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
-    """Classify → map to hand pose → smooth → push to VHI.
+    """Classify → gate to an activation → smooth → push to VHI.
 
-    Filter applies only to the physical-control vector; class probabilities
-    flow through unchanged for the UI / debug overlay.
+    Three separate things happen to the number, in this order, and each is worth
+    telling apart. `threshold_fraction` decides *whether* the hand is closed, giving
+    a 0 or a 1. The fan-out weights decide *how much of that* each digit gets. The
+    filter then decides *how fast* the change is allowed to look. Class probabilities
+    themselves flow through untouched, for the UI.
     """
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
-    hand = HAND_FIST.copy() if class_idx == 1 else HAND_REST.copy()
-    hand = output_filter(hand).astype(np.float32)
-    vhi_outlet.push(hand)
+    # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this callback has a
+    # deadline.
+    if link.bus is None:
+        return {"class": class_idx, "proba": proba}  # unresolved; nothing to command
+    # The probability of "Fist", pushed as-is. The bus gates it before anything else
+    # sees it, so VHI is never handed a bare 0.73 standing in for a finger position.
+    activation = float(proba[CLASSES.index("Fist")])
+    hand = link.bus.push(dict.fromkeys(FIST_ALIASES, activation))
     return {"class": class_idx, "proba": proba, "hand": hand}
 
 
@@ -196,7 +239,13 @@ grid = Grid(
 
 
 def _on_gesture(i: int) -> None:
+    link.ensure()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
+
+
+def _on_record() -> None:
+    link.ensure()
+    app.start_recording()
 
 
 viewer = SignalViewer("emg")
@@ -204,7 +253,7 @@ logo = AppLogo()
 processes = ProcessLauncher(PROCESSES)
 recording = RecordingControls(
     CLASSES,
-    on_record=app.start_recording,
+    on_record=_on_record,
     on_stop=app.stop_recording,
     on_gesture=_on_gesture,
 )
@@ -251,7 +300,12 @@ def demo_ui(ctx):
 
 
 def main() -> None:
-    app.run()
+    try:
+        app.run()
+    finally:
+        # Rest the hand and make that frame land before the outlet's thread dies.
+        link.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

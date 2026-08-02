@@ -15,11 +15,26 @@ import doctest
 import pytest
 
 from myogestic import EdgeTrigger, Fr, Grid, Px, StreamInfo, TrainingData
+from myogestic import controls as _controls
 from myogestic.outputs import filters
 from myogestic.recipes import estimators, features
+from myogestic.vhi import pose as _pose
 
 # Objects whose docstring Examples are deterministic and dependency-free.
 RUNNABLE = [
+    _pose.split_pose,
+    _controls.Continuous,
+    _controls.Discrete,
+    _controls.ControlSet,
+    _controls.load_control_map,
+    _controls.resolve,
+    _controls.read_control_space,
+    _controls.Capability,
+    _controls.ControlMap,
+    _controls.substitute_rest,
+    _controls.clip,
+    _controls.encode,
+    _controls.decode,
     StreamInfo,
     TrainingData,
     Grid,

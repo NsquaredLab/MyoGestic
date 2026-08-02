@@ -1,0 +1,14 @@
+# Map your model's outputs to VHI's controls.
+#   left  = your name, anything you like
+#   right = a control VHI declares (it owns the kind, range and states)
+# See what a running VHI exports:  uv run --extra grpc python tools/inspect_control.py
+# Full reference: docs/api/controls.md
+
+[dofs]
+setup_thumb = "vhi.control.pose.thumb.flexion"
+setup_index = "vhi.control.pose.index"
+setup_close = [
+  "vhi.control.pose.middle",
+  "vhi.control.pose.ring",
+  "vhi.control.pose.little",
+]

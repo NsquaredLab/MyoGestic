@@ -14,7 +14,6 @@ class SessionWidgetState:
     folder_dialog: object | None = None
     last_load_msg: str = ""
     deactivated_classes: set[int] = field(default_factory=set)
-    scanned: bool = False  # base_path listed yet? (one-shot on first render)
 
 
 _states: dict[str, SessionWidgetState] = {}
@@ -40,9 +39,9 @@ def scan_sessions(base_path: str) -> list[dict]:
 def _session_row(path: Path) -> dict | None:
     try:
         if path.is_dir() and (path / "meta.json").exists():
-            meta = json.loads((path / "meta.json").read_text())
+            meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
             labels_file = path / "labels.json"
-            labels = json.loads(labels_file.read_text()) if labels_file.exists() else []
+            labels = json.loads(labels_file.read_text(encoding="utf-8")) if labels_file.exists() else []
         elif path.is_file() and path.name.endswith(".zip"):
             # Any .zip with a meta.json inside is a session (matches the
             # "Load Files..." dialog filter + tooltip); recordings write
@@ -58,7 +57,7 @@ def _session_row(path: Path) -> dict | None:
 
         streams_meta = meta.get("streams", {})
         return {
-            # Canonical path so the same session dedups across spellings
+            # Resolved path so the same session dedups across spellings
             # (symlinks, /var vs /private/var on macOS, relative vs absolute).
             "path": str(path.resolve()),
             "name": path.name,
@@ -110,7 +109,7 @@ def add_recorded_session(path: str, base_path: str = "sessions", title: str = "S
     """Register a freshly recorded session as selected."""
     widget_id = f"{title}_{base_path}"
     state = get_state(widget_id)
-    path = str(Path(path).resolve())  # match the canonical paths stored on rows
+    path = str(Path(path).resolve())  # match the resolved paths stored on rows
     if any(s["path"] == path for s in state.sessions):
         return
     for row in scan_sessions(str(Path(path).parent)):
@@ -126,8 +125,8 @@ def load_session_files(state: SessionWidgetState, paths: list[str]) -> None:
     added = 0
     by_parent: dict[str, list[str]] = defaultdict(list)
     for raw in paths:
-        # Canonicalize the picked path so it dedups against the already-listed
-        # (also canonical) rows instead of being re-added under a different
+        # Resolve the picked path so it dedups against the already-listed
+        # (also resolved) rows instead of being re-added under a different
         # spelling — e.g. the macOS dialog's /private/var vs a /var scan.
         path_str = str(Path(raw).resolve())
         if path_str not in existing_paths:

@@ -15,7 +15,7 @@ flowchart LR
         AT["Acquisition thread (per Stream)<br/>source.read → ring buffer<br/>→ display snapshot<br/>→ optional Zarr append"]
         PT["Predict thread (only with Pipeline)<br/>extract → predict<br/>→ pipeline.predictions"]
         TT["Training thread (transient)<br/>train → pipeline.model"]
-        OT["Output thread (per Output)<br/>drain _latest → transport @ hz"]
+        OT["Output thread (per Outlet)<br/>drain _latest → transport @ hz"]
     end
 
     subgraph BRIDGE["Subprocess (optional)"]
@@ -35,12 +35,12 @@ flowchart LR
 | Acquisition (one per `Stream`) | `Stream` | source.read → ring buffer → display snapshot → optional Zarr append |
 | Predict | `Pipeline` | extract → predict → write to `pipeline.predictions` |
 | Training (transient) | `Pipeline` | train → assign to `pipeline.model` |
-| Output (one per `Output`) | user-owned `Output` | drain `_latest` to its destination at `hz` |
+| Output (one per `Outlet`) | user-owned `Outlet` | drain `_latest` to its destination at `hz` |
 | Bridge subprocess (optional) | `Bridge` | webcam decode → Zarr → publish LSL clock |
 
 Every non-main thread is a daemon: the program exits cleanly even if a thread is mid-iteration when the user closes the window. The predict thread is started via `app.before_run_hooks` (at `app.run()`, not on first Predict click) and joined with a short timeout via a `threading.Event` flag on cleanup. Acquisition and output threads are daemons that exit when the process does; their `stop()` methods set a sentinel but don't `join()`.
 
-## Why the GIL doesn't bite
+## Why the GIL does not serialise these threads
 
 Python's Global Interpreter Lock would be a problem if any of these threads spent CPU time in pure Python. They don't:
 
@@ -78,7 +78,7 @@ Why: PyTorch CUDA streams can be juggled, but the engineering complexity isn't w
 
 ## Bridge subprocesses
 
-Heavy-data sources break the GIL-release assumption - webcam decoding, even with OpenCV, can saturate the Python thread enough to disrupt the predict thread. The escape hatch is a subprocess:
+Heavy-data sources break the GIL-release assumption - webcam decoding, even with OpenCV, can saturate the Python thread enough to disrupt the predict thread. For heavy-data sources that break that assumption, use a subprocess:
 
 ```python
 cam = WebCamBridge("cam", device=0, zarr_path="session/cam.zarr")
@@ -91,7 +91,7 @@ The bridge process:
 - Writes frames directly to a Zarr array - that's the persistence step.
 - Publishes an LSL "clock" stream so the main app knows what frame number is current.
 
-The main app never touches the camera frames; it just reads frame-number stamps from the LSL stream and looks up frames in the Zarr if the experiment needs them. A `ProcessLauncher` panel shows the bridge's start/stop state.
+The main app never touches the camera frames; it just reads frame-number stamps from the LSL stream and looks up frames in the Zarr if the experiment needs them. Registering a bridge does not start it — call `cam.start()` when you want it up; `app.run()` stops it on cleanup. Nothing renders a bridge for you: `bridge.status` and `bridge.alive` are there if you want to show them, and a stop that does not land is logged.
 
 ## Common mistakes
 

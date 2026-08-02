@@ -11,6 +11,7 @@ import sys
 import time
 import uuid
 import zipfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.util import find_spec
 from pathlib import Path
@@ -28,27 +29,20 @@ log = logging.getLogger(__name__)
 if find_spec("zarrs") is not None:
     zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 
-#: ``meta.json`` schema version. Bump whenever the on-disk shape of a
-#: per-stream entry changes (e.g. a new field). Readers must stay tolerant
-#: of older, unversioned meta.json files (see `open_session_store`), so
-#: this is informational rather than enforced. Bumped to 2 for
-#: `channel_names` + `channel_grids` (see `StreamInfo.channel_grids`).
-_META_SCHEMA_VERSION = 2
+#: ``meta.json`` schema version. Bump whenever the on-disk shape of a per-stream
+#: entry changes. Readers must stay tolerant of older, unversioned meta.json files
+#: (see `open_session_store`), so this is informational rather than enforced.
+_META_SCHEMA_VERSION = 3
 
 
 def _robust_rmtree(path: Path, *, retries: int = 5, delay_s: float = 0.1) -> None:
     """``shutil.rmtree`` that tolerates Windows file-handle lag.
 
-    On POSIX a single ``rmtree`` of a zarr folder always succeeds (open files can
+    On POSIX the first ``rmtree`` of a zarr folder always succeeds (open files can
     be unlinked). On Windows a just-written chunk - or an antivirus scan - can
     briefly hold a handle, so deletion raises ``PermissionError`` (WinError 32).
     Force a GC to drop any lingering zarr handles, clear the read-only bit
     Windows sets on locked files, and retry a few times before giving up.
-
-    Notes
-    -----
-    A no-op-different behaviour on POSIX: the first attempt succeeds, so the
-    retry/GC path is Windows-only in practice.
     """
 
     def _force_writable(func, p, _exc):  # noqa: ANN001
@@ -73,23 +67,20 @@ def _install_windows_zarr_atomic_write_retry(*, retries: int = 10, delay_s: floa
     over the destination (``zarr.storage._local._atomic_write``). On POSIX that
     rename never fails; on Windows the underlying ``MoveFileEx`` raises
     ``PermissionError`` (WinError 5 / 32) whenever another handle to the file is
-    still open at that instant - an antivirus scan of the just-written chunk,
-    the search indexer, or the OS not having released the handle the microsecond
-    after ``close()`` returned. It is intermittent (a timing collision, not a
-    concurrency bug), but a high-rate multi-stream recording reliably hits it:
-    every [`Session.append`][] grows the arrays, each trailing-chunk rewrite
-    is another rename, and losing the race once crashes the whole recording.
+    still open at that instant - an antivirus scan of the just-written chunk, the
+    search indexer, or the OS not having released the handle yet. A high-rate
+    multi-stream recording hits it reliably: every [`Session.append`][] grows the
+    arrays, each trailing-chunk rewrite is another rename, and losing the race
+    once crashes the whole recording.
 
-    This is the write-path counterpart to [`_robust_rmtree`][], which already
-    retries on the same Windows lag during teardown. The retry has to live at
-    the rename itself: [`Session.append`][] -> ``zarr.Array.append`` cannot be
-    retried safely because it resizes (persists the new shape) *before* writing
-    the chunks, so a retry after a partial failure would write at the wrong
-    offset and corrupt the array.
+    The retry has to live at the rename itself: [`Session.append`][] ->
+    ``zarr.Array.append`` cannot be retried safely because it resizes (persists
+    the new shape) *before* writing the chunks, so a retry after a partial
+    failure would write at the wrong offset and corrupt the array.
 
     The proper fix belongs upstream in zarr; this wraps ``_atomic_write`` with a
-    bounded exponential back-off until a fixed zarr is released. Windows-only,
-    and a guarded no-op if zarr's internals move so it can never break import.
+    bounded back-off until then. Windows-only, and a guarded no-op if zarr's
+    internals move, so it can never break import.
     """
     if sys.platform != "win32":
         return
@@ -135,21 +126,20 @@ class LabelEvent:
     """One entry in a session's label track: "at LSL time T, the user picked class N".
 
     Recorded whenever the user clicks a class button in
-    [`RecordingControls`][myogestic.widgets.RecordingControls]. The label track is
-    a chronological list of these events; the recording-window
-    iterators ([`iter_labeled_windows`][myogestic.session.iter_labeled_windows],
-    [`iter_aligned_windows`][myogestic.session.iter_aligned_windows]) walk the track to
-    decide which sample range gets which class index.
+    [`RecordingControls`][myogestic.widgets.RecordingControls]. The label track is a
+    chronological list of these events; the recording-window iterators
+    ([`iter_labeled_windows`][myogestic.session.iter_labeled_windows],
+    [`iter_aligned_windows`][myogestic.session.iter_aligned_windows]) walk it to decide
+    which sample range gets which class index.
 
     Attributes
     ----------
     timestamp
-        LSL clock time (seconds) when the label was emitted.
-        Use ``mne_lsl.lsl.local_clock()`` if you ever need to mint
-        one by hand.
+        LSL clock time (seconds) when the label was emitted. Mint one by hand
+        with ``mne_lsl.lsl.local_clock()``.
     class_index
-        Index into the session's ``class_names`` list.
-        ``-1`` is the unlabeled sentinel (the iterators skip it).
+        Index into the session's ``class_names`` list. ``-1`` is the unlabeled
+        sentinel (the iterators skip it).
 
     Examples
     --------
@@ -187,13 +177,11 @@ class Recording:
 class Session:
     """One recording session on disk: per-stream Zarr arrays + a label track.
 
-    Created when the user clicks **Record**, finalised when they click
-    **Stop**. While active, every acquisition thread that has its
-    stream registered appends to the session's Zarr stores; UI label
-    clicks emit [`LabelEvent`][] entries onto the label track.
-    Closing the session writes ``meta.json`` and ``labels.json``
-    alongside the Zarr folders, and optionally packs the whole tree
-    into a portable ``.session.zip``.
+    Created when the user clicks **Record**, finalised when they click **Stop**.
+    While active, every acquisition thread with a registered stream appends to the
+    session's Zarr stores; UI label clicks emit [`LabelEvent`][] entries onto the
+    label track. Closing writes ``meta.json`` and ``labels.json`` alongside the
+    Zarr folders, and optionally packs the tree into a portable ``.session.zip``.
 
     Layout on disk (one folder per recording, named with the start
     timestamp)::
@@ -207,15 +195,13 @@ class Session:
             labels.json                # the LabelEvent list
 
     Read sessions back with [`open_session_store`][myogestic.session.open_session_store],
-    which transparently handles both folders and ``.session.zip``
-    archives.
+    which handles both folders and ``.session.zip`` archives.
 
     Parameters
     ----------
     base_path
-        Parent directory; the session creates a
-        timestamp-named subdirectory inside. Default ``"sessions"``
-        (created if missing).
+        Parent directory; the session creates a timestamp-named subdirectory
+        inside. Default ``"sessions"`` (created if missing).
 
     Examples
     --------
@@ -226,11 +212,10 @@ class Session:
 
     def __init__(self, base_path: str = "sessions"):
         ts = time.strftime("%Y-%m-%d_%H-%M-%S")
-        # Append a short random suffix so two sessions started within the same
-        # wall-clock second (e.g. Stop then immediately Record) never share a
-        # folder. pack_to_zip() runs on a daemon thread and shutil.rmtree()s its
-        # own folder; a shared name would let the old session's pack thread wipe
-        # the new recording's data (and collide on the <name>.session.zip path).
+        # Random suffix so two sessions started within the same wall-clock second
+        # never share a folder: pack_to_zip() runs on a daemon thread and
+        # shutil.rmtree()s its own folder, so a shared name lets the old session's
+        # pack thread wipe the new recording (and collide on the .session.zip path).
         self.path = Path(base_path) / f"{ts}_{uuid.uuid4().hex[:8]}"
         self.path.mkdir(parents=True, exist_ok=True)
         self.stores: dict[str, zarr.Array] = {}
@@ -263,17 +248,13 @@ class Session:
 
     def append(self, stream_name: str, data: np.ndarray, timestamps: np.ndarray) -> None:
         """Called from acquire loop when recording. data: (n_samples, n_channels)."""
-        # Defense-in-depth: Stream.detach_session() (under its lock) is what
-        # actually prevents an append from racing pack_to_zip()'s clear(); this
-        # guard keeps a stray/late append from raising KeyError if the stores
-        # were already finalised, rather than crashing the caller's thread.
+        # Stream.detach_session() (under its lock) is what prevents an append from
+        # racing pack_to_zip()'s clear(). This guard only keeps a stray late append
+        # from raising KeyError on the caller's thread; the log line makes a future
+        # regression that drops samples observable rather than silent.
         store = self.stores.get(stream_name)
         ts_store = self.ts_stores.get(stream_name)
         if store is None or ts_store is None:
-            # Should not happen now that Stream.detach_session() drains
-            # in-flight appends before pack_to_zip() clears the stores; log
-            # it so a future regression that drops samples is observable
-            # rather than silent.
             log.debug("dropping late append for finalised stream %r", stream_name)
             return
         store.append(data)
@@ -295,7 +276,12 @@ class Session:
         ts = timestamp if timestamp is not None else local_clock()
         self.label_track.append(LabelEvent(timestamp=ts, class_index=class_index))
 
-    def save_meta(self, app_name: str, class_names: list[str] | None = None) -> None:
+    def save_meta(
+        self,
+        app_name: str,
+        class_names: list[str] | None = None,
+        control_space: Mapping[str, object] | None = None,
+    ) -> None:
         """Write meta.json + labels.json to the session folder.
 
         Parameters
@@ -303,9 +289,15 @@ class Session:
         app_name
             Identifier for the producing app.
         class_names
-            Optional human-readable names for label class indices.
-            Persisting them makes old sessions self-describing: readers can
-            render labels without an external lookup.
+            Optional human-readable names for label class indices. Persisting them
+            keeps old sessions self-describing: readers can render labels without
+            an external lookup.
+        control_space
+            Optional control configuration this recording was made under, as produced
+            by ``ControlMap.as_control_space()``. Records what each number meant — the alias it
+            came from and the target control it drove. Carries a ``format`` tag; read
+            it back with `myogestic.controls.read_control_space`, which refuses a
+            pre-alias control space by name instead of reinterpreting it.
         """
         meta: dict[str, object] = {
             "schema_version": _META_SCHEMA_VERSION,
@@ -328,23 +320,26 @@ class Session:
         }
         if class_names is not None:
             meta["class_names"] = list(class_names)
-        (self.path / "meta.json").write_text(json.dumps(meta, indent=2))
+        if control_space is not None:
+            meta["control_space"] = dict(control_space)
+        (self.path / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         labels = [
             {"timestamp": e.timestamp, "class_index": e.class_index} for e in self.label_track
         ]
-        (self.path / "labels.json").write_text(json.dumps(labels, indent=2))
+        (self.path / "labels.json").write_text(
+            json.dumps(labels, indent=2), encoding="utf-8"
+        )
 
     def pack_to_zip(self) -> Path:
         """Pack the session folder into a single `<name>.session.zip` file.
 
-        Uses ZIP_STORED (no compression). Zarr chunks are already compressed
-        internally; an outer compression layer would add CPU for little gain.
+        Uses ZIP_STORED: zarr chunks are already compressed internally, so an outer
+        compression layer would add CPU for little gain.
         """
-        # zarr v3 arrays expose no explicit close, so drop refs and force a GC
-        # to release the underlying chunk-file handles. On POSIX this is belt-
-        # and-braces (open files can be unlinked anyway); on Windows it is
-        # required - the later rmtree/replace fail with WinError 32 if any
-        # handle into the folder is still open.
+        # zarr v3 arrays expose no explicit close, so drop refs and force a GC to
+        # release the chunk-file handles. Required on Windows: the later
+        # rmtree/replace fail with WinError 32 while any handle into the folder
+        # is still open.
         self.stores.clear()
         self.ts_stores.clear()
         gc.collect()
@@ -435,9 +430,8 @@ class Session:
         Closes the ``ZipStore`` opened by [`open_session_store`][] for a
         ``.session.zip`` and drops the array references. Safe to call more than
         once. On Windows an open ``ZipStore`` keeps the archive **locked**, so
-        close the session before moving or deleting the ``.session.zip``. Use as
-        a context manager (``with open_session_store(p) as s: ...``) to do this
-        automatically.
+        close the session before moving or deleting the ``.session.zip`` — use it
+        as a context manager (``with open_session_store(p) as s: ...``).
         """
         store = getattr(self, "_zip_store", None)
         if store is not None:

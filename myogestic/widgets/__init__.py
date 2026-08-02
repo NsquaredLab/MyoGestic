@@ -1,6 +1,7 @@
 """Reusable ImGui widgets for building MyoGestic ``@app.ui`` functions."""
 
 from myogestic.widgets.common import panel_header
+from myogestic.widgets.control_map_editor import ControlMapEditor
 from myogestic.widgets.panels import (
     BUILTIN_FILTERS,
     AppLogo,
@@ -60,6 +61,7 @@ __all__ = [
     "TemplateInspector",
     "TemplateInspectorRow",
     "TrialPreview",
+    "ControlMapEditor",
     "VhiMovementPanel",
     "VhiStateCache",
     "VhiStateSnapshot",

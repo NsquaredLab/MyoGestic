@@ -1,11 +1,16 @@
-"""``VhiMovementPanel`` in isolation — the Virtual Hand movement grid.
+"""``VhiMovementPanel`` in isolation — the Virtual Hand control-hand aid.
 
-A button grid of the VHI control hand's movements: it auto-refreshes state
-in the background, highlights the current movement, and dispatches clicks
-to the client. Normally that client is a live gRPC ``VhiControlClient``; to
-run without a VHI process we hand it a **fake client** whose ``get_state``
-returns a canned movement list and whose ``set_movement`` just logs — so
-refresh, highlighting, and click dispatch all work offline.
+A button grid of the VHI control hand's movements: it auto-refreshes state in the
+background, highlights the current movement, and dispatches clicks to a handler you
+supply. Normally the state comes from a live ``RecordingClient`` and the handler
+commands a discrete DOF (``bus.select("gesture", state)``); to run
+without a VHI process we hand it a **fake aid** whose ``state()`` returns a canned
+movement list, and a handler that just logs — so refresh, highlighting, and click
+dispatch all work offline.
+
+Note the panel takes the handler explicitly rather than defaulting to "command the
+target". Dispatching straight at the target would bypass the DOF's debounce, which
+is the only thing protecting a classifier-driven session from state chatter.
 
 Run with:
     uv run python examples/panels/vhi_movements.py
@@ -32,26 +37,32 @@ MOVEMENTS = (
 )
 
 
-class _FakeVhiClient:
-    """Stand-in for VhiControlClient — no gRPC, never raises."""
+class _FakeRecordingAid:
+    """Stand-in for RecordingClient — no gRPC, never raises."""
 
     def __init__(self) -> None:
         self.current = "Fist"
 
-    def get_state(self, timeout: float | None = None):
+    def state(self):
         return SimpleNamespace(
             available_movements=MOVEMENTS,
             current_movement=self.current,
-            current_state="idle",
-            mode="MOVEMENT",
+            animation_state="waiting",
+            trajectory_running=False,
+            trajectory_movement="",
         )
 
-    def set_movement(self, name: str) -> None:
-        self.current = name
-        print(f"[vhi] set_movement({name!r})")
+
+aid = _FakeRecordingAid()
 
 
-panel = VhiMovementPanel(_FakeVhiClient())
+def _on_movement(state: str) -> None:
+    """Stands in for `bus.select("gesture", state)` in a real app."""
+    aid.current = state
+    print(f"[vhi] discrete state -> {state!r}")
+
+
+panel = VhiMovementPanel(aid, _on_movement)
 
 app = App("panel: VhiMovementPanel")
 

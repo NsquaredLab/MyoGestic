@@ -1,0 +1,50 @@
+{
+  // Run and Debug uses `.venv/bin/python` directly, because a debugger has to own the
+  // process it debugs — it cannot attach through `uv run`. So the extras have to be in
+  // that venv *before* the launch, which is what this task does. Every configuration in
+  // launch.json declares it as its preLaunchTask, so a fresh clone works on the first
+  // press of F5 with no terminal step.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // `--inexact` is deliberate: a plain `uv sync` prunes anything outside the extras
+      // it was given, which would silently uninstall pytest/ruff/properdocs from a
+      // working checkout every time someone pressed F5.
+      "label": "uv: sync (examples + grpc)",
+      "detail": "Install the extras the examples and the gRPC control plane need.",
+      "type": "shell",
+      "command": "uv sync --inexact --extra examples --extra grpc",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true,
+        "close": true
+      }
+    },
+    {
+      "label": "uv: sync (grpc only)",
+      "detail": "Lean sync for the tools — no CatBoost, MyoVerse or torch.",
+      "type": "shell",
+      "command": "uv sync --inexact --extra grpc",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true,
+        "close": true
+      }
+    },
+    {
+      "label": "test: control standard",
+      "detail": "The suites behind the control files, the walkthrough and the examples.",
+      "type": "shell",
+      "command": "uv run --extra dev --extra examples --extra grpc python -m pytest tests/test_controls_map.py tests/test_controls_transforms.py tests/test_example_controls_toml.py tests/test_docs_control_maps.py tests/test_vhi_target.py tests/test_examples.py -q",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

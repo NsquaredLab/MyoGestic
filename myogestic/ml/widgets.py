@@ -30,9 +30,8 @@ from myogestic.widgets.panels.log_box import (
 )
 from myogestic.widgets.panels.recording import STATE_COLORS
 
-# Per-panel persistent log UX state, keyed by widget_id (defaults to "ml").
-# Lets each panel remember its own autoscroll + popout state across frames.
-_autoscroll: dict[str, bool] = {}
+# Per-panel log UX state, keyed by widget_id (defaults to "ml"), so each panel
+# remembers its own popout state across frames.
 _popout_open: dict[str, bool] = {}
 
 # Register ml state colors on the core recording widget's state-pill dict.
@@ -54,8 +53,6 @@ def _render_train_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)
 
 def _render_predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> None:
     state = pipeline.app.ctx.state
-    # Predict needs three things together: the state must be idle, a model
-    # must be loaded, AND both extract + predict callbacks must be wired.
     can_start = (
         state == "idle"
         and pipeline.model is not None
@@ -73,7 +70,7 @@ def _render_predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 
         imgui.button(f"{fa.ICON_FA_PLAY}  Predict##ml_pred", imgui.ImVec2(*size))
         imgui.end_disabled()
         # Say *why* Predict is unavailable — a disabled control with no reason
-        # is a dead end (flagged by both design reviews).
+        # is a dead end.
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
             if state != "idle":
                 why = "Busy — wait until the current action finishes."
@@ -89,8 +86,7 @@ def _render_training_log(
 ) -> None:
     if not pipeline.train_log:
         return
-    autoscroll = _autoscroll.setdefault(widget_id, True)
-    render_log(widget_id, pipeline.train_log, height=height, autoscroll=autoscroll)
+    render_log(widget_id, pipeline.train_log, height=height)
 
 
 def _render_save_model_button(
@@ -138,18 +134,15 @@ def _render_load_model_button(
 
 
 def _render_pipeline_panel(
-    pipeline: Pipeline, *, log_height: float = 80.0, widget_id: str = "ml"
+    pipeline: Pipeline, *, log_height: float = 0.0, widget_id: str = "ml"
 ) -> None:
-    # Render any open popout first so it survives frames even when the
-    # surrounding panel scrolls out of view (same pattern as
-    # process_launcher._render_open_popouts).
+    # Render any open popout first so it survives frames even when the surrounding
+    # panel scrolls out of view (as in process_launcher._render_open_popouts).
     if _popout_open.get(widget_id, False):
-        autoscroll = _autoscroll.setdefault(widget_id, True)
         still_open = render_log_popout(
             widget_id,
             pipeline.train_log,
             title="Model training log",
-            autoscroll=autoscroll,
         )
         if not still_open:
             _popout_open[widget_id] = False
@@ -159,20 +152,19 @@ def _render_pipeline_panel(
     imgui.same_line()
     _render_predict_button(pipeline)
 
-    # The log's autoscroll + popout toggles only mean something once a log
-    # exists to control, so they render with it (inline above the log) rather
-    # than dangling on the Train/Predict row over a hidden, empty log.
-    autoscroll = _autoscroll.setdefault(widget_id, True)
+    # The popout toggle only means something once a log exists, so it renders beside
+    # Train/Predict rather than dangling there before anything has been logged.
     popped = _popout_open.get(widget_id, False)
     if pipeline.train_log or popped:
         imgui.same_line()
-        autoscroll, popped = render_log_buttons(widget_id, autoscroll=autoscroll, popped_out=popped)
-        _autoscroll[widget_id] = autoscroll
+        popped = render_log_buttons(widget_id, popped_out=popped)
         _popout_open[widget_id] = popped
-        if popped:
-            imgui.text_disabled("(log popped out — see 'Model training log' window)")
-        else:
-            render_log(widget_id, pipeline.train_log, height=log_height, autoscroll=autoscroll)
+
+    # Same rule as `ProcessLauncher`: no inline log unless a caller asks for one. This
+    # panel was filling whatever height its cell gave it with output nobody had asked to
+    # see, and "Training complete" is one line that the popout shows better.
+    if log_height > 0 and not _popout_open.get(widget_id, False):
+        render_log(widget_id, pipeline.train_log, height=log_height)
 
 
 # --- Public widgets --------------------------------------------------------
@@ -221,10 +213,10 @@ class PredictButton:
 
 
 class TrainingLog:
-    """Read-only view of ``pipeline.train_log`` with smart autoscroll.
+    """Read-only view of ``pipeline.train_log``.
 
-    The autoscroll/popout *toggles* aren't drawn here — they're part of
-    [`PipelinePanel`][]'s control row so they sit next to Train/Predict.
+    The popout *toggle* isn't drawn here — it lives on
+    [`PipelinePanel`][]'s control row, next to Train/Predict.
 
     Examples
     --------
@@ -295,8 +287,21 @@ class PipelinePanel:
     """Train + Predict + log as a single titled panel.
 
     Matches the visual style of [`RecordingControls`][myogestic.widgets.RecordingControls],
-    [`SessionManager`][myogestic.widgets.SessionManager], and [`PostProcessor`][myogestic.widgets.PostProcessor]. The log inherits the
-    same autoscroll + popout UX as the process launcher's log.
+    [`SessionManager`][myogestic.widgets.SessionManager], and [`PostProcessor`][myogestic.widgets.PostProcessor].
+
+    The log lives in the ``↗`` popout, the same way
+    [`ProcessLauncher`][myogestic.widgets.ProcessLauncher]'s does: a window you can move,
+    resize and leave open. Nothing is drawn inline unless you ask for a height — the panel
+    used to fill its whole cell with a box holding one line of output.
+
+    Parameters
+    ----------
+    pipeline
+        The [`Pipeline`][myogestic.Pipeline] to train and predict with.
+    log_height
+        Height in pixels of an **optional** inline log. ``<= 0`` (the default) draws none.
+    widget_id
+        Unique ID for this panel, so two of them keep separate popout state.
 
     Examples
     --------
@@ -306,7 +311,7 @@ class PipelinePanel:
     """
 
     def __init__(
-        self, pipeline: Pipeline, *, log_height: float = 80.0, widget_id: str = "ml"
+        self, pipeline: Pipeline, *, log_height: float = 0.0, widget_id: str = "ml"
     ) -> None:
         self._pipeline = pipeline
         self._log_height = log_height

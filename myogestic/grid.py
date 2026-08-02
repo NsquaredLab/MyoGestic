@@ -256,9 +256,6 @@ class Grid:
             row_end = row + 1
         return _Cell(self, row_start, row_end, col_start, col_end)
 
-    def end_frame(self) -> None:
-        """No-op. Frame reset is handled automatically via frame counter."""
-
 
 class _Cell:
     """Context manager that positions an ImGui child window in a grid cell."""

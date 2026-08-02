@@ -72,9 +72,8 @@ class LinePlot:
                         if channel_names and ch < len(channel_names)
                         else f"ch{ch}"
                     )
-                    # Colour from the shared PALETTE (like the scatter + signal
-                    # viewer) so channel N is the same colour across the app,
-                    # not ImPlot's separate default cycle.
+                    # The shared PALETTE, not ImPlot's separate default cycle, so
+                    # channel N is the same colour across the app.
                     c = PALETTE[ch % len(PALETTE)]
                     spec = implot.Spec()
                     spec.line_color = imgui.ImVec4(float(c[0]), float(c[1]), float(c[2]), 1.0)

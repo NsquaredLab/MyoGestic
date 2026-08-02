@@ -19,6 +19,7 @@ Experimental - see the README "Status" note for macOS caveats.
 import re
 import sys
 import time as _time
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Stream, TrainingData
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
@@ -40,10 +42,11 @@ from myogestic.recipes.estimators import (
     sklearn_extra_trees_classifier,
     sklearn_logistic_classifier,
 )
+from myogestic.remote import RemoteTarget
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     LogPanel,
     PostProcessor,
@@ -66,15 +69,33 @@ HOP_MS = 100
 ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
 output_filter = PostProcessor(hz=32)
 
-HAND_POSES: dict[int, np.ndarray] = {
-    0: np.zeros(9, dtype=np.float32),
-    1: np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32),
-    2: np.array([-0.7, 0, -0.8, -0.6, 0, 0, 0, 0, 0], dtype=np.float32),
-    3: np.array([0.5, 0, 0.5, 0.5, 0.5, 0.5, 0, 0, 0], dtype=np.float32),
+# Which of *this example's* output names go to which of VHI's controls. Parsing the file
+# needs no VHI; learning what its addresses mean does — see `link.ensure`.
+CONTROL_FILE = Path(__file__).resolve().parent.parent / "controls" / "popout_layout.toml"
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
+
+# Our aliases, taken from the file, so renaming one there needs no edit here.
+POSE_ALIASES = tuple(CONTROL_MAP.bindings)
+
+# Per-class poses in control values: +1 is the direction the alias' target names, 0 is
+# rest. The fist abducts the thumb — this used to write that channel as 0, but recorded
+# VHI sessions have it at full excursion.
+HAND_POSES: dict[int, dict[str, float]] = {
+    0: {},  # Rest
+    1: dict.fromkeys(POSE_ALIASES, 1.0),  # Fist
+    2: {  # Pinch
+        "thumb_curl": 0.7,
+        "thumb_spread": 0.6,
+        "index_curl": 0.8,
+        "middle_curl": 0.6,
+    },
+    3: dict.fromkeys(POSE_ALIASES, -0.5),  # Open: extended past rest
 }
+
+vhi_control = vhi.control_client()
 
 rms_transform = RMS(window_size=32)
 mav_transform = MAV(window_size=32)
@@ -111,9 +132,11 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
-    # vhi.launcher() returns a [(name, argv)] entry; splat it so EMG
-    # Generator and VHI Hand share a single launcher panel.
-    *vhi.launcher(),
+    # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
+    # Hand share one launcher panel. `launchable` rather than `launcher` because an
+    # unlaunchable target must not stop this app from opening — a running one needs no
+    # button, and the reason is logged either way.
+    *vhi.launchable(),
 ]
 
 # docking=True enables ImGui multi-viewport so each app.popout(...) panel
@@ -123,6 +146,20 @@ app.streams(Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, bu
 pipeline = Pipeline(app)
 pipeline.save_model = save_pickle
 pipeline.load_model = load_pickle
+
+# The link and its target own the wire. VHI's continuous inlet takes control values, and
+# `RemoteTarget` negotiates the space and refuses a VHI it cannot fully drive rather than
+# guessing. Nothing resolves until `link.ensure()` finds VHI up: the map says nothing
+# about kinds or ranges until VHI has declared them. No hand and no stream is named here
+# either — the target looks this file's addresses up in VHI's manifest and publishes one
+# stream per address it drives, named for that address.
+link = ControlLink(
+    CONTROL_MAP,
+    [RemoteTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=32,
+)
 
 MODELS_DIR = Path("models")
 
@@ -199,14 +236,23 @@ def predict(model, features):
     else:
         proba = None
         class_idx = int(model.predict(x)[0])
-    hand = HAND_POSES.get(class_idx, HAND_POSES[0]).copy()
-    hand = output_filter(hand).astype(np.float32)
-    vhi_outlet.push(hand)
+    # `link.bus`, never `link.ensure()`: nothing resolved yet means nothing to command,
+    # and asking VHI what it exports blocks on an RPC, which this thread must not do.
+    if link.bus is None:
+        return {"class": class_idx, "proba": proba, "hand": {}}
+    pose = HAND_POSES.get(class_idx, HAND_POSES[0])
+    hand = link.bus.push({**dict.fromkeys(POSE_ALIASES, 0.0), **pose})
     return {"class": class_idx, "proba": proba, "hand": hand}
 
 
 def _on_gesture(i: int) -> None:
+    link.ensure()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
+
+
+def _on_record() -> None:
+    link.ensure()
+    app.start_recording()
 
 
 # --- Per-block render functions (each becomes its own dockable window) -----
@@ -242,7 +288,7 @@ def _processes_block() -> None:
 
 _recording = RecordingControls(
     CLASSES,
-    on_record=app.start_recording,
+    on_record=_on_record,
     on_stop=app.stop_recording,
     on_gesture=_on_gesture,
 )
@@ -253,7 +299,6 @@ def _recording_block() -> None:
 
 
 _MODEL_WIDGET_ID = "ml_popout"
-_autoscroll_on = True
 _log_popout_open = False
 
 _train_btn = TrainButton(pipeline)
@@ -262,7 +307,7 @@ _training_log = TrainingLog(pipeline, height=80.0, widget_id=_MODEL_WIDGET_ID)
 
 
 def _model_block() -> None:
-    global selected_model_idx, _load_dialog, _autoscroll_on, _log_popout_open
+    global selected_model_idx, _load_dialog, _log_popout_open
 
     # Render the popout window first so it survives even if the parent
     # block scrolls / docks out of view (same pattern as pipeline_panel).
@@ -271,7 +316,6 @@ def _model_block() -> None:
             _MODEL_WIDGET_ID,
             pipeline.train_log,
             title="Model training log",
-            autoscroll=_autoscroll_on,
         )
         if not still_open:
             _log_popout_open = False
@@ -284,8 +328,8 @@ def _model_block() -> None:
     imgui.same_line()
     _predict_btn.ui()
     imgui.same_line()
-    _autoscroll_on, _log_popout_open = render_log_buttons(
-        _MODEL_WIDGET_ID, autoscroll=_autoscroll_on, popped_out=_log_popout_open
+    _log_popout_open = render_log_buttons(
+        _MODEL_WIDGET_ID, popped_out=_log_popout_open
     )
     if _log_popout_open:
         imgui.text_disabled("(log popped out — see 'Model training log' window)")
@@ -358,7 +402,12 @@ _panel("Prediction", _prediction_block)
 
 
 def main() -> None:
-    app.run()
+    try:
+        app.run()
+    finally:
+        # Rest the hand and make that frame land before the outlet's thread dies.
+        link.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

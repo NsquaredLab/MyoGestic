@@ -9,12 +9,19 @@ and at worst it cancels animations or floods a downstream service.
 latest value, and the callback runs **only on the rising edge** - the first
 tick where the value differs from the previous one.
 
+!!! tip "For a Virtual Hand, prefer a discrete DOF"
+    `EdgeTrigger` is the primitive; you rarely need it directly. Declaring a
+    **discrete DOF** with `debounce_s` gets the same gating plus the dedupe and
+    the rebase-on-click, owned by `ControlBus` — see
+    [the control standard](../api/controls.md). Reach for `EdgeTrigger` when you
+    are driving something that is *not* a `myogestic.controls.Target`.
+
 ## The pattern
 
 ```python
 from myogestic.outputs import EdgeTrigger
 
-trigger = EdgeTrigger(callback=vhi_client.set_movement)
+trigger = EdgeTrigger(callback=send_gesture_to_device)
 
 @pipeline.predict
 def predict(model, features):
@@ -33,7 +40,7 @@ the trigger would, sync the trigger so it doesn't re-fire on the next tick:
 
 ```python
 def _on_gesture_button(class_idx: int) -> None:
-    vhi_client.set_movement(CLASSES[class_idx])     # do the action
+    send_gesture_to_device(CLASSES[class_idx])      # do the action
     trigger.rebase(CLASSES[class_idx])              # baseline matches
 ```
 
@@ -53,7 +60,7 @@ Pass `n_stable_ticks=N` to require a value to hold for **N consecutive ticks**
 before it fires, swallowing sub-`N` flicker:
 
 ```python
-trigger = EdgeTrigger(vhi_client.set_movement, n_stable_ticks=5)
+trigger = EdgeTrigger(send_gesture_to_device, n_stable_ticks=5)
 ```
 
 It counts *calls*, not time - convert a duration with the loop rate so the
@@ -64,7 +71,7 @@ import math
 
 STABLE_SECONDS = 0.1
 trigger = EdgeTrigger(
-    vhi_client.set_movement,
+    send_gesture_to_device,
     n_stable_ticks=max(1, math.ceil(STABLE_SECONDS * pipeline.predict_hz)),
 )
 ```
@@ -114,6 +121,7 @@ not here.
 
 ## See also
 
-* [[integrate-vhi]] - the canonical use case, gating gRPC `SetMovement`
-  on the predicted class.
+* [Controls](controls.md#continuous-and-discrete-are-different-things) - the reference
+  use case: a discrete DOF is delivered as an edge, gated by `debounce_s`, and commanded
+  over the device's own channel rather than repeated every tick.
 * [`myogestic.outputs.edge_trigger.EdgeTrigger`](../api/core.md) - full API reference.

@@ -8,9 +8,8 @@ from scipy.signal import iirnotch, lfilter, lfilter_zi
 #: -3 dB width of each notch, in Hz. `Q = f0 / _NOTCH_BW_HZ`.
 _NOTCH_BW_HZ = 3.0
 
-#: Fundamental + this many harmonics are notched (each is one biquad, so this
-#: bounds per-frame cost). The fundamental and low harmonics carry essentially
-#: all the visible mains energy; higher ones are lost in the trace anyway.
+#: Fundamental + this many harmonics are notched; each is one biquad, so this
+#: bounds per-frame cost.
 _NOTCH_MAX_LINES = 5
 
 
@@ -22,13 +21,11 @@ def apply_mains_notch(data: np.ndarray, fs: float, freq: int) -> np.ndarray:
     [`scipy.signal.iirnotch`][] biquad per harmonic below Nyquist, cascaded
     and applied with [`scipy.signal.lfilter`][] along axis 0.
 
-    Causal is the whole point: the scope scrolls, so a given sample is
-    re-filtered on many frames as the visible window slides over it. A causal
-    filter's output at sample ``i`` depends only on samples ``<= i``, so that
-    output never changes as newer samples arrive — the already-drawn trace
-    stays put. (A zero-phase/FFT notch couples the whole window and rewrites
-    past samples every frame, which reads as jitter.) The caller is responsible
-    for feeding a warm-up slice *before* the region it displays and dropping it,
+    Causal matters here: the scope scrolls, so a given sample is re-filtered on
+    many frames as the visible window slides over it. A causal filter's output at
+    sample ``i`` depends only on samples ``<= i``, so the already-drawn trace stays
+    put, where a zero-phase/FFT notch would rewrite past samples every frame. The
+    caller must feed a warm-up slice *before* the region it displays and drop it,
     so the shown region is the filter's settled steady state.
 
     Each biquad is initialised to the steady state for the first sample
@@ -74,15 +71,12 @@ class NotchFilter:
     stream. Feeding the same samples through :meth:`step` in *any* chunking yields output
     identical (within one SciPy build) to :func:`apply_mains_notch` over their concatenation
     — for concatenations of **≥ 8 samples**, below which ``apply_mains_notch`` no-ops as a
-    too-short guard while :meth:`step` always filters (the viewer's warm-up region is many
-    thousands of samples, so this never bites there). That equivalence is what lets the signal
-    viewer filter only the newly-arrived samples each frame instead of re-filtering the whole
-    visible window — the notch analog of the M4 display-decimation perf fix.
+    too-short guard while :meth:`step` always filters.
 
     A non-finite sample would poison the IIR state indefinitely, so a chunk containing any
-    non-finite value **resets the state after processing**: the poisoned output scrolls off and
-    the next clean chunk re-seeds, matching :func:`compute_rms_trace`'s recover-next-window
-    policy rather than corrupting everything downstream.
+    non-finite value **resets the state after processing**: the poisoned output scrolls off
+    and the next clean chunk re-seeds, matching :func:`compute_rms_trace`'s
+    recover-next-window policy.
     """
 
     def __init__(self, fs: float, freq: int):
@@ -162,24 +156,21 @@ def compute_rms_trace(
     (trailing / causal — the value is timestamped at the window's END, so it
     never implies future data at the live edge).
 
-    Design notes that make it correct for a scrolling live view:
+    For a scrolling live view:
 
     - **Absolute hop grid.** Endpoints sit at integer multiples of the hop
       period, keyed off the absolute timestamps ``ts``, *not* off this slice's
       own start. A given sample therefore lands in the same hop window no
       matter where the visible window currently begins, so the envelope does
-      not jitter as it scrolls (the same absolute-grid trick the MinMax
-      decimator uses). The caller must pass a slice that includes one full
-      ``window_ms`` of **pre-roll** before the visible left edge, otherwise
-      the leftmost visible endpoints are dropped for lack of history rather
-      than drawn as a scroll-dependent partial-window transient.
+      not jitter as it scrolls. The caller must pass a slice that includes one
+      full ``window_ms`` of **pre-roll** before the visible left edge, otherwise
+      the leftmost visible endpoints are dropped for lack of history.
     - **Only complete windows are emitted** (``start >= ts[0]``), so a short
-      buffer yields fewer points (or none) rather than a partial-window RMS
-      masquerading as raw signal.
+      buffer yields fewer points (or none) rather than a partial-window RMS.
     - **NaN policy:** a window containing any non-finite sample yields NaN for
       that channel *for that window only* — the running sums zero out the bad
       samples (counted separately), so the trace recovers on the next clean
-      window instead of one dropout poisoning everything after it.
+      window.
     - **float64 accumulation** for the sum of squares: a float32 cumulative
       sum drifts badly on a DC-offset signal over a long window.
 

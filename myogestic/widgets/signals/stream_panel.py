@@ -1,11 +1,9 @@
 """Per-stream status panel for @app.ui.
 
-A compact replacement for the MyoGestic "device setup" tab that only shows
-what's actually true at runtime: source class, connection status, sample
-rate, channel count, last-sample age, plus inline connect buttons for any
-target the source's ``discover()`` reports. Rendering is one-shot per
-frame — no hidden state beyond the discovery cache (shared with the signal
-viewers).
+Shows source class, connection status, sample rate, channel count and
+last-sample age, plus inline connect buttons for any target the source's
+``discover()`` reports. Rendering is one-shot per frame — no hidden state
+beyond the discovery cache, which is shared with the signal viewers.
 """
 
 from __future__ import annotations
@@ -27,9 +25,8 @@ if TYPE_CHECKING:
 _OK = SUCCESS
 _BAD = DANGER
 
-# Streams we've already auto-discovered once. Forces the auto-scan to fire
-# only on the first frame each stream is observed disconnected — the user's
-# scan button can refresh later.
+# Streams we've already auto-discovered once, so the auto-scan fires only on the
+# first frame each stream is seen disconnected. The scan button refreshes later.
 _auto_scanned: set[str] = set()
 
 
@@ -105,7 +102,11 @@ def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
     if scan.busy:
         imgui.end_disabled()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Reconnect to current target")
+        imgui.set_tooltip(
+            "Connect to this stream's target.\n"
+            "Nothing attaches on its own — not on open, and not after a source goes\n"
+            "away — so a stream from an earlier run is never picked up behind you."
+        )
 
     if has_discover and selectable:
         imgui.same_line()
@@ -132,7 +133,13 @@ def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
         if stream.last_error:
             imgui.text_colored(muted(), stream.last_error)
         else:
-            imgui.text_colored(muted(), "disconnected — waiting for source")
+            # Not "waiting for source". Nothing is waiting: a stream attaches when
+            # somebody attaches it, so a line promising it would happen on its own
+            # described the retry loop this used to have and left a red dot looking
+            # like a fault when it is a question. Name the button that answers it.
+            imgui.text_colored(
+                muted(), f"disconnected — {fa.ICON_FA_ARROWS_ROTATE} connects it"
+            )
 
         # Auto-kick a scan on first disconnect so buttons appear without a click.
         if has_discover and selectable and name not in _auto_scanned:
@@ -206,10 +213,7 @@ def _connect_buttons(name: str, stream: Stream, scan: _ScanState) -> None:
 
 
 def _current_target(stream: object) -> str | None:
-    """Best-effort read of the stream name the source is currently targeting.
-
-    Used to suppress the redundant button for the failing target.
-    """
+    """Best-effort read of the stream name the source is currently targeting."""
     src = stream._source  # type: ignore
     for attr in ("stream_name", "_stream_name", "name", "_name"):
         val = getattr(src, attr, None)
@@ -221,9 +225,9 @@ def _current_target(stream: object) -> str | None:
 def _last_ts_age(stream: object) -> float | None:
     """Seconds since the most recent sample reached the ring buffer.
 
-    Defers to ``Stream.last_timestamp()`` which takes the per-stream lock —
-    necessary because ``reconnect()`` zeroes ``_display_n`` and reallocates
-    ``_display_t``, so a lock-free read can index a torn buffer.
+    Must go through ``Stream.last_timestamp()``, which takes the per-stream lock:
+    ``reconnect()`` zeroes ``_display_n`` and reallocates ``_display_t``, so a
+    lock-free read can index a torn buffer.
     """
     last_fn = getattr(stream, "last_timestamp", None)
     if last_fn is None:

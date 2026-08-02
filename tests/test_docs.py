@@ -183,3 +183,69 @@ def test_doc_page_runs(path, doc_session):
             exec(compile(code, f"{path}:{ln}", "exec"), ns)  # noqa: S102
         except Exception as e:  # noqa: BLE001
             pytest.fail(f"{path.relative_to(ROOT)}:{ln} doc block raised {type(e).__name__}: {e}")
+
+
+# --- Layer 3: every ```toml block that declares DOFs must actually load ----------
+# parses but is rejected by `load_control_map` — teaches a shape that cannot work.
+# Layer 1 gives python blocks that guarantee; this extends it to the declarations.
+
+_TOML_BLOCK = re.compile(r"```toml\n(.*?)\n[ \t]*```", re.DOTALL)
+
+
+def _toml_blocks(path: Path):
+    """Yield ``(code, line_number)`` for each toml block in a file."""
+    text = path.read_text(encoding="utf-8")
+    for match in _TOML_BLOCK.finditer(text):
+        yield textwrap.dedent(match.group(1)), text[: match.start()].count("\n") + 1
+
+
+@pytest.mark.parametrize("path", MD_FILES, ids=lambda p: str(p.relative_to(ROOT)))
+def test_doc_toml_blocks_parse_and_load(path):
+    """A TOML snippet must parse, and a mapping must survive `load_control_map`."""
+    import tomllib
+
+    from myogestic.controls import load_control_map
+
+    for code, line in _toml_blocks(path):
+        where = f"{path.relative_to(ROOT)}:{line}"
+        try:
+            raw = tomllib.loads(code)
+        except tomllib.TOMLDecodeError as exc:
+            pytest.fail(f"{where}: invalid TOML — {exc}")
+
+        # A fragment showing one mapping (no [dofs] header) is still a real declaration:
+        # it is exactly what a reader copies into their own [dofs] table, so wrap it and
+        # check it rather than skip it.
+        if "dofs" in raw:
+            candidate = raw
+        elif raw and all(isinstance(v, (str, list, dict)) for v in raw.values()):
+            candidate = {"dofs": raw}
+        else:
+            continue  # not a control declaration (e.g. a pyproject sample)
+
+        try:
+            load_control_map(candidate)
+        except ValueError as exc:
+            pytest.fail(f"{where}: TOML parses but load_control_map rejects it — {exc}")
+
+
+# --- Layer 4: snippet includes must sit inside a fence ------------------------
+#
+# `--8<--` outside a code fence is *valid markdown*, so `properdocs build` succeeds and the
+# page renders the included Python as prose — `#:` comments become headings. That shipped
+# once. The block scanner above cannot catch it either: an unfenced include is not a code
+# block, so nothing in layers 1-3 ever looks at the line.
+
+
+@pytest.mark.parametrize("path", MD_FILES, ids=lambda p: str(p.relative_to(ROOT)))
+def test_snippet_includes_are_inside_a_code_fence(path):
+    """A bare ``--8<--`` renders the included file as markdown rather than as code."""
+    inside = False
+    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if line.lstrip().startswith("```"):
+            inside = not inside
+        elif line.lstrip().startswith("--8<--") and not inside:
+            pytest.fail(
+                f"{path.relative_to(ROOT)}:{n}: snippet include is not inside a code fence, "
+                f"so the included file will render as prose. Wrap it in ```python."
+            )

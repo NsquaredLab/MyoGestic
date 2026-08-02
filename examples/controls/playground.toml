@@ -1,0 +1,18 @@
+# The VHI 2 playground's control map. Edit it here or in the app's editor panel.
+# left  = your name, anything you like
+# right = a control VHI declares (it owns the kind, range and states)
+#
+# Change a name or a weight, save, and press Reload in the app — or just press F5.
+
+[dofs]
+close = { targets = [
+  { target = "vhi.prediction.thumb.flexion" },
+  { target = "vhi.prediction.thumb.abduction", weight = -1.0 },
+  { target = "vhi.prediction.index" },
+  { target = "vhi.prediction.middle" },
+  { target = "vhi.prediction.ring" },
+  { target = "vhi.prediction.little" },
+] }
+my_control_1 = { target = "keyboard.hold.function.f1", debounce_s = 0.41, threshold_fraction = 0.5 }
+my_control_2 = { target = "keyboard.tap.function.f1", threshold_fraction = 0.5 }
+my_control_3 = "vhi.prediction.wrist.rotation"

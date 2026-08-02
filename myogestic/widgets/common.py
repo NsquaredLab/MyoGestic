@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 import numpy as np
+from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui, implot
 
 # 10 distinct colors for class labels (Category10-like)
@@ -35,10 +36,10 @@ INFO = imgui.ImVec4(10 / 255, 132 / 255, 255 / 255, 1.0)  # systemBlue
 IDLE = imgui.ImVec4(142 / 255, 142 / 255, 147 / 255, 1.0)  # systemGray
 
 
-# Surfaces that deliberately keep ONE look in both themes, because they imitate
-# a physical thing rather than the app's own chrome: a terminal stays dark on a
-# light desktop, and a status pill reads as a badge printed on the panel. Fixed
-# on purpose — everything else must come from the theme (see `muted` / `primary`).
+# Surfaces that keep ONE look in both themes, because they imitate a physical
+# thing rather than the app's own chrome: a terminal stays dark on a light
+# desktop, a status pill reads as a badge printed on the panel. Everything else
+# must come from the theme (see `muted` / `primary`).
 CONSOLE_BG = imgui.ImVec4(0.075, 0.078, 0.086, 1.0)
 CONSOLE_TEXT = imgui.ImVec4(0.88, 0.89, 0.91, 1.0)
 PILL_BG = imgui.ImVec4(0.14, 0.17, 0.21, 1.0)
@@ -48,8 +49,8 @@ ON_PILL_TEXT = imgui.ImVec4(0.93, 0.95, 0.98, 1.0)
 def primary() -> imgui.ImVec4:
     """The theme's main text colour — resolved per call, so it follows light/dark.
 
-    Colour must never be hardcoded in a widget: a literal that looks right on
-    the dark theme disappears on the light one. Read the slot instead.
+    Never hardcode a colour in a widget: a literal that looks right on the dark
+    theme disappears on the light one.
     """
     return imgui.get_style().color_(imgui.Col_.text)
 
@@ -86,7 +87,6 @@ def flash_color(
 
     Flashes toward ``accent`` when ``value`` changes for ``key``, then decays
     over ``duration`` seconds — the "this just updated" cue for a live readout.
-    The app renders continuously, so the decay animates frame to frame.
     """
     now = time.perf_counter()
     prev = _flash_state.get(key)
@@ -112,9 +112,8 @@ def ensure_implot_style() -> None:
     """Apply the app's plot styling to ImPlot once, lazily.
 
     Call at the top of any plot widget — ImPlot's global style needs a live
-    context, so it's set on the first render. Plots then read as part of the
-    app instead of stock ImPlot: no chart border (surface tone frames them), a
-    transparent plot background so the card shows through, and a faint grid.
+    context, so it is set on the first render. Without it the plot renders as
+    stock ImPlot rather than as part of the app.
     """
     global _IMPLOT_STYLED
     if _IMPLOT_STYLED:
@@ -131,11 +130,8 @@ def ensure_implot_style() -> None:
 _ELLIPSIS = "…"
 
 # The one definition of the "this control is the active choice" cue, used for
-# *persistent selection* (a momentary press is now neutral gray). Wrap the
-# active button:  push_selected(); imgui.button(...); pop_selected().  Keeping
-# it here means selection can be restyled app-wide from a single place — e.g.
-# to the proposed translucent-accent fill + 2px underline — instead of the five
-# hard-coded copies this replaced.
+# *persistent selection* (a momentary press stays neutral gray). Wrap the active
+# button:  push_selected(); imgui.button(...); pop_selected().
 _ACCENT = imgui.ImVec4(0.31, 0.61, 0.98, 1.0)
 _SELECTED_FILL = imgui.ImVec4(0.31, 0.61, 0.98, 0.28)  # translucent accent tint (rest)
 _SELECTED_HOVER = imgui.ImVec4(0.31, 0.61, 0.98, 0.40)
@@ -144,9 +140,8 @@ _SELECTED_HOVER = imgui.ImVec4(0.31, 0.61, 0.98, 0.40)
 def push_selected() -> None:
     """Tint the next button as the selected / active choice (pair with [`pop_selected`][]).
 
-    Instead of a solid accent fill, the selected control gets a translucent
-    accent *tint* plus a 2px accent underline (drawn in [`pop_selected`][]) —
-    a calmer "this is on" cue that reads as selection, not a momentary press.
+    The selected control gets a translucent accent *tint* plus a 2px accent
+    underline, which [`pop_selected`][] draws — so it must always be called.
     """
     imgui.push_style_color(imgui.Col_.button, _SELECTED_FILL)
     imgui.push_style_color(imgui.Col_.button_hovered, _SELECTED_HOVER)
@@ -162,6 +157,90 @@ def pop_selected() -> None:
     imgui.get_window_draw_list().add_rect_filled(
         imgui.ImVec2(p0.x + 3.0, y), imgui.ImVec2(p1.x - 3.0, p1.y), imgui.get_color_u32(_ACCENT), 1.0
     )
+
+
+def destructive_button(label: str, *, tooltip: str = "") -> bool:
+    """A button that destroys something, red only while the pointer is on it.
+
+    A grey button beside `Add` gives a delete the same weight; a permanently red one in
+    every row of a list turns the list into an alarm. So `DANGER` arrives on hover only.
+
+    Parameters
+    ----------
+    label
+        Button text. Icon-plus-label is `f"{icon}  Label"`; a bare glyph is fine for a
+        row-level remove, where the tooltip carries the meaning.
+    tooltip
+        Shown on hover, saying *what* is about to be destroyed. Required in practice
+        whenever the label is a bare glyph.
+    """
+    imgui.push_style_color(imgui.Col_.button_hovered, DANGER)
+    imgui.push_style_color(imgui.Col_.button_active, DANGER)
+    clicked = imgui.button(label)
+    imgui.pop_style_color(2)
+    if tooltip and not clicked and imgui.is_item_hovered():
+        imgui.set_tooltip(tooltip)
+    return clicked
+
+
+def label_column(
+    label: str,
+    among: tuple[str, ...],
+    *,
+    reserve: float = 0.0,
+    max_width: float = 0.0,
+    min_item_width: float = 90.0,
+) -> float:
+    """Draw `label` to the left of the next widget, and return the width to give it.
+
+    ImGui draws a widget's own label *after* the widget, and that label is not covered by
+    `set_next_item_width` — so a row of default-width widgets is wider than its window, and
+    widening the window makes it worse. Hide the native label (`"##id"`) and draw a real one
+    first, which also gives the reading order ``Name [ ]`` rather than ``[ ] Name``.
+
+    Aligned into a column while a usable field still fits, otherwise the label goes on its
+    own line above a full-width one.
+
+    The width is set on the next item *and* returned, for the callers that need the number
+    rather than the side effect (a combo that takes its own ``width=``).
+
+    Parameters
+    ----------
+    label
+        The text to draw.
+    among
+        Every label in the group, so one column width serves all of them and their fields
+        line up. Pass ``(label,)`` when it stands alone.
+    reserve
+        Pixels to keep free at the right, for a value drawn *after* the field.
+    max_width
+        Cap on the field, ``0`` for none. A field does not need to grow to 1600 px.
+    min_item_width
+        Below this the row stacks rather than shrinking further.
+
+    Notes
+    -----
+    The gap after the label is spacing passed to `imgui.same_line`, never the absolute
+    ``offset_from_start_x`` form: that form measures from the window edge and ignores
+    `imgui.indent`, so inside an indented block it lands the field on top of the label.
+    """
+    style = imgui.get_style()
+    gap = style.item_spacing.x * 3.0
+    column = max(imgui.calc_text_size(text).x for text in among) + gap
+    avail = imgui.get_content_region_avail().x
+    room = avail - column - reserve
+    if room < min_item_width:
+        imgui.text(label)  # label above, full-width field below
+        width = avail - reserve
+    else:
+        imgui.align_text_to_frame_padding()  # or the label sits above the field's baseline
+        imgui.text(label)
+        imgui.same_line(0.0, max(column - imgui.calc_text_size(label).x, style.item_spacing.x))
+        width = room
+    if max_width > 0.0:
+        width = min(width, max_width)
+    imgui.set_next_item_width(width)
+    return width
 
 
 def segmented(widget_id: str, options: list[str], selected: int) -> int:
@@ -194,7 +273,13 @@ def segmented(widget_id: str, options: list[str], selected: int) -> int:
     return result
 
 
-def panel_header(title: str, icon: str | None = None, *, reserve: float = 0.0) -> None:
+def panel_header(
+    title: str,
+    icon: str | None = None,
+    *,
+    reserve: float = 0.0,
+    status: imgui.ImVec4 | None = None,
+) -> None:
     """Render a uniform panel-header line: muted, all-caps, optional FA icon.
 
     Pairs with the button + slider styling used by the other widgets in this
@@ -204,24 +289,36 @@ def panel_header(title: str, icon: str | None = None, *, reserve: float = 0.0) -
         train_button(pipeline)
         ...
 
-    The text color follows the active theme's ``text_disabled`` slot, so it
-    reads correctly on both light and dark themes without hardcoding.
-
     When the panel is too narrow for the full title, the title is truncated
     with a ``…`` ellipsis; when there is no room for any label, only the icon
     is shown. Pass ``reserve`` to leave that many pixels for controls placed
     after the header on the same row (e.g. a right-aligned button), so the
     *title* collapses instead of pushing those controls off the panel.
 
+    Pass ``status`` — one of `SUCCESS`, `IDLE`, `DANGER`, `WARNING` — to put a filled
+    circle before the title in that colour. Colour is the *only* thing the dot carries,
+    so it must not be the only place the state is available: give the header a tooltip
+    with the detail (a PID, an exit code) for anyone who cannot read the hue.
+
     Examples
     --------
     >>> from myogestic.widgets import panel_header
     >>> panel_header("MODEL")
     """
+    # Grouped so the dot and the title are one item for hit-testing: a following
+    # `set_item_tooltip` would otherwise attach to the title text alone, leaving the dot
+    # — the part whose colour needs explaining — unhoverable.
+    imgui.begin_group()
+    if status is not None:
+        # Drawn *before* the title, so the cursor has already advanced when `_fit_header`
+        # measures what is left — the truncation below needs no adjustment for it.
+        imgui.text_colored(status, fa.ICON_FA_CIRCLE)
+        imgui.same_line()
     muted = imgui.get_style().color_(imgui.Col_.text_disabled)
     imgui.push_style_color(imgui.Col_.text, muted)
     imgui.text(_fit_header(title.upper(), icon, reserve))
     imgui.pop_style_color()
+    imgui.end_group()
 
 
 def _fit_header(label: str, icon: str | None, reserve: float) -> str:
@@ -254,8 +351,7 @@ def panel_header_button(title: str, icon: str | None, button_icon: str, *, toolt
 
     Returns ``True`` on the frame the button is clicked. The button is
     prioritized: when the row can't fit the header icon + button side by side
-    it drops to its own line below the (icon-only) header — the same behaviour
-    as the Reset button on the post-processing panel.
+    it drops to its own line below the (icon-only) header.
     """
     style = imgui.get_style()
     sp = style.item_spacing.x

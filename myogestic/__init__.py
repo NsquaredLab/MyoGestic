@@ -6,6 +6,7 @@ iterators always yield that layout; on-disk zarr storage is samples-first
 and the iterators handle the transpose.
 """
 
+import myogestic._lsl_quiet  # noqa: F401  — side effect; must precede any liblsl load
 from myogestic.contracts import TrainingData
 from myogestic.core import App, AppState, Context
 from myogestic.grid import Fr, Grid, Px
