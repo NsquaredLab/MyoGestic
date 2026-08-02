@@ -84,7 +84,7 @@ def _refuse_an_incompatible_install(install_root: Path | None) -> None:
         return
     marker = Path(install_root) / "vhi-version.txt"
     try:
-        text = marker.read_text()
+        text = marker.read_text(encoding="utf-8")
     except OSError:
         return
     tag = ""

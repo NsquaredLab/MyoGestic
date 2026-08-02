@@ -54,7 +54,7 @@ def main() -> int:
             print(f"WARNING: {grpc_file.name} was not generated", file=sys.stderr)
             continue
         alias = stem.replace("_", "__")
-        text = grpc_file.read_text()
+        text = grpc_file.read_text(encoding="utf-8")
         patched = text.replace(
             f"import {stem}_pb2 as {alias}__pb2",
             f"from . import {stem}_pb2 as {alias}__pb2",

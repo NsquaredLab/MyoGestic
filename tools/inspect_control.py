@@ -46,7 +46,7 @@ def step_1_the_file():
     """Load the TOML. Two vocabularies meet, and neither owns the other."""
     heading(1, f"The declaration — {CONTROL_FILE.relative_to(CONTROL_FILE.parents[2])}")
     print("  The file, minus its comments:\n")
-    for line in CONTROL_FILE.read_text().splitlines():
+    for line in CONTROL_FILE.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if stripped and not stripped.startswith("#"):
             print("   " + line)

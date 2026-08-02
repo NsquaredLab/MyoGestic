@@ -34,7 +34,7 @@ def _read_jsonc(path: pathlib.Path) -> dict:
     mangling a `//` inside one.
     """
     kept = [
-        line for line in path.read_text().splitlines() if not line.lstrip().startswith("//")
+        line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("//")
     ]
     return json.loads("\n".join(kept))
 
@@ -104,7 +104,7 @@ def test_every_module_is_importable(launch):
             continue
         spec = importlib.util.find_spec(module)
         assert spec is not None, f"{config['name']}: no module {module!r}"
-        source = pathlib.Path(spec.origin).read_text()
+        source = pathlib.Path(spec.origin).read_text(encoding="utf-8")
         assert '__name__ == "__main__"' in source, (
             f"{config['name']}: {module} has no __main__ guard, so running it as a "
             f"module would do nothing"
@@ -193,7 +193,7 @@ def test_every_control_file_is_reachable_from_a_configuration(launch):
     `control_hand.toml` sat in the repository with no consumer at all.
     """
     sources = "\n".join(
-        _resolve(config["program"]).read_text()
+        _resolve(config["program"]).read_text(encoding="utf-8")
         for config in _configs(launch)
         if "program" in config and not VARIABLE.search(config["program"])
     )
@@ -226,7 +226,7 @@ def test_the_names_say_what_needs_a_live_vhi(launch):
 
 def test_no_absolute_machine_specific_paths(launch, tasks):
     """A committed file with someone's home directory in it works on one machine."""
-    blob = LAUNCH.read_text() + TASKS.read_text()
+    blob = LAUNCH.read_text(encoding="utf-8") + TASKS.read_text(encoding="utf-8")
     active = [
         line for line in blob.splitlines() if not line.lstrip().startswith("//")
     ]
@@ -313,7 +313,7 @@ class TestTheGenericEntriesComeFirstAndWork:
         """An undeclared ${input:...} fails the launch with a variable-resolution error."""
         launch = _read_jsonc(LAUNCH)
         declared = {entry["id"] for entry in launch.get("inputs", [])}
-        referenced = set(re.findall(r"\$\{input:([A-Za-z0-9_]+)\}", LAUNCH.read_text()))
+        referenced = set(re.findall(r"\$\{input:([A-Za-z0-9_]+)\}", LAUNCH.read_text(encoding="utf-8")))
         assert referenced, "the prompt entry is gone"
         assert referenced <= declared, f"undeclared inputs: {referenced - declared}"
 

@@ -143,7 +143,7 @@ def test_the_resolved_space_actually_drives_a_bus(resolved):
 def test_the_walkthrough_points_at_this_file():
     """If the walkthrough's path drifts, this suite is the only thing that would know."""
     walkthrough = CONFIG.parents[2] / "tools" / "inspect_control.py"
-    text = walkthrough.read_text()
+    text = walkthrough.read_text(encoding="utf-8")
     assert '"examples"' in text and '"controls"' in text and '"hand.toml"' in text
 
 
@@ -187,7 +187,7 @@ class TestTheClassificationFileTeachesTheUnifiedPath:
     def test_the_example_pushes_the_probability_it_documents(self):
         """The file and the app that loads it have to agree about who gates."""
         app = self.CONFIG.parents[1] / "synthetic" / "emg_classification.py"
-        text = app.read_text()
+        text = app.read_text(encoding="utf-8")
         assert "classification.toml" in text
         assert "proba[" in text.split("def predict")[1], "it must push the probability"
 
@@ -205,7 +205,7 @@ class TestTheWalkthroughDemonstratesTheClassifierPath:
 
     @pytest.fixture(scope="class")
     def source(self):
-        return self.WALKTHROUGH.read_text()
+        return self.WALKTHROUGH.read_text(encoding="utf-8")
 
     def test_it_loads_the_classifier_mapping_file(self, source):
         assert "classification.toml" in source

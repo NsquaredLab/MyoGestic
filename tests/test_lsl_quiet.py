@@ -18,7 +18,7 @@ from myogestic._lsl_quiet import _FALLBACK, quiet_liblsl
 
 def test_the_shipped_config_only_sets_the_log_level(tmp_path, monkeypatch):
     """Anything else in it would be MyoGestic changing a user's networking."""
-    text = _FALLBACK.read_text()
+    text = _FALLBACK.read_text(encoding="utf-8")
     sections = [line.strip() for line in text.splitlines() if line.strip().startswith("[")]
     assert sections == ["[log]"], f"the fallback config configures more than logging: {sections}"
 
@@ -26,7 +26,7 @@ def test_the_shipped_config_only_sets_the_log_level(tmp_path, monkeypatch):
 def test_it_uses_semicolon_comments():
     """liblsl's parser ignores a `#`-commented file's settings without saying so."""
     commented = [
-        line for line in _FALLBACK.read_text().splitlines() if line.strip().startswith("#")
+        line for line in _FALLBACK.read_text(encoding="utf-8").splitlines() if line.strip().startswith("#")
     ]
     assert not commented, f"liblsl does not parse `#` comments: {commented}"
 
@@ -74,7 +74,7 @@ def test_this_repo_keeps_its_own_config_quiet_too():
     repo_cfg = Path(__file__).resolve().parent.parent / "lsl_api.cfg"
     if not repo_cfg.is_file():
         return
-    text = repo_cfg.read_text()
+    text = repo_cfg.read_text(encoding="utf-8")
     assert "[log]" in text and "level = -2" in text, (
         "running from the repo root uses this file instead of the shipped fallback, "
         "so it has to set the log level itself"

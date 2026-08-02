@@ -50,7 +50,7 @@ def test_old_session_without_grids_loads_as_none(tmp_path):
     # Overwrite meta.json to look like an old, pre-channel_grids session: the
     # per-stream dict has no "channel_grids" (and no "channel_names") key at all.
     meta_path = s.path / "meta.json"
-    meta = json.loads(meta_path.read_text())
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
     stream_meta = meta["streams"]["emg"]
     stream_meta.pop("channel_grids", None)
     stream_meta.pop("channel_names", None)

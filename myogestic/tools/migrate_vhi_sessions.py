@@ -86,7 +86,7 @@ def migrate(path: Path, *, dry_run: bool = False) -> str:
 
         array[:] = after
         meta["pose_convention"] = POSE_CONVENTION
-        (root / "meta.json").write_text(json.dumps(meta, indent=2))
+        (root / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
         # Repack the way the recorder does — ZIP_STORED, because zarr chunks are already
         # compressed and an outer layer buys nothing.
