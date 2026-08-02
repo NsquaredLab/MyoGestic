@@ -132,6 +132,7 @@ nav:
           - tutorials/index.md
           - EMG classification: tutorials/emg-classification.md
           - EMG regression with VHI: tutorials/emg-regression-with-vhi.md
+          - Integrate your own interface: tutorials/integrate-your-interface.md
           - Examples directory: tutorials/examples-index.md
       - How-to:
           - how-to/index.md

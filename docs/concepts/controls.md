@@ -193,7 +193,10 @@ This is the fork the how-to guides assume you have already taken.
 | guide | [Drive your own device](../how-to/add-a-target.md) | [Build a renderer](../how-to/build-a-renderer.md) |
 
 The distinction is only about *where the code runs*. Both declare a manifest, both are named by
-address in the same map, and a single `ControlBus` drives a mixed list of them.
+address in the same map, and a single `ControlBus` drives a mixed list of them. To take the
+renderer route end to end on hardware of your own, follow
+[Integrate your own interface](../tutorials/integrate-your-interface.md), which builds one in
+seven stages with a checkpoint at each.
 
 A renderer still needs a target on this side to talk to it — but you do not write that one:
 [`VhiTarget`][myogestic.vhi.VhiTarget] is the shipped adapter for a VHI-shaped renderer, and it

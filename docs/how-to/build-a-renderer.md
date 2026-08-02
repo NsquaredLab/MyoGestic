@@ -5,7 +5,10 @@ reached over gRPC and read from over LSL. A [target](add-a-target.md) is the opp
 an in-process object a `ControlBus` calls directly, on the thread MyoGestic already owns.
 
 If you have not chosen between the two yet, [Concepts › Controls](../concepts/controls.md)
-explains the control system and which route fits what you are building.
+explains the control system and which route fits what you are building. This page is the
+contract; if you would rather arrive at it a stage at a time, with something to run and watch
+at each one, start from [Integrate your own
+interface](../tutorials/integrate-your-interface.md) instead.
 
 ## Which way the streams run
 
