@@ -17,7 +17,13 @@ Recipes for specific tasks. Each guide assumes you've worked through [Getting St
 - [Record good training data](record-good-training-data.md) - cycle-style recording, how many cycles you actually need, verifying templates before training.
 - [Feature extraction cookbook](feature-extraction-cookbook.md) - copy-paste `@pipeline.extract` snippets (RMS+MAV, bandpass+envelope, spectral, sliding RMS, onset detection, multi-stream fusion).
 - [Post-process predictions](post-process-output.md) - `PostProcessor` and `myogestic.outputs.filters` for output smoothing.
-- [Integrate the Virtual Hand](integrate-vhi.md) - `myogestic.vhi.virtual_hand` and the launcher pattern.
+
+## The Virtual Hand
+
+The one renderer this project ships. The contract it serves is generic — see [Build a renderer](build-a-renderer.md) — so a device that is not a hand needs neither of these pages.
+
+- [Install the Virtual Hand](install-vhi.md) - the installer CLI, and where a build is looked for.
+- [Integrate the Virtual Hand](integrate-vhi.md) - `myogestic.vhi.virtual_hand`, the launcher pattern, and what VHI calls its own controls.
 
 ## Operations
 

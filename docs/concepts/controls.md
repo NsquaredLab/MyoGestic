@@ -117,6 +117,11 @@ gRPC call; for [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] it is a key
 Which addresses are which is `kind` in the **device's** manifest. The map never says, and cannot:
 change a device build so a control becomes discrete and the same map file keeps working.
 
+A button is the one case that does not want the gate: [`ControlBus.select`][myogestic.controls.ControlBus.select]
+delivers a state immediately **and rebases** the DOF's debounce, so the predict ticks that
+follow — still carrying the class from a sliding window that has not caught up — do not
+re-fire what the click just did.
+
 ## Who answers what
 
 | question | answered by |
@@ -251,6 +256,11 @@ every subsystem.
 
 - **Writing a kind or a range into the map.** It has no place for one. If you think you need it,
   the device's manifest is wrong, not the file.
+- **Publishing to a stream you named yourself.** A stream's name is the address, and the address
+  is the device's to declare. Map your aliases onto addresses and let
+  [`RendererTarget`][myogestic.renderer.RendererTarget] publish: VHI changed every stream name it
+  had when it moved to one stream per DOF, and every application that had let the manifest answer
+  needed no edit at all.
 - **Reaching for a second address for the other direction.** A signed control already has both
   halves; emit a negative value, or give that address a negative `weight`.
 - **Low-pass filtering a discrete control.** Averaging "rest" and "fist" interpolates through

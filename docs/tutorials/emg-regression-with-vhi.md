@@ -20,10 +20,10 @@ to learn after `emg_classification.py`:
   resulting kinematics over LSL, and pushes the predicted pose back over
   LSL. Three streams, three roles.
 
-If you haven't yet, read
-[Integrate the Virtual Hand](../how-to/integrate-vhi.md) first - that
-page explains the dual-plane architecture in general; this one walks the
-specific script.
+If you haven't yet, read [Build a renderer](../how-to/build-a-renderer.md) for the
+dual-plane architecture in general and
+[Integrate the Virtual Hand](../how-to/integrate-vhi.md) for what VHI calls its own
+controls; this page walks the specific script.
 
 ## Run it first
 

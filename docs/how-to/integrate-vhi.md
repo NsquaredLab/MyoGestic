@@ -1,120 +1,16 @@
 # Integrate the Virtual Hand Interface
 
-The **Virtual Hand Interface (VHI)** is the Godot-based 3-D hand
-visualisation that ships alongside MyoGestic. It can be driven on two
-planes at once:
+The **Virtual Hand Interface (VHI)** is the Godot-based 3-D hand visualisation that ships
+alongside MyoGestic. It is a [renderer](build-a-renderer.md) — a separate application, read
+from over LSL and commanded over gRPC — and it is the one renderer this project ships with.
 
-* **LSL data plane** - high-rate continuous values. Continuous DOFs stream
-  every tick; `vhi.prediction.*` renders on the *predicted hand* and
-  `vhi.control.pose.*` on the *operator's* — the address picks the hand. VHI publishes one
-  stream per DOF, named after the address and one channel wide, and applies
-  each the moment its sample arrives.
-* **gRPC control plane** - the manifest, discrete state, and verification.
-  `GetControlManifest` reports every control VHI exports by *address*,
-  `SetControl` carries held states, and a separate recording aid gates a
-  session and drives training trajectories.
+So this page is only what is true of *this* renderer: where it is installed, how it is
+launched, what it calls its controls, and how to drive its control hand while recording. How
+the two planes work at all is [Build a renderer](build-a-renderer.md); what a control map is
+and how you declare what you drive is [Concepts › Controls](../concepts/controls.md), with
+the full rules in [the control standard](../api/controls.md).
 
-You don't have to pick one, and mostly you don't choose at all: declare what
-you control and hand it to a
-[`ControlBus`](../api/controls.md) with a `RendererTarget`. The target negotiates,
-puts continuous values on LSL, and sends discrete states over gRPC.
-
-!!! tip "Watch it happen first"
-    `uv run --extra grpc python tools/inspect_control.py` walks the whole
-    path end to end and prints what reaches the wire. It needs no Virtual Hand, and
-    tells you which contract yours speaks if you have one running.
-
-## Start with a control file
-
-New to control maps, addresses and aliases? [Concepts ›
-Controls](../concepts/controls.md) explains the system this guide applies.
-
-Declare what your application controls in a TOML file. Copy
-[`examples/controls/hand.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/hand.toml)
-and edit it:
-
-```toml
-[dofs]
-# Left side: your model's output names. Right side: controls VHI declares.
-my_thumb_spread = "vhi.prediction.thumb.abduction"
-
-fist = [                                       # one output, fanned out
-  { target = "vhi.prediction.thumb.flexion", weight = 0.6 },   # ...with a per-target gain
-  { target = "vhi.prediction.index" },
-  { target = "vhi.prediction.middle" },
-  { target = "vhi.prediction.ring" },
-  { target = "vhi.prediction.little" },
-]
-
-gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
-
-# Equal weights need no tables:  grip = ["vhi.prediction.ring", "vhi.prediction.little"]
-# One control may take only one output, so no two entries may name the same address.
-```
-
-Load it, and hand the result to a bus with a `RendererTarget`:
-
-```python
-import tomllib
-
-from myogestic.controls import ControlLink, load_control_map
-from myogestic.renderer import RendererTarget
-from myogestic.vhi import virtual_hand
-
-vhi = virtual_hand()
-vhi_control = vhi.control_client()
-
-with open("hand.toml", "rb") as f:            # "rb" — tomllib requires binary
-    CONTROL_MAP = load_control_map(tomllib.load(f))
-
-# No stream and no hand is named here. The target looks the file's addresses up in VHI's
-# manifest and publishes one stream per address it drives, each named for that address.
-# Nothing is resolved yet: `link.bus` stays None until `link.ensure()` finds VHI up.
-link = ControlLink(
-    CONTROL_MAP,
-    [RendererTarget(client=vhi_control, interface=vhi)],
-    hz=32,
-)
-```
-
-The bus is built **lazily** because resolution needs a live target: VHI declares whether
-each address is a number or a held state, and an app that launches VHI from its own UI
-necessarily starts before it exists. So every handler that needs the hand starts with
-`link.ensure()` — idempotent, and cheap once it has bound:
-
-```python
-def on_record() -> None:
-    link.ensure()             # binds on the first click that finds VHI up
-    app.start_recording()
-```
-
-`capabilities()` blocks on an RPC, so call `ensure()` from a UI handler or a training
-thread, never from `@pipeline.predict` — read `link.bus` there and no-op while it is
-`None`. One target is constructed here and reused across every attempt: a failed attempt
-stops at `capabilities()`, so nothing is bound and nothing is left part-way.
-
-**One target drives the whole map**, whatever is in it. A map naming *both* hands —
-sliders posing the operator's while a model drives the predicted one — is the same two
-lines: the target publishes one stream per address, named for that address, so the two
-hands are simply eighteen names rather than two layouts to keep apart. An application
-used to have to build one target per stream and could not know how many that was until
-it had read the map; there is nothing left to decide.
-
-That is the whole setup. `link.bus.push({"fist": 0.8})` from inside `@pipeline.predict` —
-using *your* alias, the left side of the file — and the target negotiates the wire,
-encodes, and sends.
-
-!!! note "The file is yours; the library never reads it"
-    `load_control_map` takes a **Mapping**, not a path — so MyoGestic reads no configuration
-    files, and your declaration can equally live in JSON, a dict literal, or a config
-    system you already run. TOML is what a human wants to edit, which is why the shipped
-    example is TOML and why the snippet above opens it itself.
-
-!!! tip "Declare DOFs, don't push channels"
-    The rest of this page shows the transport underneath, which is worth
-    understanding when something misbehaves. But application code should not
-    contain stream names or sign flips — that is what `RendererTarget` is for, and the four
-    wrong pose tables this project fixed all came from hand-written channel maps.
+If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
 
 ![VHI dual-plane integration](../images/vhi-integration.svg){ align=center }
 
@@ -123,24 +19,34 @@ encodes, and sends.
 ```python
 from myogestic.vhi import virtual_hand
 
-vhi = virtual_hand()                  # resolves install path + gRPC endpoint
+vhi = virtual_hand()                 # resolves install path + gRPC endpoint
 vhi_control = vhi.control_client()   # negotiates the control space (v2)
-recording = vhi.recording_client()     # recording session gate + trajectory playback
+recording = vhi.recording_client()   # recording session gate + trajectory playback
 ```
 
-`virtual_hand()` looks at `$VHI_PATH`, the per-user install root, and the
-local git checkout in that order. It reads `$VHI_GRPC_HOST` /
-`$VHI_GRPC_PORT` for the control endpoint (defaults `127.0.0.1:50051`).
+`virtual_hand()` looks at `$VHI_PATH`, the per-user install root, and the local git checkout
+in that order. It reads `$VHI_GRPC_HOST` / `$VHI_GRPC_PORT` for the control endpoint
+(defaults `127.0.0.1:50051`).
 
-What the returned `InterfaceSpec` does **not** know is a stream name. Which controls VHI
-exports is in the manifest a *running* VHI answers with, and each control's stream is
-named for that control's own address — so a target names its outlets from that answer,
-after negotiating, and nothing on this side has a table to go stale. That is why no
-outlet is built here: until the map has been read against the manifest, there is nothing
-that says which streams it needs. `RendererTarget` and the `interface=` it is given are what
-do that, at `bind`.
+That is the whole VHI-shaped part of pointing MyoGestic at it. The returned
+[`InterfaceSpec`][myogestic.renderer.InterfaceSpec] knows *where* VHI is and nothing about
+what VHI renders — which controls exist is a running VHI's answer, and each one's stream is
+named for its own address, so there is no table on this side to go stale. Handing that spec
+and its client to a [`RendererTarget`][myogestic.renderer.RendererTarget] is what asks:
 
-If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
+```python
+from myogestic.controls import ControlLink
+from myogestic.renderer import RendererTarget
+
+link = ControlLink(CONTROL_MAP, [RendererTarget(client=vhi_control, interface=vhi)], hz=32)
+```
+
+One target drives the whole map, both hands included; no stream is named and none is
+counted. See [Negotiating with the target](../api/controls.md#negotiating-with-the-target)
+for what that resolves and what it refuses, and
+[Binding is deferred, not decided](../concepts/controls.md#binding-is-deferred-not-decided)
+for why a `ControlLink` rather than a bus — an application that launches VHI from its own
+button necessarily binds before VHI exists.
 
 ## Launching the VHI process
 
@@ -180,70 +86,37 @@ except FileNotFoundError as e:
     PROCESSES = base       # demo still runs; VHI button just absent
 ```
 
-## Plane 1 - continuous values over LSL
+## What VHI calls its controls
 
-!!! tip "Prefer the control standard"
-    Everything below describes the transport underneath, which is worth knowing when
-    something misbehaves. New work should declare DOFs by name and let
-    [`RendererTarget`](../api/controls.md) negotiate — then no stream name appears in your
-    code at all.
+A running VHI's manifest is the authority — `uv run --extra grpc python tools/inspect_control.py`
+prints it — but the shape of the vocabulary is worth knowing before you write a map, because
+**the address picks the hand**:
 
-VHI subscribes to **one float32 stream per DOF, named after the address itself and one
-channel wide**: `vhi.prediction.index` is a stream called `vhi.prediction.index` carrying
-`vhi.prediction.index` on channel 0. Values are interpreted in `[-1, 1]`, `0` is rest and
-`+1` is the direction the address name denotes — the control standard is the only
-convention here.
+| address | drives |
+|---|---|
+| `vhi.prediction.thumb.flexion`, `vhi.prediction.thumb.abduction` | the **predicted hand** — the thumb's two axes |
+| `vhi.prediction.index`, `.middle`, `.ring`, `.little` | the predicted hand's other four digits, one axis each |
+| `vhi.prediction.wrist.flexion`, `.abduction`, `.rotation` | the predicted hand's wrist |
+| `vhi.control.pose.*` | the same digits on the **control hand** — the operator's, the one a recording captures |
+| `vhi.control.gesture` | the control hand's movement presets, as a **discrete** control |
 
-Each DOF is applied the moment its sample arrives. Nothing waits for a whole pose, so one
-nobody drives holds its last value and two processes can each own a finger. That is the
-contract rather than this renderer's preference — see
-[Build a renderer](build-a-renderer.md) — and VHI **refuses** a stream that is not exactly
-one channel wide rather than reading element zero of something wider.
+`vhi.control.gesture`'s states are whole-hand poses — `Fist`, `ThumbExtension` and the rest
+of what that VHI build ships — which is why a preset is a held state and not a number: it
+commands a compound shape no single continuous address expresses. VHI supplies the state
+names, so push one of *those*; what you write yourself is `debounce_s`, which is a property
+of your control loop rather than of the hand.
 
-Which streams exist is the manifest's answer, never a table on this side. If you are
-debugging the transport, build the outlet for the one DOF you are chasing and push it
-every predict tick — it runs its own send thread at `hz`, so only the latest push is
-sent:
-
-```python
-index = vhi.stream_outlet("vhi.prediction.index", n_channels=1)  # the manifest's name
-
-@pipeline.predict
-def predict(model, features):
-    closed = model.how_closed(features)            # np.float32, shape (1,)
-    index.push(closed)
-    return {"index": float(closed[0])}
-```
-
-Pair it with a smoothing filter - raw model output looks twitchy on a
-60 fps render:
-
-```python
-from myogestic.widgets import PostProcessor
-import time
-
-pose_filter = PostProcessor(hz=20.0)
-
-@pipeline.predict
-def predict(model, features):
-    closed = pose_filter(model.how_closed(features), timestamp=time.monotonic())
-    index.push(closed)
-    return {"index": float(closed[0])}
-
-@app.ui
-def ui(ctx):
-    with grid[6, 0]:
-        pose_filter.ui()
-```
+A map naming both hands — sliders posing the operator's while a model drives the predicted
+one — is still one `RendererTarget` and one bus. The two hands are simply more addresses.
 
 ### The nine channels of a recorded pose
 
-VHI's **read-backs** — `VHI_Predict` and `VHI_Control`, the streams it publishes so a
-client can see what actually rendered — are unchanged by any of the above: nine
-positional float32 channels, standard values. That is also the layout a recorded session
-carries, which is why the table still matters even though nothing writes it any more. It
-was read out of VHI's own consumer (`PredictedHandSkeleton`) and confirmed against
-recorded sessions:
+VHI's **read-backs** — `VHI_Predict` and `VHI_Control`, the streams it publishes so a client
+can see what actually rendered — are nine positional float32 channels whatever the inbound
+shape. That is also the layout a recorded session carries, which is why the table matters
+even though nothing writes it any more. It was read out of VHI's own consumer
+(`PredictedHandSkeleton`) and confirmed against recorded sessions; `myogestic.vhi.pose` is
+the layout in code:
 
 | Index | Joint            | Notes                                    |
 |-------|------------------|------------------------------------------|
@@ -255,133 +128,11 @@ recorded sessions:
 | 5     | Little flexion   |                                          |
 | 6-8   | Wrist flexion, abduction, rotation | bone 0, which parents every digit |
 
-Two corrections to what this page used to say, both verified rather than assumed:
-
-* Channel 0 is thumb **flexion**, not thumb rotation, and channel 1 is thumb
-  **abduction**, not thumb flexion. A recorded fist has channel 1 at exactly
-  `-1.0` — the thumb comes *across* the fingers, which is adduction — and that
-  is what settled it.
-* Channels 6-8 **do** drive the wrist. They read `0` in archived sessions
-  because the recorder hardcoded them, not because the renderer ignores them;
-  see `myogestic.vhi.pose` for the layout.
-
-See [Post-process predictions](post-process-output.md) for filter tuning.
-
-## Classification: the same mapping a regressor uses
-
-A classifier does not need its own path to the hand. It produces an **activation** —
-open or closed — and an activation is just a control value, so it travels the mapping
-you already have. Add a `threshold_fraction` — the probability cutoff — to say the input
-is a classifier's confidence rather than a position:
-
-```toml
-fist = { targets = [
-  { target = "vhi.prediction.thumb.flexion", weight = 0.6 },
-  { target = "vhi.prediction.index" },
-  { target = "vhi.prediction.middle" },
-], threshold_fraction = 0.5 }
-```
-
-Push the probability and the bus gates it before anything else sees it:
-
-```python
-@pipeline.predict
-def predict(model, features):
-    proba = model.predict_proba(features.reshape(1, -1))[0]
-    bus.push({"fist": float(proba[1])})
-    return {"class": int(np.argmax(proba))}
-```
-
-Three separate decisions happen, in this order. `threshold_fraction` decides **whether**
-the
-hand is closed, giving a 0 or a 1. The weights decide **how much of that** each digit
-gets — the thumb 0.6, the fingers all of it. `ControlBus(smoothing=...)` then decides
-**how fast** the change is allowed to look. So VHI receives continuous per-control
-values, the same ones a regressor would send, and drop the `threshold_fraction` and the
-identical
-mapping serves a regressor emitting 0..1 directly.
-
-The gate matters because a continuous address is a *position*. Streaming a raw `0.73`
-into one says the finger is 73% curled, which is not what a 73%-confident classifier
-meant. `examples/synthetic/emg_classification.py` with
-`examples/controls/classification.toml` is this end to end.
-
-## Plane 2 - discrete state and negotiation over gRPC
-
-Some controls are genuinely discrete: a preset, a keypress, a mode — things that *are* a
-state rather than an amount. VHI declares those addresses discrete, and then the right
-primitive is "hold state X, and change it only when the class has actually settled".
-Reach for this for events, not for fingers; a hand closing is the activation above.
-
-Declare it in the file — `debounce_s` is the gate, in seconds:
-
-```toml
-gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
-```
-
-VHI declares `vhi.control.gesture` discrete and supplies its states, so you do not write
-them. `debounce_s` *is* yours to write: it is a property of your control loop, not of the
-hand.
-
-Then command it by name, using the `bus` built above:
-
-```python
-@pipeline.predict
-def predict(model, features):
-    class_idx = int(np.argmax(model.predict_proba(features)))
-    bus.push({"gesture": CLASSES[class_idx]})
-    return {"class": class_idx}
-```
-
-The states come from the manifest, so push one of *those* names, not a name of your own.
-`debounce_s` is declared on the DOF rather than wrapped around the client, because
-it is a property of the control: a classifier flickering tick-to-tick must produce
-*no* transition until one state holds. Use `bus.select(...)` for a deliberate click
-— it delivers immediately and rebases the gate so the next predict ticks don't
-re-fire.
-
-!!! warning "Never low-pass filter a discrete control"
-    Smoothing is three separate mechanisms and mixing them up is a bug:
-
-    | Layer | Where | Applies to |
-    |---|---|---|
-    | Continuous smoothing | `ControlBus(smoothing=...)` | continuous DOFs |
-    | Debounce / hysteresis | declared on the DOF | discrete DOFs |
-    | Presentation blending | `control_client().set_presentation(...)` | appearance only |
-
-    Averaging "rest" and "fist" would interpolate through a state nobody selected,
-    so the bus never passes a discrete value through a filter — the filter only
-    ever sees the continuous vector. And renderer blending, while worth having,
-    cannot make an unstable prediction stable: with blending on and no debounce a
-    hand still jumps between states, just smoothly.
-
-### The clients
-
-Both gRPC clients are constructed from the interface spec. Absence is reported rather
-than raised — a call returns `None` when VHI is not up — so a UI stays responsive while
-the renderer starts:
-
-| Call | Effect |
-|---|---|
-| `control_client().capabilities()` | The manifest — every control VHI exports. Returns `None` when VHI has not answered; `RendererTarget` defers and retries. `resolve()` and `RendererTarget.bind` are what validate a configuration against it. |
-| `control_client().set_control(...)` | Command a frame. Fire-and-forget; safe from the predict thread. |
-| `control_client().sweep(name)` | Drive one DOF across its range and report which bones moved, in signed degrees. Verification only — it animates a joint. |
-| `control_client().set_presentation(blend=...)` | Renderer blending. Appearance only. |
-| `recording.set_recording_session(True / False)` | Gate VHI's local keyboard so a recording has one movement source. |
-| `recording.start_trajectory(movement, frequency_hz=...)` | Cycle the control hand to generate a training trajectory. |
-| `recording.state()` | Movements, current movement, whether a trajectory is running. |
-
-`capabilities`, `sweep` and the aid's calls are **synchronous** — they are setup, teardown
-and verification, and a caller needs the answer. `set_control` is fire-and-forget on a
-worker thread, so it never blocks a 60 fps render loop.
-
-!!! note "Recording is not control"
-    A recording trajectory deliberately keeps the control hand *moving*, which is the
-    opposite of what a discrete DOF means. That is exactly why it lives in a separate
-    service: collecting training data must not redefine "hold this state". While a
-    trajectory runs it owns the control hand, and discrete DOFs are refused with the
-    reason rather than silently interrupting the trajectory a recording is aligned
-    against.
+Two things about that table are easy to get wrong, and both were settled by measurement
+rather than by reading. Channel 0 is thumb **flexion** and channel 1 thumb **abduction**, not
+the other way round: a recorded fist has channel 1 at exactly `-1.0`, because the thumb comes
+*across* the fingers. And channels 6-8 **do** drive the wrist — they read `0` in archived
+sessions because the recorder hardcoded them, not because the renderer ignores them.
 
 ## A ready-made movement palette
 
@@ -413,9 +164,9 @@ def _on_movement_click(name: str) -> None:
     bus.select("gesture", name)                     # deliver + rebase the debounce
 ```
 
-`bus.select` is the important part: it delivers the state immediately *and* rebases
-the DOF's stability gate, so the next predict ticks — still carrying the old
-sliding-window class — do not re-fire what the button just did.
+[`bus.select`](../concepts/controls.md#continuous-and-discrete-are-different-things) is the
+important part: it delivers the state immediately *and* rebases the DOF's stability gate, so
+the next predict ticks do not re-fire what the button just did.
 
 ## Driving the control hand as a recording target
 
@@ -429,11 +180,10 @@ recording.start_trajectory("Fist", frequency_hz=0.7)   # cycles, producing a tra
 recording.stop_trajectory()                            # stops and rests the hand
 ```
 
-A recording trajectory is deliberately *not* a control primitive. It exists so that
-collecting data never has to redefine what a discrete DOF means: a discrete DOF holds
-a state, and a trajectory sweeps — two different jobs, two different vocabularies.
-While a trajectory runs it owns the control hand and discrete DOFs are refused with
-the reason.
+While a trajectory runs it owns the control hand, and discrete DOFs are refused with the
+reason rather than silently interrupting it — see
+[Recording is not control](../api/controls.md#recording-is-not-control) for why the sweep
+lives here and not in the control standard.
 
 Wrap a recording in the session gate so VHI's local keyboard cannot compete as a
 movement source:
@@ -464,22 +214,20 @@ def predict(model, features):
 Or attach `pylsl`'s `lslviewer.py` to one of the streams — `vhi.prediction.index`
 for a single DOF going out, `VHI_Predict` for all nine coming back. For
 the gRPC plane, the standard `grpcurl` works against the local server
-when VHI is running - the proto is at
+when VHI is running — the proto is at
 `myogestic/renderer/_proto/renderer_control.proto`.
+
+`tools/inspect_control.py` needs no Virtual Hand at all: it walks declaration, resolution and
+the wire frame with nothing launched, and then shows what a target does when its renderer is
+absent.
 
 ## Common mistakes
 
 See the full **[Troubleshooting](../troubleshooting.md)** index for
-symptom-organised debugging.
+symptom-organised debugging, and
+[Controls › Common mistakes](../concepts/controls.md#common-mistakes) for the ones that are
+about the control standard rather than about VHI.
 
-* **Publishing to a stream you named yourself.** Map your names onto addresses and let
-  `RendererTarget` publish. A hand-built outlet hard-codes a stream name, and that name is the
-  renderer's to declare — VHI changed every one of them when it moved to one stream per
-  DOF, and every application that had let the manifest answer needed no edit at all.
-* **Numerically filtering a discrete control.** It interpolates through states nobody
-  selected. Declare `debounce_s` on the DOF instead; see the smoothing table above.
-* **Relying on renderer blending to steady a classifier.** It cannot. Blending changes
-  how a commanded value looks, not whether it is stable.
 * **Forgetting `set_recording_session(False)` on session end.** VHI keeps ignoring its
   own keyboard until you toggle it back.
 * **Leaving a recording trajectory running.** It keeps the control hand moving and
@@ -487,11 +235,16 @@ symptom-organised debugging.
   regardless.
 * **Forgetting `pose_filter.reset()` on retrain.** The first few smoothed
   frames blend the new model's first prediction with the old model's
-  last; looks like a brief pose drift on every train cycle.
+  last; looks like a brief pose drift on every train cycle. See
+  [Post-process predictions](post-process-output.md).
 
 ## See also
 
 * [Install the Virtual Hand](install-vhi.md) - the installer CLI.
+* [Build a renderer](build-a-renderer.md) - the contract VHI serves, and what MyoGestic
+  calls on it.
+* [Control standard](../api/controls.md) - declaring a map, negotiation, the three layers
+  of smoothing.
 * [Edge trigger](../concepts/edge-trigger.md) - fire-on-change pattern.
 * [Examples directory](../tutorials/examples-index.md) - every shipped
   example wires VHI either via LSL, gRPC, or both.
