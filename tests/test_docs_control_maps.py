@@ -53,6 +53,14 @@ VHI_MANIFEST = [
 #: Everything the shipped targets export. A block may name controls on either.
 MANIFEST = [*VHI_MANIFEST, *keyboard_capabilities()]
 
+#: The namespaces this suite has a manifest for. A page teaching a reader to write their
+#: *own* renderer necessarily names addresses in a namespace nothing here exports, and
+#: resolving those against this manifest would fail for the wrong reason — not "this mapping
+#: is wrong" but "the test does not know what it points at". Inventing a manifest for them
+#: would only test the invention, so those blocks are checked as far as `load_control_map`
+#: and no further.
+SHIPPED_NAMESPACES = {cap.address.split(".", 1)[0] for cap in MANIFEST}
+
 
 def _dof_blocks() -> list[tuple[str, int, str]]:
     """Every fenced ```toml block containing a `[dofs]` table, with where it came from."""
@@ -89,7 +97,17 @@ def test_a_documented_mapping_loads_resolves_and_routes(page, line, block):
     raw = tomllib.loads(block)
     if "dofs" not in raw:  # a fragment showing one entry, not a whole file
         raw = {"dofs": raw}
-    controls = resolve(load_control_map(raw), MANIFEST)
+    control_map = load_control_map(raw)
+    foreign = sorted(
+        {
+            address.split(".", 1)[0]
+            for address in control_map.addresses()
+            if address.split(".", 1)[0] not in SHIPPED_NAMESPACES
+        }
+    )
+    if foreign:
+        pytest.skip(f"{where}: names {foreign}, which no shipped target exports")
+    controls = resolve(control_map, MANIFEST)
     # Binding is the point: `resolve` cannot see a routing conflict, because two aliases
     # sharing a control is only wrong once something has to put them on one wire. The
     # keyboard target is left **disarmed**, which is its default — it binds and claims its
