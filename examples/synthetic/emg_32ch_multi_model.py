@@ -36,7 +36,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, connect_controls, load_control_map
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
@@ -77,7 +77,7 @@ output_filter = PostProcessor(hz=32)
 
 # Which of this example's outputs drive which of VHI's controls. The left side of the
 # file is ours and the right side is VHI's, so nothing below hard-codes what a control
-# means — the addresses are resolved against a live VHI in `_ensure_vhi`.
+# means — the addresses are resolved against a live VHI by `link.ensure()`.
 CONTROL_FILE = Path(__file__).resolve().parent.parent / "controls" / "multi_model.toml"
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
@@ -86,12 +86,7 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 #: this rather than from a second list that could drift out of step with the TOML.
 POSE_ALIASES = tuple(CONTROL_MAP.bindings)
 
-# The bus stays None until `_ensure_vhi` — see its docstring. It and its targets own the
-# wire once built, and that matters more than it looks: VHI's continuous inlet takes
-# control values, and `VhiTarget` negotiates the space at bind time and refuses a VHI it
-# cannot fully drive rather than guessing.
 vhi_control = vhi.control_client()
-bus: ControlBus | None = None
 
 # Per-class hand poses, in control values keyed by *our* aliases: +1 is the
 # direction the alias names, 0 is rest, and an alias left out of a pose rests.
@@ -163,6 +158,20 @@ pipeline = Pipeline(app)
 # so the example's custom picker can call them through the pipeline too.
 pipeline.save_model = save_pickle
 pipeline.load_model = load_pickle
+
+# `link.bus` stays None until `link.ensure()` succeeds. The link and its target own the
+# wire once bound, and that matters more than it looks: VHI's continuous inlet takes
+# control values, and `VhiTarget` negotiates the space at bind time and refuses a VHI it
+# cannot fully drive rather than guessing. No hand and no stream is named here — the
+# target looks this file's addresses up in VHI's manifest and publishes one stream per
+# address it drives, named for that address.
+link = ControlLink(
+    CONTROL_MAP,
+    [VhiTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=32,
+)
 
 MODELS_DIR = Path("models")
 
@@ -384,12 +393,14 @@ def predict(model, features):
         proba = None
         class_idx = int(model.predict(x)[0])
 
-    if bus is None:
+    # `link.bus`, never `link.ensure()`: binding blocks on an RPC, which this thread
+    # must not do.
+    if link.bus is None:
         return {"class": class_idx, "proba": proba}  # nothing resolved yet, nothing to command
 
     # Control values in; the bus rests every alias the pose omits, sanitises and
     # smooths, and the target places them on the channels this VHI negotiated.
-    values = bus.push(HAND_POSES.get(class_idx, HAND_POSES[0]))
+    values = link.bus.push(HAND_POSES.get(class_idx, HAND_POSES[0]))
     return {"class": class_idx, "proba": proba, "hand": values}
 
 
@@ -403,29 +414,13 @@ grid = Grid(
 )
 
 
-def _ensure_vhi() -> None:
-    """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
-    global bus
-    if bus is not None:
-        return
-    # No hand and no stream is named here: the target looks this file's addresses up in
-    # VHI's manifest and publishes one stream per address it drives, each named for that
-    # address and one channel wide. `connect_controls` returns None while VHI cannot say
-    # what it exports, which is the only reason this can fail.
-    target = VhiTarget(client=vhi_control, interface=vhi)
-    bus = connect_controls(
-        CONTROL_MAP, [target], ctx=app.ctx, smoothing=output_filter, hz=32
-    )
-
-
-
 def _on_gesture(i: int) -> None:
-    _ensure_vhi()
+    link.ensure()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
 def _on_record() -> None:
-    _ensure_vhi()
+    link.ensure()
     app.start_recording()
 
 
@@ -482,8 +477,7 @@ def main() -> None:
         app.run()
     finally:
         # Rest the hand and make that frame land before the outlet's thread dies.
-        if bus is not None:
-            bus.stop()
+        link.stop()
         vhi_control.stop()
 
 

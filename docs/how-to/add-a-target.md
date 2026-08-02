@@ -109,9 +109,35 @@ bus.stop()
 ```
 
 `connect_controls` returns `None` — rather than raising — while any target's
-`capabilities()` says `None`. That is the case where a renderer has not started yet: call it
-again from a UI handler until it answers. Never from `@pipeline.predict`, which has its own
-thread and a deadline.
+`capabilities()` says `None`. That is the case where a renderer has not started yet: an
+application that launches its own renderer necessarily binds before it exists, so the
+answer is to ask again later, not to fail.
+
+[`ControlLink`][myogestic.controls.ControlLink] is that retry, so you do not keep it as a
+global. It holds the arguments, calls `connect_controls` until one attempt answers, and
+hands you the bus:
+
+<!--docs:run-->
+```python
+from myogestic.controls import ControlLink
+
+link = ControlLink(control_map, [CursorTarget()], hz=32)
+
+def on_click():                 # a button handler, or a training thread
+    if link.ensure():           # idempotent, and cheap once it has bound
+        link.bus.push({"aim_x": 0.5, "aim_y": -0.25})
+
+on_click()
+assert link.bus is not None     # this target answers immediately; a renderer would not
+link.stop()                     # rests every target and clears the bus
+```
+
+The targets are constructed **once** and reused across attempts: a failed attempt stops at
+`capabilities()`, so nothing was bound and no target was left part-way.
+
+Call `ensure()` from a UI handler or a training thread — anywhere that can afford to block.
+Never from `@pipeline.predict`, which has its own thread and a deadline: read `link.bus`
+there and no-op while it is `None`.
 
 If your target's vocabulary is fixed and you have the capabilities in hand already, build
 the bus directly instead; `connect_controls` is only the lazy-resolve convenience:

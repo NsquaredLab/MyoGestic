@@ -53,7 +53,7 @@ Load it, and hand the result to a bus with a `VhiTarget`:
 ```python
 import tomllib
 
-from myogestic.controls import connect_controls, load_control_map
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.vhi import VhiTarget, virtual_hand
 
 vhi = virtual_hand()
@@ -62,25 +62,31 @@ vhi_control = vhi.control_client()
 with open("hand.toml", "rb") as f:            # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(f))
 
-bus = None            # built once VHI can say what it exports
-
-
-def ensure_vhi() -> None:
-    """Resolve the map once VHI is up. Call from a button handler, never from predict."""
-    global bus
-    if bus is not None:
-        return
-    # No stream and no hand is named here. The target looks the file's addresses up in
-    # VHI's manifest and publishes one stream per address it drives, each named for that
-    # address. `connect_controls` returns None while VHI is unreachable.
-    target = VhiTarget(client=vhi_control, interface=vhi)
-    bus = connect_controls(CONTROL_MAP, [target], hz=32)
+# No stream and no hand is named here. The target looks the file's addresses up in VHI's
+# manifest and publishes one stream per address it drives, each named for that address.
+# Nothing is resolved yet: `link.bus` stays None until `link.ensure()` finds VHI up.
+link = ControlLink(
+    CONTROL_MAP,
+    [VhiTarget(client=vhi_control, interface=vhi)],
+    hz=32,
+)
 ```
 
 The bus is built **lazily** because resolution needs a live target: VHI declares whether
 each address is a number or a held state, and an app that launches VHI from its own UI
-necessarily starts before it exists. `capabilities()` blocks on an RPC, so call
-`ensure_vhi()` from a UI handler and let `predict` no-op while `bus is None`.
+necessarily starts before it exists. So every handler that needs the hand starts with
+`link.ensure()` — idempotent, and cheap once it has bound:
+
+```python
+def on_record() -> None:
+    link.ensure()             # binds on the first click that finds VHI up
+    app.start_recording()
+```
+
+`capabilities()` blocks on an RPC, so call `ensure()` from a UI handler or a training
+thread, never from `@pipeline.predict` — read `link.bus` there and no-op while it is
+`None`. One target is constructed here and reused across every attempt: a failed attempt
+stops at `capabilities()`, so nothing is bound and nothing is left part-way.
 
 **One target drives the whole map**, whatever is in it. A map naming *both* hands —
 sliders posing the operator's while a model drives the predicted one — is the same two
@@ -89,7 +95,7 @@ hands are simply eighteen names rather than two layouts to keep apart. An applic
 used to have to build one target per stream and could not know how many that was until
 it had read the map; there is nothing left to decide.
 
-That is the whole setup. `bus.push({"fist": 0.8})` from inside `@pipeline.predict` —
+That is the whole setup. `link.bus.push({"fist": 0.8})` from inside `@pipeline.predict` —
 using *your* alias, the left side of the file — and the target negotiates the wire,
 encodes, and sends.
 
