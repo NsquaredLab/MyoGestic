@@ -239,7 +239,8 @@ places, and collapsing any two of them is a bug:
 | Layer | Where | Applies to | Authoritative? |
 |---|---|---|---|
 | **1. Continuous smoothing** | `ControlBus(smoothing=...)`, MyoGestic | continuous DOFs | **Yes** — it decides the value that is commanded |
-| **2. Debounce + hysteresis** | `Discrete.debounce_s`, `ControlBus(hysteresis=...)`, MyoGestic | discrete DOFs | **Yes** — it decides *when* a state transition happens |
+| **2. Debounce** | `Discrete.debounce_s`, MyoGestic | discrete DOFs | **Yes** — it decides *when* a state transition happens |
+| **2b. Dead zone + hysteresis** | `ControlBus(dead_zone=...)`, `ControlBus(hysteresis=...)`, MyoGestic | continuous DOFs | **Yes** — they decide the value that is commanded |
 | **3. Presentation blending** | the renderer (`control_client().set_presentation`) | how a commanded value looks | **No** — appearance only |
 
 Layer 1 runs before any target sees a frame, which is what makes it authoritative:

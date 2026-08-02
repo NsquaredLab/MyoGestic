@@ -11,7 +11,7 @@ Two ideas:
 
 Continuous DOFs are **signed and normalized**: ``[-1, 1]`` with ``0`` at rest. A
 name denotes its ``+1`` direction — ``index.flexion`` is flexion at ``+1`` and
-extension at ``-1``. One-way controls declare ``range = [0.0, 1.0]``. A target owns
+extension at ``-1``. A one-way control declares ``lo=0.0`` instead. A target owns
 its own units: pixels per second belongs to a cursor target, degrees to a
 renderer, never here.
 
