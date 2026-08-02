@@ -26,11 +26,15 @@ import torch
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, connect_controls, load_control_map
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_regressor
-from myogestic.session import iter_aligned_windows, iter_labeled_windows
+from myogestic.session import (
+    iter_aligned_windows,
+    iter_labeled_windows,
+    split_sessions_by_stream,
+)
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import VhiTarget, virtual_hand
@@ -63,7 +67,7 @@ output_filter = PostProcessor(hz=32)
 # The control space this app commands, as a *mapping* rather than a declaration: five
 # continuous aliases for the digits plus one discrete gesture, each pointed at an address
 # VHI declares. What an address means — number or held state, its range, its states — is
-# VHI's to say, so this stays unresolved until VHI answers (see `_ensure_vhi`).
+# VHI's to say, so this stays unresolved until VHI answers (see `link` below).
 #
 # No VHI channel number appears here, and none should: `VhiTarget` owns the
 # translation to whatever the hand happens to want on the wire.
@@ -122,18 +126,7 @@ PROCESSES = [
     *vhi.launchable(),
 ]
 
-# --8<-- [start:bus]
-# The bus cannot exist yet. Resolving the control file needs VHI to say what its
-# addresses accept, and VHI is launched from this app's own ProcessLauncher — so these
-# stay None until `_ensure_vhi` runs, on the first click that needs them.
-#
-# Once built, one bus owns the whole output path: substitute rest -> clip -> smooth ->
-# clip again -> hand it to every target. `VhiTarget` is what turns resolved aliases into
-# whatever this VHI renders on the wire, on whichever of its streams the map's addresses
-# turn out to be on.
 vhi_control = vhi.control_client()
-bus: ControlBus | None = None
-# --8<-- [end:bus]
 
 app = App("EMG Regression", ui_scale=0.85)
 app.streams(
@@ -146,6 +139,26 @@ app.streams(
     ),
 )
 pipeline = Pipeline(app)
+
+# --8<-- [start:bus]
+# The bus cannot exist yet. Resolving the control file needs VHI to say what its
+# addresses accept, and VHI is launched from this app's own ProcessLauncher — so
+# `link.bus` stays None until `link.ensure()` succeeds, on the first click that needs it.
+#
+# Once built, one bus owns the whole output path: substitute rest -> clip -> smooth ->
+# clip again -> hand it to every target. `VhiTarget` is what turns resolved aliases into
+# whatever this VHI renders on the wire, on whichever of its streams the map's addresses
+# turn out to be on. No hand and no stream is named here: the target looks this file's
+# addresses up in VHI's manifest and publishes one stream per address it drives, each
+# named for that address and one channel wide.
+link = ControlLink(
+    CONTROL_MAP,
+    [VhiTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=32,
+)
+# --8<-- [end:bus]
 
 
 def extract_features(emg: np.ndarray) -> np.ndarray:
@@ -189,23 +202,13 @@ def train(data: TrainingData):
     all_X: list[np.ndarray] = []
     all_y: list[np.ndarray] = []
 
-    # Sessions with kinematics — primary input EMG, regress to kinematics
-    kin_paths = []
-    label_paths = []
-    for p in data.paths:
-        try:
-            from myogestic.session import open_session_store
-
-            sess = open_session_store(p)
-        except Exception as e:
-            log.append(f"  skip {p}: {e}")
-            continue
-        has_kin = "vhi_control" in sess.stores
-        sess.close()  # only needed the store list — release the .session.zip handle
-        if has_kin:
-            kin_paths.append(p)
-        else:
-            label_paths.append(p)
+    # Sessions with kinematics — primary input EMG, regress to kinematics. The rest fall
+    # back to synthetic targets below. Sessions that will not open at all come back as
+    # `unreadable` rather than being logged inside the helper, so the skip lands in *this*
+    # app's log where the user is looking.
+    kin_paths, label_paths, unreadable = split_sessions_by_stream(data.paths, "vhi_control")
+    for p, e in unreadable:
+        log.append(f"  skip {p}: {e}")
 
     # Kinematics path
     # --8<-- [start:kin_loop]
@@ -269,6 +272,9 @@ def train(data: TrainingData):
 @pipeline.predict
 def predict(model, features):
     """Regress the continuous aliases and hand them to the bus."""
+    # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this callback runs
+    # on the predict thread, where a stall is worse than a frame with no bus.
+    bus = link.bus
     if bus is None:
         return None  # nothing resolved yet, so there is nothing to command
     pred = model.predict(features.reshape(1, -1))[0]
@@ -296,23 +302,6 @@ grid = Grid(
 # --8<-- [end:grid]
 
 
-# --8<-- [start:negotiate]
-def _ensure_vhi() -> None:
-    """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
-    global bus
-    if bus is not None:
-        return
-    # No hand and no stream is named here: the target looks this file's addresses up in
-    # VHI's manifest and publishes one stream per address it drives, each named for that
-    # address and one channel wide. `connect_controls` returns None while VHI cannot say
-    # what it exports, which is the only reason this can fail.
-    target = VhiTarget(client=vhi_control, interface=vhi)
-    bus = connect_controls(
-        CONTROL_MAP, [target], ctx=app.ctx, smoothing=output_filter, hz=32
-    )
-
-
-
 # --8<-- [start:gesture]
 def _on_gesture(i: int) -> None:
     # A held state, commanded by name through the same bus the continuous DOFs go
@@ -322,7 +311,7 @@ def _on_gesture(i: int) -> None:
     #
     # `bus.select` bypasses the debounce because this is a deliberate click, not a
     # noisy prediction, and rebases the trigger so the next push does not re-fire it.
-    _ensure_vhi()
+    bus = link.ensure()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
     if bus is not None:
         # The state names are VHI's own movements, straight out of its manifest — the
@@ -337,7 +326,7 @@ def _on_record() -> None:
     # gesture buttons are the session's only movement source. Returns False if this
     # VHI has no v2 aid, which is worth surfacing — an ungated recording can pick up
     # stray keyboard movements and nothing downstream could tell.
-    _ensure_vhi()
+    link.ensure()
     app.start_recording()
     if not recording_aid.set_recording_session(True):
         app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
@@ -401,8 +390,7 @@ def main() -> None:
         # Rest the hand first, and make that frame land: the outlet sends on a
         # paced thread, so a pose pushed at exit would otherwise never go out
         # and the hand would hold its last commanded position.
-        if bus is not None:
-            bus.stop()
+        link.stop()
         recording_aid.stop_trajectory()      # no-op unless a trajectory was started
         recording_aid.set_recording_session(False)
         recording_aid.stop()

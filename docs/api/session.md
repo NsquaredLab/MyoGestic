@@ -10,6 +10,10 @@ Read back an on-disk recording session: iterate labeled or aligned windows for t
 
 ::: myogestic.session.iter_aligned_windows
 
+::: myogestic.session.split_sessions_by_stream
+
+::: myogestic.session.SessionSplit
+
 ## Data model
 
 ::: myogestic.session.Session

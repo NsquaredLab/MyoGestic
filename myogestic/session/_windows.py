@@ -1,15 +1,84 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
 from myogestic.session._io import open_session_store
 
 log = logging.getLogger("myogestic.session")
+
+
+class SessionSplit[P: str | Path](NamedTuple):
+    """Which sessions carry a stream, which do not, and which could not be opened.
+
+    Attributes
+    ----------
+    with_stream
+        Paths whose recording contains the stream — the `iter_aligned_windows` set.
+    without_stream
+        Paths that opened fine and simply do not have it — the `iter_labeled_windows`
+        fallback set.
+    unreadable
+        ``(path, exception)`` for every path that would not open at all. Returned rather
+        than logged, because *where* a skipped session is reported belongs to the caller:
+        a training callback puts it in the app's own log, not in `logging`.
+    """
+
+    with_stream: list[P]
+    without_stream: list[P]
+    unreadable: list[tuple[P, Exception]]
+
+
+def split_sessions_by_stream[P: str | Path](
+    paths: Iterable[P], stream: str
+) -> SessionSplit[P]:
+    """Sort session paths by whether they recorded ``stream``, without holding them open.
+
+    The question every mixed training callback asks first: sessions with a kinematics
+    stream train against it, the rest fall back to synthetic targets from their labels.
+
+    Each session is opened only to read its store list and is **closed again straight
+    away** — an open `zarr.storage.ZipStore` keeps a lock on the ``.session.zip``, which
+    on Windows blocks deleting or moving the file afterwards.
+
+    Parameters
+    ----------
+    paths
+        Session locations — folders or ``.session.zip`` archives, e.g. ``data.paths``.
+    stream
+        The stream name to test for, e.g. ``"vhi_control"``.
+
+    Returns
+    -------
+    SessionSplit
+        The three-way outcome, each list in the order the paths came in.
+
+    Examples
+    --------
+    >>> from myogestic.session import split_sessions_by_stream
+    >>> kin, labels, unreadable = split_sessions_by_stream([], "vhi_control")
+    >>> kin, labels, unreadable
+    ([], [], [])
+    """
+    with_stream: list[P] = []
+    without_stream: list[P] = []
+    unreadable: list[tuple[P, Exception]] = []
+    for path in paths:
+        try:
+            sess = open_session_store(path)
+        except Exception as exc:  # noqa: BLE001 - one bad session must not stop the rest
+            unreadable.append((path, exc))
+            continue
+        try:
+            present = stream in sess.stores
+        finally:
+            sess.close()
+        (with_stream if present else without_stream).append(path)
+    return SessionSplit(with_stream, without_stream, unreadable)
 
 
 def iter_labeled_windows(
