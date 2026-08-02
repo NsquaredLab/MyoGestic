@@ -15,11 +15,11 @@ Two things readers get wrong most often:
   sign error survives every test a device and its own read-back can agree on, because they
   agree whichever way they point; the only check that catches it is a person watching the
   device. See [The one convention a device may not redefine](https://nsquaredlab.github.io/MyoGestic/concepts/controls/#the-one-convention-a-device-may-not-redefine).
-- **Nothing attaches itself.** A `Stream` is inert until `app.streams(...)` registers it, and a
+- **Registration and binding are explicit.** A `Stream` is inert until `app.streams(...)` registers it, and a
   control map drives nothing until `connect_controls()` (or `ControlLink.ensure()`) binds it
   against a target that has answered with a manifest. Binding before the target is up returns
   `None` rather than raising. See [Anatomy of an app](https://nsquaredlab.github.io/MyoGestic/anatomy/)
-  and [Binding is deferred, not decided](https://nsquaredlab.github.io/MyoGestic/concepts/controls/#binding-is-deferred-not-decided).
+  and [Binding retries while the target is unavailable](https://nsquaredlab.github.io/MyoGestic/concepts/controls/#binding-retries-while-the-target-is-unavailable).
 
 ## Start here
 

@@ -247,7 +247,7 @@ Last line of every script. In order:
 
 ## Where to read next
 
-You now have the skeleton. The deep-dive concept pages add the meat:
+The concept pages describe each component in more detail:
 
 - [Streams](concepts/streams.md) - ring buffer geometry, the channels-first contract, `get_display` decimation.
 - [Pipeline](concepts/pipeline.md) - state machine, decorator semantics, stale-tick guards.

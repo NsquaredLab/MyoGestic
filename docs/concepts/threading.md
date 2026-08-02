@@ -40,7 +40,7 @@ flowchart LR
 
 Every non-main thread is a daemon: the program exits cleanly even if a thread is mid-iteration when the user closes the window. The predict thread is started via `app.before_run_hooks` (at `app.run()`, not on first Predict click) and joined with a short timeout via a `threading.Event` flag on cleanup. Acquisition and output threads are daemons that exit when the process does; their `stop()` methods set a sentinel but don't `join()`.
 
-## Why the GIL doesn't bite
+## Why the GIL does not serialise these threads
 
 Python's Global Interpreter Lock would be a problem if any of these threads spent CPU time in pure Python. They don't:
 
@@ -78,7 +78,7 @@ Why: PyTorch CUDA streams can be juggled, but the engineering complexity isn't w
 
 ## Bridge subprocesses
 
-Heavy-data sources break the GIL-release assumption - webcam decoding, even with OpenCV, can saturate the Python thread enough to disrupt the predict thread. The escape hatch is a subprocess:
+Heavy-data sources break the GIL-release assumption - webcam decoding, even with OpenCV, can saturate the Python thread enough to disrupt the predict thread. For heavy-data sources that break that assumption, use a subprocess:
 
 ```python
 cam = WebCamBridge("cam", device=0, zarr_path="session/cam.zarr")

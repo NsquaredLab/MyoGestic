@@ -36,7 +36,7 @@ separate on purpose: a held state delivered on change is a different kind of val
     spellings of one control would make "these two aliases collide" impossible to decide
     from a manifest.
 
-!!! tip "See it work before reading further"
+!!! tip "Inspect the whole control path with `tools/inspect_control.py`"
     A narrated walkthrough runs the whole path: declaration, the two kinds of control,
     the wire frame, and the negotiation against whatever Virtual Hand you have.
 
@@ -248,9 +248,8 @@ state for `debounce_s` before it counts, with optional hysteresis so a value hov
 a boundary settles on one side. `debounce_s` is declared on the DOF for that reason,
 rather than configured on the filter.
 
-Layer 3 is worth having, since a hand that snaps between poses looks wrong, but it is
-cosmetic. A target with blending on and no debounce still jumps between states, smoothly
-enough that the jump *looks* deliberate.
+Layer 3 affects presentation only. With blending on and no debounce every accepted transition
+is still applied; blending smooths how the change is drawn, not whether it happened.
 
 ### Recording is not control
 

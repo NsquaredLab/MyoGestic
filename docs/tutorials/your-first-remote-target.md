@@ -319,7 +319,7 @@ except ValueError as exc:
     assert "Did you mean" not in str(exc)
 ```
 
-## Stage 3 — `ControlLink`, and what a bus does *not* prove
+## Stage 3 — `ControlLink`: a bus proves resolution, not delivery
 
 Fix the typo. Now build the MyoGestic side, the third file. In your own application this is
 whatever calls `bus.push()` from inside `@pipeline.predict`; here it is a script, so there is
@@ -374,7 +374,7 @@ Three outcomes, and they are easy to confuse:
 | target reachable, address wrong | raises `ValueError` |
 | target too old | logs the refusal, returns `None` |
 
-Rows one and three both hand you `None`, and that is the trap: "too old, forever" looks exactly
+Rows one and three both return `None`: "too old, forever" looks exactly
 like "not started yet, try again in a second", and an application built around the retry will
 retry forever. Run `drive.py` against `my_target.py --antique` and you get row three, a
 `logging.WARNING` on the `myogestic.controls` logger:
@@ -745,9 +745,9 @@ read another sample.
 
 ### Checkpoint 3: what an *unclean* exit does, and what you choose to do about it
 
-`link.stop()` is the polite path. Kill the producer with `SIGKILL`, pull its network cable, let
-it segfault, and none of it runs: no neutral frame, no flush, no outlet teardown. Your rig
-keeps holding the last thing it was told: a gripper closed with nothing behind it.
+`link.stop()` is the orderly path. If the producer is killed with `SIGKILL`, loses its network,
+or crashes, none of it runs: no neutral frame, no flush, no outlet teardown. Under a hold-last
+policy the target then retains the last values it received.
 
 Holding is a **policy decision, and it is yours**. Pick one of three and state it in your docs:
 
@@ -794,8 +794,8 @@ that can injure someone needs a release the software is not in the path of. And 
 recovery is a separate job**: recovery decides whether the *stream* comes back, the timeout
 decides what the *device* does meanwhile, and a rig can want both. Set the timeout well above
 your producer's tick interval. At
-`output_hz=32.0` a sample is due every 31 ms, so a second is thirty missed samples and not a
-twitchy hair trigger.
+`output_hz=32.0` a sample is due every 31.25 ms, so a one-second timeout is about 32 missed
+samples.
 
 ## Stage 6 — The sign check
 
@@ -905,7 +905,7 @@ twist = "rig.wrist.pronation"
 mode = { target = "rig.mode", debounce_s = 0.1 }
 ```
 
-!!! warning "Neither side notices that you edited those two files"
+!!! warning "Restart both processes after changing the manifest or the map"
     [`ControlLink.ensure()`][myogestic.controls.ControlLink.ensure] returns its cached bus
     without a second handshake once it has one, and `RemoteTarget` caches what it resolved and
     has no detection of a changed manifest. Restarting your target is not enough; the

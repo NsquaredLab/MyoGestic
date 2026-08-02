@@ -20,12 +20,12 @@ freedom](../reference/glossary.md#dof)), named for the DOF's own address and one
 MyoGestic  --[ vhi.prediction.index, 1 channel ]-->  your target     (you read this)
 ```
 
-There is one shape and it needs no describing. The address you advertise in your manifest *is*
+There is one shape. The address you advertise in your manifest *is*
 the stream name, so nothing further is published about the transport: there is no width to
 declare and no positional layout for the two of you to agree on. A DOF applies the moment its
 sample arrives, and the DOFs that did not deliver hold whatever they were last commanded to.
 These DOFs are independently actuated, possibly driven by different processes at different
-rates. Two programs can each own a finger.
+rates. Two programs can each drive a different DOF.
 
 MyoGestic drives all of it with one [`RemoteTarget`](../api/controls.md), which publishes one
 outlet per address the map names.

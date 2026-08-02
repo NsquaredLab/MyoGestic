@@ -230,7 +230,7 @@ Hand is one such program (see [Integrate the Virtual Hand](../how-to/integrate-v
     declared range, no clamp and no rest on shutdown. See
     [Publish a data stream](../how-to/add-an-output.md).
 
-## Binding is deferred, not decided
+## Binding retries while the target is unavailable
 
 A map cannot be resolved until a device can answer, and an application that launches its device
 from its own UI necessarily binds *before* that device exists. So
