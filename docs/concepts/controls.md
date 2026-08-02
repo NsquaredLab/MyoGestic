@@ -224,7 +224,7 @@ forwards discrete edges over gRPC. It knows nothing about what the far side driv
 Hand is one such program (see [Integrate the Virtual Hand](../how-to/integrate-vhi.md)), and
 [Your first remote target](../tutorials/your-first-remote-target.md) builds another.
 
-!!! note "An `Output` is not a third way"
+!!! note "Outputs do not drive devices"
     [`Output`][myogestic.outputs.Output] is a paced latest-wins sender: what a target writes
     *through*, and what `RemoteTarget` builds one of per address. Alone it has no aliases, no
     declared range, no clamp and no rest on shutdown. See
