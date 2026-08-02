@@ -14,7 +14,6 @@ class SessionWidgetState:
     folder_dialog: object | None = None
     last_load_msg: str = ""
     deactivated_classes: set[int] = field(default_factory=set)
-    scanned: bool = False  # base_path listed yet? (one-shot on first render)
 
 
 _states: dict[str, SessionWidgetState] = {}

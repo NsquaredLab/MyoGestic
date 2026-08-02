@@ -48,7 +48,7 @@ class _Int16Source:
 
 def test_get_window_is_float32_even_for_int16_stream():
     stream = Stream("emg", source=_Int16Source(), window_ms=10, buffer_ms=1000)
-    stream._acquire_step()  # first step connects + allocates buffers
+    stream.reconnect()  # attaching is deliberate now; the loop never does it
     for _ in range(5):
         stream._acquire_step()
 

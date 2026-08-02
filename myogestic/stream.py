@@ -235,7 +235,7 @@ class Stream:
         self.info: StreamInfo | None = None
         self._connected = False
 
-        # These are initialized in _connect()
+        # These are initialized by `_allocate_buffers`, on connect.
         self._cap: int = 0
         self._data: RingBuffer | None = None
         self._timestamps: RingBuffer | None = None
@@ -263,16 +263,6 @@ class Stream:
         self.epoch = 0
         self._total_seq = 0
         self._display_seq_end = 0
-
-    def _connect(self) -> bool:
-        """Connect to source and allocate buffers. Returns True on success."""
-        try:
-            self.info = self._source.connect()
-        except Exception as e:
-            self.last_error = str(e)
-            return False
-        self._allocate_buffers()
-        return True
 
     def _allocate_buffers(self) -> None:
         """Allocate/resize buffers for the current self.info.
@@ -391,7 +381,14 @@ class Stream:
         in how they pace themselves.
         """
         if not self._connected:
-            return 0.0 if self._connect() else 1.0
+            # Nothing attaches on its own — not the first time, and not after a drop.
+            # This used to call `_connect()` every second forever, which is one behaviour
+            # doing two jobs: it is how a stream first attached, and it is also how a
+            # stream from somebody else's run got picked up seconds after you opened an
+            # app, with a plausible-looking trace and no way to tell it apart from yours.
+            # A source is a thing you point at deliberately, so the loop waits and
+            # `reconnect` — the button — is what attaches.
+            return 1.0
 
         try:
             data, ts = self._source.read()

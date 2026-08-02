@@ -66,17 +66,12 @@ class SessionManager:
         class_names = self._class_names
         state = get_state(widget_id)
 
-        if not state.scanned:
-            # A session *manager* should list what's already in its folder, so
-            # on first render we scan base_path once. Merge (don't overwrite) so
-            # a just-recorded session added via add_recorded_session survives.
-            # ponytail: synchronous scan; a huge base_path would hitch one frame.
-            state.scanned = True
-            existing = {s["path"] for s in state.sessions}
-            state.sessions.extend(
-                r for r in scan_sessions(self._base_path) if r["path"] not in existing
-            )
-
+        # Deliberately empty until asked. This used to scan `base_path` on first
+        # render, so opening an app presented every session anyone had ever recorded
+        # there — 328 of them on the machine this was reported from, none of them
+        # chosen, above a Train button. What a training set contains is a decision,
+        # and a list that arrives on its own is a decision nobody made. `Scan folder`
+        # is the same scan, one click away, and says what it found.
         panel_header(self._title, fa.ICON_FA_FOLDER_OPEN)
         render_summary_and_buttons(widget_id, self._base_path, state)
         poll_file_dialog(state)
@@ -115,6 +110,22 @@ def render_summary_and_buttons(widget_id: str, base_path: str, state: SessionWid
         imgui.set_tooltip(
             "Pick one or more session zip files (multi-select).\n"
             "Any .zip with a meta.json inside is treated as a session."
+        )
+
+    imgui.same_line()
+    if imgui.button(f"Scan folder##{widget_id}"):
+        # Merge rather than replace: a session just recorded in this run is in the
+        # list but not yet on disk under a name this finds, and losing it to a scan
+        # would be losing the only copy the user has looked at.
+        existing = {s["path"] for s in sessions}
+        found = [r for r in scan_sessions(base_path) if r["path"] not in existing]
+        sessions.extend(found)
+        state.last_load_msg = f"scanned {base_path}: {len(found)} new"
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(
+            f"List every session already in {base_path}.\n"
+            "Nothing is loaded until you ask — sessions from earlier runs are not\n"
+            "part of this one unless you say so."
         )
 
     if not sessions:

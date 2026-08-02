@@ -84,7 +84,7 @@ def _make_stream(
         window_ms=100,
         buffer_ms=buffer_ms,
     )
-    stream._acquire_step()  # first step connects + allocates buffers
+    stream.reconnect()  # attaching is deliberate now; the loop never does it
     for _ in range(n_steps):
         stream._acquire_step()
     return stream
@@ -787,7 +787,7 @@ def test_build_signal_frame_notch_attenuates_hum_end_to_end():
     stable-snapshot + epoch/sequence + `NotchCache` wiring, not just the cache in isolation."""
     fs = 2000.0
     stream = Stream("emg", source=_HumSource(fs=fs, chunk=100), window_ms=100, buffer_ms=5000)
-    stream._acquire_step()  # connect + allocate
+    stream.reconnect()  # attaching is deliberate now; the loop never does it
     for _ in range(60):  # ~3 s buffered (>= window + notch warm-up)
         stream._acquire_step()
 
