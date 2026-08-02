@@ -214,7 +214,7 @@ nothing while the rig stayed still.
 
 Four things are refused rather than half-driven: a target too old for the vocabulary this
 client speaks, an address the target does not export, one it exports as something other
-than a number, and two aliases aimed at one control. A partly-understood negotiation
+than a number, and two aliases aimed at one control. A partly understood negotiation
 leaves some controls believed driven and others quietly dropped, and a dropped control is
 indistinguishable from one that is working and holding still.
 

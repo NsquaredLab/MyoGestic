@@ -25,7 +25,7 @@ Size comes from the global scale, which resolves
 
 - **`PALETTE`**: ten categorical colours, for *series identity* (channel 0 vs channel 1). Never
   use it as a ramp; adjacent entries carry no ordering.
-- **Continuous data gets a perceptually-uniform ramp.** Viridis is `Heatmap`'s default because
+- **Continuous data gets a perceptually uniform ramp.** Viridis is `Heatmap`'s default because
   ImPlot's stock "Deep" is categorical and misleads on a heatmap.
 - **Semantic tone comes from the theme**, not literals: `Col_.text_disabled` for muted text,
   `Col_.child_bg` for cell surfaces. Reading the tone keeps light and dark themes honest.

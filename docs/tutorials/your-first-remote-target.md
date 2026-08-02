@@ -376,7 +376,7 @@ Three outcomes, and they are easy to confuse:
 
 Rows one and three both hand you `None`, and that is the trap: "too old, forever" looks exactly
 like "not started yet, try again in a second", and an application built around the retry will
-retry for ever. Run `drive.py` against `my_target.py --antique` and you get row three, a
+retry forever. Run `drive.py` against `my_target.py --antique` and you get row three, a
 `logging.WARNING` on the `myogestic.controls` logger:
 
 ```
@@ -573,7 +573,7 @@ Finally, `serve` starts both threads and `stop` shuts them down properly:
         comfortably longer than a pass of `_read` — a one-second resolve sweep plus the
         back-off — so in practice the reader has ended by the time the loop below runs. It
         is a timeout and not a bare `join()` because a wedged liblsl call would otherwise
-        hang shutdown for ever. If it *does* expire, this closes inlets underneath a
+        hang shutdown forever. If it *does* expire, this closes inlets underneath a
         reader that is still using them, which is a race liblsl makes no promise about;
         the reader will not re-open anything (`_stop` is set, so that pass is its last)
         but that is the extent of the guarantee. A rig that cannot accept even that
@@ -732,7 +732,7 @@ held both addresses, so `missing` was empty and no sweep happened. What reconnec
 !!! danger "Change `InterfaceSpec(name=…)` and reconnection stops, silently"
     The `source_id` is built from that name, so a producer that comes back under a different
     one is, to liblsl, a *different stream*. The inlet stays alive and recovering, waiting
-    for a `source_id` that will never return - `pull_chunk` yields empty for ever, `missing`
+    for a `source_id` that will never return - `pull_chunk` yields empty forever, `missing`
     stays empty, and nothing sweeps, raises or prints. Run the same rig under `name="rig"`
     and then `name="rig-renamed"` and the second producer moves nothing at all, quietly.
 
@@ -753,7 +753,7 @@ Holding is a **policy decision, and it is yours**. Pick one of three and state i
 
 | policy | what the rig does when samples stop | when |
 |---|---|---|
-| hold-last | keeps the last value for ever | a display, a simulation, anything that cannot hurt anyone |
+| hold-last | keeps the last value forever | a display, a simulation, anything that cannot hurt anyone |
 | timed rest | returns to `REST` after a declared timeout | a rig with force behind it, driven over a network |
 | device deadman | the hardware itself releases without a heartbeat | anything that can injure someone |
 
@@ -909,9 +909,9 @@ mode = { target = "rig.mode", debounce_s = 0.1 }
     [`ControlLink.ensure()`][myogestic.controls.ControlLink.ensure] returns its cached bus
     without a second handshake once it has one, and `RemoteTarget` caches what it resolved and
     has no detection of a changed manifest. Restarting your target is not enough; the
-    running MyoGestic side will keep driving the old two-address contract for ever.
+    running MyoGestic side will keep driving the old two-address contract forever.
 
-    Call `link.stop()` and build a new `ControlLink` from a freshly-loaded map. (`stop()` alone
+    Call `link.stop()` and build a new `ControlLink` from a freshly loaded map. (`stop()` alone
     makes the *link* re-handshake, but it still holds the `ControlMap` object it was
     constructed with, so a change to the TOML needs a new one either way.) Restarting
     `drive.py` does both, so this page is built out of scripts you re-run.
@@ -1132,7 +1132,7 @@ class Rig(pb2_grpc.RemoteControlServicer):
     def stop(self) -> None:
         """Stop the threads, close every inlet, and stop the gRPC server.
 
-        The join is bounded so a wedged liblsl call cannot hang shutdown for ever. If
+        The join is bounded so a wedged liblsl call cannot hang shutdown forever. If
         the timeout expires the inlets are closed under a still-running reader; drop
         the timeout if your rig cannot accept that.
         """
