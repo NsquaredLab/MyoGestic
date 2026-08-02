@@ -116,21 +116,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed (breaking)
 
-- **`UDPOutput` and `SerialOutput` are gone.** They existed to say "drive your device over
-  UDP or serial without a control map", which is the one road this release closes. Neither
-  was constructed anywhere in the tree, neither had a test, and `SerialOutput` was never
-  exported. The one real prospective user could not use `UDPOutput` anyway: it sends float32
-  bytes and the firmware in question parses ASCII, so it subclassed `Output` directly.
+- **`UDPOutput` and `SerialOutput` are gone.** They existed to drive a device without a
+  control map, which is the road this release closes. Neither was constructed anywhere in the
+  tree and neither had a test.
 
-  Anything that **moves** is now a [`Target`][myogestic.controls.Target]: three methods, any
-  transport you like, and with it the control map's declared ranges, clipping, dead zone,
-  debounce and the neutral frame delivered before teardown. A serial prosthesis is `bind`,
-  a `serial.write` in `send`, and a `stop` that rests the device and closes the port. See
-  `examples/synthetic/servo_hand.py` and *Drive your own device*.
+  Anything that **moves** is a [`Target`][myogestic.controls.Target]: three methods, any
+  transport, and with it the map's declared ranges, clipping, dead zone, debounce and the
+  neutral frame delivered before teardown. See `examples/synthetic/servo_hand.py`.
 
-  `Output` and `LSLOutlet` stay. An output is a paced sender - telemetry, or the transport a
-  target writes *through*, which is what `RemoteTarget` does with one `LSLOutlet` per control.
-  To keep a deleted class, copy it out of git history; each was under 60 lines.
+  `Output` and `LSLOutlet` stay, as the paced sender a target writes *through*. To keep a
+  deleted class, copy it out of git history; each was under 60 lines.
 
 - **`InterfaceSpec` no longer names a stream.** `output_stream_name`,
   `control_pose_stream_name`, `n_control_pose_channels` and `control_pose_hz` are gone,

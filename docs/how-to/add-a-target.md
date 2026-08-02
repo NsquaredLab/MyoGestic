@@ -38,11 +38,9 @@ The two optional members are what the bus asks for by name:
 | `capabilities()` | "the caller already knows my vocabulary" | what addresses you export, so a map can be resolved against you |
 
 **A route's `weight` is yours to apply, and before your own range.** The bus delivers the
-alias's un-weighted value, because only you know what your range is in your own units.
-`RemoteTarget` computes `min(hi, max(lo, weight * value))` and so should you. Applying the
-range first would let a gain push a value past what you declared you accept, and ignoring
-`weight` silently discards every gain in the map — including `weight = -1.0`, which is how
-a map inverts an axis.
+un-weighted value; compute `min(hi, max(lo, weight * value))`, as `RemoteTarget` does.
+Ignoring `weight` silently discards every gain in the map, including the `weight = -1.0` that
+inverts an axis.
 
 ## A complete target
 
@@ -171,9 +169,8 @@ bind. Uncaught, it would look like a control that works and holds still.
 
 ## A real one: a servo hand
 
-A cursor has two controls and no mechanism. A hand has neither of those luxuries, and
-`examples/synthetic/servo_hand.py` is the whole of one - six servos on a serial port, runnable
-with no hardware:
+A cursor has two controls and no mechanism. `examples/synthetic/servo_hand.py` is a real
+one - six servos on a serial port, runnable with no hardware:
 
 ```bash
 uv run python examples/synthetic/servo_hand.py
@@ -181,20 +178,9 @@ uv run python examples/synthetic/servo_hand.py
 
 --8<-- "examples/synthetic/servo_hand.py"
 
-Three things in it are worth more than the line count suggests.
-
-**Five addresses, six servos.** `hand.thumb` drives two of them on different transfer
-functions, because a real thumb opposes as it flexes. That coupling stays inside the target.
-A fan-out in the map sends one value to several addresses, so ganging the two thumb servos
-through the map would work - and would force whoever writes the map to know this hand's
-linkage, which is the one thing an address exists to hide.
-
-**Wire order belongs to the device.** `frame` iterates `SERVOS` and looks each fraction up by
-name, so reordering a TOML for readability cannot reorder somebody's fingers.
-
-**`stop` rests, then closes.** The bus already delivered a neutral frame, and the target sends
-one again anyway: a target can be stopped directly too, and an extra open-hand frame costs a
-few bytes while a missed one leaves a hand clenched on somebody's arm.
+Three things in it carry the weight: `hand.thumb` drives **two** servos, so the coupling stays
+out of the map; `frame` iterates `SERVOS` by name, so the wire order is the device's; and
+`stop` rests before it closes.
 
 ## What the standard asks of you
 

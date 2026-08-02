@@ -191,16 +191,14 @@ refuses a control nothing drives.
 ## Everything that moves is a target
 
 A prosthesis on a serial port, a motor controller, a cursor, a keyboard, a Godot window on
-another machine: MyoGestic drives all of them through one object, a
-[`Target`][myogestic.controls.Target]. Three methods and a list of `Capability`. Nothing
-else in this library moves anything.
+another machine: all of them are driven through one object, a
+[`Target`][myogestic.controls.Target]. Three methods and a list of `Capability`.
 
-The transport is yours. `send` receives named values and does whatever your device needs
-with them: a `serial.write`, a UDP datagram, an MQTT publish, a library call. The shipped
-[`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] presses keys and opens no socket at
-all.
+The transport is yours. `send` receives named values and does whatever your device needs with
+them: a `serial.write`, a UDP datagram, an MQTT publish, a library call. The shipped
+[`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] opens no socket at all.
 
-So the only fork is **whether that target is already written**:
+The only fork is **whether that target is already written**:
 
 | | you write the target | it is already written |
 |---|---|---|
@@ -209,13 +207,9 @@ So the only fork is **whether that target is already written**:
 | what you write instead | the target | the *other side*: the contract your program serves |
 | guide | [Drive your own device](../how-to/add-a-target.md) | [Drive a remote target](../how-to/drive-a-remote-target.md) |
 
-**A device running its own firmware is still the left column.** A serial hand has a
-microcontroller and a control loop of its own, and none of that matters here: what MyoGestic
-imports and calls is the Python object that writes to the port. The question is only whether
-the device already speaks gRPC and LSL — and if you are building it now, it does not, and
-teaching it to is a program rather than a method.
-`examples/synthetic/servo_hand.py` is the whole of a six-servo hand, including its
-finger-coupling and its wire format.
+**A device running its own firmware is still the left column.** What MyoGestic imports and
+calls is the Python object that writes to the port. The question is only whether the device
+already speaks gRPC and LSL. `examples/synthetic/servo_hand.py` is a whole six-servo hand.
 
 Both declare a manifest, both are named by address in the same map, and a single `ControlBus`
 drives a mixed list of them, so the choice is reversible: a device that starts in-process and
@@ -231,11 +225,10 @@ Hand is one such program (see [Integrate the Virtual Hand](../how-to/integrate-v
 [Your first remote target](../tutorials/your-first-remote-target.md) builds another.
 
 !!! note "An `Output` is not a third way"
-    [`Output`][myogestic.outputs.Output] is a paced latest-wins sender: the thing a target may
-    write *through*, and what `RemoteTarget` builds one of per address it drives. On its own it
-    has no aliases, no declared range, no clamp and no neutral frame on shutdown, because those
-    belong to the control map and the bus. A device driven by an output alone has none of them.
-    See [Publish a data stream](../how-to/add-an-output.md) for what it *is* for.
+    [`Output`][myogestic.outputs.Output] is a paced latest-wins sender: what a target writes
+    *through*, and what `RemoteTarget` builds one of per address. Alone it has no aliases, no
+    declared range, no clamp and no rest on shutdown. See
+    [Publish a data stream](../how-to/add-an-output.md).
 
 ## Binding is deferred, not decided
 
