@@ -101,7 +101,7 @@ VHI with `myogestic-install-vhi`.
   not speak the contract raises.
 - **`InterfaceSpec.control_client()` / `recording_client()`** for VHI's v2 control service
   and its recording aid. Exported lazily, so a plain install without the `[grpc]` extra
-  still uses `outlet()` / `launcher()` without importing grpc.
+  still uses `stream_outlet()` / `launcher()` without importing grpc.
 - **`Outlet.flush()`** — send the latest pushed value now instead of on the next tick. The
   send loop is paced, so a neutral frame pushed at teardown was never sent at all: the
   thread was mid-sleep and `stop` ended the loop before it woke. Measured against a real
@@ -116,11 +116,10 @@ VHI with `myogestic-install-vhi`.
   sidecar and `load_pickle(..., controls=…)` refuses a mismatch. A model is only meaningful
   in the space it was fitted for; loading one trained on a one-way `[0, 1]` DOF against a
   signed configuration produces motion in a direction it never learned.
-- **`myogestic.vhi.pose`** — reads VHI's *recorded* pose layout, nine floats in VHI's own
-  units. `VHI_Control` is permanently in that convention, so `decode_pose` remains how a
-  model gets targets in the space they were captured in. (It replaces `myogestic.vhi.legacy`,
-  which is removed: there is no legacy pose convention any more, only VHI's recording
-  layout.)
+- **`myogestic.vhi.pose`** — the layout of VHI's *recorded* pose stream: nine control-standard
+  values in a fixed order, with `split_pose` to name them. It replaces `myogestic.vhi.legacy`,
+  which is removed along with its `decode_pose`: both ends speak the control standard now, so
+  there is no second convention and nothing left to decode.
 
 - **A keyboard target — `myogestic.keyboard`.** Press a key while a control is active.
   `keyboard.hold.letter.w` is held for as long as the control is above its threshold;
@@ -154,8 +153,10 @@ VHI with `myogestic-install-vhi`.
   the console level to errors only, pointed at through `LSLAPICFG`. It backs off for all three
   places liblsl looks — `$LSLAPICFG`, `./lsl_api.cfg`, `~/lsl_api.cfg` — so a config of your
   own, including one that tunes discovery or disables IPv6, is never shadowed.
-- **`myogestic-migrate-vhi-sessions`** — rewrites sessions recorded under the old control-space
-  format into the current one, so a corpus recorded before this release stays trainable.
+- **`python -m myogestic.tools.migrate_vhi_sessions`** — rewrites sessions recorded under the
+  old control-space format into the current one, so a corpus recorded before this release stays
+  trainable. (A module, not a console script: `myogestic-install-vhi` is the only entry point
+  this release registers.)
 
 ### Removed (breaking)
 
@@ -202,9 +203,9 @@ VHI with `myogestic-install-vhi`.
   cleanly and surface at bind time. Neither refuses without a version marker, since a
   source-mode checkout has none.
 
-  `myogestic.vhi.pose` is **not** part of the bridge and stays: it reads VHI's *recorded*
-  pose, nine floats in VHI's own units. Past sessions cannot be re-recorded, so `decode_pose`
-  remains how a model gets targets in the space they were captured in.
+  `myogestic.vhi.pose` is **not** part of the bridge and stays: it names the nine slots of
+  VHI's *recorded* pose stream, so a model can be trained against a corpus captured before
+  this release.
 
 ### Changed (breaking)
 
@@ -227,7 +228,7 @@ VHI with `myogestic-install-vhi`.
   target, the two gRPC clients, `InterfaceSpec` and the wire contract were all
   in `myogestic.vhi`, and none of them is about a hand: they read a manifest, publish one
   stream per address and forward discrete edges. Someone integrating a robot arm imported
-  `myogestic.vhi.RemoteTarget` and reasonably concluded they had taken a wrong turn.
+  `myogestic.vhi.VhiTarget` and reasonably concluded they had taken a wrong turn.
 
   | was | is |
   |---|---|
@@ -293,10 +294,10 @@ VHI with `myogestic-install-vhi`.
   `GetTrainingState` → `GetRecordingSessionState`) — a recording aid that cannot see what
   the control service already declared to the same hand was two sources of truth for one
   state machine, not two independent responsibilities. The per-capability
-  `ContinuousEncoding` field is gone from the manifest, and `control_pose_encoding` narrows
-  to a plain `control_pose` bool on both `DeclareRequest` and `DeclareReply`: the sign
-  convention it used to carry left the wire entirely once `RemoteTarget` stopped computing one
-  to negate. On the Python side, `VhiCanonicalClient` and `VhiTrainingAidClient` become
+  `ContinuousEncoding` field is gone from the manifest, and so is `control_pose_encoding`:
+  the sign convention it used to carry left the wire entirely once `RemoteTarget` stopped
+  computing one to negate. `Declare` went with it — the manifest *is* the contract, so there
+  is nothing to declare per client. On the Python side, `VhiCanonicalClient` and `VhiTrainingAidClient` become
   `RemoteClient` and `RecordingClient`, both bound to the one stub. None of this
   degrades gracefully — an old MyoGestic against a new VHI, or the reverse, refuses to link
   at all: wrong service name, wrong RPC names, a field that no longer exists. **MyoGestic
@@ -394,8 +395,8 @@ VHI with `myogestic-install-vhi`.
 - **`emg_regression` clipped predictions *before* smoothing**, letting the filter overshoot
   back out of the range just enforced. The bus clips, smooths, and clips again.
 - **The regression training target used `np.abs()`**, folding any extension the operator did
-  into flexion of equal magnitude. `decode_pose` is a signed negation, so target space and
-  command space are now one declaration.
+  into flexion of equal magnitude. Both ends now speak the control standard, so target space
+  and command space are one declaration.
 
 
 ## [2.4.0] - 2026-07-25
