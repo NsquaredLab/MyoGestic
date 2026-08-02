@@ -1,6 +1,6 @@
 # Drive your own device
 
-A **target** is a Python object that drives a control map onto something — a hand, a
+A **target** is a Python object that drives a control map onto something: a hand, a
 cursor, a prosthesis, a motor controller. MyoGestic ships two ([`RemoteTarget`][myogestic.remote.RemoteTarget] and
 [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget]); this is how you write a third.
 
@@ -9,7 +9,7 @@ There is one way to do it. A target is a plain object with three methods, you ha
 nothing subclasses, nothing is discovered by name.
 
 If "control map", "address" and "alias" are new words, read [Concepts ›
-Controls](../concepts/controls.md) first — it explains the system, and why you would pick this
+Controls](../concepts/controls.md) first. It explains the system, and why you would pick this
 route over a [remote target](drive-a-remote-target.md).
 
 ## The contract
@@ -24,11 +24,11 @@ class Target(Protocol):
     def capabilities(self) -> Sequence | None: ...   # optional
 ```
 
-`bind` runs once, on the main thread, and **may raise** — that is where you refuse a
-configuration you cannot drive, while a human is still reading the traceback. `send` runs
-on the predict thread and **must not raise**; every value it gets is already finite and
-inside its declared range, because [`ControlBus`][myogestic.controls.ControlBus] sanitised
-the frame before fanning it out.
+`bind` runs once, on the main thread, and **may raise**. Refuse a configuration you cannot
+drive there, while a human is still reading the traceback. `send` runs on the predict thread
+and **must not raise**; every value it gets is already finite and inside its declared range,
+because [`ControlBus`][myogestic.controls.ControlBus] sanitised the frame before fanning it
+out.
 
 The two optional members are what the bus asks for by name:
 
@@ -112,10 +112,10 @@ assert cursor.position == (0.5, -0.25)
 bus.stop()
 ```
 
-`connect_controls` returns `None` — rather than raising — while any target's
-`capabilities()` says `None`. That is the case where a remote target has not started yet: an
-application that launches its own target necessarily binds before it exists, so the
-answer is to ask again later, not to fail.
+`connect_controls` returns `None` instead of raising while any target's `capabilities()` says
+`None`. A remote target that has not started yet is exactly that case: an application that
+launches its own target necessarily binds before it exists, so the answer is to ask again
+later, not to fail.
 
 [`ControlLink`][myogestic.controls.ControlLink] is that retry, so you do not keep it as a
 global. It holds the arguments, calls `connect_controls` until one attempt answers, and
@@ -139,9 +139,9 @@ link.stop()                     # rests every target and clears the bus
 The targets are constructed **once** and reused across attempts: a failed attempt stops at
 `capabilities()`, so nothing was bound and no target was left part-way.
 
-Call `ensure()` from a UI handler or a training thread — anywhere that can afford to block.
-Never from `@pipeline.predict`, which has its own thread and a deadline: read `link.bus`
-there and no-op while it is `None`.
+Call `ensure()` from anywhere that can afford to block: a UI handler, a training thread. Never
+from `@pipeline.predict`, which has its own thread and a deadline: read `link.bus` there and
+no-op while it is `None`.
 
 If your target's vocabulary is fixed and you have the capabilities in hand already, build
 the bus directly instead; `connect_controls` is only the lazy-resolve convenience:
@@ -155,17 +155,17 @@ bus = ControlBus(controls, targets=[cursor], hz=32)
 
 ## Addresses are yours to name
 
-A control map's right-hand side is an **address**, and its first segment namespaces it —
-`vhi.prediction.index`, `keyboard.tap.function.f1`, `cursor.x`. Pick a segment nobody else
-uses and the same map can drive your device and a Virtual Hand at once, with one
-`ControlBus` and one list of targets:
+A control map's right-hand side is an **address**, and its first segment namespaces it:
+`vhi.prediction.index`, `keyboard.tap.function.f1`, `cursor.x`. Pick a segment nobody else uses
+and the same map can drive your device and a Virtual Hand at once, with one `ControlBus` and
+one list of targets:
 
 ```python
 bus = ControlBus(controls, targets=[cursor, vhi_target], hz=32)
 ```
 
-The bus checks that *someone* claims every alias, so an address no target drives is caught
-at bind rather than looking like a control that works and holds still.
+The bus checks that *someone* claims every alias, so an address no target drives is caught at
+bind. Uncaught, it would look like a control that works and holds still.
 
 ## What the standard asks of you
 
@@ -179,7 +179,7 @@ point. Check it against something outside the loop — a person looking at the d
 
 ## See also
 
-- [Drive a remote target](drive-a-remote-target.md) — for a separate application rather than an in-process object
-- [Add a custom output](add-an-output.md) — for a plain data sink with no control space
-- [Integrate the Virtual Hand](integrate-vhi.md) — the one remote target this project ships
-- [Controls reference](../api/controls.md) — `Capability`, `ControlSet`, address rules
+- [Drive a remote target](drive-a-remote-target.md) - for a separate application, not an in-process object
+- [Add a custom output](add-an-output.md) - for a plain data sink with no control space
+- [Integrate the Virtual Hand](integrate-vhi.md) - the one remote target this project ships
+- [Controls reference](../api/controls.md) - `Capability`, `ControlSet`, address rules

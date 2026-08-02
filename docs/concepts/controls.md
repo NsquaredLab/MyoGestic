@@ -1,9 +1,8 @@
 # Controls
 
 A **control** is one thing a person drives: a finger, a wrist, a cursor axis, a key. MyoGestic
-never hard-codes a list of them. Instead a device declares what it can drive, your
-application picks its own names for its model's outputs, and a **control map** — a TOML file —
-pairs the two.
+never hard-codes a list of them. Instead a device declares what it can drive, your application
+picks its own names for its model's outputs, and a TOML **control map** pairs the two.
 
 That file is the whole configuration surface. Everything else on this page is what the two
 halves of a line in it mean.
@@ -19,20 +18,20 @@ my_thumb = "vhi.prediction.thumb.flexion"
 |---|---|---|
 | whose name is it | **yours** | **the device's** |
 | what is it | the key your model's `predict()` returns | an *address* the device declares |
-| who reads it | nothing — it is never parsed for meaning | the device, which owns what it means |
+| who reads it | nothing; it is never parsed for meaning | the device, which owns what it means |
 | how far does it travel | nowhere; it never leaves the app | onto the wire as the control's identity |
 
-Each entry under `[dofs]` is one **DOF** — one [degree of
-freedom](../reference/glossary.md#dof). The left side is an **alias**. `my_thumb`, `fist`,
-`drive_x` — anything readable. MyoGestic prescribes nothing about it and derives nothing from
+Each entry under `[dofs]` is one **DOF**, one [degree of
+freedom](../reference/glossary.md#dof). The left side is an **alias**: `my_thumb`, `fist`,
+`drive_x`, anything readable. MyoGestic prescribes nothing about it and derives nothing from
 it, so the same alias can point at a Virtual Hand in one file and at a cursor axis in another
 with no code change.
 
 The right side is an **address**: dotted, lowercase, at least two segments. The first segment
-namespaces the device (`vhi.`, `keyboard.`, `cursor.`), so two devices cannot collide inside one
-map. Crucially, the address is *all* the map says. Whether `vhi.prediction.thumb.flexion` takes a
-number or a held state, what its range is, what its neutral value is — the device declares every
-one of those, and MyoGestic asks.
+namespaces the device (`vhi.`, `keyboard.`, `cursor.`), so two devices cannot collide inside
+one map. The address is *all* the map says. The device declares the rest: whether
+`vhi.prediction.thumb.flexion` takes a number or a held state, what its range is, what its
+neutral value is. MyoGestic asks.
 
 ## The map is a file
 
@@ -52,8 +51,8 @@ little = "vhi.prediction.little"
 gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
 ```
 
-Six model outputs, six addresses. Now `examples/controls/playground.toml`, which is the same
-idea with the point made:
+Six model outputs, six addresses. Now `examples/controls/playground.toml`, the same idea with
+the point made:
 
 ```toml
 [dofs]
@@ -70,12 +69,12 @@ my_control_2 = { target = "keyboard.tap.function.f1", threshold_fraction = 0.5 }
 my_control_3 = "vhi.prediction.wrist.rotation"
 ```
 
-A keystroke and a 3-D hand sit in the same table, a line apart. One of them is a separate
-Godot application reached over gRPC and LSL; the other is `pynput` in this process. **Nothing in
-the file says so**, and that is the design: how a value reaches a device is the device's
-business, and the map only ever names *what* is driven, never *how* it is delivered. Pointing an
+A keystroke and a 3-D hand sit in the same table, a line apart. One of them is a separate Godot
+application reached over gRPC and LSL; the other is `pynput` in this process. **Nothing in the
+file says so**, and that is the design: how a value reaches a device is the device's business,
+and the map only ever names *what* is driven, never *how* it is delivered. Pointing an
 application at a second device is lines in this file plus one more `Target` object in the list
-handed to the bus — nothing in between changes.
+handed to the bus. Nothing in between changes.
 
 The value shapes are the only grammar: a bare string is one address, an array fans one output
 out to several, and a table is the explicit form where a per-address `weight` or a
@@ -88,11 +87,11 @@ Continuous control values are **signed and normalised**:
 
 - the range is `[-1, 1]`;
 - `0` is rest;
-- `+1` is the direction the control's **name** denotes — `…thumb.flexion` at `+1` flexes, and at
+- `+1` is the direction the control's **name** denotes: `…thumb.flexion` at `+1` flexes, and at
   `-1` extends. There is no second address for the other direction.
 - a one-way control declares `lo=0.0`, and then only ever moves one way.
 
-A device owns its own units — degrees for a robotic hand, pixels per second for a cursor — and
+A device owns its own units (degrees for a robotic hand, pixels per second for a cursor) and
 converts on its own side. What it may not do is decide that on its wire `+1` means extension.
 
 That rule is not tidiness. **A sign error survives every test a device and its own read-back can
@@ -107,29 +106,31 @@ catches it is outside the loop — a person looking at the device.
 |---|---|---|
 | what it is | an amount, this instant | a **held state**, until changed |
 | how it travels | one value per tick, on a stream | on change only, over the device's own command channel |
-| repeated? | every tick, forever | never — a repeat is expressed by returning through rest first |
+| repeated? | every tick, forever | never: a repeat is expressed by returning through rest first |
 | examples | `vhi.prediction.index` | `vhi.control.gesture`, `keyboard.tap.edit.space` |
 
 A held state does not belong on a per-tick wire: re-sending it at 32 Hz is 32 keystrokes a
 second, not one held key. So [`ControlBus`][myogestic.controls.ControlBus] delivers continuous
-values as a full frame every tick and discrete ones as **edges** — only the states that settled
-*this* tick — and each device does whatever its command channel is. For VHI that is a `SetControl`
-gRPC call; for [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] it is a key-down or key-up.
+values as a full frame every tick and discrete ones as **edges** (only the states that settled
+*this* tick), and each device does whatever its command channel is. For VHI that is a
+`SetControl` gRPC call; for [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] it is a
+key-down or key-up.
 
-Which addresses are which is `kind` in the **device's** manifest. The map never says, and cannot:
-change a device's build so a control becomes discrete and the same map file keeps working.
+Whether an address is one or the other is `kind` in the **device's** manifest. The map never
+says, and cannot: change a device's build so a control becomes discrete and the same map file
+keeps working.
 
 A button is the one case that does not want the gate: [`ControlBus.select`][myogestic.controls.ControlBus.select]
 delivers a state immediately **and rebases** the DOF's debounce, so the predict ticks that
-follow — still carrying the class from a sliding window that has not caught up — do not
-re-fire what the click just did.
+follow do not re-fire what the click just did, even though they still carry the class from a
+sliding window that has not caught up.
 
 ## Who answers what
 
 | question | answered by |
 |---|---|
-| which controls exist, and what each one *is* | the device — its manifest (`GetControlManifest` for a remote target, a local list for the keyboard) |
-| what my model's outputs are called, and where each goes | the map — your file |
+| which controls exist, and what each one *is* | the device, through its manifest (`GetControlManifest` for a remote target, a local list for the keyboard) |
+| what my model's outputs are called, and where each goes | the map you write |
 | whether those two fit together | [`resolve()`][myogestic.controls.resolve] |
 
 `resolve()` puts an alias and a capability together and produces the DOF you actually drive.
@@ -157,9 +158,9 @@ assert controls.dofs["fire"].debounce_s == 0.1  # this one the map did say
 ```
 
 Note what came from where. `walk` is discrete with two states because the keyboard declares
-`keyboard.hold.letter.w` that way — the file says nothing about states. `debounce_s` is the
-reverse: how long a state must hold before it counts is a property of *this* control loop, not of
-the keyboard, so it lives in the map.
+`keyboard.hold.letter.w` that way. The file says nothing about states. `debounce_s` is the
+reverse: how long a state must hold before it counts is a property of *this* control loop, not
+of the keyboard, so it lives in the map.
 
 And `resolve()` **refuses** rather than binding the part it understood:
 
@@ -196,16 +197,16 @@ on is **whether the code that moves your device runs in this process**.
 |---|---|---|
 | what it is | a Python object MyoGestic imports | a separate application |
 | how it is driven | a `ControlBus` calls it directly, on the thread MyoGestic already owns | gRPC for the manifest and discrete state, LSL for continuous values |
-| you write | three methods — `bind`, `send`, `stop`, and one list of `Capability` | a gRPC service, an LSL reader per address, a liveness policy, and shutdown for both |
+| you write | three methods (`bind`, `send`, `stop`) and one list of `Capability` | a gRPC service, an LSL reader per address, a liveness policy, and shutdown for both |
 | how much | **a prosthesis on a serial port is three methods and a `serial.write`** | a program, in any language, with its own process lifetime to manage |
-| right for | a prosthesis or motor controller on a serial or USB port, a cursor, a library you can import — anything you can `import` | its own window, its own process, its own machine, another language |
+| right for | anything you can `import`: a prosthesis or motor controller on a serial or USB port, a cursor, a library | its own window, its own process, its own machine, another language |
 | guide | [Drive your own device](../how-to/add-a-target.md) | [Drive a remote target](../how-to/drive-a-remote-target.md) |
 
 **Start on the left.** A serial prosthesis, the commonest case this project sees, needs no
 gRPC, no LSL and no second process: `bind` checks the map against a list you wrote, `send`
 turns a float into bytes on a port, `stop` rests the device and closes it. The right-hand
-column exists for a device that is *already* its own program — a game, a simulator, another
-language — and every line of it is a cost you take on only because that is true.
+column exists for a device that is *already* its own program: a game, a simulator, another
+language. Every line of it is a cost you take on only because that is true.
 
 Both declare a manifest, both are named by address in the same map, and a single `ControlBus`
 drives a mixed list of them, so the choice is reversible: a device that starts in-process and
@@ -213,21 +214,20 @@ later grows its own window changes nothing in the map. To take the remote route 
 hardware of your own, follow [Your first remote target](../tutorials/your-first-remote-target.md),
 which builds one in seven stages with a checkpoint at each.
 
-A remote target still needs a `Target` on this side to talk to it — but you do not write that
-one: [`RemoteTarget`][myogestic.remote.RemoteTarget] is the shipped adapter for **any**
-program that serves the contract. It reads the manifest, publishes one LSL stream per
-address, and forwards discrete edges over gRPC. It knows nothing about what the far side
-drives. The Virtual Hand is one such program — see
-[Integrate the Virtual Hand](../how-to/integrate-vhi.md) — and
+A remote target still needs a `Target` on this side to talk to it, but you do not write that
+one: [`RemoteTarget`][myogestic.remote.RemoteTarget] is the shipped adapter for **any** program
+that serves the contract. It reads the manifest, publishes one LSL stream per address, and
+forwards discrete edges over gRPC. It knows nothing about what the far side drives. The Virtual
+Hand is one such program (see [Integrate the Virtual Hand](../how-to/integrate-vhi.md)), and
 [Your first remote target](../tutorials/your-first-remote-target.md) builds another.
 
 ## Binding is deferred, not decided
 
 A map cannot be resolved until a device can answer, and an application that launches its device
 from its own UI necessarily binds *before* that device exists. So
-[`connect_controls()`][myogestic.controls.connect_controls] returns `None` in that case rather
-than raising: "not yet" is a normal state, not a fault, and there is nothing half-built to
-clean up.
+[`connect_controls()`][myogestic.controls.connect_controls] returns `None` in that case
+instead of raising: "not yet" is a normal state, not a fault, and there is nothing
+half-built to clean up.
 
 [`ControlLink`][myogestic.controls.ControlLink] holds that retry, so no application has to carry
 a nullable bus, a guard and a re-try of its own:
