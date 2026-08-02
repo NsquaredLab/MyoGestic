@@ -76,6 +76,30 @@ or closing an inlet. Read it for the contract; do not deploy it as a template.
 meets all four instead, one stage at a time — and marks the one place its duplicate check
 stops looking.
 
+## What calls it
+
+You write none of the client side. [`RendererTarget`][myogestic.renderer.RendererTarget]
+drives the wire through two clients — `RendererClient` and `RecordingClient` — both built
+from the [`InterfaceSpec`][myogestic.renderer.InterfaceSpec] that says where your renderer
+listens, and both reached as `spec.control_client()` and `spec.recording_client()`. Absence
+is **reported rather than raised**: every call answers `None` or `False` while you are not
+up, so an application that launches its renderer from its own button stays responsive
+while it starts.
+
+| the client calls | when, and what it needs back |
+|---|---|
+| `control_client().capabilities()` | at bind, and on every retry until you answer. Your manifest is the whole reply. `None` means "not up yet" and is deferred, never failed |
+| `control_client().set_control(...)` | on a discrete edge, from the predict thread. **Queued and latest-wins** — it never blocks and never raises, so a slow handler of yours cannot stall a 60 fps loop, and your `rejected` reasons reach a log rather than a caller |
+| `control_client().sweep(name)` | never automatically. Verification only, by a human or a test: it animates one DOF and reads back the degrees your rig produced |
+| `control_client().set_presentation(blend=…)` | when a client asks you to smooth what you render. Appearance only — it must not change what was commanded |
+| `recording.set_recording_session(True/False)` | around a capture, to gate any local input of your own so the recording has one movement source |
+| `recording.start_trajectory(movement, frequency_hz=…)` | to sweep a ground-truth control through a range while training data is collected |
+| `recording.state()` | to show a client which movements you have, which is current, and whether a trajectory is running |
+
+Everything except `set_control` is **synchronous** — setup, teardown and verification, where
+the caller cannot go on without your answer. Only the per-edge call is queued, and only
+because it is the one on a deadline.
+
 ## The whole renderer
 
 The reference renderer, complete — every method is the real one; nothing is elided. It
@@ -120,5 +144,6 @@ renderer — rather than for the first renderer that shipped.
 
 ## See also
 
-- [Integrate the Virtual Hand](integrate-vhi.md) — how MyoGestic is pointed at a renderer: `InterfaceSpec`, the outlet, the control client
+- [Control standard](../api/controls.md) — the other side of this contract: the map, `RendererTarget`, and what it refuses
+- [Integrate the Virtual Hand](integrate-vhi.md) — one renderer that serves it, and how MyoGestic is pointed at that one
 - [Drive your own device](add-a-target.md) — the in-process counterpart: a `Target` a `ControlBus` calls directly

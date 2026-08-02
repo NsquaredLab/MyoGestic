@@ -181,5 +181,5 @@ point. Check it against something outside the loop — a person looking at the d
 
 - [Build a renderer](build-a-renderer.md) — for a separate application rather than an in-process object
 - [Add a custom output](add-an-output.md) — for a plain data sink with no control space
-- [Integrate VHI](integrate-vhi.md) — the shipped target, end to end
+- [Integrate the Virtual Hand](integrate-vhi.md) — the one renderer this project ships
 - [Controls reference](../api/controls.md) — `Capability`, `ControlSet`, address rules

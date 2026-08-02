@@ -121,6 +121,7 @@ not here.
 
 ## See also
 
-* [[integrate-vhi]] - the reference use case, gating gRPC `SetMovement`
-  on the predicted class.
+* [Controls](controls.md#continuous-and-discrete-are-different-things) - the reference
+  use case: a discrete DOF is delivered as an edge, gated by `debounce_s`, and commanded
+  over the device's own channel rather than repeated every tick.
 * [`myogestic.outputs.edge_trigger.EdgeTrigger`](../api/core.md) - full API reference.
