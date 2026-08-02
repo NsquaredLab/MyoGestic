@@ -81,6 +81,28 @@ if RMS_WINDOW_SAMPLES >= N_WINDOW_SAMPLES:
         "the RMS kernel slides inside the analysis window."
     )
 
+# ── The model's own geometry, checked here rather than inside torch ───
+# RaulNetV17's encoder opens with a strided "event search" conv and then a second
+# conv whose kernel is **18 wide, hard-coded in the model**. So the first conv's
+# output has to be at least that long, and the arithmetic is not obvious from any
+# one constant: EVENT_SEARCH_STRIDE=8 turned this example's 29 feature samples into
+# 4, and the failure surfaced as a torch shape error six frames into a Lightning
+# stack — after training had started and the windows had been cut.
+EVENT_SEARCH_KERNEL = 31
+EVENT_SEARCH_STRIDE = 1
+_MIN_ENCODER_WIDTH = 18  # RaulNetV17's second conv kernel; not ours to change
+_encoder_out = (
+    INPUT_LENGTH + 2 * (EVENT_SEARCH_KERNEL // 2) - EVENT_SEARCH_KERNEL
+) // EVENT_SEARCH_STRIDE + 1
+if _encoder_out < _MIN_ENCODER_WIDTH:
+    raise ValueError(
+        f"RaulNet would see {_encoder_out} samples after its event-search conv, and its "
+        f"next kernel is {_MIN_ENCODER_WIDTH} wide. INPUT_LENGTH={INPUT_LENGTH} "
+        f"(WINDOW_MS={WINDOW_MS}, RMS_WINDOW_MS={RMS_WINDOW_MS}, "
+        f"RMS_STRIDE_MS={RMS_STRIDE_MS}) at EVENT_SEARCH_STRIDE={EVENT_SEARCH_STRIDE}. "
+        "Lower EVENT_SEARCH_STRIDE, shorten RMS_STRIDE_MS, or lengthen WINDOW_MS."
+    )
+
 CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
 
@@ -316,8 +338,8 @@ def train(data: TrainingData) -> L.LightningModule:
         nr_of_electrodes_per_grid=N_CHANNELS,
         cnn_encoder_channels=(64, 32, 32),
         mlp_encoder_channels=(128, 128),
-        event_search_kernel_length=31,
-        event_search_kernel_stride=8,
+        event_search_kernel_length=EVENT_SEARCH_KERNEL,
+        event_search_kernel_stride=EVENT_SEARCH_STRIDE,
     )
 
     torch.set_float32_matmul_precision("medium")

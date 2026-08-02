@@ -71,6 +71,25 @@ output_filter = PostProcessor(hz=32)
 CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "regression.toml"
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
+
+# Which recorded column each alias learns from, worked out from the map alone.
+#
+# Training reads sessions off a disk. It used to demand a running VHI first — not for
+# anything the renderer does, but to be told which aliases were continuous, and the map
+# already says which addresses they point at. So a model could not be trained from
+# recordings without launching the thing the recordings were made with, and the check
+# never passed anyway, because the global it tested was left behind by an earlier
+# refactor and nothing assigned it.
+#
+# `ADDRESS_CHANNELS` is the recorded pose layout — offline knowledge, which is the whole
+# reason it is a table and not a manifest lookup. An address that is not a pose channel
+# (the discrete `gesture`) is not a regression target and drops out here.
+DOF_TARGETS: dict[str, str] = {
+    alias: POSE_DOFS[ADDRESS_CHANNELS[binding.targets[0].address]]
+    for alias, binding in CONTROL_MAP.bindings.items()
+    if binding.targets and binding.targets[0].address in ADDRESS_CHANNELS
+}
+DOF_NAMES = tuple(DOF_TARGETS)
 # --8<-- [end:dofs]
 
 # MyoVerse transforms — preferred over hand-rolled numpy here so the feature
@@ -114,7 +133,6 @@ PROCESSES = [
 # turn out to be on.
 vhi_control = vhi.control_client()
 bus: ControlBus | None = None
-controls = None
 # --8<-- [end:bus]
 
 app = App("EMG Regression", ui_scale=0.85)
@@ -163,25 +181,9 @@ def train(data: TrainingData):
     log = pipeline.train_log
     log.clear()
 
-    # The target vector is named in the alias vocabulary, so the map has to be resolved
-    # first — the same handler-side resolve the buttons do, here on the training thread.
-    # (Never on the predict thread: `capabilities` blocks on an RPC.)
-    _ensure_vhi()
-    if controls is None:
-        raise ValueError(
-            "controls are not resolved yet — launch VHI, then train. Its manifest is what "
-            "says which aliases are continuous, and those are the regression targets."
-        )
-    aliases = controls.channel_labels()
+    aliases = DOF_NAMES
     n_dof = len(aliases)
-    # The recorded control hand is VHI's 9-channel pose, and `split_pose` keys it by pose
-    # channel — so each alias finds its column through the address it routes to.
-    # The aliases stay the vocabulary; the addresses only do the lookup. One route each
-    # here; an alias fanned out to several controls would need a rule for which to learn
-    # from, so this takes the first deliberately rather than by accident.
-    pose_keys = [
-        POSE_DOFS[ADDRESS_CHANNELS[controls.routes[a][0].address]] for a in aliases
-    ]
+    pose_keys = [DOF_TARGETS[a] for a in aliases]
     log.append(f"Training from {len(data.paths)} sessions, targets: {', '.join(aliases)}")
 
     all_X: list[np.ndarray] = []
@@ -274,7 +276,7 @@ def predict(model, features):
     # VHI's addresses travels with the resolved set. The bus sanitises, smooths and
     # renders. No clip here: each alias's resolved range is the authority, and clipping
     # before the smoother would let the filter overshoot straight back out of it.
-    return {"dof": bus.push(dict(zip(controls.channel_labels(), pred, strict=True)))}
+    return {"dof": bus.push(dict(zip(DOF_NAMES, pred, strict=True)))}
 
 
 # --8<-- [end:predict]
