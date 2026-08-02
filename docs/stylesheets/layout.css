@@ -132,3 +132,48 @@ html, body {
 .md-typeset .headerlink:hover {
   opacity: 1;
 }
+
+/* Left-sidebar topic groups: make the subdivision legible.
+
+   `navigation.sections` already emits `md-nav__item--section`, but Material's
+   default for it is a slightly heavier weight, which stops reading as a
+   divider once a group holds five entries. These are the same thing the app
+   calls a panel header, so they get `panel_header()`'s own treatment:
+   uppercased and muted — this project's visual language for "this labels a
+   group, it is not itself a destination".
+
+   Scoped to a section *inside* a section, so it hits the topic groups under a
+   tab (Driving a device, Recording, …) and leaves the tabs alone. Colours are
+   Material's variables, never literals, so both themes follow.
+
+   Two shapes to match: a group without an index page renders its label as
+   `label.md-nav__link`; a group with one (Start here) renders
+   `div.md-nav__link.md-nav__container` wrapping an `a.md-nav__link`. The box
+   rules go on the outer element only, or the bordered case draws twice. */
+.md-nav--primary .md-nav__item--section .md-nav__item--section > .md-nav__link,
+.md-nav--primary .md-nav__item--section .md-nav__item--section > .md-nav__container > .md-nav__link {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-nav--primary .md-nav__item--section .md-nav__item--section > .md-nav__link {
+  margin-top: 1.1rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* The inner link of an index-bearing group sits inside the bordered
+   container, so it must not repeat the box. */
+.md-nav--primary .md-nav__item--section .md-nav__item--section > .md-nav__container > .md-nav__link {
+  margin-top: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+/* The first group follows the tab's own label, which already separates it. */
+.md-nav--primary .md-nav__item--section .md-nav__list > .md-nav__item--section:first-child > .md-nav__link {
+  margin-top: 0.4rem;
+}
