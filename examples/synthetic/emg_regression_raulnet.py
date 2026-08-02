@@ -41,10 +41,14 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from myoverse.models.raul_net.v17 import RaulNetV17
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, connect_controls, load_control_map
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
-from myogestic.session import iter_aligned_windows, iter_labeled_windows, open_session_store
+from myogestic.session import (
+    iter_aligned_windows,
+    iter_labeled_windows,
+    split_sessions_by_stream,
+)
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import VhiTarget, virtual_hand
@@ -177,11 +181,6 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 # Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
-# The bus is built lazily, in `_ensure_vhi`. Every semantic the map needs — whether an
-# address takes a number or a held state, its range, its states — is VHI's to declare, and
-# VHI does not exist yet: this app launches it from its own ProcessLauncher.
-bus: ControlBus | None = None
-
 PROCESSES = [
     (
         "EMG Generator",
@@ -219,6 +218,19 @@ app.streams(
 pipeline = Pipeline(app, predict_hz=20)
 pipeline.save_model = save_raulnet
 pipeline.load_model = load_raulnet
+
+# The bus is built lazily, by `link.ensure()`. Every semantic the map needs — whether an
+# address takes a number or a held state, its range, its states — is VHI's to declare, and
+# VHI does not exist yet: this app launches it from its own ProcessLauncher. No hand and no
+# stream is named here either: the target looks this file's addresses up in VHI's manifest
+# and publishes one stream per address it drives, named for that address.
+link = ControlLink(
+    CONTROL_MAP,
+    [VhiTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=32,
+)
 
 
 @pipeline.extract
@@ -261,20 +273,11 @@ def train(data: TrainingData) -> L.LightningModule:
     log.clear()
     log.append(f"Training from {len(data.paths)} sessions...")
 
-    kin_paths: list[str] = []
-    label_paths: list[str] = []
-    for p in data.paths:
-        try:
-            sess = open_session_store(p)
-        except Exception as e:
-            log.append(f"  skip {p}: {e}")
-            continue
-        has_kin = "vhi_control" in sess.stores
-        sess.close()  # only needed the store list — release the .session.zip handle
-        if has_kin:
-            kin_paths.append(p)
-        else:
-            label_paths.append(p)
+    # Unreadable sessions come back rather than being logged inside the helper, so the
+    # skip lands in *this* app's log where the user is looking.
+    kin_paths, label_paths, unreadable = split_sessions_by_stream(data.paths, "vhi_control")
+    for p, e in unreadable:
+        log.append(f"  skip {p}: {e}")
 
     X_list: list[np.ndarray] = []
     y_list: list[np.ndarray] = []
@@ -409,6 +412,9 @@ def predict(model: L.LightningModule, features: np.ndarray) -> dict:
         x = torch.from_numpy(features).float().to(model.device)
         x = x.unsqueeze(0).unsqueeze(0)  # (1, 1, n_ch, INPUT_LENGTH)
         out = model(x).cpu().numpy()[0]  # (5,)
+    # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this runs on the
+    # predict thread, where a stall is worse than a frame with no bus.
+    bus = link.bus
     if bus is None:
         return {}  # nothing resolved yet; nothing to command
     # No clip: each DOF's declared range is the authority, and clipping before the
@@ -426,27 +432,11 @@ grid = Grid(
 )
 
 
-def _ensure_vhi() -> None:
-    """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
-    global bus
-    if bus is not None:
-        return
-    # No hand and no stream is named here: the target looks this file's addresses up in
-    # VHI's manifest and publishes one stream per address it drives, each named for that
-    # address and one channel wide. `connect_controls` returns None while VHI cannot say
-    # what it exports, which is the only reason this can fail.
-    target = VhiTarget(client=vhi_control, interface=vhi)
-    bus = connect_controls(
-        CONTROL_MAP, [target], ctx=app.ctx, smoothing=output_filter, hz=32
-    )
-
-
-
 def _on_gesture(i: int) -> None:
     # A discrete held state through the same bus the continuous DOFs use. The
     # control hand snaps to the pose and holds it, so VHI_Control settles to a static
     # kinematic value the regressor can map back from EMG amplitude.
-    _ensure_vhi()
+    bus = link.ensure()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
     if bus is not None:
         # The states are VHI's own movement names, so "Fist" is not lowercased here.
@@ -456,7 +446,7 @@ def _on_gesture(i: int) -> None:
 def _on_record() -> None:
     # The recording aid, not a control command: it gates VHI's local keyboard so the
     # gesture buttons are this session's only movement source.
-    _ensure_vhi()
+    link.ensure()
     app.start_recording()
     if not recording_aid.set_recording_session(True):
         app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
@@ -508,8 +498,7 @@ def main() -> None:
     try:
         app.run()
     finally:
-        if bus is not None:
-            bus.stop()
+        link.stop()
         recording_aid.stop_trajectory()
         recording_aid.set_recording_session(False)
         recording_aid.stop()
