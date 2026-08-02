@@ -210,3 +210,28 @@ def test_run_cleanup_continues_on_cleanup_hook_failure():
 
     # The second cleanup hook ran even though the first one raised
     assert calls == ["after_boom"]
+
+
+# --- Pyodide: no threads exist there -----------------------------------------
+#
+# Every `threading.Thread(...).start()` on a path the browser playground reaches raises
+# `RuntimeError: can't start new thread`. That is how the playground broke: the GLFW
+# stderr filter started a pump thread before the first frame, so `App.run()` died on the
+# boot path with a traceback instead of a window.
+
+
+def test_the_glfw_stderr_filter_starts_no_thread_in_the_browser(monkeypatch):
+    """It is a no-op there: Pyodide has no threads, and the warning it collapses is a
+    macOS multi-monitor artefact that cannot arise in a browser anyway."""
+    import myogestic._browser
+    from myogestic.core import _collapse_glfw_monitor_spam
+
+    monkeypatch.setattr(myogestic._browser, "IS_BROWSER", True)
+
+    def _no_threads(*a, **k):
+        raise AssertionError("started a thread in the browser")
+
+    monkeypatch.setattr(threading, "Thread", _no_threads)
+
+    with _collapse_glfw_monitor_spam():
+        pass  # must enter and exit cleanly
