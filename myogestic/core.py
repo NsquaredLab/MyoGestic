@@ -36,7 +36,15 @@ def _collapse_glfw_monitor_spam():
 
     Works at the file-descriptor level: GLFW writes to fd 2 from C, where a Python-level
     `sys.stderr` wrapper never sees it.
+
+    A no-op in the browser. Pyodide has no threads, so the pump below cannot start, and the
+    warning this collapses is a macOS multi-monitor artefact that cannot arise there anyway.
     """
+    from myogestic._browser import IS_BROWSER
+
+    if IS_BROWSER:
+        yield
+        return
     try:
         saved = os.dup(2)
     except OSError:  # pragma: no cover - no stderr to redirect (embedded, some sandboxes)
@@ -369,6 +377,8 @@ class App:
             n = len(session.label_track)
             self.ctx.status_message = f"Saved {n} labels - finalizing…"
 
+            from myogestic._browser import IS_BROWSER
+
             # Pack session folder → .session.zip in a daemon thread so the
             # UI stays responsive during finalization. Register with
             # session_manager only after pack succeeds.
@@ -397,7 +407,13 @@ class App:
                     except Exception:
                         pass
 
-            threading.Thread(target=_finalize, daemon=True).start()
+            if IS_BROWSER:
+                # Pyodide is single-threaded. Zipping inline blocks the frame, which for a
+                # short recording is a hitch rather than a hang — and the alternative is
+                # `RuntimeError: can't start new thread` and a session left unpacked.
+                _finalize()
+            else:
+                threading.Thread(target=_finalize, daemon=True).start()
 
     # --- Run ---
 
