@@ -417,7 +417,17 @@ def connect_controls(
         merged.extend(got)
 
     controls = resolve(control_map, merged)
-    bus = ControlBus(controls, targets=list(targets), smoothing=smoothing, hz=hz)
+    # `on_warn` goes to the same place every other message from this function goes. Without
+    # it the bus's warnings are computed and dropped: a value clipped to a one-way control's
+    # range, a target whose `send` raised. Each is once-only and each is the only sign that
+    # something is being quietly held still.
+    bus = ControlBus(
+        controls,
+        targets=list(targets),
+        smoothing=smoothing,
+        hz=hz,
+        on_warn=None if ctx is None else ctx.log,
+    )
     if ctx is not None:
         ctx.control_space = control_map
         ctx.log(f"resolved {len(controls.dofs)} control(s)")

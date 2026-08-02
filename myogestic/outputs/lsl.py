@@ -83,10 +83,10 @@ class LSLOutlet(Output):
             info.set_channel_units(list(channel_units))
         self._outlet = StreamOutlet(info)
         self._n_channels = int(n_channels)
-        #: What this stream is published as. Readable because a consumer that was handed
-        #: an outlet cannot otherwise tell which stream it is writing — `RemoteTarget` checks
-        #: it against the stream its control map resolved to, since both hands number
-        #: channels from 0 and a mismatch would be a silent leak onto the wrong one.
+        #: What this stream is published as. Readable so a log line, a test double or a
+        #: debugger can say which stream an outlet is. `RemoteTarget` keys its outlets by
+        #: address rather than reading this, and `ControlSink` does not require it, so a
+        #: substitute need not provide one.
         self.name = name
         super().__init__(hz=hz)
 
