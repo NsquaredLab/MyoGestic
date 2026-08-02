@@ -4,7 +4,7 @@ End-to-end walkthrough of
 [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py):
 8-channel synthetic EMG → MyoVerse RMS+MAV+WL features →
 **multi-output CatBoost regressor** → five control DOFs → a
-`ControlBus` that sanitises and smooths them → a `VhiTarget` that
+`ControlBus` that sanitises and smooths them → a `RendererTarget` that
 renders them on the Virtual Hand.
 
 Why regression and not classification? Two reasons it's the next thing
@@ -100,7 +100,7 @@ substitution comes first because `min(hi, max(lo, nan))` is `lo`, so a
 NaN prediction would otherwise arrive as a full-scale deflection; the
 second clip exists because a smoother undershoots on a falling edge.
 
-`VhiTarget` refuses at construction what it cannot render. Declare
+`RendererTarget` refuses at construction what it cannot render. Declare
 something this hand has no joint for and it raises, listing what it does
 have — because a silently dropped joint looks exactly like a joint that
 is working and holding still.
