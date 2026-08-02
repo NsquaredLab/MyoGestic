@@ -118,6 +118,23 @@ device may not redefine](../concepts/controls.md#the-one-convention-a-device-may
 for why no suite can reach it. Check against something outside the loop. Look at the device
 yourself. This repo shipped that bug and its own contract suite passed throughout.
 
+## Design notes
+
+Detail a target author needs once, usually while debugging, rather than while building.
+
+**A liveness timeout is not a safety interlock.** A target that has itself crashed, hung or
+been swapped out cannot time anything out. Anything that can injure a person needs a release
+the software is not in the path of.
+
+**Stream recovery and the liveness timeout are different jobs.** Recovery decides whether the
+*stream* comes back; the timeout decides what the *device* does meanwhile. A rig can want both.
+
+**`SetControl` delivery timing is not guaranteed.** `set_control` queues a frame for the
+client's worker thread, which drains one blocking RPC at a time with a two-second deadline. A
+later state can be queued before an earlier one is delivered, and two can land inside one tick
+of a status poller. So verify discrete state from a handler that prints what it *applied*, not
+from a poller — the poller is a matter of luck.
+
 ## See also
 
 - [Control standard](../api/controls.md) - the other side of this contract: the map, `RemoteTarget`, and what it refuses
