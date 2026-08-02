@@ -8,6 +8,10 @@ There is one way to do it. A target is a plain object with three methods, you ha
 [`ControlBus`][myogestic.controls.ControlBus], and the bus drives it. Nothing registers,
 nothing subclasses, nothing is discovered by name.
 
+If "control map", "address" and "alias" are new words, read [Concepts ›
+Controls](../concepts/controls.md) first — it explains the system, and why you would pick this
+route over a [renderer](build-a-renderer.md).
+
 ## The contract
 
 ```python

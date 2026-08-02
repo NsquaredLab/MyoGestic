@@ -156,6 +156,7 @@ nav:
       - Architecture: concepts/architecture.md
       - Streams: concepts/streams.md
       - Pipeline: concepts/pipeline.md
+      - Controls: concepts/controls.md
       - Recording: concepts/recording.md
       - Widgets: concepts/widgets.md
       - Grid layout: concepts/grid-layout.md

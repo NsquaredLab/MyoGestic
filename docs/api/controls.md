@@ -7,6 +7,10 @@ what the control *is*: a number or a held state, its range, its states. MyoGesti
 none of that, so a Virtual Hand, a keyboard, a cursor and a prosthesis each keep their own
 vocabulary and a build that grows a control needs no change on this side.
 
+New to this? [Concepts › Controls](../concepts/controls.md) explains the system this page
+documents — what a control is, why the standard is fixed, and how to choose between an
+in-process target and a separate renderer.
+
 Continuous controls are **normalized**: `+1` is the direction the control denotes, rest is
 `0`, and the range is signed when the target says the control is. Discrete controls are
 separate on purpose — a held state delivered on change is not the same thing as a number.

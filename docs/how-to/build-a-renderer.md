@@ -4,6 +4,9 @@ A **renderer** is a separate application MyoGestic drives — a process of its o
 reached over gRPC and read from over LSL. A [target](add-a-target.md) is the opposite:
 an in-process object a `ControlBus` calls directly, on the thread MyoGestic already owns.
 
+If you have not chosen between the two yet, [Concepts › Controls](../concepts/controls.md)
+explains the control system and which route fits what you are building.
+
 ## Which way the streams run
 
 MyoGestic writes, you read. **One stream per DOF**, named for the DOF's own address and
