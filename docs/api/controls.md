@@ -176,9 +176,17 @@ an ordering that is easy to get subtly wrong per-application.
 
 ::: myogestic.controls.ControlLink
 
+## Targets
+
+Anything that moves is a target: three methods and a list of `Capability`. The protocol is
+structural, so there is no base class to inherit and nothing to register — an object with
+these methods *is* a target. `myogestic.remote.RemoteTarget` and
+`myogestic.keyboard.KeyboardTarget` are the two this project ships;
+[Drive your own device](../how-to/add-a-target.md) writes a third.
+
 ::: myogestic.controls.Target
 
-## Targets
+### A target for a separate program
 
 ::: myogestic.remote.RemoteTarget
 

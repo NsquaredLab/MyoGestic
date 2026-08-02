@@ -18,9 +18,9 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 
     ---
 
-    Declare what an app controls by name; targets drive it.
+    Declare what an app controls by name; a `Target` drives it.
 
-    [`load_control_map`][myogestic.controls.load_control_map] · [`ControlBus`][myogestic.controls.ControlBus]
+    [`Target`][myogestic.controls.Target] · [`Capability`][myogestic.controls.Capability] · [`ControlBus`][myogestic.controls.ControlBus] · [`load_control_map`][myogestic.controls.load_control_map]
 
     [:octicons-arrow-right-24: Control standard](controls.md)
 
