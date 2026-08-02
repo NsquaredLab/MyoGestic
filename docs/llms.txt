@@ -51,7 +51,7 @@ addresses a device declares, resolved against that device's live manifest.
 
 - [Controls (concept)](https://nsquaredlab.github.io/MyoGestic/concepts/controls/): start here - the two vocabularies on one line, the sign convention, continuous vs discrete, deferred binding.
 - [Control standard (API)](https://nsquaredlab.github.io/MyoGestic/api/controls/): the reference - the TOML grammar (bare string, fan-out array, explicit table with `weight` / `debounce_s` / `threshold_fraction`), `load_control_map`, `resolve`, `ControlBus`, `connect_controls`, `ControlLink`, `RemoteTarget`, what negotiation refuses, and the three separate layers of smoothing.
-- [Drive your own device](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-target/): implement `bind` / `send` / `stop` plus a `Capability` list so a control map drives your prosthesis on a serial port, your motors, your cursor. **Everything MyoGestic moves is a target** - the transport is yours (serial, UDP, MQTT, a library call), and `send` does whatever your device needs. Worked example: `examples/synthetic/servo_hand.py`, six servos with a finger coupling, runnable without hardware.
+- [Drive your own device](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-target/): implement `bind` / `send` / `stop` plus a `Capability` list so a control map drives your prosthesis on a serial port, your motors, your cursor. **Everything MyoGestic moves is a target** - the transport is yours (serial, UDP, MQTT, a library call), and `send` does whatever your device needs. Start from `examples/synthetic/my_device.py` (three marked lines to change); `examples/synthetic/servo_hand.py` is the same shape carrying a real mechanism, six servos with a coupled thumb. Both run without hardware.
 - [Drive a remote target](https://nsquaredlab.github.io/MyoGestic/how-to/drive-a-remote-target/): wire MyoGestic to a device that is already its own program, over gRPC for the manifest and LSL for continuous values.
 - [Your first remote target](https://nsquaredlab.github.io/MyoGestic/tutorials/your-first-remote-target/): build one end to end in seven stages, each ending in something you run and watch.
 - [Integrate the Virtual Hand](https://nsquaredlab.github.io/MyoGestic/how-to/integrate-vhi/): the shipped remote target - where VHI is installed, how it is launched, what it calls its controls, and how to drive its control hand while recording.
@@ -60,28 +60,44 @@ addresses a device declares, resolved against that device's live manifest.
 - [Post-process predictions](https://nsquaredlab.github.io/MyoGestic/how-to/post-process-output/): smooth the prediction output vector with OneEuro or Gaussian filters before it leaves the app.
 - [Edge trigger](https://nsquaredlab.github.io/MyoGestic/concepts/edge-trigger/): fire a discrete side effect once per change instead of once per tick.
 
-## How-to guides
+## Guides
 
-- [How-to index](https://nsquaredlab.github.io/MyoGestic/how-to/): every recipe, grouped into extending the framework, recording and post-processing, the Virtual Hand, and operations.
-- [Add a custom source](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-source/): implement the three-method `Source` protocol for a new device, file format or transport.
-- [Publish a data stream](https://nsquaredlab.github.io/MyoGestic/how-to/add-an-output/): subclass `Outlet` to publish numbers for something else to read (a dashboard, a recorder, another process) on its own paced send thread. **Not for driving a device** - an output has no aliases, no declared range, no clamp and no rest-on-shutdown; a target has all four. `RemoteTarget` builds one `LSLOutlet` per control *inside* the target, which is where an output belongs when a device is on the other end.
-- [Add a custom widget](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-widget/): write a class with a `.ui()` method and call it from `@app.ui`.
-- [Add a custom model](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-model/): plug sklearn, CatBoost, PyTorch, a state machine or a lookup table into `@pipeline.train`, including custom `save_model` / `load_model`.
+One section, grouped by job. There is no tutorial/how-to split.
+
+- [Guides index](https://nsquaredlab.github.io/MyoGestic/how-to/): every guide, grouped into start here, driving a device, recording, models and features, extending the framework, and operations.
+
+**Start here** - runnable experiments, walked line by line against a real file in `examples/`.
+
+- [EMG classification](https://nsquaredlab.github.io/MyoGestic/tutorials/emg-classification/): `examples/synthetic/emg_classification.py` line by line - synthetic 8-channel EMG, RMS+MAV features, a CatBoost binary classifier, a smoothed pose to the Virtual Hand. The best first read.
+- [EMG regression with the Virtual Hand](https://nsquaredlab.github.io/MyoGestic/tutorials/emg-regression-with-vhi/): a multi-output CatBoost regressor driving five continuous DOFs through a `ControlBus` and a `RemoteTarget`, with kinematics recorded from VHI's control hand.
+- [Examples directory](https://nsquaredlab.github.io/MyoGestic/tutorials/examples-index/): every runnable example under `examples/synthetic/`, the command that runs it, and what is worth tweaking. All hardware-free.
+
+**Driving a device** - all five pages are listed under *The control system* above. Start with
+*Drive your own device*; the stage-by-stage remote-target build is for a device that is already
+its own program, which most are not.
+
+**Recording**
+
 - [Enable on-disk recording](https://nsquaredlab.github.io/MyoGestic/how-to/enable-recording/): capture every registered stream to a Zarr-backed `.session.zip`, from the GUI button or headlessly, plus the on-disk layout and the read-back API.
 - [Record and replay](https://nsquaredlab.github.io/MyoGestic/how-to/record-and-replay/): capture sessions, browse them in `SessionManager`, train on them, then replay one as a `Source` to debug the predict path offline.
 - [Record good training data](https://nsquaredlab.github.io/MyoGestic/how-to/record-good-training-data/): cycle-style recording, why one-click sessions produce bad models, and how to check your data before training.
+
+**Models and features** - *Post-process predictions* is listed above.
+
+- [Add a custom model](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-model/): plug sklearn, CatBoost, PyTorch, a state machine or a lookup table into `@pipeline.train`, including custom `save_model` / `load_model`.
 - [Feature-extraction cookbook](https://nsquaredlab.github.io/MyoGestic/how-to/feature-extraction-cookbook/): copy-paste `@pipeline.extract` recipes - RMS+MAV, scipy bandpass and envelope, FFT spectral features, sliding RMS, onset detection, multi-stream concatenation.
 - [Use the recipe feature set](https://nsquaredlab.github.io/MyoGestic/how-to/use-recipe-features/): the five classic time-domain EMG features shipped in `myogestic.recipes.features`.
 - [Keep state between pipeline stages](https://nsquaredlab.github.io/MyoGestic/how-to/inter-stage-state/): the four patterns for carrying data across predict ticks, since `extract` and `predict` get no implicit context.
+
+**Extending the framework**
+
+- [Add a custom source](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-source/): implement the three-method `Source` protocol for a new device, file format or transport.
+- [Add a custom widget](https://nsquaredlab.github.io/MyoGestic/how-to/add-a-widget/): write a class with a `.ui()` method and call it from `@app.ui`.
+- [Publish a data stream](https://nsquaredlab.github.io/MyoGestic/how-to/add-an-output/): subclass `Outlet` to publish numbers for something else to read - a dashboard, a recorder, another process - on its own paced send thread. **Not for driving a device**: an outlet has no aliases, no declared range, no clamp and no rest-on-shutdown; a `Target` has all four. `RemoteTarget` builds one `LSLOutlet` per control *inside* the target, which is where an outlet belongs when a device is on the other end.
+
+**Operations**
+
 - [Run headless (no GUI)](https://nsquaredlab.github.io/MyoGestic/how-to/headless-mode/): `App.run(mode="headless")` for unattended recordings, scripted experiments and integration tests, driving the recording state machine yourself.
-
-## Tutorials
-
-- [Tutorials index](https://nsquaredlab.github.io/MyoGestic/tutorials/): what each walkthrough teaches and which `examples/` file it reads.
-- [EMG classification](https://nsquaredlab.github.io/MyoGestic/tutorials/emg-classification/): `examples/synthetic/emg_classification.py` line by line - synthetic 8-channel EMG, RMS+MAV features, a CatBoost binary classifier, a smoothed pose to the Virtual Hand. The best first tutorial.
-- [EMG regression with the Virtual Hand](https://nsquaredlab.github.io/MyoGestic/tutorials/emg-regression-with-vhi/): a multi-output CatBoost regressor driving five continuous DOFs through a `ControlBus` and a `RemoteTarget`, with kinematics recorded from VHI's control hand.
-- [Your first remote target](https://nsquaredlab.github.io/MyoGestic/tutorials/your-first-remote-target/): build a gRPC + LSL remote target for a device of your own, in seven stages with a checkpoint each.
-- [Examples directory](https://nsquaredlab.github.io/MyoGestic/tutorials/examples-index/): every runnable example under `examples/synthetic/`, the command that runs it, and what is worth tweaking. All hardware-free.
 
 ## API reference
 
@@ -91,7 +107,7 @@ addresses a device declares, resolved against that device's live manifest.
 - [Control standard](https://nsquaredlab.github.io/MyoGestic/api/controls/): the control map format, resolution, the bus, targets and the wire-level encode/decode helpers.
 - [Keyboard](https://nsquaredlab.github.io/MyoGestic/api/keyboard/): `KeyboardTarget` and its ~220 addresses.
 - [Sources](https://nsquaredlab.github.io/MyoGestic/api/sources/): the `Source` protocol plus the built-in `LSLSource`, `ReplaySource` and `SerialSource`.
-- [Outputs](https://nsquaredlab.github.io/MyoGestic/api/outputs/): the `Outlet` base class and `LSLOutlet`. Anything that *moves* is a `Target`, not an outlet.
+- [Outlets](https://nsquaredlab.github.io/MyoGestic/api/outputs/): the `Outlet` base class and `LSLOutlet`. Anything that *moves* is a `Target`, not an outlet.
 - [Bridges](https://nsquaredlab.github.io/MyoGestic/api/bridges/): subprocess acquisition for heavy data that does not fit the LSL pull model, such as a webcam writing frames straight to Zarr.
 - [Widgets](https://nsquaredlab.github.io/MyoGestic/api/widgets/): every public widget class with its screenshot - signal viewers, scatter/line/heatmap plots, recording controls, `SessionManager`, `ProcessLauncher`, `FeatureSelector`, output post-processing, log and status panels.
 - [Estimator recipes](https://nsquaredlab.github.io/MyoGestic/api/models/): constructor recipes for CatBoost, scikit-learn and zero-dependency dummy estimators, with lazy optional imports and a clear `ImportError` naming the extra to install.
