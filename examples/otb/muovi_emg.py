@@ -16,6 +16,7 @@ def main() -> None:
         source=MuoviSource(plus=False, emg=True, mode=0),  # 32-ch gain-8 @2000Hz
         window_ms=1000,
     )
+    stream.reconnect()   # nothing attaches a stream on its own
     stream.start()
     print("Connected. Reading 5 windows...")
 
