@@ -23,12 +23,11 @@ gate and recorded pose layout, and nothing generic.
 """
 
 from myogestic.remote.interfaces import InterfaceSpec
-from myogestic.remote.target import ControlSink, RemoteTarget
+from myogestic.remote.target import RemoteTarget
 
 #: The two gRPC clients are listed here but resolved lazily by ``__getattr__`` below.
 __all__ = [
     "InterfaceSpec",
-    "ControlSink",
     "RecordingClient",
     "RemoteClient",
     "RemoteTarget",

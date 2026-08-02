@@ -52,7 +52,7 @@ Every box runs on its own daemon thread. The shared `Context` is the only synchr
 | [`myogestic.core`](../api/core.md) | `App`, `Context`, lifecycle hooks, run loops |
 | [`myogestic.stream`](../api/core.md) | `Stream`, ring buffer, acquisition thread, display snapshots |
 | [`myogestic.sources`](../api/sources.md) | `LSLSource`, `ReplaySource`, `SerialSource` |
-| [`myogestic.outputs`](../api/outputs.md) | `Output` base + `LSLOutlet`, the output-side filters |
+| [`myogestic.outputs`](../api/outputs.md) | `Outlet` base + `LSLOutlet`, the output-side filters |
 | [`myogestic.controls`](../api/controls.md) | `Target`, `ControlBus`, `Capability` — everything that *drives* |
 | [`myogestic.session`](../api/session.md) | Recording, label tracks, `.session.zip`, window iterators |
 | [`myogestic.ml`](../api/ml.md) | `Pipeline`, train/predict lifecycle, ML widgets |

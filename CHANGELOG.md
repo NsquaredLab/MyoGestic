@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`InterfaceSpec.control_client()` / `recording_client()`** for VHI's v2 control service
   and its recording aid. Exported lazily, so a plain install without the `[grpc]` extra
   still uses `outlet()` / `launcher()` without importing grpc.
-- **`Output.flush()`** — send the latest pushed value now instead of on the next tick. The
+- **`Outlet.flush()`** — send the latest pushed value now instead of on the next tick. The
   send loop is paced, so a neutral frame pushed at teardown was never sent at all: the
   thread was mid-sleep and `stop` ended the loop before it woke. Measured against a real
   Virtual Hand, that was the difference between a hand releasing and a hand frozen in a
@@ -116,6 +116,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed (breaking)
 
+- **`myogestic.remote.ControlSink` is gone.** It was a `Protocol` describing exactly
+  `Outlet`'s public surface — `push` / `flush` / `stop`, verified identical — under a second
+  name, and it was already bypassed at the boundary it was written to protect
+  (`InterfaceSpec.stream_outlet` annotates `-> LSLOutlet` concretely). `RemoteTarget` now
+  annotates `Outlet`. Nothing changes at runtime: it was never `runtime_checkable`, and a
+  test double still duck-types.
+
 - **`UDPOutput` and `SerialOutput` are gone.** They existed to drive a device without a
   control map, which is the road this release closes. Neither was constructed anywhere in the
   tree and neither had a test.
@@ -124,7 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transport, and with it the map's declared ranges, clipping, dead zone, debounce and the
   neutral frame delivered before teardown. See `examples/synthetic/servo_hand.py`.
 
-  `Output` and `LSLOutlet` stay, as the paced sender a target writes *through*. To keep a
+  `Outlet` (renamed from `Output`, below) and `LSLOutlet` stay, as the paced sender a target
+  writes *through*. To keep a
   deleted class, copy it out of git history; each was under 60 lines.
 
 - **`InterfaceSpec` no longer names a stream.** `output_stream_name`,
@@ -171,6 +179,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model gets targets in the space they were captured in.
 
 ### Changed (breaking)
+
+- **`myogestic.outputs.Output` is now `Outlet`**, and `outputs/base.py` is `outputs/outlet.py`.
+  A user met four names for two ideas: `Output`, `ControlSink` (an identical surface),
+  `LSLOutlet` (the only implementation) and `Target`. The base class did not even share a name
+  stem with its own subclass, which is much of why three names read as three concepts.
+
+  There are now two, and the difference is real: a **`Target`** takes *named* values, can
+  refuse a configuration at `bind`, declares `capabilities()`, and gets range, clamping, dead
+  zone and rest-on-teardown from the control map. An **`Outlet`** takes an array, paces one
+  wire, and has none of that. `RemoteTarget` owning one `LSLOutlet` per address it drives is
+  the relationship in one line.
+
+  Update `class MyThing(Output)` to `class MyThing(Outlet)` and import from
+  `myogestic.outputs` rather than `myogestic.outputs.base`. No alias is shipped: two names for
+  one meaning is the problem being fixed.
 
 - **`myogestic.renderer` — the generic half moved out from under the hand's name.** The
   target, the two gRPC clients, `InterfaceSpec`, `PoseSink` and the wire contract were all
@@ -340,7 +363,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every flexion DOF, fixed in VHI as `Vhi.StandardPose`.
 
   Two ordering rules it documents are properties of the renderer worth knowing: an
-  `Output` repeats its last pushed vector at `hz` and the renderer overwrites its whole
+  `Outlet` repeats its last pushed vector at `hz` and the renderer overwrites its whole
   pose from the inlet every frame, so **a still-streaming outlet beats `SweepControl`'s own
   commands** — and a stale outlet left behind by an earlier process still wins the single
   `MyoGestic_Output` inlet, which is why a control `+1` could appear to render either way.

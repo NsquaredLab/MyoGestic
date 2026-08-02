@@ -1,6 +1,6 @@
 """Output sinks — the send-side of myogestic.
 
-An [`Output`][] is the counterpart to a ``Source``: push a vector out to a
+An [`Outlet`][] is the counterpart to a ``Source``: push a vector out to a
 downstream consumer at a steady rate. The base class lives in
 [`myogestic.outputs.base`][]; the one shipped sink is [`LSLOutlet`][].
 
@@ -20,7 +20,6 @@ changes), [`EdgeTrigger`][] lives in [`myogestic.outputs.edge_trigger`][]
 and is re-exported here too.
 """
 
-from myogestic.outputs.base import Output
 from myogestic.outputs.edge_trigger import EdgeTrigger
 from myogestic.outputs.filters import (
     GaussianFilter,
@@ -31,9 +30,10 @@ from myogestic.outputs.filters import (
     make_filter,
 )
 from myogestic.outputs.lsl import LSLOutlet
+from myogestic.outputs.outlet import Outlet
 
 __all__ = [
-    "Output",
+    "Outlet",
     "LSLOutlet",
     "VectorFilter",
     "IdentityFilter",

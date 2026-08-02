@@ -2,7 +2,13 @@
 
 The eight rules the codebase keeps to:
 
-1. **No base classes. No inheritance.** No registration. No config files.
+1. **No base classes. No inheritance.** No registration. No config files. **One exception,
+   named:** [`Outlet`][myogestic.outputs.Outlet]. Anything you write against a *shape* is a
+   structural `Protocol` and needs no base — `Source`, `Target`, `VectorFilter`. `Outlet` is a
+   base class because it is not a shape: it is sixty lines of running code — a paced daemon
+   thread with compensated timing, a latest-wins slot, per-error-kind deduplication — and the
+   alternative to inheriting it is copying it once per transport. Subclass it to add `_send`.
+   Nothing else in the library asks you to subclass anything.
 2. User code is **plain functions**: `extract()`, `train()`, `predict()`.
 3. Every public function has **typed arguments and a typed return**.
 4. **One name, one meaning.** No overloaded types.

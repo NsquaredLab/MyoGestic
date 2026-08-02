@@ -118,14 +118,14 @@ See: [Widgets concept page](concepts/widgets.md), [Add a custom widget](how-to/a
 
 ## Outputs
 
-### Output sends old values forever
+### An outlet sends old values forever { #output-sends-old-values-forever }
 
-`Output.push(data)` writes to a *latest-value slot*. The output thread sends whatever's in the slot every `1/hz`. If you stop pushing but the slot still holds the last value, the same value gets re-sent forever.
+`Outlet.push(data)` writes to a *latest-value slot*. The output thread sends whatever's in the slot every `1/hz`. If you stop pushing but the slot still holds the last value, the same value gets re-sent forever.
 
 !!! tip "Fix"
     This is the contract: latest-wins, not queued. For event-style streams (one send per event, not periodic), implement a queue-based output by overriding the daemon-thread loop.
 
-### Output thread falls behind
+### The output thread falls behind { #output-thread-falls-behind }
 
 Your `_send` takes longer than `1/hz` per call. The daemon thread can't keep up.
 

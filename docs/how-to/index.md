@@ -42,7 +42,7 @@ system itself.
 
 - [Add a custom source](add-a-source.md) - implement the `Source` protocol for a new device, file format or transport.
 - [Add a custom widget](add-a-widget.md) - a class with a `.ui(ctx)` method that draws ImGui commands.
-- [Publish a data stream](add-an-output.md) - an `Output` is a paced sender for telemetry: predictions to a recorder, a stream another application reads. If something *moves*, you want a target, not this.
+- [Publish a data stream](add-an-output.md) - an `Outlet` is a paced sender for telemetry: predictions to a recorder, a stream another application reads. If something *moves*, you want a target, not this.
 
 ## Operations
 

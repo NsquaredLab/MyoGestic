@@ -15,7 +15,7 @@ flowchart LR
         AT["Acquisition thread (per Stream)<br/>source.read → ring buffer<br/>→ display snapshot<br/>→ optional Zarr append"]
         PT["Predict thread (only with Pipeline)<br/>extract → predict<br/>→ pipeline.predictions"]
         TT["Training thread (transient)<br/>train → pipeline.model"]
-        OT["Output thread (per Output)<br/>drain _latest → transport @ hz"]
+        OT["Output thread (per Outlet)<br/>drain _latest → transport @ hz"]
     end
 
     subgraph BRIDGE["Subprocess (optional)"]
@@ -35,7 +35,7 @@ flowchart LR
 | Acquisition (one per `Stream`) | `Stream` | source.read → ring buffer → display snapshot → optional Zarr append |
 | Predict | `Pipeline` | extract → predict → write to `pipeline.predictions` |
 | Training (transient) | `Pipeline` | train → assign to `pipeline.model` |
-| Output (one per `Output`) | user-owned `Output` | drain `_latest` to its destination at `hz` |
+| Output (one per `Outlet`) | user-owned `Outlet` | drain `_latest` to its destination at `hz` |
 | Bridge subprocess (optional) | `Bridge` | webcam decode → Zarr → publish LSL clock |
 
 Every non-main thread is a daemon: the program exits cleanly even if a thread is mid-iteration when the user closes the window. The predict thread is started via `app.before_run_hooks` (at `app.run()`, not on first Predict click) and joined with a short timeout via a `threading.Event` flag on cleanup. Acquisition and output threads are daemons that exit when the process does; their `stop()` methods set a sentinel but don't `join()`.
