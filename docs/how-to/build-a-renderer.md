@@ -42,7 +42,7 @@ it.
 | serve `GetControlManifest` | so a control map can resolve against you — the reply is the whole contract: every address, its kind, its range, its states |
 | report `vocabulary_version` `"2"` or newer | the compatibility gate. MyoGestic refuses an older renderer **by name at bind**, because these are separately installed applications and a mismatch is otherwise silent: a renderer waiting for a stream nobody publishes reports nothing at all, and the hand just never moves |
 | advertise **one address per control** | the address is the control's identity *and* its stream name. Two spellings of one control is a second vocabulary to keep in step by hand, and it makes "these two aliases collide" undecidable from the manifest |
-| read one stream per address, exactly one `float32` channel wide | that is the contract, so **refuse anything else** rather than reading element zero of it. A nine-channel whole-pose outlet from an out-of-date client would otherwise render its first value on every DOF and say nothing |
+| read one stream per address, exactly one `float32` channel wide | that is the contract, so **refuse anything else** rather than reading element zero of it. An inlet is found by its address's stream name, so a nine-channel whole-pose outlet from an out-of-date client corrupts only the one DOF it is named for — quietly, because element zero of somebody's pose frame is a *different* DOF's value, plausible and in range and wrong |
 
 | you may | for |
 |---|---|
@@ -50,6 +50,20 @@ it.
 | serve `SweepControl` | letting a client sweep one DOF and read back the degrees it produced, as a direction check |
 | serve `SetPresentation` | for a client asking you to smooth incoming poses |
 | serve the four recording RPCs | driving a ground-truth hand through a capture session |
+
+Nothing above is about *your device*. Once something with force behind it is on the other
+end, four more things are worth doing — none of them is in the reference renderer below,
+because none is part of the wire contract and each is a decision only you can make:
+
+| once it drives hardware | why |
+|---|---|
+| check the sample, not just the width | a correctly shaped stream still carries a NaN out of a divide or a `12.0` out of an unclipped model. The range you advertised is a promise you are entitled to enforce before anything moves |
+| refuse an address published by more than one outlet | resolving into `{info.name: info}` keeps whichever producer the sweep answered with last, so two applications driving one DOF look exactly like one, and which you obey changes between restarts |
+| state a liveness policy | hold-last, a timed return to rest, or a hardware deadman. A `SIGKILL`ed producer sends no neutral frame, and *nothing* about a stream going quiet distinguishes an idle system from a dead one. `source_id` recovery is a separate concern: it decides whether the stream comes back, not what the device does meanwhile — and neither replaces an interlock the software is not in the path of |
+| close inlets and join reader threads on shutdown | setting an event is not shutting down: it leaves the reader mid-`pull_chunk` while the caller carries on, and every inlet still open and re-connecting |
+
+[Integrate your own interface](../tutorials/integrate-your-interface.md) builds a renderer
+that does all four, one stage at a time.
 
 ## The whole renderer
 
