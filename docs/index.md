@@ -82,7 +82,7 @@ Pyodide + imgui-bundle WASM + scikit-learn, ~30 s first-load, cached after.
 - [:material-rocket-launch: **Getting Started**](getting-started.md) - install, run the synthetic-EMG demo
 - [:material-robot-industrial: **I have a device**](how-to/add-a-target.md) - drive your prosthesis, motors or cursor from a control map. Three methods; a copyable example that runs without hardware
 - [:material-puzzle-outline: **Anatomy of an app**](anatomy.md) - walk through one complete script in the order you write it
-- [:material-school: **Guides**](tutorials/index.md) - tutorials (line-by-line walkthroughs) + how-to recipes
+- [:material-school: **Guides**](how-to/index.md) - every task guide, grouped by job: start here, driving a device, recording, models, extending
 - [:material-graph-outline: **Concepts**](concepts/index.md) - streams, pipeline, threading, recording, design principles
 - [:material-help-circle-outline: **Troubleshooting**](troubleshooting.md) - symptom-first reference for the things that go wrong
 - [:material-book-open-variant: **Reference**](reference/index.md) - auto-generated API + cheatsheet + glossary

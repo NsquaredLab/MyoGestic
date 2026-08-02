@@ -263,5 +263,5 @@ uv run --extra grpc python examples/synthetic/vhi_control_hand.py
 * **Multi-monitor / docking** - `emg_popout_layout.py`.
 * **Posing the control hand for setup or labelling** - `vhi_control_hand.py`.
 * **Custom extension point** - skip the examples and read the
-  [how-to guides](../how-to/index.md) - each is a recipe for one
+  [guides](../how-to/index.md) - each is a recipe for one
   extension point.
