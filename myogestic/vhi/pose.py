@@ -32,7 +32,7 @@ the corpus, not about the format, and nothing here may treat it as a limit.
 
 This is a *layout*, not an interface. The control standard does not know these channels exist
 and nothing in it should learn: a live target is asked where its controls are
-(`myogestic.vhi.VhiTarget` does exactly that), and only recorded data needs a table.
+(`myogestic.renderer.RendererTarget` does exactly that), and only recorded data needs a table.
 """
 
 from __future__ import annotations

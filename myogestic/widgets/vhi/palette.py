@@ -1,7 +1,7 @@
 """VHI movement palette — a button grid for the VHI control hand's movements.
 
 The Virtual Hand Interface reports its valid movement names over the gRPC
-control plane (``VhiRecordingClient.state().available_movements`` — 17 in AI
+control plane (``RecordingClient.state().available_movements`` — 17 in AI
 mode, 15 in Classifier mode). This module renders them as a grid of buttons;
 clicking one commands that movement on VHI's control hand.
 
@@ -52,7 +52,7 @@ from imgui_bundle import imgui
 from myogestic.widgets.common import DANGER, SUCCESS, panel_header, pop_selected, push_selected
 
 if TYPE_CHECKING:
-    from myogestic.vhi._recording import VhiRecordingClient
+    from myogestic.renderer._recording import RecordingClient
 
 # Movement button size. Columns are computed from the panel width, so the grid
 # reflows as the panel is resized. Width fits VHI's longest name ("ThreeFingerPinch").
@@ -124,7 +124,7 @@ class VhiStateCache:
 
 
 def request_vhi_state_refresh(
-    client: VhiRecordingClient,
+    client: RecordingClient,
     cache: VhiStateCache,
     *,
     force: bool = False,

@@ -136,7 +136,7 @@ def _check_supported(tag: str) -> str:
     """Refuse a release this MyoGestic cannot drive. Returns the resolved tag.
 
     Checked *before* the download: an old binary installs happily and is then refused
-    by every `VhiTarget` at bind time, far from the command that put it there.
+    by every `RendererTarget` at bind time, far from the command that put it there.
     """
     resolved = _resolve_latest_tag() if tag == "latest" else tag
     if resolved is None:

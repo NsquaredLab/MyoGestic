@@ -1,12 +1,14 @@
-"""Render control values on a Virtual Hand.
+"""Render control values on a renderer — whatever it renders.
 
-`VhiTarget` is the `myogestic.controls.Target` for the VHI: it takes the sanitised frame
-a `myogestic.controls.ControlBus` delivers and writes the values the hand expects.
+`RendererTarget` is the `myogestic.controls.Target` for anything that serves the control
+contract: it takes the sanitised frame a `myogestic.controls.ControlBus` delivers and
+writes the values the renderer declared it accepts. A hand, a gripper, a cursor and a
+robot arm are all the same object here.
 
 **The wire layout lives entirely behind this module.** An application declares its own
-alias and maps it onto an address VHI publishes; this translates. Every fact about where
-a value goes comes from VHI's own manifest, asked for at bind time — never from a table
-in this file.
+alias and maps it onto an address the renderer publishes; this translates. Every fact
+about where a value goes comes from that renderer's own manifest, asked for at bind
+time — never from a table in this file.
 
 **One stream per DOF.** A control's LSL stream is named for the control's own address and
 is one channel wide, so a target that drives nine controls owns nine outlets. There is no
@@ -36,7 +38,7 @@ if TYPE_CHECKING:
     from myogestic._controls_core import ControlSet
     from myogestic._controls_map import Capability
 
-log = logging.getLogger("myogestic.vhi_target")
+log = logging.getLogger("myogestic.renderer.target")
 
 
 class PoseSink(Protocol):
@@ -44,7 +46,7 @@ class PoseSink(Protocol):
 
     `myogestic.outputs.LSLOutlet` satisfies it, and so does a recorder or a test double.
 
-    One of these carries **one control**, so a `VhiTarget` holds one per address it
+    One of these carries **one control**, so a `RendererTarget` holds one per address it
     drives. They are not supplied directly: the target builds them, one per address, by
     calling ``interface.stream_outlet(address, n_channels=1)`` once negotiation has said
     which addresses those are. Substituting a recorder or a double therefore means
@@ -93,13 +95,13 @@ def _retire(outlet: PoseSink, rest: float) -> None:
         outlet.stop()
 
 
-class VhiTarget:
-    """Drive a Virtual Hand from control values.
+class RendererTarget:
+    """Drive a renderer from control values.
 
-    Requires a VHI that speaks the v2 control contract: it *asks* the renderer what it
+    Requires a renderer that speaks the v2 control contract: it *asks* what the renderer
     exports and refuses anything it cannot place. A build older than the vocabulary this
     client needs is refused by version at bind, not driven on a guess — see
-    `myogestic.vhi._control.VhiControlClient.capabilities`.
+    `myogestic.renderer._control.RendererClient.capabilities`.
 
     One target drives a whole control map. It owns **one LSL outlet per address** it
     drives, each named for that address and one channel wide, all built after negotiation
@@ -108,14 +110,14 @@ class VhiTarget:
     Parameters
     ----------
     client
-        A `myogestic.vhi._control.VhiControlClient` — ``virtual_hand().control_client()``.
+        A `myogestic.renderer._control.RendererClient` — ``spec.control_client()``.
         Required: the control space is negotiated over it, and it carries discrete
         state, which the pose streams cannot express.
     interface
-        The `~myogestic.vhi.interfaces.InterfaceSpec` to build streams from —
-        ``virtual_hand()``. The target calls ``stream_outlet(address, n_channels=1)`` on
-        it once per address it drives, so the application never states a stream name or a
-        width. Anything with that method serves: a recorder or a test double substitutes
+        The `~myogestic.renderer.InterfaceSpec` to build streams from — for the Virtual
+        Hand, ``virtual_hand()``. The target calls ``stream_outlet(address, n_channels=1)``
+        on it once per address it drives, so the application never states a stream name or
+        a width. Anything with that method serves: a recorder or a test double substitutes
         here.
 
     Notes
@@ -124,7 +126,8 @@ class VhiTarget:
     a silently-dropped control is indistinguishable from one holding still.
 
     Binding is **deferred** rather than decided when the renderer is silent, because an
-    application that launches VHI from its own UI necessarily binds before VHI exists.
+    application that launches its renderer from its own UI necessarily binds before that
+    renderer exists.
     Call `negotiate` once it is up. A renderer that *answers* and does not speak the
     current vocabulary raises.
 
@@ -135,13 +138,14 @@ class VhiTarget:
     Examples
     --------
     >>> from myogestic.controls import ControlBus, load_control_map, resolve
-    >>> from myogestic.vhi import VhiTarget, virtual_hand
+    >>> from myogestic.renderer import RendererTarget
+    >>> from myogestic.vhi import virtual_hand
     >>>
     >>> vhi = virtual_hand()
     >>> client = vhi.control_client()
     >>> control_map = load_control_map({"dofs": {"my_index": "vhi.prediction.index"}})
     >>> controls = resolve(control_map, client.capabilities())   # needs VHI running
-    >>> bus = ControlBus(controls, targets=[VhiTarget(client=client, interface=vhi)])
+    >>> bus = ControlBus(controls, targets=[RendererTarget(client=client, interface=vhi)])
     >>> _ = bus.push({"my_index": 0.8})        # sanitised on the way to the wire
     """
 
@@ -153,15 +157,15 @@ class VhiTarget:
     def __init__(self, *, client: Any = None, interface: Any = None) -> None:
         if interface is None:
             raise ValueError(
-                "VhiTarget needs an `interface=` to build its streams from. It publishes "
+                "RendererTarget needs an `interface=` to build its streams from. It publishes "
                 "one stream per control it drives, each named for that control's address, "
                 "which it can only do once `bind` has resolved what those are. Pass "
-                "interface=virtual_hand()."
+                "interface=<the renderer's InterfaceSpec>, e.g. virtual_hand()."
             )
         #: What streams are built from. Never None: every outlet is this target's own.
         self._interface = interface
         self._client = client
-        #: The configuration still awaiting a reachable VHI, or None once settled.
+        #: The configuration still awaiting a reachable renderer, or None once settled.
         self._pending: ControlSet | None = None
         self._dofs: tuple[Continuous, ...] = ()
         #: Held states this target commands over gRPC once negotiated, as (alias, address)
@@ -195,7 +199,7 @@ class VhiTarget:
         return self._negotiated
 
     def bind(self, controls: ControlSet) -> None:
-        """Negotiate the control space with VHI, or defer until it is reachable.
+        """Negotiate the control space with the renderer, or defer until it is reachable.
 
         Raises
         ------
@@ -221,12 +225,12 @@ class VhiTarget:
             # configuration against the manifest succeeds trivially, leaving a target
             # that is bound, negotiated, and renders nothing.
             raise ValueError(
-                "VhiTarget has nothing to render: the configuration declares no DOFs "
+                "RendererTarget has nothing to render: the configuration declares no DOFs "
                 "at all."
             )
         if self._client is None:
             raise ValueError(
-                "VhiTarget needs a control client: every address, range and state "
+                "RendererTarget needs a control client: every address, range and state "
                 "comes from the renderer's manifest, so without one there is nothing "
                 "to render against. Pass client=virtual_hand().control_client()."
             )
@@ -254,7 +258,7 @@ class VhiTarget:
         Returns
         -------
         bool
-            Whether the contract is settled. ``False`` means VHI has not answered yet,
+            Whether the contract is settled. ``False`` means the renderer has not answered yet,
             so nothing is being rendered and this will keep retrying.
 
         Raises
@@ -325,7 +329,9 @@ class VhiTarget:
         if not mine:
             # Nothing in this file is ours. Not an error: `ControlBus` checks that
             # *someone* claims every alias, so an unrendered alias is still caught.
-            log.info("VHI renders none of %d configured control(s)", len(controls.dofs))
+            log.info(
+                "the renderer renders none of %d configured control(s)", len(controls.dofs)
+            )
             self._dofs = ()
             self._discrete = ()
             self._publish((), {a: float(c.rest) for a, c in exported.items()})
@@ -342,10 +348,9 @@ class VhiTarget:
                 if cap is None or getattr(cap, "kind", "") != "continuous":
                     raise ValueError(
                         f"{alias!r} points at {ref.address!r}, which no target can drive "
-                        f"as a number: the renderer does not export it as one. "
-                        f"Check the address against what it does export — "
-                        f"vhi.prediction.* is the model's hand and vhi.control.pose.* the "
-                        f"operator's."
+                        f"as a number: the renderer does not export it as one. It does "
+                        f"export these as numbers: "
+                        f"{sorted(a for a, c in exported.items() if getattr(c, 'kind', '') == 'continuous')}."
                     )
                 if ref.address in taken:
                     if taken[ref.address] != alias:
@@ -396,7 +401,7 @@ class VhiTarget:
         if self._routed:
             self._push({dof.name: dof.rest for dof in self._dofs})
         log.info(
-            "VHI routed %d alias-address pairs onto %d stream(s)",
+            "routed %d alias-address pairs onto %d stream(s)",
             len(slots),
             len(self._outlets),
         )
@@ -445,9 +450,9 @@ class VhiTarget:
         included; the resolution itself is shared.
 
         A **resolved** set carries routes and may name controls another target renders,
-        so ownership goes by **namespace**, not exact address: a `vhi.*` address this
+        so ownership goes by **namespace**, not exact address: a `vhi.*` address a VHI
         build does not export is still refused by `_settle`, while a `keyboard.*` control
-        sharing the file is in no VHI namespace and is simply not ours.
+        sharing the file is in no namespace this renderer exports and is simply not ours.
 
         A set built **directly** — a rig diagnostic, a test — carries no routes: its DOF
         names *are* the addresses, nothing upstream checked them, and there is no other
@@ -473,7 +478,7 @@ class VhiTarget:
         missing = [name for name in controls.channel_labels() if name not in renderable]
         if missing:
             raise ValueError(
-                f"VHI renders {sorted(renderable)} as numbers, which has no place for "
+                f"the renderer renders {sorted(renderable)} as numbers, which has no place for "
                 f"{missing}. Rendering the rest would leave these looking like "
                 f"controls that work and hold still."
             )
@@ -506,8 +511,8 @@ class VhiTarget:
         if not changed:
             return
         # Only *our* edges. `changed` is the bus's, so on a shared map it also carries the
-        # edges of every other target, and forwarding those makes VHI log a rejection per
-        # keystroke.
+        # edges of every other target, and forwarding those makes the renderer log a
+        # rejection per keystroke.
         # Keyed by address, like every stream this target publishes: the renderer looks the
         # control up by the key and the state up by the value.
         ours = {
@@ -519,8 +524,8 @@ class VhiTarget:
             self._client.set_control(discrete=ours)
         else:
             log.warning(
-                "discrete edge %s dropped: VHI has not been reached yet, so its states "
-                "are unresolved. Call VhiTarget.negotiate() once VHI is running.",
+                "discrete edge %s dropped: the renderer has not been reached yet, so its "
+                "states are unresolved. Call RendererTarget.negotiate() once it is running.",
                 ours,
             )
 
@@ -579,4 +584,4 @@ class VhiTarget:
             raise failures[0]
 
 
-__all__ = ["PoseSink", "VhiTarget"]
+__all__ = ["PoseSink", "RendererTarget"]

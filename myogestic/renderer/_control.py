@@ -1,12 +1,12 @@
-"""gRPC client for VHI's control service.
+"""gRPC client for a renderer's control service.
 
 Three calls, three shapes:
 
-- `VhiControlClient.capabilities` is the manifest — the whole contract `VhiTarget`
+- `RendererClient.capabilities` is the manifest — the whole contract `RendererTarget`
   resolves against, with no separate handshake. Synchronous, and asked once at bind.
-- `VhiControlClient.set_control` is fire-and-forget on a worker thread: it may be
+- `RendererClient.set_control` is fire-and-forget on a worker thread: it may be
   called from the predict thread and must never block it.
-- `VhiControlClient.sweep` is synchronous and slow — it drives a joint through its
+- `RendererClient.sweep` is synchronous and slow — it drives a joint through its
   range. For verification tools, never for a running app.
 
 Continuous per-tick values still go over LSL; this carries the manifest, discrete
@@ -22,13 +22,13 @@ from typing import TYPE_CHECKING, Any
 
 import grpc
 
-from myogestic.vhi._proto import myogestic_vhi_pb2 as pb2
-from myogestic.vhi._proto.myogestic_vhi_pb2_grpc import VhiControlStub
+from myogestic.renderer._proto import renderer_control_pb2 as pb2
+from myogestic.renderer._proto.renderer_control_pb2_grpc import RendererControlStub
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-log = logging.getLogger("myogestic.vhi_control")
+log = logging.getLogger("myogestic.renderer.control")
 
 _RPC_TIMEOUT_S = 2.0
 
@@ -59,30 +59,30 @@ def _vocabulary(reported: str) -> int:
 
 #: How many un-sent control frames to hold before dropping the oldest. `set_control` is fed
 #: from the predict thread at ``predict_hz`` while `_send_loop` drains one *blocking* RPC at
-#: a time, so a VHI that accepts the connection without answering costs `_RPC_TIMEOUT_S` per
-#: frame: measured 0.5 frames/s drained against 50/s produced. Unbounded, that queue grew for
-#: as long as the app ran and then replayed every stale frame in order once VHI answered.
+#: a time, so a renderer that accepts the connection without answering costs `_RPC_TIMEOUT_S`
+#: per frame: measured 0.5 frames/s drained against 50/s produced. Unbounded, that queue grew
+#: for as long as the app ran and then replayed every stale frame in order once it answered.
 #: At 50 Hz this is about a second of slack.
 _QUEUE_DEPTH = 64
 #: A sweep drives a joint through its whole range, so its deadline is the sweep's
-#: own duration plus room for VHI to settle and read the rig back.
+#: own duration plus room for the renderer to settle and read the rig back.
 _SWEEP_SLACK_S = 5.0
 
 
-class VhiControlClient:
-    """Client for VHI's control service.
+class RendererClient:
+    """Client for a renderer's control service.
 
     Parameters
     ----------
     host, port
-        Where VHI's gRPC server is listening.
+        Where the renderer's gRPC server is listening.
 
     Examples
     --------
-    >>> from myogestic.vhi._control import VhiControlClient
-    >>> client = VhiControlClient()
+    >>> from myogestic.renderer._control import RendererClient
+    >>> client = RendererClient()
     >>> capabilities = client.capabilities()
-    >>> capabilities is None      # None means this VHI is unreachable
+    >>> capabilities is None      # None means this renderer is unreachable
     True
     """
 
@@ -92,7 +92,7 @@ class VhiControlClient:
         self.target = f"{host}:{port}"
 
         self._channel = grpc.insecure_channel(self.target)
-        self._stub = VhiControlStub(self._channel)
+        self._stub = RendererControlStub(self._channel)
 
         self._commands: queue.Queue[pb2.SetControlRequest | None] = queue.Queue(
             maxsize=_QUEUE_DEPTH
@@ -103,7 +103,7 @@ class VhiControlClient:
 
         self._running = True
         self._thread = threading.Thread(
-            target=self._send_loop, name="VhiControlClient", daemon=True
+            target=self._send_loop, name="RendererClient", daemon=True
         )
         self._thread.start()
 
@@ -138,7 +138,7 @@ class VhiControlClient:
                 self._dropped += 1
                 if self._dropped == 1 or self._dropped % 1000 == 0:
                     log.warning(
-                        "VHI is not keeping up — dropped %d stale control frame(s). The "
+                        "the renderer is not keeping up — dropped %d stale control frame(s). The "
                         "renderer is answering slower than %s produces them.",
                         self._dropped,
                         type(self).__name__,
@@ -147,7 +147,7 @@ class VhiControlClient:
     # --- the target's own vocabulary -----------------------------------------
 
     def capabilities(self) -> list[Any] | None:
-        """Every control this VHI exports, as `myogestic.controls.Capability` values.
+        """Every control this renderer exports, as `myogestic.controls.Capability` values.
 
         The target-owned half of the contract: a configuration maps *your* aliases onto
         these addresses, and their semantics — number or held state, domain, states —
@@ -156,7 +156,7 @@ class VhiControlClient:
         Returns
         -------
         list[Capability] or None
-            ``None`` when VHI is unreachable or predates the manifest; the caller
+            ``None`` when the renderer is unreachable or predates the manifest; the caller
             defers and retries once it is reachable, rather than guessing a vocabulary.
 
         Raises
@@ -187,13 +187,14 @@ class VhiControlClient:
                 f"for that control's own address and one channel wide; vocabulary 1 read a "
                 f"single wide pose stream that MyoGestic no longer sends. Paired with this "
                 f"client such a renderer would report no error and never move. "
-                # Named, not "VHI": this client speaks to whatever serves the contract, and
+                # Named, not "the renderer": this client speaks to whatever serves the
+                # contract, and
                 # telling the author of a third-party renderer to update somebody else's
                 # program is advice they cannot act on.
                 f"Update {manifest.target_name or 'the renderer'}."
             )
         log.info(
-            "VHI %s exports %d controls (vocabulary %s)",
+            "%s exports %d controls (vocabulary %s)",
             manifest.target_name,
             len(manifest.capabilities),
             reported,
@@ -233,7 +234,7 @@ class VhiControlClient:
         Layer 3 is not a substitute for layer 2: with blending on but no debounce the
         hand still jumps between states, just smoothly.
 
-        Returns whether VHI applied it (``False`` when it does not speak v2).
+        Returns whether the renderer applied it (``False`` when it does not speak v2).
         """
         try:
             ack = self._stub.SetPresentation(
@@ -250,7 +251,7 @@ class VhiControlClient:
     def sweep(
         self, name: str, *, duration_s: float = 2.0, both_directions: bool = True
     ) -> pb2.SweepControlReply | None:
-        """Drive one DOF across its range and report what VHI observed on its rig.
+        """Drive one DOF across its range and report what the renderer observed on its rig.
 
         Synchronous and slow — it animates a joint. For a verification tool, never
         for a running app. ``None`` on any failure.
@@ -304,7 +305,9 @@ class VhiControlClient:
                     # Keyed by address, because that is what the request was keyed by — the
                     # renderer only ever sees addresses, so it can only refuse one by name.
                     # A reader holding the map that produced this reads the right-hand side.
-                    log.warning("VHI rejected these control addresses: %s", dict(ack.rejected))
+                    log.warning(
+                        "the renderer rejected these control addresses: %s", dict(ack.rejected)
+                    )
             except Exception as e:  # noqa: BLE001 - the worker must survive
                 self.connected = False
                 self._log_failure("set_control", e)
@@ -321,4 +324,4 @@ class VhiControlClient:
         log.log(level, "%s.%s failed — %s", type(self).__name__, operation, detail)
 
 
-__all__ = ["VhiControlClient"]
+__all__ = ["RendererClient"]

@@ -1,6 +1,5 @@
-"""Widgets for the Virtual Hand Interface: movement palette, control panel, map editor."""
+"""Widgets for the Virtual Hand Interface: the movement palette and the panel over it."""
 
-from myogestic.widgets.vhi.control_map_editor import ControlMapEditor
 from myogestic.widgets.vhi.palette import (
     VhiStateCache,
     VhiStateSnapshot,
@@ -10,7 +9,6 @@ from myogestic.widgets.vhi.palette import (
 from myogestic.widgets.vhi.panel import VhiMovementPanel
 
 __all__ = [
-    "ControlMapEditor",
     "VhiMovementPanel",
     "VhiStateCache",
     "VhiStateSnapshot",

@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from . import myogestic_vhi_pb2 as myogestic__vhi__pb2
+from . import renderer_control_pb2 as renderer__control__pb2
 
 GRPC_GENERATED_VERSION = '1.80.0'
 GRPC_VERSION = grpc.__version__
@@ -18,27 +18,28 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in myogestic_vhi_pb2_grpc.py depends on'
+        + ' but the generated code in renderer_control_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class VhiControlStub(object):
-    """Control plane between MyoGestic and the Virtual Hand Interface.
+class RendererControlStub(object):
+    """Control plane between MyoGestic and a renderer — a separate application that
+    displays or actuates the values MyoGestic produces.
 
-    GetControlManifest is the whole contract: it returns every control VHI exports, by
+    GetControlManifest is the whole contract: it returns every control the renderer exports, by
     address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range
     and the states — so neither side hard-codes a stream layout or a movement table. A
     client calls it unconditionally, once, before sending anything; there is no per-client
     negotiation and nothing to declare.
 
-    Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
-    movements, so the two never contend for one driver. SweepControl is the
-    verification primitive: it confirms a DOF actually renders the way its name
-    claims — that a named finger curls, in the direction its name claims — without a
-    human watching the screen.
+    Continuous and discrete DOFs address separate rigs — in the Virtual Hand, the
+    predicted hand and the operator's control hand — so the two never contend for one
+    driver. SweepControl is the verification primitive: it confirms a DOF actually
+    renders the way its name claims — that a control named for a joint moves that joint,
+    in the direction its name claims — without a human watching the screen.
 
     Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
     control's stream is named for the control's own address and is one channel wide, so
@@ -54,61 +55,62 @@ class VhiControlStub(object):
             channel: A grpc.Channel.
         """
         self.SetControl = channel.unary_unary(
-                '/myogestic.vhi.VhiControl/SetControl',
-                request_serializer=myogestic__vhi__pb2.SetControlRequest.SerializeToString,
-                response_deserializer=myogestic__vhi__pb2.ControlAck.FromString,
+                '/myogestic.renderer.RendererControl/SetControl',
+                request_serializer=renderer__control__pb2.SetControlRequest.SerializeToString,
+                response_deserializer=renderer__control__pb2.ControlAck.FromString,
                 _registered_method=True)
         self.SweepControl = channel.unary_unary(
-                '/myogestic.vhi.VhiControl/SweepControl',
-                request_serializer=myogestic__vhi__pb2.SweepControlRequest.SerializeToString,
-                response_deserializer=myogestic__vhi__pb2.SweepControlReply.FromString,
+                '/myogestic.renderer.RendererControl/SweepControl',
+                request_serializer=renderer__control__pb2.SweepControlRequest.SerializeToString,
+                response_deserializer=renderer__control__pb2.SweepControlReply.FromString,
                 _registered_method=True)
         self.SetPresentation = channel.unary_unary(
-                '/myogestic.vhi.VhiControl/SetPresentation',
-                request_serializer=myogestic__vhi__pb2.SetPresentationRequest.SerializeToString,
-                response_deserializer=myogestic__vhi__pb2.ControlAck.FromString,
+                '/myogestic.renderer.RendererControl/SetPresentation',
+                request_serializer=renderer__control__pb2.SetPresentationRequest.SerializeToString,
+                response_deserializer=renderer__control__pb2.ControlAck.FromString,
                 _registered_method=True)
         self.GetControlManifest = channel.unary_unary(
-                '/myogestic.vhi.VhiControl/GetControlManifest',
-                request_serializer=myogestic__vhi__pb2.GetControlManifestRequest.SerializeToString,
-                response_deserializer=myogestic__vhi__pb2.ControlManifest.FromString,
+                '/myogestic.renderer.RendererControl/GetControlManifest',
+                request_serializer=renderer__control__pb2.GetControlManifestRequest.SerializeToString,
+                response_deserializer=renderer__control__pb2.ControlManifest.FromString,
                 _registered_method=True)
         self.SetRecordingSession = channel.unary_unary(
-                '/myogestic.vhi.VhiControl/SetRecordingSession',
-                request_serializer=myogestic__vhi__pb2.SetRecordingSessionRequest.SerializeToString,
-                response_deserializer=myogestic__vhi__pb2.RecordingAck.FromString,
+                '/myogestic.renderer.RendererControl/SetRecordingSession',
+                request_serializer=renderer__control__pb2.SetRecordingSessionRequest.SerializeToString,
+                response_deserializer=renderer__control__pb2.RecordingAck.FromString,
                 _registered_method=True)
         self.StartRecordingTrajectory = channel.unary_unary(
-                '/myogestic.vhi.VhiControl/StartRecordingTrajectory',
-                request_serializer=myogestic__vhi__pb2.StartRecordingTrajectoryRequest.SerializeToString,
-                response_deserializer=myogestic__vhi__pb2.RecordingAck.FromString,
+                '/myogestic.renderer.RendererControl/StartRecordingTrajectory',
+                request_serializer=renderer__control__pb2.StartRecordingTrajectoryRequest.SerializeToString,
+                response_deserializer=renderer__control__pb2.RecordingAck.FromString,
                 _registered_method=True)
         self.StopRecordingTrajectory = channel.unary_unary(
-                '/myogestic.vhi.VhiControl/StopRecordingTrajectory',
-                request_serializer=myogestic__vhi__pb2.StopRecordingTrajectoryRequest.SerializeToString,
-                response_deserializer=myogestic__vhi__pb2.RecordingAck.FromString,
+                '/myogestic.renderer.RendererControl/StopRecordingTrajectory',
+                request_serializer=renderer__control__pb2.StopRecordingTrajectoryRequest.SerializeToString,
+                response_deserializer=renderer__control__pb2.RecordingAck.FromString,
                 _registered_method=True)
         self.GetRecordingSessionState = channel.unary_unary(
-                '/myogestic.vhi.VhiControl/GetRecordingSessionState',
-                request_serializer=myogestic__vhi__pb2.GetRecordingSessionStateRequest.SerializeToString,
-                response_deserializer=myogestic__vhi__pb2.RecordingSessionState.FromString,
+                '/myogestic.renderer.RendererControl/GetRecordingSessionState',
+                request_serializer=renderer__control__pb2.GetRecordingSessionStateRequest.SerializeToString,
+                response_deserializer=renderer__control__pb2.RecordingSessionState.FromString,
                 _registered_method=True)
 
 
-class VhiControlServicer(object):
-    """Control plane between MyoGestic and the Virtual Hand Interface.
+class RendererControlServicer(object):
+    """Control plane between MyoGestic and a renderer — a separate application that
+    displays or actuates the values MyoGestic produces.
 
-    GetControlManifest is the whole contract: it returns every control VHI exports, by
+    GetControlManifest is the whole contract: it returns every control the renderer exports, by
     address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range
     and the states — so neither side hard-codes a stream layout or a movement table. A
     client calls it unconditionally, once, before sending anything; there is no per-client
     negotiation and nothing to declare.
 
-    Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
-    movements, so the two never contend for one driver. SweepControl is the
-    verification primitive: it confirms a DOF actually renders the way its name
-    claims — that a named finger curls, in the direction its name claims — without a
-    human watching the screen.
+    Continuous and discrete DOFs address separate rigs — in the Virtual Hand, the
+    predicted hand and the operator's control hand — so the two never contend for one
+    driver. SweepControl is the verification primitive: it confirms a DOF actually
+    renders the way its name claims — that a control named for a joint moves that joint,
+    in the direction its name claims — without a human watching the screen.
 
     Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
     control's stream is named for the control's own address and is one channel wide, so
@@ -143,8 +145,8 @@ class VhiControlServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def GetControlManifest(self, request, context):
-        """What can this target be told to do? Returns every control VHI exports, with the
-        semantics VHI itself declares for each. Call it first.
+        """What can this target be told to do? Returns every control the renderer exports, with
+        the semantics it declares for each. Call it first.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -152,20 +154,20 @@ class VhiControlServicer(object):
 
     def SetRecordingSession(self, request, context):
         """--- recording session ---------------------------------------------------
-        Not control: these coordinate VHI's participation in a recording session that
-        something else owns. They live here because they drive the same hand through the
+        Not control: these coordinate the renderer's participation in a recording session that
+        something else owns. They live here because they drive the same rig through the
         same state machine — a second service implied an independence the renderer does
         not have, and the arbitration between them is already cross-cutting.
 
-        Mark a recording session active or finished. While active, VHI ignores its own
-        keyboard so the recording has a single movement source.
+        Mark a recording session active or finished. While active, the renderer ignores its
+        own local input so the recording has a single movement source.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def StartRecordingTrajectory(self, request, context):
-        """Start cycling the control hand through a movement, so the recorded pose stream
+        """Start cycling the control rig through a movement, so the recorded pose stream
         sweeps a continuous range instead of snapping between held states. Refused if a
         trajectory is already running.
         """
@@ -174,7 +176,7 @@ class VhiControlServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def StopRecordingTrajectory(self, request, context):
-        """Stop the trajectory. Rests the hand only if one was running.
+        """Stop the trajectory. Rests the rig only if one was running.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -188,70 +190,71 @@ class VhiControlServicer(object):
         raise NotImplementedError('Method not implemented!')
 
 
-def add_VhiControlServicer_to_server(servicer, server):
+def add_RendererControlServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'SetControl': grpc.unary_unary_rpc_method_handler(
                     servicer.SetControl,
-                    request_deserializer=myogestic__vhi__pb2.SetControlRequest.FromString,
-                    response_serializer=myogestic__vhi__pb2.ControlAck.SerializeToString,
+                    request_deserializer=renderer__control__pb2.SetControlRequest.FromString,
+                    response_serializer=renderer__control__pb2.ControlAck.SerializeToString,
             ),
             'SweepControl': grpc.unary_unary_rpc_method_handler(
                     servicer.SweepControl,
-                    request_deserializer=myogestic__vhi__pb2.SweepControlRequest.FromString,
-                    response_serializer=myogestic__vhi__pb2.SweepControlReply.SerializeToString,
+                    request_deserializer=renderer__control__pb2.SweepControlRequest.FromString,
+                    response_serializer=renderer__control__pb2.SweepControlReply.SerializeToString,
             ),
             'SetPresentation': grpc.unary_unary_rpc_method_handler(
                     servicer.SetPresentation,
-                    request_deserializer=myogestic__vhi__pb2.SetPresentationRequest.FromString,
-                    response_serializer=myogestic__vhi__pb2.ControlAck.SerializeToString,
+                    request_deserializer=renderer__control__pb2.SetPresentationRequest.FromString,
+                    response_serializer=renderer__control__pb2.ControlAck.SerializeToString,
             ),
             'GetControlManifest': grpc.unary_unary_rpc_method_handler(
                     servicer.GetControlManifest,
-                    request_deserializer=myogestic__vhi__pb2.GetControlManifestRequest.FromString,
-                    response_serializer=myogestic__vhi__pb2.ControlManifest.SerializeToString,
+                    request_deserializer=renderer__control__pb2.GetControlManifestRequest.FromString,
+                    response_serializer=renderer__control__pb2.ControlManifest.SerializeToString,
             ),
             'SetRecordingSession': grpc.unary_unary_rpc_method_handler(
                     servicer.SetRecordingSession,
-                    request_deserializer=myogestic__vhi__pb2.SetRecordingSessionRequest.FromString,
-                    response_serializer=myogestic__vhi__pb2.RecordingAck.SerializeToString,
+                    request_deserializer=renderer__control__pb2.SetRecordingSessionRequest.FromString,
+                    response_serializer=renderer__control__pb2.RecordingAck.SerializeToString,
             ),
             'StartRecordingTrajectory': grpc.unary_unary_rpc_method_handler(
                     servicer.StartRecordingTrajectory,
-                    request_deserializer=myogestic__vhi__pb2.StartRecordingTrajectoryRequest.FromString,
-                    response_serializer=myogestic__vhi__pb2.RecordingAck.SerializeToString,
+                    request_deserializer=renderer__control__pb2.StartRecordingTrajectoryRequest.FromString,
+                    response_serializer=renderer__control__pb2.RecordingAck.SerializeToString,
             ),
             'StopRecordingTrajectory': grpc.unary_unary_rpc_method_handler(
                     servicer.StopRecordingTrajectory,
-                    request_deserializer=myogestic__vhi__pb2.StopRecordingTrajectoryRequest.FromString,
-                    response_serializer=myogestic__vhi__pb2.RecordingAck.SerializeToString,
+                    request_deserializer=renderer__control__pb2.StopRecordingTrajectoryRequest.FromString,
+                    response_serializer=renderer__control__pb2.RecordingAck.SerializeToString,
             ),
             'GetRecordingSessionState': grpc.unary_unary_rpc_method_handler(
                     servicer.GetRecordingSessionState,
-                    request_deserializer=myogestic__vhi__pb2.GetRecordingSessionStateRequest.FromString,
-                    response_serializer=myogestic__vhi__pb2.RecordingSessionState.SerializeToString,
+                    request_deserializer=renderer__control__pb2.GetRecordingSessionStateRequest.FromString,
+                    response_serializer=renderer__control__pb2.RecordingSessionState.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'myogestic.vhi.VhiControl', rpc_method_handlers)
+            'myogestic.renderer.RendererControl', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('myogestic.vhi.VhiControl', rpc_method_handlers)
+    server.add_registered_method_handlers('myogestic.renderer.RendererControl', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class VhiControl(object):
-    """Control plane between MyoGestic and the Virtual Hand Interface.
+class RendererControl(object):
+    """Control plane between MyoGestic and a renderer — a separate application that
+    displays or actuates the values MyoGestic produces.
 
-    GetControlManifest is the whole contract: it returns every control VHI exports, by
+    GetControlManifest is the whole contract: it returns every control the renderer exports, by
     address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range
     and the states — so neither side hard-codes a stream layout or a movement table. A
     client calls it unconditionally, once, before sending anything; there is no per-client
     negotiation and nothing to declare.
 
-    Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
-    movements, so the two never contend for one driver. SweepControl is the
-    verification primitive: it confirms a DOF actually renders the way its name
-    claims — that a named finger curls, in the direction its name claims — without a
-    human watching the screen.
+    Continuous and discrete DOFs address separate rigs — in the Virtual Hand, the
+    predicted hand and the operator's control hand — so the two never contend for one
+    driver. SweepControl is the verification primitive: it confirms a DOF actually
+    renders the way its name claims — that a control named for a joint moves that joint,
+    in the direction its name claims — without a human watching the screen.
 
     Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
     control's stream is named for the control's own address and is one channel wide, so
@@ -274,9 +277,9 @@ class VhiControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.vhi.VhiControl/SetControl',
-            myogestic__vhi__pb2.SetControlRequest.SerializeToString,
-            myogestic__vhi__pb2.ControlAck.FromString,
+            '/myogestic.renderer.RendererControl/SetControl',
+            renderer__control__pb2.SetControlRequest.SerializeToString,
+            renderer__control__pb2.ControlAck.FromString,
             options,
             channel_credentials,
             insecure,
@@ -301,9 +304,9 @@ class VhiControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.vhi.VhiControl/SweepControl',
-            myogestic__vhi__pb2.SweepControlRequest.SerializeToString,
-            myogestic__vhi__pb2.SweepControlReply.FromString,
+            '/myogestic.renderer.RendererControl/SweepControl',
+            renderer__control__pb2.SweepControlRequest.SerializeToString,
+            renderer__control__pb2.SweepControlReply.FromString,
             options,
             channel_credentials,
             insecure,
@@ -328,9 +331,9 @@ class VhiControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.vhi.VhiControl/SetPresentation',
-            myogestic__vhi__pb2.SetPresentationRequest.SerializeToString,
-            myogestic__vhi__pb2.ControlAck.FromString,
+            '/myogestic.renderer.RendererControl/SetPresentation',
+            renderer__control__pb2.SetPresentationRequest.SerializeToString,
+            renderer__control__pb2.ControlAck.FromString,
             options,
             channel_credentials,
             insecure,
@@ -355,9 +358,9 @@ class VhiControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.vhi.VhiControl/GetControlManifest',
-            myogestic__vhi__pb2.GetControlManifestRequest.SerializeToString,
-            myogestic__vhi__pb2.ControlManifest.FromString,
+            '/myogestic.renderer.RendererControl/GetControlManifest',
+            renderer__control__pb2.GetControlManifestRequest.SerializeToString,
+            renderer__control__pb2.ControlManifest.FromString,
             options,
             channel_credentials,
             insecure,
@@ -382,9 +385,9 @@ class VhiControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.vhi.VhiControl/SetRecordingSession',
-            myogestic__vhi__pb2.SetRecordingSessionRequest.SerializeToString,
-            myogestic__vhi__pb2.RecordingAck.FromString,
+            '/myogestic.renderer.RendererControl/SetRecordingSession',
+            renderer__control__pb2.SetRecordingSessionRequest.SerializeToString,
+            renderer__control__pb2.RecordingAck.FromString,
             options,
             channel_credentials,
             insecure,
@@ -409,9 +412,9 @@ class VhiControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.vhi.VhiControl/StartRecordingTrajectory',
-            myogestic__vhi__pb2.StartRecordingTrajectoryRequest.SerializeToString,
-            myogestic__vhi__pb2.RecordingAck.FromString,
+            '/myogestic.renderer.RendererControl/StartRecordingTrajectory',
+            renderer__control__pb2.StartRecordingTrajectoryRequest.SerializeToString,
+            renderer__control__pb2.RecordingAck.FromString,
             options,
             channel_credentials,
             insecure,
@@ -436,9 +439,9 @@ class VhiControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.vhi.VhiControl/StopRecordingTrajectory',
-            myogestic__vhi__pb2.StopRecordingTrajectoryRequest.SerializeToString,
-            myogestic__vhi__pb2.RecordingAck.FromString,
+            '/myogestic.renderer.RendererControl/StopRecordingTrajectory',
+            renderer__control__pb2.StopRecordingTrajectoryRequest.SerializeToString,
+            renderer__control__pb2.RecordingAck.FromString,
             options,
             channel_credentials,
             insecure,
@@ -463,9 +466,9 @@ class VhiControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.vhi.VhiControl/GetRecordingSessionState',
-            myogestic__vhi__pb2.GetRecordingSessionStateRequest.SerializeToString,
-            myogestic__vhi__pb2.RecordingSessionState.FromString,
+            '/myogestic.renderer.RendererControl/GetRecordingSessionState',
+            renderer__control__pb2.GetRecordingSessionStateRequest.SerializeToString,
+            renderer__control__pb2.RecordingSessionState.FromString,
             options,
             channel_credentials,
             insecure,
