@@ -79,3 +79,31 @@ def test_this_repo_keeps_its_own_config_quiet_too():
         "running from the repo root uses this file instead of the shipped fallback, "
         "so it has to set the log level itself"
     )
+
+
+def test_it_survives_a_home_directory_that_cannot_be_resolved(tmp_path, monkeypatch):
+    """`Path.home()` raises `RuntimeError`, not `OSError`, when it cannot resolve `~`.
+
+    This runs at `import myogestic`, so an unhandled raise here takes the whole package
+    down — which is what would happen in a container with no `HOME` and no passwd entry.
+    """
+    monkeypatch.delenv("LSLAPICFG", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    def _no_home():
+        raise RuntimeError("Could not determine home directory")
+
+    monkeypatch.setattr(Path, "home", staticmethod(_no_home))
+
+    assert quiet_liblsl() is True, "an unresolvable home should not stop the fallback"
+    assert os.environ["LSLAPICFG"] == str(_FALLBACK)
+
+
+def test_it_does_nothing_in_the_browser(tmp_path, monkeypatch):
+    """Pyodide has no liblsl, and probing a filesystem it does not have is pointless."""
+    monkeypatch.delenv("LSLAPICFG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("myogestic._lsl_quiet._IS_BROWSER", True)
+
+    assert quiet_liblsl() is False
+    assert "LSLAPICFG" not in os.environ

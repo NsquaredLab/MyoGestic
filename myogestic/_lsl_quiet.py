@@ -17,7 +17,13 @@ it would put that back.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
+
+#: Pyodide has no liblsl and no home directory. Probing for one there is pointless at best,
+#: and `Path.home()` raises `RuntimeError` when it cannot resolve `~` — from a function this
+#: module calls at import, which would take `import myogestic` down with it in the browser.
+_IS_BROWSER = sys.platform == "emscripten"
 
 #: Ships in the wheel — `pyproject.toml` already includes `myogestic/assets/**/*`.
 _FALLBACK = Path(__file__).parent / "assets" / "lsl_api.cfg"
@@ -32,15 +38,17 @@ def quiet_liblsl() -> bool:
         Whether this call set the variable. `False` means liblsl was already configured and
         was left alone.
     """
-    if os.environ.get("LSLAPICFG"):
+    if _IS_BROWSER or os.environ.get("LSLAPICFG"):
         return False
-    for existing in (Path("lsl_api.cfg"), Path.home() / "lsl_api.cfg"):
+    for candidate in (lambda: Path("lsl_api.cfg"), lambda: Path.home() / "lsl_api.cfg"):
         try:
-            if existing.is_file():
+            if candidate().is_file():
                 return False
-        except OSError:
-            # An unreadable cwd or home (locked-down account, some containers) is not a
-            # reason to leave the console noisy.
+        except (OSError, RuntimeError):
+            # An unreadable cwd, or a home directory that cannot be resolved at all
+            # (locked-down account, some containers). Neither is a reason to leave the
+            # console noisy — and `Path.home()` is called lazily, inside the guard, because
+            # it is the call that raises.
             pass
     if not _FALLBACK.is_file():
         return False  # a tree without assets: noise beats raising on import
