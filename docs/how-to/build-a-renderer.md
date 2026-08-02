@@ -1,7 +1,7 @@
 # Build a renderer
 
 A **renderer** is a separate application MyoGestic drives — a process of its own,
-reached over gRPC and read from over LSL. A [target](add-a-target.md) is the opposite:
+reached over gRPC and driven over LSL. A [target](add-a-target.md) is the opposite:
 an in-process object a `ControlBus` calls directly, on the thread MyoGestic already owns.
 
 If you have not chosen between the two yet, [Concepts › Controls](../concepts/controls.md)

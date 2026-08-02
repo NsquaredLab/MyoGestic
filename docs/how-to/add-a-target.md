@@ -39,7 +39,7 @@ The two optional members are what the bus asks for by name:
 
 ## A complete target
 
-Forty lines that move a cursor. Every method is the real one; nothing is elided.
+The whole of a target that moves a cursor. Every method is the real one; nothing is elided.
 
 <!--docs:run-->
 ```python

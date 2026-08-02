@@ -36,7 +36,7 @@ one of those, and MyoGestic asks.
 
 ## The map is a file
 
-`examples/controls/regression.toml`, in full:
+`examples/controls/regression.toml`, its whole `[dofs]` table:
 
 ```toml
 [dofs]
@@ -70,7 +70,7 @@ my_control_2 = { target = "keyboard.tap.function.f1", threshold_fraction = 0.5 }
 my_control_3 = "vhi.prediction.wrist.rotation"
 ```
 
-A keystroke and a 3-D hand sit in the same table, three lines apart. One of them is a separate
+A keystroke and a 3-D hand sit in the same table, a line apart. One of them is a separate
 Godot application reached over gRPC and LSL; the other is `pynput` in this process. **Nothing in
 the file says so**, and that is the design: how a value reaches a device is the device's
 business, and the map only ever names *what* is driven, never *how* it is delivered. Pointing an
@@ -181,7 +181,7 @@ controls = resolve(load_control_map({"dofs": {"twist": "arm.wrist.rotation"}}), 
 assert controls.dofs["twist"].lo == -1.0  # signed, because that capability is
 ```
 
-Binding the four addresses it recognised and quietly dropping the typo would be worse than
+Binding the addresses it recognised and quietly dropping the typo would be worse than
 failing, because **a silently dropped control is indistinguishable from one holding still**. You
 would move, see nothing happen, and go looking at the model. The same rule runs one level down:
 [`ControlBus`][myogestic.controls.ControlBus] checks that *some* target claims every alias, and
