@@ -212,7 +212,7 @@ def predict(model, features):
     return {"pose": pose}
 ```
 
-Or attach `pylsl`'s `lslviewer.py` to one of the streams — `vhi.prediction.index`
+Or point `uv run mne-lsl viewer` at one of the streams — `vhi.prediction.index`
 for a single DOF going out, `VHI_Predict` for all nine coming back. For
 the gRPC plane, the standard `grpcurl` works against the local server
 when VHI is running — the proto is at
