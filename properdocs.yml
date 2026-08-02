@@ -179,7 +179,7 @@ nav:
           - Control standard: api/controls.md
           - Keyboard: api/keyboard.md
           - Sources: api/sources.md
-          - Outputs: api/outputs.md
+          - Outlets: api/outputs.md
           - Bridges: api/bridges.md
           - ML pipeline: api/ml.md
           - Widgets: api/widgets.md

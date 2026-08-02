@@ -44,7 +44,7 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 
     [:octicons-arrow-right-24: Sources API](sources.md)
 
--   :material-export:{ .lg .middle } __Outputs__
+-   :material-export:{ .lg .middle } __Outlets__
 
     ---
 
@@ -53,7 +53,7 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 
     [`LSLOutlet`][myogestic.outputs.LSLOutlet]
 
-    [:octicons-arrow-right-24: Outputs API](outputs.md)
+    [:octicons-arrow-right-24: Outlets API](outputs.md)
 
 -   :material-camera-outline:{ .lg .middle } __Bridges__
 
