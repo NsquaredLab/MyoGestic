@@ -106,6 +106,33 @@ To see it with no target at all:
 
 ## The examples
 
+### `my_device.py` - drive your own hardware
+
+A complete in-process target with three lines left for you: name your controls, drive your
+hardware, release it. No hardware needed to run it — `send` prints what it would have sent,
+so you can watch the bus clip an out-of-range value, replace a `NaN` with rest, and return
+every control to neutral before teardown.
+
+```bash
+uv run python examples/synthetic/my_device.py
+```
+
+**What to tweak:** the three numbered lines. See
+[Drive your own device](../how-to/add-a-target.md).
+
+### `servo_hand.py` - the same shape, with a real mechanism
+
+Six servos on a serial port. `hand.thumb` drives two of them on different transfer functions,
+because a real thumb opposes as it flexes, and that coupling stays inside the target rather
+than in anyone's control map. Runs with no hardware; its assertions check the exact bytes.
+
+```bash
+uv run python examples/synthetic/servo_hand.py
+```
+
+**What to tweak:** `SERVOS` for your travel in degrees, and pass a real
+`serial.Serial(...)` as `port`.
+
 ### `emg_classification.py` - start here
 
 The simplest end-to-end loop: 8-channel synthetic EMG → MyoVerse RMS+MAV
@@ -225,6 +252,9 @@ uv run --extra grpc python examples/synthetic/vhi_control_hand.py
 * **Brand new** - [Anatomy of an app](../anatomy.md) →
   [EMG classification tutorial](emg-classification.md) →
   `emg_classification.py`.
+* **I have a device to drive** - `my_device.py`, a complete target with three lines left for
+  you, then [Drive your own device](../how-to/add-a-target.md). `servo_hand.py` is the same
+  shape carrying a real mechanism: six servos, a coupled thumb, a wire format.
 * **Want gRPC discrete control** - `emg_classification_grpc.py` next.
 * **Regression flow** -
   [EMG regression with VHI tutorial](emg-regression-with-vhi.md) →
