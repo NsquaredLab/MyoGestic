@@ -77,12 +77,12 @@ def test_targets_are_bound_at_construction():
 def test_bind_may_raise_at_construction():
     class Picky:
         def bind(self, controls):
-            raise ValueError("cannot render this")
+            raise ValueError("cannot drive this")
 
         def send(self, values, changed): ...
         def stop(self): ...
 
-    with pytest.raises(ValueError, match="cannot render"):
+    with pytest.raises(ValueError, match="cannot drive"):
         ControlBus(MIXED, targets=[Picky()])
 
 
@@ -282,7 +282,7 @@ def test_a_clip_is_reported_once_not_every_tick():
 # --- the three layers, and the boundaries between them --------------------------
 #
 # Smoothing is not one mechanism. Continuous DOFs are numerically filtered; discrete
-# DOFs are *stability gated*; a renderer may additionally blend for appearance. The
+# DOFs are *stability gated*; a target may additionally blend for appearance. The
 # tests below pin the boundaries, because collapsing any two of them is a bug and each
 # collapse has its own failure mode.
 
@@ -407,7 +407,7 @@ def test_the_two_gates_are_independent():
 
 
 def test_layer_3_is_not_represented_in_the_bus_at_all():
-    """Renderer blending is the target's business, and the bus has no opinion on it.
+    """Target blending is the target's business, and the bus has no opinion on it.
 
     If the bus grew a "visual smoothing" setting it would be the second authoritative
     smoother, and two authorities is how a commanded value stops being knowable.
@@ -423,7 +423,7 @@ def test_connect_controls_reports_a_refusing_target_instead_of_raising():
     """`ControlLink.ensure()` is a button handler in every shipped example.
 
     `capabilities()` gained a third outcome with the version gate — answered, silent, or
-    *refused* — and only the first two were handled, so an old renderer took the window
+    *refused* — and only the first two were handled, so an old target took the window
     down. Loud beats silent, but fatal was never the intent: the caller can act on "got a
     bus" and "did not", and the reason belongs in the log where it can be read.
     """
@@ -431,7 +431,7 @@ def test_connect_controls_reports_a_refusing_target_instead_of_raising():
 
     class TooOld:
         def capabilities(self):
-            raise ValueError("speaks control vocabulary 1 ... Update the renderer.")
+            raise ValueError("speaks control vocabulary 1 ... Update the target.")
 
     logged: list[str] = []
     ctx = types.SimpleNamespace(log=logged.append, control_space=None)
@@ -447,7 +447,7 @@ def test_connect_controls_reports_a_refusing_target_instead_of_raising():
 
 
 class _LateTarget:
-    """A target that cannot answer until it is told the renderer came up."""
+    """A target that cannot answer until it is told the target came up."""
 
     def __init__(self) -> None:
         self.up = False
@@ -477,7 +477,7 @@ def _link(target) -> ControlLink:
 
 
 def test_control_link_stays_unbound_while_the_target_cannot_answer():
-    """The normal state before the renderer is launched — and not an error."""
+    """The normal state before the target is launched — and not an error."""
     target = _LateTarget()
     link = _link(target)
 
@@ -511,7 +511,7 @@ def test_control_link_ensure_is_idempotent_once_bound():
     """It is called from every button handler, so a second call must cost nothing.
 
     Not just "returns the same bus": it must not *ask* again either, because asking is a
-    blocking RPC against the renderer.
+    blocking RPC against the target.
     """
     target = _LateTarget()
     target.up = True

@@ -1,4 +1,4 @@
-"""The direction gate's own decisions, checked without a renderer.
+"""The direction gate's own decisions, checked without a target.
 
 `tools/verify_control_direction.py` is a gate: a live run of it is what says the
 predicted hand still flexes on a control +1. That makes its *judgement* load-bearing —
@@ -66,7 +66,7 @@ EXTENDED = [_Observation("WaveBone_7", -85.0), _Observation("WaveBone_8", -75.0)
 
 
 def test_a_closing_hand_passes():
-    """Positive degrees is what a held `Movements.Fist` renders, so this is the pass.
+    """Positive degrees is what a held `Movements.Fist` produces, so this is the pass.
 
     Not what `MovementPoses` reads: `ApplyMovementPose` negates every row on the way to
     the bone, so the table says -85 where the rig lands at +85. Asserting the table is
@@ -76,7 +76,7 @@ def test_a_closing_hand_passes():
 
 
 def test_an_opening_hand_is_refused():
-    """The regression this whole gate exists for: +1 rendered as extension."""
+    """The regression this whole gate exists for: +1 moving as extension."""
     with pytest.raises(verify.Failure, match="extended WaveBone_7"):
         verify.check_direction(_Client(_Reply(EXTENDED)))
 
@@ -89,7 +89,7 @@ def test_one_backwards_bone_out_of_two_is_refused():
 
 
 def test_a_bone_resting_at_zero_is_refused():
-    """`<= 0` not `< 0`: a bone that did not move renders no direction at all."""
+    """`<= 0` not `< 0`: a bone that did not move shows no direction at all."""
     with pytest.raises(verify.Failure, match="extended"):
         verify.check_direction(_Client(_Reply([_Observation("WaveBone_7", 0.0)])))
 
@@ -113,7 +113,7 @@ def test_a_missing_reply_is_refused():
 
 # --- checks 2-4: round-trip, the client's own stack, the control hand -----------
 #
-# The three producers are a raw frame, the same value through a negotiated `RendererTarget`,
+# The three producers are a raw frame, the same value through a negotiated `RemoteTarget`,
 # and that again while the control hand's stream is published too. They used to be three
 # *declarations*, which since `Declare` was removed were the same thing measured three
 # times — a cross-check comparing a value against itself.
@@ -172,13 +172,13 @@ HELD = [1.0] * 12
 def test_three_agreeing_producers_pass(producers):
     assert producers(HELD, HELD, HELD) == {
         "raw frame": 1.0,
-        "through a RendererTarget": 1.0,
+        "through a RemoteTarget": 1.0,
         "+ control hand": 1.0,
     }
 
 
 def test_an_inverted_read_back_is_refused(producers):
-    """Sent +1, read -1: exactly what a renderer negating on ingest reports."""
+    """Sent +1, read -1: exactly what a target negating on ingest reports."""
     with pytest.raises(verify.Failure, match="not the identity"):
         producers([-1.0] * 12, HELD, HELD)
 

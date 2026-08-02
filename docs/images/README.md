@@ -20,7 +20,7 @@ uv run python tools/widget_screenshot.py signal_viewer
 
 The current registry covers:
 
-| File                                       | Renderer                            |
+| File                                       | Shows                               |
 |--------------------------------------------|-------------------------------------|
 | `widgets/signal_viewer.png`                | 4-channel synthetic signal          |
 | `widgets/recording_controls.png`           | 4-class button strip                |

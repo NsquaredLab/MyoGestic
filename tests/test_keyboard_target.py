@@ -255,7 +255,7 @@ class TestRefusals:
         assert target.armed is False
 
     def test_claims_reports_exactly_the_keyboard_aliases(self):
-        """`ControlBus` refuses a map where some alias renders nowhere, and with two
+        """`ControlBus` refuses a map where some alias drives nowhere, and with two
         targets sharing one map that check is the only thing that catches a typo."""
         target, _ = _target(
             {"go": "keyboard.hold.letter.w", "fire": "keyboard.tap.edit.space"}
@@ -278,7 +278,7 @@ class TestItSaysWhyItCannotArm:
 
     Without a reason asked for *before* the click, arming looks broken: the toggle flicks
     on, `arm` refuses, it flicks back, and the explanation went to a log panel the studio
-    does not render. `arm_refusal` is the question the UI can ask first.
+    does not drive. `arm_refusal` is the question the UI can ask first.
     """
 
     def test_a_working_backend_has_no_refusal(self, monkeypatch):

@@ -1,14 +1,14 @@
 """Control-map studio — edit the TOML, and drive whatever it names.
 
 The shortest path from a TOML control map to a hand that moves. No model, no EMG, no
-training: one slider per name in the file, sent straight through a `RendererTarget` to VHI's
+training: one slider per name in the file, sent straight through a `RemoteTarget` to VHI's
 **predicted** hand.
 
 Run with:
     uv run --extra grpc --extra keyboard python examples/synthetic/control_map_studio.py
 
 Workflow:
-    1. Launch "VHI Hand" → the renderer appears
+    1. Launch "VHI Hand" → VHI appears
     2. Click "Connect" → the file resolves against what VHI says it exports
     3. Drag a slider → that hand moves
 
@@ -37,7 +37,7 @@ The map can also name **keys**, which is why this is a studio rather than a VHI 
 Both targets share the one file and the one bus. Key sending starts **disarmed** — see the
 KEYBOARD panel — because a resolved map types into whatever window has focus.
 
-Needs a VHI 2.x build. A pre-2.0 renderer has no manifest to resolve against and is
+Needs a VHI 2.x build. A pre-2.0 VHI has no manifest to resolve against and is
 refused with the upgrade command rather than driven on a guess.
 """
 
@@ -52,7 +52,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myogestic import App, Fr, Grid, Px
 from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.keyboard import KeyboardTarget
-from myogestic.renderer import RendererTarget
+from myogestic.remote import RemoteTarget
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import AppLogo, ControlMapEditor, ProcessLauncher
 from myogestic.widgets.common import DANGER, SUCCESS, WARNING, muted, panel_header
@@ -104,7 +104,7 @@ waiting: dict[str, str] = {}
 # The picker offers every address both targets export — the model's hand, the operator's
 # hand and the keyboard — because which of them this app drives is the map's answer, not
 # this file's. Point a control at the operator's hand and the VHI target publishes the
-# stream that renders it; there is no hand chosen up here for the picker to be filtered by.
+# stream that drives it; there is no hand chosen up here for the picker to be filtered by.
 def _new_document(path=None) -> ControlMapEditor:
     """One open map, offering everything both targets export."""
     return ControlMapEditor(path, clients=[vhi_control, keys], title="EDIT THE MAP")
@@ -138,8 +138,8 @@ caps_seen: dict[int, int] = {}
 def editor() -> ControlMapEditor:
     """The document in front of the user, and therefore the one being driven."""
     return documents[active]
-# `launchable` not `launcher`: an unlaunchable renderer must not stop this app from
-# opening — a renderer that is already running needs no button, and the reason is
+# `launchable` not `launcher`: an unlaunchable target must not stop this app from
+# opening — a target that is already running needs no button, and the reason is
 # logged either way.
 processes = ProcessLauncher(vhi.launchable())
 logo = AppLogo()
@@ -270,7 +270,7 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
         editor's worker fetched seconds ago. Omitted by every caller that *is* a click,
         where asking again is the point of pressing the button.
 
-    Binding still costs a `capabilities()` RPC either way — fast against a renderer that
+    Binding still costs a `capabilities()` RPC either way — fast against a target that
     is up, and fast against one that is not, since a refused connection comes back at
     once. The client's full two-second deadline needs something holding the port
     without answering.
@@ -279,7 +279,7 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
     failure = ""
     # `bus.stop()` below reaches *every* target, and resting the hand and lifting the keys is
     # what that should do on the way out. But this now also runs without a click — when a
-    # renderer turns up or goes away — and an arm switch that flicks itself off while you are
+    # target turns up or goes away — and an arm switch that flicks itself off while you are
     # using it is worse than one that stays on: you armed it, VHI launched, and your keys
     # quietly stopped working with the checkbox unticked and no reason given. So the arm is
     # carried across the rebuild. `_switch_to` and `_close_document` disarm *before* calling
@@ -317,10 +317,10 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
     try:
         # Every target, not just VHI. `KeyboardTarget.capabilities()` answers from local
         # data, so a keyboard-only map resolves with nothing launched at all — the gate
-        # that used to sit here made testing a key wait on a renderer it never needed.
+        # that used to sit here made testing a key wait on a target it never needed.
         #
         # Inside the `try`, because asking can now be *refused* as well as unanswered: a
-        # renderer too old for this client's vocabulary raises rather than going quiet, and
+        # target too old for this client's vocabulary raises rather than going quiet, and
         # this runs from a click, where an escaping exception takes the window down instead
         # of the tab.
         capabilities, absent = _manifests() if known is None else known
@@ -331,20 +331,20 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
         controls = resolve(bindable, capabilities)
         # One VHI target for the whole map: it publishes a stream per address it drives,
         # each named for that address, so this file states neither a hand nor a width.
-        vhi_target = RendererTarget(client=vhi_control, interface=vhi)
+        vhi_target = RemoteTarget(client=vhi_control, interface=vhi)
         # Both targets share one map. `ControlBus` checks that *someone* claims every
         # alias, so a keyboard address in a VHI-only app is caught here rather than
-        # rendering nowhere and looking like a control that works and holds still.
+        # driving nowhere and looking like a control that works and holds still.
         new_bus = ControlBus(controls, targets=[vhi_target, keys], hz=32)
         # Constructing the bus binds each target, which negotiates — but VHI may have
         # come up between the two, so settle it explicitly rather than on the next tick.
         vhi_target.negotiate()
     except ValueError as exc:
         # A refusal is the useful case: it names the address it could not place, the two
-        # aliases aiming at one control, or a renderer too old to drive at all. Show it
+        # aliases aiming at one control, or a target too old to drive at all. Show it
         # instead of leaving a dead slider.
         failure = str(exc)
-        status = "That map cannot be rendered by this VHI."
+        status = "That map cannot be driven by this VHI."
         return
     bus = new_bus
     if was_armed and not keys.armed:
@@ -373,12 +373,12 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
 def _rebuild_if_the_manifest_changed() -> None:
     """Rebuild when the active map's targets start — or stop — offering something.
 
-    The editor re-asks its targets on a timer, so a renderer launched from the PROCESS panel
+    The editor re-asks its targets on a timer, so a target launched from the PROCESS panel
     turns up in *its* picker a second or two later with no click. The sliders here were built
     from the manifest as it stood at the last `Connect`, and nothing rebuilt them — so after
     a launch the two panels disagreed, and the way out was a button nothing said had become
     necessary. Watching the count the editor already publishes needs no second connection of
-    its own, and covers the renderer going away as well as arriving.
+    its own, and covers the target going away as well as arriving.
 
     It is also what connects on the very first frame, since `caps_seen` starts empty: the
     panel now opens with the real answer instead of "Press Connect".
@@ -499,7 +499,7 @@ def _keyboard_ui() -> None:
     panel_header("KEYBOARD")
     # Asked before the click, not after it. Without this the switch is a trap: it flicks on,
     # `arm` refuses, it flicks back, and the reason went to `app.ctx.log` — a buffer this app
-    # never renders. So the honest answer was written somewhere nobody could see it.
+    # never drives. So the honest answer was written somewhere nobody could see it.
     refusal = keys.arm_refusal
     imgui.begin_disabled(bool(refusal) and not keys.armed)
     changed, armed = imgui.checkbox("Send keys to the system", keys.armed)
@@ -593,7 +593,7 @@ def _typed_value_ui(alias: str, width: float, label: str | None) -> bool:
         imgui.text_unformatted(label)
     if committed:
         # Clamped to the same domain the slider offers. The bus clips anyway, so this is
-        # about not *displaying* a value the hand will never render.
+        # about not *displaying* a value the hand will never reach.
         levels[alias] = min(1.0, max(-1.0, value))
         typing.pop(alias, None)
         return True

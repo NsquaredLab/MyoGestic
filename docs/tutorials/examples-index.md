@@ -54,7 +54,7 @@ uv run --extra grpc python tools/inspect_control.py
 ```
 
 That runs safely with no Virtual Hand at all, and prints a different section for a v2
-build and nothing running — and it needs VHI 2.0 or newer, since a pre-2.0 renderer
+build and nothing running — and it needs VHI 2.0 or newer, since a pre-2.0 VHI
 has no manifest to resolve against.
 
 ## Start here: the control-map studio
@@ -101,7 +101,7 @@ def ui(ctx):
         rebuild_my_bus()
 ```
 
-To see it with no renderer at all:
+To see it with no target at all:
 `uv run python examples/panels/control_map_editor.py`.
 
 ## The examples
@@ -125,7 +125,7 @@ sklearn-shaped classifier.
 
 ### `emg_classification_grpc.py` - add the gRPC control plane
 
-Same classifier, plus the `RendererClient` gRPC plane: each predicted
+Same classifier, plus the `RemoteClient` gRPC plane: each predicted
 class change commands a **discrete DOF**, whose declared
 `debounce_s` gates the tick-to-tick argmax flicker, and a `VhiMovementPanel`
 in the UI lets the user click movements directly. Demonstrates the
@@ -207,7 +207,7 @@ The only example that drives `vhi.control.pose.*` instead of `vhi.prediction.*`:
 pose the hand an operator sets up by hand, on its own stream. Both namespaces number
 channels from 0, so a control-pose address on the prediction stream would land on the
 other hand's channel — but nothing in the example says so. The target finds those
-addresses on the operator's stream in VHI's manifest and publishes there; the renderer
+addresses on the operator's stream in VHI's manifest and publishes there; VHI
 reads a pose instead of animating its own movements for as long as that stream is
 present. Point the same file at `vhi.prediction.*` and the example drives the other
 hand, unchanged.

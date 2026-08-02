@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from myogestic.renderer import InterfaceSpec
+from myogestic.remote import InterfaceSpec
 from myogestic.vhi import virtual_hand
 
 
@@ -57,7 +57,7 @@ def test_virtual_hand_output_spec():
     """Channel count and sample rate match MyoGestic VHI.
 
     No pose stream *name* is asserted because the spec no longer carries one: which
-    streams the renderer has, and which controls each carries, is in the manifest a
+    streams the target has, and which controls each carries, is in the manifest a
     running VHI answers with. `VHI_Control` is a different thing — an inlet MyoGestic
     reads, not a stream it negotiates — so it stays configuration.
     """

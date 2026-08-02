@@ -9,7 +9,7 @@ movement list, and a handler that just logs — so refresh, highlighting, and cl
 dispatch all work offline.
 
 Note the panel takes the handler explicitly rather than defaulting to "command the
-renderer". Dispatching straight at a renderer would bypass the DOF's debounce, which
+target". Dispatching straight at the target would bypass the DOF's debounce, which
 is the only thing protecting a classifier-driven session from state chatter.
 
 Run with:

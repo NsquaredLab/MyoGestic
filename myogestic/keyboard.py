@@ -128,7 +128,7 @@ def keyboard_capabilities() -> tuple[Capability, ...]:
     """Every key this target can press, in both modes.
 
     The manifest a `myogestic.controls.resolve` call validates a map against, exactly like
-    a renderer's. Around 220 entries — every key twice.
+    a remote target's. Around 220 entries — every key twice.
 
     Returns
     -------
@@ -344,7 +344,7 @@ class KeyboardTarget:
     # --- what this target can do -------------------------------------------------
 
     def capabilities(self) -> tuple[Capability, ...]:
-        """The manifest, so this can be handed to an editor like a renderer's client."""
+        """The manifest, so this can be handed to an editor like a remote target's client."""
         return keyboard_capabilities()
 
     @property

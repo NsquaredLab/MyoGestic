@@ -1,14 +1,14 @@
-"""Render control values on a renderer — whatever it renders.
+"""Apply control values to a remote target — whatever that target drives.
 
-`RendererTarget` is the `myogestic.controls.Target` for anything that serves the control
-contract: it takes the sanitised frame a `myogestic.controls.ControlBus` delivers and
-writes the values the renderer declared it accepts. A hand, a gripper, a cursor and a
-robot arm are all the same object here.
+`RemoteTarget` is the `myogestic.controls.Target` for anything that serves the control
+contract from another process: it takes the sanitised frame a
+`myogestic.controls.ControlBus` delivers and writes the values the far side declared it
+accepts. A hand, a gripper, a cursor and a robot arm are all the same object here.
 
 **The wire layout lives entirely behind this module.** An application declares its own
-alias and maps it onto an address the renderer publishes; this translates. Every fact
-about where a value goes comes from that renderer's own manifest, asked for at bind
-time — never from a table in this file.
+alias and maps it onto an address the far side publishes; this translates. Every fact
+about where a value goes comes from that side's own manifest, asked for at bind time —
+never from a table in this file.
 
 **One stream per DOF.** A control's LSL stream is named for the control's own address and
 is one channel wide, so a target that drives nine controls owns nine outlets. There is no
@@ -38,15 +38,15 @@ if TYPE_CHECKING:
     from myogestic._controls_core import ControlSet
     from myogestic._controls_map import Capability
 
-log = logging.getLogger("myogestic.renderer.target")
+log = logging.getLogger("myogestic.remote.target")
 
 
-class PoseSink(Protocol):
+class ControlSink(Protocol):
     """Where one control's values go — the slice of `myogestic.outputs.Output` used here.
 
     `myogestic.outputs.LSLOutlet` satisfies it, and so does a recorder or a test double.
 
-    One of these carries **one control**, so a `RendererTarget` holds one per address it
+    One of these carries **one control**, so a `RemoteTarget` holds one per address it
     drives. They are not supplied directly: the target builds them, one per address, by
     calling ``interface.stream_outlet(address, n_channels=1)`` once negotiation has said
     which addresses those are. Substituting a recorder or a double therefore means
@@ -72,7 +72,7 @@ def _sample(value: float) -> np.ndarray:
     return np.array([value], dtype=np.float32)
 
 
-def _retire(outlet: PoseSink, rest: float) -> None:
+def _retire(outlet: ControlSink, rest: float) -> None:
     """Rest a stream, make sure that lands, and take it off the network.
 
     Every path that gives up on an outlet comes through here. Dropping the reference is
@@ -95,13 +95,13 @@ def _retire(outlet: PoseSink, rest: float) -> None:
         outlet.stop()
 
 
-class RendererTarget:
-    """Drive a renderer from control values.
+class RemoteTarget:
+    """Drive a target in another process from control values.
 
-    Requires a renderer that speaks the v2 control contract: it *asks* what the renderer
-    exports and refuses anything it cannot place. A build older than the vocabulary this
-    client needs is refused by version at bind, not driven on a guess — see
-    `myogestic.renderer._control.RendererClient.capabilities`.
+    Requires a remote target that speaks the v2 control contract: it *asks* what that
+    target exports and refuses anything it cannot place. A build older than the
+    vocabulary this client needs is refused by version at bind, not driven on a guess — see
+    `myogestic.remote._control.RemoteClient.capabilities`.
 
     One target drives a whole control map. It owns **one LSL outlet per address** it
     drives, each named for that address and one channel wide, all built after negotiation
@@ -110,11 +110,11 @@ class RendererTarget:
     Parameters
     ----------
     client
-        A `myogestic.renderer._control.RendererClient` — ``spec.control_client()``.
+        A `myogestic.remote._control.RemoteClient` — ``spec.control_client()``.
         Required: the control space is negotiated over it, and it carries discrete
         state, which the pose streams cannot express.
     interface
-        The `~myogestic.renderer.InterfaceSpec` to build streams from — for the Virtual
+        The `~myogestic.remote.InterfaceSpec` to build streams from — for the Virtual
         Hand, ``virtual_hand()``. The target calls ``stream_outlet(address, n_channels=1)``
         on it once per address it drives, so the application never states a stream name or
         a width. Anything with that method serves: a recorder or a test double substitutes
@@ -122,14 +122,13 @@ class RendererTarget:
 
     Notes
     -----
-    `bind` **refuses** a configuration it cannot render rather than rendering part of it:
+    `bind` **refuses** a configuration it cannot drive rather than driving part of it:
     a silently-dropped control is indistinguishable from one holding still.
 
-    Binding is **deferred** rather than decided when the renderer is silent, because an
-    application that launches its renderer from its own UI necessarily binds before that
-    renderer exists.
-    Call `negotiate` once it is up. A renderer that *answers* and does not speak the
-    current vocabulary raises.
+    Binding is **deferred** rather than decided when the far side is silent, because an
+    application that launches its own remote target from its UI necessarily binds before
+    that target exists. Call `negotiate` once it is up. A remote target that *answers*
+    and does not speak the current vocabulary raises.
 
     On shutdown every stream's declared rest is pushed *and flushed*: the send loop is
     paced, so a pushed-only value would sit unsent while the process exits, leaving the
@@ -138,14 +137,14 @@ class RendererTarget:
     Examples
     --------
     >>> from myogestic.controls import ControlBus, load_control_map, resolve
-    >>> from myogestic.renderer import RendererTarget
+    >>> from myogestic.remote import RemoteTarget
     >>> from myogestic.vhi import virtual_hand
     >>>
     >>> vhi = virtual_hand()
     >>> client = vhi.control_client()
     >>> control_map = load_control_map({"dofs": {"my_index": "vhi.prediction.index"}})
     >>> controls = resolve(control_map, client.capabilities())   # needs VHI running
-    >>> bus = ControlBus(controls, targets=[RendererTarget(client=client, interface=vhi)])
+    >>> bus = ControlBus(controls, targets=[RemoteTarget(client=client, interface=vhi)])
     >>> _ = bus.push({"my_index": 0.8})        # sanitised on the way to the wire
     """
 
@@ -157,15 +156,15 @@ class RendererTarget:
     def __init__(self, *, client: Any = None, interface: Any = None) -> None:
         if interface is None:
             raise ValueError(
-                "RendererTarget needs an `interface=` to build its streams from. It publishes "
+                "RemoteTarget needs an `interface=` to build its streams from. It publishes "
                 "one stream per control it drives, each named for that control's address, "
                 "which it can only do once `bind` has resolved what those are. Pass "
-                "interface=<the renderer's InterfaceSpec>, e.g. virtual_hand()."
+                "interface=<the remote target's InterfaceSpec>, e.g. virtual_hand()."
             )
         #: What streams are built from. Never None: every outlet is this target's own.
         self._interface = interface
         self._client = client
-        #: The configuration still awaiting a reachable renderer, or None once settled.
+        #: The configuration still awaiting a reachable remote target, or None once settled.
         self._pending: ControlSet | None = None
         self._dofs: tuple[Continuous, ...] = ()
         #: Held states this target commands over gRPC once negotiated, as (alias, address)
@@ -175,7 +174,7 @@ class RendererTarget:
         self._discrete: tuple[tuple[str, str], ...] = ()
         #: One outlet per address driven, keyed by address. Owned outright: replaced only
         #: through `_publish`, which retires what it drops.
-        self._outlets: dict[str, PoseSink] = {}
+        self._outlets: dict[str, ControlSink] = {}
         #: Negotiated routes: (alias, weight, lo, hi, address). The address is the key
         #: into `_outlets`; the alias cannot be, since a fan-out sends one alias to
         #: several addresses.
@@ -189,25 +188,25 @@ class RendererTarget:
         """Which aliases this target actually drives.
 
         `ControlBus` reads this to check that every control was claimed by *someone* — a
-        map may also name controls another target renders, a keyboard's for instance.
+        map may also name controls another target drives, a keyboard's for instance.
         """
         return frozenset(alias for alias, *_ in (*self._routed, *self._discrete))
 
     @property
     def negotiated(self) -> bool:
-        """Whether the contract has been settled with the renderer."""
+        """Whether the contract has been settled with the remote target."""
         return self._negotiated
 
     def bind(self, controls: ControlSet) -> None:
-        """Negotiate the control space with the renderer, or defer until it is reachable.
+        """Negotiate the control space with the remote target, or defer until it is reachable.
 
         Raises
         ------
         ValueError
-            When no client was given, when the renderer is too old for the vocabulary
+            When no client was given, when the remote target is too old for the vocabulary
             this client speaks, or when it answers and the configuration cannot be
-            rendered — an address it does not export, or two aliases aimed at one
-            control. A renderer too old to answer `capabilities()` at all looks identical
+            driven — an address it does not export, or two aliases aimed at one
+            control. A remote target too old to answer `capabilities()` at all looks identical
             to one that is simply not up yet, so that case is deferred, never raised.
         Exception
             Whatever an outlet raises: a settled negotiation puts each declared rest
@@ -223,26 +222,26 @@ class RendererTarget:
         if not controls.dofs:
             # Checked here rather than left to negotiation: resolving an empty
             # configuration against the manifest succeeds trivially, leaving a target
-            # that is bound, negotiated, and renders nothing.
+            # that is bound, negotiated, and drives nothing.
             raise ValueError(
-                "RendererTarget has nothing to render: the configuration declares no DOFs "
+                "RemoteTarget has nothing to drive: the configuration declares no DOFs "
                 "at all."
             )
         if self._client is None:
             raise ValueError(
-                "RendererTarget needs a control client: every address, range and state "
-                "comes from the renderer's manifest, so without one there is nothing "
-                "to render against. Pass client=virtual_hand().control_client()."
+                "RemoteTarget needs a control client: every address, range and state "
+                "comes from the remote target's manifest, so without one there is nothing "
+                "to drive against. Pass client=virtual_hand().control_client()."
             )
         if self._negotiate(controls):
             return
-        # Silent — decide nothing, and let `negotiate` settle it. A renderer too old to
+        # Silent — decide nothing, and let `negotiate` settle it. A remote target too old to
         # answer `capabilities()` at all looks identical to one that is simply not up
         # yet, so there is no signal left here to raise on rather than defer.
         self._pending = controls
 
     def negotiate(self, *, force: bool = False) -> bool:
-        """Retry the handshake now — for an application that launches its own renderer.
+        """Retry the handshake now — for an application that launches its own remote target.
 
         Cheap and idempotent when already settled, so it is fine to call from a button
         handler. Never call it from the predict thread — it blocks on an RPC.
@@ -251,20 +250,20 @@ class RendererTarget:
         ----------
         force
             Re-run the handshake even if one already succeeded. Useful after the
-            renderer restarts or its manifest changes — this target caches what it
+            remote target restarts or its manifest changes — this target caches what it
             resolved and does not notice on its own. There is no automatic detection
             of that today.
 
         Returns
         -------
         bool
-            Whether the contract is settled. ``False`` means the renderer has not answered yet,
-            so nothing is being rendered and this will keep retrying.
+            Whether the contract is settled. ``False`` means the remote target has not answered yet,
+            so nothing is being driven and this will keep retrying.
 
         Raises
         ------
         ValueError
-            If the renderer answers and the configuration cannot be rendered. Call this
+            If the remote target answers and the configuration cannot be driven. Call this
             from a setup path or a button handler where a traceback is visible, never
             from the predict thread.
         Exception
@@ -314,9 +313,9 @@ class RendererTarget:
             raise
 
     def _settle(self, controls: ControlSet) -> bool:
-        """Resolve alias -> address through the renderer's own manifest, and publish.
+        """Resolve alias -> address through the remote target's own manifest, and publish.
 
-        The addresses come from the configuration, the ranges from the renderer. A
+        The addresses come from the configuration, the ranges from the remote target. A
         configuration that carries no routes is handed the ones its DOF names imply and
         travels this same path, so there is one resolution here rather than one per kind
         of `ControlSet`.
@@ -328,9 +327,9 @@ class RendererTarget:
         routes, mine = self._scope_or_refuse(controls, exported)
         if not mine:
             # Nothing in this file is ours. Not an error: `ControlBus` checks that
-            # *someone* claims every alias, so an unrendered alias is still caught.
+            # *someone* claims every alias, so an undriven alias is still caught.
             log.info(
-                "the renderer renders none of %d configured control(s)", len(controls.dofs)
+                "the remote target drives none of %d configured control(s)", len(controls.dofs)
             )
             self._dofs = ()
             self._discrete = ()
@@ -348,7 +347,7 @@ class RendererTarget:
                 if cap is None or getattr(cap, "kind", "") != "continuous":
                     raise ValueError(
                         f"{alias!r} points at {ref.address!r}, which no target can drive "
-                        f"as a number: the renderer does not export it as one. It does "
+                        f"as a number: the remote target does not export it as one. It does "
                         f"export these as numbers: "
                         f"{sorted(a for a, c in exported.items() if getattr(c, 'kind', '') == 'continuous')}."
                     )
@@ -380,7 +379,7 @@ class RendererTarget:
         self._dofs = tuple(dof for dof in controls.continuous if dof.name in mine)
         # Addressed exactly like the continuous ones. A discrete command has to name the
         # control it is *for*: `dof.name` is the alias, a name the user invented on the
-        # left-hand side of their own map, and the renderer has never seen it. Resolving on
+        # left-hand side of their own map, and the remote target has never seen it. Resolving on
         # the state instead — the only thing left once the key is meaningless — cannot tell
         # two controls apart that happen to share a state name.
         self._discrete = tuple(
@@ -396,7 +395,7 @@ class RendererTarget:
         self._routed = tuple(slots)
         self._negotiated = True
         # Put each declared rest value on the wire immediately: the hand should hold what
-        # this configuration calls rest, and the renderer drops an inlet that has never
+        # this configuration calls rest, and the remote target drops an inlet that has never
         # sent anything, re-resolving it in a loop until someone touches the UI.
         if self._routed:
             self._push({dof.name: dof.rest for dof in self._dofs})
@@ -420,10 +419,10 @@ class RendererTarget:
         So: work out the new set, retire what is leaving (rest, flush, stop — see
         `_retire`), build only what is genuinely new, and swap the mapping last. An
         address that survives a rebind keeps the outlet it already had rather than losing
-        and regaining a stream the renderer would have to re-resolve, which is a visible
+        and regaining a stream the remote target would have to re-resolve, which is a visible
         stall on the hand for a change that did not concern it.
 
-        `rests` is the renderer's own declared rest per address, from the manifest — the
+        `rests` is the remote target's own declared rest per address, from the manifest — the
         value to leave a departing stream at. Not the *DOF's* rest, which by definition
         no longer exists for an address this configuration has stopped driving.
         """
@@ -449,10 +448,10 @@ class RendererTarget:
         The one thing the two kinds of configuration disagree about, strictness
         included; the resolution itself is shared.
 
-        A **resolved** set carries routes and may name controls another target renders,
+        A **resolved** set carries routes and may name controls another target drives,
         so ownership goes by **namespace**, not exact address: a `vhi.*` address a VHI
         build does not export is still refused by `_settle`, while a `keyboard.*` control
-        sharing the file is in no namespace this renderer exports and is simply not ours.
+        sharing the file is in no namespace this remote target exports and is simply not ours.
 
         A set built **directly** — a rig diagnostic, a test — carries no routes: its DOF
         names *are* the addresses, nothing upstream checked them, and there is no other
@@ -470,16 +469,16 @@ class RendererTarget:
                     for ref in refs
                 )
             }
-        renderable = {
+        drivable = {
             address
             for address, cap in exported.items()
             if getattr(cap, "kind", "") == "continuous"
         }
-        missing = [name for name in controls.channel_labels() if name not in renderable]
+        missing = [name for name in controls.channel_labels() if name not in drivable]
         if missing:
             raise ValueError(
-                f"the renderer renders {sorted(renderable)} as numbers, which has no place for "
-                f"{missing}. Rendering the rest would leave these looking like "
+                f"the remote target drives {sorted(drivable)} as numbers, which has no place for "
+                f"{missing}. Driving the rest would leave these looking like "
                 f"controls that work and hold still."
             )
         # Weight 1.0 and the name as its own address: exactly what `resolve` would have
@@ -511,9 +510,9 @@ class RendererTarget:
         if not changed:
             return
         # Only *our* edges. `changed` is the bus's, so on a shared map it also carries the
-        # edges of every other target, and forwarding those makes the renderer log a
+        # edges of every other target, and forwarding those makes the remote target log a
         # rejection per keystroke.
-        # Keyed by address, like every stream this target publishes: the renderer looks the
+        # Keyed by address, like every stream this target publishes: the remote target looks the
         # control up by the key and the state up by the value.
         ours = {
             address: changed[alias] for alias, address in self._discrete if alias in changed
@@ -524,8 +523,8 @@ class RendererTarget:
             self._client.set_control(discrete=ours)
         else:
             log.warning(
-                "discrete edge %s dropped: the renderer has not been reached yet, so its "
-                "states are unresolved. Call RendererTarget.negotiate() once it is running.",
+                "discrete edge %s dropped: the remote target has not been reached yet, so its "
+                "states are unresolved. Call RemoteTarget.negotiate() once it is running.",
                 ours,
             )
 
@@ -545,12 +544,12 @@ class RendererTarget:
             self._outlets[address].push(_sample(value))
 
     def capabilities(self) -> tuple[Capability, ...] | None:
-        """What the renderer exports, or `None` while it cannot be reached.
+        """What the remote target exports, or `None` while it cannot be reached.
 
         The same question `KeyboardTarget.capabilities` answers off a local list, so a
-        caller can ask a mixed set of targets what they render without knowing which of
-        them needs a live connection. `None` is the honest answer for a renderer that has
-        not started: not an empty manifest, which would read as "renders nothing".
+        caller can ask a mixed set of targets what they drive without knowing which of
+        them needs a live connection. `None` is the honest answer for a remote target that has
+        not started: not an empty manifest, which would read as "drives nothing".
         """
         fetch = getattr(self._client, "capabilities", None)
         got = fetch() if callable(fetch) else None
@@ -584,4 +583,4 @@ class RendererTarget:
             raise failures[0]
 
 
-__all__ = ["PoseSink", "RendererTarget"]
+__all__ = ["ControlSink", "RemoteTarget"]

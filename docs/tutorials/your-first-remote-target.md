@@ -1,14 +1,15 @@
-# Integrate your own interface
+# Your first remote target
 
 You have a device — a gripper, a prosthesis, a robot arm, a game — and you want MyoGestic to
 drive it. This builds the thing that makes that happen, in seven stages, each ending in
 something you run and watch.
 
-!!! note "This page is about a **renderer**"
-    A renderer is a **separate application**, reached over gRPC for its manifest and LSL for
-    its values. If your device is a Python object you can `import` — a serial motor
-    controller, a cursor, a library — you want a **target** instead: three methods, no
-    processes, no wire. See [Drive your own device](../how-to/add-a-target.md). [Concepts ›
+!!! note "This page is about a **remote** target"
+    A remote target is a **separate application**, reached over gRPC for its manifest and
+    LSL for its values. If your device is a Python object you can `import` — a serial motor
+    prosthesis on a serial port, a cursor, a library — you want an **in-process** target
+    instead: three methods, no processes, no wire, and rather less of this page. See [Drive
+    your own device](../how-to/add-a-target.md). [Concepts ›
     Controls](../concepts/controls.md) explains the fork if you have not taken it yet.
 
 The device here is a two-axis rig: a gripper that closes and opens, and a wrist that rotates.
@@ -20,19 +21,19 @@ page](#the-finished-files):
 
 | file | side | what it is |
 |---|---|---|
-| `my_renderer.py` | yours | the renderer — the manifest, the inlets, the held state |
+| `my_target.py` | yours | the target — the manifest, the inlets, the held state |
 | `my-rig.toml` | shared | the map, pairing your model's output names with the rig's addresses |
 | `drive.py` | MyoGestic's | the producer — a stand-in for your application, which is what actually publishes |
 
 Two of them are processes, and from stage 3 on you need **both running, in two terminals**:
 
 ```bash
-uv run --extra grpc python my_renderer.py      # terminal 1 — your renderer
+uv run --extra grpc python my_target.py        # terminal 1 — your target
 uv run --extra grpc python drive.py            # terminal 2 — MyoGestic
 ```
 
-Running only the renderer publishes nothing, so nothing moves. That is not a fault; it is
-the shape of the system. MyoGestic writes and your renderer reads.
+Running only the target publishes nothing, so nothing moves. That is not a fault; it is
+the shape of the system. MyoGestic writes and your target reads.
 
 !!! tip "liblsl is chatty"
     Anything touching LSL prints network-interface enumeration and multicast-bind warnings to
@@ -42,16 +43,16 @@ the shape of the system. MyoGestic writes and your renderer reads.
 
 ## First, the wiring
 
-The MyoGestic side is two objects, and it is the same two for every renderer:
+The MyoGestic side is two objects, and it is the same two for every remote target:
 
 ```python
-from myogestic.renderer import InterfaceSpec, RendererTarget
+from myogestic.remote import InterfaceSpec, RemoteTarget
 
 #: Your endpoint and your outlet settings. `process=[]` because nothing launches this —
 #: you start your own device. `output_hz` is how fast MyoGestic re-sends each value.
 rig = InterfaceSpec(name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051)
 
-target = RendererTarget(client=rig.control_client(), interface=rig)
+target = RemoteTarget(client=rig.control_client(), interface=rig)
 ```
 
 That is the whole MyoGestic-side wiring, and it does not change again. `virtual_hand()`
@@ -59,16 +60,16 @@ is this same call with VHI's numbers filled in and a Godot path resolved — you
 use it, because your rig is not a hand and has no Godot binary to launch.
 
 `name=` looks cosmetic and is not: every stream this spec publishes carries the `source_id`
-`myogestic:<name>:<address>`, which is what lets your renderer find the same stream again
+`myogestic:<name>:<address>`, which is what lets your target find the same stream again
 after a restart. Stage 5 is where changing it bites.
 
 ## Stage 1 — A manifest, and a direct probe
 
-A renderer's one obligation is `GetControlManifest`. Serve that and nothing else, and a
+A remote target's one obligation is `GetControlManifest`. Serve that and nothing else, and a
 client can already learn everything about your device. No LSL yet.
 
 ```python
-"""my_renderer.py — stage 1."""
+"""my_target.py — stage 1."""
 
 from __future__ import annotations
 
@@ -78,8 +79,8 @@ from concurrent import futures
 
 import grpc
 
-from myogestic.renderer._proto import renderer_control_pb2 as pb2
-from myogestic.renderer._proto import renderer_control_pb2_grpc as pb2_grpc
+from myogestic.remote._proto import remote_control_pb2 as pb2
+from myogestic.remote._proto import remote_control_pb2_grpc as pb2_grpc
 
 #: Your addresses, in your own namespace. The first segment namespaces the device, so
 #: `rig.*` cannot collide with `vhi.*` or `keyboard.*` in one map. The address is also the
@@ -90,7 +91,7 @@ ADDRESSES = ["rig.gripper.closure", "rig.wrist.pronation"]
 LO, HI, REST = -1.0, 1.0, 0.0
 
 
-class RigRenderer(pb2_grpc.RendererControlServicer):
+class Rig(pb2_grpc.RemoteControlServicer):
     """Two axes. Holds the last value it was sent, per address."""
 
     def __init__(self, port: int = 50051) -> None:
@@ -112,7 +113,7 @@ class RigRenderer(pb2_grpc.RendererControlServicer):
     def serve(self) -> None:
         """Start the gRPC server."""
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
-        pb2_grpc.add_RendererControlServicer_to_server(self, self._server)
+        pb2_grpc.add_RemoteControlServicer_to_server(self, self._server)
         self._server.add_insecure_port(f"127.0.0.1:{self._port}")
         self._server.start()
 
@@ -122,7 +123,7 @@ class RigRenderer(pb2_grpc.RendererControlServicer):
             self._server.stop(grace=None)
 
 
-class Antique(RigRenderer):
+class Antique(Rig):
     """The same rig, reporting the vocabulary MyoGestic no longer drives.
 
     Here so the refusal below is something you can *run*, not something you read about.
@@ -137,7 +138,7 @@ class Antique(RigRenderer):
 
 
 if __name__ == "__main__":
-    rig = Antique() if "--antique" in sys.argv else RigRenderer()
+    rig = Antique() if "--antique" in sys.argv else Rig()
     print(f"{type(rig).__name__} on 127.0.0.1:50051 — Ctrl-C to stop")
     rig.serve()
     try:
@@ -168,7 +169,7 @@ client, so the answer you see is the one MyoGestic will get:
 ```python
 """probe.py"""
 
-from myogestic.renderer import InterfaceSpec
+from myogestic.remote import InterfaceSpec
 
 rig = InterfaceSpec(name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051)
 client = rig.control_client()
@@ -198,15 +199,15 @@ rig.wrist.pronation  continuous  [-1.0, +1.0]  rest=+0.0
     The next stage introduces `tools/inspect_control_map.py`, which is the one that takes a
     path.
 
-### The negative: an old renderer is refused by name
+### The negative: an old target is refused by name
 
-MyoGestic and your renderer are installed separately, so nothing guarantees a matching pair.
-A renderer speaking vocabulary 1 waits for a wide pose stream nobody publishes any more; it
+MyoGestic and your target are installed separately, so nothing guarantees a matching pair.
+A target speaking vocabulary 1 waits for a wide pose stream nobody publishes any more; it
 logs nothing and the device simply never moves. The client refuses it instead. Stop the
-renderer and start the one that reports the wrong version:
+target and start the one that reports the wrong version:
 
 ```bash
-uv run --extra grpc python my_renderer.py --antique
+uv run --extra grpc python my_target.py --antique
 ```
 
 ```
@@ -216,11 +217,11 @@ Antique on 127.0.0.1:50051 — Ctrl-C to stop
 Run `probe.py` against it and `client.capabilities()` raises `ValueError`:
 
 ```
-ValueError: rig speaks control vocabulary 1, and MyoGestic needs 2 or newer. Vocabulary 2 publishes one LSL stream per control, named for that control's own address and one channel wide; vocabulary 1 read a single wide pose stream that MyoGestic no longer sends. Paired with this client such a renderer would report no error and never move. Update rig.
+ValueError: rig speaks control vocabulary 1, and MyoGestic needs 2 or newer. Vocabulary 2 publishes one LSL stream per control, named for that control's own address and one channel wide; vocabulary 1 read a single wide pose stream that MyoGestic no longer sends. Paired with this client such a target would report no error and never move. Update rig.
 ```
 
 That is **one line** — the whole message is a single string, wrapped here only by your
-terminal. It names *your* renderer, because "update VHI" would be advice about a different
+terminal. It names *your* target, because "update VHI" would be advice about a different
 program. See it here, at the direct probe: from stage 3 onwards this exception is caught and
 turned into a `None`, and you would never read it.
 
@@ -279,7 +280,7 @@ Resolved against a live target
 my-rig.toml is usable against this target.
 ```
 
-It reaches your renderer at `127.0.0.1:50051`. With
+It reaches your target at `127.0.0.1:50051`. With
 nothing running the second section says so instead, and it still exits `0`; that is the
 "structurally valid" answer, not a pass.
 
@@ -304,7 +305,7 @@ and go looking at your model.
 
 The "Did you mean" hint is the addresses sharing the longest dotted prefix with what you
 wrote, so it is absent only when nothing matches even the namespace. Here is that refusal
-with no renderer running at all, resolved against a manifest written by hand:
+with no target running at all, resolved against a manifest written by hand:
 
 <!--docs:run-->
 ```python
@@ -340,7 +341,7 @@ there is something to run.
 import tomllib
 
 from myogestic.controls import ControlLink, load_control_map
-from myogestic.renderer import InterfaceSpec, RendererTarget
+from myogestic.remote import InterfaceSpec, RemoteTarget
 
 rig = InterfaceSpec(
     name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051
@@ -354,7 +355,7 @@ client = rig.control_client()
 with open("my-rig.toml", "rb") as handle:   # "rb" — tomllib requires binary
     control_map = load_control_map(tomllib.load(handle))
 
-link = ControlLink(control_map, [RendererTarget(client=client, interface=rig)], hz=32)
+link = ControlLink(control_map, [RemoteTarget(client=client, interface=rig)], hz=32)
 try:
     print(link.ensure())
 finally:
@@ -364,7 +365,7 @@ finally:
 
 ### Checkpoint
 
-With the renderer stopped, `ensure()` prints `None`. Start it and run again, and you get a
+With the target stopped, `ensure()` prints `None`. Start it and run again, and you get a
 `ControlBus`:
 
 ```
@@ -372,24 +373,24 @@ With the renderer stopped, `ensure()` prints `None`. Start it and run again, and
 ```
 
 **A bus proves less than it looks like it proves.** It means the manifest resolved and one
-LSL outlet per address was constructed. Your renderer has not read a single sample — it has
+LSL outlet per address was constructed. Your target has not read a single sample — it has
 no inlet code yet. Do not read "bus" as "connected".
 
 Three outcomes, and they are easy to confuse:
 
 | situation | `link.ensure()` |
 |---|---|
-| renderer unreachable | `None` |
-| renderer reachable, address wrong | raises `ValueError` |
-| renderer too old | logs the refusal, returns `None` |
+| target unreachable | `None` |
+| target reachable, address wrong | raises `ValueError` |
+| target too old | logs the refusal, returns `None` |
 
 Rows one and three both hand you `None`, and that is the trap: "too old, forever" looks
 exactly like "not started yet, try again in a second", and an application built around the
-retry will retry for ever. Run `drive.py` against `my_renderer.py --antique` and you get
+retry will retry for ever. Run `drive.py` against `my_target.py --antique` and you get
 row three — a `logging.WARNING` on the `myogestic.controls` logger:
 
 ```
-RendererTarget refused the handshake: rig speaks control vocabulary 1, and MyoGestic needs 2 or newer. …
+RemoteTarget refused the handshake: rig speaks control vocabulary 1, and MyoGestic needs 2 or newer. …
 ```
 
 That reaches stderr even with logging unconfigured, but in a GUI application stderr is a
@@ -411,7 +412,7 @@ manifest = [Capability("rig.gripper.closure", "continuous", lo=-1.0, hi=1.0, res
 
 
 class Unreachable:
-    """Not started. `None` — never an empty list, which would mean 'renders nothing'."""
+    """Not started. `None` — never an empty list, which would mean 'drives nothing'."""
 
     def capabilities(self):
         return None
@@ -425,7 +426,7 @@ class TooOld:
 
 
 class Reachable:
-    """Answers, binds, and renders."""
+    """Answers, binds, and drives."""
 
     claims = frozenset({"grip"})
 
@@ -454,10 +455,10 @@ except ValueError as exc:
 Now the half that moves. MyoGestic publishes **one LSL stream per address, named for that
 address, one channel wide**.
 
-`my_renderer.py` gains some imports, five fields, and five methods. **The methods belong to
-the `RigRenderer` class you already have** — they join `GetControlManifest`, `serve` and
+`my_target.py` gains some imports, five fields, and five methods. **The methods belong to
+the `Rig` class you already have** — they join `GetControlManifest`, `serve` and
 `stop` rather than replacing them, so do not start a second `class` statement. If anything
-below lands ambiguously, [the finished file](#my_rendererpy) is at the end of the page.
+below lands ambiguously, [the finished file](#my_targetpy) is at the end of the page.
 
 New imports:
 
@@ -473,7 +474,7 @@ Five more fields in `__init__`:
 ```python
         #: When each address last accepted a sample, for the liveness policy in stage 5.
         self._fresh = dict.fromkeys(ADDRESSES, 0.0)
-        #: Addresses currently sending values this rig will not render, so the complaint
+        #: Addresses currently sending values this rig will not accept, so the complaint
         #: is printed once rather than per tick.
         self._refused: set[str] = set()
         self._stop = threading.Event()
@@ -523,11 +524,11 @@ Finding and opening the inlets:
             self._inlets[address].open_stream()
 ```
 
-Rendering one sample — **this is the one method where a value becomes motion**:
+Applying one sample — **this is the one method where a value becomes motion**:
 
 ```python
     def _apply(self, address: str, value: float) -> None:
-        """Render one sample, or refuse it.
+        """Apply one sample, or refuse it.
 
         Width is checked when the inlet opens; this checks the *value*. A correctly
         shaped stream can still carry a NaN out of a divide, or a 12.0 out of a model
@@ -563,7 +564,7 @@ The loop that drives them:
             # Resolving is inside the `try` too: an outlet can vanish between the resolve
             # and the open. Outside it, that ordinary race kills this thread while the gRPC
             # server keeps answering the manifest — a client would bind successfully
-            # against a renderer that never reads another sample.
+            # against a target that never reads another sample.
             try:
                 missing = [a for a in ADDRESSES if a not in self._inlets]
                 if missing:
@@ -595,7 +596,7 @@ And something to watch, because a rig you cannot see is a rig you cannot check:
         return f"rig: {axes}"
 
     def _watch(self) -> None:
-        """Print the rendered state whenever it changes."""
+        """Print the driven state whenever it changes."""
         last = None
         while not self._stop.is_set():
             line = self._status()
@@ -611,7 +612,7 @@ Finally, `serve` starts both threads and `stop` shuts them down properly:
     def serve(self) -> None:
         """Start the gRPC server, the inlet reader and the status printer."""
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
-        pb2_grpc.add_RendererControlServicer_to_server(self, self._server)
+        pb2_grpc.add_RemoteControlServicer_to_server(self, self._server)
         self._server.add_insecure_port(f"127.0.0.1:{self._port}")
         self._server.start()
         for target in (self._read, self._watch):
@@ -674,28 +675,28 @@ indented in the `try:`, so `link.stop()` and `client.stop()` still run whatever 
             time.sleep(0.05)
 ```
 
-The `if` is not defensive padding: `ensure()` answers `None` whenever the renderer is not
+The `if` is not defensive padding: `ensure()` answers `None` whenever the target is not
 up, and without the guard the very first thing you would meet is an `AttributeError` on
-`None` rather than the checkpoint. The renderer prints:
+`None` rather than the checkpoint. The target prints:
 
 ```
 rig: gripper.closure=+0.00  wrist.pronation=+0.00
 rig: gripper.closure=+1.00  wrist.pronation=-1.00
 ```
 
-The first line is the rest frame `RendererTarget` puts on the wire the moment negotiation
+The first line is the rest frame `RemoteTarget` puts on the wire the moment negotiation
 settles; the second is your loop. Both axes, with the right signs on the right ones. Equal
 values on both would prove nothing — `+1` and `+1` looks identical whether the streams are
 correctly wired or crossed, or whether one value is being written onto both. That is why
-`tests/test_reference_renderer.py` drives its two DOFs to `1.0` and `-1.0` and not to the
+`tests/test_reference_target.py` drives its two DOFs to `1.0` and `-1.0` and not to the
 same number.
 
 ### Checkpoint 2: the wrong width, refused
 
-Stop `drive.py` and the renderer, so nothing is publishing these addresses legitimately.
+Stop `drive.py` and the target, so nothing is publishing these addresses legitimately.
 Then publish one of them at the wrong width, from a script that **stays up** — a producer
 that pushes once and exits takes its outlet with it, and `LSLOutlet`'s sender is a daemon
-thread, so the stream would be gone before the renderer's next one-second sweep could
+thread, so the stream would be gone before the target's next one-second sweep could
 find it:
 
 ```python
@@ -716,7 +717,7 @@ except KeyboardInterrupt:
     wide.stop()
 ```
 
-Start that first, then start the renderer:
+Start that first, then start the target:
 
 ```
 rig: rig.gripper.closure is published 9 channels wide; this contract is one channel. Not opening it.
@@ -731,12 +732,12 @@ rig: rig.gripper.closure is published by 2 outlets at once. One address, one pro
 ```
 
 Order matters for that one, and it is the limit `_open`'s docstring names: start the two
-outlets *before* the renderer and you get the refusal above; start the second one after the
-renderer already holds an inlet for that address and nothing is printed at all, because
-nothing sweeps for an address that is no longer missing. The rig keeps rendering whichever
+outlets *before* the target and you get the refusal above; start the second one after the
+target already holds an inlet for that address and nothing is printed at all, because
+nothing sweeps for an address that is no longer missing. The rig keeps obeying whichever
 producer it bound to first. Know which half you have before you rely on it.
 
-And a one-channel stream carrying a value the rig never agreed to render gets the third:
+And a one-channel stream carrying a value the rig never agreed to accept gets the third:
 
 ```
 rig: rig.wrist.pronation sent nan, which is not a finite value in [-1.0, +1.0] — ignored (reported once).
@@ -748,7 +749,7 @@ device's fault. All three say so.
 ## Stage 5 — Stopping, reconnecting, and staying alive
 
 MyoGestic's outlets **re-send their last value continuously** at `output_hz`, and your
-renderer as written holds the last value it read when nothing arrives. Those two together
+target as written holds the last value it read when nothing arrives. Those two together
 mean "the device stopped moving" carries no information at all: it is what a healthy idle
 system and a dead producer both look like. So check the shutdown.
 
@@ -770,13 +771,13 @@ atomic within, and whether the printer catches the moment between them is luck. 
 *last* line, never the count.
 
 That is [`ControlBus.stop`][myogestic.controls.ControlBus.stop] delivering the neutral frame
-*before* tearing the targets down, and `RendererTarget` pushing **and flushing** each stream's
+*before* tearing the targets down, and `RemoteTarget` pushing **and flushing** each stream's
 declared rest before it releases the outlet. The send loop is paced, so a pushed-but-unflushed
 rest would sit unsent while the outlet went away.
 
 ### Checkpoint 2: it reconnects
 
-Stop the producer, then start a fresh one — leaving the renderer up throughout — and drive
+Stop the producer, then start a fresh one — leaving the target up throughout — and drive
 the axes the other way:
 
 ```
@@ -787,7 +788,7 @@ rig: gripper.closure=-1.00  wrist.pronation=+1.00
 rig: gripper.closure=+0.00  wrist.pronation=+0.00
 ```
 
-Check this on its own, because a renderer can work perfectly on its first inlet and fail for
+Check this on its own, because a target can work perfectly on its first inlet and fail for
 ever after a restart, and nothing says so when it does.
 
 It works here for a reason worth knowing. Your `_read` loop never re-resolved: `_inlets`
@@ -797,7 +798,7 @@ still held both addresses, so `missing` was empty and no sweep happened. What re
 
 !!! danger "Change `InterfaceSpec(name=…)` and reconnection stops, silently"
     The `source_id` is built from that name, so a producer that comes back under a different
-    one is, to liblsl, a *different stream*. The renderer's inlet is not broken — it is alive
+    one is, to liblsl, a *different stream*. The target's inlet is not broken — it is alive
     and recovering, waiting for a `source_id` that will never return — so `pull_chunk` yields
     empty for ever, `missing` stays empty, no sweep is triggered, nothing raises, and nothing
     is printed. Running the same rig under `name="rig"` and then `name="rig-renamed"`, the
@@ -808,7 +809,7 @@ still held both addresses, so `missing` was empty and no sweep happened. What re
 The `except` around the loop is still doing real work — it is what keeps the reader thread
 alive through the ordinary race where an outlet vanishes between the resolve and the open.
 Take it out and the thread dies while the gRPC server keeps cheerfully answering the
-manifest: a client binds successfully against a renderer that will never read another sample.
+manifest: a client binds successfully against a target that will never read another sample.
 
 ### Checkpoint 3: what an *unclean* exit does, and what you choose to do about it
 
@@ -816,7 +817,7 @@ manifest: a client binds successfully against a renderer that will never read an
 let it segfault, and none of it runs — no neutral frame, no flush, no outlet teardown. Your
 rig keeps holding the last thing it was told: a gripper closed with nothing behind it.
 
-That is a **policy decision, and it is yours**, not an unavoidable property of renderers.
+That is a **policy decision, and it is yours**, not an unavoidable property of targets.
 Pick one of three and state it in your docs:
 
 | policy | what the rig does when samples stop | when |
@@ -847,7 +848,7 @@ a sample is accepted — `_apply` already does, in `self._fresh` — add an opti
                             self.pose[address] = REST
 ```
 
-`RigRenderer(rest_after_s=1.0)`, a producer `SIGKILL`ed mid-grip, and the rig lets go on
+`Rig(rest_after_s=1.0)`, a producer `SIGKILL`ed mid-grip, and the rig lets go on
 its own about a second later:
 
 ```
@@ -856,7 +857,7 @@ rig: gripper.closure=+0.00  wrist.pronation=-1.00
 rig: gripper.closure=+0.00  wrist.pronation=+0.00
 ```
 
-Two things this is not. It is **not a substitute for a hardware interlock** — a renderer
+Two things this is not. It is **not a substitute for a hardware interlock** — a target
 that has itself crashed, hung, or been swapped out cannot time anything out, so anything
 that can injure a person needs a release the software is not in the path of. And it is a
 **different concern from `source_id` recovery**, even though both are about a producer that
@@ -886,7 +887,7 @@ The check only means something because the names commit to a direction. This is 
 stage 1's naming rule buys: had the address been `rig.gripper`, there would be no fact of
 the matter to check, and "is it inverted?" would have no answer.
 
-If your rig is inverted, fix it *inside your renderer* — flip the sign in `_apply`, where
+If your rig is inverted, fix it *inside your target* — flip the sign in `_apply`, where
 the value becomes motion. Do not flip it in the map with a `weight = -1.0`, and do not
 advertise a second address for the other direction: the range you declared already has both
 halves, and the next person to write a map against your manifest will read the name and
@@ -916,7 +917,7 @@ MODE_CAPABILITY = pb2.ControlCapability(
 )
 ```
 
-Then, on `RigRenderer` — again, the same class, gaining a field and a method:
+Then, on `Rig` — again, the same class, gaining a field and a method:
 
 ```python
         #: Initialised to the state the manifest advertises as `rest_state`, so this rig
@@ -975,8 +976,8 @@ mode = { target = "rig.mode", debounce_s = 0.1 }
 
 !!! warning "Neither side notices that you edited those two files"
     [`ControlLink.ensure()`][myogestic.controls.ControlLink.ensure] returns its cached bus
-    without a second handshake once it has one, and `RendererTarget` caches what it resolved and
-    has no detection of a changed manifest. Restarting your renderer is not enough; the
+    without a second handshake once it has one, and `RemoteTarget` caches what it resolved and
+    has no detection of a changed manifest. Restarting your target is not enough; the
     running MyoGestic side will keep driving the old two-address contract for ever.
 
     Call `link.stop()` and build a new `ControlLink` from a freshly-loaded map. (`stop()`
@@ -1024,7 +1025,7 @@ assert mode.debounce_s == 0.1              # this one the map did say
 
 Add this to `drive.py` **inside the same `if bus is not None:` block**, after the `for`
 loop — eight spaces of indent, not four. At the end of the `try:` but outside the guard, it
-would call `select` on `None` every time you run it with the renderer down, which is the
+would call `select` on `None` every time you run it with the target down, which is the
 one case the guard exists for:
 
 ```python
@@ -1041,7 +1042,7 @@ True
 False
 ```
 
-and on the renderer, **four** lines, in this order, every run:
+and on the target, **four** lines, in this order, every run:
 
 ```
 rig: mode -> rest
@@ -1089,7 +1090,7 @@ caught.
 **`True` is a weaker claim than it looks.** `set_control` is fire-and-forget on a worker
 thread — it never blocks the predict thread and never raises — so `select()` returning `True`
 says only that the state was one this DOF declares and that a frame was queued. Whether the
-rig applied it is a fact on the *renderer's* side, which is why the renderer prints the state
+rig applied it is a fact on the *target's* side, which is why the target prints the state
 it applied. `banana` never reaches the wire at all: the bus checks it against the states your
 manifest declared and drops it locally.
 
@@ -1100,14 +1101,14 @@ bus — which is exactly what some other program on the network would do:
 applied: False  rejected: {'rig.mode': "'banana' is not one of ['rest', 'active']"}
 ```
 
-The client logs that as `the renderer rejected these control addresses: {…}` and nothing
+The client logs that as `the target rejected these control addresses: {…}` and nothing
 raises.
 
 !!! warning "`applied=False` does not mean *nothing* happened"
     The handler above validates and applies **per entry**, so a request carrying one good
     address and one bad one applies the good one and still answers `applied=False`. That is
     deliberate, and it is what the Virtual Hand does — `VhiControlService.SetControl` walks
-    both maps the same way — so copying it is how you behave like the renderer every client
+    both maps the same way — so copying it is how you behave like the target every client
     was written against.
 
     The proto only defines the `true` case: "every value in the request was applied". It
@@ -1135,10 +1136,10 @@ raises.
 Everything above, assembled. If you have been typing along, this is what you should be
 holding; if you have not, this is where you start.
 
-### `my_renderer.py`
+### `my_target.py`
 
 ```python
-"""my_renderer.py — a two-axis rig with a held mode."""
+"""my_target.py — a two-axis rig with a held mode."""
 
 from __future__ import annotations
 
@@ -1151,8 +1152,8 @@ from contextlib import suppress
 import grpc
 from mne_lsl.lsl import StreamInlet, resolve_streams
 
-from myogestic.renderer._proto import renderer_control_pb2 as pb2
-from myogestic.renderer._proto import renderer_control_pb2_grpc as pb2_grpc
+from myogestic.remote._proto import remote_control_pb2 as pb2
+from myogestic.remote._proto import remote_control_pb2_grpc as pb2_grpc
 
 #: Your addresses. Each name states the direction `+1` moves in.
 ADDRESSES = ["rig.gripper.closure", "rig.wrist.pronation"]
@@ -1172,7 +1173,7 @@ MODE_CAPABILITY = pb2.ControlCapability(
 )
 
 
-class RigRenderer(pb2_grpc.RendererControlServicer):
+class Rig(pb2_grpc.RemoteControlServicer):
     """Two axes and a mode. Holds the last value it was sent, per address.
 
     Parameters
@@ -1240,7 +1241,7 @@ class RigRenderer(pb2_grpc.RendererControlServicer):
     def serve(self) -> None:
         """Start the gRPC server, the inlet reader and the status printer."""
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
-        pb2_grpc.add_RendererControlServicer_to_server(self, self._server)
+        pb2_grpc.add_RemoteControlServicer_to_server(self, self._server)
         self._server.add_insecure_port(f"127.0.0.1:{self._port}")
         self._server.start()
         for target in (self._read, self._watch):
@@ -1293,7 +1294,7 @@ class RigRenderer(pb2_grpc.RendererControlServicer):
             self._inlets[address].open_stream()
 
     def _apply(self, address: str, value: float) -> None:
-        """Render one sample, or refuse it. THIS is where a value becomes motion."""
+        """Apply one sample, or refuse it. THIS is where a value becomes motion."""
         if not LO <= value <= HI:  # a NaN fails this comparison too
             if address not in self._refused:
                 self._refused.add(address)
@@ -1342,7 +1343,7 @@ class RigRenderer(pb2_grpc.RendererControlServicer):
         return f"rig: {axes}  mode={self.mode}"
 
     def _watch(self) -> None:
-        """Print the rendered state whenever it changes."""
+        """Print the driven state whenever it changes."""
         last = None
         while not self._stop.is_set():
             line = self._status()
@@ -1352,7 +1353,7 @@ class RigRenderer(pb2_grpc.RendererControlServicer):
             self._stop.wait(0.05)
 
 
-class Antique(RigRenderer):
+class Antique(Rig):
     """The same rig, reporting the vocabulary MyoGestic no longer drives."""
 
     def GetControlManifest(self, request, context):  # noqa: N802
@@ -1363,7 +1364,7 @@ class Antique(RigRenderer):
 
 
 if __name__ == "__main__":
-    rig = Antique() if "--antique" in sys.argv else RigRenderer()
+    rig = Antique() if "--antique" in sys.argv else Rig()
     print(f"{type(rig).__name__} on 127.0.0.1:50051 — Ctrl-C to stop")
     rig.serve()
     try:
@@ -1394,7 +1395,7 @@ import time
 import tomllib
 
 from myogestic.controls import ControlLink, load_control_map
-from myogestic.renderer import InterfaceSpec, RendererTarget
+from myogestic.remote import InterfaceSpec, RemoteTarget
 
 rig = InterfaceSpec(
     name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051
@@ -1408,7 +1409,7 @@ client = rig.control_client()
 with open("my-rig.toml", "rb") as handle:  # "rb" — tomllib requires binary
     control_map = load_control_map(tomllib.load(handle))
 
-link = ControlLink(control_map, [RendererTarget(client=client, interface=rig)], hz=32)
+link = ControlLink(control_map, [RemoteTarget(client=client, interface=rig)], hz=32)
 
 try:
     bus = link.ensure()
@@ -1430,24 +1431,24 @@ finally:
 
 ## What you have
 
-A renderer that declares its own vocabulary, is bound against by name, reads one stream per
-axis, refuses a wrong-width producer, a duplicated one *at the moment it opens the inlet*,
+A remote target that declares its own vocabulary, is bound against by name, reads one stream
+per axis, refuses a wrong-width producer, a duplicated one *at the moment it opens the inlet*,
 and an out-of-range sample, comes back after a restart, moves in the direction its names
 claim, states what it does when its producer dies, and holds a state. That is the entire
 contract, plus the four things running it asks for that no client can check.
 
 The shortest possible version of all of it is
-[`examples/synthetic/reference_renderer.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/reference_renderer.py)
+[`examples/synthetic/reference_target.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/reference_target.py)
 — eighty lines, six addresses, no discrete controls, hold-last and nothing else. Read it now
 that you know why each part is there, and what each part it leaves out would have cost.
 
 ## See also
 
-- [Build a renderer](../how-to/build-a-renderer.md) — the contract as a table, and the
+- [Drive a remote target](../how-to/drive-a-remote-target.md) — the contract as a table, and the
   reference implementation in full
 - [Concepts › Controls](../concepts/controls.md) — aliases, addresses, and the signed
   convention
-- [Drive your own device](../how-to/add-a-target.md) — the in-process route, if a renderer
-  turns out to be more than you need
-- `myogestic/renderer/_proto/renderer_control.proto` — the wire contract; generate stubs from it for
+- [Drive your own device](../how-to/add-a-target.md) — the in-process route, if a wire
+  between two processes turns out to be more than you need
+- `myogestic/remote/_proto/remote_control.proto` — the wire contract; generate stubs from it for
   any language other than Python

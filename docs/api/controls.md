@@ -9,7 +9,7 @@ vocabulary and a build that grows a control needs no change on this side.
 
 New to this? [Concepts › Controls](../concepts/controls.md) explains the system this page
 documents — what a control is, why the standard is fixed, and how to choose between an
-in-process target and a separate renderer.
+in-process target and a remote one.
 
 Continuous controls are **normalized**: `+1` is the direction the control denotes, rest is
 `0`, and the range is signed when the target says the control is. Discrete controls are
@@ -33,7 +33,7 @@ separate on purpose — a held state delivered on change is not the same thing a
       continuous address expresses.
 
     **One address per control**, always: the address is the control's identity and also
-    the name of the one-channel LSL stream that carries it. A renderer that advertised two
+    the name of the one-channel LSL stream that carries it. A target that advertised two
     spellings of one control would make "these two aliases collide" impossible to decide
     from a manifest, so it is not allowed to.
 
@@ -47,7 +47,7 @@ separate on purpose — a held state delivered on change is not the same thing a
     ```
 
     It is safe to run with no Virtual Hand at all: it still walks the first three steps
-    and then shows what a target does when its renderer is absent. Launch a VHI and run
+    and then shows what a target does when the far side is absent. Launch a VHI and run
     it again to see the handshake — it prints a different step 4 for a v2 build, a v1
     build, and nothing at all.
 
@@ -182,13 +182,13 @@ an ordering that is easy to get subtly wrong per-application.
 
 ## Targets
 
-::: myogestic.renderer.RendererTarget
+::: myogestic.remote.RemoteTarget
 
-::: myogestic.renderer.PoseSink
+::: myogestic.remote.ControlSink
 
 ### Negotiating with the target
 
-A target does not have to guess what an application can render. Hand `RendererTarget` a
+A target does not have to guess what an application can drive. Hand `RemoteTarget` a
 control client and it **asks** at bind time, then encodes according to the answer.
 
 **One target drives the whole map.** It owns one LSL outlet per address it drives, each
@@ -201,36 +201,36 @@ client = vhi.control_client()
 # No stream is named here and none is counted. `interface=` is why: which controls exist
 # is the manifest's answer, and each one's stream is named for its own address, so both
 # facts arrive together once `bind` has something to ask.
-target = RendererTarget(client=client, interface=vhi)
-bus = connect_controls(control_map, [target])   # None while the renderer is unreachable
+target = RemoteTarget(client=client, interface=vhi)
+bus = connect_controls(control_map, [target])   # None while the far side is unreachable
 ```
 
-An application that launches its own renderer binds before the renderer exists, so it
+An application that launches its own target binds before that target exists, so it
 holds a [`ControlLink`][myogestic.controls.ControlLink] instead and calls `ensure()` from
 each handler that needs the hand — same arguments, plus the retry.
 
 The client is **required**, because every address, range and state comes from that
-answer. A renderer with no manifest to answer with — a Virtual Hand older than 2.0, say —
+answer. A target with no manifest to answer with — a Virtual Hand older than 2.0, say —
 is never distinguishable from one that is simply not up yet, and MyoGestic 2.x has no
 fallback and no table to fall back to. One that *does* answer but reports an older
 `vocabulary_version` is refused by name, since it would be listening for a stream layout
 this client no longer publishes and would report nothing while the rig stayed still.
 
-What it refuses, rather than half-rendering: a renderer too old for the vocabulary this
-client speaks, an address the renderer does not export, one it does not export as a
+What it refuses, rather than half-driving: a target too old for the vocabulary this
+client speaks, an address the target does not export, one it does not export as a
 number, and two aliases aimed at one control. A partly-understood negotiation is worse
-than none — it would leave some controls believed rendered and others quietly dropped,
+than none — it would leave some controls believed driven and others quietly dropped,
 and a dropped control is indistinguishable from one that is working and holding still.
 
-One case is **deferred** rather than refused: a renderer that has not answered *at all*.
-An application that launches its renderer from its own button binds before that renderer
+One case is **deferred** rather than refused: a target that has not answered *at all*.
+An application that launches its target from its own button binds before that target
 exists, so nothing is decided until
-[`negotiate`][myogestic.renderer.RendererTarget.negotiate] settles it. A renderer
+[`negotiate`][myogestic.remote.RemoteTarget.negotiate] settles it. A target
 old enough to have no manifest looks identical to one that is simply not up yet — both
 answer `capabilities()` with `None` — so it is deferred the same way, retried forever
 rather than refused outright.
 
-::: myogestic.renderer.InterfaceSpec.control_client
+::: myogestic.remote.InterfaceSpec.control_client
 
 ### Three layers of smoothing, and why they are not interchangeable
 
@@ -242,7 +242,7 @@ places, and collapsing any two of them is a bug:
 | **1. Continuous smoothing** | `ControlBus(smoothing=...)`, MyoGestic | continuous DOFs | **Yes** — it decides the value that is commanded |
 | **2. Debounce** | `Discrete.debounce_s`, MyoGestic | discrete DOFs | **Yes** — it decides *when* a state transition happens |
 | **2b. Dead zone + hysteresis** | `ControlBus(dead_zone=...)`, `ControlBus(hysteresis=...)`, MyoGestic | continuous DOFs | **Yes** — they decide the value that is commanded |
-| **3. Presentation blending** | the renderer (`control_client().set_presentation`) | how a commanded value looks | **No** — appearance only |
+| **3. Presentation blending** | the target (`control_client().set_presentation`) | how a commanded value looks | **No** — appearance only |
 
 Layer 1 runs before any target sees a frame, which is what makes it authoritative:
 smoothing after delivery would mean different targets acted on different values.
@@ -255,7 +255,7 @@ optional hysteresis so a value hovering near a boundary does not oscillate. That
 `debounce_s` is declared on the DOF rather than configured on the filter.
 
 Layer 3 is real and worth having — a hand that snaps between poses looks wrong — but it
-is only cosmetic. It cannot make an unstable prediction stable. A renderer with
+is only cosmetic. It cannot make an unstable prediction stable. A target with
 blending on and no debounce still jumps between states; it just does so smoothly, which
 is arguably worse because it *looks* deliberate.
 
@@ -274,7 +274,7 @@ While a recording trajectory runs it owns the control hand, and discrete DOFs ar
 refused with a reason rather than silently interrupting the trajectory a recording is
 aligned against. Continuous DOFs are unaffected.
 
-::: myogestic.renderer.InterfaceSpec.recording_client
+::: myogestic.remote.InterfaceSpec.recording_client
 
 ## Encoding helpers
 

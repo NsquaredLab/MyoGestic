@@ -23,7 +23,7 @@ import tomllib
 import numpy as np
 
 from myogestic.controls import ControlBus, load_control_map, resolve, substitute_rest
-from myogestic.renderer import RendererTarget
+from myogestic.remote import RemoteTarget
 from myogestic.vhi import virtual_hand
 
 #: The real file a user copies and edits.
@@ -82,7 +82,7 @@ def step_2_ask_the_target(client):
         print("  No target answered.")
         print("   - So the mapping stays UNRESOLVED, and that is correct rather than a")
         print("     failure: nothing here may invent what an address means.")
-        print("   - An application that launches its own renderer therefore resolves")
+        print("   - An application that launches its own target therefore resolves")
         print("     *after* startup, not at import. Every shipped example does exactly")
         print("     that — see ControlLink in examples/synthetic/*.py.")
         print("\n  Launch a Virtual Hand and run this again to see steps 3 to 5.")
@@ -139,21 +139,21 @@ def step_4_drive(control_map, controls, client, capabilities):
 
     # One target for the whole map: it owns one stream per control it drives, each named
     # for that control's own address, all built after negotiation says which those are.
-    target = RendererTarget(client=client, interface=virtual_hand())
+    target = RemoteTarget(client=client, interface=virtual_hand())
     bus = ControlBus(controls, targets=[target], hz=32)
     settled = target.negotiate()
-    print(f"\n  one RendererTarget for the whole map; negotiate() -> {settled}")
+    print(f"\n  one RemoteTarget for the whole map; negotiate() -> {settled}")
     for _alias, _weight, _lo, _hi, address in sorted(target._routed, key=lambda r: r[4]):
         print(f"    {address:38s} its own stream, one channel wide")
     print("  Nothing above was written here: the names are all the manifest's, which is")
-    print("  why a renderer can grow a control without this side changing.")
+    print("  why a target can grow a control without this side changing.")
 
-    rendered = _observe(bus, alias)
-    if rendered is None:
+    observed = _observe(bus, alias)
+    if observed is None:
         print("\n  (VHI_Predict was not readable, so nothing to show)")
     else:
-        print(f"\n  commanded {alias}=1.0  ->  the hand rendered:")
-        for channel, value in rendered:
+        print(f"\n  commanded {alias}=1.0  ->  the hand produced:")
+        for channel, value in observed:
             print(f"    channel {channel}: {value:+.2f}")
         print("  Each member got its own weight, then the target's own range. A weight")
         print("  scales a value; it cannot push one past what the target accepts.")
@@ -164,7 +164,7 @@ def step_4_drive(control_map, controls, client, capabilities):
 
 
 def _observe(bus, alias) -> list[tuple[int, float]] | None:
-    """Command the alias and read back what the hand actually rendered."""
+    """Command the alias and read back what the hand actually produced."""
     from mne_lsl.lsl import StreamInlet, resolve_streams
 
     inlet = None
@@ -225,7 +225,7 @@ def step_6_commands():
       # start VHI from any example's Launch button, or run the binary directly
       uv run --extra grpc python tools/inspect_control.py
 
-  Confirm what the hand actually renders, per control, in signed degrees:
+  Confirm what the hand actually does, per control, in signed degrees:
       uv run python tools/check_vhi_bridge.py
 
   A full application using all of this:
@@ -238,7 +238,7 @@ def step_6_commands():
   The contracts themselves:
       myogestic/controls.py                        the standard
       myogestic/_controls_map.py                   aliases, addresses, resolution
-      myogestic/renderer/_proto/renderer_control.proto     the wire contract""")
+      myogestic/remote/_proto/remote_control.proto     the wire contract""")
 
 
 def main() -> None:

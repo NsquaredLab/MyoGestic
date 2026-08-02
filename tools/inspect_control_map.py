@@ -6,7 +6,7 @@ Point it at a file and it says what that file declares: every alias, where each 
 sends its value, the weight each target gets, and the gates you wrote. Then, if a target
 is reachable, it resolves the map against that target's own manifest and says what each
 alias actually *became* — which is where the semantics come from, so it is also where a
-wrong address, a duplicated control, or an unrenderable configuration shows up.
+wrong address, a duplicated control, or an undrivable configuration shows up.
 
 With no target running it still checks everything a file alone can be checked for, and
 says so rather than pretending. Exit status is 0 when the file is usable, 1 when it is
@@ -160,7 +160,7 @@ def _check_for_collisions(controls, capabilities) -> bool:
     running application. Computed here from the manifest the target already sent, rather
     than by declaring anything to it: a validator must not change what it inspects.
     """
-    rendered = {
+    streamed = {
         cap.address for cap in capabilities if getattr(cap, "kind", "") == "continuous"
     }
     claims: dict[str, set[str]] = {}
@@ -168,7 +168,7 @@ def _check_for_collisions(controls, capabilities) -> bool:
         if hasattr(controls.dofs[alias], "states"):
             continue  # a held state travels over gRPC, not on a stream
         for ref in refs:
-            if ref.address in rendered:
+            if ref.address in streamed:
                 claims.setdefault(ref.address, set()).add(alias)
 
     clashes = {address: owners for address, owners in claims.items() if len(owners) > 1}

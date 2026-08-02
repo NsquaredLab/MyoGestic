@@ -363,7 +363,7 @@ class TestTheProcessDotSaysTheState:
         A process blocked in an uninterruptible kernel wait — which a wedged network
         driver is enough to cause, and VHI's LSL resolver thread is a candidate — ignores
         SIGKILL. Forgetting the handle here made `alive` False and the dot say "Not
-        running", so the next Launch stacked a second renderer on a live one.
+        running", so the next Launch stacked a second target on a live one.
         """
         import subprocess
 
@@ -403,7 +403,7 @@ class TestTheProcessDotSaysTheState:
 
         `stop` only waits 200 ms, so a process that dies just after it gives up is still
         held — with the -9 of the signal that killed it. Without `_kill_wanted` the dot
-        would go red and say the renderer had crashed on its own.
+        would go red and say the target had crashed on its own.
         """
         import subprocess
 

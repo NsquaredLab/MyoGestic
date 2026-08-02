@@ -1,12 +1,12 @@
-"""gRPC client for a renderer's control service.
+"""gRPC client for a remote target's control service.
 
 Three calls, three shapes:
 
-- `RendererClient.capabilities` is the manifest — the whole contract `RendererTarget`
+- `RemoteClient.capabilities` is the manifest — the whole contract `RemoteTarget`
   resolves against, with no separate handshake. Synchronous, and asked once at bind.
-- `RendererClient.set_control` is fire-and-forget on a worker thread: it may be
+- `RemoteClient.set_control` is fire-and-forget on a worker thread: it may be
   called from the predict thread and must never block it.
-- `RendererClient.sweep` is synchronous and slow — it drives a joint through its
+- `RemoteClient.sweep` is synchronous and slow — it drives a joint through its
   range. For verification tools, never for a running app.
 
 Continuous per-tick values still go over LSL; this carries the manifest, discrete
@@ -22,23 +22,23 @@ from typing import TYPE_CHECKING, Any
 
 import grpc
 
-from myogestic.renderer._proto import renderer_control_pb2 as pb2
-from myogestic.renderer._proto.renderer_control_pb2_grpc import RendererControlStub
+from myogestic.remote._proto import remote_control_pb2 as pb2
+from myogestic.remote._proto.remote_control_pb2_grpc import RemoteControlStub
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-log = logging.getLogger("myogestic.renderer.control")
+log = logging.getLogger("myogestic.remote.control")
 
 _RPC_TIMEOUT_S = 2.0
 
-#: The oldest renderer vocabulary this client can drive.
+#: The oldest remote-target vocabulary this client can drive.
 #:
-#: **Load-bearing.** MyoGestic and the renderer are separately installed applications, so
+#: **Load-bearing.** MyoGestic and the remote target are separately installed applications, so
 #: "they were released together" does not mean any given pair of them is a matching pair.
 #: Vocabulary 2 is one LSL stream per DOF, named for the control's own address and one
 #: channel wide; vocabulary 1 was a manifest of ``stream_name``/``channel`` pairs and a
-#: renderer listening for one wide pose stream. A version-1 renderer paired with this
+#: target listening for one wide pose stream. A version-1 target paired with this
 #: client fails *silently* — it waits for a stream nobody publishes any more, logs
 #: nothing, and the hand simply never moves — which is why the mismatch is refused here,
 #: loudly, at the one call every bind makes.
@@ -48,7 +48,7 @@ _MIN_VOCABULARY = 2
 def _vocabulary(reported: str) -> int:
     """The manifest's vocabulary as an integer, or 0 when it does not state one.
 
-    Leading-integer, so a renderer that versions itself ``"2.1"`` compares as 2 rather
+    Leading-integer, so a target that versions itself ``"2.1"`` compares as 2 rather
     than as unversioned. Anything with no leading integer at all — including the empty
     string a build predating the field leaves — is 0, and so is older than any minimum.
     """
@@ -59,30 +59,30 @@ def _vocabulary(reported: str) -> int:
 
 #: How many un-sent control frames to hold before dropping the oldest. `set_control` is fed
 #: from the predict thread at ``predict_hz`` while `_send_loop` drains one *blocking* RPC at
-#: a time, so a renderer that accepts the connection without answering costs `_RPC_TIMEOUT_S`
+#: a time, so a target that accepts the connection without answering costs `_RPC_TIMEOUT_S`
 #: per frame: measured 0.5 frames/s drained against 50/s produced. Unbounded, that queue grew
 #: for as long as the app ran and then replayed every stale frame in order once it answered.
 #: At 50 Hz this is about a second of slack.
 _QUEUE_DEPTH = 64
 #: A sweep drives a joint through its whole range, so its deadline is the sweep's
-#: own duration plus room for the renderer to settle and read the rig back.
+#: own duration plus room for the target to settle and read the rig back.
 _SWEEP_SLACK_S = 5.0
 
 
-class RendererClient:
-    """Client for a renderer's control service.
+class RemoteClient:
+    """Client for a remote target's control service.
 
     Parameters
     ----------
     host, port
-        Where the renderer's gRPC server is listening.
+        Where the target's gRPC server is listening.
 
     Examples
     --------
-    >>> from myogestic.renderer._control import RendererClient
-    >>> client = RendererClient()
+    >>> from myogestic.remote._control import RemoteClient
+    >>> client = RemoteClient()
     >>> capabilities = client.capabilities()
-    >>> capabilities is None      # None means this renderer is unreachable
+    >>> capabilities is None      # None means this target is unreachable
     True
     """
 
@@ -92,7 +92,7 @@ class RendererClient:
         self.target = f"{host}:{port}"
 
         self._channel = grpc.insecure_channel(self.target)
-        self._stub = RendererControlStub(self._channel)
+        self._stub = RemoteControlStub(self._channel)
 
         self._commands: queue.Queue[pb2.SetControlRequest | None] = queue.Queue(
             maxsize=_QUEUE_DEPTH
@@ -103,7 +103,7 @@ class RendererClient:
 
         self._running = True
         self._thread = threading.Thread(
-            target=self._send_loop, name="RendererClient", daemon=True
+            target=self._send_loop, name="RemoteClient", daemon=True
         )
         self._thread.start()
 
@@ -118,7 +118,7 @@ class RendererClient:
 
         Safe to call from the predict thread: never blocks, never raises. A control frame
         is latest-wins — a held state and a pose both mean "be this now" — so when the
-        renderer cannot keep up, the *old* frame is the one to lose. Delivering it late
+        target cannot keep up, the *old* frame is the one to lose. Delivering it late
         moves the hand to somewhere the model asked for minutes ago.
         """
         if not self._running:
@@ -138,8 +138,8 @@ class RendererClient:
                 self._dropped += 1
                 if self._dropped == 1 or self._dropped % 1000 == 0:
                     log.warning(
-                        "the renderer is not keeping up — dropped %d stale control frame(s). The "
-                        "renderer is answering slower than %s produces them.",
+                        "the target is not keeping up — dropped %d stale control frame(s). The "
+                        "target is answering slower than %s produces them.",
                         self._dropped,
                         type(self).__name__,
                     )
@@ -147,7 +147,7 @@ class RendererClient:
     # --- the target's own vocabulary -----------------------------------------
 
     def capabilities(self) -> list[Any] | None:
-        """Every control this renderer exports, as `myogestic.controls.Capability` values.
+        """Every control this target exports, as `myogestic.controls.Capability` values.
 
         The target-owned half of the contract: a configuration maps *your* aliases onto
         these addresses, and their semantics — number or held state, domain, states —
@@ -156,13 +156,13 @@ class RendererClient:
         Returns
         -------
         list[Capability] or None
-            ``None`` when the renderer is unreachable or predates the manifest; the caller
+            ``None`` when the target is unreachable or predates the manifest; the caller
             defers and retries once it is reachable, rather than guessing a vocabulary.
 
         Raises
         ------
         ValueError
-            When the renderer answers with a vocabulary older than `_MIN_VOCABULARY`.
+            When the target answers with a vocabulary older than `_MIN_VOCABULARY`.
             Deliberately not ``None``: unreachable means "try again", while too old means
             "this pair will never work", and the two must not be handled the same way.
         """
@@ -181,17 +181,17 @@ class RendererClient:
         reported = manifest.vocabulary_version
         if _vocabulary(reported) < _MIN_VOCABULARY:
             raise ValueError(
-                f"{manifest.target_name or 'this renderer'} speaks control vocabulary "
+                f"{manifest.target_name or 'this target'} speaks control vocabulary "
                 f"{reported or '(none)'}, and MyoGestic needs {_MIN_VOCABULARY} or newer. "
                 f"Vocabulary {_MIN_VOCABULARY} publishes one LSL stream per control, named "
                 f"for that control's own address and one channel wide; vocabulary 1 read a "
                 f"single wide pose stream that MyoGestic no longer sends. Paired with this "
-                f"client such a renderer would report no error and never move. "
-                # Named, not "the renderer": this client speaks to whatever serves the
+                f"client such a target would report no error and never move. "
+                # Named, not "the target": this client speaks to whatever serves the
                 # contract, and
-                # telling the author of a third-party renderer to update somebody else's
+                # telling the author of a third-party target to update somebody else's
                 # program is advice they cannot act on.
-                f"Update {manifest.target_name or 'the renderer'}."
+                f"Update {manifest.target_name or 'the target'}."
             )
         log.info(
             "%s exports %d controls (vocabulary %s)",
@@ -217,7 +217,7 @@ class RendererClient:
     # --- presentation --------------------------------------------------------
 
     def set_presentation(self, *, blend: bool, blend_speed: float = 0.0) -> bool:
-        """Configure how the renderer *looks* while reaching a commanded value.
+        """Configure how the target *presents* reaching a commanded value.
 
         The third of three separate layers:
 
@@ -228,13 +228,13 @@ class RendererClient:
            (`myogestic.controls.Discrete.debounce_s`) and applied by the same bus. A
            discrete control is never numerically low-pass filtered like an axis; that
            would interpolate through states nobody selected.
-        3. **This** — purely visual interpolation inside the renderer, so the hand does
+        3. **This** — purely visual interpolation inside the target, so the hand does
            not snap between poses.
 
         Layer 3 is not a substitute for layer 2: with blending on but no debounce the
         hand still jumps between states, just smoothly.
 
-        Returns whether the renderer applied it (``False`` when it does not speak v2).
+        Returns whether the target applied it (``False`` when it does not speak v2).
         """
         try:
             ack = self._stub.SetPresentation(
@@ -251,7 +251,7 @@ class RendererClient:
     def sweep(
         self, name: str, *, duration_s: float = 2.0, both_directions: bool = True
     ) -> pb2.SweepControlReply | None:
-        """Drive one DOF across its range and report what the renderer observed on its rig.
+        """Drive one DOF across its range and report what the target observed on its rig.
 
         Synchronous and slow — it animates a joint. For a verification tool, never
         for a running app. ``None`` on any failure.
@@ -278,7 +278,7 @@ class RendererClient:
         # way: the sentinel would otherwise sit behind up to `_QUEUE_DEPTH` stale frames,
         # each costing an RPC timeout before the worker reached it — and the newest frame is
         # the one `ControlBus.stop` just queued to put the hand back at rest. Dropping that
-        # would leave the renderer holding whatever it was doing.
+        # would leave the target holding whatever it was doing.
         while self._commands.qsize() > 1:
             try:
                 self._commands.get_nowait()
@@ -303,10 +303,10 @@ class RendererClient:
                 self._seen_errors.clear()
                 if not ack.applied:
                     # Keyed by address, because that is what the request was keyed by — the
-                    # renderer only ever sees addresses, so it can only refuse one by name.
+                    # target only ever sees addresses, so it can only refuse one by name.
                     # A reader holding the map that produced this reads the right-hand side.
                     log.warning(
-                        "the renderer rejected these control addresses: %s", dict(ack.rejected)
+                        "the target rejected these control addresses: %s", dict(ack.rejected)
                     )
             except Exception as e:  # noqa: BLE001 - the worker must survive
                 self.connected = False
@@ -324,4 +324,4 @@ class RendererClient:
         log.log(level, "%s.%s failed — %s", type(self).__name__, operation, detail)
 
 
-__all__ = ["RendererClient"]
+__all__ = ["RemoteClient"]

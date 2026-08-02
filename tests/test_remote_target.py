@@ -1,19 +1,19 @@
-"""`RendererTarget` — control values in, one stream per control out, on a negotiated contract.
+"""`RemoteTarget` — control values in, one stream per control out, on a negotiated contract.
 
-The target is the only place that knows how a control reaches the renderer. Since the v2
+The target is the only place that knows how a control reaches the target. Since the v2
 cutover it learns that by *asking*: there is no table and no fallback, so a configuration
 it cannot place is refused while a human is still reading the traceback rather than
-half-rendered later.
+half-driven later.
 
 **One stream per DOF.** A control's stream is named for the control's own address and is
 one channel wide, so a target driving nine controls owns nine outlets. There is no frame,
 no width and no channel index anywhere in here — the manifest carries an address and the
-outlet is named after it, which is why a renderer that grows a control needs no change on
+outlet is named after it, which is why a target that grows a control needs no change on
 this side.
 
 These pin both halves: what `bind` refuses, and what reaches each stream per tick. Every
 test runs against a recording interface and a fake client, so the whole target is verified
-without a hand running. What that deliberately cannot prove is that VHI *renders* these
+without a hand running. What that deliberately cannot prove is that VHI *moves* these
 values as intended — that needs the binary, and the recorded pose format itself is pinned
 in `test_vhi_legacy.py`.
 """
@@ -29,8 +29,8 @@ import pytest
 
 from myogestic.controls import Capability, ControlBus, ControlSet
 from myogestic.outputs.filters import GaussianFilter
-from myogestic.renderer._control import _QUEUE_DEPTH
-from myogestic.renderer.target import RendererTarget
+from myogestic.remote._control import _QUEUE_DEPTH
+from myogestic.remote.target import RemoteTarget
 from myogestic.vhi.pose import POSE_DOFS
 
 from .conftest import build_controls
@@ -89,17 +89,17 @@ class FakeInterface:
         return [outlet.name for outlet in self.built]
 
 
-# --- the fake renderer every binding negotiates against -------------------------
+# --- the fake target every binding negotiates against -------------------------
 #
-# The manifest is duck-typed rather than a real protobuf message: RendererTarget reads it
+# The manifest is duck-typed rather than a real protobuf message: RemoteTarget reads it
 # through `Capability`-shaped objects, which keeps these tests free of the grpc extra.
 
 
 class FakeClient:
-    """A `RendererClient` stand-in: answers the manifest a bind resolves against.
+    """A `RemoteClient` stand-in: answers the manifest a bind resolves against.
 
-    ``addresses`` is what this renderer exports as numbers, each on a stream of its own.
-    ``None`` is a renderer that has not started — silence, which is not an empty manifest.
+    ``addresses`` is what this target exports as numbers, each on a stream of its own.
+    ``None`` is a target that has not started — silence, which is not an empty manifest.
     """
 
     def __init__(self, addresses: tuple[str, ...] | None = ()) -> None:
@@ -132,7 +132,7 @@ def _cap(address, *, lo=-1.0, hi=1.0, rest=0.0, kind="continuous", states=()):
 
 
 def _client(order=POSE_DOFS):
-    """A renderer that exports the nine pose controls under their own DOF names."""
+    """A target that exports the nine pose controls under their own DOF names."""
     return FakeClient(order)
 
 
@@ -143,15 +143,15 @@ def _controls(*names: str, **entries: object):
     return build_controls(dofs)
 
 
-def _bound(*names: str, **entries: object) -> tuple[RendererTarget, FakeInterface]:
-    """A target bound to a renderer that names the nine pose controls by address."""
+def _bound(*names: str, **entries: object) -> tuple[RemoteTarget, FakeInterface]:
+    """A target bound to a target that names the nine pose controls by address."""
     interface = FakeInterface()
-    target = RendererTarget(client=_client(), interface=interface)
+    target = RemoteTarget(client=_client(), interface=interface)
     target.bind(_controls(*names, **entries))
     return target, interface
 
 
-# --- bind: refuse what cannot be rendered -------------------------------------
+# --- bind: refuse what cannot be driven ---------------------------------------
 
 
 def test_bind_accepts_the_pose_dofs():
@@ -184,7 +184,7 @@ def test_bind_accepts_a_subset():
 def test_bind_refuses_an_empty_configuration():
     """`ControlSet()` directly, because there is no parser to refuse it first."""
     with pytest.raises(ValueError, match="no DOFs at all"):
-        RendererTarget(interface=FakeInterface()).bind(ControlSet())
+        RemoteTarget(interface=FakeInterface()).bind(ControlSet())
 
 
 def test_bind_refuses_before_anything_is_published():
@@ -195,14 +195,14 @@ def test_bind_refuses_before_anything_is_published():
     """
     interface = FakeInterface()
     with pytest.raises(ValueError):
-        RendererTarget(client=_client(), interface=interface).bind(_controls("pinky.abduction"))
+        RemoteTarget(client=_client(), interface=interface).bind(_controls("pinky.abduction"))
     assert interface.built == []
 
 
 def test_a_target_with_no_interface_is_refused_at_construction():
     """There has to be somewhere to publish. Refused early, not at the first send."""
     with pytest.raises(ValueError, match="needs an `interface="):
-        RendererTarget(client=_client())
+        RemoteTarget(client=_client())
 
 
 # --- send: one value per stream -----------------------------------------------
@@ -218,7 +218,7 @@ def test_send_pushes_one_float32_sample_per_driven_control():
 
 
 def test_send_carries_the_wrist_controls():
-    """The wrist used to be zeroed as dead. VHI renders all three, so they carry."""
+    """The wrist used to be zeroed as dead. VHI drives all three, so they carry."""
     target, interface = _bound()
     target.send(dict.fromkeys(POSE_DOFS, 1.0), {})
     for axis in ("wrist.flexion", "wrist.abduction", "wrist.rotation"):
@@ -272,7 +272,7 @@ def test_send_accepts_numpy_float32_values():
 
 
 def test_a_routed_binding_clamps_to_the_range_the_target_declared():
-    """The bus clips first; a routed slot clamps again to what the renderer accepts.
+    """The bus clips first; a routed slot clamps again to what the target accepts.
 
     The two are not the same bound — a weight is applied between them — so the target's
     own range is the last word before the wire.
@@ -344,7 +344,7 @@ def test_stop_releases_every_outlet_even_when_one_of_them_is_dead():
             return outlet
 
     interface = OneBadOutlet()
-    target = RendererTarget(client=_client(), interface=interface)
+    target = RemoteTarget(client=_client(), interface=interface)
     target.bind(_controls())
     with pytest.raises(OSError, match="outlet closed"):
         target.stop()
@@ -377,7 +377,7 @@ def test_stop_is_idempotent_and_does_not_reuse_a_stopped_outlet():
 def test_stop_before_bind_does_not_raise():
     """Teardown runs even when setup failed — that is when it matters most."""
     interface = FakeInterface()
-    RendererTarget(client=_client(), interface=interface).stop()
+    RemoteTarget(client=_client(), interface=interface).stop()
     assert interface.built == []
 
 
@@ -392,7 +392,7 @@ def test_stop_before_bind_does_not_raise():
 def test_a_rebind_keeps_the_outlet_of_an_address_it_still_drives():
     """Losing and regaining an unchanged stream is a visible stall on the hand."""
     interface = FakeInterface()
-    target = RendererTarget(client=_client(), interface=interface)
+    target = RemoteTarget(client=_client(), interface=interface)
     target.bind(_controls("index.flexion", "middle.flexion"))
     kept = interface.live["index.flexion"]
 
@@ -403,7 +403,7 @@ def test_a_rebind_keeps_the_outlet_of_an_address_it_still_drives():
 
 def test_a_rebind_rests_and_stops_the_outlet_of_an_address_it_has_dropped():
     interface = FakeInterface()
-    target = RendererTarget(client=_client(), interface=interface)
+    target = RemoteTarget(client=_client(), interface=interface)
     target.bind(_controls("index.flexion", "middle.flexion"))
     dropped = interface.live["middle.flexion"]
     target.send({"index.flexion": 1.0, "middle.flexion": 1.0}, {})
@@ -417,7 +417,7 @@ def test_a_rebind_rests_and_stops_the_outlet_of_an_address_it_has_dropped():
 
 def test_a_rebind_builds_a_stream_for_an_address_it_has_gained():
     interface = FakeInterface()
-    target = RendererTarget(client=_client(), interface=interface)
+    target = RemoteTarget(client=_client(), interface=interface)
     target.bind(_controls("index.flexion"))
     target.bind(_controls("index.flexion", "ring.flexion"))
     assert interface.names == ["index.flexion", "ring.flexion"]
@@ -427,11 +427,11 @@ def test_a_rebind_builds_a_stream_for_an_address_it_has_gained():
 def test_a_refused_rebind_leaves_no_stream_behind():
     """Nothing drives them any more, and a live outlet keeps republishing regardless."""
     interface = FakeInterface()
-    target = RendererTarget(client=_client(), interface=interface)
+    target = RemoteTarget(client=_client(), interface=interface)
     target.bind(_controls("index.flexion"))
     first = interface.live["index.flexion"]
 
-    target._client.addresses = ()   # the renderer came back exporting nothing
+    target._client.addresses = ()   # the target came back exporting nothing
     with pytest.raises(ValueError, match="has no place for"):
         target.bind(_controls("index.flexion"))
     assert first.stops == 1
@@ -450,7 +450,7 @@ def test_a_binding_that_renders_nothing_of_ours_publishes_nothing():
     key = _cap("keyboard.hold.letter.w", kind="discrete", states=("up", "down"))
     controls = resolve(load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [key])
     interface = FakeInterface()
-    target = RendererTarget(client=ManifestClient(), interface=interface)
+    target = RemoteTarget(client=ManifestClient(), interface=interface)
     target.bind(controls)
     assert target.negotiated is True
     assert interface.built == []
@@ -460,13 +460,13 @@ def test_a_discrete_only_configuration_publishes_no_stream_at_all():
     """Nothing continuous to carry, so nothing to publish — but it must still bind.
 
     A target that raised here would make a perfectly valid gesture-only configuration
-    unusable, and its held states still have to reach the renderer over gRPC.
+    unusable, and its held states still have to reach the target over gRPC.
     """
     target, interface = _owned({"g": "vhi.control.gesture"})
     assert interface.built == []
     assert target.negotiated is True
     target.send({"g": "Fist"}, {"g": "Fist"})
-    # By address, not by the alias `g`: the renderer has never seen the left-hand side of
+    # By address, not by the alias `g`: the target has never seen the left-hand side of
     # this map and could not resolve it against anything it advertised.
     assert target._client.sent == [(None, {"vhi.control.gesture": "Fist"})]
 
@@ -484,14 +484,14 @@ def test_the_bus_binds_the_target_at_construction():
     with pytest.raises(ValueError, match="has no place for"):
         ControlBus(
             _controls("pinky.abduction"),
-            targets=[RendererTarget(client=_client(), interface=interface)],
+            targets=[RemoteTarget(client=_client(), interface=interface)],
         )
     assert interface.built == []
 
 
 def test_a_bus_frame_reaches_the_wire():
     interface = FakeInterface()
-    bus = ControlBus(_controls(), targets=[RendererTarget(client=_client(), interface=interface)])
+    bus = ControlBus(_controls(), targets=[RemoteTarget(client=_client(), interface=interface)])
     bus.push({"index.flexion": 0.5})
     assert interface.live["index.flexion"].last == pytest.approx(0.5)
 
@@ -499,14 +499,14 @@ def test_a_bus_frame_reaches_the_wire():
 def test_nan_reaches_the_wire_as_rest_not_full_deflection():
     """`min(hi, max(lo, nan))` is `lo` — the bus substitutes rest before clipping."""
     interface = FakeInterface()
-    bus = ControlBus(_controls(), targets=[RendererTarget(client=_client(), interface=interface)])
+    bus = ControlBus(_controls(), targets=[RemoteTarget(client=_client(), interface=interface)])
     bus.push({"index.flexion": float("nan")})
     assert interface.live["index.flexion"].last == 0.0
 
 
 def test_an_out_of_range_prediction_is_clipped_before_the_wire():
     interface = FakeInterface()
-    bus = ControlBus(_controls(), targets=[RendererTarget(client=_client(), interface=interface)])
+    bus = ControlBus(_controls(), targets=[RemoteTarget(client=_client(), interface=interface)])
     bus.push(dict.fromkeys(POSE_DOFS, 40.0))
     assert all(o.last <= 1.0 for o in interface.live.values())
 
@@ -516,7 +516,7 @@ def test_smoothing_cannot_push_a_value_out_of_range():
     interface = FakeInterface()
     bus = ControlBus(
         _controls(**{"index.flexion": {"kind": "continuous", "range": [0.0, 1.0]}}),
-        targets=[RendererTarget(client=_client(), interface=interface)],
+        targets=[RemoteTarget(client=_client(), interface=interface)],
         smoothing=GaussianFilter(sigma=1.0),
     )
     for value in (1.0, 0.0):
@@ -530,7 +530,7 @@ def test_smoothing_cannot_push_a_value_out_of_range():
 def test_bus_stop_returns_the_hand_to_rest_and_flushes():
     """The whole safety chain: rest is delivered, then made to land, then stopped."""
     interface = FakeInterface()
-    bus = ControlBus(_controls(), targets=[RendererTarget(client=_client(), interface=interface)])
+    bus = ControlBus(_controls(), targets=[RemoteTarget(client=_client(), interface=interface)])
     bus.push(dict.fromkeys(POSE_DOFS, 1.0))
     assert interface.live["index.flexion"].last == pytest.approx(1.0)
     bus.stop()
@@ -560,11 +560,11 @@ def test_a_broken_outlet_does_not_kill_the_predict_thread():
     warnings: list[str] = []
     bus = ControlBus(
         _controls(),
-        targets=[RendererTarget(client=_client(), interface=BrokenInterface())],
+        targets=[RemoteTarget(client=_client(), interface=BrokenInterface())],
         on_warn=warnings.append,
     )
     bus.push({"index.flexion": 1.0})
-    assert any("RendererTarget" in w for w in warnings)
+    assert any("RemoteTarget" in w for w in warnings)
 
 
 def test_an_outlet_that_is_already_dead_at_bind_raises_out_of_the_bus():
@@ -587,7 +587,7 @@ def test_an_outlet_that_is_already_dead_at_bind_raises_out_of_the_bus():
 
     interface = DeadInterface()
     with pytest.raises(OSError, match="outlet closed"):
-        ControlBus(_controls(), targets=[RendererTarget(client=_client(), interface=interface)])
+        ControlBus(_controls(), targets=[RemoteTarget(client=_client(), interface=interface)])
     assert all(o.stops == 1 for o in interface.built), (
         "a bind that died mid-publish still has to release what it had published"
     )
@@ -599,8 +599,8 @@ def test_two_targets_receive_the_same_frame():
     bus = ControlBus(
         _controls(),
         targets=[
-            RendererTarget(client=_client(), interface=a),
-            RendererTarget(client=_client(), interface=b),
+            RemoteTarget(client=_client(), interface=a),
+            RemoteTarget(client=_client(), interface=b),
         ],
     )
     bus.push({"middle.flexion": 0.5})
@@ -635,7 +635,7 @@ def test_the_vhi_outlet_advertises_a_stable_source_id():
 
 
 def test_an_unnamed_stream_is_refused_rather_than_published():
-    """An LSL stream with no name cannot be resolved, so it renders nothing, silently."""
+    """An LSL stream with no name cannot be resolved, so it drives nothing, silently."""
     from myogestic.vhi import virtual_hand
 
     with pytest.raises(ValueError, match="unnamed stream"):
@@ -664,25 +664,25 @@ def test_a_value_reaches_the_wire_with_the_sign_it_was_given():
 
 def test_an_address_vocabulary_that_disagrees_is_refused():
     """Guessing a mapping is exactly what the standard exists to stop."""
-    target = RendererTarget(client=FakeClient(("something.else",)), interface=FakeInterface())
+    target = RemoteTarget(client=FakeClient(("something.else",)), interface=FakeInterface())
     with pytest.raises(ValueError, match="has no place for"):
         target.bind(_controls(*POSE_DOFS))
     assert target.negotiated is False
 
 
-def test_a_declared_dof_the_renderer_does_not_export_is_refused():
-    """The case that must still fail: a DOF with nowhere to go renders nothing."""
-    target = RendererTarget(client=FakeClient(("index.flexion",)), interface=FakeInterface())
+def test_a_declared_dof_the_target_does_not_export_is_refused():
+    """The case that must still fail: a DOF with nowhere to go drives nothing."""
+    target = RemoteTarget(client=FakeClient(("index.flexion",)), interface=FakeInterface())
     with pytest.raises(ValueError, match="has no place for"):
         target.bind(_controls("index.flexion", **{"wrist.rotation": "continuous"}))
     assert target.negotiated is False
 
 
-def test_a_subset_of_what_the_renderer_exports_is_legal():
+def test_a_subset_of_what_the_target_exports_is_legal():
     """VHI reports its whole vocabulary; a client may drive part of it.
 
     Requiring an exact set match made every subset configuration fall back, even though
-    the renderer had accepted it.
+    the target had accepted it.
     """
     target, interface = _bound("index.flexion")
     assert target.negotiated is True
@@ -698,7 +698,7 @@ def test_discrete_edges_go_over_grpc_when_negotiated():
     also meant forwarding another target's edges on a shared map.
     """
     client = _client()
-    target = RendererTarget(client=client, interface=FakeInterface())
+    target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(_controls(*POSE_DOFS, **{"hand.grasp": ["rest", "fist"]}))
     target.send(dict.fromkeys(POSE_DOFS, 0.0), {"hand.grasp": "fist"})
     assert client.sent == [(None, {"hand.grasp": "fist"})]
@@ -707,7 +707,7 @@ def test_discrete_edges_go_over_grpc_when_negotiated():
 def test_no_edge_means_no_rpc():
     """A value is re-sent every tick; a state change is not."""
     client = _client()
-    target = RendererTarget(client=client, interface=FakeInterface())
+    target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(_controls(*POSE_DOFS))
     for _ in range(5):
         target.send(dict.fromkeys(POSE_DOFS, 0.0), {})
@@ -717,7 +717,7 @@ def test_no_edge_means_no_rpc():
 def test_rebinding_re_negotiates_rather_than_keeping_the_old_verdict():
     """A reconnect can land on a different VHI; a stale verdict would encode wrongly."""
     client = _client()
-    target = RendererTarget(client=client, interface=FakeInterface())
+    target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(_controls(*POSE_DOFS))
     assert target.negotiated is True
     client.addresses = None
@@ -733,7 +733,7 @@ def test_a_discrete_only_configuration_negotiates_and_delivers():
     every discrete DOF it was handed.
     """
     client = FakeClient(())
-    target = RendererTarget(client=client, interface=FakeInterface())
+    target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(build_controls({"hand.grasp": ["rest", "fist"]}))
     assert target.negotiated is True
     target.send({"hand.grasp": "fist"}, {"hand.grasp": "fist"})
@@ -744,7 +744,7 @@ def test_a_mixed_configuration_negotiates_both_kinds():
     """v2 lifts v1's exclusivity: a number and a held state travel together."""
     client = FakeClient(("index.flexion",))
     interface = FakeInterface()
-    target = RendererTarget(client=client, interface=interface)
+    target = RemoteTarget(client=client, interface=interface)
     target.bind(
         build_controls({"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]})
     )
@@ -757,21 +757,21 @@ def test_a_mixed_configuration_negotiates_both_kinds():
 def test_the_control_client_is_publicly_importable():
     """Nobody should have to reach into a private module to negotiate."""
     pytest.importorskip("grpc")
-    import myogestic.renderer as renderer_pkg
+    import myogestic.remote as remote_pkg
 
-    assert "RendererClient" in renderer_pkg.__all__
-    assert renderer_pkg.RendererClient.__name__ == "RendererClient"
+    assert "RemoteClient" in remote_pkg.__all__
+    assert remote_pkg.RemoteClient.__name__ == "RemoteClient"
 
 
-def test_the_renderer_package_still_rejects_unknown_attributes():
+def test_the_remote_package_still_rejects_unknown_attributes():
     """The lazy __getattr__ must not turn every typo into an import error."""
-    import myogestic.renderer as renderer_pkg
+    import myogestic.remote as remote_pkg
 
     with pytest.raises(AttributeError, match="no attribute"):
-        _ = renderer_pkg.NoSuchThing
+        _ = remote_pkg.NoSuchThing
 
 
-def test_importing_the_renderer_package_does_not_require_grpc():
+def test_importing_the_remote_package_does_not_require_grpc():
     """A plain install calls virtual_hand().launcher() and must not pay for grpc."""
     import subprocess
     import sys
@@ -779,8 +779,8 @@ def test_importing_the_renderer_package_does_not_require_grpc():
     result = subprocess.run(
         [
             sys.executable, "-c",
-            "import sys; import myogestic.renderer, myogestic.vhi; "
-            "assert 'grpc' not in sys.modules, 'importing the renderer package pulled in grpc'; "
+            "import sys; import myogestic.remote, myogestic.vhi; "
+            "assert 'grpc' not in sys.modules, 'importing the target package pulled in grpc'; "
             "print('ok')",
         ],
         capture_output=True, text=True, check=False,
@@ -789,23 +789,23 @@ def test_importing_the_renderer_package_does_not_require_grpc():
     assert "ok" in result.stdout
 
 
-# --- deferred negotiation: an app that launches its own renderer ------------------
+# --- deferred negotiation: an app that launches its own target ------------------
 
 
 class Deaf(FakeClient):
-    """A renderer that is not up yet: silent."""
+    """A target that is not up yet: silent."""
 
     def __init__(self) -> None:
         super().__init__(addresses=None)
 
 
 def test_an_unreachable_vhi_defers_instead_of_failing_the_configuration():
-    """The app launches its own renderer, so bind necessarily runs before VHI exists.
+    """The app launches its own target, so bind necessarily runs before VHI exists.
 
-    "No answer" cannot be read as "bad configuration" at that point — the renderer
+    "No answer" cannot be read as "bad configuration" at that point — the target
     simply is not there yet, and the same configuration will be fine in a second.
     """
-    target = RendererTarget(client=Deaf(), interface=FakeInterface())
+    target = RemoteTarget(client=Deaf(), interface=FakeInterface())
     target.bind(build_controls({"g": ["rest", "fist"]}))   # must not raise
     assert target.negotiated is False
 
@@ -813,7 +813,7 @@ def test_an_unreachable_vhi_defers_instead_of_failing_the_configuration():
 def test_a_deferred_edge_is_dropped_loudly_rather_than_raising():
     """`send` runs on the predict thread, where a raise would log every tick."""
     client = Deaf()
-    target = RendererTarget(client=client, interface=FakeInterface())
+    target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(build_controls({"g": ["rest", "fist"]}))
     target.send({"g": "fist"}, {"g": "fist"})   # must not raise
     assert client.sent == []
@@ -821,7 +821,7 @@ def test_a_deferred_edge_is_dropped_loudly_rather_than_raising():
 
 def test_negotiate_settles_once_vhi_appears():
     client = Deaf()
-    target = RendererTarget(client=client, interface=FakeInterface())
+    target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(build_controls({"g": ["rest", "fist"]}))
     assert target.negotiate() is False
     client.addresses = ()
@@ -831,9 +831,9 @@ def test_negotiate_settles_once_vhi_appears():
 
 
 def test_a_target_with_no_client_is_refused_at_bind():
-    """Every address comes from the manifest, so there is nothing to render without one."""
+    """Every address comes from the manifest, so there is nothing to drive without one."""
     with pytest.raises(ValueError, match="needs a control client"):
-        RendererTarget(interface=FakeInterface()).bind(_controls("index.flexion"))
+        RemoteTarget(interface=FakeInterface()).bind(_controls("index.flexion"))
 
 
 def test_negotiate_is_idempotent_when_already_settled():
@@ -846,7 +846,7 @@ def test_negotiate_is_idempotent_when_already_settled():
 
 
 class Silent:
-    """A client whose renderer never answers."""
+    """A client whose target never answers."""
 
     def capabilities(self):
         return None
@@ -860,10 +860,10 @@ def test_a_continuous_only_config_keeps_retrying_while_vhi_is_silent():
 
     A continuous-only configuration bound while VHI was down never set `_pending`, so
     `negotiate()` reported success and never re-declared — and against a v2 build every
-    joint then rendered inverted, because the target had settled on the legacy sign.
+    joint then moved inverted, because the target had settled on the legacy sign.
     Continuous-only is the common case, so this was the common case.
     """
-    target = RendererTarget(client=Silent(), interface=FakeInterface())
+    target = RemoteTarget(client=Silent(), interface=FakeInterface())
     target.bind(_controls("index.flexion"))
     assert target.negotiated is False
     assert target.negotiate() is False, "unsettled: VHI has not answered"
@@ -871,8 +871,8 @@ def test_a_continuous_only_config_keeps_retrying_while_vhi_is_silent():
     assert target._pending is not None, "and it must still be willing to retry"
 
 
-def test_a_silent_renderer_does_not_fail_a_v2_only_configuration():
-    """Refusing at construction would reject a configuration v2 can render.
+def test_a_silent_target_does_not_fail_a_v2_only_configuration():
+    """Refusing at construction would reject a configuration v2 can drive.
 
     Two shapes used to raise out of ControlBus(): a discrete DOF with no legacy_client,
     and a DOF the legacy wire has no channel for. Both are fine on v2, and "VHI has not
@@ -882,15 +882,15 @@ def test_a_silent_renderer_does_not_fail_a_v2_only_configuration():
         build_controls({"hand.gesture": ["rest", "fist"]}),
         _controls("wrist.rotation"),
     ):
-        target = RendererTarget(client=Silent(), interface=FakeInterface())
+        target = RemoteTarget(client=Silent(), interface=FakeInterface())
         target.bind(controls)  # must not raise
         assert target._pending is not None
 
 
-def test_a_silent_renderer_that_appears_later_gets_negotiated():
+def test_a_silent_target_that_appears_later_gets_negotiated():
     """The whole point of deferring: the app launches VHI after the bus is built."""
     client = FakeClient(addresses=None)
-    target = RendererTarget(client=client, interface=FakeInterface())
+    target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(_controls("index.flexion"))
     assert target.negotiated is False
 
@@ -901,9 +901,9 @@ def test_a_silent_renderer_that_appears_later_gets_negotiated():
 
 
 def test_force_re_fetches_the_manifest_after_a_settled_negotiation():
-    """A renderer restart can hand back a different manifest; force is the remedy."""
+    """A target restart can hand back a different manifest; force is the remedy."""
     client = _client()
-    target = RendererTarget(client=client, interface=FakeInterface())
+    target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
     before = client.capability_fetches
@@ -937,7 +937,7 @@ def test_a_target_binds_without_declaring():
     """
 
     class ManifestOnlyClient:
-        """A renderer that serves GetControlManifest and nothing else."""
+        """A target that serves GetControlManifest and nothing else."""
 
         def __init__(self, manifest):
             self.manifest = manifest
@@ -948,7 +948,7 @@ def test_a_target_binds_without_declaring():
     interface = FakeInterface()
     # By-name: address == alias, exactly as `_client()` synthesises it.
     manifest = [_cap(name) for name in POSE_DOFS]
-    target = RendererTarget(client=ManifestOnlyClient(manifest), interface=interface)
+    target = RemoteTarget(client=ManifestOnlyClient(manifest), interface=interface)
     target.bind(_controls("index.flexion"))
     target.send({"index.flexion": 1.0}, {})
     assert interface.live["index.flexion"].last == pytest.approx(1.0)
@@ -974,7 +974,7 @@ def _routed_target(dofs, *, manifest=MANIFEST):
 
     controls = resolve(load_control_map({"dofs": dofs}), manifest)
     interface = FakeInterface()
-    target = RendererTarget(client=ManifestClient(manifest), interface=interface)
+    target = RemoteTarget(client=ManifestClient(manifest), interface=interface)
     target.bind(controls)
     return target, interface, controls
 
@@ -1036,19 +1036,19 @@ def test_two_aliases_on_one_control_are_refused_rather_than_racing():
         ),
         MANIFEST,
     )
-    target = RendererTarget(client=ManifestClient(), interface=FakeInterface())
+    target = RemoteTarget(client=ManifestClient(), interface=FakeInterface())
     with pytest.raises(ValueError, match="both map to"):
         target.bind(controls)
 
 
-def test_an_address_the_renderer_does_not_export_as_a_number_is_refused():
+def test_an_address_the_target_does_not_export_as_a_number_is_refused():
     """A held state cannot be driven as a number — say so rather than dropping it."""
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(
         load_control_map({"dofs": {"a": {"target": "vhi.control.gesture"}}}), MANIFEST
     )
-    target = RendererTarget(client=ManifestClient(), interface=FakeInterface())
+    target = RemoteTarget(client=ManifestClient(), interface=FakeInterface())
     target.bind(controls)
     # A discrete alias is not routed onto a stream at all; it is commanded over gRPC.
     assert target._routed == ()
@@ -1116,7 +1116,7 @@ def test_one_target_follows_the_map_onto_the_operators_hand():
 
     This used to route *nothing*: a target defaulted to the model's hand and left every
     control-pose address to a target the application had not built, so a map like this
-    rendered nowhere at all.
+    driven nowhere at all.
     """
     from myogestic.controls import load_control_map, resolve
 
@@ -1124,7 +1124,7 @@ def test_one_target_follows_the_map_onto_the_operators_hand():
         load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_HANDS
     )
     interface = FakeInterface()
-    target = RendererTarget(client=ManifestClient(TWO_HANDS), interface=interface)
+    target = RemoteTarget(client=ManifestClient(TWO_HANDS), interface=interface)
     target.bind(controls)
     assert target.claims == frozenset({"a"})
     assert interface.names == ["vhi.control.pose.index"]
@@ -1138,7 +1138,7 @@ def test_one_target_drives_both_hands_from_one_map():
     """
     controls = _two_hand_controls()
     interface = FakeInterface()
-    target = RendererTarget(client=ManifestClient(TWO_HANDS), interface=interface)
+    target = RemoteTarget(client=ManifestClient(TWO_HANDS), interface=interface)
     bus = ControlBus(controls, targets=[target], hz=32)   # refuses an unclaimed alias
     assert target.claims == {"model_index", "operator_thumb", "gesture"}
     bus.push({"model_index": 1.0, "operator_thumb": -1.0})
@@ -1151,7 +1151,7 @@ def test_each_hand_gets_only_its_own_values():
     """A leak between the hands would be silent, not loud — so pin it by name."""
     controls = _two_hand_controls()
     interface = FakeInterface()
-    target = RendererTarget(client=ManifestClient(TWO_HANDS), interface=interface)
+    target = RemoteTarget(client=ManifestClient(TWO_HANDS), interface=interface)
     bus = ControlBus(controls, targets=[target], hz=32)
     bus.push({"model_index": 1.0, "operator_thumb": -1.0})
     assert interface.names == ["vhi.prediction.index", "vhi.control.pose.thumb.flexion"], (
@@ -1163,12 +1163,12 @@ def test_each_hand_gets_only_its_own_values():
 
 def test_a_held_state_is_claimed_alongside_the_streams():
     controls = _two_hand_controls()
-    target = RendererTarget(client=ManifestClient(TWO_HANDS), interface=FakeInterface())
+    target = RemoteTarget(client=ManifestClient(TWO_HANDS), interface=FakeInterface())
     target.bind(controls)
     assert "gesture" in target.claims
 
 
-def test_an_address_no_renderer_exports_is_still_refused():
+def test_an_address_no_target_exports_is_still_refused():
     """"Not mine" must not swallow a typo, and the refusal names both namespaces.
 
     A namespace mix-up is the likely mistake — `…index` on the wrong one moves the other
@@ -1181,7 +1181,7 @@ def test_an_address_no_renderer_exports_is_still_refused():
         load_control_map({"dofs": {"a": "vhi.prediction.index"}}), TWO_HANDS
     )
     thinner = [cap for cap in TWO_HANDS if cap.address != "vhi.prediction.index"]
-    target = RendererTarget(client=ManifestClient(thinner), interface=FakeInterface())
+    target = RemoteTarget(client=ManifestClient(thinner), interface=FakeInterface())
     with pytest.raises(ValueError, match="no target can drive") as excinfo:
         target.bind(controls)
     message = str(excinfo.value)
@@ -1199,7 +1199,7 @@ def test_a_target_that_does_not_report_claims_is_assumed_to_take_everything():
         def stop(self) -> None: ...
 
     controls = _two_hand_controls()
-    target = RendererTarget(client=ManifestClient(TWO_HANDS), interface=FakeInterface())
+    target = RemoteTarget(client=ManifestClient(TWO_HANDS), interface=FakeInterface())
     bus = ControlBus(controls, targets=[target, Recorder()], hz=32)
     bus.stop()
 
@@ -1212,15 +1212,15 @@ def test_a_control_no_target_claims_is_refused_by_the_bus():
     controls = resolve(
         load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [key]
     )
-    target = RendererTarget(client=ManifestClient(TWO_HANDS), interface=FakeInterface())
-    with pytest.raises(ValueError, match="no target renders"):
+    target = RemoteTarget(client=ManifestClient(TWO_HANDS), interface=FakeInterface())
+    with pytest.raises(ValueError, match="no target drives"):
         ControlBus(controls, targets=[target], hz=32)
 
 
 # --- the stream name is the address, and nothing else ------------------------------
 #
 # Nothing on this side writes a stream name down, and there is no longer a field that
-# could: a renderer that renames a control, or ships a new one, needs no configuration at
+# could: a target that renames a control, or ships a new one, needs no configuration at
 # all, because the name it publishes under is the address it advertises.
 
 
@@ -1241,7 +1241,7 @@ def test_a_renamed_control_is_honoured_on_the_by_name_path_too():
     """
     client = ManifestClient([_cap("index.flexion")])
     interface = FakeInterface()
-    target = RendererTarget(client=client, interface=interface)
+    target = RemoteTarget(client=client, interface=interface)
     target.bind(_controls("index.flexion"))
     assert target.negotiated is True
     assert interface.names == ["index.flexion"]
@@ -1261,7 +1261,7 @@ class TestItClaimsOnlyWhatVhiExports:
     Since a key resolves to a *discrete* DOF, and this target used to claim every
     discrete DOF unconditionally, a mixed map made it over-claim a `keyboard.*`
     control that happened to share the file — reporting it as covered when nothing
-    here actually renders it.
+    here actually drives it.
     """
 
     @staticmethod
@@ -1295,36 +1295,36 @@ class TestItClaimsOnlyWhatVhiExports:
         ])
 
     def test_a_foreign_control_is_not_claimed(self):
-        """`ControlBus` trusts `claims` to catch an alias nothing renders. Over-claiming
+        """`ControlBus` trusts `claims` to catch an alias nothing drives. Over-claiming
         would make a genuinely orphaned control look covered."""
-        target = RendererTarget(client=self._vhi_only_client(), interface=FakeInterface())
+        target = RemoteTarget(client=self._vhi_only_client(), interface=FakeInterface())
         target.bind(self._mixed())
         assert "walk" not in target.claims
         assert {"close", "grip"} <= target.claims
 
     def test_vhis_own_discrete_control_is_still_claimed(self):
         """The filter must not over-reach: a gRPC-only VHI control is genuinely VHI's."""
-        target = RendererTarget(client=self._vhi_only_client(), interface=FakeInterface())
+        target = RemoteTarget(client=self._vhi_only_client(), interface=FakeInterface())
         target.bind(self._mixed())
         assert "grip" in target.claims
 
     def test_the_vhi_controls_still_bind(self):
         interface = FakeInterface()
-        target = RendererTarget(client=self._vhi_only_client(), interface=interface)
+        target = RemoteTarget(client=self._vhi_only_client(), interface=interface)
         target.bind(self._mixed())
         assert target.negotiated is True
         target.send({"close": 1.0, "grip": "Fist", "walk": "down"}, {})
         assert interface.live["vhi.prediction.index"].last == pytest.approx(1.0)
 
     def test_a_map_with_nothing_of_ours_binds_and_claims_nothing(self):
-        """A keyboard-only file in an app that also holds a RendererTarget. Not an error: the
+        """A keyboard-only file in an app that also holds a RemoteTarget. Not an error: the
         bus checks that *someone* claims every alias, so this is simply not our business."""
         from myogestic.controls import load_control_map, resolve
 
         controls = resolve(
             load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [KEY]
         )
-        target = RendererTarget(client=self._vhi_only_client(), interface=FakeInterface())
+        target = RemoteTarget(client=self._vhi_only_client(), interface=FakeInterface())
         target.bind(controls)
         assert target.claims == frozenset()
         assert target.negotiated is True
@@ -1336,8 +1336,8 @@ class TestItClaimsOnlyWhatVhiExports:
         controls = resolve(
             load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [KEY]
         )
-        target = RendererTarget(client=self._vhi_only_client(), interface=FakeInterface())
-        with pytest.raises(ValueError, match="no target renders"):
+        target = RemoteTarget(client=self._vhi_only_client(), interface=FakeInterface())
+        with pytest.raises(ValueError, match="no target drives"):
             ControlBus(controls, targets=[target], hz=32)
 
 
@@ -1345,7 +1345,7 @@ def test_a_foreign_edge_is_not_forwarded_to_vhi():
     """`changed` is the *bus's*, so on a shared map it carries every target's edges.
 
     Forwarding them made VHI log "no movement matches state 'down'" once per keystroke for
-    a control that was never its to render — harmless but wrong, and it would bury a real
+    a control that was never its to drive — harmless but wrong, and it would bury a real
     rejection in noise.
     """
     from myogestic.controls import load_control_map, resolve
@@ -1361,7 +1361,7 @@ def test_a_foreign_edge_is_not_forwarded_to_vhi():
         manifest,
     )
     client = ManifestClient([manifest[0]])
-    target = RendererTarget(client=client, interface=FakeInterface())
+    target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(controls)
     target.send({"grip": "Fist", "walk": "down"}, {"grip": "Fist", "walk": "down"})
     assert client.sent == [(None, {"vhi.control.gesture": "Fist"})]
@@ -1380,7 +1380,7 @@ def test_a_frame_of_only_foreign_edges_sends_nothing_at_all():
         [vhi_cap, key],
     )
     client = ManifestClient([vhi_cap])
-    target = RendererTarget(client=client, interface=FakeInterface())
+    target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(controls)
     target.send({"close": 0.5, "walk": "down"}, {"walk": "down"})
     assert client.sent == []
@@ -1392,15 +1392,15 @@ class TestTheControlQueueCannotGrowForever:
     Against a VHI that accepts the connection and does not answer, each send costs the full
     RPC timeout — measured 0.5 frames/s drained against 50/s produced. Unbounded, the queue
     grew for as long as the app ran, held every frame live, and replayed the whole stale
-    backlog in order once the renderer came back.
+    backlog in order once the target came back.
     """
 
     @staticmethod
     def _client():
         """A client whose sender never runs, so the queue only fills."""
-        from myogestic.renderer._control import RendererClient
+        from myogestic.remote._control import RemoteClient
 
-        client = RendererClient.__new__(RendererClient)
+        client = RemoteClient.__new__(RemoteClient)
         client._running = True
         client._dropped = 0
         client._commands = queue.Queue(maxsize=_QUEUE_DEPTH)
@@ -1408,9 +1408,9 @@ class TestTheControlQueueCannotGrowForever:
 
     def test_the_real_client_bounds_its_queue(self):
         """The bound has to be in `__init__`, not just in the drop path above."""
-        from myogestic.renderer._control import RendererClient
+        from myogestic.remote._control import RemoteClient
 
-        client = RendererClient(host="127.0.0.1", port=59999)   # nothing listening
+        client = RemoteClient(host="127.0.0.1", port=59999)   # nothing listening
         try:
             assert client._commands.maxsize == _QUEUE_DEPTH, "the queue is unbounded"
         finally:

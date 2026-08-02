@@ -4,7 +4,7 @@ This is a **VHI recording / control-hand aid**, not a control surface for an
 application's own DOFs. It reads the v2 recording aid for state and dispatches clicks
 through a caller-supplied handler, which is expected to command a *discrete
 DOF* — normally ``bus.select("gesture", state)``, under whatever alias your
-mapping file gave that control. The movement names it shows are the renderer's own
+mapping file gave that control. The movement names it shows are VHI's own
 vocabulary.
 
 Wraps the three-piece pattern most examples use verbatim:
@@ -32,7 +32,7 @@ from myogestic.widgets.vhi.palette import (
 )
 
 if TYPE_CHECKING:
-    from myogestic.renderer._recording import RecordingClient
+    from myogestic.remote._recording import RecordingClient
 
 
 class VhiMovementPanel:
@@ -41,13 +41,13 @@ class VhiMovementPanel:
     Parameters
     ----------
     client
-        The `myogestic.renderer.RecordingClient` used to fetch control-hand state
+        The `myogestic.remote.RecordingClient` used to fetch control-hand state
         (available movements, the current one, whether a recording trajectory is running).
     on_movement
         Click handler for a movement button — **required**. Wire it to a
         discrete DOF, e.g. ``lambda s: bus.select("gesture", s)`` — the states come
         from the target's manifest, so pass one of those names through. There
-        is deliberately no default: dispatching straight to a renderer would bypass
+        is deliberately no default: dispatching straight at the target would bypass
         the DOF's debounce, which is the only thing protecting a classifier-driven
         session from state chatter.
     min_interval_s

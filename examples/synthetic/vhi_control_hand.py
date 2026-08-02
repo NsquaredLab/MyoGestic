@@ -8,14 +8,14 @@ The distinction is not cosmetic: an address is only ever a name, so `…index` o
 namespace moves the *other* hand and nothing anywhere reports an error. Nothing in this
 file keeps them apart, though — the target reads the map's addresses out of VHI's
 manifest and publishes a stream named for each one. Point the same file at
-`vhi.prediction.*` instead and this app drives the other hand, unchanged. The renderer
+`vhi.prediction.*` instead and this app drives the other hand, unchanged. VHI
 follows whichever streams are present and publishing — nothing here has to ask for that.
 
 Run with:
     uv run --extra grpc python examples/synthetic/vhi_control_hand.py
 
 Workflow:
-    1. Launch "VHI Hand" → the renderer appears
+    1. Launch "VHI Hand" → VHI appears
     2. Click "Connect" → the mapping resolves against what VHI says it exports
     3. Drag the sliders → the control hand follows
 """
@@ -27,7 +27,7 @@ from imgui_bundle import imgui
 
 from myogestic import App, Fr, Grid, Px
 from myogestic.controls import ControlLink, load_control_map
-from myogestic.renderer import RendererTarget
+from myogestic.remote import RemoteTarget
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import AppLogo, ProcessLauncher
 from myogestic.widgets.common import panel_header
@@ -56,13 +56,13 @@ app = App("VHI control hand")
 # one. `link.bus` stays None until VHI can say what it exports.
 link = ControlLink(
     CONTROL_MAP,
-    [RendererTarget(client=vhi_control, interface=vhi)],
+    [RemoteTarget(client=vhi_control, interface=vhi)],
     ctx=app.ctx,
     hz=32,
 )
 
-# `launchable` not `launcher`: an unlaunchable renderer must not stop this app
-# from opening — a renderer that is already running needs no button.
+# `launchable` not `launcher`: an unlaunchable target must not stop this app
+# from opening — a target that is already running needs no button.
 PROCESSES = vhi.launchable()
 processes = ProcessLauncher(PROCESSES)
 logo = AppLogo()

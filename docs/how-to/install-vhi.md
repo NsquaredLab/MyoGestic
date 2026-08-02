@@ -19,7 +19,7 @@ atomically into the location `virtual_hand()` searches, and prints a
 single-line success summary.
 
 !!! warning "MyoGestic 2.x needs VHI 2.0 or newer"
-    MyoGestic drives VHI over the v2 control contract: it asks the renderer which
+    MyoGestic drives VHI over the v2 control contract: it asks VHI which
     controls it exports and refuses to guess. A pre-2.0 build has no manifest to
     answer with, and the v1 bridge that used to cover for that was removed — so an
     older release is not limited, it does not work.

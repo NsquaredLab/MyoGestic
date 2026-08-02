@@ -18,7 +18,7 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 
     ---
 
-    Declare what an app controls by name; targets render it.
+    Declare what an app controls by name; targets drive it.
 
     [`load_control_map`][myogestic.controls.load_control_map] · [`ControlBus`][myogestic.controls.ControlBus]
 

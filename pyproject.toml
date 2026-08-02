@@ -62,7 +62,7 @@ brainflow = ["brainflow>=5.12.0"]
 bdi = ["biosignal-device-interface>=0.1.0"]
 serial = ["pyserial>=3.5"]
 zarrs = ["zarrs>=0.2.0"]
-# gRPC control plane to a renderer (the Virtual Hand Interface is one). grpcio-tools is only
+# gRPC control plane to a remote target (the Virtual Hand Interface is one). grpcio-tools is only
 # needed to regenerate stubs via tools/gen_proto.py; generated _pb2 files are
 # committed so a plain install needs only grpcio + protobuf at runtime.
 grpc = ["grpcio>=1.60", "grpcio-tools>=1.60", "protobuf>=4.21"]
@@ -100,7 +100,7 @@ include = ["myogestic*"]
 # Ship the branding assets (icon + wordmark) and the gRPC proto inside the
 # wheel; without this, `pip install myogestic` would land them in the
 # wrong place (or skip them) and image_from_asset / gen_proto would fail.
-myogestic = ["assets/**/*", "renderer/_proto/*.proto"]
+myogestic = ["assets/**/*", "remote/_proto/*.proto"]
 
 [build-system]
 requires = ["setuptools>=68.0"]
@@ -118,7 +118,7 @@ addopts = "-m 'not lsl_contention'"
 # Generated gRPC stubs (mirror the ruff exclude): the proto-compiler output
 # trips type-checkers (e.g. EnumTypeWrapper metaclass clashes) and must not be
 # edited, so keep it out of type checking entirely.
-exclude = ["myogestic/renderer/_proto"]
+exclude = ["myogestic/remote/_proto"]
 
 [tool.ty.rules]
 # Project policy uses bare `# type: ignore` (ty does not honor bracketed
@@ -131,12 +131,12 @@ unused-type-ignore-comment = "ignore"
 [tool.pyright]
 # Same generated gRPC stubs as the ruff/ty excludes: pyright flags the
 # proto-compiler output (e.g. `grpc.experimental`), which must not be edited.
-exclude = ["myogestic/renderer/_proto", "**/.venv", "**/node_modules", "**/__pycache__"]
+exclude = ["myogestic/remote/_proto", "**/.venv", "**/node_modules", "**/__pycache__"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-exclude = ["tools", "sessions", ".venv", "*.egg-info", "*.zarr", ".imgui_state", "myogestic/renderer/_proto", "docs/playground"]
+exclude = ["tools", "sessions", ".venv", "*.egg-info", "*.zarr", ".imgui_state", "myogestic/remote/_proto", "docs/playground"]
 
 [tool.ruff.lint]
 # Conservative defaults — catch real issues, don't fight style.

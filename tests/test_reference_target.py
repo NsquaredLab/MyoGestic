@@ -1,4 +1,4 @@
-"""The reference renderer is the claim 'the contract is small', made executable."""
+"""The reference target is the claim 'the contract is small', made executable."""
 
 from __future__ import annotations
 
@@ -8,42 +8,42 @@ import time
 
 import pytest
 
-RENDERER = (
+REFERENCE = (
     pathlib.Path(__file__).parent.parent
-    / "examples" / "synthetic" / "reference_renderer.py"
+    / "examples" / "synthetic" / "reference_target.py"
 )
 
 
 @pytest.fixture(scope="module")
-def renderer_module():
+def target_module():
     pytest.importorskip("grpc")
-    spec = importlib.util.spec_from_file_location("reference_renderer", RENDERER)
+    spec = importlib.util.spec_from_file_location("reference_target", REFERENCE)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
 @pytest.mark.lsl_contention
-def test_a_control_bus_drives_the_reference_renderer(renderer_module):
+def test_a_control_bus_drives_the_reference_target(target_module):
     """Serve a manifest, read a stream, get driven. No Declare in the path.
 
     Deselected from the default run (see the `lsl_contention` marker registered in
-    pyproject.toml): a bounded 3-attempt retry with a fresh outlet/renderer/inlet per
+    pyproject.toml): a bounded 3-attempt retry with a fresh outlet/rig/inlet per
     attempt (see git history for the tried-and-reverted version) still failed outright
     in 2 of 3 full-suite runs on this dev machine, so retrying does not make this a
     signal the default suite can carry. It passes reliably every time run alone —
     `uv run --extra grpc --extra dev pytest -m lsl_contention -q`. See CLAUDE.md.
     """
     from myogestic.controls import connect_controls, load_control_map
-    from myogestic.renderer import RendererTarget
+    from myogestic.remote import RemoteTarget
     from myogestic.vhi import virtual_hand
 
-    renderer = renderer_module.ReferenceRenderer(port=50099)
-    renderer.serve()
+    rig = target_module.ReferenceTarget(port=50099)
+    rig.serve()
     try:
         vhi = virtual_hand(grpc_port=50099)
         client = vhi.control_client()
-        # Two addresses, and on this renderer that is two streams — one per control,
+        # Two addresses, and on this target that is two streams — one per control,
         # named for the control.
         control_map = load_control_map(
             {"dofs": {"close": "vhi.prediction.index", "spread": "vhi.prediction.little"}}
@@ -51,30 +51,30 @@ def test_a_control_bus_drives_the_reference_renderer(renderer_module):
         # No stream is named on this side and there is no field that could name one: a
         # control's stream is its address, and the target publishes under exactly that —
         # which is the whole reason this end-to-end can find the other end at all.
-        target = RendererTarget(client=client, interface=vhi)
+        target = RemoteTarget(client=client, interface=vhi)
         bus = connect_controls(control_map, [target], hz=32)
-        assert bus is not None, "the renderer's manifest did not resolve"
+        assert bus is not None, "the target's manifest did not resolve"
 
-        # Opposite signs, because a renderer applying each address as it arrives has to be
+        # Opposite signs, because a target applying each address as it arrives has to be
         # caught writing one value onto both streams — which a matching pair would hide.
         index, little = "vhi.prediction.index", "vhi.prediction.little"
         deadline = time.time() + 10.0
-        while time.time() < deadline and renderer.pose[index] < 0.9:
+        while time.time() < deadline and rig.pose[index] < 0.9:
             bus.push({"close": 1.0, "spread": -1.0})
             time.sleep(0.1)
-        assert renderer.pose[index] == pytest.approx(1.0, abs=0.05), renderer.pose
-        assert renderer.pose[little] == pytest.approx(-1.0, abs=0.05), renderer.pose
+        assert rig.pose[index] == pytest.approx(1.0, abs=0.05), rig.pose
+        assert rig.pose[little] == pytest.approx(-1.0, abs=0.05), rig.pose
         bus.stop()
         client.stop()
     finally:
-        renderer.stop()
+        rig.stop()
 
 
-def test_a_renderer_reporting_an_older_vocabulary_is_refused_by_name(renderer_module):
+def test_a_target_reporting_an_older_vocabulary_is_refused_by_name(target_module):
     """The gate that makes a version-skewed pair say so instead of just not moving.
 
-    MyoGestic and the renderer are installed separately, so an upgrade on one side is not
-    an upgrade on both. A vocabulary-1 renderer listens for a wide pose stream nothing
+    MyoGestic and the target are installed separately, so an upgrade on one side is not
+    an upgrade on both. A vocabulary-1 target listens for a wide pose stream nothing
     publishes any more and reports nothing at all — the hand simply never moves. This is
     the one place that turns that into a sentence.
 
@@ -83,16 +83,16 @@ def test_a_renderer_reporting_an_older_vocabulary_is_refused_by_name(renderer_mo
     """
     from myogestic.vhi import virtual_hand
 
-    class Antique(renderer_module.ReferenceRenderer):
-        """The same renderer, still claiming the vocabulary it served before the split."""
+    class Antique(target_module.ReferenceTarget):
+        """The same target, still claiming the vocabulary it served before the split."""
 
         def GetControlManifest(self, request, context):   # noqa: N802 - gRPC's spelling
             manifest = super().GetControlManifest(request, context)
             manifest.vocabulary_version = "1"
             return manifest
 
-    renderer = Antique(port=50098)
-    renderer.serve()
+    rig = Antique(port=50098)
+    rig.serve()
     try:
         client = virtual_hand(grpc_port=50098).control_client()
         try:
@@ -101,25 +101,25 @@ def test_a_renderer_reporting_an_older_vocabulary_is_refused_by_name(renderer_mo
         finally:
             client.stop()
     finally:
-        renderer.stop()
+        rig.stop()
 
     message = str(excinfo.value)
     # Both versions by name, and the remedy: a refusal that says only "incompatible"
     # leaves the reader to guess which side is behind.
     assert "vocabulary 1" in message, message
     assert "needs 2 or newer" in message, message
-    # Named, so the instruction is one the reader can act on. The reference renderer calls
+    # Named, so the instruction is one the reader can act on. The reference target calls
     # itself "reference"; telling its author to update VHI would be advice about a
     # different program.
     assert message.endswith("Update reference."), message
 
 
-def test_two_discrete_controls_are_told_apart_by_address(renderer_module):
+def test_two_discrete_controls_are_told_apart_by_address(target_module):
     """The case a state-keyed contract could not express at all.
 
     Both controls declare a state called ``hold``, so the state says nothing about which
     of them a command is for. A `SetControl` keyed by the client's *alias* leaves the
-    renderer two ways to guess and no way to know: match the key against the addresses it
+    target two ways to guess and no way to know: match the key against the addresses it
     advertised and every command is rejected, or resolve on the state alone and the two
     controls are indistinguishable. Keyed by address, there is nothing to guess.
 
@@ -127,13 +127,13 @@ def test_two_discrete_controls_are_told_apart_by_address(renderer_module):
     trip and runs in the default suite.
     """
     from myogestic.controls import load_control_map, resolve
-    from myogestic.renderer import RendererTarget
+    from myogestic.remote import RemoteTarget
     from myogestic.vhi import virtual_hand
 
-    pb2 = renderer_module.pb2
+    pb2 = target_module.pb2
 
-    class TwoModes(renderer_module.ReferenceRenderer):
-        """The reference renderer plus two discrete controls that share a vocabulary."""
+    class TwoModes(target_module.ReferenceTarget):
+        """The reference target plus two discrete controls that share a vocabulary."""
 
         #: Address -> its states. `hold` belongs to both, which is the whole point.
         DISCRETE = {
@@ -164,7 +164,7 @@ def test_two_discrete_controls_are_told_apart_by_address(renderer_module):
             for address, state in request.discrete.items():
                 states = self.DISCRETE.get(address)
                 if states is None:
-                    rejected[address] = f"{address!r} is not a control this renderer exports"
+                    rejected[address] = f"{address!r} is not a control this target exports"
                 elif state not in states:
                     rejected[address] = f"{state!r} is not one of {list(states)}"
                 else:
@@ -176,13 +176,13 @@ def test_two_discrete_controls_are_told_apart_by_address(renderer_module):
             need is exactly the LSL contention the default suite must not carry."""
             self._stop.wait()
 
-    renderer = TwoModes(port=50097)
-    renderer.serve()
+    rig = TwoModes(port=50097)
+    rig.serve()
     try:
         vhi = virtual_hand(grpc_port=50097)
         client = vhi.control_client()
         try:
-            # Aliases deliberately unlike the addresses: whatever reaches the renderer had
+            # Aliases deliberately unlike the addresses: whatever reaches the target had
             # to have been translated, and only the address translates.
             controls = resolve(
                 load_control_map(
@@ -190,28 +190,28 @@ def test_two_discrete_controls_are_told_apart_by_address(renderer_module):
                 ),
                 client.capabilities(),
             )
-            target = RendererTarget(client=client, interface=vhi)
+            target = RemoteTarget(client=client, interface=vhi)
             target.bind(controls)
             assert target.negotiated is True
             target.send({}, {"twist": "hold"})
 
             deadline = time.time() + 5.0
-            while time.time() < deadline and renderer.state["rig.mode.wrist"] == "open":
+            while time.time() < deadline and rig.state["rig.mode.wrist"] == "open":
                 time.sleep(0.02)
         finally:
             client.stop()
     finally:
-        renderer.stop()
+        rig.stop()
 
-    assert renderer.state["rig.mode.wrist"] == "hold", renderer.state
-    # The one that matters: `hold` is a state of this control too, so a renderer that had
+    assert rig.state["rig.mode.wrist"] == "hold", rig.state
+    # The one that matters: `hold` is a state of this control too, so a target that had
     # only the state to go on could just as well have moved this one.
-    assert renderer.state["rig.mode.gripper"] == "open", renderer.state
+    assert rig.state["rig.mode.gripper"] == "open", rig.state
 
 
-def test_the_reference_renderer_reports_the_vocabulary_this_client_needs(renderer_module):
-    """The example renderers ship must be one a current MyoGestic will actually drive."""
-    from myogestic.renderer._control import _MIN_VOCABULARY, _vocabulary
+def test_the_reference_target_reports_the_vocabulary_this_client_needs(target_module):
+    """The example target this repo ships must be one a current MyoGestic will drive."""
+    from myogestic.remote._control import _MIN_VOCABULARY, _vocabulary
 
-    manifest = renderer_module.ReferenceRenderer(port=0).GetControlManifest(None, None)
+    manifest = target_module.ReferenceTarget(port=0).GetControlManifest(None, None)
     assert _vocabulary(manifest.vocabulary_version) >= _MIN_VOCABULARY

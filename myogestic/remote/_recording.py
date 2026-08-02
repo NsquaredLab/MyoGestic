@@ -1,6 +1,6 @@
-"""Client for a renderer's recording session gate and trajectories.
+"""Client for a remote target's recording session gate and trajectories.
 
-Separate from `myogestic.renderer._control` for the same reason the RPCs are grouped
+Separate from `myogestic.remote._control` for the same reason the RPCs are grouped
 apart on the service: **none of this is control**. A DOF is something an
 application commands; these are properties of a recording *session*.
 
@@ -22,21 +22,21 @@ import logging
 
 import grpc
 
-from myogestic.renderer._proto import renderer_control_pb2 as pb2
-from myogestic.renderer._proto.renderer_control_pb2_grpc import RendererControlStub
+from myogestic.remote._proto import remote_control_pb2 as pb2
+from myogestic.remote._proto.remote_control_pb2_grpc import RemoteControlStub
 
-log = logging.getLogger("myogestic.renderer.recording")
+log = logging.getLogger("myogestic.remote.recording")
 
 _RPC_TIMEOUT_S = 3.0
 
 
 class RecordingClient:
-    """Drive a renderer's recording session: the session gate and trajectories.
+    """Drive a remote target's recording session: the session gate and trajectories.
 
     Parameters
     ----------
     host, port
-        The renderer's gRPC server — the same one `myogestic.renderer._control.RendererClient`
+        The target's gRPC server — the same one `myogestic.remote._control.RemoteClient`
         uses. There is one service now, not a second port.
 
     Examples
@@ -50,16 +50,16 @@ class RecordingClient:
     def __init__(self, host: str = "127.0.0.1", port: int = 50051):
         self.target = f"{host}:{port}"
         self._channel = grpc.insecure_channel(self.target)
-        self._stub = RendererControlStub(self._channel)
+        self._stub = RemoteControlStub(self._channel)
         self._seen_errors: set[tuple[str, str]] = set()
         self.available = False
 
     # --- the session gate ----------------------------------------------------
 
     def set_recording_session(self, active: bool) -> bool:
-        """Open or close a recording session. Returns whether the renderer applied it.
+        """Open or close a recording session. Returns whether the target applied it.
 
-        While active, the renderer ignores its own local input, so a recording has a single
+        While active, the target ignores its own local input, so a recording has a single
         movement source. Returns ``False`` rather than raising when the aid is absent
         — a caller can then decide whether an ungated recording is acceptable, which
         is a judgement about experiment integrity and not this client's to make.
@@ -81,7 +81,7 @@ class RecordingClient:
         """Start cycling ``movement`` so the control hand sweeps a range.
 
         This is the recording aid, not a control command: it deliberately keeps the
-        rig moving. The defaults leave the renderer's own timing alone — a non-positive
+        rig moving. The defaults leave the target's own timing alone — a non-positive
         frequency and negative hold/rest times mean "don't change it".
 
         Refused while another trajectory is running: a recording is being aligned
@@ -110,7 +110,7 @@ class RecordingClient:
     # --- state ---------------------------------------------------------------
 
     def state(self) -> pb2.RecordingSessionState | None:
-        """The session's state, or ``None`` when the renderer does not offer it."""
+        """The session's state, or ``None`` when the target does not offer it."""
         try:
             reply = self._stub.GetRecordingSessionState(
                 pb2.GetRecordingSessionStateRequest(), timeout=_RPC_TIMEOUT_S
@@ -149,7 +149,7 @@ class RecordingClient:
         self.available = True
         self._seen_errors.clear()
         if not ack.applied:
-            log.warning("the renderer refused %s: %s", rpc_name, ack.message)
+            log.warning("the target refused %s: %s", rpc_name, ack.message)
         return ack.applied
 
     def _log_failure(self, operation: str, error: Exception, *, level: int = logging.WARNING) -> None:

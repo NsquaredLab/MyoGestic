@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 class Target(Protocol):
-    """Render some control DOFs. One protocol for every application.
+    """Drive some control DOFs. One protocol for every application.
 
     A target is **user-owned**, exactly like `myogestic.outputs.Output`: construct
     it, hand it to a `ControlBus`, and register teardown with
@@ -33,7 +33,7 @@ class Target(Protocol):
     Notes
     -----
     `bind` runs on the main thread at construction and **may raise** — that is the
-    place to reject a configuration this target cannot render, while there is still
+    place to reject a configuration this target cannot drive, while there is still
     a human reading the traceback. `send` runs on the predict thread and must not
     raise; the bus already guarantees every value it delivers is finite and inside
     its declared range.
@@ -70,11 +70,11 @@ class Target(Protocol):
     # and means something specific rather than nothing.
 
     claims: frozenset[str]
-    """Which aliases this target renders, for the bus's coverage check.
+    """Which aliases this target drives, for the bus's coverage check.
 
     Absent means "assume it takes everything" — right for a recorder or a test double
     that does not know. But if *every* target reports and a control appears in none of
-    them, nothing renders it, which looks exactly like a control that works and holds
+    them, nothing drives it, which looks exactly like a control that works and holds
     still. Report it if you can.
     """
 
@@ -83,7 +83,7 @@ class Target(Protocol):
 
         What `myogestic.controls.connect_controls` asks so it can resolve a map before
         anything is bound. Return `None` — not an empty sequence — while the target
-        cannot answer, e.g. a renderer that has not started: empty reads as "renders
+        cannot answer, e.g. a remote target that has not started: empty reads as "drives
         nothing" and would resolve to a bus that silently drives nothing.
 
         Absent is fine for a target whose vocabulary is fixed and known to the caller.
@@ -112,7 +112,7 @@ class ControlBus:
     controls
         The validated configuration.
     targets
-        Targets to deliver to. Each is `bind`-ed now, so a target that cannot render
+        Targets to deliver to. Each is `bind`-ed now, so a target that cannot drive
         this configuration says so while a human is watching.
     smoothing
         Optional `myogestic.outputs.filters.VectorFilter` over the continuous
@@ -195,12 +195,12 @@ class ControlBus:
         self._check_every_control_is_claimed(controls)
 
     def _check_every_control_is_claimed(self, controls: ControlSet) -> None:
-        """Refuse a control no target will render.
+        """Refuse a control no target will drive.
 
         Several targets can share one control space — one per Virtual Hand, say — so no
         single target need claim all of it, and a target that does not know what it claims
         (a recorder, a test double) is assumed to take everything. But if *every* target
-        reports its claims and a control appears in none of them, nothing renders it: the
+        reports its claims and a control appears in none of them, nothing drives it: the
         failure that looks exactly like a control which is working and holding still.
         """
         reported = [getattr(target, "claims", None) for target in self._targets]
@@ -212,9 +212,9 @@ class ControlBus:
         orphans = [name for name in controls.dofs if name not in claimed]
         if orphans:
             raise ValueError(
-                f"no target renders {sorted(orphans)}. Each target drives one of the "
-                f"renderer's pose streams, so a control on another stream needs a target "
-                f"for that stream too — add one, or take the control out of the map."
+                f"no target drives {sorted(orphans)}. Each target claims the addresses it "
+                f"handles, so a control claimed by none of them needs a target of its own "
+                f"— add one, or take the control out of the map."
             )
 
     def _record(self, name: str) -> Callable[[str], None]:
@@ -364,10 +364,10 @@ def connect_controls(
     The bind every VHI application has to do, and had to write out: a control map names
     *addresses*, and what an address means — number or held state, its range, its neutral
     value — belongs to the target. So a map cannot be resolved until the targets can
-    answer, and an application that launches its own renderer has nobody to ask at import.
+    answer, and an application that launches its own target has nobody to ask at import.
 
     Call it from a UI handler, or anywhere that can afford to block, and call it again
-    until it returns something. **Never from a predict callback**: asking a renderer costs
+    until it returns something. **Never from a predict callback**: asking a target costs
     an RPC, and stalling the control loop on it is worse than a frame with no bus.
 
     Parameters
@@ -376,7 +376,7 @@ def connect_controls(
         The parsed `~myogestic.controls.ControlMap`, from `~myogestic.controls.load_control_map`.
     targets
         Every target the map may name, already constructed. Each is asked what it exports;
-        one that answers `None` — a renderer that has not started — makes the whole call
+        one that answers `None` — a remote target that has not started — makes the whole call
         return `None`, because a map resolved against a partial manifest would bind some
         aliases and silently drop the rest.
     ctx
@@ -400,7 +400,7 @@ def connect_controls(
         try:
             got = fetch() if callable(fetch) else None
         except ValueError as exc:
-            # A target that answered and refused the answer — a renderer too old for the
+            # A target that answered and refused the answer — a remote target too old for the
             # vocabulary this client speaks, say. Reported and retried rather than raised:
             # this is called from a button handler, so a raise takes the window down, and
             # the two outcomes a caller can act on are "got a bus" and "did not". The
@@ -428,8 +428,8 @@ class ControlLink:
     """Hold `connect_controls`'s retry, so an application does not carry it as a global.
 
     `connect_controls` answers `None` while a target cannot yet say what it exports,
-    which is the *normal* state for an application that launches its own renderer: it
-    necessarily binds before the renderer exists. That leaves every such application
+    which is the *normal* state for an application that launches its own target: it
+    necessarily binds before that target exists. That leaves every such application
     holding the same three things — a nullable bus, a guard, and a re-try — and every
     one of them wrote it out. This is those three things and nothing else.
 
@@ -446,7 +446,7 @@ class ControlLink:
     >>> from myogestic.controls import ControlLink, load_control_map
     >>> class NotStartedYet:
     ...     def capabilities(self):
-    ...         return None                   # the renderer is not up
+    ...         return None                   # the target is not up
     >>> control_map = load_control_map({"dofs": {"aim": "cursor.x"}})
     >>> link = ControlLink(control_map, [NotStartedYet()])
     >>> link.ensure() is None                 # call it again on the next click
@@ -457,7 +457,7 @@ class ControlLink:
     Notes
     -----
     Call `ensure` from a UI handler or a training thread — anywhere that can afford to
-    block — and **never from ``@pipeline.predict``**: asking a renderer what it exports
+    block — and **never from ``@pipeline.predict``**: asking a target what it exports
     costs a blocking RPC, and that callback has a deadline. `predict` reads `bus` and
     no-ops while it is `None`.
     """

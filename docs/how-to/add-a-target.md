@@ -1,7 +1,7 @@
 # Drive your own device
 
-A **target** is a Python object that renders a control map onto something — a hand, a
-cursor, a prosthesis, a motor controller. MyoGestic ships two ([`RendererTarget`][myogestic.renderer.RendererTarget] and
+A **target** is a Python object that drives a control map onto something — a hand, a
+cursor, a prosthesis, a motor controller. MyoGestic ships two ([`RemoteTarget`][myogestic.remote.RemoteTarget] and
 [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget]); this is how you write a third.
 
 There is one way to do it. A target is a plain object with three methods, you hand it to a
@@ -10,7 +10,7 @@ nothing subclasses, nothing is discovered by name.
 
 If "control map", "address" and "alias" are new words, read [Concepts ›
 Controls](../concepts/controls.md) first — it explains the system, and why you would pick this
-route over a [renderer](build-a-renderer.md).
+route over a [remote target](drive-a-remote-target.md).
 
 ## The contract
 
@@ -25,7 +25,7 @@ class Target(Protocol):
 ```
 
 `bind` runs once, on the main thread, and **may raise** — that is where you refuse a
-configuration you cannot render, while a human is still reading the traceback. `send` runs
+configuration you cannot drive, while a human is still reading the traceback. `send` runs
 on the predict thread and **must not raise**; every value it gets is already finite and
 inside its declared range, because [`ControlBus`][myogestic.controls.ControlBus] sanitised
 the frame before fanning it out.
@@ -34,7 +34,7 @@ The two optional members are what the bus asks for by name:
 
 | member | absent means | present means |
 |---|---|---|
-| `claims` | "assume it renders everything" | the aliases it drives, so the bus can catch a control nothing renders |
+| `claims` | "assume it drives everything" | the aliases it drives, so the bus can catch a control nothing drives |
 | `capabilities()` | "the caller already knows my vocabulary" | what addresses you export, so a map can be resolved against you |
 
 ## A complete target
@@ -113,8 +113,8 @@ bus.stop()
 ```
 
 `connect_controls` returns `None` — rather than raising — while any target's
-`capabilities()` says `None`. That is the case where a renderer has not started yet: an
-application that launches its own renderer necessarily binds before it exists, so the
+`capabilities()` says `None`. That is the case where a remote target has not started yet: an
+application that launches its own target necessarily binds before it exists, so the
 answer is to ask again later, not to fail.
 
 [`ControlLink`][myogestic.controls.ControlLink] is that retry, so you do not keep it as a
@@ -132,7 +132,7 @@ def on_click():                 # a button handler, or a training thread
         link.bus.push({"aim_x": 0.5, "aim_y": -0.25})
 
 on_click()
-assert link.bus is not None     # this target answers immediately; a renderer would not
+assert link.bus is not None     # this target answers immediately; a remote one would not
 link.stop()                     # rests every target and clears the bus
 ```
 
@@ -164,7 +164,7 @@ uses and the same map can drive your device and a Virtual Hand at once, with one
 bus = ControlBus(controls, targets=[cursor, vhi_target], hz=32)
 ```
 
-The bus checks that *someone* claims every alias, so an address no target renders is caught
+The bus checks that *someone* claims every alias, so an address no target drives is caught
 at bind rather than looking like a control that works and holds still.
 
 ## What the standard asks of you
@@ -174,12 +174,12 @@ direction the name denotes. `cursor.x` at `+1` should move right if you called i
 A one-way control declares `lo=0.0` instead.
 
 Getting a sign backwards is the one mistake that survives every test you are likely to
-write, because a renderer and its own read-back agree with each other whichever way they
+write, because a device and its own read-back agree with each other whichever way they
 point. Check it against something outside the loop — a person looking at the device.
 
 ## See also
 
-- [Build a renderer](build-a-renderer.md) — for a separate application rather than an in-process object
+- [Drive a remote target](drive-a-remote-target.md) — for a separate application rather than an in-process object
 - [Add a custom output](add-an-output.md) — for a plain data sink with no control space
-- [Integrate the Virtual Hand](integrate-vhi.md) — the one renderer this project ships
+- [Integrate the Virtual Hand](integrate-vhi.md) — the one remote target this project ships
 - [Controls reference](../api/controls.md) — `Capability`, `ControlSet`, address rules

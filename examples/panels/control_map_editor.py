@@ -25,7 +25,7 @@ FINGERS = ("thumb", "index", "middle", "ring", "little")
 #: What a VHI build reports, mirrored: one address per control, each carried on a stream
 #: named after it and one channel wide. Two aliases pointing at one *address* is the
 #: collision the editor refuses — there is no second spelling of a control to collapse
-#: first, because a renderer advertises exactly one.
+#: first, because a target advertises exactly one.
 MANIFEST = [
     *(
         Capability(
@@ -60,7 +60,7 @@ SCRATCH.write_text(
 
 
 class _FakeTarget:
-    """Stand-in for RendererClient — no gRPC, always answers."""
+    """Stand-in for RemoteClient — no gRPC, always answers."""
 
     def capabilities(self):
         return MANIFEST

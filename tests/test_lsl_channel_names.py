@@ -92,15 +92,15 @@ def test_the_positional_constructor_still_works():
 # --- the VHI pose stream describes itself ---------------------------------------
 
 
-def test_the_vhi_pose_stream_is_the_renderers_full_width():
-    """`InterfaceSpec.outlet` builds an unlabelled stream at the renderer's pose width.
+def test_the_vhi_pose_stream_is_vhis_full_width():
+    """`InterfaceSpec.outlet` builds an unlabelled stream at the target's pose width.
 
     The loopback matters here for the same reason as above: a fake interface proves the
     hand-off but not that what it builds is something LSL will actually publish and a
     consumer resolve.
 
     It used to be narrow and labelled — a channel per driven control, named with its
-    address — so the renderer could put a compacted frame back together. A channel is an
+    address — so the target could put a compacted frame back together. A channel is an
     address; nothing is compacted and nothing needs a label.
     """
     from myogestic.sources import LSLSource

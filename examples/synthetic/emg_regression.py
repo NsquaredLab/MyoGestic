@@ -30,7 +30,7 @@ from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_regressor
-from myogestic.renderer import RendererTarget
+from myogestic.remote import RemoteTarget
 from myogestic.session import (
     iter_aligned_windows,
     iter_labeled_windows,
@@ -70,7 +70,7 @@ output_filter = PostProcessor(hz=32)
 # VHI declares. What an address means — number or held state, its range, its states — is
 # VHI's to say, so this stays unresolved until VHI answers (see `link` below).
 #
-# No VHI channel number appears here, and none should: `RendererTarget` owns the
+# No VHI channel number appears here, and none should: `RemoteTarget` owns the
 # translation to whatever the hand happens to want on the wire.
 # --8<-- [start:dofs]
 CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "regression.toml"
@@ -80,7 +80,7 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 # Which recorded column each alias learns from, worked out from the map alone.
 #
 # Training reads sessions off a disk. It used to demand a running VHI first — not for
-# anything the renderer does, but to be told which aliases were continuous, and the map
+# anything the target does, but to be told which aliases were continuous, and the map
 # already says which addresses they point at. So a model could not be trained from
 # recordings without launching the thing the recordings were made with, and the check
 # never passed anyway, because the global it tested was left behind by an earlier
@@ -122,7 +122,7 @@ PROCESSES = [
     ),
     # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
     # Hand share one launcher panel. `launchable` rather than `launcher` because an
-    # unlaunchable renderer must not stop this app from opening — a running one needs no
+    # unlaunchable target must not stop this app from opening — a running one needs no
     # button, and the reason is logged either way.
     *vhi.launchable(),
 ]
@@ -147,14 +147,14 @@ pipeline = Pipeline(app)
 # `link.bus` stays None until `link.ensure()` succeeds, on the first click that needs it.
 #
 # Once built, one bus owns the whole output path: substitute rest -> clip -> smooth ->
-# clip again -> hand it to every target. `RendererTarget` is what turns resolved aliases into
-# whatever this VHI renders on the wire, on whichever of its streams the map's addresses
+# clip again -> hand it to every target. `RemoteTarget` is what turns resolved aliases into
+# whatever this VHI drives on the wire, on whichever of its streams the map's addresses
 # turn out to be on. No hand and no stream is named here: the target looks this file's
 # addresses up in VHI's manifest and publishes one stream per address it drives, each
 # named for that address and one channel wide.
 link = ControlLink(
     CONTROL_MAP,
-    [RendererTarget(client=vhi_control, interface=vhi)],
+    [RemoteTarget(client=vhi_control, interface=vhi)],
     ctx=app.ctx,
     smoothing=output_filter,
     hz=32,
@@ -281,7 +281,7 @@ def predict(model, features):
     pred = model.predict(features.reshape(1, -1))[0]
     # Still the model's own vocabulary: the bus is keyed by alias, and the routing to
     # VHI's addresses travels with the resolved set. The bus sanitises, smooths and
-    # renders. No clip here: each alias's resolved range is the authority, and clipping
+    # drives. No clip here: each alias's resolved range is the authority, and clipping
     # before the smoother would let the filter overshoot straight back out of it.
     return {"dof": bus.push(dict(zip(DOF_NAMES, pred, strict=True)))}
 

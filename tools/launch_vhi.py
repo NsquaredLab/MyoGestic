@@ -1,7 +1,7 @@
 """Start the Virtual Hand and wait, so it can be a launch target of its own.
 
 Every GUI example launches VHI from its own `ProcessLauncher` button, but two things
-that need a running renderer have no UI to click: `tools/inspect_control.py`
+that need a running VHI have no UI to click: `tools/inspect_control.py`
 and `tools/check_vhi_bridge.py`. This is the prerequisite for those — run it, leave it
 running, and run the other in a second terminal or debug session.
 
@@ -11,7 +11,7 @@ It resolves the same way the examples do, so it honours an installed release *an
 source-mode (`$VHI_PATH` + `$GODOT_BIN`) without knowing which it got. If VHI is not
 installed it prints the install command rather than failing obscurely.
 
-Ctrl-C stops the renderer. Nothing else is written or changed.
+Ctrl-C stops it. Nothing else is written or changed.
 """
 
 from __future__ import annotations

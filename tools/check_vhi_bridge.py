@@ -1,10 +1,10 @@
-"""Live check that VHI renders control DOFs as their names claim.
+"""Live check that VHI moves control DOFs as their names claim.
 
-This is the one thing no offline test can prove. ``tests/test_renderer_target.py`` pins
-exactly what `myogestic.renderer.RendererTarget` puts on the wire, and
+This is the one thing no offline test can prove. ``tests/test_remote_target.py`` pins
+exactly what `myogestic.remote.RemoteTarget` puts on the wire, and
 ``tests/test_vhi_legacy.py`` pins those wire values against two real recorded
 sessions — but both stop at the wire. Whether channel 2 at ``-1`` curls the *index*
-finger, and curls rather than extends it, is a fact about VHI's renderer that only
+finger, and curls rather than extends it, is a fact about VHI's own rig that only
 VHI can answer.
 
 Two claims are under test, and each is a decision the migration rests on:
@@ -13,7 +13,7 @@ Two claims are under test, and each is a decision the migration rests on:
    *consumer*. The fixtures that confirm it come from ``ControlHandSkeleton``, the
    *producer*. They agree, which is strong — but if the two skeletons ever indexed
    differently, offline evidence could not tell.
-2. **The extension half renders.** VHI multiplies the sample by a per-bone gain with
+2. **The extension half moves.** VHI multiplies the sample by a per-bone gain with
    no clamping, so a control ``-1`` should rotate the other way rather than being
    ignored. That reading is why the control domain is signed ``[-1, 1]`` at all. It
    has never been observed, because no operator ever extended on record.
@@ -32,7 +32,7 @@ from __future__ import annotations
 import time
 
 from myogestic.controls import Continuous, ControlBus, ControlSet
-from myogestic.renderer import RendererTarget
+from myogestic.remote import RemoteTarget
 from myogestic.vhi import virtual_hand
 from myogestic.vhi.pose import POSE_DOFS
 
@@ -59,7 +59,7 @@ def main() -> None:
     # `interface=` rather than an outlet: the stream a target writes is the one the
     # manifest says carries these controls, so it is not this file's to name or size.
     # No smoothing: a ramp would blur which frame produced which pose.
-    target = RendererTarget(client=vhi.control_client(), interface=vhi)
+    target = RemoteTarget(client=vhi.control_client(), interface=vhi)
     bus = ControlBus(controls, targets=[target])
 
     print(f"Driving {len(POSE_DOFS)} DOFs, one at a time. Watch the PREDICTED hand.\n")

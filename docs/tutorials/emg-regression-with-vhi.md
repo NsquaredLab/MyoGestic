@@ -4,8 +4,8 @@ End-to-end walkthrough of
 [`examples/synthetic/emg_regression.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_regression.py):
 8-channel synthetic EMG → MyoVerse RMS+MAV+WL features →
 **multi-output CatBoost regressor** → five control DOFs → a
-`ControlBus` that sanitises and smooths them → a `RendererTarget` that
-renders them on the Virtual Hand.
+`ControlBus` that sanitises and smooths them → a `RemoteTarget` that
+drives them on the Virtual Hand.
 
 Why regression and not classification? Two reasons it's the next thing
 to learn after `emg_classification.py`:
@@ -20,7 +20,7 @@ to learn after `emg_classification.py`:
   resulting kinematics over LSL, and pushes the predicted pose back over
   LSL. Three streams, three roles.
 
-If you haven't yet, read [Build a renderer](../how-to/build-a-renderer.md) for the
+If you haven't yet, read [Drive a remote target](../how-to/drive-a-remote-target.md) for the
 dual-plane architecture in general and
 [Integrate the Virtual Hand](../how-to/integrate-vhi.md) for what VHI calls its own
 controls; this page walks the specific script.
@@ -100,7 +100,7 @@ substitution comes first because `min(hi, max(lo, nan))` is `lo`, so a
 NaN prediction would otherwise arrive as a full-scale deflection; the
 second clip exists because a smoother undershoots on a falling edge.
 
-`RendererTarget` refuses at construction what it cannot render. Declare
+`RemoteTarget` refuses at construction what it cannot drive. Declare
 something this hand has no joint for and it raises, listing what it does
 have — because a silently dropped joint looks exactly like a joint that
 is working and holding still.

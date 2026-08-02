@@ -19,20 +19,20 @@ ch   what VHI does with it                                 name
 
 **The values are control-standard**: ``+1`` is the direction the name denotes, ``0`` is rest.
 There is no second convention and no decoding step. There used to be: VHI's ground-truth
-outlet published the renderer's own units, in which a fist read ``-1`` on the flexion
+outlet published VHI's own rig units, in which a fist read ``-1`` on the flexion
 channels — the opposite of the prediction stream it existed to be compared against — and this
 module was a bridge that negated them. Both ends speak the standard now, and recordings made
 before that were converted once by `myogestic.tools.migrate_vhi_sessions`, which stamps
 ``pose_convention`` into the session's metadata. A session without that stamp has not been
 converted; convert it rather than teaching a reader to branch.
 
-Channels 6-8 are zero in every session recorded before 2026-07-31, because the old renderer
+Channels 6-8 are zero in every session recorded before 2026-07-31, because the old VHI build
 hardcoded them rather than reading the wrist it was already animating. That is a fact about
 the corpus, not about the format, and nothing here may treat it as a limit.
 
 This is a *layout*, not an interface. The control standard does not know these channels exist
 and nothing in it should learn: a live target is asked where its controls are
-(`myogestic.renderer.RendererTarget` does exactly that), and only recorded data needs a table.
+(`myogestic.remote.RemoteTarget` does exactly that), and only recorded data needs a table.
 """
 
 from __future__ import annotations

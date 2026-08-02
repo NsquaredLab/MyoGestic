@@ -142,7 +142,7 @@ def _status_of(state: _ProcState) -> tuple[imgui.ImVec4, str]:
     landed — a process in an uninterruptible wait ignores SIGKILL. `poll()` reports that
     one as plainly running, so the dot went green and the tooltip named its PID for a
     process the user had just pressed Stop on. That reads as "nothing happened, press
-    Launch again", which is how four renderers ended up alive at once.
+    Launch again", which is how four VHI processes ended up alive at once.
 
     The string is what the header's tooltip says. Colour alone cannot be the whole signal:
     a dot is small, and red against green is the one pair a reader may not be able to tell

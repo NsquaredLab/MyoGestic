@@ -52,7 +52,7 @@ from imgui_bundle import imgui
 from myogestic.widgets.common import DANGER, SUCCESS, panel_header, pop_selected, push_selected
 
 if TYPE_CHECKING:
-    from myogestic.renderer._recording import RecordingClient
+    from myogestic.remote._recording import RecordingClient
 
 # Movement button size. Columns are computed from the panel width, so the grid
 # reflows as the panel is resized. Width fits VHI's longest name ("ThreeFingerPinch").
