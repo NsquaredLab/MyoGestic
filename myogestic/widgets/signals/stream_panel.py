@@ -102,7 +102,11 @@ def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
     if scan.busy:
         imgui.end_disabled()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Reconnect to current target")
+        imgui.set_tooltip(
+            "Connect to this stream's target.\n"
+            "Nothing attaches on its own — not on open, and not after a source goes\n"
+            "away — so a stream from an earlier run is never picked up behind you."
+        )
 
     if has_discover and selectable:
         imgui.same_line()
@@ -129,7 +133,13 @@ def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
         if stream.last_error:
             imgui.text_colored(muted(), stream.last_error)
         else:
-            imgui.text_colored(muted(), "disconnected — waiting for source")
+            # Not "waiting for source". Nothing is waiting: a stream attaches when
+            # somebody attaches it, so a line promising it would happen on its own
+            # described the retry loop this used to have and left a red dot looking
+            # like a fault when it is a question. Name the button that answers it.
+            imgui.text_colored(
+                muted(), f"disconnected — {fa.ICON_FA_ARROWS_ROTATE} connects it"
+            )
 
         # Auto-kick a scan on first disconnect so buttons appear without a click.
         if has_discover and selectable and name not in _auto_scanned:
