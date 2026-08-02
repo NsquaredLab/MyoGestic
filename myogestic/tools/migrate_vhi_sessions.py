@@ -34,6 +34,12 @@ from pathlib import Path
 import numpy as np
 import zarr
 
+# Written into ``meta.json`` so a converted session says so about itself. The same value
+# `Session.save_meta` stamps, imported rather than repeated: a migrated session and a
+# freshly recorded one are in the same convention, and if these two strings ever drifted
+# apart this tool would migrate its own output for ever.
+from myogestic.session._core import POSE_CONVENTION
+
 #: Per-channel sign taking a legacy ``vhi_control`` frame to the control standard.
 #:
 #: Not a blanket negation. The five flexion channels ran the other way in VHI's rig
@@ -43,9 +49,6 @@ import zarr
 #: Channels 6-8 were never written by the old VHI build and are all zero, so their sign is
 #: immaterial; they are left alone rather than flipped, because ``-0.0`` is noise in a diff.
 TO_STANDARD = np.array([-1, 1, -1, -1, -1, -1, 1, 1, 1], dtype=np.float32)
-
-#: Written into ``meta.json`` so a converted session says so about itself.
-POSE_CONVENTION = "standard"
 
 _STREAM = "vhi_control"
 
