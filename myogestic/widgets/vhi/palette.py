@@ -1,7 +1,7 @@
 """VHI movement palette — a button grid for the VHI control hand's movements.
 
 The Virtual Hand Interface reports its valid movement names over the gRPC
-control plane (``VhiControlClient.get_state().available_movements`` — 17 in AI
+control plane (``RecordingClient.state().available_movements`` — 17 in AI
 mode, 15 in Classifier mode). This module renders them as a grid of buttons;
 clicking one commands that movement on VHI's control hand.
 
@@ -52,7 +52,7 @@ from imgui_bundle import imgui
 from myogestic.widgets.common import DANGER, SUCCESS, panel_header, pop_selected, push_selected
 
 if TYPE_CHECKING:
-    from myogestic.vhi._client import VhiControlClient
+    from myogestic.remote._recording import RecordingClient
 
 # Movement button size. Columns are computed from the panel width, so the grid
 # reflows as the panel is resized. Width fits VHI's longest name ("ThreeFingerPinch").
@@ -81,6 +81,8 @@ class VhiStateSnapshot:
     mode: str
     connected: bool
     message: str
+    trajectory_running: bool = False
+    trajectory_movement: str = ""
 
 
 @dataclass
@@ -98,6 +100,8 @@ class VhiStateCache:
     current_movement: str = ""
     current_state: str = ""
     mode: str = ""
+    trajectory_running: bool = False
+    trajectory_movement: str = ""
     connected: bool = False
     refreshing: bool = False
     message: str = "Launch VHI, then refresh."
@@ -114,28 +118,30 @@ class VhiStateCache:
                 mode=self.mode,
                 connected=self.connected,
                 message=self.message,
+                trajectory_running=self.trajectory_running,
+                trajectory_movement=self.trajectory_movement,
             )
 
 
 def request_vhi_state_refresh(
-    client: VhiControlClient,
+    client: RecordingClient,
     cache: VhiStateCache,
     *,
     force: bool = False,
     min_interval_s: float = 1.0,
     disconnected_interval_s: float = 5.0,
-    probe_timeout_s: float = 0.5,
+    probe_timeout_s: float = 0.5,  # noqa: ARG001 - kept for API compatibility
 ) -> None:
-    """Start at most one throttled background ``GetState`` refresh.
+    """Start at most one throttled background ``GetRecordingSessionState`` refresh.
 
     Safe to call every frame from ``@app.ui``: it returns immediately unless a
-    refresh is due and none is already in flight. The blocking ``get_state()``
+    refresh is due and none is already in flight. The blocking ``state()``
     runs on a daemon thread; the result lands in ``cache`` under its lock.
 
     While VHI is **unreachable** the poll backs off to ``disconnected_interval_s``
-    and uses a short ``probe_timeout_s`` deadline — so a down server is probed
+    and (historically) used a short ``probe_timeout_s`` deadline — so a down server is probed
     only occasionally with a fast-failing call, never a 2 s blocking RPC that is
-    ~always in flight. (A continuously in-flight failing ``GetState`` keeps the
+    ~always in flight. (A continuously in-flight failing call keeps the
     gRPC channel in connect/reconnect churn, which stutters the 60 fps render
     loop.) Once connected it polls every ``min_interval_s`` again. An explicit
     ``force`` refresh ignores the interval and uses the client's full deadline
@@ -157,12 +163,10 @@ def request_vhi_state_refresh(
         cache.refreshing = True
         cache.last_attempt_s = now
 
-    # Auto-poll: short deadline so a down server fails fast. Explicit refresh:
-    # full deadline (None -> client default) since a cold connect may need it.
-    timeout = None if force else probe_timeout_s
-
     def _worker() -> None:
-        reply = client.get_state(timeout=timeout)
+        # Reads the recording aid: this palette is a control-hand *aid*, so its state
+        # comes from the aid that owns that hand.
+        reply = client.state()
         with cache.lock:
             cache.refreshing = False
             if reply is None:
@@ -172,8 +176,10 @@ def request_vhi_state_refresh(
             try:
                 cache.movements = list(reply.available_movements)
                 cache.current_movement = reply.current_movement
-                cache.current_state = reply.current_state
-                cache.mode = reply.mode
+                cache.current_state = reply.animation_state
+                cache.trajectory_running = reply.trajectory_running
+                cache.trajectory_movement = reply.trajectory_movement
+                cache.mode = "recording" if reply.trajectory_running else "movement"
             except AttributeError as e:
                 # A malformed reply (e.g. an incomplete stub) must not take down
                 # this daemon thread — surface it instead.
@@ -181,7 +187,10 @@ def request_vhi_state_refresh(
                 cache.message = f"VHI reply malformed: {e}"
                 return
             cache.connected = True
-            cache.message = f"{reply.mode} mode · {len(cache.movements)} movements"
+            if reply.trajectory_running:
+                cache.message = f"recording trajectory: {reply.trajectory_movement}"
+            else:
+                cache.message = f"{len(cache.movements)} movements"
 
     threading.Thread(target=_worker, daemon=True, name="vhi-state-refresh").start()
 
@@ -200,7 +209,8 @@ def vhi_movement_palette(
 
     Pure ImGui: performs no RPC and owns no client. ``movements`` is the cached
     list from the last successful ``GetState``; ``on_movement(name)`` fires on
-    click (wire it to ``VhiControlClient.set_movement``). If ``on_refresh`` is
+    click (wire it to a discrete DOF, e.g. ``bus.select("gesture", name)``). If
+    ``on_refresh`` is
     given, a refresh button is drawn. Movement buttons are disabled while
     ``connected`` is False, but a stale list stays visible.
 

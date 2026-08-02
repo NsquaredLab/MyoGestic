@@ -1,7 +1,8 @@
 """Classification demo: fake EMG → numpy features → CatBoost → VHI two ways.
 
-A normal MyoGestic classification example — it streams the classified hand
-*pose* to VHI's predicted hand over LSL (``MyoGestic_Output``) — that ALSO
+A normal MyoGestic classification example — it streams the classified hand to VHI's
+predicted hand over LSL, on whichever streams the manifest says carry the addresses
+the control file names — that ALSO
 showcases the gRPC control plane: on each predicted-class *change* it sends a
 discrete ``SetMovement`` command to VHI's control hand. Same classification,
 output both ways — the continuous LSL stream and the discrete gRPC command.
@@ -18,22 +19,29 @@ Workflow:
     4. Select sessions → Train → Predict → the predicted hand follows the
        classification (LSL), and each class *change* also commands the control
        hand (gRPC)
+
+Where the two outputs *go* is declared in ../controls/classification_grpc.toml, not
+here: this example names its outputs `fist` and `gesture`, and that file maps them onto
+the control addresses VHI declares it exports.
 """
 
-import math
+import pathlib
 import sys
+import tomllib
 
 import numpy as np
 
-from myogestic import App, EdgeTrigger, Fr, Grid, Px, Stream, TrainingData
+from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
 from myogestic.recipes.features import mav, rms, var, wl
+from myogestic.remote import RemoteTarget
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -49,21 +57,31 @@ from myogestic.widgets import (
 ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
-vhi_client = vhi.control_client()
+# The recording aid (session gate) and the control client.
+recording_aid = vhi.recording_client()
+vhi_control = vhi.control_client()
 
-HAND_REST = np.zeros(9, dtype=np.float32)
-HAND_FIST = np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32)
+# Where this example's two outputs go. The left side of that file is ours (`fist` and
+# `gesture`), the right side is VHI's — read it, it is commented. Parsing is all that
+# happens here: what an address *means* is VHI's to declare, so nothing is resolved
+# until it answers (see `link` below).
+CONTROL_FILE = (
+    pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification_grpc.toml"
+)
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
 
 # Output-side smoothing applied to the hand pose vector before pushing
 # to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
-# CLASSES are sent verbatim to VHI as movement names — keep them in sync
-# with VHI's movement set (see MovementDefinitions.cs). "Rest" and "Fist"
-# are both valid VHI movements; the fake generator only produces two
-# amplitude levels, so two classes is also what it can cleanly drive.
+# CLASSES double as the states of the discrete `gesture` output, and those states are
+# VHI's movement names — so they are sent verbatim and must be movements this VHI
+# offers (see MovementDefinitions.cs). "Rest" and "Fist" both are; the fake generator
+# only produces two amplitude levels, so two classes is also what it can cleanly drive.
 CLASSES = ["Rest", "Fist"]
+# Per-class value for both the generator's amplitude and the `fist` output: 0 is an
+# open hand, 1 fully closed. One scalar — the control file fans it out to six controls.
 CTRL_VALUES = [0.0, 1.0]
 
 
@@ -92,9 +110,11 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
-    # vhi.launcher() returns a [(name, argv)] entry; splat it so EMG
-    # Generator and VHI Hand share a single launcher panel.
-    *vhi.launcher(),
+    # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
+    # Hand share one launcher panel. `launchable` rather than `launcher` because an
+    # unlaunchable target must not stop this app from opening — a running one needs no
+    # button, and the reason is logged either way.
+    *vhi.launchable(),
 ]
 
 WINDOW_MS = 200
@@ -147,17 +167,18 @@ def train(data: TrainingData):
     return clf
 
 
-# SetMovement re-triggers VHI's animation, so only command VHI when the class
-# actually changes *and has settled*. EdgeTrigger's n_stable_ticks debounce
-# swallows the tick-to-tick argmax flicker during the ~0.2 s sliding-window
-# transition after a gesture (Fist EMG → Rest EMG) — without it the control hand
-# visibly jumps between poses before settling. The manual gesture button (below)
-# rebases the trigger so a click doesn't re-fire on the next predict ticks.
-# Expressed as a duration (robust to predict_hz); converted to ticks here.
-STABLE_SECONDS = 0.1
-movement_trigger: EdgeTrigger[str] = EdgeTrigger(
-    vhi_client.set_movement,
-    n_stable_ticks=max(1, math.ceil(STABLE_SECONDS * pipeline.predict_hz)),
+# Resolved by `link.ensure()` rather than here: the control file says *where* each
+# output goes, and VHI says what those addresses accept — so there is nothing to resolve,
+# and no way to know which of VHI's streams this map needs, until VHI is running, which
+# this app launches from its own UI. No hand and no stream is named here either: the
+# target looks this file's addresses up in VHI's manifest and publishes one stream per
+# address it drives, named for that address.
+link = ControlLink(
+    CONTROL_MAP,
+    [RemoteTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=pipeline.predict_hz,
 )
 
 
@@ -168,16 +189,17 @@ def predict(model, features):
     hand (gRPC)."""
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
+    if link.bus is None:
+        # Nothing resolved yet, so nothing to command. `link.ensure()` here is not an
+        # option: it blocks on an RPC and this runs on the predict thread.
+        return {"class": class_idx, "proba": proba}
 
-    hand = HAND_FIST.copy() if class_idx == 1 else HAND_REST.copy()
-    hand = output_filter(hand).astype(np.float32)
-    vhi_outlet.push(hand)
+    # One frame carries both outputs: `fist` streams to the predicted hand, and the
+    # gesture reaches the control hand only once it has settled. The bus applies the
+    # debounce the control file declares, so there is no trigger to drive here.
+    values = link.bus.push({"fist": CTRL_VALUES[class_idx], "gesture": CLASSES[class_idx]})
 
-    # Debounced inside EdgeTrigger (n_stable_ticks): fires only once the class has
-    # settled, then dedupes repeats.
-    movement_trigger.fire_if_changed(CLASSES[class_idx])
-
-    return {"class": class_idx, "proba": proba, "hand": hand}
+    return {"class": class_idx, "proba": proba, "hand": values}
 
 
 # Branding cell is FIXED-pixel in both axes so it stays sized to the
@@ -196,29 +218,41 @@ grid = Grid(
 )
 
 
+def _select_gesture(state: str) -> None:
+    """Deliver a VHI movement from a click, resolving the control map first if needed.
+
+    `select` delivers immediately and rebases the DOF's trigger, so the next predict
+    ticks — still on the old ~0.2 s window — do not re-fire or jump.
+    """
+    bus = link.ensure()
+    if bus is not None:
+        bus.select("gesture", state)
+
+
 def _on_gesture(i: int) -> None:
     """Manual class button: drive the fake generator and the VHI control hand."""
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
-    vhi_client.set_movement(CLASSES[i])
-    # The click already commanded this class; rebase so the next predict ticks
-    # (still on the old ~0.2 s window) don't re-fire / jump.
-    movement_trigger.rebase(CLASSES[i])
+    _select_gesture(CLASSES[i])
 
 
 def _on_record() -> None:
-    """While recording, VHI ignores its local keyboard — MyoGestic is sole authority."""
+    """The recording aid gates VHI's keyboard so MyoGestic is the sole authority."""
+    link.ensure()
     app.start_recording()
-    vhi_client.set_session_active(True)
+    if not recording_aid.set_recording_session(True):
+        app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
 
 
 def _on_stop() -> None:
     app.stop_recording()
-    vhi_client.set_session_active(False)
+    recording_aid.set_recording_session(False)
 
 
 # VhiMovementPanel owns its own state cache and the throttled background
 # get_state() refresh, so the @app.ui body stays free of plumbing.
-vhi_panel = VhiMovementPanel(vhi_client)
+# Clicks go through the `gesture` output, not straight at the target, so they pass
+# through the same debounce and rebase it — see `_select_gesture`.
+vhi_panel = VhiMovementPanel(recording_aid, _select_gesture)
 
 viewer = SignalViewer("emg")
 logo = AppLogo()
@@ -272,10 +306,18 @@ def demo_ui(ctx):
 
 
 def main() -> None:
+    global ctrl_outlet
     try:
         app.run()
     finally:
-        vhi_client.stop()
+        link.stop()
+        recording_aid.set_recording_session(False)
+        recording_aid.stop()
+        vhi_control.stop()
+        # Built at import time, before any UI callback runs, so a run that never opens
+        # the window still needs it released here. The pose stream is not listed: the
+        # target builds it, so `link.stop()` above is what releases it.
+        ctrl_outlet = None  # a raw StreamOutlet has no .stop(); dropping it releases it
 
 
 if __name__ == "__main__":

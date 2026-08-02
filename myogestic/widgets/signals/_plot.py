@@ -30,11 +30,8 @@ def render_plot(
     size: tuple[float, float],
     channel_height: float,
 ) -> None:
-    # Scale off the trace that is actually drawn (`frame.data`), not the raw
-    # window — so an RMS envelope fills its lane instead of being dwarfed by
-    # the raw amplitude, and warm-up/dropout NaNs are ignored.
-    # Ease the auto y-range toward the data BEFORE deriving the lane height / axis limits from it
-    # (no-op unless auto mode is active). `frame.frame_start` is this frame's perf_counter.
+    # Ease the auto y-range toward `frame.data` (the drawn trace, not the raw window) BEFORE
+    # deriving lane height / axis limits from it. `frame.frame_start` is this frame's perf_counter.
     update_auto_scale(v, frame.data, frame.channel_map, stream_name, frame.frame_start)
     channel_height = resolve_channel_height(frame.data, channel_height, v)
     if v.per_channel_scale:
@@ -54,32 +51,23 @@ def render_plot(
     if implot.begin_plot(
         f"{stream_name}##{stream_name}_viewer",
         imgui.ImVec2(plot_w, plot_h),
-        # no_mouse_text: the default readout's y is a lane-offset + gain (or
-        # per-channel-normalized) number, not physical amplitude — misleading,
-        # so suppress it until there's a real per-lane hover readout.
+        # no_mouse_text: the default readout's y is a lane offset + gain, not physical
+        # amplitude — misleading, so suppress it.
         flags=implot.Flags_.no_legend | implot.Flags_.no_title | implot.Flags_.no_mouse_text,
     ):
         setup_axes(v, enabled, channel_height, frame.channel_map, ch_names)
-        # Plot pixel width is only known once the plot is live — size the
-        # decimation target off it (a few points per pixel) instead of a
-        # fixed budget, so draw cost tracks what's actually on screen
-        # regardless of window length / sample rate / channel count.
+        # Plot pixel width is only known once the plot is live — size the decimation
+        # target off it (a few points per pixel) so draw cost tracks what's on screen.
         n_out = resolve_decimation_target(implot.get_plot_size().x, v)
         v.last_decim_n_out = n_out
-        # Decimate every enabled column at once — `xs_shared` is the shared
-        # (relative-to-window-start) x-axis every channel's trace and the
-        # label markers align to; `ys_all[i]` is channel `frame.channel_map[i]`'s
-        # own min/max envelope over that same axis (see
-        # `minmax_grid_all_shared_x`'s docstring: no cross-channel index
-        # union, so per-channel draw cost stays bounded regardless of how
-        # many other channels are enabled).
+        # Decimate every enabled column at once: `xs_shared` is the shared
+        # (relative-to-window-start) x-axis traces and label markers align to;
+        # `ys_all[i]` is channel `frame.channel_map[i]`'s min/max envelope over it.
         xs_shared, ys_all = minmax_grid_all_shared_x(
             frame.trace_ts, frame.data, n_out, v.window, x_origin=frame.x_origin
         )
-        # Iterate `frame.channel_map` (not `sorted(enabled)`) — it's the
-        # authoritative record of which real channel landed in which column
-        # of the enabled-only `data` array (and therefore which row of
-        # `ys_all`).
+        # Iterate `frame.channel_map`, not `sorted(enabled)` — it records which real
+        # channel landed in which column of `data` (and therefore which row of `ys_all`).
         for col_idx, ch in enumerate(frame.channel_map):
             plot_channel(
                 stream_name,
@@ -104,9 +92,8 @@ def resolve_channel_height(
 ) -> float:
     """Lane height for the shared-axis layout, derived from the drawn trace.
 
-    `plotted` is the enabled-only trace (`frame.data`) — raw visible window in
-    normal modes, or the RMS envelope in `rms_env` mode — so the layout tracks
-    what is actually on screen. Non-finite warm-up/dropout values are ignored.
+    `plotted` is the enabled-only trace (`frame.data`) — the raw visible window, or the
+    RMS envelope in `rms_env` mode. Non-finite warm-up/dropout values are ignored.
     """
     if channel_height > 0:
         return channel_height
@@ -115,10 +102,9 @@ def resolve_channel_height(
         # lane, so the absolute amplitude no longer drives the layout.
         return 1.0
     if v is not None:
-        # Manual AND (eased) auto both pin the lane height to `y_min/y_max` so the
-        # spacing is perfectly stable, instead of recomputing it from the visible
-        # data each frame (which wobbled the channels vertically). In auto,
-        # `update_auto_scale` has already eased `y_min/y_max` toward the data range.
+        # Manual and (eased) auto both pin the lane height to `y_min/y_max` so spacing
+        # stays stable, rather than recomputing from the visible data each frame. In
+        # auto, `update_auto_scale` has already eased those toward the data range.
         span = float(v.y_max - v.y_min)
         return span if span > 0 else 1.0
     # No ViewerState (bare preview): derive from the visible trace.
@@ -137,12 +123,9 @@ def resolve_channel_ranges(
 ) -> dict[int, tuple[float, float]]:
     """Per-channel `(min, max)` of the drawn trace, keyed by real channel index.
 
-    `plotted[:, col]` is channel `channel_map[col]` (the enabled-only compaction
-    used everywhere the plot draws); non-finite values are dropped, and an all-non-finite
-    column is omitted.
-
-    Vectorized (axis-0 reductions, not a Python per-column loop) — this runs every frame in
-    per-channel mode, where the loop cost dominated the frame at high channel counts.
+    `plotted[:, col]` is channel `channel_map[col]` (the enabled-only compaction); non-finite
+    values are dropped, and an all-non-finite column is omitted. Vectorized (axis-0
+    reductions) because it runs every frame in per-channel mode.
     """
     ranges: dict[int, tuple[float, float]] = {}
     if plotted.size == 0:
@@ -163,9 +146,8 @@ def resolve_channel_ranges(
     return ranges
 
 
-#: Time-bin width (ms) for the duration-based robust range. Each bin contributes one min and one
-#: max; a transient that fills fewer than the "ignore transients shorter than" budget of these bins
-#: is dropped as an artifact.
+#: Time-bin width (ms) for the duration-based robust range. Each bin contributes one min and
+#: one max; a transient filling fewer bins than the transient budget is dropped as an artifact.
 _ROBUST_BIN_MS = 5.0
 
 
@@ -180,17 +162,16 @@ def robust_channel_ranges(
 ) -> dict[int, tuple[float, float]]:
     """Per-channel range that ignores transients shorter than ``transient_ms`` (movement artifacts).
 
-    *Duration*, not amplitude, separates an artifact (a brief spike) from a contraction (a sustained
-    burst) — they look alike by amplitude. The visible window is split into equal-time bins; each
-    bin contributes one min and one max; the ``k`` most extreme bin maxima/minima (``k`` covering
-    the transient budget) are dropped and the next extrema are the robust range. A 10 ms artifact
-    fills ~2 bins (dropped); a 50 ms contraction fills ~11 (kept). Mode-aware: ``rectify`` /
-    ``rms_env`` are one-sided (lower bound pinned to 0, only the top trimmed), and ``rms_env``'s
-    envelope is already time-binned, so its own points are the bins with the RMS smear folded into
-    ``k``. ``transient_ms == 0`` degrades to plain per-channel min/max.
+    *Duration*, not amplitude, separates an artifact from a contraction. The visible window is
+    split into equal-time bins; each bin contributes one min and one max; the ``k`` most extreme
+    bin maxima/minima (``k`` covering the transient budget) are dropped and the next extrema are
+    the robust range. A 10 ms artifact fills ~2 bins (dropped); a 50 ms contraction fills ~11
+    (kept). ``rectify`` / ``rms_env`` are one-sided (lower bound pinned to 0, only the top
+    trimmed), and ``rms_env``'s envelope is already time-binned, so its own points are the bins
+    with the RMS smear folded into ``k``. ``transient_ms == 0`` degrades to plain min/max, as
+    does too few bins.
 
-    Cheap enough for the per-frame path: reshape + axis-1 min/max + one axis-0 partition (no
-    full-window percentile). Falls back gracefully to min/max when there are too few bins.
+    Cheap enough for the per-frame path: reshape + axis-1 min/max + one axis-0 partition.
     """
     n = len(data)
     if n == 0 or not channel_map:
@@ -229,8 +210,8 @@ def robust_channel_ranges(
 
 
 #: Auto-scale CONTRACTION settle time (s) — how long to shrink the range when the signal
-#: quietens (~95% at 3·tau). Slow, so the range never jitters downward. Expansion is INSTANT
-#: (the bound snaps out to contain a new peak), so nothing is ever clipped while it catches up.
+#: quietens (~95% at 3·tau), slow so it never jitters downward. Expansion is INSTANT: the
+#: bound snaps out to contain a new peak, so nothing is ever clipped.
 _SCALE_EASE_S = 5.0
 
 
@@ -243,14 +224,13 @@ def update_auto_scale(
 ) -> None:
     """Ease `v.y_min`/`v.y_max` toward the drawn data's padded range (auto mode only).
 
-    Replaces ImPlot's per-frame `auto_fit` refit — which makes a variable signal zoom in/out
-    constantly — with a **grow-fast / shrink-slow** ease toward the drawn window's gain-scaled
-    global min/max: the range EXPANDS quickly (``_SCALE_EXPAND_S``) so a new peak/contraction is
-    never clipped, and CONTRACTS slowly (``_SCALE_EASE_S``) so it never jitters downward.
-    **Snaps** instead of easing on the first frame
-    and whenever the context ``(active stream, channels, display filter, notch, gain)`` changes,
-    so it never eases across an unrelated scale; a huge ``dt`` (e.g. after a pause) also snaps.
-    No-op unless auto mode is active and per-channel scaling is off.
+    Replaces ImPlot's per-frame `auto_fit` refit with a **grow-fast / shrink-slow** ease toward
+    the drawn window's gain-scaled global min/max: expands instantly so a new peak is never
+    clipped, contracts slowly (``_SCALE_EASE_S``) so it never jitters downward. **Snaps**
+    instead of easing on the first frame and whenever the context ``(active stream, channels,
+    display filter, notch, gain)`` changes, so it never eases across an unrelated scale; a huge
+    ``dt`` (e.g. after a pause) also snaps. No-op unless auto mode is active and per-channel
+    scaling is off.
     """
     if v.scale_mode != "auto" or v.per_channel_scale:
         # Force a snap when auto resumes, so re-entering auto doesn't ease from stale/manual bounds.
@@ -273,9 +253,8 @@ def update_auto_scale(
     pad = span * 0.1 if span > 0 else 1.0
     target_lo, target_hi = lo - pad, hi + pad
 
-    # Snap (don't ease) on the first frame or any change that alters the scale: which stream a
-    # selectable viewer shows (`selected_stream`, not the stable widget id), the channel set, the
-    # display filter, the mains notch, or the gain.
+    # `selected_stream`, not the stable widget id: a selectable viewer switching streams must
+    # snap, not ease across an unrelated scale.
     key = (
         v.selected_stream or stream_name,
         tuple(channel_map),
@@ -310,15 +289,15 @@ def update_per_channel_ranges(
     `per_channel_scale` is the *basis*; `scale_mode` decides whether it adapts:
 
     - **Auto**: ease each channel's range grow-fast (snap out so a louder channel never overflows
-      its lane) / shrink-slow (no per-frame breathing), snapping on the first frame / a
-      newly-enabled channel / a context change (stream / channels / filter / notch / gain / rms).
-    - **Manual**: hold the frozen ranges untouched — so a channel weakening, strengthening, or
-      drifting stays visible against its captured reference. Only a *newly-enabled* channel (with
-      no saved range) is initialised from its current data; existing ones never move.
+      its lane) / shrink-slow, snapping on the first frame / a newly-enabled channel / a context
+      change (stream / channels / filter / notch / gain / rms).
+    - **Manual**: hold the frozen ranges untouched, so a channel weakening or drifting stays
+      visible against its captured reference. Only a *newly-enabled* channel is initialised
+      from its current data; existing ones never move.
 
-    Ranges are stored **gained** (× `v.gain`): in Auto gain is inert (it cancels in `plot_channel`),
-    but in Manual, changing gain magnifies the trace against the frozen reference. Returns the dict
-    and stores it on `v.pc_ranges` (channels no longer drawn drop out).
+    Ranges are stored **gained** (× `v.gain`): in Auto gain cancels in `plot_channel`, but in
+    Manual it magnifies the trace against the frozen reference. Also stored on `v.pc_ranges`
+    (channels no longer drawn drop out).
     """
     g = v.gain
     args = (v.transient_ms, v.window, v.display_filter, v.rms_window_ms, v.rms_hop_ms)
@@ -379,6 +358,35 @@ def ensure_specs(v: ViewerState, n_channels: int) -> None:
         v.specs.append(s)
 
 
+def _nice_step(raw: float) -> float:
+    """Round a raw tick spacing up to a ``1 / 2 / 2.5 / 5 × 10^k`` "nice" number."""
+    if raw <= 0:
+        return 1.0
+    mag = 10.0 ** math.floor(math.log10(raw))
+    for m in (1.0, 2.0, 2.5, 5.0):
+        if raw <= m * mag:
+            return m * mag
+    return 10.0 * mag
+
+
+def _time_ticks(window: float) -> tuple[list[float], list[str]]:
+    """X-axis ticks over ``[0, window]``, with the centre tick relabelled ``Time (s)``.
+
+    The unit on the middle tick replaces the dedicated axis-title row, reclaiming that
+    vertical space for the trace. ~10 intervals at a nice step.
+    """
+    if window <= 0:
+        return [0.0], ["Time (s)"]
+    step = _nice_step(window / 10.0)
+    n = int(round(window / step))
+    positions = [round(i * step, 6) for i in range(n + 1)]
+    labels = [f"{p:g}" for p in positions]
+    center = window / 2.0
+    ci = min(range(len(positions)), key=lambda i: abs(positions[i] - center))
+    labels[ci] = "Time (s)"
+    return positions, labels
+
+
 def setup_axes(
     v: ViewerState,
     enabled: set[int],
@@ -386,13 +394,16 @@ def setup_axes(
     channel_map: list[int],
     ch_names: list[str] | None,
 ) -> None:
-    implot.setup_axis(implot.ImAxis_.x1, "Time (s)")
+    # No axis title — "Time (s)" rides on the centre tick instead (see `_time_ticks`).
+    implot.setup_axis(implot.ImAxis_.x1)
     implot.setup_axis_limits(
         implot.ImAxis_.x1,
         0,
         v.window,
         implot.Cond_.always,  # type: ignore[attr-defined]
     )
+    x_positions, x_labels = _time_ticks(v.window)
+    implot.setup_axis_ticks(implot.ImAxis_.x1, x_positions, x_labels)
 
     if v.per_channel_scale:
         # Pin to the fixed unit-lane geometry (each lane fills ±0.4 around baselines stacked by
@@ -407,9 +418,8 @@ def setup_axes(
             implot.Cond_.always,  # type: ignore[attr-defined]
         )
     else:
-        # Auto AND manual apply the same fixed limits every frame; only the values differ —
-        # auto's `y_min/y_max` are eased toward the data by `update_auto_scale`, manual's are held.
-        # Pinning them each frame (instead of `auto_fit`) is what stops the per-frame zoom jitter.
+        # Auto and manual apply the same fixed limits every frame; only the values differ
+        # (auto's are eased by `update_auto_scale`). Pinning avoids `auto_fit`'s zoom jitter.
         implot.setup_axis(implot.ImAxis_.y1)
         y_min, y_max = v.y_min, v.y_max
         n_enabled = max(1, len(enabled))
@@ -425,11 +435,10 @@ def setup_axes(
         )
 
     # Channel-identity gutter: one y-tick per lane at its baseline (the same
-    # `-col_idx * channel_height` offset plot_channel draws at), labelled with
-    # the channel name — replaces the old `no_tick_labels` suppression so a
-    # channel can be identified past the ~10 distinguishable trace colours.
-    # ponytail: at very high enabled counts the labels crowd; that's the job of
-    # the future full-array raster overview, not this per-trace view.
+    # `-col_idx * channel_height` offset plot_channel draws at), labelled with the channel
+    # name — needed past the ~10 distinguishable trace colours.
+    # ponytail: at very high enabled counts the labels crowd; that's the job of the future
+    # full-array raster overview, not this per-trace view.
     if channel_map:
         positions = [-col_idx * channel_height for col_idx in range(len(channel_map))]
         labels = [
@@ -453,13 +462,11 @@ def plot_channel(
 ) -> None:
     """Plot one trace, reading its already-decimated row out of `ys_all`.
 
-    `xs_shared` / `ys_all` come from one `minmax_grid_all_shared_x` call in
-    `render_plot`, covering every enabled column at once — this function no
-    longer decimates anything itself. `col_idx` selects both the row of
-    `ys_all` (`frame.channel_map[col_idx] == ch`) and the vertical lane
-    offset; color/label/spec/range lookups still key off `ch`, the real
-    channel index, against full-width tables (`ch_names`, `v.specs`,
-    `PALETTE`, `channel_ranges`).
+    `xs_shared` / `ys_all` come from one `minmax_grid_all_shared_x` call in `render_plot`,
+    covering every enabled column at once. `col_idx` selects both the row of `ys_all`
+    (`frame.channel_map[col_idx] == ch`) and the vertical lane offset; color/label/spec/range
+    lookups key off `ch`, the real channel index, against full-width tables (`ch_names`,
+    `v.specs`, `PALETTE`, `channel_ranges`).
     """
     col_ch = ys_all[col_idx]
     xs = xs_shared
@@ -530,10 +537,8 @@ def render_markers(
         )
 
 
-#: How often `render_footer` recomputes the per-channel diagnostics readout.
-#: The values change slowly and are only a visual sanity check, so refreshing
-#: at ~10 Hz instead of every frame keeps a wide/high-rate window from paying
-#: the O(window_samples * n_channels) scan on every single frame.
+#: How often `render_footer` recomputes the per-channel diagnostics readout. ~10 Hz keeps a
+#: wide/high-rate window from paying the O(window_samples * n_channels) scan every frame.
 _STATS_REFRESH_S = 0.1
 
 
@@ -545,9 +550,8 @@ def stats_need_recompute(
 ) -> bool:
     """Whether the throttled footer stats must be recomputed this frame.
 
-    Recompute when there is no cache, when the enabled-channel set changed
-    (so a toggle updates immediately), or when `_STATS_REFRESH_S` has elapsed
-    since the cached values were computed. Otherwise the cached values stand.
+    Recompute when there is no cache, when the enabled-channel set changed (so a toggle
+    updates immediately), or when `_STATS_REFRESH_S` has elapsed.
     """
     return cache is None or cache[0] != valid_channels or (now - last_t) >= _STATS_REFRESH_S
 
@@ -558,25 +562,20 @@ def channel_diagnostics(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Per-channel `(rms, pp, mean)` over the raw window, one vectorized pass.
 
-    `valid_channels` are real channel indices into `data_win`'s columns
-    (ascending). The three arrays are aligned to `valid_channels` order;
-    NaN-propagating, matching the old per-channel readout.
+    `valid_channels` are real channel indices into `data_win`'s columns (ascending). The
+    three arrays are aligned to `valid_channels` order and NaN-propagating.
 
-    Cost here is dominated by memory, not arithmetic: at 256 ch / 5 s /
-    10 kHz a naive ``data_win[:, valid]`` fancy-index gather of every column
-    is ~43 ms on its own (and ``cols * cols`` allocates a second full
-    window). So skip the gather entirely when every channel is enabled, and
-    fold the sum-of-squares into one ``einsum`` pass with no temporary —
-    ~57 ms → ~7 ms for that worst case.
+    Cost is dominated by memory, not arithmetic: at 256 ch / 5 s / 10 kHz a naive
+    ``data_win[:, valid]`` fancy-index gather is ~43 ms on its own. So skip the gather when
+    every channel is enabled, and fold the sum-of-squares into one ``einsum`` pass with no
+    temporary — ~57 ms → ~7 ms for that worst case.
     """
     n = data_win.shape[0]
     if n == 0 or not valid_channels:
         z = np.zeros(len(valid_channels))
         return z, z, z
-    # `valid_channels` is sorted, unique, and bounded by the column count, so
-    # a length match means it is exactly every column — use `data_win`
-    # directly and pay no gather. Only a real subset needs the copy (and then
-    # it is proportionally small).
+    # `valid_channels` is sorted, unique and column-bounded, so a length match means it is
+    # exactly every column — use `data_win` directly and pay no gather.
     cols = data_win if len(valid_channels) == data_win.shape[1] else data_win[:, valid_channels]
     # Sum of squares in one fused pass, accumulated in float64 — no `cols*cols`
     # temporary, and more accurate than a float32 running sum over a long window.
@@ -605,9 +604,7 @@ def render_footer(
     if len(v.fps) > 60:
         v.fps.pop(0)
     avg_ms = np.mean(v.fps) * 1000
-    # Real loop rate from ImGui (smoothed). The old `1000/avg_ms` divided by
-    # per-frame *viewer work*, not the inter-frame interval, so it read absurdly
-    # high (~800); keep that work time as an explicit render-cost readout.
+    # Real loop rate from ImGui (smoothed); `avg_ms` is viewer work, not the frame interval.
     ui_fps = imgui.get_io().framerate
 
     n_buf = stream._data.shape[0] if stream._data is not None else 0
@@ -615,21 +612,16 @@ def render_footer(
     fill_pct = 100.0 * n_buf / capacity if capacity > 0 else 0.0
     paused_tag = f"  {fa.ICON_FA_PAUSE} PAUSED" if v.paused else ""
 
-    # Report the points-per-channel actually drawn. In rms_env mode the trace
-    # is the *sparse* RMS envelope (`frame.trace_ts`), already ~window/hop
-    # points and never decimated — so describe it as such rather than as a
-    # raw→MinMax reduction of the (undrawn) raw window. Otherwise: decimation
-    # happened once for every enabled channel inside the plot loop that already
-    # ran this frame; `v.last_decim_n_out` is that call's plot-width-derived
-    # target (stashed on `v` since this runs after `end_plot()`), and every
-    # channel shares the same raw window length so a single `raw_len > n_out`
-    # check tells us whether it kicked in.
+    # Points-per-channel actually drawn. In rms_env mode the trace is the *sparse* RMS
+    # envelope (`frame.trace_ts`), already ~window/hop points and never decimated. Otherwise
+    # `v.last_decim_n_out` is the plot loop's plot-width-derived target (stashed on `v` since
+    # this runs after `end_plot()`); every channel shares the same raw window length.
     if v.display_filter == "rms_env":
         pts_str = f"{len(frame.trace_ts):,} pts/ch (RMS env)"
     else:
         raw_len = len(frame.data_win)
         n_out = v.last_decim_n_out or raw_len
-        if raw_len > n_out:  # one expression instead of printing the target twice
+        if raw_len > n_out:
             pts_str = f"MinMax {raw_len:,}→{n_out:,} pts/ch"
         else:
             pts_str = f"{raw_len:,} pts/ch (raw)"
@@ -654,12 +646,8 @@ def render_footer(
     valid_channels = [ch for ch in sorted(enabled) if ch < frame.data_win.shape[1]]
     if not valid_channels:
         return
-    # The stats scan the *raw* (undecimated) window — O(window_samples *
-    # n_channels), tens of ms at a high sample rate / wide window / many
-    # channels. It is a slowly-changing readout, so recompute at most every
-    # `_STATS_REFRESH_S` (or immediately when the enabled set changes) and
-    # render the cached values on the frames in between, instead of paying
-    # the full scan every frame.
+    # The stats scan the *raw* (undecimated) window — tens of ms at a high sample rate /
+    # wide window / many channels. Hence the `_STATS_REFRESH_S` throttle.
     cache = v.stats_cache
     if stats_need_recompute(cache, valid_channels, frame.frame_start, v.stats_last_t):
         rms_all, pp_all, mean_all = channel_diagnostics(frame.data_win, valid_channels)

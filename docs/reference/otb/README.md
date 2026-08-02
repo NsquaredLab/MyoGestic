@@ -7,10 +7,10 @@ the Python implementation mirrors.
 
 | File | Source | Role |
 |------|--------|------|
-| `Read_muovi.m` | OTB MATLAB example v3.0 | Direct single-Muovi connection (PC = TCP server :54321). Canonical control-byte + decode reference. |
+| `Read_muovi.m` | OTB MATLAB example v3.0 | Direct single-Muovi connection (PC = TCP server :54321). The authoritative control-byte + decode reference. |
 | `Read_muoviAP.m` | OTB MATLAB example v2.0 | SyncStation path (PC = TCP client 192.168.76.1:54320), CRC8-framed multi-probe command strings. |
 | `CRC8.m` | OTB MATLAB example | CRC-8 (poly `0x8C`, LSB-first, init 0) used by the SyncStation / Quattrocento framed commands. |
-| `Read_Quattrocento.m` | OTB MATLAB example v5.0 | Direct Quattrocento connection (PC = TCP client `169.254.1.10:23456`). Canonical 40-byte config + little-endian decode reference. |
+| `Read_Quattrocento.m` | OTB MATLAB example v5.0 | Direct Quattrocento connection (PC = TCP client `169.254.1.10:23456`). The authoritative 40-byte config + little-endian decode reference. |
 | `FourMapsQuattrocento.m` | OTB MATLAB example | Grid/channel-map helper (maps streamed channels to electrode grids). |
 | `ReadFromOTBiolabLightQuattrocento.m` | OTB MATLAB example | Alternative path: read Quattrocento via the OT BioLab Light software server (not used by us; kept for reference). |
 

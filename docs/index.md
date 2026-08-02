@@ -57,7 +57,7 @@ That's the whole loop. Add a `Pipeline`, decorate `extract` / `train` / `predict
 
 ![MyoGestic architecture: sources, pipeline, outputs](images/architecture.svg){ .skip-lightbox loading=lazy }
 
-Sources push samples into a `Stream` ring buffer. The pipeline's `@extract`, `@train`, `@predict` decorators read from that buffer and emit predictions to outputs - LSL, UDP, Serial, or the [Virtual Hand Interface](how-to/integrate-vhi.md) over LSL+gRPC. The render thread runs `@app.ui` at 60 fps independently of the predict thread; see [Concepts → Threading](concepts/threading.md).
+Sources push samples into a `Stream` ring buffer. The pipeline's `@extract`, `@train`, `@predict` decorators read from that buffer and produce predictions. A **target** turns those into movement - a prosthesis on a serial port, a motor controller, a cursor, or the [Virtual Hand Interface](how-to/integrate-vhi.md) over LSL+gRPC - and an [`LSLOutlet`](how-to/add-an-output.md) publishes them for another program to read. The render thread runs `@app.ui` at 60 fps independently of the predict thread; see [Concepts → Threading](concepts/threading.md).
 
 <div class="playground-hero" markdown>
 
@@ -80,8 +80,9 @@ Pyodide + imgui-bundle WASM + scikit-learn, ~30 s first-load, cached after.
 <div class="grid cards" markdown>
 
 - [:material-rocket-launch: **Getting Started**](getting-started.md) - install, run the synthetic-EMG demo
+- [:material-robot-industrial: **I have a device**](how-to/add-a-target.md) - drive your prosthesis, motors or cursor from a control map. Three methods; a copyable example that runs without hardware
 - [:material-puzzle-outline: **Anatomy of an app**](anatomy.md) - walk through one complete script in the order you write it
-- [:material-school: **Guides**](tutorials/index.md) - tutorials (line-by-line walkthroughs) + how-to recipes
+- [:material-school: **Guides**](how-to/index.md) - every task guide, grouped by job: start here, driving a device, recording, models, extending
 - [:material-graph-outline: **Concepts**](concepts/index.md) - streams, pipeline, threading, recording, design principles
 - [:material-help-circle-outline: **Troubleshooting**](troubleshooting.md) - symptom-first reference for the things that go wrong
 - [:material-book-open-variant: **Reference**](reference/index.md) - auto-generated API + cheatsheet + glossary

@@ -1,120 +1,87 @@
-# Add a custom output
+# Publish a data stream
 
-Outputs are user-owned objects. They are **not** registered with the app - you construct them in `main()`, hold a reference, and call `.push(data)` from `@pipeline.predict`. The base class ([`Output`][myogestic.outputs.Output]) runs a daemon send thread at your chosen `hz`, draining whatever was last pushed.
+!!! warning "If something moves, you want a target"
+    An `Outlet` has no aliases, no declared range, no clamp and no rest on shutdown. A hand, a
+    motor, a haptic or a cursor is a **[target](add-a-target.md)**.
+    [`RemoteTarget`][myogestic.remote.RemoteTarget] builds one
+    [`LSLOutlet`][myogestic.outputs.LSLOutlet] per control *inside* the target, which is where
+    an output belongs when a device is on the other end.
 
-## The pattern
+This page is for the other case: publishing numbers for something else to read.
 
-```python
-import numpy as np
-from myogestic.outputs import Output
+Outputs are user-owned and **not** registered with the app: construct one in `main()`, hold a
+reference, call `.push(data)` from `@pipeline.predict`. [`Outlet`][myogestic.outputs.Outlet]
+runs a daemon thread at your `hz` that sends whatever was last pushed.
 
+## Writing one
 
-class Output:
-    def __init__(self, hz: float = 50):
-        self._latest: np.ndarray | None = None
-        self._hz = hz
-        # daemon thread reads _latest and calls _send() at hz
+1. Subclass [`Outlet`][myogestic.outputs.Outlet].
+2. Open your socket, file or channel **first**, then call `super().__init__(hz=...)` **last**.
+   The send thread starts inside that call, so a resource opened after it can be read before
+   it exists.
+3. Implement `_send(self, data) -> None`, the actual transport call. Treat `data` as
+   read-only and validate its shape.
+4. Override `stop()` if you hold a resource, calling `super().stop()` first.
 
-    def push(self, data: np.ndarray) -> None:
-        self._latest = data  # atomic ref assignment
+## Worked example: a telemetry socket
 
-    def _send(self, data: np.ndarray) -> None:
-        raise NotImplementedError
-```
-
-To add an output:
-
-1. Subclass `Output`.
-2. Implement `_send(self, data) -> None` - the actual transport call.
-3. (Optional) override `__init__` to take connection parameters; call `super().__init__(hz=...)`.
-
-## Worked example: ROS publisher
+Numbers to a dashboard on another host.
 
 ```python
+import socket
+
 import numpy as np
-from myogestic.outputs import Output
+
+from myogestic.outputs import Outlet
 
 
-class ROSPoseOutput(Output):
-    """Publish a 9-DoF pose as a ROS Float32MultiArray."""
+class TelemetryOutlet(Outlet):
+    """Send the latest prediction vector to a dashboard as float32 datagrams."""
 
-    def __init__(self, topic: str, hz: float = 50.0):
+    def __init__(self, host: str, port: int, hz: float = 20.0):
+        # Socket first: `super().__init__` starts the send thread.
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._addr = (host, port)
         super().__init__(hz=hz)
-        import rclpy  # lazy import - keeps ROS optional
-        from rclpy.node import Node
-        from std_msgs.msg import Float32MultiArray
-
-        rclpy.init(args=None)
-        self._node = Node("myogestic_pose")
-        self._pub = self._node.create_publisher(Float32MultiArray, topic, 10)
-        self._Float32MultiArray = Float32MultiArray
 
     def _send(self, data: np.ndarray) -> None:
-        msg = self._Float32MultiArray()
-        msg.data = data.astype(np.float32).tolist()
-        self._pub.publish(msg)
+        self._sock.sendto(data.astype(np.float32).tobytes(), self._addr)
+
+    def stop(self) -> None:
+        super().stop()
+        self._sock.close()
 ```
 
 Use it:
 
 ```python
-ros_out = ROSPoseOutput("/myogestic/pose", hz=50)
+telemetry = TelemetryOutlet("127.0.0.1", 9000, hz=20)
 
 
 @pipeline.predict
 def predict(model, features):
     pose = model.predict(features)
-    ros_out.push(pose)
+    telemetry.push(pose)
     return {"pose": pose}
 ```
 
-The `_send` runs every `1/hz` on the output's own daemon thread; `push` is non-blocking and just swaps the latest reference.
-
-## Worked example: Bluetooth haptic actuator
-
-```python
-class HapticOutput(Output):
-    def __init__(self, ble_client, characteristic_uuid: str, hz: float = 30.0):
-        super().__init__(hz=hz)
-        self._ble = ble_client
-        self._uuid = characteristic_uuid
-
-    def _send(self, data: np.ndarray) -> None:
-        # data: 3-vec of intensities in [0, 1] → 3 bytes
-        payload = (np.clip(data, 0, 1) * 255).astype(np.uint8).tobytes()
-        self._ble.write(self._uuid, payload, response=False)
-```
-
-The BLE write itself releases the GIL inside `bleak`, so the output thread doesn't impact the predict thread.
+`push` is non-blocking. `_send` runs every `1/hz` on the output's own thread, so transport
+latency never reaches the predict loop.
 
 ## Choosing `hz`
 
-Match the consumer's input rate, not the predict rate:
-
-| Consumer | Typical `hz` |
-|----------|--------------|
-| Virtual hand (Godot/VHI) | 32–50 |
-| ROS subscriber | 50–100 |
-| Serial actuator | 10–30 |
-| Vibrotactile haptic | 30–60 |
-| LSL outlet for downstream apps | 50 |
-
-If `predict_hz > output_hz`, you push faster than you send - that's fine, the latest push wins. If `predict_hz < output_hz`, you re-send the same value - that's also fine, just wastes bandwidth.
-
-## Reference implementations
-
-| Output | Where | Wire |
-|--------|-------|------|
-| [`LSLOutlet`](../api/outputs.md#myogestic.outputs.LSLOutlet) | `myogestic/outputs/lsl.py` | LSL stream outlet |
-| [`UDPOutput`](../api/outputs.md#myogestic.outputs.UDPOutput) | `myogestic/outputs/udp.py` | datagrams to host:port |
-| `SerialOutput` | `myogestic/outputs/serial_output.py` | pyserial line-based |
-
-Mirror the closest one.
+Match the consumer's input rate, not the predict rate: a dashboard redrawing at 20 Hz gains
+nothing from 200. Push faster than you send and the latest wins; slower and you re-send the
+same value, which costs bandwidth and nothing else.
 
 ## Common mistakes
 
-See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.
+See also: the full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom.
 
-- **Heavy work inside `_send`.** It runs at `hz`. If `_send` takes longer than `1/hz`, the daemon thread falls behind. Keep transport calls non-blocking; if they aren't, lower `hz` or move the slow part elsewhere.
-- **Calling `_send` directly from `predict()`.** Defeats the point of the daemon thread (you'd block predict on transport latency). Always go through `push`.
-- **Assuming `push(...)` is fire-and-forget delivery.** It's fire-and-forget *latest-value*. If you push twice between two `_send` ticks, only the second is sent. Useful for control vectors; **wrong for events**. For event streams, write a queue-based output instead of using the latest-value pattern.
+- **Driving a device with one.** No clamp, no aliases, and the transport closes while the
+  device still holds the last thing it was told. That is a [target](add-a-target.md).
+- **Heavy work inside `_send`.** It runs at `hz`; longer than `1/hz` and the thread falls
+  behind. Keep it non-blocking, or lower `hz`.
+- **Calling `_send` from `predict()`.** Blocks predict on transport latency. Go through `push`.
+- **Assuming `push(...)` delivers everything.** Fire-and-forget *latest-value*: push twice
+  between ticks and only the second is sent. **Wrong for events** - use a queue instead.

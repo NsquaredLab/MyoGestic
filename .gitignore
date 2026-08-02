@@ -15,7 +15,12 @@ lightning_logs/
 
 # IDE / agent
 .idea/
-.vscode/
+# `.vscode/*` rather than `.vscode/`: git cannot re-include a file whose parent
+# directory is excluded, so the contents are ignored and the two shared,
+# machine-independent files are named back in. Personal settings.json stays ignored.
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
 .claude/
 *.swp
 

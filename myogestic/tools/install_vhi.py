@@ -6,18 +6,21 @@ right asset for the host OS/arch, downloads it, unpacks it into the location
 ``virtual_hand()`` looks at, and drops a ``vhi-version.txt`` marker so a
 later install knows what's already there.
 
+MyoGestic drives VHI over its control service, asking it what it exports. A
+release older than `MIN_VHI_TAG` has no control manifest to answer with, so this refuses
+to install one rather than leave it to fail at every launch.
+
 Usage:
     python -m myogestic.tools.install_vhi                # latest, default dest
-    python -m myogestic.tools.install_vhi --tag v1.0.0   # pinned version
+    python -m myogestic.tools.install_vhi --tag v2.0.0   # pinned version
     python -m myogestic.tools.install_vhi --dest /custom/path
     python -m myogestic.tools.install_vhi --force        # reinstall over existing
 
 Or after ``pip install myogestic``:
     myogestic-install-vhi
 
-Pin ``--tag`` in production: ``latest`` is convenient for a fresh checkout but
-not reproducible — a downstream rebuild months later may pick up a different
-VHI version with subtly different behaviour.
+Pin ``--tag`` in production: ``latest`` is not reproducible, so a later rebuild
+may pick up a different VHI version.
 """
 
 from __future__ import annotations
@@ -41,9 +44,19 @@ import typer
 
 REPO = "NsquaredLab/MyoGestic-VHI"
 
-# (system, machine) → release asset. Darwin/x86_64 is deliberately absent:
-# only an arm64 macOS build is shipped, and Rosetta translates x86_64 → arm64,
-# NOT the reverse, so the arm64 binary cannot run on Intel Macs. See
+#: The oldest VHI this MyoGestic can drive. The only older published release is v1.0.0,
+#: which has no control manifest to negotiate against at all — so an install of it would
+#: be refused at every launch, which is what this gate catches before the download.
+#:
+#: Still v2 despite the single-service rewrite: v2 has never been released (v1.0.0 is the
+#: only tag on the repo), so there is no published VHI build serving the old two-service
+#: contract for anything to be incompatible *with*. v2.0.0 will be the first release that
+#: carries the one control service.
+MIN_VHI_TAG = "v2.0.0"
+
+# (system, machine) → release asset. Darwin/x86_64 is absent: only an arm64
+# macOS build is shipped, and Rosetta translates x86_64 → arm64, NOT the
+# reverse, so the arm64 binary cannot run on Intel Macs. See
 # https://support.apple.com/en-ie/guide/security/secebb113be1/web
 ASSETS = {
     ("Darwin", "arm64"): "VHI-macos-arm64.zip",
@@ -99,13 +112,71 @@ def _download_url(tag: str, asset: str) -> str:
     return f"https://github.com/{REPO}/releases/download/{tag}/{asset}"
 
 
+def _version_of(tag: str) -> tuple[int, ...] | None:
+    """The numeric part of a release tag, or None if it is not a version at all."""
+    cleaned = tag.lstrip("vV").split("-")[0].split("+")[0]
+    parts = cleaned.split(".")
+    if not parts or not all(part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)
+
+
+def _resolve_latest_tag() -> str | None:
+    """Ask GitHub which release ``latest`` currently points at."""
+    url = f"https://api.github.com/repos/{REPO}/releases/latest"
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+    try:
+        with urllib.request.urlopen(req) as response:
+            return json.load(response).get("tag_name") or None
+    except (urllib.error.URLError, json.JSONDecodeError):
+        return None
+
+
+def _check_supported(tag: str) -> str:
+    """Refuse a release this MyoGestic cannot drive. Returns the resolved tag.
+
+    Checked *before* the download: an old binary installs happily and is then refused
+    by every `RemoteTarget` at bind time, far from the command that put it there.
+    """
+    resolved = _resolve_latest_tag() if tag == "latest" else tag
+    if resolved is None:
+        print(
+            f"  WARNING: could not resolve which release 'latest' points at. "
+            f"This MyoGestic needs VHI {MIN_VHI_TAG} or newer; if this installs an "
+            f"older one, every launch will refuse it.",
+            file=sys.stderr,
+        )
+        return tag
+    version = _version_of(resolved)
+    minimum = _version_of(MIN_VHI_TAG)
+    if version is None:
+        # A tag that is not a version at all — a branch build, say. Not ours to judge.
+        return resolved
+    if version < minimum:
+        print(
+            f"VHI {resolved} is too old for this MyoGestic.\n"
+            f"  This MyoGestic reaches VHI through one control service, and asks the\n"
+            f"  target which controls it exports rather than guessing. {resolved} has\n"
+            f"  no manifest to answer with, so the install would be unusable rather\n"
+            f"  than limited.\n"
+            f"\n"
+            f"  Install {MIN_VHI_TAG} or newer:\n"
+            f"    python -m myogestic.tools.install_vhi --tag {MIN_VHI_TAG}\n"
+            f"\n"
+            f"  Or run a VHI checkout from source, which needs no release at all:\n"
+            f"    export VHI_PATH=/path/to/Virtual-Hand-Interface\n"
+            f"    export GODOT_BIN=/path/to/godot            # Godot 4.x with .NET\n",
+            file=sys.stderr,
+        )
+        raise typer.Exit(1)
+    return resolved
+
+
 def _fetch_release_digest(tag: str, asset: str) -> str | None:
     """Fetch the SHA-256 hex digest for ``asset`` at ``tag`` from the GitHub API.
 
     GitHub publishes ``assets[].digest`` (``"sha256:<hex>"``) in every release
-    payload — used by ``install_vhi`` to integrity-check the downloaded zip
-    against the value GitHub computed at upload time. No coordination with
-    VHI's release pipeline required.
+    payload, computed at upload time.
 
     Returns the hex digest (no ``sha256:`` prefix), or ``None`` if the API is
     unreachable, the tag doesn't exist, or the asset has no digest.
@@ -149,8 +220,7 @@ def _verify(archive: Path, expected: str | None) -> None:
 
     Aborts the install on mismatch — a tampered or corrupted artifact must
     never reach the unpack step. ``expected=None`` (digest unavailable from
-    the API) downgrades to a warning instead of an error; the warning is
-    intentional so it isn't silently masked.
+    the API) warns instead of aborting.
     """
     if expected is None:
         print(
@@ -232,9 +302,8 @@ def _restore_exec_bits(target: Path) -> None:
 def _strip_quarantine(target: Path) -> None:
     """Remove macOS Gatekeeper's `com.apple.quarantine` xattr so the .app launches.
 
-    Loud on purpose: this is security-sensitive (we're trusting the
-    GitHub-hosted artifact), and the user should see it happen rather than
-    have it done silently.
+    Printed rather than done silently: this is security-sensitive, since it
+    means trusting the GitHub-hosted artifact.
     """
     if platform.system() != "Darwin":
         return
@@ -249,10 +318,9 @@ def _macos_gatekeeper_note(target: Path) -> None:
     """Print the macOS-specific "what to do when Gatekeeper blocks it" notice.
 
     VHI's .app is ad-hoc signed (no Apple Developer ID, no notarization), so
-    macOS will block it when launched via Finder / `open`. The block does NOT
-    fire when MyoGestic launches it via process_launcher (subprocess.Popen
-    bypasses LaunchServices) - so for the integrated workflow this is a
-    non-issue. The note is for users who try to double-click the app.
+    macOS blocks it when launched via Finder / `open`. The block does NOT fire
+    when MyoGestic launches it via process_launcher (subprocess.Popen bypasses
+    LaunchServices); the note is for users who double-click the app.
     """
     if platform.system() != "Darwin":
         return
@@ -274,7 +342,8 @@ def _macos_gatekeeper_note(target: Path) -> None:
 
 def _write_marker(target: Path, tag: str, asset: str) -> None:
     (target / "vhi-version.txt").write_text(
-        f"installed_tag={tag}\nasset={asset}\nplatform={platform.system()}/{platform.machine()}\n"
+        f"installed_tag={tag}\nasset={asset}\nplatform={platform.system()}/{platform.machine()}\n",
+        encoding="utf-8",
     )
 
 
@@ -282,8 +351,8 @@ def _install(
     tag: Annotated[
         str,
         typer.Option(
-            help="Release tag, e.g. 'v1.0.0' (default: 'latest'). Pin in "
-            "production for reproducible installs."
+            help="Release tag, e.g. 'v2.0.0' (default: 'latest'). Pin in "
+            f"production for reproducible installs. Must be {MIN_VHI_TAG} or newer."
         ),
     ] = "latest",
     dest: Annotated[
@@ -314,9 +383,11 @@ def _install(
     """Install a MyoGestic-VHI release binary for this platform."""
     dest = dest or _default_dest()
     asset = _resolve_asset()
+    resolved = _check_supported(tag)
     url = _download_url(tag, asset)
 
-    print(f"Installing VHI {tag} → {dest}")
+    label = tag if resolved == tag else f"{tag} ({resolved})"
+    print(f"Installing VHI {label} → {dest}")
 
     if dest.exists() and any(dest.iterdir()):
         looks_like_previous_install = any((dest / m).exists() for m in INSTALL_MARKERS)
@@ -342,8 +413,7 @@ def _install(
 
     # Atomic install: stage in a temp dir, validate, then swap with dest.
     # A failed download or malformed archive never leaves a half-installed
-    # dest behind. Checksum verification happens before unpack — a tampered
-    # archive never reaches the file extraction step.
+    # dest behind.
     with tempfile.TemporaryDirectory(prefix="myogestic-vhi-") as tmp:
         tmp_path = Path(tmp)
         archive = tmp_path / asset

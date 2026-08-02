@@ -1,0 +1,251 @@
+# Drive your own device
+
+Anything MyoGestic moves — a prosthesis on a serial port, a motor controller, a cursor, a
+robot arm — is a **target**: a plain object with three methods that you hand to a
+[`ControlBus`][myogestic.controls.ControlBus]. Nothing registers, nothing subclasses,
+nothing is discovered by name.
+
+## Run it first
+
+`examples/synthetic/my_device.py` is a complete target with three lines left for you. It
+needs no hardware:
+
+```bash
+uv run python examples/synthetic/my_device.py
+```
+
+## What you should see
+
+```
+a frame, as @pipeline.predict would push it:
+  mydevice.grip              +0.80
+  mydevice.wrist.pronation   -0.40
+out of range and NaN, both handled before you see them:
+  mydevice.grip              +1.00
+  mydevice.wrist.pronation   +0.00
+teardown, which rests every control first:
+  mydevice.grip              +0.00
+  mydevice.wrist.pronation   +0.00
+  stopped
+```
+
+Three things happened without you writing them. `5.0` arrived at your device as `1.0`, because
+it declared `hi=1.0`. A `NaN` arrived as `0.0` rather than as full deflection. And every
+control was returned to rest *before* teardown, so the device does not keep its last grip.
+That is [`ControlBus`][myogestic.controls.ControlBus], and it is the reason a target is three
+methods rather than thirty.
+
+## Change these three things
+
+Copy `my_device.py` next to your own code and edit the three marked lines:
+
+| | what | where |
+|---|---|---|
+| **1** | **Name your controls.** Two or more dotted lowercase segments; the first is your namespace. Name a *direction*, so `+1` means something: `grip.close`, not `grip.motor`. | `ADDRESSES` |
+| **2** | **Drive your hardware.** Replace the `print` with your call: `self._port.write(...)`, `self._motors.set(...)`, an MQTT publish, anything. | in `send` |
+| **3** | **Release your hardware.** Close the port, disconnect, power down. | in `stop` |
+
+Nothing else has to change. If your device only moves one way, declare `lo=0.0` in
+`capabilities` and MyoGestic will refuse a map that asks for the other direction.
+
+To check a control map against your device before running anything:
+
+```bash
+uv run python tools/inspect_control_map.py my-map.toml
+```
+
+It calls only `capabilities()` and `resolve()`, so it builds no target and moves nothing.
+
+## The contract, in full
+
+If "control map", "address" and "alias" are new words,
+[Concepts › Controls](../concepts/controls.md) explains the system this page uses. A
+[remote target](drive-a-remote-target.md) is the separate case where your device is already
+its own program and the target is written for you.
+
+```python
+class Target(Protocol):
+    def bind(self, controls: ControlSet) -> None: ...
+    def send(self, values, changed) -> None: ...
+    def stop(self) -> None: ...
+
+    claims: frozenset[str]                      # optional
+    def capabilities(self) -> Sequence | None: ...   # optional
+```
+
+`bind` runs once, on the main thread, and **may raise**. Refuse a configuration you cannot
+drive there, while a human is still reading the traceback. `send` runs on the predict thread
+and **must not raise**; every value it gets is already finite and inside its declared range,
+because [`ControlBus`][myogestic.controls.ControlBus] sanitised the frame before fanning it
+out.
+
+The two optional members are what the bus asks for by name:
+
+| member | absent means | present means |
+|---|---|---|
+| `claims` | "assume it drives everything" | the aliases it drives, so the bus can catch a control nothing drives |
+| `capabilities()` | "the caller already knows my vocabulary" | what addresses you export, so a map can be resolved against you |
+
+**A route's `weight` is yours to apply, and before your own range.** The bus delivers the
+un-weighted value; compute `min(hi, max(lo, weight * value))`, as `RemoteTarget` does.
+Ignoring `weight` silently discards every gain in the map, including the `weight = -1.0` that
+inverts an axis.
+
+## A complete target
+
+The whole of a target that moves a cursor.
+
+<!--docs:run-->
+```python
+from myogestic.controls import Capability, ControlBus, Continuous, ControlSet
+
+
+class CursorTarget:
+    """Drive a 2-D cursor from two continuous controls."""
+
+    #: What this target exports. Addresses are namespaced by their first segment, so
+    #: `cursor.*` cannot collide with `vhi.*` in the same map.
+    ADDRESSES = ("cursor.x", "cursor.y")
+
+    def __init__(self) -> None:
+        self.position = (0.0, 0.0)
+        self._slots: dict[str, tuple[str, float]] = {}
+
+    def capabilities(self):
+        """Signed, normalised, resting at zero — the control standard's defaults."""
+        return [
+            Capability(address=a, kind="continuous", lo=-1.0, hi=1.0, rest=0.0)
+            for a in self.ADDRESSES
+        ]
+
+    def bind(self, controls: ControlSet) -> None:
+        """Refuse here, not at the first frame."""
+        self._slots = {}
+        for alias, refs in controls.routes.items():
+            for ref in refs:
+                if ref.address in self.ADDRESSES:
+                    self._slots[alias] = (ref.address, ref.weight)
+        if not self._slots:
+            raise ValueError(f"nothing in this map targets {self.ADDRESSES}")
+
+    @property
+    def claims(self) -> frozenset[str]:
+        return frozenset(self._slots)
+
+    def send(self, values, changed) -> None:
+        """One tick. Must not raise."""
+        x, y = self.position
+        for alias, (address, weight) in self._slots.items():
+            # Weight first, then your own range. Yours to apply — the bus does not.
+            value = min(1.0, max(-1.0, weight * float(values.get(alias, 0.0))))
+            if address == "cursor.x":
+                x = value
+            else:
+                y = value
+        self.position = (x, y)
+
+    def stop(self) -> None:
+        """Rest. The bus sends a neutral frame first, so this is usually enough."""
+        self.position = (0.0, 0.0)
+```
+
+## Driving it
+
+Same three lines as any other target. `connect_controls` asks each target what it exports,
+resolves the map against the answers, and builds the bus:
+
+<!--docs:run-->
+```python
+from myogestic.controls import connect_controls, load_control_map
+
+control_map = load_control_map({"dofs": {"aim_x": "cursor.x", "aim_y": "cursor.y"}})
+
+cursor = CursorTarget()
+bus = connect_controls(control_map, [cursor], hz=32)
+
+bus.push({"aim_x": 0.5, "aim_y": -0.25})
+assert cursor.position == (0.5, -0.25)
+bus.stop()
+```
+
+`connect_controls` answers `None` rather than raising while any target's `capabilities()` does,
+so a target that is not up yet defers instead of failing.
+[`ControlLink`][myogestic.controls.ControlLink] holds the arguments and asks again for you,
+which saves you a module-level `bus` and a `global`:
+
+<!--docs:run-->
+```python
+from myogestic.controls import ControlLink
+
+link = ControlLink(control_map, [CursorTarget()], hz=32)
+
+def on_click():                 # a button handler, or a training thread
+    if link.ensure():           # idempotent, and cheap once it has bound
+        link.bus.push({"aim_x": 0.5, "aim_y": -0.25})
+
+on_click()
+assert link.bus is not None     # this target answers immediately; a remote one would not
+link.stop()                     # rests every target and clears the bus
+```
+
+Call `ensure()` from anywhere that can afford to block: a UI handler, a training thread. Never
+from `@pipeline.predict`, which has its own thread and a deadline - read `link.bus` there and
+no-op while it is `None`.
+
+If your target's vocabulary is fixed and you have the capabilities in hand already, build
+the bus directly instead; `connect_controls` is only the lazy-resolve convenience:
+
+```python
+from myogestic.controls import ControlBus, resolve
+
+controls = resolve(control_map, cursor.capabilities())
+bus = ControlBus(controls, targets=[cursor], hz=32)
+```
+
+## Addresses are yours to name
+
+A control map's right-hand side is an **address**, and its first segment namespaces it:
+`vhi.prediction.index`, `keyboard.tap.function.f1`, `cursor.x`. Pick a segment nobody else uses
+and the same map can drive your device and a Virtual Hand at once, with one `ControlBus` and
+one list of targets:
+
+```python
+bus = ControlBus(controls, targets=[cursor, vhi_target], hz=32)
+```
+
+The bus checks that *someone* claims every alias, so an address no target drives is caught at
+bind. Uncaught, it would look like a control that works and holds still.
+
+## A real one: a servo hand
+
+A cursor has two controls and no mechanism. `examples/synthetic/servo_hand.py` is a real
+one - six servos on a serial port, runnable with no hardware:
+
+```bash
+uv run python examples/synthetic/servo_hand.py
+```
+
+```python
+--8<-- "examples/synthetic/servo_hand.py"
+```
+
+Three things in it carry the weight: `hand.thumb` drives **two** servos, so the coupling stays
+out of the map; `frame` iterates `SERVOS` by name, so the wire order is the device's; and
+`stop` rests before it closes.
+
+## What the standard asks of you
+
+A control value is **signed and normalised**: `[-1, 1]`, `0` at rest, and `+1` means the
+direction the name denotes. `cursor.x` at `+1` should move right if you called it *right*.
+A one-way control declares `lo=0.0` instead.
+
+Getting a sign backwards is the one mistake that survives every test you are likely to write -
+[Concepts › Controls](../concepts/controls.md#the-one-convention-a-device-may-not-redefine)
+has the reason. Check it against something outside the loop: a person looking at the device.
+
+## See also
+
+- [Drive a remote target](drive-a-remote-target.md) - for a separate application, not an in-process object
+- [Publish a data stream](add-an-output.md) - for telemetry: a sink with no control space, which drives nothing
+- [Integrate the Virtual Hand](integrate-vhi.md) - the one remote target this project ships
+- [Controls reference](../api/controls.md) - `Capability`, `ControlSet`, address rules

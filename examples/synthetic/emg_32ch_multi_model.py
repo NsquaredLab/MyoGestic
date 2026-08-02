@@ -15,11 +15,15 @@ Workflow:
 
 Mirrors `emg_classification.py` but expands to 32 channels and 4 classes, and lets
 you compare classifiers side-by-side without editing the file.
+
+Which hand controls the poses drive is declared in `examples/controls/multi_model.toml`
+— our own alias on the left, the address VHI exports on the right.
 """
 
 import re
 import sys
 import time as _time
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -32,6 +36,7 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
@@ -41,10 +46,11 @@ from myogestic.recipes.estimators import (
     sklearn_extra_trees_classifier,
     sklearn_logistic_classifier,
 )
+from myogestic.remote import RemoteTarget
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     AppLogo,
     LogPanel,
@@ -68,16 +74,39 @@ HOP_MS = 100
 ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
 output_filter = PostProcessor(hz=32)
 
-# Per-class 9-DOF hand poses. Library only ships the rest pose conceptually;
-# anything richer is experiment-specific and lives here.
-HAND_POSES: dict[int, np.ndarray] = {
-    0: np.zeros(9, dtype=np.float32),  # Rest
-    1: np.array([-1, 0, -1, -1, -1, -1, 0, 0, 0], dtype=np.float32),  # Fist
-    2: np.array([-0.7, 0, -0.8, -0.6, 0, 0, 0, 0, 0], dtype=np.float32),  # Pinch
-    3: np.array([0.5, 0, 0.5, 0.5, 0.5, 0.5, 0, 0, 0], dtype=np.float32),  # Open
+# Which of this example's outputs drive which of VHI's controls. The left side of the
+# file is ours and the right side is VHI's, so nothing below hard-codes what a control
+# means — the addresses are resolved against a live VHI by `link.ensure()`.
+CONTROL_FILE = Path(__file__).resolve().parent.parent / "controls" / "multi_model.toml"
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
+
+#: Our aliases in file order. Poses that move everything (Fist, Open) are built from
+#: this rather than from a second list that could drift out of step with the TOML.
+POSE_ALIASES = tuple(CONTROL_MAP.bindings)
+
+vhi_control = vhi.control_client()
+
+# Per-class hand poses, in control values keyed by *our* aliases: +1 is the
+# direction the alias names, 0 is rest, and an alias left out of a pose rests.
+# The target turns them into whatever this VHI's wire wants, so no channel index
+# or sign flip appears here.
+#
+# `thumb_spread` used to be written as 0 in a fist. Recorded VHI sessions have it
+# at exactly -1.0 on the wire — full abduction — so a fist abducts the thumb
+# rather than leaving it neutral.
+HAND_POSES: dict[int, dict[str, float]] = {
+    0: {},  # Rest — every alias at 0
+    1: dict.fromkeys(POSE_ALIASES, 1.0),  # Fist: everything flexed, thumb abducted
+    2: {  # Pinch
+        "thumb_curl": 0.7,
+        "thumb_spread": 0.6,
+        "index_curl": 0.8,
+        "middle_curl": 0.6,
+    },
+    3: dict.fromkeys(POSE_ALIASES, -0.5),  # Open: extended past rest
 }
 
 rms_transform = RMS(window_size=32)
@@ -116,9 +145,11 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
-    # vhi.launcher() returns a [(name, argv)] entry; splat it so EMG
-    # Generator and VHI Hand share a single launcher panel.
-    *vhi.launcher(),
+    # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
+    # Hand share one launcher panel. `launchable` rather than `launcher` because an
+    # unlaunchable target must not stop this app from opening — a running one needs no
+    # button, and the reason is logged either way.
+    *vhi.launchable(),
 ]
 
 app = App("EMG 32ch Multi-Model", ui_scale=0.85)
@@ -128,6 +159,20 @@ pipeline = Pipeline(app)
 # so the example's custom picker can call them through the pipeline too.
 pipeline.save_model = save_pickle
 pipeline.load_model = load_pickle
+
+# `link.bus` stays None until `link.ensure()` succeeds. The link and its target own the
+# wire once bound, and that matters more than it looks: VHI's continuous inlet takes
+# control values, and `RemoteTarget` negotiates the space at bind time and refuses a VHI it
+# cannot fully drive rather than guessing. No hand and no stream is named here — the
+# target looks this file's addresses up in VHI's manifest and publishes one stream per
+# address it drives, named for that address.
+link = ControlLink(
+    CONTROL_MAP,
+    [RemoteTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=32,
+)
 
 MODELS_DIR = Path("models")
 
@@ -159,7 +204,6 @@ _load_dialog: object | None = None  # in-flight pfd.open_file future, None if id
 # we don't call pipeline_panel directly (custom layout with the recipe
 # selector + save/load row).
 _MODEL_WIDGET_ID = "ml_multi"
-_autoscroll_on = True
 _popout_open = False
 
 _train_btn = TrainButton(pipeline)
@@ -202,7 +246,7 @@ def model_panel() -> None:
     Log inherits the same autoscroll + popout UX as ``pipeline_panel``
     and the process launcher's log — same icons, same tooltips.
     """
-    global selected_model_idx, _load_dialog, _autoscroll_on, _popout_open
+    global selected_model_idx, _load_dialog, _popout_open
 
     # Render the popout window first so it survives even if this panel
     # scrolls out of view next frame (same pattern as pipeline_panel).
@@ -211,7 +255,6 @@ def model_panel() -> None:
             _MODEL_WIDGET_ID,
             pipeline.train_log,
             title="Model training log",
-            autoscroll=_autoscroll_on,
         )
         if not still_open:
             _popout_open = False
@@ -226,8 +269,8 @@ def model_panel() -> None:
     imgui.same_line()
     _predict_btn.ui()
     imgui.same_line()
-    _autoscroll_on, _popout_open = render_log_buttons(
-        _MODEL_WIDGET_ID, autoscroll=_autoscroll_on, popped_out=_popout_open
+    _popout_open = render_log_buttons(
+        _MODEL_WIDGET_ID, popped_out=_popout_open
     )
 
     if _popout_open:
@@ -351,10 +394,15 @@ def predict(model, features):
         proba = None
         class_idx = int(model.predict(x)[0])
 
-    hand = HAND_POSES.get(class_idx, HAND_POSES[0]).copy()
-    hand = output_filter(hand).astype(np.float32)
-    vhi_outlet.push(hand)
-    return {"class": class_idx, "proba": proba, "hand": hand}
+    # `link.bus`, never `link.ensure()`: binding blocks on an RPC, which this thread
+    # must not do.
+    if link.bus is None:
+        return {"class": class_idx, "proba": proba}  # nothing resolved yet, nothing to command
+
+    # Control values in; the bus rests every alias the pose omits, sanitises and
+    # smooths, and the target places them on the channels this VHI negotiated.
+    values = link.bus.push(HAND_POSES.get(class_idx, HAND_POSES[0]))
+    return {"class": class_idx, "proba": proba, "hand": values}
 
 
 LOGO_CELL_W = 300
@@ -368,7 +416,13 @@ grid = Grid(
 
 
 def _on_gesture(i: int) -> None:
+    link.ensure()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
+
+
+def _on_record() -> None:
+    link.ensure()
+    app.start_recording()
 
 
 viewer = SignalViewer("emg", selectable=True)
@@ -378,7 +432,7 @@ logo = AppLogo()
 processes = ProcessLauncher(PROCESSES)
 recording = RecordingControls(
     CLASSES,
-    on_record=app.start_recording,
+    on_record=_on_record,
     on_stop=app.stop_recording,
     on_gesture=_on_gesture,
 )
@@ -420,7 +474,12 @@ def demo_ui(ctx):
 
 
 def main() -> None:
-    app.run()
+    try:
+        app.run()
+    finally:
+        # Rest the hand and make that frame land before the outlet's thread dies.
+        link.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

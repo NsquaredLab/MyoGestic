@@ -117,7 +117,12 @@ app = App(
     "MyoGestic Playground",
     ui_scale=1.0 if _IS_PHONE else 0.9,
 )
-app.streams(Stream("emg", source=BrowserSource(), window_ms=1000, buffer_ms=10000))
+# Nothing attaches a stream on its own — see `Stream.reconnect`. This source is
+# synthetic and in-process, so there is no other producer to pick up by mistake,
+# and no operator to press the button: the page attaches its own.
+stream = Stream("emg", source=BrowserSource(), window_ms=1000, buffer_ms=10000)
+stream.reconnect()
+app.streams(stream)
 
 pipeline = Pipeline(app)
 # The Pipeline.start_training gate rejects empty TrainingData. The
@@ -259,7 +264,7 @@ def _sessions_panel() -> None:
 
 
 # Live-tunable post-processing smoother. Same widget the desktop demos
-# use to smooth a 9-DoF pose before pushing to VHI; here we feed it the
+# use to smooth a 9-DOF pose before pushing to VHI; here we feed it the
 # per-class probability vector so the prediction_label's confidence bar
 # smooths instead of jittering frame-to-frame.
 proba_filter = PostProcessor(hz=20.0)

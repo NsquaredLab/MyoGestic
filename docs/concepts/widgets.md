@@ -101,7 +101,7 @@ def ui(ctx):
         save.ui()
 ```
 
-Slices accept Python conventions: `0:8` is rows 0–7 inclusive, `1:3` is cols 1–2 inclusive. There's no flex layout — sizes are even fractions of the window. If you want non-uniform sizing, drop down to `imgui.set_next_window_size` directly.
+Slices accept Python conventions: `0:8` is rows 0–7 inclusive, `1:3` is cols 1–2 inclusive. There's no flex layout — sizes are even fractions of the window. If you want non-uniform sizing, drop to `imgui.set_next_window_size` directly.
 
 ## Pop-out windows
 

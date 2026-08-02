@@ -1,4 +1,11 @@
-"""Compact VHI movement palette — auto-refreshed state + click dispatch in one call.
+"""Compact VHI control-hand aid — auto-refreshed state + click dispatch in one call.
+
+This is a **VHI recording / control-hand aid**, not a control surface for an
+application's own DOFs. It reads the v2 recording aid for state and dispatches clicks
+through a caller-supplied handler, which is expected to command a *discrete
+DOF* — normally ``bus.select("gesture", state)``, under whatever alias your
+mapping file gave that control. The movement names it shows are VHI's own
+vocabulary.
 
 Wraps the three-piece pattern most examples use verbatim:
 
@@ -25,7 +32,7 @@ from myogestic.widgets.vhi.palette import (
 )
 
 if TYPE_CHECKING:
-    from myogestic.vhi._client import VhiControlClient
+    from myogestic.remote._recording import RecordingClient
 
 
 class VhiMovementPanel:
@@ -34,12 +41,15 @@ class VhiMovementPanel:
     Parameters
     ----------
     client
-        The `VhiControlClient` used to fetch state and dispatch
-        ``SetMovement`` commands.
+        The `myogestic.remote.RecordingClient` used to fetch control-hand state
+        (available movements, the current one, whether a recording trajectory is running).
     on_movement
-        Click handler for a movement button. Defaults to
-        ``client.set_movement``; pass a wrapper to layer side-effects
-        (e.g. snap a session label, fire an edge-trigger).
+        Click handler for a movement button — **required**. Wire it to a
+        discrete DOF, e.g. ``lambda s: bus.select("gesture", s)`` — the states come
+        from the target's manifest, so pass one of those names through. There
+        is deliberately no default: dispatching straight at the target would bypass
+        the DOF's debounce, which is the only thing protecting a classifier-driven
+        session from state chatter.
     min_interval_s
         Minimum seconds between background state
         refreshes. Default 1 s.
@@ -49,7 +59,10 @@ class VhiMovementPanel:
     Examples
     --------
     >>> from myogestic.widgets import VhiMovementPanel
-    >>> panel = VhiMovementPanel(vhi_client)
+    >>> panel = VhiMovementPanel(
+    ...     vhi.recording_client(),
+    ...     lambda state: bus.select("gesture", state),
+    ... )
     >>> panel.ui()
     """
 
@@ -57,15 +70,15 @@ class VhiMovementPanel:
 
     def __init__(
         self,
-        client: VhiControlClient,
+        client: RecordingClient,
+        on_movement: Callable[[str], None],
         *,
-        on_movement: Callable[[str], None] | None = None,
         min_interval_s: float = 1.0,
-        title: str = "VHI Movements",
+        title: str = "VHI Control Hand",
     ) -> None:
         self._client = client
         self._cache = VhiStateCache()
-        self._on_movement = on_movement or client.set_movement
+        self._on_movement = on_movement
         self._min_interval_s = min_interval_s
         self._title = title
 

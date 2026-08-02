@@ -15,7 +15,12 @@ from myogestic import App, Stream
 from myogestic.widgets import RawSignalViewer
 
 app = App("panel: raw_signal_viewer")
-app.streams(Stream("emg", source=SyntheticSource(n_channels=4), window_ms=1000, buffer_ms=5000))
+# Nothing attaches a stream on its own — see `Stream.reconnect`. This source is
+# synthetic and in-process, so there is no other producer to pick up by mistake,
+# and no operator to press the button: the script attaches its own.
+stream = Stream("emg", source=SyntheticSource(n_channels=4), window_ms=1000, buffer_ms=5000)
+stream.reconnect()
+app.streams(stream)
 
 viewer = RawSignalViewer("emg")
 

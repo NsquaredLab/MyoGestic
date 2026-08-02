@@ -7,6 +7,10 @@ regressing the 5-DOF kinematics target — but the model is RaulNet V17
 CatBoost. Use this to compare a neural-net regressor against the
 tree-based one on the same data.
 
+The control space is declared in :file:`examples/controls/regression_raulnet.toml` — your
+aliases on the left, VHI's addresses on the right — and resolves against a *running* VHI,
+so nothing here hard-codes what a control means.
+
 Run with:
     uv run --extra examples --extra grpc python examples/synthetic/emg_regression_raulnet.py
 
@@ -27,21 +31,29 @@ Requirements:
 from __future__ import annotations
 
 import sys
+import tomllib
 from pathlib import Path
 
 import lightning as L
 import numpy as np
 import torch
-from lightning.pytorch.callbacks import ModelCheckpoint, StochasticWeightAveraging
+from lightning.pytorch.callbacks import ModelCheckpoint
 from myoverse.models.raul_net.v17 import RaulNetV17
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
-from myogestic.session import iter_aligned_windows, iter_labeled_windows, open_session_store
+from myogestic.remote import RemoteTarget
+from myogestic.session import (
+    iter_aligned_windows,
+    iter_labeled_windows,
+    split_sessions_by_stream,
+)
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import virtual_hand
+from myogestic.vhi.pose import split_pose
 from myogestic.widgets import (
     AppLogo,
     PostProcessor,
@@ -74,9 +86,32 @@ if RMS_WINDOW_SAMPLES >= N_WINDOW_SAMPLES:
         "the RMS kernel slides inside the analysis window."
     )
 
-# 5 VHI DOFs (mosaic-2.0 registry): wrist rotation + index/middle/ring/pinky.
-VHI_DOF_INDICES = [0, 2, 3, 4, 5]
-N_DOF = len(VHI_DOF_INDICES)
+# ── The model's own geometry, checked here rather than inside torch ───
+# RaulNetV17's encoder opens with a strided "event search" conv and then a second
+# conv whose kernel is **18 wide, hard-coded in the model**. So the first conv's
+# output has to be at least that long, and the arithmetic is not obvious from any
+# one constant: EVENT_SEARCH_STRIDE=8 turned this example's 29 feature samples into
+# 4, and the failure surfaced as a torch shape error six frames into a Lightning
+# stack — after training had started and the windows had been cut.
+EVENT_SEARCH_KERNEL = 31
+EVENT_SEARCH_STRIDE = 1
+_MIN_ENCODER_WIDTH = 18  # RaulNetV17's second conv kernel; not ours to change
+_encoder_out = (
+    INPUT_LENGTH + 2 * (EVENT_SEARCH_KERNEL // 2) - EVENT_SEARCH_KERNEL
+) // EVENT_SEARCH_STRIDE + 1
+if _encoder_out < _MIN_ENCODER_WIDTH:
+    raise ValueError(
+        f"RaulNet would see {_encoder_out} samples after its event-search conv, and its "
+        f"next kernel is {_MIN_ENCODER_WIDTH} wide. INPUT_LENGTH={INPUT_LENGTH} "
+        f"(WINDOW_MS={WINDOW_MS}, RMS_WINDOW_MS={RMS_WINDOW_MS}, "
+        f"RMS_STRIDE_MS={RMS_STRIDE_MS}) at EVENT_SEARCH_STRIDE={EVENT_SEARCH_STRIDE}. "
+        "Lower EVENT_SEARCH_STRIDE, shorten RMS_STRIDE_MS, or lengthen WINDOW_MS."
+    )
+
+# Training budget. Steps, not epochs — see the DataLoader and the Trainer below.
+BATCH_SIZE = 8
+MAX_EPOCHS = 300
+MAX_STEPS = 4000
 
 CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
@@ -120,11 +155,31 @@ def load_raulnet(path: str) -> L.LightningModule:
 ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
-vhi_outlet = vhi.outlet()
-vhi_client = vhi.control_client()
+# The recording aid (session gate, trajectory playback) and the control client.
+recording_aid = vhi.recording_client()
+vhi_control = vhi.control_client()
 
-# Output-side smoothing applied to the 9-DOF hand vector before pushing
-# to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
+# Which control each of the network's five outputs drives. The aliases on the left are
+# ours and must match regression_raulnet.toml; the names on the right are what
+# `split_pose` names the channels of a recorded VHI_Control frame, i.e. the training
+# target. There is no wrist on that wire at all — channel 0 is thumb flexion.
+DOF_TARGETS: dict[str, str] = {
+    "thumb": "thumb.flexion",
+    "index": "index.flexion",
+    "middle": "middle.flexion",
+    "ring": "ring.flexion",
+    "little": "little.flexion",
+}
+DOF_NAMES = tuple(DOF_TARGETS)
+N_DOF = len(DOF_NAMES)
+GESTURE = "gesture"  # the alias the Rest / Fist buttons command
+
+CONTROL_FILE = Path(__file__).resolve().parent.parent / "controls" / "regression_raulnet.toml"
+with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
+    CONTROL_MAP = load_control_map(tomllib.load(handle))
+
+# Output-side smoothing, applied by the control bus to the control vector.
+# Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
 PROCESSES = [
@@ -144,9 +199,11 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
-    # vhi.launcher() returns a [(name, argv)] entry; splat it so EMG
-    # Generator and VHI Hand share a single launcher panel.
-    *vhi.launcher(),
+    # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
+    # Hand share one launcher panel. `launchable` rather than `launcher` because an
+    # unlaunchable target must not stop this app from opening — a running one needs no
+    # button, and the reason is logged either way.
+    *vhi.launchable(),
 ]
 
 app = App("EMG Regression — RaulNet", ui_scale=0.85)
@@ -162,6 +219,19 @@ app.streams(
 pipeline = Pipeline(app, predict_hz=20)
 pipeline.save_model = save_raulnet
 pipeline.load_model = load_raulnet
+
+# The bus is built lazily, by `link.ensure()`. Every semantic the map needs — whether an
+# address takes a number or a held state, its range, its states — is VHI's to declare, and
+# VHI does not exist yet: this app launches it from its own ProcessLauncher. No hand and no
+# stream is named here either: the target looks this file's addresses up in VHI's manifest
+# and publishes one stream per address it drives, named for that address.
+link = ControlLink(
+    CONTROL_MAP,
+    [RemoteTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=32,
+)
 
 
 @pipeline.extract
@@ -204,20 +274,11 @@ def train(data: TrainingData) -> L.LightningModule:
     log.clear()
     log.append(f"Training from {len(data.paths)} sessions...")
 
-    kin_paths: list[str] = []
-    label_paths: list[str] = []
-    for p in data.paths:
-        try:
-            sess = open_session_store(p)
-        except Exception as e:
-            log.append(f"  skip {p}: {e}")
-            continue
-        has_kin = "vhi_control" in sess.stores
-        sess.close()  # only needed the store list — release the .session.zip handle
-        if has_kin:
-            kin_paths.append(p)
-        else:
-            label_paths.append(p)
+    # Unreadable sessions come back rather than being logged inside the helper, so the
+    # skip lands in *this* app's log where the user is looking.
+    kin_paths, label_paths, unreadable = split_sessions_by_stream(data.paths, "vhi_control")
+    for p, e in unreadable:
+        log.append(f"  skip {p}: {e}")
 
     X_list: list[np.ndarray] = []
     y_list: list[np.ndarray] = []
@@ -231,7 +292,11 @@ def train(data: TrainingData) -> L.LightningModule:
         n_alignment_samples=10,
     ):
         X_list.append(sliding_rms(emg_window))
-        y_list.append(np.abs(aligned["vhi_control"][VHI_DOF_INDICES]))
+        # A recorded pose is already control-standard, so this only names the training
+        # target is in exactly the space `predict` commands. A signed negation, not
+        # the old abs() — which folded extension into flexion of equal magnitude.
+        pose = split_pose(aligned["vhi_control"])
+        y_list.append(np.array([pose[DOF_TARGETS[n]] for n in DOF_NAMES], dtype=np.float64))
     if kin_paths:
         log.append(f"  kinematics: {len(X_list)} windows from {len(kin_paths)} sessions")
 
@@ -265,12 +330,23 @@ def train(data: TrainingData) -> L.LightningModule:
     X_tensor = torch.from_numpy(X).unsqueeze(1)
     y_tensor = torch.from_numpy(y)
     dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
+    # What trains a network is optimizer steps, and this batch size used to be larger
+    # than the whole demo training set: 37 windows in one batch, one batch per epoch,
+    # 50 epochs — fifty updates at 1e-4, which is a network barely off its
+    # initialisation. It lost to CatBoost because it had not been fitted, not because
+    # it is worse. Eight keeps several steps per epoch on a set this small, and stays
+    # a sane batch when there is more data.
     loader = torch.utils.data.DataLoader(
         dataset,
-        batch_size=64,
+        batch_size=BATCH_SIZE,
         shuffle=True,
         num_workers=0,
         pin_memory=True,
+    )
+    log.append(
+        f"  {len(dataset)} windows, batch {BATCH_SIZE} -> "
+        f"{max(1, len(dataset) // BATCH_SIZE)} steps/epoch, "
+        f"up to {MAX_EPOCHS} epochs (ceiling {MAX_STEPS} steps)"
     )
 
     model = RaulNetV17(
@@ -282,8 +358,8 @@ def train(data: TrainingData) -> L.LightningModule:
         nr_of_electrodes_per_grid=N_CHANNELS,
         cnn_encoder_channels=(64, 32, 32),
         mlp_encoder_channels=(128, 128),
-        event_search_kernel_length=31,
-        event_search_kernel_stride=8,
+        event_search_kernel_length=EVENT_SEARCH_KERNEL,
+        event_search_kernel_stride=EVENT_SEARCH_STRIDE,
     )
 
     torch.set_float32_matmul_precision("medium")
@@ -298,16 +374,20 @@ def train(data: TrainingData) -> L.LightningModule:
         accelerator="auto",
         devices=1,
         precision="32-true",
-        max_epochs=50,
+        max_epochs=MAX_EPOCHS,
+        # A ceiling in *steps*, because epochs are not the unit that trains anything:
+        # the same `max_epochs` is fifty updates on this demo set and tens of thousands
+        # on a real one. Whichever limit comes first wins.
+        max_steps=MAX_STEPS,
         # log_every_n_steps=1 so callback_metrics is populated even when
         # an epoch is a single batch (small training-set demo case).
         log_every_n_steps=1,
+        # No StochasticWeightAveraging. It began at `swa_epoch_start=0.5` — epoch 25 of
+        # 50 — and averaged the weights of the last 25 updates, which is a technique for
+        # the tail of a long run being asked to smooth a model that had not converged.
+        # It froze an undertrained network. Worth restoring once a run is long enough
+        # for the average to be over something.
         callbacks=[
-            StochasticWeightAveraging(
-                swa_lrs=1e-4,
-                swa_epoch_start=0.5,
-                annealing_epochs=5,
-            ),
             ModelCheckpoint(
                 monitor="train/loss",
                 mode="min",
@@ -328,20 +408,19 @@ def train(data: TrainingData) -> L.LightningModule:
 
 @pipeline.predict
 def predict(model: L.LightningModule, features: np.ndarray) -> dict:
-    """Regress 5-DOF → expand to 9-DOF (negated) → smooth → push to VHI."""
+    """Regress the five control DOFs and hand them to the bus."""
     with torch.inference_mode():
         x = torch.from_numpy(features).float().to(model.device)
         x = x.unsqueeze(0).unsqueeze(0)  # (1, 1, n_ch, INPUT_LENGTH)
         out = model(x).cpu().numpy()[0]  # (5,)
-    pred_5dof = np.clip(out, 0, 1)
-
-    pred_9dof = np.zeros(9, dtype=np.float32)
-    for i, vhi_idx in enumerate(VHI_DOF_INDICES):
-        pred_9dof[vhi_idx] = -pred_5dof[i]
-
-    pred_9dof = output_filter(pred_9dof).astype(np.float32)
-    vhi_outlet.push(pred_9dof)
-    return {"dof": pred_5dof, "hand": pred_9dof}
+    # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this runs on the
+    # predict thread, where a stall is worse than a frame with no bus.
+    bus = link.bus
+    if bus is None:
+        return {}  # nothing resolved yet; nothing to command
+    # No clip: each DOF's declared range is the authority, and clipping before the
+    # smoother lets the filter overshoot straight back out of it.
+    return {"dof": bus.push(dict(zip(DOF_NAMES, out, strict=True)))}
 
 
 LOGO_CELL_W = 300
@@ -355,23 +434,28 @@ grid = Grid(
 
 
 def _on_gesture(i: int) -> None:
-    # cycle=False: snap to the movement's end pose and hold it. VHI_Control
-    # settles to a static kinematic value per gesture, which the regressor
-    # learns to map back from the corresponding EMG amplitude.
+    # A discrete held state through the same bus the continuous DOFs use. The
+    # control hand snaps to the pose and holds it, so VHI_Control settles to a static
+    # kinematic value the regressor can map back from EMG amplitude.
+    bus = link.ensure()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
-    vhi_client.set_movement(CLASSES[i], cycle=False)
+    if bus is not None:
+        # The states are VHI's own movement names, so "Fist" is not lowercased here.
+        bus.select(GESTURE, CLASSES[i])
 
 
 def _on_record() -> None:
-    # While recording, VHI ignores its local keyboard so MyoGestic's gesture
-    # buttons are the sole movement source for the session.
+    # The recording aid, not a control command: it gates VHI's local keyboard so the
+    # gesture buttons are this session's only movement source.
+    link.ensure()
     app.start_recording()
-    vhi_client.set_session_active(True)
+    if not recording_aid.set_recording_session(True):
+        app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
 
 
 def _on_stop() -> None:
     app.stop_recording()
-    vhi_client.set_session_active(False)
+    recording_aid.set_recording_session(False)
 
 
 viewer = SignalViewer("emg")
@@ -415,7 +499,11 @@ def main() -> None:
     try:
         app.run()
     finally:
-        vhi_client.stop()
+        link.stop()
+        recording_aid.stop_trajectory()
+        recording_aid.set_recording_session(False)
+        recording_aid.stop()
+        vhi_control.stop()
 
 
 if __name__ == "__main__":

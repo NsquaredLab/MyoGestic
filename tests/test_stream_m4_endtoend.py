@@ -53,7 +53,7 @@ def test_acquire_loop_never_runs_m4_and_keeps_up(capsys):
 
     stream._update_m4_snapshot = _spy
 
-    stream._acquire_step()  # first step connects + allocates, no read
+    stream.reconnect()  # attaching is deliberate now; the loop never does it
     step_times = []
     for _ in range(300):  # 300 * 64 = 19200 samples > 3 s buffer (6144)
         t0 = time.perf_counter()
@@ -91,7 +91,7 @@ def test_viewer_decimation_path_still_valid():
 
     src = _SynthSource(n_channels=64, fs=2048.0, chunk=64)
     stream = Stream("emg", source=src, window_ms=1000, buffer_ms=3000)
-    stream._acquire_step()
+    stream.reconnect()
     for _ in range(200):
         stream._acquire_step()
 

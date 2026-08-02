@@ -20,6 +20,7 @@ def main() -> None:
         source=QuattrocentoSource(fs_mode=1, nch_mode=0),
         window_ms=1000,
     )
+    stream.reconnect()   # nothing attaches a stream on its own
     stream.start()
     print("Connected. Reading 5 windows...")
 

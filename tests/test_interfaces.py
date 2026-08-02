@@ -1,4 +1,4 @@
-"""Tests for myogestic.vhi.interfaces — InterfaceSpec + virtual_hand registry."""
+"""The generic `InterfaceSpec` and the one VHI-shaped instance of it, `virtual_hand`."""
 
 from __future__ import annotations
 
@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from myogestic.vhi.interfaces import InterfaceSpec, virtual_hand
+from myogestic.remote import InterfaceSpec
+from myogestic.vhi import virtual_hand
 
 
 def test_virtual_hand_default_paths(monkeypatch):
@@ -53,9 +54,14 @@ def test_virtual_hand_explicit_args_win_over_env(tmp_path, monkeypatch):
 
 
 def test_virtual_hand_output_spec():
-    """Channel count, sample rate, and stream names match MyoGestic VHI."""
+    """Channel count and sample rate match MyoGestic VHI.
+
+    No pose stream *name* is asserted because the spec no longer carries one: which
+    streams the target has, and which controls each carries, is in the manifest a
+    running VHI answers with. `VHI_Control` is a different thing — an inlet MyoGestic
+    reads, not a stream it negotiates — so it stays configuration.
+    """
     spec = virtual_hand()
-    assert spec.output_stream_name == "MyoGestic_Output"
     assert spec.n_output_channels == 9
     assert spec.output_hz == 32.0
     assert spec.control_stream_name == "VHI_Control"
@@ -129,19 +135,21 @@ def test_launcher_accepts_binary_on_path(tmp_path: Path, monkeypatch):
     assert spec.launcher()[0][1][0] == "godot-on-path"
 
 
-def test_outlet_construction_uses_spec_fields():
-    """`spec.outlet()` reads name/channels/hz from the dataclass — no
-    hard-coding inside `outlet()`. We assert that without binding a real
-    LSL outlet (which requires the LSL C lib + a free port).
+def test_outlet_construction_takes_the_name_from_the_caller():
+    """`stream_outlet()` publishes the name it is *given* — the manifest's, not a field.
+
+    Width and rate still come off the dataclass. Asserted without binding a real LSL
+    outlet (which requires the LSL C lib + a free port) beyond the one built here.
     """
-    spec = InterfaceSpec(
-        name="probe",
-        process=[],
-        output_stream_name="probe_out",
-        n_output_channels=3,
-        output_hz=10.0,
-    )
+    spec = InterfaceSpec(name="probe", process=[], n_output_channels=3, output_hz=10.0)
     pytest.importorskip("mne_lsl.lsl")
-    outlet = spec.outlet()
+    outlet = spec.stream_outlet("probe_out")
     assert outlet._hz == 10.0
     outlet.stop()
+
+
+def test_an_unnamed_stream_is_refused_rather_than_published():
+    """An LSL stream with no name cannot be resolved, so it must not be built."""
+    spec = InterfaceSpec(name="probe", process=[], n_output_channels=3, output_hz=10.0)
+    with pytest.raises(ValueError, match="unnamed stream"):
+        spec.stream_outlet("")

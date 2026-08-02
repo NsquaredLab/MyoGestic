@@ -1,0 +1,294 @@
+syntax = "proto3";
+
+package myogestic.remote;
+
+// Control plane between MyoGestic and a target — a separate application that
+// displays or actuates the values MyoGestic produces.
+//
+// GetControlManifest is the whole contract: it returns every control the target exports, by
+// address (e.g. "vhi.prediction.index"), with what it can drive — the kind, the range
+// and the states — so neither side hard-codes a stream layout or a movement table. A
+// client calls it unconditionally, once, before sending anything; there is no per-client
+// negotiation and nothing to declare.
+//
+// Continuous and discrete DOFs address separate rigs — in the Virtual Hand, the
+// predicted hand and the operator's control hand — so the two never contend for one
+// driver. SweepControl is the verification primitive: it confirms a DOF actually
+// moves the way its name claims — that a control named for a joint moves that joint,
+// in the direction its name claims — without a human watching the screen.
+//
+// Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
+// control's stream is named for the control's own address and is one channel wide, so
+// the manifest's address is also the stream name and there is nothing further to publish
+// about the transport. This service carries discrete state, low-rate continuous
+// commands, and verification.
+service RemoteControl {
+  // Command one control frame. Intended for discrete DOFs and low-rate
+  // continuous updates; a per-tick continuous stream belongs on LSL.
+  rpc SetControl (SetControlRequest) returns (ControlAck);
+
+  // Drive one DOF across its declared range and report what actually moved.
+  // The verification primitive: it answers "does this control move as its name
+  // claims, in the direction its name claims" without a human watching.
+  rpc SweepControl (SweepControlRequest) returns (SweepControlReply);
+
+  // Configure how the target *presents* transitions between commanded values.
+  // Appearance only — see SetPresentationRequest.
+  rpc SetPresentation (SetPresentationRequest) returns (ControlAck);
+
+  // What can this target be told to do? Returns every control the target exports, with
+  // the semantics it declares for each. Call it first.
+  rpc GetControlManifest (GetControlManifestRequest) returns (ControlManifest);
+
+  // --- recording session ---------------------------------------------------
+  // Not control: these coordinate the target's participation in a recording session that
+  // something else owns. They live here because they drive the same rig through the
+  // same state machine — a second service implied an independence the target does
+  // not have, and the arbitration between them is already cross-cutting.
+
+  // Mark a recording session active or finished. While active, the target ignores its
+  // own local input so the recording has a single movement source.
+  rpc SetRecordingSession (SetRecordingSessionRequest) returns (RecordingAck);
+
+  // Start cycling the control rig through a movement, so the recorded pose stream
+  // sweeps a continuous range instead of snapping between held states. Refused if a
+  // trajectory is already running.
+  rpc StartRecordingTrajectory (StartRecordingTrajectoryRequest) returns (RecordingAck);
+
+  // Stop the trajectory. Rests the rig only if one was running.
+  rpc StopRecordingTrajectory (StopRecordingTrajectoryRequest) returns (RecordingAck);
+
+  // Session state, plus the movement names a trajectory may use.
+  rpc GetRecordingSessionState (GetRecordingSessionStateRequest) returns (RecordingSessionState);
+}
+
+// Empty — proto3 needs a message type even with no parameters.
+message GetControlManifestRequest {}
+
+// One control this target exports, addressed by a stable dotted name.
+//
+// The address is **owned by the target**. A client maps its own arbitrary
+// model-output name onto one of these; it does not invent addresses and it does not
+// hard-code their semantics. Everything a client needs in order to send values
+// correctly is declared right here, by the side that carries them out:
+//
+//   - whether it is a number or a held state, and
+//   - for a number: its domain and its neutral value, and
+//   - for a state: the states it accepts and which one is neutral.
+//
+// That is the whole point of shipping a manifest rather than a naming convention. A
+// convention has to be kept in sync by hand on both sides; a manifest is read.
+message ControlCapability {
+  // Stable dotted address, e.g. "vhi.prediction.index". Namespaced by target
+  // so addresses from different targets cannot collide in one client configuration.
+  string address = 1;
+
+  // Whether this control takes a number or a held state.
+  Kind kind = 2;
+
+  // CONTINUOUS only: the domain and the value meaning "no command".
+  float lo = 3;
+  float hi = 4;
+  float rest = 5;
+
+  // DISCRETE only: the states this control accepts, and the neutral one.
+  repeated string states = 6;
+  string rest_state = 7;
+
+  // Reserved: was `ContinuousEncoding encoding = 8`, dropped with the encoding enum —
+  // there is one encoding now, so nothing is left to name per capability.
+  reserved 8;
+
+  // Human-readable: what moves, and any target-local behaviour worth knowing. For a
+  // log or a UI — clients must not parse it.
+  string description = 9;
+
+  // Reserved: was `string stream_name = 10` and `int32 channel = 11`, dropped when the
+  // transport became one stream per DOF. A streamed control's stream is named for its own
+  // address and is one channel wide, so both fields said only what `address` already
+  // says. The **names** are reserved as well as the numbers: a later field spelled
+  // `stream_name` in JSON or text format would read as this one to anything still
+  // carrying an old schema, which is the mistake the numbers alone do not prevent.
+  reserved 10, 11;
+  reserved "stream_name", "channel";
+
+  // DISCRETE only: the activation level at which a client should select the non-rest
+  // state, when its model emits a probability rather than a state name. 0 means the
+  // target has no opinion and the client's own default applies.
+  //
+  // Declared here because the target knows what its states cost: a prosthesis that takes
+  // a second to close wants a higher bar than a cursor click.
+  float activation_threshold = 12;
+}
+
+message ControlManifest {
+  // Which target this is, for a client that talks to more than one.
+  string target_name = 1;
+
+  // The vocabulary's own version: a decimal integer, compared numerically, bumped when
+  // the addresses or the transport change in a way a client cannot absorb silently.
+  //
+  // **Load-bearing, not informational.** A client declares the oldest version it can
+  // drive and refuses anything below it, by name, at bind. These are separately installed
+  // applications, so an upgrade on one side does not upgrade the other, and without this
+  // a mismatch is silent: an old target listening for a stream a new client no longer
+  // publishes reports no error at all — the rig simply never moves.
+  //
+  //   1 — a manifest carrying stream_name and channel; several controls could share one
+  //       wider stream. Retired.
+  //   2 — one stream per DOF, named for the address, one channel wide.
+  string vocabulary_version = 2;
+
+  // Every control this build exports. A client validates its configuration against
+  // this list and reports an unknown address by name — with these as the alternatives.
+  repeated ControlCapability capabilities = 3;
+}
+
+// How the target blends between the values it is given.
+//
+// This is the third and last of three distinct layers, and confusing them is the
+// mistake it exists to prevent:
+//
+//   1. Continuous smoothing, on the MyoGestic side, inside ControlBus and before any
+//      target sees a frame. Authoritative: it decides what value is *commanded*.
+//   2. Discrete debounce and hysteresis, also MyoGestic-side, declared on the DOF. A
+//      classifier's state must be gated for stability before it becomes a
+//      transition. A discrete control is never numerically low-pass filtered as
+//      though it were an axis — that would interpolate through states nobody
+//      selected.
+//   3. This: purely visual interpolation in the target, so the rig does not snap
+//      jarringly between poses.
+//
+// Layer 3 must never be relied on as protection against classifier chatter. It
+// changes only how a commanded value *looks* on its way to being reached; it does not
+// change the value, and it cannot make an unstable prediction stable. A build with
+// blending on and no debounce still jumps between states — it just does so smoothly.
+message SetPresentationRequest {
+  // Interpolate toward each newly commanded pose instead of snapping to it.
+  bool blend = 1;
+  // Interpolation speed when blend is true; higher is snappier. Non-positive leaves
+  // the target's current speed alone.
+  float blend_speed = 2;
+}
+
+// What a control is. Mirrors the standard rather than any one target's rig: a
+// continuous DOF is signed and normalized, +1 meaning the direction the name
+// denotes, and rest is expressible inside the declared range.
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  // A number in [lo, hi]. Signed and normalized; rest is usually 0.
+  CONTINUOUS = 1;
+  // Exactly one of a fixed set of states. A held state, not an event.
+  DISCRETE = 2;
+}
+
+message SetControlRequest {
+  // Continuous DOF values by control address. Each must be finite and inside the
+  // range declared for it.
+  map<string, float> continuous = 1;
+  // Discrete DOF states by control address. Each must be one of that DOF's
+  // declared states. Kept separate from continuous on purpose: a held state and
+  // a number are not the same kind of command.
+  //
+  // The key is the address the manifest published, exactly as for continuous — not
+  // the client's own alias for the control, which the target has never seen and
+  // could not interpret. So a target resolves the *control* from the key and the
+  // *state* from the value: in the Virtual Hand, for instance, the states are the movement
+  // names it currently offers, matched case-insensitively. Resolving on the state alone cannot tell two
+  // discrete controls apart that happen to share a state name.
+  //
+  // An address this target does not export, and a state that control does not
+  // declare, are both refused by address in ControlAck.rejected — so a client never
+  // has to guess whether "fist" means anything here, or which control it meant.
+  map<string, string> discrete = 2;
+}
+
+message ControlAck {
+  // true: every value in the request was applied.
+  bool applied = 1;
+  // Addresses that were rejected, with the reason. Keyed the same way the request
+  // was. Empty when applied == true.
+  map<string, string> rejected = 2;
+}
+
+message SweepControlRequest {
+  // The DOF to exercise. Must have been declared and found drivable.
+  string name = 1;
+  // Seconds for the whole sweep. The target clamps to something it can animate.
+  float duration_s = 2;
+  // true: rest -> hi -> rest -> lo -> rest, so both directions are observed.
+  // false: rest -> hi -> rest only.
+  bool both_directions = 3;
+}
+
+// What the target measured on its own rig while sweeping. Read back from the rig
+// after the sweep, not echoed from the request — otherwise it would confirm only
+// that the target can repeat a number back.
+message SweepObservation {
+  // The rig element that moved, e.g. "index bone 4".
+  string element = 1;
+  // Signed rotation extreme in degrees observed while the DOF was at hi. Its
+  // sign is the whole point: it says which way the joint actually went.
+  float degrees_at_hi = 2;
+  // Same at lo. Zero when both_directions was false.
+  float degrees_at_lo = 3;
+}
+
+message SweepControlReply {
+  bool completed = 1;
+  // Reason when completed == false.
+  string message = 2;
+  // Every rig element that moved by more than a negligible amount during the
+  // sweep. A correctly named DOF moves exactly the elements its name denotes; a
+  // list with anything extra is a rigging or mapping error, and an empty list
+  // means the DOF was accepted but moves nothing.
+  repeated SweepObservation observed = 3;
+  // Convenience: true when the sweep moved the elements the target itself associates
+  // with this DOF name, and nothing else. Clients should still inspect
+  // `observed` rather than trusting a single bool.
+  bool matched_expectation = 4;
+}
+
+message SetRecordingSessionRequest {
+  // true while a recording session is in progress.
+  bool active = 1;
+}
+
+message StartRecordingTrajectoryRequest {
+  // A movement name the target offers, from RecordingSessionState.available_movements.
+  // Application-specific by design.
+  string movement = 1;
+  // Movement cycles per second. Non-positive leaves the target's current timing alone.
+  float frequency_hz = 2;
+  // Seconds held at full excursion in each cycle. Negative leaves it alone.
+  float hold_time_s = 3;
+  // Seconds held at rest in each cycle. Negative leaves it alone.
+  float rest_time_s = 4;
+}
+
+// Empty — proto3 needs a message type even with no parameters.
+message StopRecordingTrajectoryRequest {}
+message GetRecordingSessionStateRequest {}
+
+message RecordingAck {
+  bool applied = 1;
+  // Human-readable reason when applied == false.
+  string message = 2;
+}
+
+message RecordingSessionState {
+  // Whether a recording session is currently marked active.
+  bool recording_session_active = 1;
+  // Whether a trajectory is cycling the control rig right now.
+  bool trajectory_running = 2;
+  // The movement a running trajectory is cycling; empty when none is running.
+  string trajectory_movement = 3;
+  // The control rig's animation state, e.g. "waiting" | "closing" | "holding".
+  string animation_state = 4;
+  // Movement names a trajectory may use. Discover, don't hard-code.
+  repeated string available_movements = 5;
+  // The control rig's currently selected movement, whatever selected it — the
+  // target's own keyboard included. Lets a UI highlight it without being the
+  // thing that chose it.
+  string current_movement = 6;
+}

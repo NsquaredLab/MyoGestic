@@ -1,0 +1,26 @@
+# Map your model's outputs to VHI's controls.
+#   left  = your name, anything you like
+#   right = a control VHI declares (it owns the kind, range and states)
+# See what a running VHI exports:  uv run --extra grpc python tools/inspect_control.py
+# Full reference: docs/api/controls.md
+
+[dofs]
+
+# CLASSIFIER -> the same grouped mapping a regressor uses.
+#
+# `threshold_fraction` is the probability cutoff: below 0.5 the classifier's output
+# becomes 0, at or above it 1. That activation is then fanned out and weighted like any
+# other control value, so VHI receives continuous per-control values — the same ones a
+# regressor would send — and there is no separate "fist" state command.
+#
+# Drop it and the identical mapping serves a regressor emitting 0..1 directly.
+fist = { targets = [
+  { target = "vhi.prediction.thumb.flexion", weight = 0.6 },
+  { target = "vhi.prediction.index" },
+  { target = "vhi.prediction.middle" },
+  { target = "vhi.prediction.ring" },
+  { target = "vhi.prediction.little" },
+], threshold_fraction = 0.5 }
+
+# Same idea, one target: an activation gated to 0/1, not a joint value.
+thumb_spread = { target = "vhi.prediction.thumb.abduction", threshold_fraction = 0.5 }

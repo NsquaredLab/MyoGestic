@@ -238,16 +238,34 @@ Last line of every script. In order:
 
 → Deep dive: [Architecture](concepts/architecture.md), [Threading](concepts/threading.md).
 
+## Driving a device
+
+This skeleton predicts a class index and moves nothing. Anything that *moves* — a prosthesis
+on a serial port, a motor controller, a cursor, the Virtual Hand — is a
+[`Target`][myogestic.controls.Target]: three methods, plus a TOML control map naming which
+model output drives which control.
+
+`examples/synthetic/my_device.py` is a complete one with three lines left for you, and it runs
+without hardware:
+
+```bash
+uv run python examples/synthetic/my_device.py
+```
+
+→ [Drive your own device](how-to/add-a-target.md). To *publish* predictions for another
+program to read rather than to move something, an [`LSLOutlet`][myogestic.outputs.LSLOutlet]
+pushed from `predict()` is the whole of it — see
+[Publish a data stream](how-to/add-an-output.md).
+
 ## What's not in this script
 
 - **Recording.** Streams *flow* whether you record or not. Recording starts when [`app.start_recording()`][myogestic.App.start_recording] is called (typically from the [`RecordingControls`][myogestic.widgets.RecordingControls] widget's **Record** button). See [Recording](concepts/recording.md).
-- **Outputs.** This skeleton predicts a class index but doesn't push to anything physical. Add an [`LSLOutlet`][myogestic.outputs.LSLOutlet], [`UDPOutput`][myogestic.outputs.UDPOutput], `SerialOutput`, or your own subclass and call `outlet.push(value)` from `predict()`. See [Add a custom output](how-to/add-an-output.md).
 - **Multi-stream.** A second `Stream("imu", ...)` and your `extract()` sees `windows["imu"]` too. Match the [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] pattern in `train()` for paired primary/target streams. See [Recording](concepts/recording.md).
 - **Bridges.** Heavy-data sources (webcam, ultrasound) run as subprocesses via [`app.bridges(...)`][myogestic.App.bridges]. See [Threading](concepts/threading.md).
 
 ## Where to read next
 
-You now have the skeleton. The deep-dive concept pages add the meat:
+The concept pages describe each component in more detail:
 
 - [Streams](concepts/streams.md) - ring buffer geometry, the channels-first contract, `get_display` decimation.
 - [Pipeline](concepts/pipeline.md) - state machine, decorator semantics, stale-tick guards.

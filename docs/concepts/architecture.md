@@ -1,6 +1,6 @@
 # Architecture
 
-MyoGestic is built around three orthogonal concerns: **acquisition** (sources feeding ring buffers), **decision** (the predict thread), and **rendering** (the main thread drawing widgets). Outputs are a fourth, owned by user code.
+MyoGestic is built around three orthogonal concerns: **acquisition** (sources feeding ring buffers), **decision** (the predict thread), and **rendering** (the main thread drawing widgets). **Actuation** is a fourth: a `Target` driving a device from a sanitised control frame. Outputs are the paced sender a target writes through, and are owned by user code.
 
 ```mermaid
 flowchart TB
@@ -28,7 +28,7 @@ flowchart TB
         direction LR
         PT["Predict thread @ predict_hz<br/>extract → predict<br/>writes pipeline.predictions"]
         RT["Render thread (main)<br/>Dear ImGui + ImPlot<br/>draws widgets"]
-        OUT["Output threads<br/>LSLOutlet / UDPOutput / SerialOutput<br/>each @ its own hz"]
+        OUT["Output threads<br/>one LSLOutlet per driven control<br/>each @ its own hz"]
     end
 
     PT -.->|push| OUT
@@ -41,7 +41,7 @@ A typical tick of the system:
 1. **Acquisition thread** for stream `"emg"` reads a chunk from `LSLSource`, appends to the ring buffer, refreshes the display snapshot, and (if `ctx.session` is non-`None`) appends to the active Zarr array.
 2. **Predict thread**, once per `1/predict_hz`, pulls a window via `Stream.get_window()` (channels-first), forwards it to `@pipeline.extract`, then to `@pipeline.predict(model, features)`. The returned `dict[str, Any]` is stored in `pipeline.predictions`.
 3. **Render thread** (main) draws widgets from `ctx`. `SignalViewer` calls `Stream.get_display(n_pixels)` for a min/max envelope. The pose-output filter (`PostProcessor`) renders its panel.
-4. **Output thread** for `LSLOutlet` checks its atomic latest-value slot every `1/hz`, sends if changed.
+4. **Output thread** for `LSLOutlet` reads its atomic latest-value slot every `1/hz` and sends it — every tick, changed or not. Latest-wins, never queued.
 
 Every box runs on its own daemon thread. The shared `Context` is the only synchronisation surface.
 
@@ -52,7 +52,8 @@ Every box runs on its own daemon thread. The shared `Context` is the only synchr
 | [`myogestic.core`](../api/core.md) | `App`, `Context`, lifecycle hooks, run loops |
 | [`myogestic.stream`](../api/core.md) | `Stream`, ring buffer, acquisition thread, display snapshots |
 | [`myogestic.sources`](../api/sources.md) | `LSLSource`, `ReplaySource`, `SerialSource` |
-| [`myogestic.outputs`](../api/outputs.md) | `Output` base + `LSLOutlet`, `UDPOutput`, `SerialOutput` |
+| [`myogestic.outputs`](../api/outputs.md) | `Outlet` base + `LSLOutlet`, the output-side filters |
+| [`myogestic.controls`](../api/controls.md) | `Target`, `ControlBus`, `Capability` — everything that *drives* |
 | [`myogestic.session`](../api/session.md) | Recording, label tracks, `.session.zip`, window iterators |
 | [`myogestic.ml`](../api/ml.md) | `Pipeline`, train/predict lifecycle, ML widgets |
 | [`myogestic.recipes`](../api/models.md) | CatBoost / scikit-learn constructor recipes |
@@ -67,7 +68,7 @@ Keep these import paths stable. The internal modules (`myogestic.core`, `myogest
 ```python
 from myogestic import App, Grid, Stream, TrainingData
 from myogestic.sources import LSLSource, ReplaySource
-from myogestic.outputs import LSLOutlet, UDPOutput
+from myogestic.outputs import LSLOutlet
 from myogestic.ml import Pipeline
 from myogestic.session import open_session_store, iter_labeled_windows
 from myogestic.widgets import signal_viewer, recording_controls, session_manager

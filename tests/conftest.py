@@ -1,6 +1,8 @@
-"""Shared test fixtures."""
+"""Shared test fixtures and helpers."""
 
 import pytest
+
+from myogestic.controls import Continuous, ControlSet, Discrete
 
 
 @pytest.fixture
@@ -44,11 +46,51 @@ def imgui_frame():
 
 @pytest.fixture
 def implot_frame(imgui_frame):
-    """Like :func:`imgui_frame`, but with an ImPlot context too (plot widgets)."""
-    from imgui_bundle import implot
+    """Like :func:`imgui_frame`, but with the plotting contexts too.
+
+    Both of them: a widget that draws a 3-D plot fails on a missing ImPlot3D
+    context exactly as loudly as one that draws a 2-D plot fails without ImPlot,
+    and a fixture that supplies one of the two only looks like it covers plots.
+    """
+    from imgui_bundle import implot, implot3d
 
     implot.create_context()
+    implot3d.create_context()
     try:
         yield imgui_frame
     finally:
+        implot3d.destroy_context()
         implot.destroy_context()
+
+
+
+def build_controls(spec: dict) -> ControlSet:
+    """A resolved `ControlSet` from a terse spec, keyed by alias.
+
+    A string value means a signed continuous control; a list/tuple means discrete states;
+    a dict is passed through as `Continuous` keyword arguments.
+    """
+    dofs: dict = {}
+    for alias, value in spec.items():
+        if isinstance(value, (list, tuple)):
+            states = tuple(value)
+            dofs[alias] = Discrete(alias, states, states[0])
+        elif isinstance(value, dict):
+            if "states" in value:
+                states = tuple(value["states"])
+                dofs[alias] = Discrete(
+                    alias,
+                    states,
+                    value.get("rest", states[0]),
+                    debounce_s=value.get("debounce_s", 0.0),
+                )
+            else:
+                dofs[alias] = Continuous(
+                    alias,
+                    lo=value.get("lo", value.get("range", [-1.0, 1.0])[0]),
+                    hi=value.get("hi", value.get("range", [-1.0, 1.0])[1]),
+                    rest=value.get("rest", 0.0),
+                )
+        else:
+            dofs[alias] = Continuous(alias)
+    return ControlSet(dofs=dofs)

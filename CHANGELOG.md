@@ -7,6 +7,397 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-08-02
+
+MyoGestic 2.5 and **Virtual Hand Interface 2.0 are one release** and must be upgraded
+together: the pair negotiates a `vocabulary_version`, MyoGestic requires 2, and only VHI 2.0
+serves it. A mismatched pair refuses at bind rather than half-driving. Install the matching
+VHI with `myogestic-install-vhi`.
+
+
+### Added
+
+- **One target drives the whole map.** VHI used to render its two hands on two wide
+  streams, and an application had to say which one it drove *before* it had read the map:
+  `RemoteTarget(vhi_outlet, client=…)` bound whichever hand the outlet was built for, so a
+  map naming the operator's hand rendered nowhere and the editor hid those addresses to
+  stop anyone writing one. Now every control has a stream of its own, named for its own
+  address, and one `RemoteTarget(client=…, interface=vhi)` owns one outlet per address the
+  map names — both hands included. An application no longer chooses a hand, there is
+  nothing left for it to count, and a user editing a map sees every address their
+  target offers.
+
+- **A version gate on the target.** `ControlManifest.vocabulary_version` is load-bearing
+  rather than logged: MyoGestic declares the oldest vocabulary it can drive and **refuses**
+  anything older, by name, at bind. These are separately installed applications, so
+  shipping the two together does not make any given pair a matching pair — and the
+  mismatch it catches is otherwise silent, because a target waiting for a stream nobody
+  publishes any more reports no error at all and the hand simply never moves.
+
+- **A control standard — `myogestic.controls`.** A control space is a *mapping*, written in
+  a file: your name for a model output on the left, an address the target declares on the
+  right (`my_index = "vhi.prediction.index"`). The left side is yours and arbitrary. The
+  right side belongs to the target, which also declares what the control **is** — number or
+  held state, its range, its states — so MyoGestic hard-codes no vocabulary and a target
+  that grows a control needs no change here. Continuous controls are normalized: `+1` is
+  the direction the control denotes, rest is `0`, signed when the target says so. Discrete
+  controls are a separate kind — a held state delivered on change, never a number.
+  `load_control_map` takes a plain mapping, so the library still reads no config files;
+  `resolve` needs a live target, because the target is what declares the semantics.
+- **A playground and a control-map editor.** `examples/synthetic/control_map_studio.py` is
+  the shortest path from a mapping file to a hand that moves: a slider per name in
+  `examples/controls/playground.toml`, straight to VHI's predicted hand, with no model
+  and no EMG. Beside it, `myogestic.widgets.ControlMapEditor` — a reusable panel that
+  asks the target what it exports and lets a control be *picked* rather than typed,
+  with weights, fan-out, and `threshold_fraction` in plain words. It refuses a map the
+  target would reject before it can be saved, including two aliases that would land on
+  one control. The TOML stays the source of truth: the
+  editor reads and writes that file through `dump_control_map` and keeps no state of its
+  own.
+- **`dump_control_map`** — render a `ControlMap` back to TOML that `load_control_map`
+  reads. Anything that edits a control map writes through it rather than inventing its
+  own formatting.
+- **Grouped and weighted fan-out.** One output may reach several controls —
+  `fist = ["vhi.prediction.index", "vhi.prediction.middle"]` — with an optional per-target
+  `weight` applied *before* that target's own range conversion, so a gain scales a value
+  but cannot push one past what the target accepts. Negative weights are permitted only on
+  a target that declares signed motion.
+- **Classification reaches a target the same way regression does.** A classifier produces a
+  *probability*, not a position, so `threshold_fraction` on a continuous binding declares the
+  cutoff: below it the value becomes `0.0`, at or above it `1.0`, gated before anything else
+  sees it — before the weights, before the wire, before the recording. From there it is an
+  ordinary control value: `0` to every listed control when inactive, `1 × weight` when
+  active. Drop the `threshold_fraction` and the identical mapping serves a regressor. The
+  gate exists because a continuous address is a *position*: streaming a raw `0.73` into one
+  says the finger is 73% curled, which is not what a 73%-confident classifier meant. Map onto
+  a target-declared **discrete** address instead when the thing genuinely is a state rather
+  than an amount.
+
+  The name says what it is compared against — a probability fraction, validated to `[0, 1]` —
+  and is deliberately not `threshold`, because a *target* declares its own
+  (`Capability.activation_threshold`: what its states cost, e.g. a prosthesis that takes a
+  second to close wants a higher bar than a cursor click). The two answer different questions
+  and must not be confused for one another.
+- **`ControlBus` owns the one ordering that must not be re-derived per application:**
+  substitute rest → clip → dead zone → smooth → substitute rest → clip again → deliver.
+  Rest substitution comes first because `min(hi, max(lo, nan))` is `lo`, so a NaN
+  prediction would otherwise arrive as full-scale deflection; the second clip exists
+  because a smoother undershoots on a falling edge. `push` never raises — it runs on the
+  predict thread, where an exception would bury the log that explains it.
+- **Three smoothing layers, kept distinct.** Continuous smoothing (`ControlBus(smoothing=…)`,
+  authoritative, before any target sees a frame), discrete debounce and hysteresis
+  (declared on the DOF), and optional target blending
+  (`control_client().set_presentation(…)`, appearance only). A discrete control is
+  **never** numerically low-pass filtered — averaging "rest" and "fist" interpolates
+  through a state nobody selected — and that is enforced structurally: the filter only
+  ever receives the continuous vector.
+- **`myogestic.remote.RemoteTarget` — drives control DOFs on a separate application.** It *asks* which
+  contract the hand speaks rather than assuming, and refuses a configuration it cannot
+  fully drive rather than driving part of it — a partly-understood negotiation would
+  leave some DOFs believed driven and others quietly dropped, and a dropped joint is
+  indistinguishable from a joint that is working and holding still. Binding is deferred
+  rather than decided when the target is silent, since an application that launches VHI
+  from its own UI necessarily binds before VHI exists; a target that answers and does
+  not speak the contract raises.
+- **`InterfaceSpec.control_client()` / `recording_client()`** for VHI's v2 control service
+  and its recording aid. Exported lazily, so a plain install without the `[grpc]` extra
+  still uses `outlet()` / `launcher()` without importing grpc.
+- **`Outlet.flush()`** — send the latest pushed value now instead of on the next tick. The
+  send loop is paced, so a neutral frame pushed at teardown was never sent at all: the
+  thread was mid-sleep and `stop` ended the loop before it woke. Measured against a real
+  Virtual Hand, that was the difference between a hand releasing and a hand frozen in a
+  fist.
+- **Recordings describe the space they were made under.** `ctx.control_space` is persisted
+  into `meta.json` (schema 3). Channel names alone do not say what a number meant: `-1` is
+  a full excursion for a signed DOF and out of range for a one-way one, and nothing
+  recoverable distinguishes "declared one-way" from "signed, but this operator never went
+  negative".
+- **Model provenance.** `save_pickle(..., controls=…)` writes a `<path>.controls.json`
+  sidecar and `load_pickle(..., controls=…)` refuses a mismatch. A model is only meaningful
+  in the space it was fitted for; loading one trained on a one-way `[0, 1]` DOF against a
+  signed configuration produces motion in a direction it never learned.
+- **`myogestic.vhi.pose`** — reads VHI's *recorded* pose layout, nine floats in VHI's own
+  units. `VHI_Control` is permanently in that convention, so `decode_pose` remains how a
+  model gets targets in the space they were captured in. (It replaces `myogestic.vhi.legacy`,
+  which is removed: there is no legacy pose convention any more, only VHI's recording
+  layout.)
+
+- **A keyboard target — `myogestic.keyboard`.** Press a key while a control is active.
+  `keyboard.hold.letter.w` is held for as long as the control is above its threshold;
+  `keyboard.tap.edit.space` is one press per crossing however long you hold it. Around 220
+  addresses, every key in both modes.
+
+  **Nothing in the control standard changed for this.** A key is a two-state discrete
+  control, so activating above `0.5` is `Capability.activation_threshold` selecting the
+  non-rest state, overriding it per control is `threshold_fraction`, ignoring a chattering
+  signal is `debounce_s`, and "it just changed" is the discrete edge `ControlBus` already
+  delivers. The address rule already reserved the `keyboard.` namespace. That the second
+  target needed no new mechanism is the strongest evidence the standard is the right shape.
+
+  It starts **disarmed** and sends nothing until armed, because a resolved map types into
+  whatever window has focus. It disarms on stop, on a backend failure, and on exit, letting
+  go of everything it holds — a held key outlives the process that set it. Needs the
+  `keyboard` extra (`pynput`, *not* the PyPI package called `keyboard`, which wants root and
+  is unmaintained) and, on macOS, Accessibility permission, without which `pynput` reports
+  success and does nothing.
+- **The picker is a tree.** `ControlMapEditor` splits addresses on their dots and nests
+  them, so `vhi` and `keyboard` are two roots and each `.` is another level. Addresses are
+  dotted by contract and the first segment names the target, so this needed no
+  target-specific code — the same function organises 19 VHI controls and 214 keys. Typing in
+  the search box prunes the tree and opens what is left, rather than making you hunt.
+- **The editor takes several manifests.** `ControlMapEditor(..., clients=[vhi, keys])` merges
+  them, because one file can name controls on more than one target. `client=` still works.
+- **liblsl is quiet by default.** At its own default level, building one outlet logs a line
+  per network interface plus a multicast bind warning per interface it cannot use — and
+  MyoGestic publishes one outlet per control it drives, so a six-control map emitted several
+  hundred lines before the application logged anything. A config shipped in the package sets
+  the console level to errors only, pointed at through `LSLAPICFG`. It backs off for all three
+  places liblsl looks — `$LSLAPICFG`, `./lsl_api.cfg`, `~/lsl_api.cfg` — so a config of your
+  own, including one that tunes discovery or disables IPv6, is never shadowed.
+- **`myogestic-migrate-vhi-sessions`** — rewrites sessions recorded under the old control-space
+  format into the current one, so a corpus recorded before this release stays trainable.
+
+### Removed (breaking)
+
+- **`UDPOutput` and `SerialOutput` are gone.** They existed to drive a device without a
+  control map, which is the road this release closes. Neither was constructed anywhere in the
+  tree and neither had a test.
+
+  Anything that **moves** is a [`Target`][myogestic.controls.Target]: three methods, any
+  transport, and with it the map's declared ranges, clipping, dead zone, debounce and the
+  neutral frame delivered before teardown. See `examples/synthetic/servo_hand.py`.
+
+  `Outlet` (renamed from `Output`, below) and `LSLOutlet` stay, as the paced sender a target
+  writes *through*. To keep a
+  deleted class, copy it out of git history; each was under 60 lines.
+
+- **`InterfaceSpec` no longer names a stream.** `output_stream_name`,
+  `control_pose_stream_name`, `n_control_pose_channels` and `control_pose_hz` are gone,
+  and `outlet()` / `control_outlet()` with them; one `stream_outlet(name, n_channels=…)`
+  replaces both, and the *caller* supplies the name. Which streams a target publishes,
+  and which controls each carries, is in the manifest it answers with — so MyoGestic
+  writes no stream name down anywhere, and a target that renames a stream, or ships a third,
+  needs no configuration at all. `RemoteTarget(…, stream=…)` and `stream_name=` are gone with
+  them: the constructor is now `RemoteTarget(client=…, interface=…)` and it builds its own
+  outlets, one per address, after negotiation says what those addresses are.
+  `ControlMapEditor(…, stream=…)` is gone outright — the picker offers every address every
+  manifest reports, because hiding one hand made wanting it impossible to express.
+
+- **The VHI 1.x bridge is gone. MyoGestic now requires VHI 2.0 or newer.** The v1 gRPC
+  client, the vendored v1 `.proto` and its stubs, and every fallback branch in
+  `RemoteTarget` — the legacy pose path, the address-to-channel table it routed through, and
+  v1 `SetMovement` for held states. (`InterfaceSpec.control_client()` stays; it returns the
+  v2 client.)
+
+  The substantive part is what replaces the fallback: **a refusal**. `bind` used to warn
+  and encode a legacy pose when a handshake came back partial, disagreeing, or without a
+  stated encoding; each of those now raises. The alternative to a fallback is not a guess.
+  A *silent* target still defers, because an application that launches VHI from its own
+  button binds before VHI exists — but one that answers and does not speak v2 is a settled
+  fact and raises with the upgrade command.
+
+  `install_vhi` resolves what `latest` actually points at before downloading and refuses
+  anything below 2.0, and `launcher()` refuses to start a pre-2.0 install it finds on
+  disk. Both fail where the cause is, rather than letting an unusable binary install
+  cleanly and surface at bind time. Neither refuses without a version marker, since a
+  source-mode checkout has none.
+
+  `myogestic.vhi.pose` is **not** part of the bridge and stays: it reads VHI's *recorded*
+  pose, nine floats in VHI's own units. Past sessions cannot be re-recorded, so `decode_pose`
+  remains how a model gets targets in the space they were captured in.
+
+### Changed (breaking)
+
+- **`myogestic.outputs.Output` is now `Outlet`**, and `outputs/base.py` is `outputs/outlet.py`.
+  The base class did not share a name stem with its own subclass — `Output` → `LSLOutlet` —
+  which made the send side read as more concepts than it has, now that this release also adds
+  `Target`.
+
+  There are now two, and the difference is real: a **`Target`** takes *named* values, can
+  refuse a configuration at `bind`, declares `capabilities()`, and gets range, clamping, dead
+  zone and rest-on-teardown from the control map. An **`Outlet`** takes an array, paces one
+  wire, and has none of that. `RemoteTarget` owning one `LSLOutlet` per address it drives is
+  the relationship in one line.
+
+  Update `class MyThing(Output)` to `class MyThing(Outlet)` and import from
+  `myogestic.outputs` rather than `myogestic.outputs.base`. No alias is shipped: two names for
+  one meaning is the problem being fixed.
+
+- **`myogestic.remote` — the generic half moved out from under the hand's name.** The
+  target, the two gRPC clients, `InterfaceSpec` and the wire contract were all
+  in `myogestic.vhi`, and none of them is about a hand: they read a manifest, publish one
+  stream per address and forward discrete edges. Someone integrating a robot arm imported
+  `myogestic.vhi.RemoteTarget` and reasonably concluded they had taken a wrong turn.
+
+  | was | is |
+  |---|---|
+  | `myogestic.vhi.RemoteTarget` | `myogestic.remote.RemoteTarget` |
+  | `myogestic.vhi.RemoteClient` | `myogestic.remote.RemoteClient` |
+  | `myogestic.vhi.RecordingClient` | `myogestic.remote.RecordingClient` |
+  | `myogestic.vhi.InterfaceSpec` | `myogestic.remote.InterfaceSpec` |
+  | `myogestic/vhi/_proto/myogestic_vhi.proto` | `myogestic/remote/_proto/remote_control.proto` |
+
+  **No aliases and no shims.** A second name for one thing is what this removes; update the
+  import. `myogestic.vhi` keeps exactly what is about the Virtual Hand: `virtual_hand()`,
+  the install/version gate behind it, and `pose` — the layout of VHI's *recorded*
+  nine-channel pose.
+
+  `InterfaceSpec` gained two fields so the generic launcher can stay generic:
+  `install_hint` (appended to the "not installed" error — how a target is installed is
+  the target's business) and `version_gate` (a callable that refuses an installed build
+  too old to drive; VHI's reads the `vhi-version.txt` marker its own installer leaves).
+
+  `myogestic.widgets.ControlMapEditor` moved with them, out of `myogestic/widgets/vhi/`:
+  it edits a map against whatever target answers, and never knew what a hand was. The
+  public import is unchanged.
+
+- **BREAKING: the proto is named for the contract, not for VHI.** `package myogestic.vhi`
+  → `package myogestic.remote`, `service VhiControl` → `service RemoteControl`. Every
+  field number, name and type is unchanged — this renames identifiers, not the wire's
+  data — but the **service path** moved to
+  `/myogestic.remote.RemoteControl/<Method>`, so MyoGestic and VHI must be upgraded
+  together. A mismatched pair fails at connect with `UNIMPLEMENTED`, not silently.
+
+- **`ControlCapability.stream_name` and `.channel` are gone, and so is the shape they
+  described.** A streamed control's LSL stream is named for the control's own address and
+  is one channel wide, so both fields could only ever repeat what `address` already said.
+  Field numbers 10 and 11 and both field *names* are reserved in the proto — the names as
+  well, so a later field cannot inherit either spelling in JSON or text format.
+  `myogestic.controls.Capability` loses the two attributes to match, and with them go the
+  width computation, the outlet/stream mismatch refusal, the channel map, and the
+  by-address/elsewhere split inside `RemoteTarget`. A target still serving them reports
+  vocabulary 1 and is refused by version.
+- **`myogestic.vhi.vhi_targets` is gone.** It existed to build one target per stream a map
+  spanned; there is one target now. `[RemoteTarget(client=client, interface=vhi)]`.
+- **`RemoteTarget` takes no outlet and no `stream_name`.** It owns one outlet per address it
+  drives and builds every one of them, so the only sink parameter is `interface=` — the
+  thing they are built from, called once per address as
+  `stream_outlet(address, n_channels=1)`. A recorder or a test double substitutes there
+  rather than as a single supplied outlet, because one sink can no longer stand for a
+  whole binding. Replacing that set on a rebind is **transactional**: the addresses that
+  survive keep the outlets they had, the ones that leave are rested, flushed and stopped,
+  and the mapping is swapped last — an abandoned LSL outlet stays discoverable and shares
+  a `source_id` with whatever replaced it, so what used to be one leak per rebind would
+  have become one per address.
+- **`load_dofs` and its kind/range/state grammar are gone.** A control space is declared by
+  mapping your alias onto a target-owned address; `load_control_map` + `resolve` replace it.
+  The old grammar let a *mapping* claim a control was signed, or discrete, or ranged — facts
+  only the target can know, and which went silently wrong when it disagreed.
+- **The recorded control-space format changed** and is tagged `alias-address/1`. Recordings
+  and model sidecars written before it are refused with a message naming the format, rather
+  than being reinterpreted under a grammar whose meaning has moved.
+- **VHI's control plane collapsed to one gRPC service, and none of this has a compatibility
+  window.** The separate `VhiTrainingAid` service is gone; its RPCs move onto `VhiControl`
+  and lose "training" from their names in the process (`StartTrainingProgram` →
+  `StartRecordingTrajectory`, `StopTrainingProgram` → `StopRecordingTrajectory`,
+  `GetTrainingState` → `GetRecordingSessionState`) — a recording aid that cannot see what
+  the control service already declared to the same hand was two sources of truth for one
+  state machine, not two independent responsibilities. The per-capability
+  `ContinuousEncoding` field is gone from the manifest, and `control_pose_encoding` narrows
+  to a plain `control_pose` bool on both `DeclareRequest` and `DeclareReply`: the sign
+  convention it used to carry left the wire entirely once `RemoteTarget` stopped computing one
+  to negate. On the Python side, `VhiCanonicalClient` and `VhiTrainingAidClient` become
+  `RemoteClient` and `RecordingClient`, both bound to the one stub. None of this
+  degrades gracefully — an old MyoGestic against a new VHI, or the reverse, refuses to link
+  at all: wrong service name, wrong RPC names, a field that no longer exists. **MyoGestic
+  and VHI must be upgraded together**; there is no staged rollout and no version this pair
+  is backward-compatible with.
+
+### Changed
+
+- **`RemoteTarget` can build its own stream.** `RemoteTarget(client=…, interface=…)` with no
+  outlet publishes one as wide as the target's pose layout, so an application does not
+  have to know that width to construct an outlet. `RemoteTarget(outlet, …)` is unchanged.
+
+  Values sit at the target's own channel indices, because a channel *is* an address: the
+  manifest says `vhi.prediction.index` is channel 2 and both ends read that from the same
+  table. An earlier version compacted the frame and labelled each channel so the receiver
+  could put it back — three floats a frame, paid for with a routing table at each end and
+  an LSL round-trip that crashed the target.
+
+- **LSL outlets carry per-channel labels and a stable `source_id`.** Without an id, LSL
+  cannot tell a restarted outlet from a new stream, so a consumer that resolved the old one
+  keeps a dead inlet — measured against VHI, which then stayed deaf until *it* was
+  restarted.
+- **The VHI examples declare DOFs instead of building frames.** `emg_regression`,
+  `emg_regression_raulnet`, `emg_classification_grpc` and `emg_32ch_multi_model` no longer
+  contain a channel index or a sign flip. `emg_classification_grpc` also lost its
+  hand-rolled `EdgeTrigger`: that debounce is a property of the DOF, so it is `debounce_s`
+  and the bus owns the edge detection, dedupe and rebase-on-click.
+- **`VhiMovementPanel` is a control-hand aid.** It reads VHI's recording aid for state and
+  takes its click handler explicitly — there is no default, because dispatching straight at
+  a target would bypass the DOF's debounce, the only thing protecting a classifier-driven
+  session from state chatter.
+
+### Fixed
+
+- **The browser playground could not start.** `App.run()` entered a context manager that
+  starts a daemon thread to filter GLFW's stderr, and Pyodide has no threads — so the boot
+  path raised `RuntimeError: can't start new thread` before the first frame. It is a no-op in
+  the browser now: the warning it collapses is a macOS multi-monitor artefact that cannot
+  arise there. Stopping a recording packed the session in a thread too, so the playground's
+  own Record button hit the same error and left the session unpacked; it packs inline there.
+- **`import myogestic` could crash where there is no home directory.** The liblsl config probe
+  called `Path.home()`, which raises `RuntimeError` — not `OSError` — when `~` cannot be
+  resolved, from a module imported first by the package. In a container with no `HOME` and no
+  passwd entry, the import died on line one. It is now skipped entirely under Emscripten and
+  guarded elsewhere.
+- **A stopped `LSLOutlet` no longer keeps its stream discoverable.** liblsl keeps a stream
+  resolvable for as long as its `StreamOutlet` object lives, not for as long as anything is
+  pushing, and a stopped-but-live outlet shares its `source_id` with whatever replaced it — so
+  a consumer could resolve the dead one and read a layout that no longer matched. `stop()`
+  now releases it. MyoGestic also stops binding IPv6 multicast responders it cannot use.
+
+- **A `Bridge` could report a subprocess stopped while it was still running.** `stop()` sent
+  SIGKILL and then never waited for it, recording `"stopped"` either way — but SIGKILL does
+  not reach a process parked in an uninterruptible kernel wait, and a wedged driver is enough
+  to put one there. It now waits the kill out, keeps the handle when it does not land, and
+  logs a warning naming the PID, since nothing renders a bridge. `status` is derived from the
+  subprocess on every read instead of stored, so it can no longer contradict `alive` or go
+  stale when a child exits on its own — it is read-only now, with the two values it always
+  had, and `process.returncode` is what says whether an exit was clean. `start()` refuses
+  while a child is `alive` rather than overwriting the handle and orphaning it, which is how
+  four targets stacked up in `ProcessLauncher`. And stdout/stderr go to `DEVNULL`: those
+  pipes never had a reader, so a bridge that outgrew the ~64 KB buffer blocked in `write()`
+  forever while still reading as alive — a silently stalled data source rather than a hang
+  you would notice. Run the command in a terminal to watch a bridge's output. Registering a
+  bridge still does not start it, which the docs had claimed for some time.
+
+- **`examples/synthetic/vhi_playground.py` is now `control_map_studio.py`**, and drives VHI
+  and the keyboard from one map. The old name stopped being true the moment a second target
+  existed.
+- **`thumb` is `thumb.flexion`** in every shipped `examples/controls/*.toml`. VHI advertises
+  the explicit axis now, because the thumb has two and a bare name did not say which. A
+  single-axis digit keeps its bare name. Any map outside this repo using `vhi.prediction.thumb`
+  or `vhi.control.pose.thumb` needs the same one-word edit; the target still accepts the
+  bare form, but `resolve()` validates against the manifest and will refuse it.
+- **`tools/verify_control_direction.py`** — a live gate proving the predicted hand's
+  control direction. VHI's own suite proves *direction* from its rig, but cannot drive the
+  LSL inlet, which is the path every real client uses; this checks that a control `+1`
+  flexes, reads back as `+1` on `VHI_Predict`, and does so identically whether the client
+  declared nothing, the predicted stream, or both streams — over repeated frames, repeated
+  runs, and (with `--restart`) repeated target processes. It found the target inverting
+  every flexion DOF, fixed in VHI as `Vhi.StandardPose`.
+
+  Two ordering rules it documents are properties of the target worth knowing: an
+  `Outlet` repeats its last pushed vector at `hz` and the target overwrites its whole
+  pose from the inlet every frame, so **a still-streaming outlet beats `SweepControl`'s own
+  commands** — and a stale outlet left behind by an earlier process still wins the single
+  `MyoGestic_Output` inlet, which is why a control `+1` could appear to render either way.
+  A replaced outlet is also not noticed immediately: VHI re-resolves by name only while it
+  has no inlet at all, so recovery rides on the outlet's stable `source_id`.
+- **Four pose tables documented channel 1 as `0` in a fist; recorded VHI sessions have it at
+  exactly `-1.0`.** The integration guide also described channel 0 as thumb *rotation* and
+  channels 6-8 as a wrist. Channel 0 is thumb flexion, channel 1 thumb abduction, and 6-8
+  are read by no consumer. All four tables are gone — the examples declare control values,
+  so there is nothing left to be wrong.
+- **`emg_regression` clipped predictions *before* smoothing**, letting the filter overshoot
+  back out of the range just enforced. The bus clips, smooths, and clips again.
+- **The regression training target used `np.abs()`**, folding any extension the operator did
+  into flexion of equal magnitude. `decode_pose` is a signed negation, so target space and
+  command space are now one declaration.
+
+
 ## [2.4.0] - 2026-07-25
 
 ### Changed

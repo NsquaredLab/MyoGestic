@@ -53,10 +53,7 @@ class Heatmap:
         self._label = label
         self._size = size
         self._label_fmt = label_fmt
-        # Perceptually-uniform default (``implot.Colormap_.viridis``). ImPlot's
-        # own default is "Deep" — a *categorical* palette that maps continuous
-        # values to non-monotonic colours, which is wrong for a heatmap. Pass a
-        # diverging map (e.g. ``implot.Colormap_.rd_bu``) for signed data.
+        # ``None`` resolves to viridis at draw time; see the class docstring.
         self._colormap = colormap
         self._widget_id = widget_id
 

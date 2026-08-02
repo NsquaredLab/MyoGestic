@@ -14,6 +14,26 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 
     [:octicons-arrow-right-24: Core API](core.md)
 
+-   :material-tune-variant:{ .lg .middle } __Control standard__
+
+    ---
+
+    Declare what an app controls by name; a `Target` drives it.
+
+    [`Target`][myogestic.controls.Target] · [`Capability`][myogestic.controls.Capability] · [`ControlBus`][myogestic.controls.ControlBus] · [`load_control_map`][myogestic.controls.load_control_map]
+
+    [:octicons-arrow-right-24: Control standard](controls.md)
+
+-   :material-keyboard:{ .lg .middle } __Keyboard__
+
+    ---
+
+    Press keys when a control is active — a target that is not a hand.
+
+    [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] · [`keyboard_capabilities`][myogestic.keyboard.keyboard_capabilities]
+
+    [:octicons-arrow-right-24: Keyboard](keyboard.md)
+
 -   :material-access-point:{ .lg .middle } __Sources__
 
     ---
@@ -24,15 +44,16 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 
     [:octicons-arrow-right-24: Sources API](sources.md)
 
--   :material-export:{ .lg .middle } __Outputs__
+-   :material-export:{ .lg .middle } __Outlets__
 
     ---
 
-    Push prediction output to LSL, UDP, or serial destinations.
+    Publish a vector to a downstream consumer at a steady rate. To *drive* something,
+    see [`Target`][myogestic.controls.Target].
 
-    [`LSLOutlet`][myogestic.outputs.LSLOutlet] · [`UDPOutput`][myogestic.outputs.UDPOutput]
+    [`LSLOutlet`][myogestic.outputs.LSLOutlet]
 
-    [:octicons-arrow-right-24: Outputs API](outputs.md)
+    [:octicons-arrow-right-24: Outlets API](outputs.md)
 
 -   :material-camera-outline:{ .lg .middle } __Bridges__
 
