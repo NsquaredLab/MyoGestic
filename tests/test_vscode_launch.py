@@ -326,11 +326,16 @@ class TestTheGenericEntriesComeFirstAndWork:
     def test_the_inspector_the_entries_point_at_takes_a_path(self):
         """The generic inspector must accept an arbitrary path, or the entries lie."""
         import subprocess  # noqa: PLC0415
+        import sys  # noqa: PLC0415
 
         tool = ROOT / "tools" / "inspect_control_map.py"
         assert tool.is_file()
+        # `sys.executable`, not `.venv/bin/python`: that path is `.venv\Scripts\python.exe`
+        # on Windows — which is exactly the override `launch.json` carries and this file
+        # asserts elsewhere. Which interpreter runs the tool does not matter here, only that
+        # it is the one the project is installed into, and under pytest that is this one.
         result = subprocess.run(
-            [str(ROOT / ".venv" / "bin" / "python"), str(tool), "--help"],
+            [sys.executable, str(tool), "--help"],
             capture_output=True,
             text=True,
             timeout=180,
