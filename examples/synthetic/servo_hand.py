@@ -1,26 +1,18 @@
-"""A prosthetic hand on a serial port: the shape most devices actually have.
-
-Three methods and a write to a port. No gRPC, no LSL, no second process — those are for
-a target that is *already its own program*. A device you can `import` and call is this.
-
-Run it with no hardware at all:
+"""A prosthetic hand on a serial port: three methods and a write.
 
     uv run python examples/synthetic/servo_hand.py
 
-Two things are worth reading for rather than skimming past:
+Runs with no hardware. Two things to notice:
 
-**Five addresses, six servos.** `hand.thumb` drives two of them, on different transfer
-functions, because a real thumb opposes as it flexes. That coupling belongs *here* and not
-in the control map: a fan-out sends one value to several addresses, so ganging two servos
-through the map would force whoever writes it to know this hand's linkage — which is the
-one thing an address exists to hide.
+**Five addresses, six servos.** `hand.thumb` drives two of them on different transfer
+functions, because a real thumb opposes as it flexes. The coupling lives here, not in the
+control map: an address exists so the map need not know this hand's linkage.
 
-**Wire order is this file's, never the map's.** `send` builds its frame by iterating
-`SERVOS`, so reordering a TOML for readability cannot reorder somebody's fingers.
+**Wire order is this file's.** `frame` iterates `SERVOS` and looks each fraction up by name,
+so reordering a TOML cannot reorder somebody's fingers.
 
-What this file does *not* do, because the bus already did it: clamp NaN, fill a missing
-control, hold the declared range, apply a dead zone, debounce a state, or deliver rest
-before teardown. See `myogestic.controls.ControlBus`.
+The bus already clamped NaN, filled missing controls, held the declared range and delivered
+rest before teardown - see `myogestic.controls.ControlBus`.
 """
 
 from __future__ import annotations
@@ -33,11 +25,8 @@ from myogestic.controls import (
     resolve,
 )
 
-#: What this hand exports. One address per finger, because a finger is what a person drives.
-#:
-#: One-way: a servo hand flexes from open and cannot hyperextend, so `lo=0.0` rather than
-#: the signed default. Declaring a direction the servos do not have would move the failure
-#: from resolve time, where a human reads it, to a silent clamp on the predict thread.
+#: One address per finger. One-way (`lo=0.0`): a servo hand cannot hyperextend, and
+#: declaring a direction it does not have would clamp silently on the predict thread.
 ADDRESSES = ("hand.thumb", "hand.index", "hand.middle", "hand.ring", "hand.little")
 
 #: The firmware's channel order, and each servo's travel in degrees, `(open, closed)`.
@@ -51,8 +40,7 @@ SERVOS = {
     "little": (5, 100),
 }
 
-#: How far into the thumb's travel opposition completes; past this it only flexes. A fact
-#: about the mechanism, which is why it lives here and not in anybody's control map.
+#: How far into the thumb's travel opposition completes; past this it only flexes.
 OPPOSITION_SPAN = 0.6
 
 
@@ -62,12 +50,11 @@ class ServoHand:
     Parameters
     ----------
     port
-        Anything with ``write(bytes)`` and ``close()``. The real thing is one line::
+        Anything with ``write(bytes)`` and ``close()``::
 
             ServoHand(serial.Serial("/dev/ttyACM0", 115200))
 
-        Left as ``None`` the hand computes its frames and sends nothing, which is what
-        makes this file runnable with no hardware attached.
+        ``None`` computes frames and sends nothing, so this file runs without hardware.
     """
 
     def __init__(self, port=None) -> None:
@@ -75,7 +62,7 @@ class ServoHand:
         self._routed: tuple[tuple[str, str, float], ...] = ()
 
     def capabilities(self) -> tuple[Capability, ...]:
-        """What a control map may name. Answerable immediately: nothing has to be running."""
+        """What a control map may name."""
         return tuple(
             Capability(
                 address=address,
@@ -110,14 +97,13 @@ class ServoHand:
 
     @property
     def claims(self) -> frozenset[str]:
-        """Which aliases this hand drives, so the bus can spot one that nothing drives."""
+        """Which aliases this hand drives."""
         return frozenset(alias for _, alias, _ in self._routed)
 
     def send(self, values, changed) -> None:
         """Actuate one tick. Never raises: the bus guarantees finite, in-range values."""
         levels = {
-            # Weight first, then this hand's own range. A gain may scale a value but must
-            # not push one past what `capabilities` said this hand accepts.
+            # Weight first, then this hand's range: a gain must not exceed what we accept.
             address: min(1.0, max(0.0, weight * float(values.get(alias, 0.0))))
             for address, alias, weight in self._routed
         }
@@ -127,9 +113,8 @@ class ServoHand:
     def stop(self) -> None:
         """Open the hand, then close the port. Idempotent.
 
-        `ControlBus.stop` already delivered the neutral frame before calling this. Repeated
-        anyway, because a target can be stopped directly too, and one extra open-hand frame
-        costs a few bytes on a UART while a missed one leaves a hand clenched on somebody.
+        The bus delivers rest before calling this; repeated because a target can also be
+        stopped directly, and a missed open-hand frame leaves a hand closed.
         """
         port, self._port = self._port, None
         if port is None:
@@ -141,11 +126,9 @@ class ServoHand:
 
     @staticmethod
     def frame(levels) -> bytes:
-        """The bytes for one pose. Pure, so it can be read without a port.
+        """The bytes for one pose. Pure, so a test can read it without a port.
 
-        An address nobody drives is held open rather than left floating: a servo has no
-        third state. (A remote target is the opposite — there each address arrives on a
-        stream of its own, so one that gets no sample keeps its last value.)
+        An address nobody drives is held open: a servo has no third state.
         """
         thumb = levels.get("hand.thumb", 0.0)
         fraction = {
@@ -197,8 +180,7 @@ if __name__ == "__main__":
     bus.push({"thumb": 1.0, "index": 1.0, "close": 1.0})
     assert port.lines[-1] == "96,110,100,100,100,100", port.lines[-1]
 
-    # Half a thumb is *most* of the rotator's travel, not half of it. That is the coupling,
-    # and it is why `hand.thumb` is one address rather than two.
+    # Half a thumb is *most* of the rotator's travel, not half of it: the coupling.
     bus.push({"thumb": 0.5, "index": 0.0, "close": 0.0})
     assert port.lines[-1] == "53,92,5,5,5,5", port.lines[-1]
 
