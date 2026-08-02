@@ -151,3 +151,37 @@ def test_a_frame_of_the_wrong_width_is_refused(width):
     """Guessing which channels are missing would be worse than refusing."""
     with pytest.raises(ValueError, match="9 channels wide"):
         split_pose(np.zeros(width, dtype=np.float32))
+
+
+def test_a_freshly_recorded_session_is_not_migrated_again():
+    """`save_meta` stamps the convention, so the migrator can tell today's recording from
+    a legacy one and leave it alone.
+
+    Without the stamp the two are indistinguishable — `_convention` reads an absent key as
+    ``"legacy"`` — and a session recorded through a `ControlBus`, already in the standard
+    convention, would be negated into the old one by a migration it did not need. Silent,
+    and it looks exactly like a hand that was driven backwards.
+    """
+    import tempfile
+
+    import zarr
+
+    from myogestic.session import Session
+    from myogestic.stream import StreamInfo
+    from myogestic.tools.migrate_vhi_sessions import POSE_CONVENTION, migrate
+
+    with tempfile.TemporaryDirectory() as tmp:
+        session = Session(base_path=tmp)
+        session.init_stream("vhi_control", StreamInfo(n_channels=9, fs=32.0, dtype=np.dtype("float32")))
+        fist = np.tile(np.array([1, 0, 1, 1, 1, 1, 0, 0, 0], dtype=np.float32), (8, 1))
+        session.append("vhi_control", fist, np.arange(8, dtype=np.float64))
+        session.save_meta("StampTest")
+        path = session.pack_to_zip()
+
+        assert json.loads(zipfile.ZipFile(path).read("meta.json"))["pose_convention"] == POSE_CONVENTION
+        assert "already standard" in migrate(path), "the migrator did not recognise its own convention"
+
+        with zipfile.ZipFile(path) as zf:
+            assert not any(n.endswith(".legacy.bak") for n in zf.namelist())
+        after = zarr.open_array(store=zarr.storage.ZipStore(path, mode="r"), path="vhi_control.zarr")
+        assert np.array_equal(np.asarray(after[:]), fist), "a standard-convention fist was flipped"

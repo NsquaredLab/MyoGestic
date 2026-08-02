@@ -34,6 +34,17 @@ if find_spec("zarrs") is not None:
 #: (see `open_session_store`), so this is informational rather than enforced.
 _META_SCHEMA_VERSION = 3
 
+#: Value of ``meta.json``'s ``pose_convention``, stamped on every session this build
+#: writes. Signed and normalised, ``+1`` in the direction the control's address names —
+#: what a `ControlBus` emits, so a recording made through one is in it by construction.
+#:
+#: The stamp exists so a reader never has to guess. A session without it predates the
+#: question and is in the pre-2.5 convention, where negative meant flexion; that is what
+#: `myogestic.tools.migrate_vhi_sessions` converts, and it is why the stamp has to be
+#: written rather than inferred. Unstamped, a session recorded today would read as legacy
+#: and be flipped by a migration it does not need.
+POSE_CONVENTION = "standard"
+
 
 def _robust_rmtree(path: Path, *, retries: int = 5, delay_s: float = 0.1) -> None:
     """``shutil.rmtree`` that tolerates Windows file-handle lag.
@@ -301,6 +312,7 @@ class Session:
         """
         meta: dict[str, object] = {
             "schema_version": _META_SCHEMA_VERSION,
+            "pose_convention": POSE_CONVENTION,
             "app_name": app_name,
             "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "streams": {
