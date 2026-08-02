@@ -318,11 +318,10 @@ first section prints unchanged, and the second becomes:
 my-rig.toml was refused.
 ```
 
-Exit status `1`, and the refusal itself goes to **stderr**, so it can appear above the stdout
-section it belongs to when both go to one terminal. Note what is in it: the address, the near
-miss, and **everything the rig exports**. `resolve()` refuses the whole map rather than binding
-the one address it understood - a silently dropped control looks exactly like a control that
-works and holds still, and you would move, see nothing, and go looking at your model.
+Exit status `1`. The refusal names the address, the near miss, and everything the rig exports,
+and it goes to **stderr**, so it can appear above the stdout section it belongs to. `resolve()`
+refuses the whole map rather than binding the part it understood: a dropped control is
+indistinguishable from one that works and holds still.
 
 The "Did you mean" hint is the addresses sharing the longest dotted prefix with what you
 wrote, so it is absent only when nothing matches even the namespace. Here is that refusal
@@ -697,11 +696,9 @@ script with `n_channels=1` and *two* outlets under one name gets you the other r
 rig: rig.gripper.closure is published by 2 outlets at once. One address, one producer — not opening any of them.
 ```
 
-Order matters for that one, and it is the limit `_open`'s docstring names: start the two
-outlets *before* the target and you get the refusal above; start the second one after the
-target already holds an inlet for that address and nothing is printed at all, because
-nothing sweeps for an address that is no longer missing. The rig keeps obeying whichever
-producer it bound to first. Know which half you have before you rely on it.
+Order matters, and it is the limit `_open`'s docstring names: a second producer that starts
+*after* the target already holds that inlet is not detected at all, and the rig keeps obeying
+whichever one it bound to first.
 
 And a one-channel stream carrying a value the rig never agreed to accept gets the third:
 
@@ -826,14 +823,10 @@ rig: gripper.closure=+0.00  wrist.pronation=-1.00
 rig: gripper.closure=+0.00  wrist.pronation=+0.00
 ```
 
-Two boundaries around that. A **hardware interlock** is still what protects a person, because
-a target that has itself crashed, hung, or been swapped out cannot time anything out - anything
-that can injure someone needs a release the software is not in the path of. And **`source_id`
-recovery is a separate job**: recovery decides whether the *stream* comes back, the timeout
-decides what the *device* does meanwhile, and a rig can want both. Set the timeout well above
-your producer's tick interval. At
-`output_hz=32.0` a sample is due every 31.25 ms, so a one-second timeout is about 32 missed
-samples.
+Set the timeout well above your producer's tick interval: at `output_hz=32.0` a sample is due
+every 31.25 ms, so one second is about 32 missed samples. A software deadman is not a safety
+interlock, and it is not the same job as stream recovery — see
+[Design notes](../how-to/drive-a-remote-target.md#design-notes).
 
 ## Stage 6 — The sign check
 
@@ -1018,26 +1011,16 @@ rig: mode -> rest
 rig: mode -> rest
 ```
 
-Only the middle two are your `select` calls, and the bracketing pair is worth understanding.
-The first is the *push loop*: `mode` is absent from what you push, so it holds the rest its
-manifest declares, and a discrete DOF is delivered as an **edge**, once, when its debounce
-settles, which at `debounce_s = 0.1` and `hz = 32` is four ticks in. The last is `link.stop()`
-in the `finally`, delivering the same neutral frame to every DOF that put the axes back in
-stage 5, the mode included.
+The middle two are your `select` calls. The first is the push loop: `mode` is absent from what
+you push, so it settles on its declared rest and is delivered once, as an edge. The last is
+`link.stop()` delivering the neutral frame.
 
-All four come from `SetControl` itself, and that is why they are the checkpoint rather than the
-status line. The *timing* is nobody's guarantee: `set_control` only queues a frame for the
-client's worker thread, and that thread drains one blocking RPC at a time with a two-second
-deadline, so `rest` can already be queued before `active` has been delivered, and both can
-land inside a single 50 ms tick of the status printer. The sleeps make that unlikely, not
-impossible. A handler that prints what it applied is observable on every run; a poller is
-a matter of luck.
-
-`select()` returns `True` once the state is one this DOF declares and a frame is queued -
-`set_control` is fire-and-forget on a worker thread, so it never blocks the predict thread and
-never raises. Whether the rig applied it is a fact on the *target's* side, which is why the
-target prints the state it applied. `banana` never reaches the wire at all: the bus checks it
-against the states your manifest declared and drops it locally.
+`select()` returns `True` once the state is one this DOF declares and a frame is queued. It is
+fire-and-forget on a worker thread, so it never blocks the predict thread and never raises;
+whether the rig *applied* it is a fact on the target's side, which is why the target prints
+what it applied. `banana` never reaches the wire: the bus checks it against your declared
+states and drops it locally. Delivery timing is not guaranteed — see
+[Design notes](../how-to/drive-a-remote-target.md#design-notes).
 
 !!! note "The key in `request.discrete` is your **address**, not the client's alias"
     `rig.mode`, not `mode`. `continuous` is keyed the same way, and so are your
