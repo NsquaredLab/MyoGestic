@@ -37,7 +37,7 @@ from pathlib import Path
 import lightning as L
 import numpy as np
 import torch
-from lightning.pytorch.callbacks import ModelCheckpoint, StochasticWeightAveraging
+from lightning.pytorch.callbacks import ModelCheckpoint
 from myoverse.models.raul_net.v17 import RaulNetV17
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
@@ -102,6 +102,11 @@ if _encoder_out < _MIN_ENCODER_WIDTH:
         f"RMS_STRIDE_MS={RMS_STRIDE_MS}) at EVENT_SEARCH_STRIDE={EVENT_SEARCH_STRIDE}. "
         "Lower EVENT_SEARCH_STRIDE, shorten RMS_STRIDE_MS, or lengthen WINDOW_MS."
     )
+
+# Training budget. Steps, not epochs — see the DataLoader and the Trainer below.
+BATCH_SIZE = 8
+MAX_EPOCHS = 300
+MAX_STEPS = 4000
 
 CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
@@ -321,12 +326,23 @@ def train(data: TrainingData) -> L.LightningModule:
     X_tensor = torch.from_numpy(X).unsqueeze(1)
     y_tensor = torch.from_numpy(y)
     dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
+    # What trains a network is optimizer steps, and this batch size used to be larger
+    # than the whole demo training set: 37 windows in one batch, one batch per epoch,
+    # 50 epochs — fifty updates at 1e-4, which is a network barely off its
+    # initialisation. It lost to CatBoost because it had not been fitted, not because
+    # it is worse. Eight keeps several steps per epoch on a set this small, and stays
+    # a sane batch when there is more data.
     loader = torch.utils.data.DataLoader(
         dataset,
-        batch_size=64,
+        batch_size=BATCH_SIZE,
         shuffle=True,
         num_workers=0,
         pin_memory=True,
+    )
+    log.append(
+        f"  {len(dataset)} windows, batch {BATCH_SIZE} -> "
+        f"{max(1, len(dataset) // BATCH_SIZE)} steps/epoch, "
+        f"up to {MAX_EPOCHS} epochs (ceiling {MAX_STEPS} steps)"
     )
 
     model = RaulNetV17(
@@ -354,16 +370,20 @@ def train(data: TrainingData) -> L.LightningModule:
         accelerator="auto",
         devices=1,
         precision="32-true",
-        max_epochs=50,
+        max_epochs=MAX_EPOCHS,
+        # A ceiling in *steps*, because epochs are not the unit that trains anything:
+        # the same `max_epochs` is fifty updates on this demo set and tens of thousands
+        # on a real one. Whichever limit comes first wins.
+        max_steps=MAX_STEPS,
         # log_every_n_steps=1 so callback_metrics is populated even when
         # an epoch is a single batch (small training-set demo case).
         log_every_n_steps=1,
+        # No StochasticWeightAveraging. It began at `swa_epoch_start=0.5` — epoch 25 of
+        # 50 — and averaged the weights of the last 25 updates, which is a technique for
+        # the tail of a long run being asked to smooth a model that had not converged.
+        # It froze an undertrained network. Worth restoring once a run is long enough
+        # for the average to be over something.
         callbacks=[
-            StochasticWeightAveraging(
-                swa_lrs=1e-4,
-                swa_epoch_start=0.5,
-                annealing_epochs=5,
-            ),
             ModelCheckpoint(
                 monitor="train/loss",
                 mode="min",
