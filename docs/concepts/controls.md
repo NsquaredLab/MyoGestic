@@ -188,25 +188,34 @@ would move, see nothing happen, and go looking at the model. The same rule runs 
 [`ControlBus`][myogestic.controls.ControlBus] checks that *some* target claims every alias, and
 refuses a control nothing drives.
 
-## Two ways to reach a device
+## Everything that moves is a target
 
-This is the fork the how-to guides assume you have already taken. The only question it turns
-on is **whether the code that moves your device runs in this process**.
+A prosthesis on a serial port, a motor controller, a cursor, a keyboard, a Godot window on
+another machine: MyoGestic drives all of them through one object, a
+[`Target`][myogestic.controls.Target]. Three methods and a list of `Capability`. Nothing
+else in this library moves anything.
 
-| | an **in-process target** | a **remote target** |
+The transport is yours. `send` receives named values and does whatever your device needs
+with them: a `serial.write`, a UDP datagram, an MQTT publish, a library call. The shipped
+[`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] presses keys and opens no socket at
+all.
+
+So the only fork is **whether that target is already written**:
+
+| | you write the target | it is already written |
 |---|---|---|
-| what it is | a Python object MyoGestic imports | a separate application |
-| how it is driven | a `ControlBus` calls it directly, on the thread MyoGestic already owns | gRPC for the manifest and discrete state, LSL for continuous values |
-| you write | three methods (`bind`, `send`, `stop`) and one list of `Capability` | a gRPC service, an LSL reader per address, a liveness policy, and shutdown for both |
-| how much | **a prosthesis on a serial port is three methods and a `serial.write`** | a program, in any language, with its own process lifetime to manage |
-| right for | anything you can `import`: a prosthesis or motor controller on a serial or USB port, a cursor, a library | its own window, its own process, its own machine, another language |
+| when | anything you can `import` and call | your device is **already its own program** and serves MyoGestic's contract: `GetControlManifest` over gRPC, one LSL stream per address |
+| how much | three methods and a `serial.write` | none of it. Construct [`RemoteTarget`][myogestic.remote.RemoteTarget] and hand it to the bus |
+| what you write instead | the target | the *other side*: the contract your program serves |
 | guide | [Drive your own device](../how-to/add-a-target.md) | [Drive a remote target](../how-to/drive-a-remote-target.md) |
 
-**Start on the left.** A serial prosthesis, the commonest case this project sees, needs no
-gRPC, no LSL and no second process: `bind` checks the map against a list you wrote, `send`
-turns a float into bytes on a port, `stop` rests the device and closes it. The right-hand
-column exists for a device that is *already* its own program: a game, a simulator, another
-language. Every line of it is a cost you take on only because that is true.
+**A device running its own firmware is still the left column.** A serial hand has a
+microcontroller and a control loop of its own, and none of that matters here: what MyoGestic
+imports and calls is the Python object that writes to the port. The question is only whether
+the device already speaks gRPC and LSL — and if you are building it now, it does not, and
+teaching it to is a program rather than a method.
+`examples/synthetic/servo_hand.py` is the whole of a six-servo hand, including its
+finger-coupling and its wire format.
 
 Both declare a manifest, both are named by address in the same map, and a single `ControlBus`
 drives a mixed list of them, so the choice is reversible: a device that starts in-process and
@@ -220,6 +229,13 @@ that serves the contract. It reads the manifest, publishes one LSL stream per ad
 forwards discrete edges over gRPC. It knows nothing about what the far side drives. The Virtual
 Hand is one such program (see [Integrate the Virtual Hand](../how-to/integrate-vhi.md)), and
 [Your first remote target](../tutorials/your-first-remote-target.md) builds another.
+
+!!! note "An `Output` is not a third way"
+    [`Output`][myogestic.outputs.Output] is a paced latest-wins sender: the thing a target may
+    write *through*, and what `RemoteTarget` builds one of per address it drives. On its own it
+    has no aliases, no declared range, no clamp and no neutral frame on shutdown, because those
+    belong to the control map and the bus. A device driven by an output alone has none of them.
+    See [Publish a data stream](../how-to/add-an-output.md) for what it *is* for.
 
 ## Binding is deferred, not decided
 

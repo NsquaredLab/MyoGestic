@@ -15,7 +15,7 @@ A Protocol with `connect()` / `read()` / `disconnect()`. Wraps a device, file, o
 
 ### Output
 
-A class with `.push(data)` and a daemon thread that drains the latest pushed value to its destination at `hz`. User-owned - not registered with the app. See [Add a custom output](../how-to/add-an-output.md).
+A class with `.push(data)` and a daemon thread that sends the latest pushed value to its destination at `hz`. User-owned - not registered with the app. A paced sender, not a way to drive a device: anything that moves is a **Target**, and an output is what a target may write *through*. See [Publish a data stream](../how-to/add-an-output.md).
 
 ### Stream
 
