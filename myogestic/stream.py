@@ -172,10 +172,16 @@ class Stream:
     window duration, register it with ``app.streams(...)``, and the rest of
     the framework addresses it by stream name.
 
+    - **Nothing attaches on its own.** Call `reconnect` — or press the
+      button in a `StreamPanel` — and the source is opened once. The
+      acquire loop never opens one for you, on the first tick or after
+      a source goes away, so a stream left running by an earlier
+      process is never picked up behind you.
     - One daemon **acquisition thread** is started per Stream when
-      ``App.run()`` begins. It loops ``source.read()``, appends to the
-      ring buffer, refreshes the display snapshot, and (if a recording
-      session is active) appends to the session's Zarr store.
+      ``App.run()`` begins. Once attached it loops ``source.read()``,
+      appends to the ring buffer, refreshes the display snapshot, and
+      (if a recording session is active) appends to the session's Zarr
+      store. Until then it waits.
     - [`get_window`][] and [`get_display`][] are then readable
       concurrently from other threads.
     - The ring buffer holds the last ``buffer_ms`` of samples so

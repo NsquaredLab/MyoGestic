@@ -166,7 +166,11 @@ def render_signal_viewer(out: Path) -> None:
             pass
 
     app = App("signal_viewer")
-    app.streams(Stream("emg", source=FakeSource(), window_ms=2000, buffer_ms=10000))
+    # Attached here, not by the acquire loop: a screenshot of a disconnected stream is
+    # a screenshot of an empty plot.
+    stream = Stream("emg", source=FakeSource(), window_ms=2000, buffer_ms=10000)
+    stream.reconnect()
+    app.streams(stream)
 
     viewer = SignalViewer("emg")
 
