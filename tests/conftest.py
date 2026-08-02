@@ -46,13 +46,20 @@ def imgui_frame():
 
 @pytest.fixture
 def implot_frame(imgui_frame):
-    """Like :func:`imgui_frame`, but with an ImPlot context too (plot widgets)."""
-    from imgui_bundle import implot
+    """Like :func:`imgui_frame`, but with the plotting contexts too.
+
+    Both of them: a widget that draws a 3-D plot fails on a missing ImPlot3D
+    context exactly as loudly as one that draws a 2-D plot fails without ImPlot,
+    and a fixture that supplies one of the two only looks like it covers plots.
+    """
+    from imgui_bundle import implot, implot3d
 
     implot.create_context()
+    implot3d.create_context()
     try:
         yield imgui_frame
     finally:
+        implot3d.destroy_context()
         implot.destroy_context()
 
 

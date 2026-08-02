@@ -305,7 +305,6 @@ def _recording_block() -> None:
 
 
 _MODEL_WIDGET_ID = "ml_popout"
-_autoscroll_on = True
 _log_popout_open = False
 
 _train_btn = TrainButton(pipeline)
@@ -314,7 +313,7 @@ _training_log = TrainingLog(pipeline, height=80.0, widget_id=_MODEL_WIDGET_ID)
 
 
 def _model_block() -> None:
-    global selected_model_idx, _load_dialog, _autoscroll_on, _log_popout_open
+    global selected_model_idx, _load_dialog, _log_popout_open
 
     # Render the popout window first so it survives even if the parent
     # block scrolls / docks out of view (same pattern as pipeline_panel).
@@ -323,7 +322,6 @@ def _model_block() -> None:
             _MODEL_WIDGET_ID,
             pipeline.train_log,
             title="Model training log",
-            autoscroll=_autoscroll_on,
         )
         if not still_open:
             _log_popout_open = False
@@ -336,8 +334,8 @@ def _model_block() -> None:
     imgui.same_line()
     _predict_btn.ui()
     imgui.same_line()
-    _autoscroll_on, _log_popout_open = render_log_buttons(
-        _MODEL_WIDGET_ID, autoscroll=_autoscroll_on, popped_out=_log_popout_open
+    _log_popout_open = render_log_buttons(
+        _MODEL_WIDGET_ID, popped_out=_log_popout_open
     )
     if _log_popout_open:
         imgui.text_disabled("(log popped out — see 'Model training log' window)")
