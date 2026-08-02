@@ -227,3 +227,25 @@ def test_doc_toml_blocks_parse_and_load(path):
             load_control_map(candidate)
         except ValueError as exc:
             pytest.fail(f"{where}: TOML parses but load_control_map rejects it — {exc}")
+
+
+# --- Layer 4: snippet includes must sit inside a fence ------------------------
+#
+# `--8<--` outside a code fence is *valid markdown*, so `properdocs build` succeeds and the
+# page renders the included Python as prose — `#:` comments become headings. That shipped
+# once. The block scanner above cannot catch it either: an unfenced include is not a code
+# block, so nothing in layers 1-3 ever looks at the line.
+
+
+@pytest.mark.parametrize("path", MD_FILES, ids=lambda p: str(p.relative_to(ROOT)))
+def test_snippet_includes_are_inside_a_code_fence(path):
+    """A bare ``--8<--`` renders the included file as markdown rather than as code."""
+    inside = False
+    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if line.lstrip().startswith("```"):
+            inside = not inside
+        elif line.lstrip().startswith("--8<--") and not inside:
+            pytest.fail(
+                f"{path.relative_to(ROOT)}:{n}: snippet include is not inside a code fence, "
+                f"so the included file will render as prose. Wrap it in ```python."
+            )
