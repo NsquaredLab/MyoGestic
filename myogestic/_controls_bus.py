@@ -422,3 +422,93 @@ def connect_controls(
         ctx.control_space = control_map
         ctx.log(f"resolved {len(controls.dofs)} control(s)")
     return bus
+
+
+class ControlLink:
+    """Hold `connect_controls`'s retry, so an application does not carry it as a global.
+
+    `connect_controls` answers `None` while a target cannot yet say what it exports,
+    which is the *normal* state for an application that launches its own renderer: it
+    necessarily binds before the renderer exists. That leaves every such application
+    holding the same three things — a nullable bus, a guard, and a re-try — and every
+    one of them wrote it out. This is those three things and nothing else.
+
+    Parameters
+    ----------
+    control_map, targets, ctx, hz, smoothing
+        Exactly `connect_controls`'s arguments, kept for every attempt. The targets are
+        constructed **once** by the caller and reused: a failed attempt asks each target
+        for its capabilities and stops there, so nothing is bound and no target is left
+        part-way.
+
+    Examples
+    --------
+    >>> from myogestic.controls import ControlLink, load_control_map
+    >>> class NotStartedYet:
+    ...     def capabilities(self):
+    ...         return None                   # the renderer is not up
+    >>> control_map = load_control_map({"dofs": {"aim": "cursor.x"}})
+    >>> link = ControlLink(control_map, [NotStartedYet()])
+    >>> link.ensure() is None                 # call it again on the next click
+    True
+    >>> link.bus is None
+    True
+
+    Notes
+    -----
+    Call `ensure` from a UI handler or a training thread — anywhere that can afford to
+    block — and **never from ``@pipeline.predict``**: asking a renderer what it exports
+    costs a blocking RPC, and that callback has a deadline. `predict` reads `bus` and
+    no-ops while it is `None`.
+    """
+
+    __slots__ = ("_bus", "_control_map", "_ctx", "_hz", "_smoothing", "_targets")
+
+    def __init__(
+        self,
+        control_map: Any,
+        targets: Sequence[Any],
+        *,
+        ctx: Any = None,
+        hz: float = 32.0,
+        smoothing: Any = None,
+    ) -> None:
+        self._control_map = control_map
+        self._targets = list(targets)
+        self._ctx = ctx
+        self._hz = hz
+        self._smoothing = smoothing
+        self._bus: ControlBus | None = None
+
+    @property
+    def bus(self) -> ControlBus | None:
+        """The bus, or `None` while no target has answered. Read-only."""
+        return self._bus
+
+    def ensure(self) -> ControlBus | None:
+        """Bind if it is not bound yet, and return the bus. Idempotent and cheap once bound.
+
+        Returns
+        -------
+        ControlBus or None
+            `None` while any target is still unreachable — try again later. Safe to call
+            on every click; once it has answered, this is one attribute read.
+        """
+        if self._bus is None:
+            self._bus = connect_controls(
+                self._control_map,
+                self._targets,
+                ctx=self._ctx,
+                hz=self._hz,
+                smoothing=self._smoothing,
+            )
+        return self._bus
+
+    def stop(self) -> None:
+        """Rest and tear down the bus, and forget it. Idempotent.
+
+        The link is reusable afterwards: the next `ensure` binds the same targets again.
+        """
+        bus, self._bus = self._bus, None
+        if bus is not None:
+            bus.stop()

@@ -32,7 +32,7 @@ import tomllib
 import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, connect_controls, load_control_map
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
@@ -63,7 +63,7 @@ vhi_control = vhi.control_client()
 # Where this example's two outputs go. The left side of that file is ours (`fist` and
 # `gesture`), the right side is VHI's — read it, it is commented. Parsing is all that
 # happens here: what an address *means* is VHI's to declare, so nothing is resolved
-# until it answers (see `_ensure_vhi`).
+# until it answers (see `link` below).
 CONTROL_FILE = (
     pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification_grpc.toml"
 )
@@ -166,11 +166,19 @@ def train(data: TrainingData):
     return clf
 
 
-# Built by `_ensure_vhi` rather than here: the control file says *where* each output
-# goes, and VHI says what those addresses accept — so there is nothing to resolve,
-# and no way to know which of VHI's streams this map needs, until VHI is running,
-# which this app launches from its own UI.
-bus: ControlBus | None = None
+# Resolved by `link.ensure()` rather than here: the control file says *where* each
+# output goes, and VHI says what those addresses accept — so there is nothing to resolve,
+# and no way to know which of VHI's streams this map needs, until VHI is running, which
+# this app launches from its own UI. No hand and no stream is named here either: the
+# target looks this file's addresses up in VHI's manifest and publishes one stream per
+# address it drives, named for that address.
+link = ControlLink(
+    CONTROL_MAP,
+    [VhiTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=pipeline.predict_hz,
+)
 
 
 @pipeline.predict
@@ -180,15 +188,15 @@ def predict(model, features):
     hand (gRPC)."""
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
-    if bus is None:
-        # Nothing resolved yet, so nothing to command. Resolving here is not an option:
-        # it blocks on an RPC and this runs on the predict thread.
+    if link.bus is None:
+        # Nothing resolved yet, so nothing to command. `link.ensure()` here is not an
+        # option: it blocks on an RPC and this runs on the predict thread.
         return {"class": class_idx, "proba": proba}
 
     # One frame carries both outputs: `fist` streams to the predicted hand, and the
     # gesture reaches the control hand only once it has settled. The bus applies the
     # debounce the control file declares, so there is no trigger to drive here.
-    values = bus.push({"fist": CTRL_VALUES[class_idx], "gesture": CLASSES[class_idx]})
+    values = link.bus.push({"fist": CTRL_VALUES[class_idx], "gesture": CLASSES[class_idx]})
 
     return {"class": class_idx, "proba": proba, "hand": values}
 
@@ -209,33 +217,13 @@ grid = Grid(
 )
 
 
-def _ensure_vhi() -> None:
-    """Bind the map once VHI can say what it exports. Idempotent; UI thread only.
-
-    Never from `predict`: asking a renderer costs an RPC, and that callback has its own
-    thread and a deadline.
-    """
-    global bus
-    if bus is not None:
-        return
-    # No hand and no stream is named here: the target looks this file's addresses up in
-    # VHI's manifest and publishes one stream per address it drives, each named for that
-    # address and one channel wide. `connect_controls` returns None while VHI cannot say
-    # what it exports, which is the only reason this can fail.
-    target = VhiTarget(client=vhi_control, interface=vhi)
-    bus = connect_controls(
-        CONTROL_MAP, [target], ctx=app.ctx, smoothing=output_filter, hz=pipeline.predict_hz
-    )
-
-
-
 def _select_gesture(state: str) -> None:
     """Deliver a VHI movement from a click, resolving the control map first if needed.
 
     `select` delivers immediately and rebases the DOF's trigger, so the next predict
     ticks — still on the old ~0.2 s window — do not re-fire or jump.
     """
-    _ensure_vhi()
+    bus = link.ensure()
     if bus is not None:
         bus.select("gesture", state)
 
@@ -248,7 +236,7 @@ def _on_gesture(i: int) -> None:
 
 def _on_record() -> None:
     """The recording aid gates VHI's keyboard so MyoGestic is the sole authority."""
-    _ensure_vhi()
+    link.ensure()
     app.start_recording()
     if not recording_aid.set_recording_session(True):
         app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
@@ -321,14 +309,13 @@ def main() -> None:
     try:
         app.run()
     finally:
-        if bus is not None:
-            bus.stop()
+        link.stop()
         recording_aid.set_recording_session(False)
         recording_aid.stop()
         vhi_control.stop()
         # Built at import time, before any UI callback runs, so a run that never opens
         # the window still needs it released here. The pose stream is not listed: the
-        # target builds it, so `bus.stop()` above is what releases it.
+        # target builds it, so `link.stop()` above is what releases it.
         ctrl_outlet = None  # a raw StreamOutlet has no .stop(); dropping it releases it
 
 

@@ -15,7 +15,15 @@ import types
 import numpy as np
 import pytest
 
-from myogestic.controls import Continuous, ControlBus, ControlSet, Discrete
+from myogestic.controls import (
+    Capability,
+    Continuous,
+    ControlBus,
+    ControlLink,
+    ControlSet,
+    Discrete,
+    load_control_map,
+)
 
 #: Aliases with the three shapes that exercise every branch. Built directly: a resolved
 #: set is what the bus operates on, and its keys are the user's own names.
@@ -412,7 +420,7 @@ def test_layer_3_is_not_represented_in_the_bus_at_all():
 
 
 def test_connect_controls_reports_a_refusing_target_instead_of_raising():
-    """`_ensure_vhi()` is a button handler in every shipped example.
+    """`ControlLink.ensure()` is a button handler in every shipped example.
 
     `capabilities()` gained a third outcome with the version gate — answered, silent, or
     *refused* — and only the first two were handled, so an old renderer took the window
@@ -430,3 +438,111 @@ def test_connect_controls_reports_a_refusing_target_instead_of_raising():
     control_map = load_control_map({"dofs": {"a": "vhi.prediction.index"}})
     assert connect_controls(control_map, [TooOld()], ctx=ctx) is None
     assert any("vocabulary 1" in line for line in logged), logged
+
+
+# --- ControlLink -----------------------------------------------------------------
+#
+# Every VHI example used to carry the same module-level `bus`, the same `global bus`,
+# and the same `_ensure_vhi()`. These pin the four things that block of code did.
+
+
+class _LateTarget:
+    """A target that cannot answer until it is told the renderer came up."""
+
+    def __init__(self) -> None:
+        self.up = False
+        self.asked = 0
+        self.bound = 0
+        self.stopped = 0
+
+    def capabilities(self):
+        self.asked += 1
+        if not self.up:
+            return None
+        return [Capability("cursor.x", "continuous", lo=-1.0, hi=1.0)]
+
+    def bind(self, controls) -> None:
+        self.bound += 1
+
+    def send(self, values, changed) -> None:
+        pass
+
+    def stop(self) -> None:
+        self.stopped += 1
+
+
+def _link(target) -> ControlLink:
+    """A link over one alias, the shape every example builds."""
+    return ControlLink(load_control_map({"dofs": {"aim": "cursor.x"}}), [target])
+
+
+def test_control_link_stays_unbound_while_the_target_cannot_answer():
+    """The normal state before the renderer is launched — and not an error."""
+    target = _LateTarget()
+    link = _link(target)
+
+    assert link.ensure() is None
+    assert link.bus is None
+    assert target.bound == 0        # nothing was bound, so nothing was left half-built
+    assert link.ensure() is None    # a retry asks again rather than caching the failure
+    assert target.asked == 2
+
+
+def test_control_link_binds_the_same_target_once_it_answers():
+    """The retry reuses the target the caller constructed — no factory needed.
+
+    A failed attempt stops at `capabilities()`, so the target is untouched and is still
+    the one that ends up bound.
+    """
+    target = _LateTarget()
+    link = _link(target)
+    assert link.ensure() is None
+
+    target.up = True
+    bus = link.ensure()
+
+    assert bus is not None
+    assert link.bus is bus
+    assert target.bound == 1
+    bus.push({"aim": 0.5})
+
+
+def test_control_link_ensure_is_idempotent_once_bound():
+    """It is called from every button handler, so a second call must cost nothing.
+
+    Not just "returns the same bus": it must not *ask* again either, because asking is a
+    blocking RPC against the renderer.
+    """
+    target = _LateTarget()
+    target.up = True
+    link = _link(target)
+
+    first = link.ensure()
+    asked = target.asked
+    second = link.ensure()
+
+    assert second is first
+    assert target.asked == asked    # no second handshake
+    assert target.bound == 1        # and no second bind
+
+
+def test_control_link_stop_rests_the_target_and_clears_the_bus():
+    """`stop()` is the teardown in `main()`'s finally, and must leave nothing behind."""
+    target = _LateTarget()
+    target.up = True
+    link = _link(target)
+    link.ensure()
+
+    link.stop()
+
+    assert link.bus is None
+    assert target.stopped == 1
+    link.stop()                     # idempotent: a second teardown is a no-op
+    assert target.stopped == 1
+
+
+def test_control_link_bus_is_read_only():
+    """The bus is the link's to own — an app that could assign it could desync `ensure`."""
+    link = _link(_LateTarget())
+    with pytest.raises(AttributeError):
+        link.bus = "not a bus"      # type: ignore[misc]

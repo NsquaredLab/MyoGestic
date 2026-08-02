@@ -170,6 +170,10 @@ an ordering that is easy to get subtly wrong per-application.
 
 ::: myogestic.controls.ControlBus
 
+::: myogestic.controls.connect_controls
+
+::: myogestic.controls.ControlLink
+
 ::: myogestic.controls.Target
 
 ## Targets
@@ -196,6 +200,10 @@ client = vhi.control_client()
 target = VhiTarget(client=client, interface=vhi)
 bus = connect_controls(control_map, [target])   # None while VHI is unreachable
 ```
+
+An application that launches its own renderer binds before the renderer exists, so it
+holds a [`ControlLink`][myogestic.controls.ControlLink] instead and calls `ensure()` from
+each handler that needs the hand — same arguments, plus the retry.
 
 The client is **required**, because every address, range and state comes from that
 answer. A Virtual Hand older than 2.0 has no manifest to answer with, so it is never

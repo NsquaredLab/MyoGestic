@@ -26,7 +26,7 @@ import tomllib
 from imgui_bundle import imgui
 
 from myogestic import App, Fr, Grid, Px
-from myogestic.controls import ControlBus, connect_controls, load_control_map
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.vhi import VhiTarget, virtual_hand
 from myogestic.widgets import AppLogo, ProcessLauncher
 from myogestic.widgets.common import panel_header
@@ -46,9 +46,19 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 levels: dict[str, float] = dict.fromkeys(CONTROL_MAP.bindings, 0.0)
 
 vhi_control = vhi.control_client()
-bus: ControlBus | None = None
 
 app = App("VHI control hand")
+
+# The map is the whole point: every address in it belongs to the control hand, so that
+# is the hand this ends up driving. The file names no hand and neither does this — the
+# target looks the addresses up in the manifest and publishes a stream named for each
+# one. `link.bus` stays None until VHI can say what it exports.
+link = ControlLink(
+    CONTROL_MAP,
+    [VhiTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    hz=32,
+)
 
 # `launchable` not `launcher`: an unlaunchable renderer must not stop this app
 # from opening — a renderer that is already running needs no button.
@@ -66,19 +76,6 @@ grid = Grid(
 )
 
 
-def _connect() -> None:
-    """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
-    global bus
-    if bus is not None:
-        return
-    # The map is the whole point: every address in it belongs to the control hand, so
-    # that is the hand this ends up driving. The file names no hand and neither does this
-    # line — the target looks the addresses up in the manifest and publishes a stream
-    # named for each one. `None` while VHI cannot yet say what it exports.
-    target = VhiTarget(client=vhi_control, interface=vhi)
-    bus = connect_controls(CONTROL_MAP, [target], ctx=app.ctx, hz=32)
-
-
 @app.ui
 def demo_ui(ctx):
     """Sliders, one per alias in the file."""
@@ -90,9 +87,10 @@ def demo_ui(ctx):
 
     with grid[2, 0]:
         panel_header("CONTROL HAND")
+        bus = link.bus
         if bus is None:
             if imgui.button("Connect"):
-                _connect()
+                link.ensure()
             imgui.text_disabled("Launch VHI first — resolving needs its manifest.")
             return
 
@@ -113,8 +111,7 @@ def main() -> None:
         app.run()
     finally:
         # Rest the hand and make that frame land before the outlet's thread dies.
-        if bus is not None:
-            bus.stop()
+        link.stop()
         vhi_control.stop()
 
 

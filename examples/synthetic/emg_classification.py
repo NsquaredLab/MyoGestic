@@ -17,7 +17,7 @@ import tomllib
 import numpy as np
 
 from myogestic import App, Fr, Grid, Px, Stream, TrainingData
-from myogestic.controls import ControlBus, connect_controls, load_control_map
+from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
@@ -43,7 +43,7 @@ ctrl_outlet = control_outlet()
 vhi = virtual_hand()
 
 # What this app controls, declared in a file: the left side is *ours*, the right side is
-# VHI's. Parsing needs no VHI; resolving does, so that waits until one is up (`_ensure_vhi`).
+# VHI's. Parsing needs no VHI; resolving does, so that waits until one is up (`link.ensure`).
 CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification.toml"
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
@@ -64,13 +64,7 @@ FIST_ALIASES = ("fist", "thumb_spread")
 output_filter = PostProcessor(hz=32)
 # --8<-- [end:filter]
 
-# The bus and its targets own the wire. VHI's continuous inlet takes control values,
-# and `VhiTarget` negotiates the space and refuses a VHI it cannot fully drive rather
-# than guessing. They are built in `_ensure_vhi`, not here: the aliases above mean
-# nothing until VHI has said what its addresses do, and this script launches VHI
-# itself — which is also why *which* targets the map needs cannot be known yet.
 vhi_control = vhi.control_client()
-bus: ControlBus | None = None
 
 
 # Reference RMS / MAV / WL / VAR / ZC live in myogestic.recipes.features; mix
@@ -113,6 +107,22 @@ app = App("EMG Classification", ui_scale=0.85)
 app.streams(Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 # --8<-- [end:setup]
+
+# The link and its target own the wire. VHI's continuous inlet takes control values, and
+# `VhiTarget` negotiates the space and refuses a VHI it cannot fully drive rather than
+# guessing. Nothing is resolved here: the aliases above mean nothing until VHI has said
+# what its addresses do, and this script launches VHI itself. `link.ensure()` binds on
+# the first click that finds VHI up, and `link.bus` is None until then.
+link = ControlLink(
+    CONTROL_MAP,
+    # No hand and no stream is named: the target looks this file's addresses up in VHI's
+    # manifest and publishes one stream per address it drives, each named for that
+    # address and one channel wide.
+    [VhiTarget(client=vhi_control, interface=vhi)],
+    ctx=app.ctx,
+    smoothing=output_filter,
+    hz=32,
+)
 
 
 # --8<-- [start:extract]
@@ -195,12 +205,14 @@ def predict(model, features):
     """
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
-    if bus is None:
+    # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this callback has a
+    # deadline.
+    if link.bus is None:
         return {"class": class_idx, "proba": proba}  # unresolved; nothing to command
     # The probability of "Fist", pushed as-is. The bus gates it before anything else
     # sees it, so VHI is never handed a bare 0.73 standing in for a finger position.
     activation = float(proba[CLASSES.index("Fist")])
-    hand = bus.push(dict.fromkeys(FIST_ALIASES, activation))
+    hand = link.bus.push(dict.fromkeys(FIST_ALIASES, activation))
     return {"class": class_idx, "proba": proba, "hand": hand}
 
 
@@ -225,29 +237,13 @@ grid = Grid(
 )
 
 
-def _ensure_vhi() -> None:
-    """Bind the map once VHI can say what it exports. Idempotent; UI thread only."""
-    global bus
-    if bus is not None:
-        return
-    # No hand and no stream is named here: the target looks this file's addresses up in
-    # VHI's manifest and publishes one stream per address it drives, each named for that
-    # address and one channel wide. `connect_controls` returns None while VHI cannot say
-    # what it exports, which is the only reason this can fail.
-    target = VhiTarget(client=vhi_control, interface=vhi)
-    bus = connect_controls(
-        CONTROL_MAP, [target], ctx=app.ctx, smoothing=output_filter, hz=32
-    )
-
-
-
 def _on_gesture(i: int) -> None:
-    _ensure_vhi()
+    link.ensure()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
 
 
 def _on_record() -> None:
-    _ensure_vhi()
+    link.ensure()
     app.start_recording()
 
 
@@ -307,8 +303,7 @@ def main() -> None:
         app.run()
     finally:
         # Rest the hand and make that frame land before the outlet's thread dies.
-        if bus is not None:
-            bus.stop()
+        link.stop()
         vhi_control.stop()
 
 
