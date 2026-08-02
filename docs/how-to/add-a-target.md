@@ -39,7 +39,7 @@ The two optional members are what the bus asks for by name:
 
 ## A complete target
 
-The whole of a target that moves a cursor. Every method is the real one; nothing is elided.
+The whole of a target that moves a cursor.
 
 <!--docs:run-->
 ```python
@@ -112,14 +112,10 @@ assert cursor.position == (0.5, -0.25)
 bus.stop()
 ```
 
-`connect_controls` returns `None` instead of raising while any target's `capabilities()` says
-`None`. A remote target that has not started yet is exactly that case: an application that
-launches its own target necessarily binds before it exists, so the answer is to ask again
-later, not to fail.
-
-[`ControlLink`][myogestic.controls.ControlLink] is that retry, so you do not keep it as a
-global. It holds the arguments, calls `connect_controls` until one attempt answers, and
-hands you the bus:
+`connect_controls` answers `None` rather than raising while any target's `capabilities()` does,
+so a target that is not up yet defers instead of failing.
+[`ControlLink`][myogestic.controls.ControlLink] holds the arguments and asks again for you,
+which saves you a module-level `bus` and a `global`:
 
 <!--docs:run-->
 ```python
@@ -136,11 +132,8 @@ assert link.bus is not None     # this target answers immediately; a remote one 
 link.stop()                     # rests every target and clears the bus
 ```
 
-The targets are constructed **once** and reused across attempts: a failed attempt stops at
-`capabilities()`, so nothing was bound and no target was left part-way.
-
 Call `ensure()` from anywhere that can afford to block: a UI handler, a training thread. Never
-from `@pipeline.predict`, which has its own thread and a deadline: read `link.bus` there and
+from `@pipeline.predict`, which has its own thread and a deadline - read `link.bus` there and
 no-op while it is `None`.
 
 If your target's vocabulary is fixed and you have the capabilities in hand already, build
@@ -173,9 +166,9 @@ A control value is **signed and normalised**: `[-1, 1]`, `0` at rest, and `+1` m
 direction the name denotes. `cursor.x` at `+1` should move right if you called it *right*.
 A one-way control declares `lo=0.0` instead.
 
-Getting a sign backwards is the one mistake that survives every test you are likely to
-write, because a device and its own read-back agree with each other whichever way they
-point. Check it against something outside the loop — a person looking at the device.
+Getting a sign backwards is the one mistake that survives every test you are likely to write -
+[Concepts › Controls](../concepts/controls.md#the-one-convention-a-device-may-not-redefine)
+has the reason. Check it against something outside the loop: a person looking at the device.
 
 ## See also
 

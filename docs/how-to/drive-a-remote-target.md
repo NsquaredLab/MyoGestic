@@ -51,12 +51,8 @@ moved and catch a sign error. Nothing requires it.
 | serve the four recording RPCs | driving a ground-truth hand through a capture session |
 
 Nothing above is about *running* the thing. The table below is what turns a process that
-satisfies the wire into an application you can leave up, and it is a separate table only
-because a client cannot check any of it. It is not optional, and it does not wait for hardware.
-Closing inlets and joining reader threads is lifecycle hygiene for every remote target there
-is; refusing a duplicate producer and refusing a non-finite or out-of-range sample is what
-makes your input deterministic, which a simulation wants as much as a gripper does; and every
-target already *has* a liveness policy — the only question is whether anyone wrote it down.
+satisfies the wire into an application you can leave up - a separate table only because a
+client cannot check any of it.
 
 | every remote target | why |
 |---|---|
@@ -117,25 +113,10 @@ or as nine one-channel ones.
 
 ## The warning
 
-A backwards sign survives every test you would think to write, because a target and its own
-read-back agree whichever way they point. Check against something outside the loop. Look at the
-device yourself. This repo shipped that bug and its own contract suite passed throughout.
-
-## What changed
-
-`Declare` no longer exists; the manifest is the contract, and a control hand is driven
-by publishing to its stream rather than by asking permission.
-
-VHI moved from two nine-channel positional streams (`MyoGestic_Output`,
-`MyoGestic_ControlPose`) to one stream per DOF, and that is now the contract, not one target's
-choice. The proto's `stream_name` (field 10) and `channel` (field 11) are **gone**: with the
-address naming the stream they could only repeat it. Both numbers and both names are reserved
-in the proto. A target serving them is a vocabulary-1 target and is refused by version.
-
-An application no longer picks its targets either: `vhi_targets()` existed to build one target
-per stream a map spanned, and one target now drives the whole map. It is
-`[RemoteTarget(client=…, interface=spec)]`, and it is named for what it drives, a target
-reached over a wire, not for the first one that shipped.
+A backwards sign survives every test you would think to write - see [the one convention a
+device may not redefine](../concepts/controls.md#the-one-convention-a-device-may-not-redefine)
+for why no suite can reach it. Check against something outside the loop. Look at the device
+yourself. This repo shipped that bug and its own contract suite passed throughout.
 
 ## See also
 
