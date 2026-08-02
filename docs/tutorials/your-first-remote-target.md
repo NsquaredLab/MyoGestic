@@ -146,12 +146,12 @@ if __name__ == "__main__":
 `+1` is the direction the address *name* denotes, so `rig.gripper.closure` at `+1` is
 closed and `rig.wrist.pronation` at `+1` is pronated.
 
-!!! tip "Name the direction, not the axis"
-    `+1` means "the direction the name denotes", so the name has to denote one.
-    `rig.gripper` names a part - is `+1` closed or open? `rig.wrist.rotation` names a
-    motion with two directions and picks neither. Either way stage 6's sign check has
-    nothing to check *against*, and the next person to write a map guesses. Every address
-    here ends in a word that has an opposite: `closure`, `pronation`. Yours should too.
+!!! tip "End each address in a word that has an opposite"
+    `+1` means the direction the address name says, so the name has to say one.
+    `rig.gripper` is a part: is `+1` open or closed? `rig.wrist.rotation` is a motion with
+    two directions and picks neither. In both cases there is no correct answer for stage 6's
+    sign check to compare against, and whoever writes the next map guesses. `closure` and
+    `pronation` each have an opposite; `gripper` and `rotation` do not.
 
 ### Checkpoint
 
