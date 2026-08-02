@@ -132,7 +132,7 @@ Your `_send` takes longer than `1/hz` per call. The daemon thread can't keep up.
 !!! tip "Fix"
     Lower `hz`, or move slow work outside `_send` (cache, pre-compute, etc.).
 
-See: [Add a custom output](how-to/add-an-output.md).
+See: [Publish a data stream](how-to/add-an-output.md).
 
 ## Virtual Hand Interface
 

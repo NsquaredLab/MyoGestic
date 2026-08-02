@@ -9,8 +9,8 @@ There is one way to do it. A target is a plain object with three methods, you ha
 nothing subclasses, nothing is discovered by name.
 
 If "control map", "address" and "alias" are new words, read [Concepts ›
-Controls](../concepts/controls.md) first. It explains the system, and why you would pick this
-route over a [remote target](drive-a-remote-target.md).
+Controls](../concepts/controls.md) first. It explains the system. This is the only route; a
+[remote target](drive-a-remote-target.md) is the case where the target is already written.
 
 ## The contract
 
@@ -37,6 +37,13 @@ The two optional members are what the bus asks for by name:
 | `claims` | "assume it drives everything" | the aliases it drives, so the bus can catch a control nothing drives |
 | `capabilities()` | "the caller already knows my vocabulary" | what addresses you export, so a map can be resolved against you |
 
+**A route's `weight` is yours to apply, and before your own range.** The bus delivers the
+alias's un-weighted value, because only you know what your range is in your own units.
+`RemoteTarget` computes `min(hi, max(lo, weight * value))` and so should you. Applying the
+range first would let a gain push a value past what you declared you accept, and ignoring
+`weight` silently discards every gain in the map — including `weight = -1.0`, which is how
+a map inverts an axis.
+
 ## A complete target
 
 The whole of a target that moves a cursor.
@@ -55,7 +62,7 @@ class CursorTarget:
 
     def __init__(self) -> None:
         self.position = (0.0, 0.0)
-        self._slots: dict[str, str] = {}
+        self._slots: dict[str, tuple[str, float]] = {}
 
     def capabilities(self):
         """Signed, normalised, resting at zero — the control standard's defaults."""
@@ -70,7 +77,7 @@ class CursorTarget:
         for alias, refs in controls.routes.items():
             for ref in refs:
                 if ref.address in self.ADDRESSES:
-                    self._slots[alias] = ref.address
+                    self._slots[alias] = (ref.address, ref.weight)
         if not self._slots:
             raise ValueError(f"nothing in this map targets {self.ADDRESSES}")
 
@@ -81,11 +88,13 @@ class CursorTarget:
     def send(self, values, changed) -> None:
         """One tick. Must not raise."""
         x, y = self.position
-        for alias, address in self._slots.items():
+        for alias, (address, weight) in self._slots.items():
+            # Weight first, then your own range. Yours to apply — the bus does not.
+            value = min(1.0, max(-1.0, weight * float(values.get(alias, 0.0))))
             if address == "cursor.x":
-                x = float(values.get(alias, 0.0))
+                x = value
             else:
-                y = float(values.get(alias, 0.0))
+                y = value
         self.position = (x, y)
 
     def stop(self) -> None:
@@ -160,6 +169,33 @@ bus = ControlBus(controls, targets=[cursor, vhi_target], hz=32)
 The bus checks that *someone* claims every alias, so an address no target drives is caught at
 bind. Uncaught, it would look like a control that works and holds still.
 
+## A real one: a servo hand
+
+A cursor has two controls and no mechanism. A hand has neither of those luxuries, and
+`examples/synthetic/servo_hand.py` is the whole of one - six servos on a serial port, runnable
+with no hardware:
+
+```bash
+uv run python examples/synthetic/servo_hand.py
+```
+
+--8<-- "examples/synthetic/servo_hand.py"
+
+Three things in it are worth more than the line count suggests.
+
+**Five addresses, six servos.** `hand.thumb` drives two of them on different transfer
+functions, because a real thumb opposes as it flexes. That coupling stays inside the target.
+A fan-out in the map sends one value to several addresses, so ganging the two thumb servos
+through the map would work - and would force whoever writes the map to know this hand's
+linkage, which is the one thing an address exists to hide.
+
+**Wire order belongs to the device.** `frame` iterates `SERVOS` and looks each fraction up by
+name, so reordering a TOML for readability cannot reorder somebody's fingers.
+
+**`stop` rests, then closes.** The bus already delivered a neutral frame, and the target sends
+one again anyway: a target can be stopped directly too, and an extra open-hand frame costs a
+few bytes while a missed one leaves a hand clenched on somebody's arm.
+
 ## What the standard asks of you
 
 A control value is **signed and normalised**: `[-1, 1]`, `0` at rest, and `+1` means the
@@ -173,6 +209,6 @@ has the reason. Check it against something outside the loop: a person looking at
 ## See also
 
 - [Drive a remote target](drive-a-remote-target.md) - for a separate application, not an in-process object
-- [Add a custom output](add-an-output.md) - for a plain data sink with no control space
+- [Publish a data stream](add-an-output.md) - for telemetry: a sink with no control space, which drives nothing
 - [Integrate the Virtual Hand](integrate-vhi.md) - the one remote target this project ships
 - [Controls reference](../api/controls.md) - `Capability`, `ControlSet`, address rules

@@ -137,7 +137,6 @@ nav:
       - How-to:
           - how-to/index.md
           - Add a custom source: how-to/add-a-source.md
-          - Add a custom output: how-to/add-an-output.md
           - Drive your own device: how-to/add-a-target.md
           - Drive a remote target: how-to/drive-a-remote-target.md
           - Add a custom widget: how-to/add-a-widget.md
@@ -149,6 +148,7 @@ nav:
           - Use the recipe feature set: how-to/use-recipe-features.md
           - Keep state between pipeline stages: how-to/inter-stage-state.md
           - Post-process predictions: how-to/post-process-output.md
+          - Publish a data stream: how-to/add-an-output.md
           - Integrate the Virtual Hand: how-to/integrate-vhi.md
           - Install the Virtual Hand: how-to/install-vhi.md
           - Run headless (no GUI): how-to/headless-mode.md

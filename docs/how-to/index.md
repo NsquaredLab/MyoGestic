@@ -5,9 +5,8 @@ Recipes for specific tasks. Each guide assumes you've worked through [Getting St
 ## Extending the framework
 
 - [Add a custom source](add-a-source.md) - implement the `Source` protocol for a new device, file format, or transport.
-- [Add a custom output](add-an-output.md) - push predictions to actuators, robots, or other processes.
-- [Drive your own device](add-a-target.md) - implement the `Target` protocol so a control map can drive your prosthesis on a serial port, your cursor, or your hand. Three methods, in this process: the simpler of the two routes.
-- [Drive a remote target](drive-a-remote-target.md) - a separate application MyoGestic drives, like the Virtual Hand: one RPC and a stream. The longer route — take [Drive your own device](add-a-target.md) unless your device is already its own program.
+- [Drive your own device](add-a-target.md) - implement the `Target` protocol so a control map drives your prosthesis on a serial port, your motors, your cursor. Three methods and a write to a port. **Everything MyoGestic moves goes through one of these.**
+    - [Drive a remote target](drive-a-remote-target.md) - only if your device is *already its own program*, like the Virtual Hand. MyoGestic's side is written for you (`RemoteTarget`); this page is the contract yours has to serve.
 - [Add a custom widget](add-a-widget.md) - write a stateless function that draws ImGui commands from `ctx`.
 - [Add a custom model](add-a-model.md) - wire `extract` / `train` / `predict` for any ML library.
 
@@ -17,6 +16,7 @@ Recipes for specific tasks. Each guide assumes you've worked through [Getting St
 - [Record good training data](record-good-training-data.md) - cycle-style recording, how many cycles you actually need, verifying templates before training.
 - [Feature extraction cookbook](feature-extraction-cookbook.md) - copy-paste `@pipeline.extract` snippets (RMS+MAV, bandpass+envelope, spectral, sliding RMS, onset detection, multi-stream fusion).
 - [Post-process predictions](post-process-output.md) - `PostProcessor` and `myogestic.outputs.filters` for output smoothing.
+- [Publish a data stream](add-an-output.md) - an `Output` is a paced sender for telemetry: predictions to a recorder, an LSL stream another application reads. If something *moves*, you want a target, not this.
 
 ## The Virtual Hand
 
