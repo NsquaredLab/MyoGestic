@@ -241,10 +241,14 @@ def test_recording_controls_label_buttons_wrap(imgui_frame, monkeypatch):
     assert len(set(rows)) > 1  # wrapped onto multiple rows when narrow
 
 
-def test_session_manager_lists_base_path_sessions(imgui_frame, tmp_path):
-    """A SessionManager lists the sessions already in its base_path on first
-    render (folder-format sessions with a meta.json), not just after a manual
-    file-pick — one-shot, no duplication across frames."""
+def test_session_manager_starts_empty_however_full_the_folder_is(imgui_frame, tmp_path):
+    """Opening an app is not asking for every session ever recorded in its folder.
+
+    This used to scan `base_path` on first render, so a machine with 328 recordings
+    presented all 328 — unchosen, above a Train button, indistinguishable from a
+    selection somebody had made. What a training set contains is a decision, and
+    rendering a panel is not one. `scan_sessions` is still one click away.
+    """
     import json
 
     from myogestic.widgets import SessionManager
@@ -257,8 +261,31 @@ def test_session_manager_lists_base_path_sessions(imgui_frame, tmp_path):
 
     sm = SessionManager(str(tmp_path), class_names=["Rest", "Fist"])
     imgui_frame(sm.ui)
-    imgui_frame(sm.ui)  # scan is one-shot -> still 3, not 6
-    assert len(get_state(f"Sessions_{tmp_path}").sessions) == 3
+    imgui_frame(sm.ui)
+    assert get_state(f"Sessions_{tmp_path}").sessions == []
+    assert sm.ui.__self__._base_path == str(tmp_path)  # still knows where to look
+
+
+def test_session_manager_finds_them_when_asked(imgui_frame, tmp_path):
+    """The scan itself is unchanged — only who starts it. Merges, never doubles."""
+    import json
+
+    from myogestic.widgets.training._session_state import get_state
+    from myogestic.widgets.training.session_manager import scan_sessions
+
+    for name in ("s1", "s2", "s3"):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "meta.json").write_text(json.dumps({"class_names": ["Rest", "Fist"]}))
+
+    state = get_state(f"Sessions_{tmp_path}")
+    state.sessions.clear()
+    found = scan_sessions(str(tmp_path))
+    assert len(found) == 3
+    state.sessions.extend(found)
+    existing = {s["path"] for s in state.sessions}
+    again = [r for r in scan_sessions(str(tmp_path)) if r["path"] not in existing]
+    assert again == []
 
 
 def test_session_manager_dedups_same_session_across_path_spellings(tmp_path):

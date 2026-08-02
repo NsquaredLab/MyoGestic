@@ -34,6 +34,7 @@ def test_stream_roundtrip():
     time.sleep(0.5)  # let stream start
 
     stream = Stream("test", source=LSLSource("TestEMG_unit"), window_ms=500)
+    stream.reconnect()   # the loop never attaches on its own
     stream.start()
     time.sleep(2.0)  # collect data
 
@@ -59,6 +60,7 @@ def test_stream_reconnect_swaps_buffers_atomically():
     time.sleep(0.4)
 
     stream = Stream("test", source=LSLSource("ReconA"), window_ms=300)
+    stream.reconnect()   # the loop never attaches on its own
     stream.start()
     time.sleep(1.0)
 

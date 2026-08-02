@@ -50,6 +50,7 @@ def test_recording_transitions():
     app = App("TestApp")
     app.streams(stream)
 
+    stream.reconnect()   # the loop never attaches on its own
     stream.start()
     time.sleep(1.0)
 

@@ -140,6 +140,7 @@ def test_replay_into_stream():
         source=ReplaySource(str(session_path), "emg", speed=10.0),
         window_ms=500,
     )
+    stream.reconnect()   # the loop never attaches on its own
     stream.start()
     time.sleep(1.5)  # let replay feed the buffer
 
