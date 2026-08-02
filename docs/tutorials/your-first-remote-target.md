@@ -55,9 +55,9 @@ will not use it, because your rig is not a hand and has no Godot binary to launc
 
 `name=` looks cosmetic and is not: every stream this spec publishes carries the `source_id`
 `myogestic:<name>:<address>`, which lets your target find the same stream again after a
-restart. Stage 5 is where changing it bites.
+restart. Stage 5 is where changing it breaks reconnection.
 
-## Stage 1 — A manifest, and a direct probe
+## Stage 1 — Serve a manifest, and read it back
 
 A remote target's one obligation is `GetControlManifest`. Serve that and nothing else, and a
 client can already learn everything about your device. No LSL yet.
@@ -218,7 +218,7 @@ you would never read it.
 
 Restart without `--antique` before going on.
 
-## Stage 2 — The map, and a typo
+## Stage 2 — Write the control map, and see a bad address refused
 
 The map pairs your model's output names with the addresses the rig declared. Left side yours,
 right side the device's. Each line under `[dofs]` declares one **DOF**, one [degree of
@@ -319,7 +319,7 @@ except ValueError as exc:
     assert "Did you mean" not in str(exc)
 ```
 
-## Stage 3 — `ControlLink`: a bus proves resolution, not delivery
+## Stage 3 — Bind the map with `ControlLink`
 
 Fix the typo. Now build the MyoGestic side, the third file. In your own application this is
 whatever calls `bus.push()` from inside `@pipeline.predict`; here it is a script, so there is
