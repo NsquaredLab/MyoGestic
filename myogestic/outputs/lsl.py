@@ -84,7 +84,7 @@ class LSLOutlet(Output):
         self._outlet = StreamOutlet(info)
         self._n_channels = int(n_channels)
         #: What this stream is published as. Readable because a consumer that was handed
-        #: an outlet cannot otherwise tell which stream it is writing — `VhiTarget` checks
+        #: an outlet cannot otherwise tell which stream it is writing — `RendererTarget` checks
         #: it against the stream its control map resolved to, since both hands number
         #: channels from 0 and a mismatch would be a silent leak onto the wrong one.
         self.name = name

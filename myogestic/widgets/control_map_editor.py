@@ -204,7 +204,7 @@ def address_tree(capabilities: Sequence[Capability]) -> dict[str, Any]:
     Examples
     --------
     >>> from myogestic.controls import Capability
-    >>> from myogestic.widgets.vhi.control_map_editor import address_tree
+    >>> from myogestic.widgets.control_map_editor import address_tree
     >>> tree = address_tree([Capability("keyboard.tap.edit.space", "discrete")])
     >>> sorted(tree["keyboard"]["tap"]["edit"])
     ['space']
@@ -238,7 +238,7 @@ class ControlMapEditor:
         Not fixed for the life of the editor: **Save as...** writes elsewhere and the
         editor *follows*, so read `path` rather than remembering what was passed in.
     client
-        A `myogestic.vhi._control.VhiControlClient`, or anything with a
+        A `myogestic.renderer._control.RendererClient`, or anything with a
         ``capabilities()`` method returning a sequence of `myogestic.controls.Capability`.
         Called on **Connect** rather than every frame, because it blocks on an RPC.
         Without it the editor still opens the file and shows it; it just cannot offer a
@@ -1046,7 +1046,7 @@ class ControlMapEditor:
         """Ask silent targets what they export, off the render thread.
 
         Called every frame from `ui`. Connecting was click-only because
-        `VhiControlClient.capabilities()` blocks for its RPC timeout when nothing is
+        `RendererClient.capabilities()` blocks for its RPC timeout when nothing is
         listening, and a two-second stall per frame is not a thing a UI can do. But that is
         an argument against blocking *here*, not against connecting at all — a
         `KeyboardTarget` answers from a local list and never needed a click in the first
@@ -1152,7 +1152,7 @@ class ControlMapEditor:
         # reserves for exactly that. With one target "the manifest is empty" meant "I know
         # nothing"; with two it means "I know about one of them", and an address belonging to
         # the silent one is unverifiable rather than wrong. Same namespace reasoning
-        # `VhiTarget` uses to decide what is its to render, so the two cannot disagree.
+        # `RendererTarget` uses to decide what is its to render, so the two cannot disagree.
         self._answered = frozenset(
             address.split(".", 1)[0] for address in merged
         )

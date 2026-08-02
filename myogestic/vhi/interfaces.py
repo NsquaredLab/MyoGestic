@@ -1,22 +1,21 @@
-"""Output interface registry — pre-wired (process, output stream, control).
+"""Where the Virtual Hand is, how to start it, and whether this MyoGestic can drive it.
 
-The ``InterfaceSpec`` dataclass and ``virtual_hand()`` constructor hold the VHI
-boilerplate — Godot path, pose width + sample rate, gRPC endpoint — behind a
-single call:
+``virtual_hand()`` is a `myogestic.renderer.InterfaceSpec` with VHI's numbers filled in
+— the Godot path or packaged binary, the nine-channel pose read-back, the gRPC endpoint
+— so an application never states any of them:
 
     from myogestic.controls import connect_controls
-    from myogestic.vhi import VhiTarget, virtual_hand
+    from myogestic.renderer import RendererTarget
+    from myogestic.vhi import virtual_hand
 
     vhi = virtual_hand()
     process_launcher(vhi.launcher())    # the packaged binary or `godot --path`
     client = vhi.control_client()       # gRPC control plane: discover, command, verify
-    target = VhiTarget(client=client, interface=vhi)   # one stream per control it drives
+    target = RendererTarget(client=client, interface=vhi)  # one stream per control driven
     bus = connect_controls(control_map, [target])
 
-What it does *not* hold is a stream name: which controls the renderer has comes
-from the manifest a running VHI answers with, and each control's stream is named
-for that control's own address. The example still owns *what* to push — DOF
-mapping, sign flips, smoothing.
+Everything past that call is generic — nothing in `myogestic.renderer` knows a hand from
+a robot arm, and the example still owns *what* to push.
 
 VHI ships in two ways and ``virtual_hand()`` accepts both:
 
@@ -29,26 +28,27 @@ VHI ships in two ways and ``virtual_hand()`` accepts both:
 
 from __future__ import annotations
 
-import logging
 import os
 import platform
-from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from shutil import which
-from typing import TYPE_CHECKING
 
-from myogestic.outputs import LSLOutlet
-
-if TYPE_CHECKING:
-    from myogestic.vhi._control import VhiControlClient
-    from myogestic.vhi._recording import VhiRecordingClient
+from myogestic.renderer import InterfaceSpec
 
 #: Kept in step with `myogestic.tools.install_vhi.MIN_VHI_TAG` (asserted equal by
 #: tests/test_install_vhi_version_gate.py). Duplicated rather than imported: the
 #: installer pulls in typer, which launching a process should not require.
-log = logging.getLogger("myogestic.vhi")
-
 MIN_VHI_TAG = "v2.0.0"
+
+#: Appended to `myogestic.renderer.InterfaceSpec.launcher`'s "not installed" error.
+#: How VHI is installed is VHI's business; the generic spec has nothing to say about it.
+_INSTALL_HINT = (
+    f"\n  Run `python -m myogestic.tools.install_vhi` to fetch a release "
+    f"for this platform ({MIN_VHI_TAG} or newer).\n"
+    f"  Or set $VHI_PATH to an existing VHI Godot project and "
+    f"$GODOT_BIN to a Godot 4.x binary for source-mode."
+)
 
 
 def _version_of(tag: str) -> tuple[int, ...] | None:
@@ -60,217 +60,48 @@ def _version_of(tag: str) -> tuple[int, ...] | None:
     return tuple(int(part) for part in parts)
 
 
-@dataclass
-class InterfaceSpec:
-    """Description of an external visual-feedback interface (e.g. VHI).
+def _refuse_an_incompatible_install(install_root: Path | None) -> None:
+    """Refuse to launch an installed release this MyoGestic cannot drive.
 
-    Attributes
+    The marker `install_vhi` leaves behind is the only way to know what is on disk
+    before starting it, so the check happens at launch rather than after the renderer
+    comes up and every `myogestic.renderer.RendererTarget` refuses it.
+
+    Silent when there is no marker: a source-mode checkout has none, and neither
+    does a hand-placed build.
+
+    Parameters
     ----------
-    name
-        Human label, used as the process_launcher row title.
-    process
-        argv to spawn the interface (passed to ``subprocess.Popen``).
-        An empty list means "VHI not installed"; ``launcher()`` then raises
-        pointing at ``install_vhi``.
-    n_output_channels
-        Number of channels in the interface's full pose vector.
-    output_hz
-        Outlet send rate.
-    control_stream_name
-        LSL inlet name the interface publishes when the user drives it
-        manually (used for regression targets). May be None.
-    n_control_channels
-        Channel count of the control stream, if known.
-    grpc_host
-        VHI gRPC control-server host.
-    grpc_port
-        VHI gRPC control-server port.
     install_root
-        The directory ``process`` was resolved from; quoted in the
-        "not installed" error.
+        Where the release was unpacked, or ``None`` when nothing installed it.
 
-    Examples
-    --------
-    >>> from myogestic.vhi.interfaces import InterfaceSpec
-    >>> spec = InterfaceSpec(
-    ...     name="Hand",
-    ...     process=["vhi"],
-    ...     n_output_channels=9,
-    ...     output_hz=32.0,
-    ... )
-    >>> spec.launcher()
-    [('Hand', ['vhi'])]
+    Raises
+    ------
+    FileNotFoundError
+        When the marker names a release older than `MIN_VHI_TAG`.
     """
-
-    name: str
-    process: list[str]
-    n_output_channels: int
-    output_hz: float
-    control_stream_name: str | None = None
-    n_control_channels: int | None = None
-    grpc_host: str = "127.0.0.1"
-    grpc_port: int = 50051
-    install_root: Path | None = None
-
-    def stream_outlet(self, name: str, *, n_channels: int | None = None) -> LSLOutlet:
-        """Construct an LSLOutlet publishing the interface's stream called `name`.
-
-        **The name is the renderer's, not this spec's.** Which controls exist is in the
-        manifest a running interface answers with, and a streamed control's stream is
-        named for that control's own address — so a stream is named where that answer is
-        read (`myogestic.vhi.VhiTarget`, which calls this once per address it drives,
-        after negotiation has settled), never guessed here.
-
-        Carries a stable ``source_id`` so a consumer can re-resolve this stream after a
-        restart. Without one, LSL cannot tell a restarted outlet from a new stream and a
-        consumer that resolved the old one keeps a dead inlet.
-
-        Parameters
-        ----------
-        name
-            The stream's name, as the interface's manifest reports it.
-        n_channels
-            Width. `~myogestic.vhi.VhiTarget` passes ``1``: one control per stream. The
-            default is the interface's full pose layout, for the whole-pose read-back a
-            recording consumes.
-
-        Raises
-        ------
-        ValueError
-            If `name` is empty. An unnamed LSL stream cannot be resolved, so a nameless
-            control could never be found by the renderer that exports it.
-        """
-        if not name:
-            raise ValueError(
-                f"{self.name}: cannot publish an unnamed stream. A stream carrying one "
-                f"control is named for that control's address, so an empty name means "
-                f"the manifest reported a capability with no address at all."
-            )
-        return LSLOutlet(
-            name=name,
-            n_channels=self.n_output_channels if n_channels is None else n_channels,
-            hz=self.output_hz,
-            source_id=f"myogestic:{self.name}:{name}",
-        )
-
-    def control_client(self) -> VhiControlClient:
-        """Construct a client for this interface's control service.
-
-        Hand it to `myogestic.vhi.VhiTarget` and the target asks VHI which named
-        DOFs it renders, refusing a configuration it cannot place. Required: without
-        one there is nothing to negotiate the control space against.
-
-        Imported lazily — a plain install has no ``[grpc]`` extra, and
-        `outlet` / `launcher` must keep working without it.
-
-        Examples
-        --------
-        >>> from myogestic.controls import ControlBus, Continuous, ControlSet
-        >>> from myogestic.vhi import VhiTarget, virtual_hand
-        >>>
-        >>> vhi = virtual_hand()
-        >>> controls = ControlSet(dofs={"my_index": Continuous("my_index")})
-        >>> target = VhiTarget(client=vhi.control_client(), interface=vhi)
-        >>> bus = ControlBus(controls, targets=[target])
-        >>> target.negotiated          # True once VHI has answered, False until then
-        False
-        """
-        from myogestic.vhi._control import VhiControlClient
-
-        return VhiControlClient(host=self.grpc_host, port=self.grpc_port)
-
-    def recording_client(self) -> VhiRecordingClient:
-        """Construct a client for this interface's recording session gate.
-
-        Not a control plane, and nothing it does is a control DOF. It carries the two
-        things a *recording session* needs: the gate that stops VHI's local keyboard
-        competing as a movement source, and trajectories that cycle the control hand
-        so the recorded kinematics sweep a continuous range.
-
-        Imported lazily, like the other gRPC client, so a plain install without the
-        ``[grpc]`` extra can still use `outlet` / `launcher`.
-
-        Examples
-        --------
-        >>> from myogestic.vhi import virtual_hand
-        >>> aid = virtual_hand().recording_client()
-        >>> aid.set_recording_session(True)     # False when VHI is unreachable
-        False
-        """
-        from myogestic.vhi._recording import VhiRecordingClient
-
-        return VhiRecordingClient(host=self.grpc_host, port=self.grpc_port)
-
-    def launcher(self) -> list[tuple[str, list[str]]]:
-        """Return the (name, argv) tuple list expected by `process_launcher`.
-
-        Raises ``FileNotFoundError`` with an ``install_vhi`` hint when VHI
-        is not installed at the resolved location.
-        """
-        if not self.process:
-            location = f" at {self.install_root}" if self.install_root else ""
-            raise FileNotFoundError(
-                f"{self.name}: not installed{location}.\n"
-                f"  Run `python -m myogestic.tools.install_vhi` to fetch a release "
-                f"for this platform ({MIN_VHI_TAG} or newer).\n"
-                f"  Or set $VHI_PATH to an existing VHI Godot project and "
-                f"$GODOT_BIN to a Godot 4.x binary for source-mode."
-            )
-        self._refuse_an_incompatible_install()
-        return [(self.name, list(self.process))]
-
-    def launchable(self) -> list[tuple[str, list[str]]]:
-        """Like `launcher`, but empty instead of raising when nothing can be launched.
-
-        For a `myogestic.widgets.ProcessLauncher` in an application's own UI, where an
-        in-app Launch button is a *convenience*: `launcher` raising there takes the whole
-        app down at import, even when a renderer is already running. This returns no rows
-        and logs why instead. `launcher` stays strict for a caller whose entire job is to
-        start the thing (`tools/launch_vhi.py`).
-
-        Examples
-        --------
-        >>> from myogestic.vhi import virtual_hand
-        >>> processes = virtual_hand().launchable()   # [] rather than an exception
-        """
-        try:
-            return self.launcher()
-        except FileNotFoundError as exc:
-            log.info("%s cannot be launched from this app: %s", self.name, exc)
-            return []
-
-    def _refuse_an_incompatible_install(self) -> None:
-        """Refuse to launch an installed release this MyoGestic cannot drive.
-
-        The marker `install_vhi` leaves behind is the only way to know what is on disk
-        before starting it, so the check happens here rather than after the renderer
-        comes up and every `VhiTarget` refuses it.
-
-        Silent when there is no marker: a source-mode checkout has none, and neither
-        does a hand-placed build.
-        """
-        if not self.install_root:
-            return
-        marker = Path(self.install_root) / "vhi-version.txt"
-        try:
-            text = marker.read_text()
-        except OSError:
-            return
-        tag = ""
-        for line in text.splitlines():
-            if line.startswith("installed_tag="):
-                tag = line.partition("=")[2].strip()
-        version = _version_of(tag)
-        if version is None or version >= _version_of(MIN_VHI_TAG):
-            return
-        raise FileNotFoundError(
-            f"{self.name}: the installed release is {tag}, which does not serve the v2 "
-            f"control contract.\n"
-            f"  MyoGestic 2.x asks the renderer which controls it exports and refuses "
-            f"to guess, so this build cannot be driven at all.\n"
-            f"  Upgrade: python -m myogestic.tools.install_vhi --tag {MIN_VHI_TAG} --force\n"
-            f"  Or run a checkout from source: set $VHI_PATH and $GODOT_BIN."
-        )
+    if not install_root:
+        return
+    marker = Path(install_root) / "vhi-version.txt"
+    try:
+        text = marker.read_text()
+    except OSError:
+        return
+    tag = ""
+    for line in text.splitlines():
+        if line.startswith("installed_tag="):
+            tag = line.partition("=")[2].strip()
+    version = _version_of(tag)
+    if version is None or version >= _version_of(MIN_VHI_TAG):
+        return
+    raise FileNotFoundError(
+        f"VHI Hand: the installed release is {tag}, which does not serve the v2 "
+        f"control contract.\n"
+        f"  MyoGestic 2.x asks the renderer which controls it exports and refuses "
+        f"to guess, so this build cannot be driven at all.\n"
+        f"  Upgrade: python -m myogestic.tools.install_vhi --tag {MIN_VHI_TAG} --force\n"
+        f"  Or run a checkout from source: set $VHI_PATH and $GODOT_BIN."
+    )
 
 
 # --- Launch resolution -------------------------------------------------------
@@ -397,7 +228,7 @@ def _resolve_vhi_launch(install_root: Path, godot_bin: str | None, mode: str) ->
     return [str(binary)] if binary else []
 
 
-# --- Concrete interfaces ----------------------------------------------------
+# --- The Virtual Hand -------------------------------------------------------
 
 
 def virtual_hand(
@@ -432,12 +263,12 @@ def virtual_hand(
 
     Returns
     -------
-    An ``InterfaceSpec`` with the resolved argv, ready to wire into
+    A `myogestic.renderer.InterfaceSpec` with the resolved argv, ready to wire into
     ``process_launcher()``.
 
     Examples
     --------
-    >>> from myogestic.vhi.interfaces import virtual_hand
+    >>> from myogestic.vhi import virtual_hand
     >>> vhi = virtual_hand()
     >>> vhi.n_output_channels
     9
@@ -462,7 +293,9 @@ def virtual_hand(
         grpc_host=grpc_host,
         grpc_port=grpc_port,
         install_root=install_root,
+        install_hint=_INSTALL_HINT,
+        version_gate=partial(_refuse_an_incompatible_install, install_root),
     )
 
 
-__all__ = ["InterfaceSpec", "virtual_hand"]
+__all__ = ["virtual_hand"]

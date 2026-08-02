@@ -1,6 +1,7 @@
 """Reusable ImGui widgets for building MyoGestic ``@app.ui`` functions."""
 
 from myogestic.widgets.common import panel_header
+from myogestic.widgets.control_map_editor import ControlMapEditor
 from myogestic.widgets.panels import (
     BUILTIN_FILTERS,
     AppLogo,
@@ -29,7 +30,6 @@ from myogestic.widgets.training import (
     TrialPreview,
 )
 from myogestic.widgets.vhi import (
-    ControlMapEditor,
     VhiMovementPanel,
     VhiStateCache,
     VhiStateSnapshot,

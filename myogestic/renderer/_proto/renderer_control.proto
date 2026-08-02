@@ -1,27 +1,28 @@
 syntax = "proto3";
 
-package myogestic.vhi;
+package myogestic.renderer;
 
-// Control plane between MyoGestic and the Virtual Hand Interface.
+// Control plane between MyoGestic and a renderer — a separate application that
+// displays or actuates the values MyoGestic produces.
 //
-// GetControlManifest is the whole contract: it returns every control VHI exports, by
+// GetControlManifest is the whole contract: it returns every control the renderer exports, by
 // address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range
 // and the states — so neither side hard-codes a stream layout or a movement table. A
 // client calls it unconditionally, once, before sending anything; there is no per-client
 // negotiation and nothing to declare.
 //
-// Continuous DOFs drive the predicted hand; discrete DOFs drive the control hand's
-// movements, so the two never contend for one driver. SweepControl is the
-// verification primitive: it confirms a DOF actually renders the way its name
-// claims — that a named finger curls, in the direction its name claims — without a
-// human watching the screen.
+// Continuous and discrete DOFs address separate rigs — in the Virtual Hand, the
+// predicted hand and the operator's control hand — so the two never contend for one
+// driver. SweepControl is the verification primitive: it confirms a DOF actually
+// renders the way its name claims — that a control named for a joint moves that joint,
+// in the direction its name claims — without a human watching the screen.
 //
 // Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
 // control's stream is named for the control's own address and is one channel wide, so
 // the manifest's address is also the stream name and there is nothing further to publish
 // about the transport. This service carries discrete state, low-rate continuous
 // commands, and verification.
-service VhiControl {
+service RendererControl {
   // Command one control frame. Intended for discrete DOFs and low-rate
   // continuous updates; a per-tick continuous stream belongs on LSL.
   rpc SetControl (SetControlRequest) returns (ControlAck);
@@ -35,26 +36,26 @@ service VhiControl {
   // Appearance only — see SetPresentationRequest.
   rpc SetPresentation (SetPresentationRequest) returns (ControlAck);
 
-  // What can this target be told to do? Returns every control VHI exports, with the
-  // semantics VHI itself declares for each. Call it first.
+  // What can this target be told to do? Returns every control the renderer exports, with
+  // the semantics it declares for each. Call it first.
   rpc GetControlManifest (GetControlManifestRequest) returns (ControlManifest);
 
   // --- recording session ---------------------------------------------------
-  // Not control: these coordinate VHI's participation in a recording session that
-  // something else owns. They live here because they drive the same hand through the
+  // Not control: these coordinate the renderer's participation in a recording session that
+  // something else owns. They live here because they drive the same rig through the
   // same state machine — a second service implied an independence the renderer does
   // not have, and the arbitration between them is already cross-cutting.
 
-  // Mark a recording session active or finished. While active, VHI ignores its own
-  // keyboard so the recording has a single movement source.
+  // Mark a recording session active or finished. While active, the renderer ignores its
+  // own local input so the recording has a single movement source.
   rpc SetRecordingSession (SetRecordingSessionRequest) returns (RecordingAck);
 
-  // Start cycling the control hand through a movement, so the recorded pose stream
+  // Start cycling the control rig through a movement, so the recorded pose stream
   // sweeps a continuous range instead of snapping between held states. Refused if a
   // trajectory is already running.
   rpc StartRecordingTrajectory (StartRecordingTrajectoryRequest) returns (RecordingAck);
 
-  // Stop the trajectory. Rests the hand only if one was running.
+  // Stop the trajectory. Rests the rig only if one was running.
   rpc StopRecordingTrajectory (StopRecordingTrajectoryRequest) returns (RecordingAck);
 
   // Session state, plus the movement names a trajectory may use.
@@ -131,7 +132,7 @@ message ControlManifest {
   // drive and refuses anything below it, by name, at bind. These are separately installed
   // applications, so an upgrade on one side does not upgrade the other, and without this
   // a mismatch is silent: an old renderer listening for a stream a new client no longer
-  // publishes reports no error at all — the hand simply never moves.
+  // publishes reports no error at all — the rig simply never moves.
   //
   //   1 — a manifest carrying stream_name and channel; several controls could share one
   //       wider stream. Retired.
@@ -155,7 +156,7 @@ message ControlManifest {
 //      transition. A discrete control is never numerically low-pass filtered as
 //      though it were an axis — that would interpolate through states nobody
 //      selected.
-//   3. This: purely visual interpolation in the renderer, so a hand does not snap
+//   3. This: purely visual interpolation in the renderer, so the rig does not snap
 //      jarringly between poses.
 //
 // Layer 3 must never be relied on as protection against classifier chatter. It
@@ -170,7 +171,7 @@ message SetPresentationRequest {
   float blend_speed = 2;
 }
 
-// What a control is. Mirrors the standard rather than VHI's rig: a
+// What a control is. Mirrors the standard rather than any one renderer's rig: a
 // continuous DOF is signed and normalized, +1 meaning the direction the name
 // denotes, and rest is expressible inside the declared range.
 enum Kind {
@@ -192,8 +193,8 @@ message SetControlRequest {
   // The key is the address the manifest published, exactly as for continuous — not
   // the client's own alias for the control, which the renderer has never seen and
   // could not interpret. So a renderer resolves the *control* from the key and the
-  // *state* from the value: for VHI the states are the movement names it currently
-  // offers, matched case-insensitively. Resolving on the state alone cannot tell two
+  // *state* from the value: in the Virtual Hand, for instance, the states are the movement
+  // names it currently offers, matched case-insensitively. Resolving on the state alone cannot tell two
   // discrete controls apart that happen to share a state name.
   //
   // An address this renderer does not export, and a state that control does not
@@ -213,16 +214,16 @@ message ControlAck {
 message SweepControlRequest {
   // The DOF to exercise. Must have been declared and found renderable.
   string name = 1;
-  // Seconds for the whole sweep. VHI clamps to something it can animate.
+  // Seconds for the whole sweep. The renderer clamps to something it can animate.
   float duration_s = 2;
   // true: rest -> hi -> rest -> lo -> rest, so both directions are observed.
   // false: rest -> hi -> rest only.
   bool both_directions = 3;
 }
 
-// What VHI measured on its own rig while sweeping. Read back from the skeleton
+// What the renderer measured on its own rig while sweeping. Read back from the rig
 // after rendering, not echoed from the request — otherwise it would confirm only
-// that VHI can repeat a number back.
+// that the renderer can repeat a number back.
 message SweepObservation {
   // The rig element that moved, e.g. "index bone 4".
   string element = 1;
@@ -242,7 +243,7 @@ message SweepControlReply {
   // list with anything extra is a rigging or mapping error, and an empty list
   // means the DOF was accepted but renders nothing.
   repeated SweepObservation observed = 3;
-  // Convenience: true when the sweep moved the elements VHI itself associates
+  // Convenience: true when the sweep moved the elements the renderer itself associates
   // with this DOF name, and nothing else. Clients should still inspect
   // `observed` rather than trusting a single bool.
   bool matched_expectation = 4;
@@ -254,10 +255,10 @@ message SetRecordingSessionRequest {
 }
 
 message StartRecordingTrajectoryRequest {
-  // A VHI movement name, from RecordingSessionState.available_movements.
+  // A movement name the renderer offers, from RecordingSessionState.available_movements.
   // Application-specific by design.
   string movement = 1;
-  // Movement cycles per second. Non-positive leaves VHI's current timing alone.
+  // Movement cycles per second. Non-positive leaves the renderer's current timing alone.
   float frequency_hz = 2;
   // Seconds held at full excursion in each cycle. Negative leaves it alone.
   float hold_time_s = 3;
@@ -278,15 +279,15 @@ message RecordingAck {
 message RecordingSessionState {
   // Whether a recording session is currently marked active.
   bool recording_session_active = 1;
-  // Whether a trajectory is cycling the control hand right now.
+  // Whether a trajectory is cycling the control rig right now.
   bool trajectory_running = 2;
   // The movement a running trajectory is cycling; empty when none is running.
   string trajectory_movement = 3;
-  // The control hand's animation state, e.g. "waiting" | "closing" | "holding".
+  // The control rig's animation state, e.g. "waiting" | "closing" | "holding".
   string animation_state = 4;
   // Movement names a trajectory may use. Discover, don't hard-code.
   repeated string available_movements = 5;
-  // The control hand's currently selected movement, whatever selected it — the
+  // The control rig's currently selected movement, whatever selected it — the
   // renderer's own keyboard included. Lets a UI highlight it without being the
   // thing that chose it.
   string current_movement = 6;

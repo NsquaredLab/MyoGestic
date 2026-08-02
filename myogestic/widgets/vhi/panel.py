@@ -32,7 +32,7 @@ from myogestic.widgets.vhi.palette import (
 )
 
 if TYPE_CHECKING:
-    from myogestic.vhi._recording import VhiRecordingClient
+    from myogestic.renderer._recording import RecordingClient
 
 
 class VhiMovementPanel:
@@ -41,7 +41,7 @@ class VhiMovementPanel:
     Parameters
     ----------
     client
-        The `myogestic.vhi.VhiRecordingClient` used to fetch control-hand state
+        The `myogestic.renderer.RecordingClient` used to fetch control-hand state
         (available movements, the current one, whether a recording trajectory is running).
     on_movement
         Click handler for a movement button — **required**. Wire it to a
@@ -70,7 +70,7 @@ class VhiMovementPanel:
 
     def __init__(
         self,
-        client: VhiRecordingClient,
+        client: RecordingClient,
         on_movement: Callable[[str], None],
         *,
         min_interval_s: float = 1.0,
