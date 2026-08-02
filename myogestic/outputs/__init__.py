@@ -1,13 +1,14 @@
 """Output sinks — the send-side of myogestic.
 
 An [`Outlet`][] is the counterpart to a ``Source``: push a vector out to a
-downstream consumer at a steady rate. The base class lives in
-[`myogestic.outputs.base`][]; the one shipped sink is [`LSLOutlet`][].
+downstream consumer at a steady rate. The one shipped outlet is
+[`LSLOutlet`][].
 
-An output is a *paced sender*, not a way to drive a device. Anything that
-moves is a [`myogestic.controls.Target`][], which is where a control map's
-declared ranges, clamping and rest-on-teardown live. A target may write
-*through* an output — [`myogestic.remote.RemoteTarget`][] builds one
+An outlet is a *paced sender*, not a way to drive a device. It takes an array,
+paces one wire, and has no aliases, no declared range and no rest on shutdown.
+Anything that **moves** is a [`myogestic.controls.Target`][], which is where a
+control map's declared ranges, clamping and rest-on-teardown live. A target may
+write *through* an outlet — [`myogestic.remote.RemoteTarget`][] builds one
 [`LSLOutlet`][] per control it drives.
 
 Output-side smoothing filters (applied to the prediction-output vector *before*

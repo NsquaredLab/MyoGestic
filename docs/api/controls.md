@@ -8,8 +8,8 @@ keyboard, a cursor and a prosthesis each keep their own vocabulary, and a build 
 a control needs no change on this side.
 
 New to this? [Concepts › Controls](../concepts/controls.md) explains the system this page
-documents: what a control is, why the standard is fixed, and how to choose between an
-in-process target and a remote one.
+documents: what a control is, why the standard is fixed, and whether you write the target or
+it is already written.
 
 Continuous controls are **normalized**: `+1` is the direction the control denotes, rest is
 `0`, and the range is signed when the target says the control is. Discrete controls are
