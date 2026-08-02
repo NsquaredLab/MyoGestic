@@ -1,7 +1,7 @@
 # Publish a data stream
 
 !!! warning "If something moves, you want a target"
-    An `Output` has no aliases, no declared range, no clamp and no rest on shutdown. A hand, a
+    An `Outlet` has no aliases, no declared range, no clamp and no rest on shutdown. A hand, a
     motor, a haptic or a cursor is a **[target](add-a-target.md)**.
     [`RemoteTarget`][myogestic.remote.RemoteTarget] builds one
     [`LSLOutlet`][myogestic.outputs.LSLOutlet] per control *inside* the target, which is where
@@ -10,12 +10,12 @@
 This page is for the other case: publishing numbers for something else to read.
 
 Outputs are user-owned and **not** registered with the app: construct one in `main()`, hold a
-reference, call `.push(data)` from `@pipeline.predict`. [`Output`][myogestic.outputs.Output]
+reference, call `.push(data)` from `@pipeline.predict`. [`Outlet`][myogestic.outputs.Outlet]
 runs a daemon thread at your `hz` that sends whatever was last pushed.
 
 ## Writing one
 
-1. Subclass [`Output`][myogestic.outputs.Output].
+1. Subclass [`Outlet`][myogestic.outputs.Outlet].
 2. Open your socket, file or channel **first**, then call `super().__init__(hz=...)` **last**.
    The send thread starts inside that call, so a resource opened after it can be read before
    it exists.
@@ -32,10 +32,10 @@ import socket
 
 import numpy as np
 
-from myogestic.outputs import Output
+from myogestic.outputs import Outlet
 
 
-class TelemetryOutput(Output):
+class TelemetryOutlet(Outlet):
     """Send the latest prediction vector to a dashboard as float32 datagrams."""
 
     def __init__(self, host: str, port: int, hz: float = 20.0):
@@ -55,7 +55,7 @@ class TelemetryOutput(Output):
 Use it:
 
 ```python
-telemetry = TelemetryOutput("127.0.0.1", 9000, hz=20)
+telemetry = TelemetryOutlet("127.0.0.1", 9000, hz=20)
 
 
 @pipeline.predict

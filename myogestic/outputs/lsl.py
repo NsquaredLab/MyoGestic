@@ -7,10 +7,10 @@ from collections.abc import Sequence
 import numpy as np
 from mne_lsl.lsl import StreamInfo, StreamOutlet
 
-from myogestic.outputs.base import Output
+from myogestic.outputs.outlet import Outlet
 
 
-class LSLOutlet(Output):
+class LSLOutlet(Outlet):
     """Publish a 1-D vector to a Lab Streaming Layer outlet.
 
     The dual of [`LSLSource`][myogestic.sources.LSLSource] - call ``.push(vec)``
@@ -85,8 +85,7 @@ class LSLOutlet(Output):
         self._n_channels = int(n_channels)
         #: What this stream is published as. Readable so a log line, a test double or a
         #: debugger can say which stream an outlet is. `RemoteTarget` keys its outlets by
-        #: address rather than reading this, and `ControlSink` does not require it, so a
-        #: substitute need not provide one.
+        #: address rather than reading this, so a substitute need not provide one.
         self.name = name
         super().__init__(hz=hz)
 

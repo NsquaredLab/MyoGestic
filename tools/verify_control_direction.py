@@ -50,7 +50,7 @@ what the client had declared is now checks 2-4, which vary who writes the frame.
 Two ordering rules, both learned the hard way and both properties of the target rather
 than of this tool:
 
-- **The sweep runs before any outlet exists.** `Output` repeats its last pushed value at
+- **The sweep runs before any outlet exists.** `Outlet` repeats its last pushed value at
   `hz`, and the target applies whatever arrives on a DOF's stream — so a still-streaming
   outlet beats `SweepControl`'s own commands and the sweep reports the stream's value
   instead of its own. Held at -0.5, an index sweep reports `+42.5°` and looks like a

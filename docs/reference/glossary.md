@@ -13,9 +13,18 @@ Three meanings, kept separate by convention:
 
 A Protocol with `connect()` / `read()` / `disconnect()`. Wraps a device, file, or transport behind a uniform interface. See [Add a custom source](../how-to/add-a-source.md).
 
-### Output
+### Target
 
-A class with `.push(data)` and a daemon thread that sends the latest pushed value to its destination at `hz`. User-owned - not registered with the app. A paced sender, not a way to drive a device: anything that moves is a **Target**, and an output is what a target may write *through*. See [Publish a data stream](../how-to/add-an-output.md).
+A Protocol with `bind()` / `send()` / `stop()`, plus a `capabilities()` list of what it can
+drive. **Anything that moves is a target**: a prosthesis on a serial port, a motor controller,
+a cursor, the Virtual Hand. It receives *named* values from a control map, can refuse a
+configuration at `bind`, and gets range, clamping, dead zone, debounce and rest-on-teardown
+from the [bus](#dof). The transport is yours - `send` does whatever your device needs. See
+[Drive your own device](../how-to/add-a-target.md).
+
+### Outlet { #output }
+
+A class with `.push(data)` and a daemon thread that sends the latest pushed value to its destination at `hz`. It takes an array, paces one wire, and has no aliases, no declared range and no rest on shutdown. User-owned - not registered with the app. Anything that *moves* is a [Target](#target) instead; an outlet is what a target may write *through*, and `RemoteTarget` owns one `LSLOutlet` per address it drives. See [Publish a data stream](../how-to/add-an-output.md).
 
 ### Stream
 
@@ -51,6 +60,6 @@ The three daemon-thread categories that run alongside the GUI:
 
 - **Acquisition** (one per Stream): `Source.read` → ring buffer → display snapshot → optional Zarr append.
 - **Predict** (one, only when `Pipeline` is attached): wakes every `1/predict_hz`, runs `extract` → `predict`, writes to `pipeline.predictions`.
-- **Output** (one per Output): drains the latest pushed value to its destination at the output's own `hz`.
+- **Output** (one per `Outlet`): drains the latest pushed value to its destination at the output's own `hz`.
 
 The main thread stays on the GUI. See [Threading](../concepts/threading.md).

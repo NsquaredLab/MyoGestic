@@ -1,4 +1,4 @@
-"""The [`Output`][] base class — the send-side counterpart to ``Source``.
+"""The [`Outlet`][] base class — the send-side counterpart to ``Source``.
 
 [`LSLOutlet`][myogestic.outputs.LSLOutlet] subclasses this; so does any sink you
 write for a transport of your own.
@@ -27,7 +27,7 @@ log = logging.getLogger("myogestic.outputs")
 _IS_BROWSER = sys.platform == "emscripten"
 
 
-class Output:
+class Outlet:
     """Base class for "send the latest pushed vector at ``hz``" outputs.
 
     Subclass to define a new transport: override `_send` with the
@@ -35,7 +35,7 @@ class Output:
     RPC, ...). The base class handles everything else:
 
     - A daemon **output thread** is started in ``__init__`` and runs
-      for the lifetime of the Output. Each tick it reads the latest
+      for the lifetime of the outlet. Each tick it reads the latest
       pushed vector and calls `_send`.
     - [`push`][] is the caller-facing API: write the latest value to
       an atomic slot (CPython's GIL guarantees atomic reference
@@ -71,10 +71,10 @@ class Output:
 
     Examples
     --------
-    >>> from myogestic.outputs import Output
+    >>> from myogestic.outputs import Outlet
     >>> import socket, numpy as np
     >>>
-    >>> class MyOutput(Output):
+    >>> class MyOutlet(Outlet):
     ...     def __init__(self, addr, hz=50):
     ...         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     ...         self._addr = addr

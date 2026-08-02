@@ -6,11 +6,11 @@ import time
 import numpy as np
 from mne_lsl.lsl import StreamInlet, resolve_streams
 
-from myogestic.outputs import Output
+from myogestic.outputs import Outlet
 from myogestic.outputs.lsl import LSLOutlet
 
 
-class RecordingOutput(Output):
+class RecordingOutlet(Outlet):
     """Test double that records every _send call."""
 
     def __init__(self, hz: float = 50):
@@ -25,7 +25,7 @@ class RecordingOutput(Output):
 
 def test_output_send_loop_calls_send():
     """push() stores data, send thread picks it up and calls _send()."""
-    out = RecordingOutput(hz=100)
+    out = RecordingOutlet(hz=100)
     assert out._latest is None
     assert len(out.sent) == 0
 
@@ -42,7 +42,7 @@ def test_output_send_loop_calls_send():
 
 def test_output_send_loop_runs_at_hz():
     """Verify the send thread fires roughly at the requested rate."""
-    out = RecordingOutput(hz=50)
+    out = RecordingOutlet(hz=50)
     out.push(np.array([1.0]))
     time.sleep(0.2)  # 50 Hz => ~10 calls in 200ms
 
@@ -55,7 +55,7 @@ def test_output_send_loop_runs_at_hz():
 
 def test_output_push_overwrites():
     """Later push() replaces earlier data atomically."""
-    out = RecordingOutput(hz=20)
+    out = RecordingOutlet(hz=20)
     out.push(np.array([1.0]))
     time.sleep(0.15)
     out.push(np.array([99.0]))
@@ -70,7 +70,7 @@ def test_output_push_overwrites():
 
 def test_output_no_send_without_push():
     """If nothing is pushed, _send is never called."""
-    out = RecordingOutput(hz=100)
+    out = RecordingOutlet(hz=100)
     time.sleep(0.1)
     assert len(out.sent) == 0
     out.stop()
@@ -79,7 +79,7 @@ def test_output_no_send_without_push():
 def test_output_send_exception_does_not_crash():
     """An exception in _send must not kill the send thread."""
 
-    class FailOnceOutput(Output):
+    class FailOnceOutlet(Outlet):
         def __init__(self):
             self.call_count = 0
             self._survived = threading.Event()
@@ -91,7 +91,7 @@ def test_output_send_exception_does_not_crash():
                 raise ValueError("boom")
             self._survived.set()
 
-    out = FailOnceOutput()
+    out = FailOnceOutlet()
     out.push(np.array([1.0]))
     assert out._survived.wait(timeout=2.0), "Send thread died after exception"
     assert out.call_count >= 2
@@ -104,7 +104,7 @@ def test_output_logs_first_error_per_kind(caplog):
     disconnect does not flood the log."""
     import logging
 
-    class AlwaysFails(Output):
+    class AlwaysFails(Outlet):
         def __init__(self):
             self.call_count = 0
             super().__init__(hz=200)
@@ -162,7 +162,7 @@ def test_lsl_outlet_roundtrip():
 
 def test_flush_sends_immediately():
     """The paced loop would not have sent this for another 100 seconds."""
-    out = RecordingOutput(hz=0.01)
+    out = RecordingOutlet(hz=0.01)
     out.push(np.array([1.0, 2.0]))
     before = len(out.sent)
     out.flush()
@@ -171,7 +171,7 @@ def test_flush_sends_immediately():
 
 
 def test_flush_before_any_push_does_nothing():
-    out = RecordingOutput(hz=0.01)
+    out = RecordingOutlet(hz=0.01)
     out.flush()
     assert out.sent == []
     out.stop()
@@ -179,7 +179,7 @@ def test_flush_before_any_push_does_nothing():
 
 def test_flush_after_stop_still_sends():
     """Teardown order must not decide whether a neutral frame reaches the wire."""
-    out = RecordingOutput(hz=0.01)
+    out = RecordingOutlet(hz=0.01)
     out.push(np.array([0.0, 0.0]))
     before = len(out.sent)
     out.stop()
@@ -190,7 +190,7 @@ def test_flush_after_stop_still_sends():
 def test_flush_survives_a_dead_transport():
     """A flush runs from a cleanup hook, where a raise would mask the real exit."""
 
-    class Broken(Output):
+    class Broken(Outlet):
         def _send(self, data: np.ndarray) -> None:
             raise OSError("transport closed")
 

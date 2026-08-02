@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import suppress
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -37,34 +37,9 @@ if TYPE_CHECKING:
 
     from myogestic._controls_core import ControlSet
     from myogestic._controls_map import Capability
+    from myogestic.outputs import Outlet
 
 log = logging.getLogger("myogestic.remote.target")
-
-
-class ControlSink(Protocol):
-    """Where one control's values go — the slice of `myogestic.outputs.Output` used here.
-
-    `myogestic.outputs.LSLOutlet` satisfies it, and so does a recorder or a test double.
-
-    One of these carries **one control**, so a `RemoteTarget` holds one per address it
-    drives. They are not supplied directly: the target builds them, one per address, by
-    calling ``interface.stream_outlet(address, n_channels=1)`` once negotiation has said
-    which addresses those are. Substituting a recorder or a double therefore means
-    supplying an ``interface=`` whose ``stream_outlet`` returns one of these — the same
-    seam, moved up one level so that it can be called once per address.
-    """
-
-    def push(self, data: np.ndarray) -> None:
-        """Queue a one-channel sample for sending."""
-        ...
-
-    def flush(self) -> None:
-        """Send the queued sample now rather than on the next tick."""
-        ...
-
-    def stop(self) -> None:
-        """Take this stream off the network and release it."""
-        ...
 
 
 def _sample(value: float) -> np.ndarray:
@@ -72,7 +47,7 @@ def _sample(value: float) -> np.ndarray:
     return np.array([value], dtype=np.float32)
 
 
-def _retire(outlet: ControlSink, rest: float) -> None:
+def _retire(outlet: Outlet, rest: float) -> None:
     """Rest a stream, make sure that lands, and take it off the network.
 
     Every path that gives up on an outlet comes through here. Dropping the reference is
@@ -174,7 +149,7 @@ class RemoteTarget:
         self._discrete: tuple[tuple[str, str], ...] = ()
         #: One outlet per address driven, keyed by address. Owned outright: replaced only
         #: through `_publish`, which retires what it drops.
-        self._outlets: dict[str, ControlSink] = {}
+        self._outlets: dict[str, Outlet] = {}
         #: Negotiated routes: (alias, weight, lo, hi, address). The address is the key
         #: into `_outlets`; the alias cannot be, since a fan-out sends one alias to
         #: several addresses.
@@ -583,4 +558,4 @@ class RemoteTarget:
             raise failures[0]
 
 
-__all__ = ["ControlSink", "RemoteTarget"]
+__all__ = ["RemoteTarget"]

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 class Target(Protocol):
     """Drive some control DOFs. One protocol for every application.
 
-    A target is **user-owned**, exactly like `myogestic.outputs.Output`: construct
+    A target is **user-owned**, exactly like `myogestic.outputs.Outlet`: construct
     it, hand it to a `ControlBus`, and register teardown with
     ``app.cleanup_hooks``. The framework does not track it.
 

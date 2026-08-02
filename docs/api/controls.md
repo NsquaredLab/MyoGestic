@@ -190,8 +190,6 @@ these methods *is* a target. `myogestic.remote.RemoteTarget` and
 
 ::: myogestic.remote.RemoteTarget
 
-::: myogestic.remote.ControlSink
-
 ### Negotiating with the target
 
 Hand `RemoteTarget` a control client and it **asks** what the target drives at bind time,
