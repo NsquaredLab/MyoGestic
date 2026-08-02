@@ -80,7 +80,7 @@ by publishing to its stream rather than by asking permission.
 
 VHI moved from two nine-channel positional streams (`MyoGestic_Output`,
 `MyoGestic_ControlPose`) to one stream per DOF, and that is now the contract rather than
-one renderer's choice. `ControlCapability.stream_name` (field 10) and `channel` (field 11)
+one renderer's choice. The proto's `stream_name` (field 10) and `channel` (field 11)
 are **gone** — both numbers and both names are reserved in the proto — because with the
 address naming the stream they could only repeat it. A renderer serving them is a
 vocabulary-1 renderer and is refused by version.

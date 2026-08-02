@@ -5,7 +5,8 @@ visualisation that ships alongside MyoGestic. It can be driven on two
 planes at once:
 
 * **LSL data plane** - high-rate continuous values. Continuous DOFs stream
-  every tick; VHI renders them on the *predicted hand*. VHI publishes one
+  every tick; `vhi.prediction.*` renders on the *predicted hand* and
+  `vhi.control.pose.*` on the *operator's* — the address picks the hand. VHI publishes one
   stream per DOF, named after the address and one channel wide, and applies
   each the moment its sample arrives.
 * **gRPC control plane** - the manifest, discrete state, and verification.
