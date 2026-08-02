@@ -1,6 +1,6 @@
-"""The v2-only gate: MyoGestic 2.x cannot drive a pre-2.0 renderer, so it says so early.
+"""The v2-only gate: MyoGestic 2.x cannot drive a pre-2.0 target, so it says so early.
 
-There is no bridge any more. A `RendererTarget` asks the renderer which controls it exports
+There is no bridge any more. A `RemoteTarget` asks the target which controls it exports
 and refuses to guess, so a 1.x build is not degraded — it does not work. The failure that
 matters is therefore not "it broke", it is *where* it breaks: installing or launching an
 old binary succeeds, and the refusal then surfaces at bind time, three layers from the
@@ -14,7 +14,7 @@ from functools import partial
 import pytest
 import typer
 
-from myogestic.renderer import InterfaceSpec
+from myogestic.remote import InterfaceSpec
 from myogestic.tools import install_vhi
 from myogestic.vhi import interfaces
 

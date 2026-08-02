@@ -44,7 +44,7 @@
 
 ::: myogestic.vhi.virtual_hand
 
-::: myogestic.renderer.InterfaceSpec
+::: myogestic.remote.InterfaceSpec
 
 ## Tools
 

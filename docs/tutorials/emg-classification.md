@@ -46,7 +46,7 @@ ctrl_outlet = control_outlet()
 --8<-- "examples/synthetic/emg_classification.py:poses"
 ```
 
-The example declares its own outputs in `examples/controls/classification.toml`. Both entries carry a `threshold_fraction`, which says their input is a **classifier probability** rather than a position: below the fraction the value becomes `0`, at or above it `1`. There are no pose vectors here — `fist` fans out to all five digits and `thumb_spread` abducts the thumb, so a whole-hand pose is two numbers and the target decides what each one renders.
+The example declares its own outputs in `examples/controls/classification.toml`. Both entries carry a `threshold_fraction`, which says their input is a **classifier probability** rather than a position: below the fraction the value becomes `0`, at or above it `1`. There are no pose vectors here — `fist` fans out to all five digits and `thumb_spread` abducts the thumb, so a whole-hand pose is two numbers and the target decides what each one drives.
 
 ### 2. The output filter
 

@@ -162,7 +162,7 @@ VHI isn't installed at the location `virtual_hand()` looks at - by default `<rep
 
 ### VHI hand looks twitchy
 
-You're pushing raw model output. VHI rendering at 32-50 Hz amplifies any per-tick jitter.
+You're pushing raw model output. VHI moving at 32-50 Hz amplifies any per-tick jitter.
 
 !!! tip "Fix"
     Pair every VHI integration with a [`PostProcessor`][myogestic.widgets.PostProcessor] block (1€ filter is the default and usually right). Pass `timestamp=time.monotonic()` into the filter so it computes real elapsed dt.

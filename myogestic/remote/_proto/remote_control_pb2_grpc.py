@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from . import renderer_control_pb2 as renderer__control__pb2
+from . import remote_control_pb2 as remote__control__pb2
 
 GRPC_GENERATED_VERSION = '1.80.0'
 GRPC_VERSION = grpc.__version__
@@ -18,19 +18,19 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in renderer_control_pb2_grpc.py depends on'
+        + ' but the generated code in remote_control_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class RendererControlStub(object):
-    """Control plane between MyoGestic and a renderer — a separate application that
+class RemoteControlStub(object):
+    """Control plane between MyoGestic and a target — a separate application that
     displays or actuates the values MyoGestic produces.
 
-    GetControlManifest is the whole contract: it returns every control the renderer exports, by
-    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range
+    GetControlManifest is the whole contract: it returns every control the target exports, by
+    address (e.g. "vhi.prediction.index"), with what it can drive — the kind, the range
     and the states — so neither side hard-codes a stream layout or a movement table. A
     client calls it unconditionally, once, before sending anything; there is no per-client
     negotiation and nothing to declare.
@@ -38,7 +38,7 @@ class RendererControlStub(object):
     Continuous and discrete DOFs address separate rigs — in the Virtual Hand, the
     predicted hand and the operator's control hand — so the two never contend for one
     driver. SweepControl is the verification primitive: it confirms a DOF actually
-    renders the way its name claims — that a control named for a joint moves that joint,
+    moves the way its name claims — that a control named for a joint moves that joint,
     in the direction its name claims — without a human watching the screen.
 
     Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
@@ -55,53 +55,53 @@ class RendererControlStub(object):
             channel: A grpc.Channel.
         """
         self.SetControl = channel.unary_unary(
-                '/myogestic.renderer.RendererControl/SetControl',
-                request_serializer=renderer__control__pb2.SetControlRequest.SerializeToString,
-                response_deserializer=renderer__control__pb2.ControlAck.FromString,
+                '/myogestic.remote.RemoteControl/SetControl',
+                request_serializer=remote__control__pb2.SetControlRequest.SerializeToString,
+                response_deserializer=remote__control__pb2.ControlAck.FromString,
                 _registered_method=True)
         self.SweepControl = channel.unary_unary(
-                '/myogestic.renderer.RendererControl/SweepControl',
-                request_serializer=renderer__control__pb2.SweepControlRequest.SerializeToString,
-                response_deserializer=renderer__control__pb2.SweepControlReply.FromString,
+                '/myogestic.remote.RemoteControl/SweepControl',
+                request_serializer=remote__control__pb2.SweepControlRequest.SerializeToString,
+                response_deserializer=remote__control__pb2.SweepControlReply.FromString,
                 _registered_method=True)
         self.SetPresentation = channel.unary_unary(
-                '/myogestic.renderer.RendererControl/SetPresentation',
-                request_serializer=renderer__control__pb2.SetPresentationRequest.SerializeToString,
-                response_deserializer=renderer__control__pb2.ControlAck.FromString,
+                '/myogestic.remote.RemoteControl/SetPresentation',
+                request_serializer=remote__control__pb2.SetPresentationRequest.SerializeToString,
+                response_deserializer=remote__control__pb2.ControlAck.FromString,
                 _registered_method=True)
         self.GetControlManifest = channel.unary_unary(
-                '/myogestic.renderer.RendererControl/GetControlManifest',
-                request_serializer=renderer__control__pb2.GetControlManifestRequest.SerializeToString,
-                response_deserializer=renderer__control__pb2.ControlManifest.FromString,
+                '/myogestic.remote.RemoteControl/GetControlManifest',
+                request_serializer=remote__control__pb2.GetControlManifestRequest.SerializeToString,
+                response_deserializer=remote__control__pb2.ControlManifest.FromString,
                 _registered_method=True)
         self.SetRecordingSession = channel.unary_unary(
-                '/myogestic.renderer.RendererControl/SetRecordingSession',
-                request_serializer=renderer__control__pb2.SetRecordingSessionRequest.SerializeToString,
-                response_deserializer=renderer__control__pb2.RecordingAck.FromString,
+                '/myogestic.remote.RemoteControl/SetRecordingSession',
+                request_serializer=remote__control__pb2.SetRecordingSessionRequest.SerializeToString,
+                response_deserializer=remote__control__pb2.RecordingAck.FromString,
                 _registered_method=True)
         self.StartRecordingTrajectory = channel.unary_unary(
-                '/myogestic.renderer.RendererControl/StartRecordingTrajectory',
-                request_serializer=renderer__control__pb2.StartRecordingTrajectoryRequest.SerializeToString,
-                response_deserializer=renderer__control__pb2.RecordingAck.FromString,
+                '/myogestic.remote.RemoteControl/StartRecordingTrajectory',
+                request_serializer=remote__control__pb2.StartRecordingTrajectoryRequest.SerializeToString,
+                response_deserializer=remote__control__pb2.RecordingAck.FromString,
                 _registered_method=True)
         self.StopRecordingTrajectory = channel.unary_unary(
-                '/myogestic.renderer.RendererControl/StopRecordingTrajectory',
-                request_serializer=renderer__control__pb2.StopRecordingTrajectoryRequest.SerializeToString,
-                response_deserializer=renderer__control__pb2.RecordingAck.FromString,
+                '/myogestic.remote.RemoteControl/StopRecordingTrajectory',
+                request_serializer=remote__control__pb2.StopRecordingTrajectoryRequest.SerializeToString,
+                response_deserializer=remote__control__pb2.RecordingAck.FromString,
                 _registered_method=True)
         self.GetRecordingSessionState = channel.unary_unary(
-                '/myogestic.renderer.RendererControl/GetRecordingSessionState',
-                request_serializer=renderer__control__pb2.GetRecordingSessionStateRequest.SerializeToString,
-                response_deserializer=renderer__control__pb2.RecordingSessionState.FromString,
+                '/myogestic.remote.RemoteControl/GetRecordingSessionState',
+                request_serializer=remote__control__pb2.GetRecordingSessionStateRequest.SerializeToString,
+                response_deserializer=remote__control__pb2.RecordingSessionState.FromString,
                 _registered_method=True)
 
 
-class RendererControlServicer(object):
-    """Control plane between MyoGestic and a renderer — a separate application that
+class RemoteControlServicer(object):
+    """Control plane between MyoGestic and a target — a separate application that
     displays or actuates the values MyoGestic produces.
 
-    GetControlManifest is the whole contract: it returns every control the renderer exports, by
-    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range
+    GetControlManifest is the whole contract: it returns every control the target exports, by
+    address (e.g. "vhi.prediction.index"), with what it can drive — the kind, the range
     and the states — so neither side hard-codes a stream layout or a movement table. A
     client calls it unconditionally, once, before sending anything; there is no per-client
     negotiation and nothing to declare.
@@ -109,7 +109,7 @@ class RendererControlServicer(object):
     Continuous and discrete DOFs address separate rigs — in the Virtual Hand, the
     predicted hand and the operator's control hand — so the two never contend for one
     driver. SweepControl is the verification primitive: it confirms a DOF actually
-    renders the way its name claims — that a control named for a joint moves that joint,
+    moves the way its name claims — that a control named for a joint moves that joint,
     in the direction its name claims — without a human watching the screen.
 
     Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
@@ -129,7 +129,7 @@ class RendererControlServicer(object):
 
     def SweepControl(self, request, context):
         """Drive one DOF across its declared range and report what actually moved.
-        The verification primitive: it answers "does this name render as its name
+        The verification primitive: it answers "does this control move as its name
         claims, in the direction its name claims" without a human watching.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -137,7 +137,7 @@ class RendererControlServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def SetPresentation(self, request, context):
-        """Configure how the renderer *presents* transitions between commanded values.
+        """Configure how the target *presents* transitions between commanded values.
         Appearance only — see SetPresentationRequest.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -145,7 +145,7 @@ class RendererControlServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def GetControlManifest(self, request, context):
-        """What can this target be told to do? Returns every control the renderer exports, with
+        """What can this target be told to do? Returns every control the target exports, with
         the semantics it declares for each. Call it first.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -154,12 +154,12 @@ class RendererControlServicer(object):
 
     def SetRecordingSession(self, request, context):
         """--- recording session ---------------------------------------------------
-        Not control: these coordinate the renderer's participation in a recording session that
+        Not control: these coordinate the target's participation in a recording session that
         something else owns. They live here because they drive the same rig through the
-        same state machine — a second service implied an independence the renderer does
+        same state machine — a second service implied an independence the target does
         not have, and the arbitration between them is already cross-cutting.
 
-        Mark a recording session active or finished. While active, the renderer ignores its
+        Mark a recording session active or finished. While active, the target ignores its
         own local input so the recording has a single movement source.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -190,62 +190,62 @@ class RendererControlServicer(object):
         raise NotImplementedError('Method not implemented!')
 
 
-def add_RendererControlServicer_to_server(servicer, server):
+def add_RemoteControlServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'SetControl': grpc.unary_unary_rpc_method_handler(
                     servicer.SetControl,
-                    request_deserializer=renderer__control__pb2.SetControlRequest.FromString,
-                    response_serializer=renderer__control__pb2.ControlAck.SerializeToString,
+                    request_deserializer=remote__control__pb2.SetControlRequest.FromString,
+                    response_serializer=remote__control__pb2.ControlAck.SerializeToString,
             ),
             'SweepControl': grpc.unary_unary_rpc_method_handler(
                     servicer.SweepControl,
-                    request_deserializer=renderer__control__pb2.SweepControlRequest.FromString,
-                    response_serializer=renderer__control__pb2.SweepControlReply.SerializeToString,
+                    request_deserializer=remote__control__pb2.SweepControlRequest.FromString,
+                    response_serializer=remote__control__pb2.SweepControlReply.SerializeToString,
             ),
             'SetPresentation': grpc.unary_unary_rpc_method_handler(
                     servicer.SetPresentation,
-                    request_deserializer=renderer__control__pb2.SetPresentationRequest.FromString,
-                    response_serializer=renderer__control__pb2.ControlAck.SerializeToString,
+                    request_deserializer=remote__control__pb2.SetPresentationRequest.FromString,
+                    response_serializer=remote__control__pb2.ControlAck.SerializeToString,
             ),
             'GetControlManifest': grpc.unary_unary_rpc_method_handler(
                     servicer.GetControlManifest,
-                    request_deserializer=renderer__control__pb2.GetControlManifestRequest.FromString,
-                    response_serializer=renderer__control__pb2.ControlManifest.SerializeToString,
+                    request_deserializer=remote__control__pb2.GetControlManifestRequest.FromString,
+                    response_serializer=remote__control__pb2.ControlManifest.SerializeToString,
             ),
             'SetRecordingSession': grpc.unary_unary_rpc_method_handler(
                     servicer.SetRecordingSession,
-                    request_deserializer=renderer__control__pb2.SetRecordingSessionRequest.FromString,
-                    response_serializer=renderer__control__pb2.RecordingAck.SerializeToString,
+                    request_deserializer=remote__control__pb2.SetRecordingSessionRequest.FromString,
+                    response_serializer=remote__control__pb2.RecordingAck.SerializeToString,
             ),
             'StartRecordingTrajectory': grpc.unary_unary_rpc_method_handler(
                     servicer.StartRecordingTrajectory,
-                    request_deserializer=renderer__control__pb2.StartRecordingTrajectoryRequest.FromString,
-                    response_serializer=renderer__control__pb2.RecordingAck.SerializeToString,
+                    request_deserializer=remote__control__pb2.StartRecordingTrajectoryRequest.FromString,
+                    response_serializer=remote__control__pb2.RecordingAck.SerializeToString,
             ),
             'StopRecordingTrajectory': grpc.unary_unary_rpc_method_handler(
                     servicer.StopRecordingTrajectory,
-                    request_deserializer=renderer__control__pb2.StopRecordingTrajectoryRequest.FromString,
-                    response_serializer=renderer__control__pb2.RecordingAck.SerializeToString,
+                    request_deserializer=remote__control__pb2.StopRecordingTrajectoryRequest.FromString,
+                    response_serializer=remote__control__pb2.RecordingAck.SerializeToString,
             ),
             'GetRecordingSessionState': grpc.unary_unary_rpc_method_handler(
                     servicer.GetRecordingSessionState,
-                    request_deserializer=renderer__control__pb2.GetRecordingSessionStateRequest.FromString,
-                    response_serializer=renderer__control__pb2.RecordingSessionState.SerializeToString,
+                    request_deserializer=remote__control__pb2.GetRecordingSessionStateRequest.FromString,
+                    response_serializer=remote__control__pb2.RecordingSessionState.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'myogestic.renderer.RendererControl', rpc_method_handlers)
+            'myogestic.remote.RemoteControl', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('myogestic.renderer.RendererControl', rpc_method_handlers)
+    server.add_registered_method_handlers('myogestic.remote.RemoteControl', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class RendererControl(object):
-    """Control plane between MyoGestic and a renderer — a separate application that
+class RemoteControl(object):
+    """Control plane between MyoGestic and a target — a separate application that
     displays or actuates the values MyoGestic produces.
 
-    GetControlManifest is the whole contract: it returns every control the renderer exports, by
-    address (e.g. "vhi.prediction.index"), with what it can render — the kind, the range
+    GetControlManifest is the whole contract: it returns every control the target exports, by
+    address (e.g. "vhi.prediction.index"), with what it can drive — the kind, the range
     and the states — so neither side hard-codes a stream layout or a movement table. A
     client calls it unconditionally, once, before sending anything; there is no per-client
     negotiation and nothing to declare.
@@ -253,7 +253,7 @@ class RendererControl(object):
     Continuous and discrete DOFs address separate rigs — in the Virtual Hand, the
     predicted hand and the operator's control hand — so the two never contend for one
     driver. SweepControl is the verification primitive: it confirms a DOF actually
-    renders the way its name claims — that a control named for a joint moves that joint,
+    moves the way its name claims — that a control named for a joint moves that joint,
     in the direction its name claims — without a human watching the screen.
 
     Continuous time-series still belongs on LSL, **one stream per DOF**: a streamed
@@ -277,9 +277,9 @@ class RendererControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.renderer.RendererControl/SetControl',
-            renderer__control__pb2.SetControlRequest.SerializeToString,
-            renderer__control__pb2.ControlAck.FromString,
+            '/myogestic.remote.RemoteControl/SetControl',
+            remote__control__pb2.SetControlRequest.SerializeToString,
+            remote__control__pb2.ControlAck.FromString,
             options,
             channel_credentials,
             insecure,
@@ -304,9 +304,9 @@ class RendererControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.renderer.RendererControl/SweepControl',
-            renderer__control__pb2.SweepControlRequest.SerializeToString,
-            renderer__control__pb2.SweepControlReply.FromString,
+            '/myogestic.remote.RemoteControl/SweepControl',
+            remote__control__pb2.SweepControlRequest.SerializeToString,
+            remote__control__pb2.SweepControlReply.FromString,
             options,
             channel_credentials,
             insecure,
@@ -331,9 +331,9 @@ class RendererControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.renderer.RendererControl/SetPresentation',
-            renderer__control__pb2.SetPresentationRequest.SerializeToString,
-            renderer__control__pb2.ControlAck.FromString,
+            '/myogestic.remote.RemoteControl/SetPresentation',
+            remote__control__pb2.SetPresentationRequest.SerializeToString,
+            remote__control__pb2.ControlAck.FromString,
             options,
             channel_credentials,
             insecure,
@@ -358,9 +358,9 @@ class RendererControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.renderer.RendererControl/GetControlManifest',
-            renderer__control__pb2.GetControlManifestRequest.SerializeToString,
-            renderer__control__pb2.ControlManifest.FromString,
+            '/myogestic.remote.RemoteControl/GetControlManifest',
+            remote__control__pb2.GetControlManifestRequest.SerializeToString,
+            remote__control__pb2.ControlManifest.FromString,
             options,
             channel_credentials,
             insecure,
@@ -385,9 +385,9 @@ class RendererControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.renderer.RendererControl/SetRecordingSession',
-            renderer__control__pb2.SetRecordingSessionRequest.SerializeToString,
-            renderer__control__pb2.RecordingAck.FromString,
+            '/myogestic.remote.RemoteControl/SetRecordingSession',
+            remote__control__pb2.SetRecordingSessionRequest.SerializeToString,
+            remote__control__pb2.RecordingAck.FromString,
             options,
             channel_credentials,
             insecure,
@@ -412,9 +412,9 @@ class RendererControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.renderer.RendererControl/StartRecordingTrajectory',
-            renderer__control__pb2.StartRecordingTrajectoryRequest.SerializeToString,
-            renderer__control__pb2.RecordingAck.FromString,
+            '/myogestic.remote.RemoteControl/StartRecordingTrajectory',
+            remote__control__pb2.StartRecordingTrajectoryRequest.SerializeToString,
+            remote__control__pb2.RecordingAck.FromString,
             options,
             channel_credentials,
             insecure,
@@ -439,9 +439,9 @@ class RendererControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.renderer.RendererControl/StopRecordingTrajectory',
-            renderer__control__pb2.StopRecordingTrajectoryRequest.SerializeToString,
-            renderer__control__pb2.RecordingAck.FromString,
+            '/myogestic.remote.RemoteControl/StopRecordingTrajectory',
+            remote__control__pb2.StopRecordingTrajectoryRequest.SerializeToString,
+            remote__control__pb2.RecordingAck.FromString,
             options,
             channel_credentials,
             insecure,
@@ -466,9 +466,9 @@ class RendererControl(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/myogestic.renderer.RendererControl/GetRecordingSessionState',
-            renderer__control__pb2.GetRecordingSessionStateRequest.SerializeToString,
-            renderer__control__pb2.RecordingSessionState.FromString,
+            '/myogestic.remote.RemoteControl/GetRecordingSessionState',
+            remote__control__pb2.GetRecordingSessionStateRequest.SerializeToString,
+            remote__control__pb2.RecordingSessionState.FromString,
             options,
             channel_credentials,
             insecure,

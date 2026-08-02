@@ -1,6 +1,6 @@
 """Does the UI still fit when the window is narrow? Measured, not eyeballed.
 
-ImGui's layout engine needs no window and no renderer — a context, a display size and a
+ImGui's layout engine needs no window and no target — a context, a display size and a
 frame are enough — so the real `ui()` methods can be run at a chosen width and asked what
 they actually did. That is what these tests do.
 
@@ -66,7 +66,7 @@ def _context():
     io.delta_time = 1 / 60
     io.fonts.add_font_default()
     # Without this ImGui asserts that the font atlas was never uploaded — true, since
-    # there is no renderer, and irrelevant to layout.
+    # there is no target, and irrelevant to layout.
     io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
     yield io
     imgui.destroy_context()
@@ -701,7 +701,7 @@ class TestThePlaygroundPicksALayoutForTheWidth:
         assert "set_keyboard_focus_here" in source, "the field must take the caret"
 
     def test_a_typed_value_is_clamped_to_the_range_the_slider_offers(self):
-        """A field that accepted 5.0 would show a number the hand will never render.
+        """A field that accepted 5.0 would show a number the hand will never reach.
 
         Pinned against the slider's own bounds rather than as literals: if the slider
         domain ever changes, a clamp left behind at the old one is exactly the mismatch
@@ -1019,7 +1019,7 @@ def test_opening_a_file_that_is_gone_does_not_crash(tmp_path):
 
 
 class TestTheStudioFollowsWhatTheTargetsOffer:
-    """Launching a renderer has to reach the sliders, not just the editor's picker."""
+    """Launching a target has to reach the sliders, not just the editor's picker."""
 
     @pytest.fixture
     def studio(self):
@@ -1053,11 +1053,11 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
             Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0),
         )
         studio._rebuild_if_the_manifest_changed()
-        assert len(calls) == 2, "a renderer that came up did not reach the sliders"
+        assert len(calls) == 2, "a target that came up did not reach the sliders"
 
         studio.documents[0]._capabilities = ()
         studio._rebuild_if_the_manifest_changed()
-        assert len(calls) == 3, "a renderer that went away left its sliders behind"
+        assert len(calls) == 3, "a target that went away left its sliders behind"
 
     def test_a_connect_that_returns_early_clears_the_old_waiting_list(self, studio):
         """`waiting` is drawn unconditionally, so a stale one belongs to the wrong map.
@@ -1110,7 +1110,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
         """`bus.stop()` lifts every key, which is right on the way out and wrong here.
 
         Rebuilding used to follow a click only, so disarming was something the user had
-        just asked for. It now also follows a renderer turning up, and an arm switch that
+        just asked for. It now also follows a target turning up, and an arm switch that
         flicks itself off mid-session — silently, since nothing here draws a log — is worse
         than one that stays on. `_switch_to` and `_close_document` still disarm on purpose:
         they do it *before* calling `_connect`, so the arm they see is already False.
@@ -1154,7 +1154,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
 
         fake_keys = _Keys()
         monkeypatch.setattr(studio, "keys", fake_keys)
-        monkeypatch.setattr(studio, "RendererTarget", lambda **kw: _Target())
+        monkeypatch.setattr(studio, "RemoteTarget", lambda **kw: _Target())
         monkeypatch.setattr(studio, "ControlBus", _Bus)
 
         path = tmp_path / "keys.toml"
@@ -1170,9 +1170,9 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
         assert not fake_keys.armed, "a rebuild armed a keyboard nobody had switched on"
 
         fake_keys.arm()                       # the user ticks "Send keys to the system"
-        studio._connect()                     # a renderer turned up: an automatic rebuild
+        studio._connect()                     # a target turned up: an automatic rebuild
 
-        assert fake_keys.armed, "launching a renderer switched the keyboard off"
+        assert fake_keys.armed, "launching a target switched the keyboard off"
 
     def test_switching_tabs_still_disarms_on_purpose(self, studio, monkeypatch, tmp_path):
         """The carry must not resurrect a disarm the app asked for."""

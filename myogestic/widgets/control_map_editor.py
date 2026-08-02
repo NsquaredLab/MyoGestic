@@ -2,7 +2,7 @@
 
 A control map is two vocabularies meeting: your own names on the left, addresses the
 target publishes on the right. `ControlMapEditor` asks the target for the right-hand
-side — it lists what the renderer exports, with the kind, range and states *it*
+side — it lists what the remote target exports, with the kind, range and states *it*
 declared, and lets a name be pointed at one by picking from that list. The file stays
 the source of truth: this reads it, edits it and writes it back with
 `myogestic.controls.dump_control_map`.
@@ -81,7 +81,7 @@ def _search_hint(all_answered: bool) -> str:
     """The picker's search-box placeholder.
 
     The box doubles as address *entry*: a well-formed address typed into it is offered even
-    when no target exports it, which is how a map is authored against a renderer that is not
+    when no target exports it, which is how a map is authored against a remote target that is not
     running. Only said when a target is silent — with everything answered the tree below is
     the whole list of what is possible.
     """
@@ -127,7 +127,7 @@ _PERCENT_READOUT = "100%"
 _SECONDS_READOUT = "0.00 s"
 #: Which addresses pose the operator's hand — and it is not a filter. A map may name any
 #: address any target offers; which stream carries it is the target's business, settled
-#: from the manifest at bind time, so nothing here chooses a hand. But the renderer
+#: from the manifest at bind time, so nothing here chooses a hand. But the remote target
 #: *refuses* one combination: streaming a pose to the operator's hand while also commanding
 #: it a movement drives that hand two ways, so it takes one or the other. That is a
 #: refusal, not a preference, and warning about it needs knowing which controls are the
@@ -187,7 +187,7 @@ def address_tree(capabilities: Sequence[Capability]) -> dict[str, Any]:
 
     An address is dotted by contract (`myogestic.controls` fixes that, and reserves the
     first segment for the target), so the dots already describe a hierarchy and this only
-    has to read it. Nothing here knows what a renderer or a keyboard is: the same code
+    has to read it. Nothing here knows what a remote target or a keyboard is: the same code
     organises 19 VHI controls and 214 keys because both spell their addresses the same way.
 
     Parameters
@@ -238,7 +238,7 @@ class ControlMapEditor:
         Not fixed for the life of the editor: **Save as...** writes elsewhere and the
         editor *follows*, so read `path` rather than remembering what was passed in.
     client
-        A `myogestic.renderer._control.RendererClient`, or anything with a
+        A `myogestic.remote._control.RemoteClient`, or anything with a
         ``capabilities()`` method returning a sequence of `myogestic.controls.Capability`.
         Called on **Connect** rather than every frame, because it blocks on an RPC.
         Without it the editor still opens the file and shows it; it just cannot offer a
@@ -295,7 +295,7 @@ class ControlMapEditor:
         self._path = path
         #: Every source of a manifest, in the order they were given. One target used to be
         #: the only possibility; a configuration can now name controls on several — a
-        #: renderer and a keyboard, say — and the picker has to offer all of them or half
+        #: remote target and a keyboard, say — and the picker has to offer all of them or half
         #: the addresses look like typos.
         self._clients: tuple[Any, ...] = tuple(
             c for c in ([client] if clients is None else list(clients)) if c is not None
@@ -320,7 +320,7 @@ class ControlMapEditor:
         self._raw_error = ""
         #: Why a target that *did* answer was rejected — a version mismatch, say. Kept
         #: apart from silence because they are opposite diagnoses that used to render as
-        #: one line: "is it running?" about a renderer that is running and answering.
+        #: one line: "is it running?" about a remote target that is running and answering.
         self._refusal = ""
         #: The comment block the file opened with, kept so a save does not erase what
         #: whoever wrote it was explaining. Only the *leading* block survives — comments
@@ -429,15 +429,15 @@ class ControlMapEditor:
 
         The file's own bytes when nothing has been changed in the fields, so opening the
         text view shows exactly what is on disk — comments and all. Once the fields have
-        diverged it is rendered from them instead, because showing stale text next to
+        diverged it is generated from them instead, because showing stale text next to
         live fields is worse than losing the comments.
         """
-        rendered = dump_control_map(self.as_control_map() or ControlMap(bindings={}))
+        dumped = dump_control_map(self.as_control_map() or ControlMap(bindings={}))
         if self._on_disk() is None:
-            return rendered
+            return dumped
         if self._unparseable_on_disk():
             return self._path.read_text()   # show it so it can be fixed by hand
-        return self._path.read_text() if self._matches_disk() else rendered
+        return self._path.read_text() if self._matches_disk() else dumped
 
     def _unparseable_on_disk(self) -> bool:
         """Whether the file cannot be loaded at all. False when there is no file."""
@@ -642,7 +642,7 @@ class ControlMapEditor:
     def as_control_map(self) -> ControlMap | None:
         """The working copy as a `ControlMap`, or None if it is not valid.
 
-        Built through `Binding`/`TargetRef` directly rather than by rendering TOML and
+        Built through `Binding`/`TargetRef` directly rather than by emitting TOML and
         parsing it back, so the editor cannot produce a file its own loader rejects.
         """
         if self.problems():
@@ -691,7 +691,7 @@ class ControlMapEditor:
 
         Separate from `problems` on purpose: one is about the file, which the editor owns,
         and the other is about which programs happen to be running, which it does not. A
-        map naming a Virtual Hand control is a valid map with the renderer switched off.
+        map naming a Virtual Hand control is a valid map with the remote target switched off.
 
         **One line per silent namespace, not per address.** It was per address, which made a
         single fact — "VHI is not running" — into a five-bullet list that said the same
@@ -711,7 +711,7 @@ class ControlMapEditor:
         seen: dict[str, int] = {}
         exported = {cap.address for cap in self._capabilities}
         # Two aliases on one control is the conflict a target refuses. Keyed on the
-        # address, which *is* the physical control's identity: a renderer advertises one
+        # address, which *is* the physical control's identity: a remote target advertises one
         # spelling per control and gives each its own stream, so two addresses are two
         # controls and one address is one control, with nothing to collapse first.
         controls: dict[str, list[str]] = {}
@@ -762,7 +762,7 @@ class ControlMapEditor:
             if entry["debounce_s"] and no_debounce:
                 found.append(f"{alias}: {no_debounce}.")
 
-        # The renderer's own exclusion, learned from its refusal: streaming a pose to the
+        # The target's own exclusion, learned from its refusal: streaming a pose to the
         # control hand and commanding it a movement would both drive that hand, so it
         # accepts one or the other. Caught here rather than at the handshake.
         posed = [
@@ -783,7 +783,7 @@ class ControlMapEditor:
             found.append(
                 f"{sorted(set(posed))} stream a pose to the operator's hand while "
                 f"{sorted(set(held))} command it a movement. Both drive that hand, so the "
-                f"renderer accepts one or the other — keep the pose, or keep the movement."
+                f"target accepts one or the other — keep the pose, or keep the movement."
             )
 
         for address, owners in controls.items():
@@ -910,7 +910,7 @@ class ControlMapEditor:
 
         # A target can be silent while this map names nothing of its own. The loop above is
         # per *named* address, so that case said nothing at all: the picker simply had no
-        # branch for the renderer, with nothing on screen to say why — which reads as "this
+        # branch for the remote target, with nothing on screen to say why — which reads as "this
         # is the whole list of what is possible" rather than "one target has not answered".
         # It also has to say what to do about it, because you *can* author against a target
         # that is not running: a typed address is offered, and saves.
@@ -927,7 +927,7 @@ class ControlMapEditor:
         # `_refusal` is read live rather than copied into `_message`, because it is a
         # standing fact about the pair of programs and not a line an event left behind:
         # copied, it outlived the thing it reported, and the panel went on telling someone
-        # who had just updated their renderer to update their renderer.
+        # who had just updated their target to update their target.
         if self._error or self._refusal or self._message:
             imgui.push_style_color(
                 imgui.Col_.text, DANGER if self._error else muted()
@@ -1034,11 +1034,11 @@ class ControlMapEditor:
 
     #: How long to wait before asking the targets again.
     #:
-    #: Not a stall budget, which is what this comment used to claim: a renderer that is not
+    #: Not a stall budget, which is what this comment used to claim: a remote target that is not
     #: running *refuses* the connection, so `capabilities()` is back in single-digit
     #: milliseconds (measured: 7 ms cold, 0.08 ms after). The client's two-second deadline
     #: only applies when something holds the port without answering, which is the rare case.
-    #: So this is a politeness interval — often enough that a renderer starting or stopping
+    #: So this is a politeness interval — often enough that a remote target starting or stopping
     #: shows up within a few seconds, rare enough that it is not a round trip per frame.
     _RETRY_EVERY_S = 5.0
 
@@ -1046,7 +1046,7 @@ class ControlMapEditor:
         """Ask silent targets what they export, off the render thread.
 
         Called every frame from `ui`. Connecting was click-only because
-        `RendererClient.capabilities()` blocks for its RPC timeout when nothing is
+        `RemoteClient.capabilities()` blocks for its RPC timeout when nothing is
         listening, and a two-second stall per frame is not a thing a UI can do. But that is
         an argument against blocking *here*, not against connecting at all — a
         `KeyboardTarget` answers from a local list and never needed a click in the first
@@ -1059,7 +1059,7 @@ class ControlMapEditor:
 
         **It keeps asking after everyone has answered.** It used to stop, on the reasoning
         that there was nothing left to ask — which reads the manifest as a fact that only
-        arrives. A target can also *go away*: closing the renderer mid-session left this
+        arrives. A target can also *go away*: closing the remote target mid-session left this
         panel offering its controls and vouching for a map it could no longer check, which
         is worse than an empty picker because it is not empty, it is wrong. What made
         stopping look necessary was the two-second stall in `_RETRY_EVERY_S`'s old comment;
@@ -1093,9 +1093,9 @@ class ControlMapEditor:
                     fetch = getattr(client, "capabilities", None)
                     got = fetch() if callable(fetch) else None
                 except ValueError as exc:
-                    # A refusal, not an absence. The renderer answered and was rejected —
+                    # A refusal, not an absence. The remote target answered and was rejected —
                     # a vocabulary older than this client speaks, say — and swallowing that
-                    # into a DEBUG line rendered it as "is it running?", which is the exact
+                    # into a DEBUG line reduced it to "is it running?", which is the exact
                     # silence the gate was added to abolish, on the surface a user is most
                     # likely looking at.
                     refusals.append(str(exc))
@@ -1131,7 +1131,7 @@ class ControlMapEditor:
             except ValueError as exc:
                 # A target that answered and was *refused* — the version gate, say. Held
                 # rather than raised: this runs from a click, so a raise takes the window
-                # down; and held rather than dropped, because reporting a renderer that is
+                # down; and held rather than dropped, because reporting a remote target that is
                 # up and talking as one that "did not answer" is precisely the silent
                 # failure the refusal exists to end.
                 refusals.append(str(exc))
@@ -1152,7 +1152,7 @@ class ControlMapEditor:
         # reserves for exactly that. With one target "the manifest is empty" meant "I know
         # nothing"; with two it means "I know about one of them", and an address belonging to
         # the silent one is unverifiable rather than wrong. Same namespace reasoning
-        # `RendererTarget` uses to decide what is its to render, so the two cannot disagree.
+        # `RemoteTarget` uses to decide what is its to drive, so the two cannot disagree.
         self._answered = frozenset(
             address.split(".", 1)[0] for address in merged
         )
@@ -1171,7 +1171,7 @@ class ControlMapEditor:
         if self._all_answered and (self._asked or self._message in _TRANSIENT):
             # Retired by the *timer*, not only by the next press. The retry is what notices a
             # target coming up, so without this the line a press left behind outlived the
-            # fact it reported: the picker offered the renderer's controls, the warning above
+            # fact it reported: the picker offered the remote target's controls, the warning above
             # cleared, and this still said it had not answered. Compared by value because
             # `_message` also carries "Saved 3 control(s)…", which a background round has no
             # business wiping.
@@ -1182,7 +1182,7 @@ class ControlMapEditor:
             #
             # The test was `not merged` — "*nothing* answered" — which cannot fire in an app
             # holding a `KeyboardTarget`, because that one always answers. So pressing
-            # Connect with the renderer closed cleared the message instead of setting one,
+            # Connect with the remote target closed cleared the message instead of setting one,
             # and looked exactly like a press that had worked.
             self._message = _NO_ANSWER
         self._asked = False
@@ -1328,7 +1328,7 @@ class ControlMapEditor:
         No reduction and no filtering. There used to be two of each — drop a continuous
         control the manifest gave no channel, and collapse several addresses that shared
         one channel down to the shortest — and both are gone with the fields they read.
-        A renderer advertises one spelling per control and gives each its own stream, so
+        A remote target advertises one spelling per control and gives each its own stream, so
         every address on this list is a distinct thing a map can point at, and an address
         that is not on it is not exported at all.
 
@@ -1433,7 +1433,7 @@ class ControlMapEditor:
                     imgui.close_current_popup()
                 imgui.set_item_tooltip(
                     "No connected target exports this. It will be saved as written and "
-                    "refused at bind time if nothing renders it."
+                    "refused at bind time if nothing drives it."
                 )
                 imgui.separator()
             # Filter *before* building the tree rather than while walking it: a pruned tree
@@ -1459,7 +1459,7 @@ class ControlMapEditor:
         """The header dot for *this map*, and the same news as text.
 
         `CIRCLE` means "the live state of whatever this panel controls", and this panel
-        controls a **file**, not a renderer. So the dot answers "can this map be saved and
+        controls a **file**, not a remote target. So the dot answers "can this map be saved and
         is it in step with disk" — the target's reachability is a different subject and gets
         its own line beside Connect.
 

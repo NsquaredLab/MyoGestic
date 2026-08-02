@@ -1,19 +1,19 @@
 """The control standard — named DOFs, independent of any application.
 
 MyoGestic defines the vocabulary; VHI, a keyboard, a cursor or a robotic hand are
-*targets* that render some of it. There is no channel index, no pose vector, no
+*targets* that drive some of it. There is no channel index, no pose vector, no
 movement name and no transport here.
 
 Two ideas:
 
 - a **DOF** is one named thing a user controls — `Continuous` or `Discrete`;
-- a **target** renders some DOFs — see `Target`, and `ControlBus` to drive them.
+- a **target** drives some DOFs — see `Target`, and `ControlBus` to drive them.
 
 Continuous DOFs are **signed and normalized**: ``[-1, 1]`` with ``0`` at rest. A
 name denotes its ``+1`` direction — ``index.flexion`` is flexion at ``+1`` and
 extension at ``-1``. A one-way control declares ``lo=0.0`` instead. A target owns
 its own units: pixels per second belongs to a cursor target, degrees to a
-renderer, never here.
+robotic hand, never here.
 
 Declare your control space in a **file**, and load it in two lines::
 

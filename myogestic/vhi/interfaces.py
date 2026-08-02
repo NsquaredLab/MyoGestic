@@ -1,20 +1,20 @@
 """Where the Virtual Hand is, how to start it, and whether this MyoGestic can drive it.
 
-``virtual_hand()`` is a `myogestic.renderer.InterfaceSpec` with VHI's numbers filled in
+``virtual_hand()`` is a `myogestic.remote.InterfaceSpec` with VHI's numbers filled in
 — the Godot path or packaged binary, the nine-channel pose read-back, the gRPC endpoint
 — so an application never states any of them:
 
     from myogestic.controls import connect_controls
-    from myogestic.renderer import RendererTarget
+    from myogestic.remote import RemoteTarget
     from myogestic.vhi import virtual_hand
 
     vhi = virtual_hand()
     process_launcher(vhi.launcher())    # the packaged binary or `godot --path`
     client = vhi.control_client()       # gRPC control plane: discover, command, verify
-    target = RendererTarget(client=client, interface=vhi)  # one stream per control driven
+    target = RemoteTarget(client=client, interface=vhi)  # one stream per control driven
     bus = connect_controls(control_map, [target])
 
-Everything past that call is generic — nothing in `myogestic.renderer` knows a hand from
+Everything past that call is generic — nothing in `myogestic.remote` knows a hand from
 a robot arm, and the example still owns *what* to push.
 
 VHI ships in two ways and ``virtual_hand()`` accepts both:
@@ -34,14 +34,14 @@ from functools import partial
 from pathlib import Path
 from shutil import which
 
-from myogestic.renderer import InterfaceSpec
+from myogestic.remote import InterfaceSpec
 
 #: Kept in step with `myogestic.tools.install_vhi.MIN_VHI_TAG` (asserted equal by
 #: tests/test_install_vhi_version_gate.py). Duplicated rather than imported: the
 #: installer pulls in typer, which launching a process should not require.
 MIN_VHI_TAG = "v2.0.0"
 
-#: Appended to `myogestic.renderer.InterfaceSpec.launcher`'s "not installed" error.
+#: Appended to `myogestic.remote.InterfaceSpec.launcher`'s "not installed" error.
 #: How VHI is installed is VHI's business; the generic spec has nothing to say about it.
 _INSTALL_HINT = (
     f"\n  Run `python -m myogestic.tools.install_vhi` to fetch a release "
@@ -64,8 +64,8 @@ def _refuse_an_incompatible_install(install_root: Path | None) -> None:
     """Refuse to launch an installed release this MyoGestic cannot drive.
 
     The marker `install_vhi` leaves behind is the only way to know what is on disk
-    before starting it, so the check happens at launch rather than after the renderer
-    comes up and every `myogestic.renderer.RendererTarget` refuses it.
+    before starting it, so the check happens at launch rather than after VHI
+    comes up and every `myogestic.remote.RemoteTarget` refuses it.
 
     Silent when there is no marker: a source-mode checkout has none, and neither
     does a hand-placed build.
@@ -97,7 +97,7 @@ def _refuse_an_incompatible_install(install_root: Path | None) -> None:
     raise FileNotFoundError(
         f"VHI Hand: the installed release is {tag}, which does not serve the v2 "
         f"control contract.\n"
-        f"  MyoGestic 2.x asks the renderer which controls it exports and refuses "
+        f"  MyoGestic 2.x asks the target which controls it exports and refuses "
         f"to guess, so this build cannot be driven at all.\n"
         f"  Upgrade: python -m myogestic.tools.install_vhi --tag {MIN_VHI_TAG} --force\n"
         f"  Or run a checkout from source: set $VHI_PATH and $GODOT_BIN."
@@ -263,7 +263,7 @@ def virtual_hand(
 
     Returns
     -------
-    A `myogestic.renderer.InterfaceSpec` with the resolved argv, ready to wire into
+    A `myogestic.remote.InterfaceSpec` with the resolved argv, ready to wire into
     ``process_launcher()``.
 
     Examples

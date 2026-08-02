@@ -1,12 +1,12 @@
 # Integrate the Virtual Hand Interface
 
 The **Virtual Hand Interface (VHI)** is the Godot-based 3-D hand visualisation that ships
-alongside MyoGestic. It is a [renderer](build-a-renderer.md) — a separate application, read
-from over LSL and commanded over gRPC — and it is the one renderer this project ships with.
+alongside MyoGestic. It is a [remote target](drive-a-remote-target.md) — a separate application, read
+from over LSL and commanded over gRPC — and it is the one this project ships with.
 
-So this page is only what is true of *this* renderer: where it is installed, how it is
+So this page is only what is true of *this* target: where it is installed, how it is
 launched, what it calls its controls, and how to drive its control hand while recording. How
-the two planes work at all is [Build a renderer](build-a-renderer.md); what a control map is
+the two planes work at all is [Drive a remote target](drive-a-remote-target.md); what a control map is
 and how you declare what you drive is [Concepts › Controls](../concepts/controls.md), with
 the full rules in [the control standard](../api/controls.md).
 
@@ -29,16 +29,16 @@ in that order. It reads `$VHI_GRPC_HOST` / `$VHI_GRPC_PORT` for the control endp
 (defaults `127.0.0.1:50051`).
 
 That is the whole VHI-shaped part of pointing MyoGestic at it. The returned
-[`InterfaceSpec`][myogestic.renderer.InterfaceSpec] knows *where* VHI is and nothing about
-what VHI renders — which controls exist is a running VHI's answer, and each one's stream is
+[`InterfaceSpec`][myogestic.remote.InterfaceSpec] knows *where* VHI is and nothing about
+what VHI drives — which controls exist is a running VHI's answer, and each one's stream is
 named for its own address, so there is no table on this side to go stale. Handing that spec
-and its client to a [`RendererTarget`][myogestic.renderer.RendererTarget] is what asks:
+and its client to a [`RemoteTarget`][myogestic.remote.RemoteTarget] is what asks:
 
 ```python
 from myogestic.controls import ControlLink
-from myogestic.renderer import RendererTarget
+from myogestic.remote import RemoteTarget
 
-link = ControlLink(CONTROL_MAP, [RendererTarget(client=vhi_control, interface=vhi)], hz=32)
+link = ControlLink(CONTROL_MAP, [RemoteTarget(client=vhi_control, interface=vhi)], hz=32)
 ```
 
 One target drives the whole map, both hands included; no stream is named and none is
@@ -107,12 +107,12 @@ names, so push one of *those*; what you write yourself is `debounce_s`, which is
 of your control loop rather than of the hand.
 
 A map naming both hands — sliders posing the operator's while a model drives the predicted
-one — is still one `RendererTarget` and one bus. The two hands are simply more addresses.
+one — is still one `RemoteTarget` and one bus. The two hands are simply more addresses.
 
 ### The nine channels of a recorded pose
 
 VHI's **read-backs** — `VHI_Predict` and `VHI_Control`, the streams it publishes so a client
-can see what actually rendered — are nine positional float32 channels, whatever the inbound
+can see what actually moved — are nine positional float32 channels, whatever the inbound
 shape. That is also the layout a recorded session carries, which is why the table matters
 even though nothing writes it any more. It was read out of VHI's own consumer
 (`PredictedHandSkeleton`) and confirmed against recorded sessions; `myogestic.vhi.pose` is
@@ -132,7 +132,7 @@ Two things about that table are easy to get wrong, and both were settled by meas
 rather than by reading. Channel 0 is thumb **flexion** and channel 1 thumb **abduction**, not
 the other way round: a recorded fist has channel 1 at exactly `-1.0`, because the thumb comes
 *across* the fingers. And channels 6-8 **do** drive the wrist — they read `0` in archived
-sessions because the recorder hardcoded them, not because the renderer ignores them.
+sessions because the recorder hardcoded them, not because VHI ignores them.
 
 ## A ready-made movement palette
 
@@ -140,7 +140,7 @@ sessions because the recorder hardcoded them, not because the renderer ignores t
 movement buttons, dispatch clicks" into one widget. It reads the recording aid for
 state and takes the click handler explicitly — wire it to a control-standard DOF (one
 [degree of freedom](../reference/glossary.md#dof)), because dispatching straight at the
-renderer would bypass the debounce:
+target would bypass the debounce:
 
 ```python
 from myogestic.widgets.vhi.panel import VhiMovementPanel
@@ -216,10 +216,10 @@ Or point `uv run mne-lsl viewer` at one of the streams — `vhi.prediction.index
 for a single DOF going out, `VHI_Predict` for all nine coming back. For
 the gRPC plane, the standard `grpcurl` works against the local server
 when VHI is running — the proto is at
-`myogestic/renderer/_proto/renderer_control.proto`.
+`myogestic/remote/_proto/remote_control.proto`.
 
 `tools/inspect_control.py` needs no Virtual Hand at all: it walks declaration, resolution and
-the wire frame with nothing launched, and then shows what a target does when its renderer is
+the wire frame with nothing launched, and then shows what a target does when the far side is
 absent.
 
 ## Common mistakes
@@ -242,7 +242,7 @@ about the control standard rather than about VHI.
 ## See also
 
 * [Install the Virtual Hand](install-vhi.md) - the installer CLI.
-* [Build a renderer](build-a-renderer.md) - the contract VHI serves, and what MyoGestic
+* [Drive a remote target](drive-a-remote-target.md) - the contract VHI serves, and what MyoGestic
   calls on it.
 * [Control standard](../api/controls.md) - declaring a map, negotiation, the three layers
   of smoothing.

@@ -44,7 +44,7 @@ from myogestic import App, Fr, Grid, Px, Stream, TrainingData
 from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
-from myogestic.renderer import RendererTarget
+from myogestic.remote import RemoteTarget
 from myogestic.session import (
     iter_aligned_windows,
     iter_labeled_windows,
@@ -201,7 +201,7 @@ PROCESSES = [
     ),
     # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
     # Hand share one launcher panel. `launchable` rather than `launcher` because an
-    # unlaunchable renderer must not stop this app from opening — a running one needs no
+    # unlaunchable target must not stop this app from opening — a running one needs no
     # button, and the reason is logged either way.
     *vhi.launchable(),
 ]
@@ -227,7 +227,7 @@ pipeline.load_model = load_raulnet
 # and publishes one stream per address it drives, named for that address.
 link = ControlLink(
     CONTROL_MAP,
-    [RendererTarget(client=vhi_control, interface=vhi)],
+    [RemoteTarget(client=vhi_control, interface=vhi)],
     ctx=app.ctx,
     smoothing=output_filter,
     hz=32,

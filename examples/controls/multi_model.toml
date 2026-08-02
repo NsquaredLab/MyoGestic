@@ -6,7 +6,7 @@
 
 [dofs]
 
-# One output per axis this hand can render.
+# One output per axis this hand can drive.
 thumb_curl = "vhi.prediction.thumb.flexion"
 thumb_spread = "vhi.prediction.thumb.abduction"
 index_curl = "vhi.prediction.index"

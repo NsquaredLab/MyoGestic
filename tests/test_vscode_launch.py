@@ -234,7 +234,7 @@ def test_no_absolute_machine_specific_paths(launch, tasks):
         assert not re.search(r'"/(Users|home)/', line), f"machine-specific path: {line}"
 
 
-def test_a_silent_port_asks_for_a_renderer(capsys):
+def test_a_silent_port_asks_for_a_target(capsys):
     """No target answered — the only case left, now that a manifest is the whole ask."""
     import tools.inspect_control as walkthrough
 
@@ -306,7 +306,7 @@ class TestTheGenericEntriesComeFirstAndWork:
         assert playgrounds, "no playground entry"
         assert any("control_map_studio" in c.get("program", "") for c in playgrounds)
         assert any("no VHI needed" in c["name"] for c in playgrounds), (
-            "the editor-only playground must say it needs no renderer"
+            "the editor-only playground must say it needs no target"
         )
 
     def test_every_input_reference_is_declared(self):

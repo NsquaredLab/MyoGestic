@@ -37,7 +37,7 @@ from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
 from myogestic.recipes.features import mav, rms, var, wl
-from myogestic.renderer import RendererTarget
+from myogestic.remote import RemoteTarget
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
@@ -112,7 +112,7 @@ PROCESSES = [
     ),
     # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
     # Hand share one launcher panel. `launchable` rather than `launcher` because an
-    # unlaunchable renderer must not stop this app from opening — a running one needs no
+    # unlaunchable target must not stop this app from opening — a running one needs no
     # button, and the reason is logged either way.
     *vhi.launchable(),
 ]
@@ -175,7 +175,7 @@ def train(data: TrainingData):
 # address it drives, named for that address.
 link = ControlLink(
     CONTROL_MAP,
-    [RendererTarget(client=vhi_control, interface=vhi)],
+    [RemoteTarget(client=vhi_control, interface=vhi)],
     ctx=app.ctx,
     smoothing=output_filter,
     hz=pipeline.predict_hz,
@@ -250,7 +250,7 @@ def _on_stop() -> None:
 
 # VhiMovementPanel owns its own state cache and the throttled background
 # get_state() refresh, so the @app.ui body stays free of plumbing.
-# Clicks go through the `gesture` output, not straight at the renderer, so they pass
+# Clicks go through the `gesture` output, not straight at the target, so they pass
 # through the same debounce and rebase it — see `_select_gesture`.
 vhi_panel = VhiMovementPanel(recording_aid, _select_gesture)
 

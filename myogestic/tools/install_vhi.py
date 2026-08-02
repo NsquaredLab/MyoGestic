@@ -6,7 +6,7 @@ right asset for the host OS/arch, downloads it, unpacks it into the location
 ``virtual_hand()`` looks at, and drops a ``vhi-version.txt`` marker so a
 later install knows what's already there.
 
-MyoGestic drives VHI over its control service, asking the renderer what it exports. A
+MyoGestic drives VHI over its control service, asking it what it exports. A
 release older than `MIN_VHI_TAG` has no control manifest to answer with, so this refuses
 to install one rather than leave it to fail at every launch.
 
@@ -49,7 +49,7 @@ REPO = "NsquaredLab/MyoGestic-VHI"
 #: be refused at every launch, which is what this gate catches before the download.
 #:
 #: Still v2 despite the single-service rewrite: v2 has never been released (v1.0.0 is the
-#: only tag on the repo), so there is no published renderer serving the old two-service
+#: only tag on the repo), so there is no published VHI build serving the old two-service
 #: contract for anything to be incompatible *with*. v2.0.0 will be the first release that
 #: carries the one control service.
 MIN_VHI_TAG = "v2.0.0"
@@ -136,7 +136,7 @@ def _check_supported(tag: str) -> str:
     """Refuse a release this MyoGestic cannot drive. Returns the resolved tag.
 
     Checked *before* the download: an old binary installs happily and is then refused
-    by every `RendererTarget` at bind time, far from the command that put it there.
+    by every `RemoteTarget` at bind time, far from the command that put it there.
     """
     resolved = _resolve_latest_tag() if tag == "latest" else tag
     if resolved is None:
@@ -156,7 +156,7 @@ def _check_supported(tag: str) -> str:
         print(
             f"VHI {resolved} is too old for this MyoGestic.\n"
             f"  This MyoGestic reaches VHI through one control service, and asks the\n"
-            f"  renderer which controls it exports rather than guessing. {resolved} has\n"
+            f"  target which controls it exports rather than guessing. {resolved} has\n"
             f"  no manifest to answer with, so the install would be unusable rather\n"
             f"  than limited.\n"
             f"\n"

@@ -1,4 +1,4 @@
-"""`ControlMapEditor` — the authoring UI's logic, without a renderer or a window.
+"""`ControlMapEditor` — the authoring UI's logic, without a target or a window.
 
 The drawing needs ImGui and the manifest needs a running VHI, but neither is where the
 risk is. The risk is in the parts that decide whether a file is safe to write: the
@@ -21,7 +21,7 @@ from myogestic.controls import Capability, load_control_map
 from myogestic.widgets import ControlMapEditor
 
 #: The nine DOFs VHI advertises, spelled the one way it spells them. There is no bare
-#: `vhi.prediction.thumb` and no `vhi.prediction.index.flexion`: a renderer publishes
+#: `vhi.prediction.thumb` and no `vhi.prediction.index.flexion`: a target publishes
 #: exactly one address per physical control, so two addresses are always two controls.
 _DOFS = (
     "thumb.flexion",
@@ -364,11 +364,11 @@ class TestItWorksWithoutATarget:
         assert "did not answer" in editor._message
 
     def test_a_refused_target_says_why_instead_of_reading_as_silence(self, tmp_path):
-        """A renderer that answered and was *rejected* is the opposite of one that is down.
+        """A target that answered and was *rejected* is the opposite of one that is down.
 
         The version gate raises out of `capabilities()`. Both fetch paths used to reduce
         that to nothing — the worker to a DEBUG line, the press to a traceback out of a
-        click — and the panel then said "is it running?" about a renderer that is running,
+        click — and the panel then said "is it running?" about a target that is running,
         answering, and telling you exactly what is wrong with it. That is the very silence
         the gate was added to end, on the surface a user is most likely looking at.
         """
@@ -403,7 +403,7 @@ class TestItWorksWithoutATarget:
         assert "vocabulary 1" in editor._refusal, editor._refusal
 
 
-    def test_a_refusal_stops_being_said_once_the_renderer_is_updated(self, tmp_path):
+    def test_a_refusal_stops_being_said_once_the_target_is_updated(self, tmp_path):
         """Otherwise the panel tells someone who has just updated VHI to update VHI.
 
         A refusal is a standing fact, so it was written straight into the line the panel
@@ -414,7 +414,7 @@ class TestItWorksWithoutATarget:
         import time
 
         class Upgradable:
-            """Refuses once, then answers — a renderer being updated under the editor."""
+            """Refuses once, then answers — a target being updated under the editor."""
 
             def __init__(self):
                 self.refuse = True
@@ -444,7 +444,7 @@ class TestItWorksWithoutATarget:
         settle(editor, pressed=True)
         assert "vocabulary 1" in editor._refusal
 
-        # The renderer is updated and the *timer* notices — nobody presses anything.
+        # The target is updated and the *timer* notices — nobody presses anything.
         client.refuse = False
         settle(editor, pressed=False)
         assert editor._refusal == "", editor._refusal
@@ -593,7 +593,7 @@ class TestThePickerRowsAreReadable:
     # Removed with `_peers` itself: `test_the_aliased_forms_of_one_control_are_reported_as_peers`,
     # `test_a_control_with_its_own_channel_has_no_peers` and
     # `test_the_same_channel_on_another_stream_is_not_a_peer`. A peer was another address
-    # for the row's own control, found by matching `(stream_name, channel)`. A renderer now
+    # for the row's own control, found by matching `(stream_name, channel)`. A target now
     # advertises one spelling per control, so no address has a peer and the question "which
     # other names reach this same thing" has no answer to give.
 
@@ -651,7 +651,7 @@ class TestTheMapPicksTheHand:
     so a user who wanted the operator's hand could not express it, and the same file was
     called invalid in one app and fine in another. Which stream carries an address is
     settled by the address itself, so there is nothing here to filter by and no cross-hand
-    pick to refuse. The one combination the renderer itself refuses — a pose and a movement
+    pick to refuse. The one combination the target itself refuses — a pose and a movement
     on the same hand — is `TestOneWayToDriveTheControlHand`, below.
     """
 
@@ -698,7 +698,7 @@ class TestTheMapPicksTheHand:
         assert editor.save() is True
 
     def test_a_map_naming_both_hands_saves(self, tmp_path):
-        """`RendererTarget` drives whatever addresses the map names, so a mixed map is fine."""
+        """`RemoteTarget` drives whatever addresses the map names, so a mixed map is fine."""
         path = tmp_path / "controls.toml"
         path.write_text(
             '[dofs]\nmodel = "vhi.prediction.thumb.flexion"\noperator = "vhi.control.pose.thumb.flexion"\n'
@@ -855,7 +855,7 @@ class TestAHeldStateDrivesNoStream:
 
 
 class TestOneWayToDriveTheControlHand:
-    """The renderer's own exclusion, restated where it can still be fixed.
+    """The target's own exclusion, restated where it can still be fixed.
 
     Streaming a pose to the operator's hand and commanding it a movement would both drive
     that hand, so VHI takes one or the other. It no longer says so up front — there is no
@@ -888,7 +888,7 @@ class TestOneWayToDriveTheControlHand:
     # Removed: `test_it_is_refused_when_every_dof_has_its_own_stream`. It re-ran the test
     # above against a second manifest whose caps had been rewritten to `stream_name =
     # address`, because the refusal used to be found by comparing `stream_name` against one
-    # shared name and silently stopped firing on a renderer that gave every DOF its own
+    # shared name and silently stopped firing on a target that gave every DOF its own
     # stream. One stream per DOF is now the only shape there is — it is what the fixture
     # above already describes — and the refusal is keyed on the address prefix, so the two
     # tests would differ in nothing at all.
@@ -922,7 +922,7 @@ class TestOneWayToDriveTheControlHand:
 # Removed in full: `TestOneRowPerControlNotPerName`, six tests about collapsing eleven
 # names onto six channels.
 #
-# A renderer used to publish the short and the explicit-axis form of a control as two
+# A target used to publish the short and the explicit-axis form of a control as two
 # addresses on one channel — `vhi.prediction.thumb` and `vhi.prediction.thumb.flexion`
 # being one finger under two names — so a flat list of addresses had more rows than the
 # hand had controls, and the only honest way to draw it was a channel column. `_offered`
@@ -1098,7 +1098,7 @@ class TestTheAddressTree:
     A flat list was fine for six controls. A keyboard exports two hundred, so the picker
     became a tree — and the only thing it knows is that addresses are dotted, which the
     control standard already guarantees. No target-specific code, which is why one
-    implementation organises a renderer and a keyboard identically.
+    implementation organises a target and a keyboard identically.
     """
 
     def _tree(self, *addresses):
@@ -1293,7 +1293,7 @@ class TestARowSaysWhatTheControlAccepts:
 
 
 class TestSavingDoesNotDependOnWhatIsRunning:
-    """A TOML naming a Virtual Hand control is a valid TOML with no renderer running.
+    """A TOML naming a Virtual Hand control is a valid TOML with no target running.
 
     This regressed the moment a second target existed. `problems()` skipped its export check
     when the manifest was empty, which with one target meant "nothing has answered". With a
@@ -1452,7 +1452,7 @@ class TestAnUntitledMapIsARealState:
 class TestTheHeaderDotReportsTheMapNotTheTarget:
     """`CIRCLE` means "the live state of whatever *this panel* controls".
 
-    This panel controls a file. Wiring its one status channel to the renderer's
+    This panel controls a file. Wiring its one status channel to the target's
     reachability would spend it on another panel's subject — and would put a green dot above
     a red "changed on disk" banner. The target gets its own line beside Connect instead.
 
@@ -1537,7 +1537,7 @@ class TestConnectingHappensOnItsOwn:
 
     The *stated* reason was that `capabilities()` blocks for the client's two-second RPC
     timeout when nothing is listening, and that turns out to be false for the case it was
-    written about: a renderer that is not running refuses the connection, and the call is
+    written about: a target that is not running refuses the connection, and the call is
     back in about 7 ms. The two seconds need something holding the port without answering.
     The worker is still right — 7 ms of a 16 ms frame is not free — but the number is why
     this used to stop asking once everyone had answered, and that part was a bug.
@@ -1571,7 +1571,7 @@ class TestConnectingHappensOnItsOwn:
             return None
 
     class _Togglable:
-        """A target that can be switched off, the way closing a renderer switches VHI off."""
+        """A target that can be switched off, the way closing a target switches VHI off."""
 
         def __init__(self):
             self.asked = 0
@@ -1655,7 +1655,7 @@ class TestConnectingHappensOnItsOwn:
         assert vhi.asked == 2, "a target launched later is never asked again"
 
     def test_it_keeps_asking_so_a_target_can_go_away(self, tmp_path):
-        """A manifest is not a fact that only ever arrives — a renderer can be closed.
+        """A manifest is not a fact that only ever arrives — a target can be closed.
 
         It used to return early once every client had answered, on the reasoning that there
         was nothing left to ask. So closing VHI mid-session left the picker offering its
@@ -1670,7 +1670,7 @@ class TestConnectingHappensOnItsOwn:
         assert editor._all_answered
         assert len(editor.capabilities) == 2
 
-        vhi.up = False                                   # the renderer is closed
+        vhi.up = False                                   # the target is closed
         editor._last_attempt -= editor._RETRY_EVERY_S + 1
         editor.poll_connect()
         self._settle(editor)
@@ -1680,11 +1680,11 @@ class TestConnectingHappensOnItsOwn:
         assert [c.address for c in editor.capabilities] == ["keyboard.hold.letter.w"]
         assert editor.unanswered() == {"vhi": ["vhi.prediction.index"]}
 
-    def test_a_press_that_reaches_no_renderer_says_so(self, tmp_path):
+    def test_a_press_that_reaches_no_target_says_so(self, tmp_path):
         """The message tested `not merged` — "*nothing* answered" — which a keyboard prevents.
 
         With two clients one of them always answers off a local list, so a Connect press
-        with the renderer closed cleared the message and looked like it had worked.
+        with the target closed cleared the message and looked like it had worked.
         """
         vhi = self._Silent()
         keys = self._Slow(address="keyboard.hold.letter.w")
@@ -1850,7 +1850,7 @@ class TestASilentTargetIsSaidOutLoud:
     `warnings` is per *named* address by design — it answers "what does this map contain
     that cannot be checked". On a blank map, or one that only uses the keyboard, that is
     correctly nothing, and the panel therefore said nothing at all: the picker simply had
-    no branch for the renderer. Which reads as "this is the whole list of what is
+    no branch for the target. Which reads as "this is the whole list of what is
     possible", not "one target has not answered, and you can type its address anyway".
     """
 
@@ -1930,7 +1930,7 @@ class TestTheConnectMessageExpires:
 
     Connecting used to be click-only, so "a target did not answer" stayed true until the
     next click by construction. With the retry running, the target comes up on its own —
-    and the line sat there insisting the renderer was absent while its controls were
+    and the line sat there insisting the target was absent while its controls were
     already in the picker. That is the reported bug inverted, which is worse than the bug.
     """
 
@@ -1969,11 +1969,11 @@ class TestTheConnectMessageExpires:
         editor._connect()
         assert editor._message, "a press that reached nothing must say so"
 
-        vhi.up = True                              # the renderer starts
+        vhi.up = True                              # the target starts
         editor._connect()                          # what the timer's round does
 
         assert editor._all_answered
-        assert not editor._message, "the panel still called a running renderer absent"
+        assert not editor._message, "the panel still called a running target absent"
 
     def test_a_background_round_does_not_wipe_a_save_confirmation(self, tmp_path):
         """`_message` is shared, so the retry may only retire the line it is about."""

@@ -193,7 +193,7 @@ class ControlMap:
 
 
 def dump_control_map(control_map: ControlMap, *, header: str = "") -> str:
-    """Render a `ControlMap` back to TOML text that `load_control_map` reads.
+    """Dump a `ControlMap` back to TOML text that `load_control_map` reads.
 
     Round-trips: ``load_control_map(tomllib.loads(dump_control_map(m)))`` has the same
     bindings as ``m``.
@@ -604,7 +604,7 @@ def resolve(
         # `capabilities()` returns None when the target has not answered.
         raise ValueError(
             "resolve() needs the target's manifest, but it has not answered. An "
-            "application that launches its own renderer must resolve *after* it is up: "
+            "application that launches its own target must resolve *after* it is up: "
             "check `client.capabilities()` for None and try again once it is."
         )
     by_address = {cap.address: cap for cap in capabilities}
@@ -688,7 +688,7 @@ def resolve(
                 threshold_fraction=fraction,
             )
         else:
-            # The alias is signed only if *every* target can render both directions —
+            # The alias is signed only if *every* target can drive both directions —
             # otherwise a negative prediction is silently clamped away on one of them.
             signed = all(cap.signed for _, cap in resolved)
             # A `threshold_fraction` on a continuous binding says the input is a

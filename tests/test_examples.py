@@ -29,15 +29,15 @@ _EXAMPLES_ROOT = Path(__file__).resolve().parent.parent / "examples"
 # `panels/*.py` are single-widget demos; `panels/_fixtures.py` is a shared
 # helper, not an example, so underscore-prefixed files are skipped.
 #
-# `reference_renderer.py` is not a MyoGestic App: it is a renderer, the thing an App
+# `reference_target.py` is not a MyoGestic App: it is a target, the thing an App
 # drives. Its `__main__` serves forever (there is no `App.run` to stub), and
-# `tests/test_reference_renderer.py` already runs it for real, driven by a live
+# `tests/test_reference_target.py` already runs it for real, driven by a live
 # `ControlBus` — a stronger check than "does it wire up" ever gives the App examples.
 EXAMPLES = sorted(
     p
     for sub in ("synthetic", "panels")
     for p in (_EXAMPLES_ROOT / sub).glob("*.py")
-    if not p.name.startswith("_") and p.name != "reference_renderer.py"
+    if not p.name.startswith("_") and p.name != "reference_target.py"
 )
 
 
@@ -57,7 +57,7 @@ def test_example_wires_up(path, monkeypatch):
     # unless the VHI binary is installed (an environment dep, not part of the API
     # surface). Stub the env check to []; a renamed/removed `launcher` method would
     # still raise AttributeError and fail the test.
-    monkeypatch.setattr(myogestic.renderer.InterfaceSpec, "launcher", lambda self: [])
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
     try:
         runpy.run_path(str(path), run_name="__main__")
     except (ImportError, ModuleNotFoundError) as e:
@@ -82,7 +82,7 @@ def test_example_draws_a_frame(path, monkeypatch, implot_frame):
     """
     monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
     monkeypatch.syspath_prepend(str(path.parent))
-    monkeypatch.setattr(myogestic.renderer.InterfaceSpec, "launcher", lambda self: [])
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
     try:
         namespace = runpy.run_path(str(path), run_name="__main__")
     except (ImportError, ModuleNotFoundError) as e:
@@ -116,14 +116,14 @@ def test_example_draws_a_frame(path, monkeypatch, implot_frame):
         pytest.skip(f"{path.name} needs a real runner, not a layout pass: {exc}")
 
 
-def test_examples_survive_an_unlaunchable_renderer(monkeypatch):
+def test_examples_survive_an_unlaunchable_target(monkeypatch):
     """An app must open even when VHI cannot be launched from inside it.
 
     This is deliberately *not* covered by the stub above. `test_example_wires_up`
     replaces `launcher` with a no-op so a machine without VHI installed can still run
     the suite — and that stub also hid a real crash: with a pre-2.0 release on disk,
     `launcher()` raises, and every example that splatted it into a `ProcessLauncher` died
-    at import. Including when a perfectly good v2 renderer was already running and the
+    at import. Including when a perfectly good v2 target was already running and the
     app never needed the button.
 
     So here the refusal is what gets simulated, not what gets stubbed away.
@@ -134,7 +134,7 @@ def test_examples_survive_an_unlaunchable_renderer(monkeypatch):
         raise FileNotFoundError(f"{self.name}: the installed release is v1.0.0")
 
     monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
-    monkeypatch.setattr(myogestic.renderer.InterfaceSpec, "launcher", refuse)
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", refuse)
 
     vhi_examples = [
         path

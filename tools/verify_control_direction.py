@@ -25,33 +25,33 @@ Four things are checked per run:
 
 1. **Direction.** A sweep of the index must bend the rig the way a closing hand bends:
    positive degrees. This is the anchor, and the only check made from *outside* the
-   renderer's own read-back loop — everything below is self-consistency, which a
-   renderer and its read-back agree on whichever way they point. It is also the only
+   target's own read-back loop — everything below is self-consistency, which a
+   target and its read-back agree on whichever way they point. It is also the only
    check that never touches an inlet, so it is unaffected by the shape of the wire.
 2. **Round-trip.** A control +1 pushed raw on the DOF's own one-channel stream must read
-   back as +1 on `VHI_Predict`, so the renderer is the identity rather than a sign flip
+   back as +1 on `VHI_Predict`, so the target is the identity rather than a sign flip
    — and *every* frame of the hold must read the same, not only the last.
-3. **The client's own stack.** The same +1 driven through a `RendererTarget` and a
-   `ControlBus` must render identically to that raw frame. A different producer, not a
-   different declaration: the stream name and the range both come from the renderer's
+3. **The client's own stack.** The same +1 driven through a `RemoteTarget` and a
+   `ControlBus` must produce identically to that raw frame. A different producer, not a
+   different declaration: the stream name and the range both come from the target's
    manifest rather than from a constant in this file, so this is the check that catches
    those two disagreeing. There is no channel index left to get wrong — the *name* is
-   the only thing a manifest and a renderer can now disagree about, so that is what the
+   the only thing a manifest and a target can now disagree about, so that is what the
    raw frame writes down and the negotiated one reads.
 4. **The control hand does not disturb the predicted one.** Publishing a control-pose
    stream is the only thing that puts the control hand into Stream mode — there is no
-   handshake — so a second inlet binding mid-run is a live event on the renderer, and
+   handshake — so a second inlet binding mid-run is a live event on the target, and
    the predicted hand must read back unchanged through it.
 
-There is nothing to declare any more: a renderer's whole contract is
+There is nothing to declare any more: a target's whole contract is
 `GetControlManifest` plus the streams it reads. What used to be three scenarios varying
 what the client had declared is now checks 2-4, which vary who writes the frame.
 
-Two ordering rules, both learned the hard way and both properties of the renderer rather
+Two ordering rules, both learned the hard way and both properties of the target rather
 than of this tool:
 
 - **The sweep runs before any outlet exists.** `Output` repeats its last pushed value at
-  `hz`, and the renderer applies whatever arrives on a DOF's stream — so a still-streaming
+  `hz`, and the target applies whatever arrives on a DOF's stream — so a still-streaming
   outlet beats `SweepControl`'s own commands and the sweep reports the stream's value
   instead of its own. Held at -0.5, an index sweep reports `+42.5°` and looks like a
   direction bug. One stream per DOF made this *harder* to spot rather than rarer: a stale
@@ -61,11 +61,11 @@ than of this tool:
   A second outlet alongside a live one is not a swap: both publish the same name and the
   same `source_id`, so which one VHI reads is resolution order, and the loser's frames go
   nowhere while this tool measures them. So the raw outlet is retired before the
-  negotiated targets publish theirs, and `_await_binding` waits for the renderer to pick
+  negotiated targets publish theirs, and `_await_binding` waits for the target to pick
   the replacement up — it re-resolves by name only while it has no inlet at all, so
   recovery otherwise rides on the `source_id`, and is not immediate.
 
-Together those are why a control +1 could appear to render either way earlier: a stale
+Together those are why a control +1 could appear to move either way earlier: a stale
 outlet left streaming by a previous process still wins that DOF's inlet, and which
 producer VHI binds depends on resolution order. Per-DOF streams split that hazard nine
 ways rather than removing it.
@@ -82,7 +82,7 @@ import numpy as np
 from mne_lsl.lsl import StreamInlet, resolve_streams
 
 from myogestic.controls import ControlBus, load_control_map, resolve
-from myogestic.renderer import RendererTarget
+from myogestic.remote import RemoteTarget
 from myogestic.vhi import virtual_hand
 
 #: The DOF driven throughout: the predicted hand's index, whose bare name denotes
@@ -147,7 +147,7 @@ def _raw(outlet):
     """Write the DOF's own one-channel stream, bypassing every client.
 
     The counterpart to `_through`: the stream is named from this file rather than from
-    the manifest, so the two together tell a renderer that reads the wrong stream from a
+    the manifest, so the two together tell a target that reads the wrong stream from a
     client that resolved the address onto one.
     """
 
@@ -238,7 +238,7 @@ def _negotiated_bus(vhi, client, *, control_hand: bool = False) -> ControlBus:
         raise Failure("VHI did not answer GetControlManifest")
     dofs = {"probe": DOF} | ({"pose": POSE_DOF} if control_hand else {})
     control_map = load_control_map({"dofs": dofs})
-    target = RendererTarget(client=client, interface=vhi)
+    target = RemoteTarget(client=client, interface=vhi)
     bus = ControlBus(resolve(control_map, capabilities), targets=[target], hz=32)
     if not target.negotiate():
         raise Failure("the target never settled its contract with VHI")
@@ -258,7 +258,7 @@ def _measure(label: str, push, inlet: StreamInlet) -> float:
         )
     if abs(seen[-1] - PLUS_ONE) > TOL:
         raise Failure(
-            f"{label}: sent {PLUS_ONE:+.1f}, read back {seen[-1]:+.3f} — the renderer "
+            f"{label}: sent {PLUS_ONE:+.1f}, read back {seen[-1]:+.3f} — the target "
             f"is not the identity on this path"
         )
     print(f"    {label:26s} {seen[-1]:+.3f} over {len(seen)} frames (spread {spread:.3f})")
@@ -269,12 +269,12 @@ def check_round_trip(vhi, client, outlet, inlet: StreamInlet) -> dict[str, float
     """2-4. Identity and frame stability, from producers that genuinely differ.
 
     A raw frame this file wrote onto the DOF's own stream; the same value through a
-    `RendererTarget` and a `ControlBus`, where the stream name and the range come from the
+    `RemoteTarget` and a `ControlBus`, where the stream name and the range come from the
     manifest instead; and that again while the control hand's stream is also being
     published. The three must agree — they vary who writes the frame and what else the
-    renderer is reading, never what it was told, because there is nothing left to tell it.
+    target is reading, never what it was told, because there is nothing left to tell it.
     """
-    rendered = {"raw frame": _measure("raw frame", _raw(outlet), inlet)}
+    observed = {"raw frame": _measure("raw frame", _raw(outlet), inlet)}
     # Retired before the targets below publish the same name: two live outlets sharing a
     # name and a `source_id` are not a swap, and the one VHI keeps reading is whichever
     # resolution order left it holding — so the negotiated frames would go nowhere while
@@ -283,33 +283,33 @@ def check_round_trip(vhi, client, outlet, inlet: StreamInlet) -> dict[str, float
     # raised above this line.
     outlet.stop()
 
-    for label, control_hand in (("through a RendererTarget", False), ("+ control hand", True)):
+    for label, control_hand in (("through a RemoteTarget", False), ("+ control hand", True)):
         bus = _negotiated_bus(vhi, client, control_hand=control_hand)
         try:
             _await_binding(_through(bus), inlet, label)
-            rendered[label] = _measure(label, _through(bus), inlet)
+            observed[label] = _measure(label, _through(bus), inlet)
         finally:
             # This also stops the outlets the targets built — a target owns an outlet it
             # built itself. One left streaming a control-pose DOF would hold that hand in
             # Stream mode, and beat a later writer to the inlet, for every run after this.
             bus.stop()
 
-    if max(rendered.values()) - min(rendered.values()) > TOL:
-        raise Failure(f"the same +1 rendered differently per producer: {rendered}")
-    return rendered
+    if max(observed.values()) - min(observed.values()) > TOL:
+        raise Failure(f"the same +1 measured differently per producer: {observed}")
+    return observed
 
 
 def _relaunch() -> None:
-    """Stop any VHI and start a fresh one, so a run cannot inherit renderer state.
+    """Stop any VHI and start a fresh one, so a run cannot inherit target state.
 
-    Nothing is declared any more, but a renderer still carries state a run can inherit:
+    Nothing is declared any more, but a target still carries state a run can inherit:
     the value it was last left holding on every DOF, and whichever inlets it has already
     bound. A cold process re-proves that an outlet is picked up from nothing.
     """
     subprocess.run(["pkill", "-f", "Godot --path"], check=False, capture_output=True)
     time.sleep(2.0)
     # `launchable` reports rows of (label, argv) for a UI's Launch button, so a tool that
-    # actually wants the renderer running has to spawn them itself.
+    # actually wants the target running has to spawn them itself.
     rows = virtual_hand().launchable()
     if not rows:
         raise Failure("--restart needs a launchable VHI install; none was found")
@@ -384,7 +384,7 @@ def main() -> int:
         except ValueError as refusal:
             # A resolve or negotiate refusal is a result, not a crash: it means this VHI
             # does not export what the tool drives, and the message says which.
-            print(f"\n✗ run {run}: refused before anything rendered:\n{refusal}", file=sys.stderr)
+            print(f"\n✗ run {run}: refused before anything moved:\n{refusal}", file=sys.stderr)
             return 1
 
     print(f"\n{RULE}")

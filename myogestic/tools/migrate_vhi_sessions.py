@@ -1,6 +1,6 @@
 """Convert recorded ``vhi_control`` streams from VHI's old units to the control standard.
 
-VHI's ground-truth outlet used to publish the renderer's own units, in which a fist read
+VHI's ground-truth outlet used to publish its own rig units, in which a fist read
 ``-1`` on the flexion channels — the opposite of the prediction stream it was meant to be
 compared against. It publishes standard values now, so a recording made before that change
 means something different from one made after, and nothing in the file said which.
@@ -36,11 +36,11 @@ import zarr
 
 #: Per-channel sign taking a legacy ``vhi_control`` frame to the control standard.
 #:
-#: Not a blanket negation. The five flexion channels ran the other way in the renderer's
+#: Not a blanket negation. The five flexion channels ran the other way in VHI's rig
 #: units, so they flip. Thumb abduction (channel 1) did not: the old readback divided by a
 #: positive Z gain while a fist's thumb Z is negative, so a recorded fist already reads
 #: ``-1`` there — adduction, which is what a fist does and what the standard calls ``-1``.
-#: Channels 6-8 were never written by the old renderer and are all zero, so their sign is
+#: Channels 6-8 were never written by the old VHI build and are all zero, so their sign is
 #: immaterial; they are left alone rather than flipped, because ``-0.0`` is noise in a diff.
 TO_STANDARD = np.array([-1, 1, -1, -1, -1, -1, 1, 1, 1], dtype=np.float32)
 

@@ -11,7 +11,7 @@ archive of each kind out of the 31 that carry a ``vhi_control`` stream.
 
 Both have been converted to the control standard by
 `myogestic.tools.migrate_vhi_sessions`, along with every other archived session. They were
-recorded in VHI's old units, where a fist read ``-1`` on the flexion channels; the renderer
+recorded in VHI's old units, where a fist read ``-1`` on the flexion channels; the target
 was publishing the opposite of the stream it was meant to be compared against. That is fixed
 at both ends and the recordings were migrated once, so there is a single convention on disk
 and nothing reads a sign at runtime. These assertions are what say the migration landed.
@@ -86,8 +86,8 @@ def test_a_recorded_fist_is_standard_plus_one():
 def test_only_the_flexion_half_was_ever_recorded():
     """The operator only ever flexed, so nothing goes negative but the adducted thumb.
 
-    A property of the corpus, not of VHI — the renderer is linear across the full signed
-    domain, so extension renders. Nothing may treat this as a limit.
+    A property of the corpus, not of VHI — the target is linear across the full signed
+    domain, so extension moves. Nothing may treat this as a limit.
     """
     pose = _pose(MOVED)
     flexion = np.delete(pose, 1, axis=1)  # channel 1 is adduction in a fist, so negative
@@ -115,7 +115,7 @@ def test_the_other_digits_track_the_thumb_up_to_the_adduction_sign():
 
 
 def test_the_wrist_channels_are_empty_in_the_archive():
-    """The old renderer hardcoded them to zero rather than reading the wrist it animated.
+    """The old target hardcoded them to zero rather than reading the wrist it animated.
 
     A fact about the corpus, and only that: VHI fills all three now, so a session recorded
     after 2026-07-31 carries real wrist kinematics.

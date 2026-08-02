@@ -74,10 +74,10 @@ def test_the_typed_field_draws_without_a_label(studio, imgui_frame):
     assert seen, "the field did not draw"
 
 
-def test_connect_reports_a_refusing_renderer_instead_of_taking_the_window_down(
+def test_connect_reports_a_refusing_target_instead_of_taking_the_window_down(
     studio, tmp_path, monkeypatch
 ):
-    """`_manifests()` asks the renderer, and asking can now be refused as well as unheard.
+    """`_manifests()` asks the target, and asking can now be refused as well as unheard.
 
     It was called *outside* the `try` that exists for exactly this reason, so the version
     gate raised straight out of a click handler — the failure the comment on that `try`
@@ -86,7 +86,7 @@ def test_connect_reports_a_refusing_renderer_instead_of_taking_the_window_down(
 
     class TooOld:
         def capabilities(self):
-            raise ValueError("speaks control vocabulary 1 ... Update the renderer.")
+            raise ValueError("speaks control vocabulary 1 ... Update the target.")
 
     path = tmp_path / "map.toml"
     path.write_text('[dofs]\nclose = "vhi.prediction.index"\n')

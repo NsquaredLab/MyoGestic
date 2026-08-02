@@ -6,8 +6,8 @@ Recipes for specific tasks. Each guide assumes you've worked through [Getting St
 
 - [Add a custom source](add-a-source.md) - implement the `Source` protocol for a new device, file format, or transport.
 - [Add a custom output](add-an-output.md) - push predictions to actuators, robots, or other processes.
-- [Drive your own device](add-a-target.md) - implement the `Target` protocol so a control map can render onto your hand, cursor, or prosthesis.
-- [Build a renderer](build-a-renderer.md) - a separate application MyoGestic drives, like the Virtual Hand: one RPC and a stream.
+- [Drive your own device](add-a-target.md) - implement the `Target` protocol so a control map can drive your prosthesis on a serial port, your cursor, or your hand. Three methods, in this process: the simpler of the two routes.
+- [Drive a remote target](drive-a-remote-target.md) - a separate application MyoGestic drives, like the Virtual Hand: one RPC and a stream. The longer route — take [Drive your own device](add-a-target.md) unless your device is already its own program.
 - [Add a custom widget](add-a-widget.md) - write a stateless function that draws ImGui commands from `ctx`.
 - [Add a custom model](add-a-model.md) - wire `extract` / `train` / `predict` for any ML library.
 
@@ -20,7 +20,7 @@ Recipes for specific tasks. Each guide assumes you've worked through [Getting St
 
 ## The Virtual Hand
 
-The one renderer this project ships. The contract it serves is generic — see [Build a renderer](build-a-renderer.md) — so a device that is not a hand needs neither of these pages.
+The one remote target this project ships. The contract it serves is generic — see [Drive a remote target](drive-a-remote-target.md) — so a device that is not a hand needs neither of these pages.
 
 - [Install the Virtual Hand](install-vhi.md) - the installer CLI, and where a build is looked for.
 - [Integrate the Virtual Hand](integrate-vhi.md) - `myogestic.vhi.virtual_hand`, the launcher pattern, and what VHI calls its own controls.
