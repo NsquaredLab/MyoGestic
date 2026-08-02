@@ -51,8 +51,8 @@ def my_ui(ctx):
 ```
 
 Each `with grid[...]` block opens an ImGui child window sized to the cell.
-The cell background uses the active theme's `Col_.child_bg`, so light/dark
-mode just works without per-panel styling.
+The cell background uses the active theme's `Col_.child_bg`, so light and dark
+mode both render correctly without per-panel styling.
 
 ## How sizes resolve
 

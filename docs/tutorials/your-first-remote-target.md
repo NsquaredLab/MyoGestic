@@ -739,9 +739,9 @@ held both addresses, so `missing` was empty and no sweep happened. What reconnec
     Pick one name per device and keep it.
 
 The `except` around the loop is what keeps the reader alive through the ordinary race where an
-outlet vanishes between the resolve and the open - without it the thread dies while the gRPC
-server carries on cheerfully answering the manifest, and a client binds against a target that
-will never read another sample.
+outlet vanishes between the resolve and the open. Without it the thread dies while the gRPC
+server continues to answer the manifest, so a client binds against a target that will never
+read another sample.
 
 ### Checkpoint 3: what an *unclean* exit does, and what you choose to do about it
 
@@ -1324,7 +1324,7 @@ that you know why each part is there, and what each part it leaves out would hav
   reference implementation in full
 - [Concepts › Controls](../concepts/controls.md) - aliases, addresses, and the signed
   convention
-- [Drive your own device](../how-to/add-a-target.md) - the in-process route, if a wire
-  between two processes turns out to be more than you need
+- [Drive your own device](../how-to/add-a-target.md) - the in-process route, if you do not
+  need a wire between two processes
 - `myogestic/remote/_proto/remote_control.proto` - the wire contract; generate stubs from it for
   any language other than Python

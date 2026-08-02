@@ -5,8 +5,8 @@ configuration once when the shared library initialises and ignores anything set 
 
 At liblsl's default level, building one outlet logs a line per network interface plus a
 multicast bind warning per interface it cannot use — 65 lines on a laptop with a dozen
-adapters. MyoGestic publishes one outlet per control it drives, so a six-control map buries
-its own log before printing anything.
+adapters. MyoGestic publishes one outlet per control it drives, so a six-control map emits
+several hundred lines before the application logs anything.
 
 liblsl looks for its config in `$LSLAPICFG`, then `./lsl_api.cfg`, then `~/lsl_api.cfg`. If
 any of those exists it is somebody's deliberate choice and this module does nothing — which
