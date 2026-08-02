@@ -22,9 +22,11 @@ my_thumb = "vhi.prediction.thumb.flexion"
 | who reads it | nothing — it is never parsed for meaning | the device, which owns what it means |
 | how far does it travel | nowhere; it never leaves the app | onto the wire as the control's identity |
 
-The left side is an **alias**. `my_thumb`, `fist`, `drive_x` — anything readable. MyoGestic
-prescribes nothing about it and derives nothing from it, so the same alias can point at a
-Virtual Hand in one file and at a cursor axis in another with no code change.
+Each entry under `[dofs]` is one **DOF** — one [degree of
+freedom](../reference/glossary.md#dof). The left side is an **alias**. `my_thumb`, `fist`,
+`drive_x` — anything readable. MyoGestic prescribes nothing about it and derives nothing from
+it, so the same alias can point at a Virtual Hand in one file and at a cursor axis in another
+with no code change.
 
 The right side is an **address**: dotted, lowercase, at least two segments. The first segment
 namespaces the device (`vhi.`, `keyboard.`, `cursor.`), so two devices cannot collide inside one
@@ -72,8 +74,8 @@ A keystroke and a 3-D hand sit in the same table, three lines apart. One of them
 Godot application reached over gRPC and LSL; the other is `pynput` in this process. **Nothing in
 the file says so**, and that is the design: how a value reaches a device is the device's
 business, and the map only ever names *what* is driven, never *how* it is delivered. Pointing an
-application at a second device is lines in this file plus one more object in the bus's target
-list — nothing in between changes.
+application at a second device is lines in this file plus one more `Target` object in the list
+handed to the bus — nothing in between changes.
 
 The value shapes are the only grammar: a bare string is one address, an array fans one output
 out to several, and a table is the explicit form where a per-address `weight` or a
@@ -82,7 +84,7 @@ and every option.
 
 ## The one convention a device may not redefine
 
-Continuous control values are **signed and normalized**:
+Continuous control values are **signed and normalised**:
 
 - the range is `[-1, 1]`;
 - `0` is rest;
@@ -115,7 +117,7 @@ values as a full frame every tick and discrete ones as **edges** — only the st
 gRPC call; for [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] it is a key-down or key-up.
 
 Which addresses are which is `kind` in the **device's** manifest. The map never says, and cannot:
-change a device build so a control becomes discrete and the same map file keeps working.
+change a device's build so a control becomes discrete and the same map file keeps working.
 
 A button is the one case that does not want the gate: [`ControlBus.select`][myogestic.controls.ControlBus.select]
 delivers a state immediately **and rebases** the DOF's debounce, so the predict ticks that
@@ -206,7 +208,7 @@ seven stages with a checkpoint at each.
 A renderer still needs a target on this side to talk to it — but you do not write that one:
 [`RendererTarget`][myogestic.renderer.RendererTarget] is the shipped adapter for **any**
 renderer that serves the contract. It reads the manifest, publishes one LSL stream per
-address and forwards discrete edges over gRPC, and it knows nothing about what the renderer
+address, and forwards discrete edges over gRPC. It knows nothing about what the renderer
 renders. The Virtual Hand is one such renderer — see
 [Integrate the Virtual Hand](../how-to/integrate-vhi.md) — and
 [Integrate your own interface](../tutorials/integrate-your-interface.md) builds another.

@@ -112,7 +112,7 @@ one — is still one `RendererTarget` and one bus. The two hands are simply more
 ### The nine channels of a recorded pose
 
 VHI's **read-backs** — `VHI_Predict` and `VHI_Control`, the streams it publishes so a client
-can see what actually rendered — are nine positional float32 channels whatever the inbound
+can see what actually rendered — are nine positional float32 channels, whatever the inbound
 shape. That is also the layout a recorded session carries, which is why the table matters
 even though nothing writes it any more. It was read out of VHI's own consumer
 (`PredictedHandSkeleton`) and confirmed against recorded sessions; `myogestic.vhi.pose` is
@@ -138,8 +138,9 @@ sessions because the recorder hardcoded them, not because the renderer ignores t
 
 `VhiMovementPanel` packages "fetch control-hand state in the background, render the
 movement buttons, dispatch clicks" into one widget. It reads the recording aid for
-state and takes the click handler explicitly — wire it to a control-standard DOF, because
-dispatching straight at the renderer would bypass the debounce:
+state and takes the click handler explicitly — wire it to a control-standard DOF (one
+[degree of freedom](../reference/glossary.md#dof)), because dispatching straight at the
+renderer would bypass the debounce:
 
 ```python
 from myogestic.widgets.vhi.panel import VhiMovementPanel
@@ -168,10 +169,10 @@ def _on_movement_click(name: str) -> None:
 important part: it delivers the state immediately *and* rebases the DOF's stability gate, so
 the next predict ticks do not re-fire what the button just did.
 
-## Driving the control hand as a recording target
+## Driving the control hand as ground truth
 
-Some workflows — continuous regression, where the control hand is the *target* the
-model learns — want the control hand to move on its own so the recorded kinematics
+Some workflows — continuous regression, where the control hand is the *regression target*
+the model learns — want the control hand to move on its own so the recorded kinematics
 sweep a range. That is what the **recording aid** is for:
 
 ```python

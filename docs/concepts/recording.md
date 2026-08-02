@@ -151,4 +151,4 @@ See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by 
 
 - **`sess.class_names = [...]` after `save_meta`.** The class names persist only when passed as a kwarg to `save_meta(name, class_names=...)`, not when set as an attribute after the fact. (`RecordingControls` handles this for you when it calls `app.start_recording`.)
 - **Treating the label track as a stream.** It isn't - it's events. To iterate "rest periods" by time, slice with the labels and the timestamp arrays manually, or use `iter_labeled_windows`.
-- **Single-click sessions.** A session with two clicks (Rest + DoF0) yields exactly one usable trial after the skip-first heuristic. Long cycle-style recordings (rest 3 s → DoF 3 s → rest 3 s → DoF 3 s, etc.) yield many trials per session and produce robust models.
+- **Single-click sessions.** A session with two clicks (Rest + DOF0) yields exactly one usable trial after the skip-first heuristic. Long cycle-style recordings (rest 3 s → DOF 3 s → rest 3 s → DOF 3 s, etc.) yield many trials per session and produce robust models.
