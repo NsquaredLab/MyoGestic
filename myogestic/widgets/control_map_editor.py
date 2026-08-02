@@ -399,7 +399,7 @@ class ControlMapEditor:
             self._baseline = self._snapshot()
             self._loaded = True
             return
-        self._header = _leading_comments(self._path.read_text())
+        self._header = _leading_comments(self._path.read_text(encoding="utf-8"))
         try:
             with self._path.open("rb") as handle:  # "rb" — tomllib requires binary
                 control_map = load_control_map(tomllib.load(handle))
@@ -436,15 +436,15 @@ class ControlMapEditor:
         if self._on_disk() is None:
             return dumped
         if self._unparseable_on_disk():
-            return self._path.read_text()   # show it so it can be fixed by hand
-        return self._path.read_text() if self._matches_disk() else dumped
+            return self._path.read_text(encoding="utf-8")   # show it so it can be fixed by hand
+        return self._path.read_text(encoding="utf-8") if self._matches_disk() else dumped
 
     def _unparseable_on_disk(self) -> bool:
         """Whether the file cannot be loaded at all. False when there is no file."""
         if self._on_disk() is None:
             return False
         try:
-            load_control_map(tomllib.loads(self._path.read_text()))
+            load_control_map(tomllib.loads(self._path.read_text(encoding="utf-8")))
         except (OSError, tomllib.TOMLDecodeError, ValueError):
             return True
         return False
@@ -462,7 +462,7 @@ class ControlMapEditor:
         if self._on_disk() is None:
             return False
         try:
-            on_disk = load_control_map(tomllib.loads(self._path.read_text())).as_control_space()
+            on_disk = load_control_map(tomllib.loads(self._path.read_text(encoding="utf-8"))).as_control_space()
         except (OSError, tomllib.TOMLDecodeError, ValueError):
             return False
         mine = (self.as_control_map() or ControlMap(bindings={})).as_control_space()
@@ -577,8 +577,10 @@ class ControlMapEditor:
             self._message = "Untitled — choose a location with Save as..."
             return False
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        # TOML is defined as UTF-8; the platform default is cp1252 on Windows, which
+        # would mangle any non-ASCII comment or name a user put in their map.
         self._path.write_text(
-            dump_control_map(control_map, header=self._header or _HEADER)
+            dump_control_map(control_map, header=self._header or _HEADER), encoding="utf-8"
         )
         # Re-stamp immediately: the write just changed the file, and without this the very
         # next `poll_disk` would report our own save as an external change.

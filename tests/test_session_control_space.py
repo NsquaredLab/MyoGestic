@@ -54,7 +54,7 @@ def test_control_space_round_trips(tmp_path):
     """What was recorded must rebuild the exact mapping it was recorded under."""
     path = _record(tmp_path, names=["my_index", "fist"],
                    control_space=CONTROL_MAP.as_control_space())
-    meta = json.loads((path / "meta.json").read_text())
+    meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
     assert meta["schema_version"] == 3
     rebuilt = read_control_space(meta["control_space"])
     assert rebuilt.as_control_space() == CONTROL_MAP.as_control_space()
@@ -68,7 +68,7 @@ def test_control_space_preserves_the_routing_and_its_weights(tmp_path):
     """
     path = _record(tmp_path, names=["my_index", "fist"],
                    control_space=CONTROL_MAP.as_control_space())
-    rebuilt = read_control_space(json.loads((path / "meta.json").read_text())["control_space"])
+    rebuilt = read_control_space(json.loads((path / "meta.json").read_text(encoding="utf-8"))["control_space"])
     refs = {r.address: r.weight for r in rebuilt.bindings["fist"].targets}
     assert refs == {"vhi.prediction.thumb": 0.6, "vhi.prediction.middle": 1.0}
     assert rebuilt.bindings["my_index"].targets[0].address == "vhi.prediction.index"
@@ -80,14 +80,14 @@ def test_a_recording_says_which_control_space_format_it_used(tmp_path):
 
     path = _record(tmp_path, names=["my_index", "fist"],
                    control_space=CONTROL_MAP.as_control_space())
-    meta = json.loads((path / "meta.json").read_text())
+    meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
     assert meta["control_space"]["format"] == CONTROL_SPACE_FORMAT
 
 
 def test_control_space_is_optional(tmp_path):
     """Every existing caller omits it, and must keep working."""
     path = _record(tmp_path, names=None)
-    meta = json.loads((path / "meta.json").read_text())
+    meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
     assert "control_space" not in meta
     session = open_session_store(path)
     try:

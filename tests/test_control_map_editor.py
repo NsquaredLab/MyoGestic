@@ -131,7 +131,7 @@ class TestTheFileStaysTheSourceOfTruth:
     def test_the_written_file_carries_a_header_for_whoever_opens_it_next(self, tmp_path):
         editor = _editor(tmp_path, GOOD)
         editor.save()
-        text = editor.path.read_text()
+        text = editor.path.read_text(encoding="utf-8")
         assert text.startswith("#")
         assert "source of truth" in text
 
@@ -232,11 +232,11 @@ class TestSaveIsBlockedWhileTheMapIsWrong:
     def test_nothing_is_written_while_a_problem_stands(self, tmp_path):
         """The point of all of the above: the file on disk stays loadable."""
         editor = _editor(tmp_path, GOOD)
-        original = editor.path.read_text()
+        original = editor.path.read_text(encoding="utf-8")
         editor.add_control("a", "vhi.prediction.thumb.flexion")
         editor.add_control("b", "vhi.prediction.thumb.flexion")   # the same control twice
         assert editor.save() is False
-        assert editor.path.read_text() == original
+        assert editor.path.read_text(encoding="utf-8") == original
 
 
 class TestEditing:
@@ -519,13 +519,13 @@ class TestTheFileCanBeEditedAsText:
     def test_text_that_parses_but_would_not_bind_still_blocks_the_save(self, tmp_path):
         """Two aliases on one control: valid TOML, a valid address, unusable map."""
         editor = _editor(tmp_path, GOOD)
-        original = editor.path.read_text()
+        original = editor.path.read_text(encoding="utf-8")
         assert editor.apply_raw(
             '[dofs]\na = "vhi.prediction.thumb.flexion"\nb = "vhi.prediction.thumb.flexion"\n'
         ), "the text itself is valid, so applying it succeeds"
         assert editor.problems(), "but the map is not usable"
         assert editor.save() is False
-        assert editor.path.read_text() == original
+        assert editor.path.read_text(encoding="utf-8") == original
 
     def test_a_round_trip_through_the_text_changes_nothing(self, tmp_path):
         editor = _editor(tmp_path, GOOD)
@@ -1048,25 +1048,25 @@ class TestSaveAs:
         elsewhere = tmp_path / "nested" / "experiment.toml"
         assert editor.save_as(elsewhere) is True
         assert editor.path == elsewhere
-        assert load_control_map(tomllib.loads(elsewhere.read_text())).bindings
+        assert load_control_map(tomllib.loads(elsewhere.read_text(encoding="utf-8"))).bindings
 
     def test_the_original_is_left_alone(self, tmp_path):
         editor = _editor(tmp_path, GOOD)
         original = editor.path
-        was = original.read_text()
+        was = original.read_text(encoding="utf-8")
         editor._draft[0]["alias"] = "changed"
         editor.save_as(tmp_path / "copy.toml")
-        assert original.read_text() == was
+        assert original.read_text(encoding="utf-8") == was
 
     def test_a_later_save_goes_to_the_new_path(self, tmp_path):
         editor = _editor(tmp_path, GOOD)
         original = editor.path
-        was = original.read_text()
+        was = original.read_text(encoding="utf-8")
         editor.save_as(tmp_path / "copy.toml")
         editor._draft[0]["alias"] = "after_save_as"
         assert editor.save() is True
-        assert "after_save_as" in (tmp_path / "copy.toml").read_text()
-        assert original.read_text() == was
+        assert "after_save_as" in (tmp_path / "copy.toml").read_text(encoding="utf-8")
+        assert original.read_text(encoding="utf-8") == was
 
     def test_the_watch_follows_the_new_path(self, tmp_path):
         """Otherwise the editor would keep reacting to the file it no longer edits."""
@@ -1432,7 +1432,7 @@ class TestAnUntitledMapIsARealState:
         assert editor.save_as(target) is True
         assert editor.path == target
         assert editor.label == "mine.toml"
-        assert load_control_map(tomllib.loads(target.read_text())).bindings
+        assert load_control_map(tomllib.loads(target.read_text(encoding="utf-8"))).bindings
 
     def test_the_watch_does_not_fire_on_a_map_with_no_file(self):
         """`poll_disk` runs every frame; an untitled map must not look like a change."""

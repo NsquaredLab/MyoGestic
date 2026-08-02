@@ -39,9 +39,9 @@ def scan_sessions(base_path: str) -> list[dict]:
 def _session_row(path: Path) -> dict | None:
     try:
         if path.is_dir() and (path / "meta.json").exists():
-            meta = json.loads((path / "meta.json").read_text())
+            meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
             labels_file = path / "labels.json"
-            labels = json.loads(labels_file.read_text()) if labels_file.exists() else []
+            labels = json.loads(labels_file.read_text(encoding="utf-8")) if labels_file.exists() else []
         elif path.is_file() and path.name.endswith(".zip"):
             # Any .zip with a meta.json inside is a session (matches the
             # "Load Files..." dialog filter + tooltip); recordings write

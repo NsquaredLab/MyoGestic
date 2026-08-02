@@ -366,7 +366,7 @@ def test_save_meta_omits_class_names_when_none():
             "emg", np.zeros((5, 1), dtype=np.float32), np.array([0.0, 0.02, 0.04, 0.06, 0.08])
         )
         session.save_meta("NoNames")  # no class_names arg
-        meta = json.loads((session.path / "meta.json").read_text())
+        meta = json.loads((session.path / "meta.json").read_text(encoding="utf-8"))
         assert "class_names" not in meta
         loaded = open_session_store(session.path)
         assert loaded.class_names == []

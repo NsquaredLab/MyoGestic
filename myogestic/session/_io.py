@@ -29,9 +29,9 @@ def open_session_store(path: str | Path) -> Session:
     p = Path(path)
     zip_store = None
     if p.is_dir():
-        meta = json.loads((p / "meta.json").read_text())
+        meta = json.loads((p / "meta.json").read_text(encoding="utf-8"))
         labels_file = p / "labels.json"
-        labels = json.loads(labels_file.read_text()) if labels_file.exists() else []
+        labels = json.loads(labels_file.read_text(encoding="utf-8")) if labels_file.exists() else []
 
         def open_array(name: str) -> zarr.Array:
             return zarr.open_array(str(p / name), mode="r")

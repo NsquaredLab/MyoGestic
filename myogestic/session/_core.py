@@ -322,11 +322,13 @@ class Session:
             meta["class_names"] = list(class_names)
         if control_space is not None:
             meta["control_space"] = dict(control_space)
-        (self.path / "meta.json").write_text(json.dumps(meta, indent=2))
+        (self.path / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         labels = [
             {"timestamp": e.timestamp, "class_index": e.class_index} for e in self.label_track
         ]
-        (self.path / "labels.json").write_text(json.dumps(labels, indent=2))
+        (self.path / "labels.json").write_text(
+            json.dumps(labels, indent=2), encoding="utf-8"
+        )
 
     def pack_to_zip(self) -> Path:
         """Pack the session folder into a single `<name>.session.zip` file.

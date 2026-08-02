@@ -139,7 +139,7 @@ def test_examples_survive_an_unlaunchable_target(monkeypatch):
     vhi_examples = [
         path
         for path in EXAMPLES
-        if "vhi" in path.read_text() and path.parent.name == "synthetic"
+        if "vhi" in path.read_text(encoding="utf-8") and path.parent.name == "synthetic"
     ]
     assert vhi_examples, "no VHI examples found — has the layout moved?"
     for path in vhi_examples:

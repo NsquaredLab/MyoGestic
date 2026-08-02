@@ -68,7 +68,7 @@ def _dof_blocks() -> list[tuple[str, int, str]]:
     for page in sorted(DOCS.rglob("*.md")):
         if "superpowers" in page.parts:  # plans and specs are records, not instructions
             continue
-        lines = page.read_text().splitlines()
+        lines = page.read_text(encoding="utf-8").splitlines()
         start = None
         for number, line in enumerate(lines, 1):
             if start is None and line.strip().startswith("```toml"):

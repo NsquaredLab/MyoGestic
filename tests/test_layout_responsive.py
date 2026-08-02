@@ -668,7 +668,7 @@ class TestThePlaygroundPicksALayoutForTheWidth:
             / "examples"
             / "synthetic"
             / "control_map_studio.py"
-        ).read_text()
+        ).read_text(encoding="utf-8")
         namespace: dict[str, object] = {}
         for line in source.splitlines():
             if line.startswith(("STACK_BELOW", "CONTROLS_W")):
@@ -724,7 +724,7 @@ class TestThePlaygroundPicksALayoutForTheWidth:
             / "examples"
             / "synthetic"
             / "control_map_studio.py"
-        ).read_text()
+        ).read_text(encoding="utf-8")
 
     def test_both_layouts_are_declared_and_differ(self):
         source = (
@@ -732,7 +732,7 @@ class TestThePlaygroundPicksALayoutForTheWidth:
             / "examples"
             / "synthetic"
             / "control_map_studio.py"
-        ).read_text()
+        ).read_text(encoding="utf-8")
         assert "WIDE = Grid(" in source
         assert "NARROW = Grid(" in source
         # The whole point: the wide layout gives the editor the slack, so the control
@@ -777,7 +777,7 @@ class TestThePickerPopupIsBounded:
             / "myogestic"
             / "widgets"
             / "control_map_editor.py"
-        ).read_text()
+        ).read_text(encoding="utf-8")
         popup = source.split("begin_combo")[1].split("end_combo")[0]
         assert "set_next_item_width(-1)" not in popup
 

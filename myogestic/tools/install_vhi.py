@@ -342,7 +342,8 @@ def _macos_gatekeeper_note(target: Path) -> None:
 
 def _write_marker(target: Path, tag: str, asset: str) -> None:
     (target / "vhi-version.txt").write_text(
-        f"installed_tag={tag}\nasset={asset}\nplatform={platform.system()}/{platform.machine()}\n"
+        f"installed_tag={tag}\nasset={asset}\nplatform={platform.system()}/{platform.machine()}\n",
+        encoding="utf-8",
     )
 
 
