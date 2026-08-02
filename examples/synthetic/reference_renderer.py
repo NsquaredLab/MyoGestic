@@ -125,9 +125,13 @@ class ReferenceRenderer(pb2_grpc.VhiControlServicer):
                         if info is None:
                             continue
                         if info.n_channels != 1:
-                            # Refused, not tolerated. Reading element zero of a wider
-                            # stream would render *something* for every address and say
-                            # nothing — the failure this contract exists to make loud.
+                            # Refused, not tolerated. An inlet is found by its address's
+                            # *stream name*, so a wide stream can only ever reach the one
+                            # address it is named for — it cannot corrupt the others. What
+                            # reading element zero of it would do is quieter and no better:
+                            # element zero of somebody's nine-channel pose frame is a
+                            # different DOF's value entirely, and this address would track
+                            # it all session — plausible, in range, and completely wrong.
                             print(
                                 f"reference renderer: {address} is published "
                                 f"{info.n_channels} channels wide, and this contract is "

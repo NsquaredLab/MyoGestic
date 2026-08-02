@@ -51,19 +51,30 @@ it.
 | serve `SetPresentation` | for a client asking you to smooth incoming poses |
 | serve the four recording RPCs | driving a ground-truth hand through a capture session |
 
-Nothing above is about *your device*. Once something with force behind it is on the other
-end, four more things are worth doing — none of them is in the reference renderer below,
-because none is part of the wire contract and each is a decision only you can make:
+Nothing above is about *running* the thing. The table below is what turns a process that
+satisfies the wire into an application you can leave up, and it is a separate table only
+because a client cannot check any of it — not because it is optional or because it waits
+for hardware. Closing inlets and joining reader threads is lifecycle hygiene for every
+renderer there is; refusing a duplicate producer and refusing a non-finite or out-of-range
+sample is what makes your input deterministic, which a simulation wants as much as a
+gripper does; and every renderer already *has* a liveness policy — the only question is
+whether anyone wrote it down.
 
-| once it drives hardware | why |
+| every renderer | why |
 |---|---|
 | check the sample, not just the width | a correctly shaped stream still carries a NaN out of a divide or a `12.0` out of an unclipped model. The range you advertised is a promise you are entitled to enforce before anything moves |
 | refuse an address published by more than one outlet | resolving into `{info.name: info}` keeps whichever producer the sweep answered with last, so two applications driving one DOF look exactly like one, and which you obey changes between restarts |
 | state a liveness policy | hold-last, a timed return to rest, or a hardware deadman. A `SIGKILL`ed producer sends no neutral frame, and *nothing* about a stream going quiet distinguishes an idle system from a dead one. `source_id` recovery is a separate concern: it decides whether the stream comes back, not what the device does meanwhile — and neither replaces an interlock the software is not in the path of |
 | close inlets and join reader threads on shutdown | setting an event is not shutting down: it leaves the reader mid-`pull_chunk` while the caller carries on, and every inlet still open and re-connecting |
 
-[Integrate your own interface](../tutorials/integrate-your-interface.md) builds a renderer
-that does all four, one stage at a time.
+**The reference renderer below meets none of them, and that is deliberate.** It is a wire
+example — the least code that shows the transport — so it renders any sample that is the
+right shape, keeps `{info.name: info}` and cannot see a duplicate producer, is hold-last by
+omission rather than by decision, and `stop()`s by setting a flag without joining its reader
+or closing an inlet. Read it for the contract; do not deploy it as a template.
+[Integrate your own interface](../tutorials/integrate-your-interface.md) builds one that
+meets all four instead, one stage at a time — and marks the one place its duplicate check
+stops looking.
 
 ## The whole renderer
 

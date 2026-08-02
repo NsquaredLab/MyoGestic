@@ -458,7 +458,7 @@ except ValueError as exc:
 Now the half that moves. MyoGestic publishes **one LSL stream per address, named for that
 address, one channel wide**.
 
-`my_renderer.py` gains some imports, four fields, and five methods. **The methods belong to
+`my_renderer.py` gains some imports, five fields, and five methods. **The methods belong to
 the `RigRenderer` class you already have** — they join `GetControlManifest`, `serve` and
 `stop` rather than replacing them, so do not start a second `class` statement. If anything
 below lands ambiguously, [the finished file](#my_rendererpy) is at the end of the page.
@@ -472,7 +472,7 @@ from contextlib import suppress
 from mne_lsl.lsl import StreamInlet, resolve_streams
 ```
 
-Four more fields in `__init__`:
+Five more fields in `__init__`:
 
 ```python
         #: When each address last accepted a sample, for the liveness policy in stage 5.
@@ -495,6 +495,14 @@ Finding and opening the inlets:
         whichever producer the sweep happened to answer with last, so two applications
         both driving your gripper would look exactly like one, and which of them you were
         obeying would change between restarts.
+
+        **This sees a duplicate only at the moment it opens the inlet.** `_read` drops an
+        address from `missing` as soon as it has one, so nothing sweeps for that address
+        again — a second producer that starts *afterwards* is never noticed: liblsl keeps
+        feeding you the outlet your inlet already bound to, and the other one is simply
+        not read. Closing that gap costs a resolve sweep on a timer whether or not
+        anything is wrong, which is a real price on a multicast network. Decide it for
+        your rig; this one takes the cheap half and says so.
         """
         found: dict[str, list] = {}
         for info in resolve_streams(timeout=1.0):
@@ -620,10 +628,20 @@ Finally, `serve` starts both threads and `stop` shuts them down properly:
 
         Setting the event is not shutting down. The threads are daemons, so the process
         will exit either way — but a `stop()` that only sets a flag leaves the reader
-        mid-`pull_chunk` while the caller carries on, and every inlet still open. Joining
-        first means nothing touches an inlet after this returns, so closing them is safe;
-        closing them means liblsl stops trying to re-connect to a stream this rig has
-        finished with.
+        mid-`pull_chunk` while the caller carries on, and every inlet still open. So join
+        first, then close: closing an inlet is what stops liblsl trying to re-connect to a
+        stream this rig has finished with.
+
+        The join is **bounded, and that is a trade rather than a detail**. Two seconds is
+        comfortably longer than a pass of `_read` — a one-second resolve sweep plus the
+        back-off — so in practice the reader has ended by the time the loop below runs. It
+        is a timeout and not a bare `join()` because a wedged liblsl call would otherwise
+        hang shutdown for ever. If it *does* expire, this closes inlets underneath a
+        reader that is still using them, which is a race liblsl makes no promise about;
+        the reader will not re-open anything (`_stop` is set, so that pass is its last)
+        but that is the extent of the guarantee. A rig that cannot accept even that
+        should `join()` without a timeout and accept a hung reader hanging shutdown
+        instead. What you may *not* do is keep the timeout and describe it as a wait.
         """
         self._stop.set()
         for thread in self._threads:
@@ -715,6 +733,12 @@ refusal:
 ```
 rig: rig.gripper.closure is published by 2 outlets at once. One address, one producer — not opening any of them.
 ```
+
+Order matters for that one, and it is the limit `_open`'s docstring names: start the two
+outlets *before* the renderer and you get the refusal above; start the second one after the
+renderer already holds an inlet for that address and nothing is printed at all, because
+nothing sweeps for an address that is no longer missing. The rig keeps rendering whichever
+producer it bound to first. Know which half you have before you rely on it.
 
 And a one-channel stream carrying a value the rig never agreed to render gets the third:
 
@@ -920,6 +944,12 @@ Then, on `RigRenderer` — again, the same class, gaining a field and a method:
                 rejected[address] = f"{state!r} is not one of {list(MODES)}"
             else:
                 self.mode = state
+                #: Printed *here*, not left to the status poller. This handler runs once
+                #: per command and in the order the commands arrived, so it is the only
+                #: place a state change is certain to be seen. `_watch` samples every
+                #: 50 ms and shows you whatever `self.mode` happens to be at the tick —
+                #: a state replaced before the next tick leaves no trace at all.
+                print(f"rig: mode -> {state}")
         return pb2.ControlAck(applied=not rejected, rejected=rejected)
 ```
 
@@ -996,18 +1026,17 @@ assert mode.debounce_s == 0.1              # this one the map did say
 
 ### Checkpoint
 
-Add this to the end of `drive.py`'s `try:` block. **The sleeps are load-bearing**, and are
-not there to be tidy: `set_control` only *queues* a frame for an async sender, and the
-renderer's status printer polls every 50 ms. Back-to-back selects can therefore be
-delivered, applied and overwritten between two prints, and you would never see `active` at
-all — a checkpoint that fails to observe a system that is working perfectly.
+Add this to `drive.py` **inside the same `if bus is not None:` block**, after the `for`
+loop — eight spaces of indent, not four. At the end of the `try:` but outside the guard it
+would call `select` on `None` every time you run it with the renderer down, which is the
+one case the guard exists for:
 
 ```python
-    print(bus.select("mode", "active"))
-    time.sleep(0.5)
-    print(bus.select("mode", "rest"))
-    time.sleep(0.5)
-    print(bus.select("mode", "banana"))
+        print(bus.select("mode", "active"))
+        time.sleep(0.5)
+        print(bus.select("mode", "rest"))
+        time.sleep(0.5)
+        print(bus.select("mode", "banana"))
 ```
 
 ```
@@ -1016,7 +1045,33 @@ True
 False
 ```
 
-and on the renderer:
+and on the renderer, **four** lines, in this order, every run:
+
+```
+rig: mode -> rest
+rig: mode -> active
+rig: mode -> rest
+rig: mode -> rest
+```
+
+Only the middle two are your `select` calls, and the bracketing pair is worth understanding
+rather than ignoring. The first is the *push loop*: `mode` is absent from what you push, so
+it holds the rest its manifest declares, and a discrete DOF is delivered as an **edge** —
+once, when its debounce settles, which at `debounce_s = 0.1` and `hz = 32` is four ticks in.
+The last is `link.stop()` in the `finally`, delivering the same neutral frame to every DOF
+that put the axes back in stage 5, the mode included.
+
+All four come from `SetControl` itself, and that is why they are the checkpoint rather than
+the status line. Nothing about the *timing* here is guaranteed: `set_control` only queues a
+frame for the client's worker thread, and that thread drains one blocking RPC at a time with
+a two-second deadline — so `rest` can already be queued before `active` has been delivered,
+and both can land inside a single 50 ms tick of the status printer. The sleeps make that
+unlikely, not impossible. A checkpoint resting on the poller catching `mode=active` would
+therefore fail against a system working perfectly, and an output block a reader may never
+see is not a checkpoint. A handler that prints what it applied is one.
+
+The status printer usually shows the same two states, and *this* pair is the one you may
+not get:
 
 ```
 rig: gripper.closure=+0.00  wrist.pronation=+0.00  mode=active
@@ -1054,15 +1109,19 @@ The client logs that as `VHI rejected these control addresses: {…}` and nothin
 !!! warning "`applied=False` does not mean *nothing* happened"
     The handler above validates and applies **per entry**, so a request carrying one good
     address and one bad one applies the good one and still answers `applied=False`. That is
-    deliberate and it is also what the Virtual Hand does — `VhiControlService.SetControl`
-    walks both maps the same way — so a client written against one renderer behaves the same
-    against the other. `applied` means "every entry was accepted", not "the frame was
-    atomic", and `rejected` is the list of what was not.
+    deliberate, and it is what the Virtual Hand does — `VhiControlService.SetControl` walks
+    both maps the same way — so copying it is how you behave like the renderer every client
+    was written against.
 
-    If your device cannot tolerate a half-applied frame — two actuators that must move
-    together, a state machine with no valid intermediate — then validate the whole request
-    into a local dict first and only mutate once nothing was rejected. Say which one you do;
-    a client cannot tell from the wire.
+    The proto only defines the `true` case: "every value in the request was applied". It
+    says nothing about what `false` implies, so **validate-first is equally inside the
+    contract**: check the whole request into a local dict and mutate only if nothing was
+    rejected, and your `applied=False` means "nothing moved" where VHI's means "some of it
+    did". That is a behavioural difference, not a violation — and a client cannot tell the
+    two apart from the wire, because there is nothing on the wire that distinguishes them.
+    Which is exactly why it belongs in your documentation. Pick per-entry unless your
+    device cannot tolerate a half-applied frame — two actuators that must move together, a
+    state machine with no valid intermediate — and say which one you picked either way.
 
 !!! note "The key in `request.discrete` is your **address**, not the client's alias"
     `rig.mode`, not `mode` — the same way `continuous` is keyed, and the same way your
@@ -1163,6 +1222,10 @@ class RigRenderer(pb2_grpc.VhiControlServicer):
         Per entry, so a mixed request applies its good entries and still answers
         ``applied=False``. Validate into a local dict first if your device cannot
         tolerate that.
+
+        Prints each accepted state itself: this handler runs once per command, so it
+        is the only observation of a state change that cannot be missed. `_watch`
+        polls, and a state replaced between two polls never appears.
         """
         rejected = {}
         for address, state in request.discrete.items():
@@ -1172,6 +1235,7 @@ class RigRenderer(pb2_grpc.VhiControlServicer):
                 rejected[address] = f"{state!r} is not one of {list(MODES)}"
             else:
                 self.mode = state
+                print(f"rig: mode -> {state}")
         return pb2.ControlAck(applied=not rejected, rejected=rejected)
 
     # --- lifecycle ------------------------------------------------------------
@@ -1188,7 +1252,12 @@ class RigRenderer(pb2_grpc.VhiControlServicer):
             self._threads.append(thread)
 
     def stop(self) -> None:
-        """Stop the threads, close every inlet, and stop the gRPC server."""
+        """Stop the threads, close every inlet, and stop the gRPC server.
+
+        The join is bounded so a wedged liblsl call cannot hang shutdown for ever. If
+        the timeout expires the inlets are closed under a still-running reader; drop
+        the timeout if your rig cannot accept that.
+        """
         self._stop.set()
         for thread in self._threads:
             thread.join(timeout=2.0)
@@ -1365,9 +1434,10 @@ finally:
 ## What you have
 
 A renderer that declares its own vocabulary, is bound against by name, reads one stream per
-axis, refuses a wrong-width producer, a duplicated one and an out-of-range sample, comes
-back after a restart, moves in the direction its names claim, states what it does when its
-producer dies, and holds a state. That is the entire contract.
+axis, refuses a wrong-width producer, a duplicated one *at the moment it opens the inlet*,
+and an out-of-range sample, comes back after a restart, moves in the direction its names
+claim, states what it does when its producer dies, and holds a state. That is the entire
+contract, plus the four things running it asks for that no client can check.
 
 The shortest possible version of all of it is
 [`examples/synthetic/reference_renderer.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/reference_renderer.py)
