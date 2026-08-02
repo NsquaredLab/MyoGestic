@@ -176,7 +176,9 @@ one - six servos on a serial port, runnable with no hardware:
 uv run python examples/synthetic/servo_hand.py
 ```
 
+```python
 --8<-- "examples/synthetic/servo_hand.py"
+```
 
 Three things in it carry the weight: `hand.thumb` drives **two** servos, so the coupling stays
 out of the map; `frame` iterates `SERVOS` by name, so the wire order is the device's; and
