@@ -1,18 +1,67 @@
 # Drive your own device
 
-A **target** is a Python object that drives a control map onto something: a hand, a
-cursor, a prosthesis, a motor controller. MyoGestic ships two ([`RemoteTarget`][myogestic.remote.RemoteTarget] and
-[`KeyboardTarget`][myogestic.keyboard.KeyboardTarget]); this is how you write a third.
+Anything MyoGestic moves — a prosthesis on a serial port, a motor controller, a cursor, a
+robot arm — is a **target**: a plain object with three methods that you hand to a
+[`ControlBus`][myogestic.controls.ControlBus]. Nothing registers, nothing subclasses,
+nothing is discovered by name.
 
-There is one way to do it. A target is a plain object with three methods, you hand it to a
-[`ControlBus`][myogestic.controls.ControlBus], and the bus drives it. Nothing registers,
-nothing subclasses, nothing is discovered by name.
+## Run it first
 
-If "control map", "address" and "alias" are new words, read [Concepts ›
-Controls](../concepts/controls.md) first. It explains the system. This is the only route; a
-[remote target](drive-a-remote-target.md) is the case where the target is already written.
+`examples/synthetic/my_device.py` is a complete target with three lines left for you. It
+needs no hardware:
 
-## The contract
+```bash
+uv run python examples/synthetic/my_device.py
+```
+
+## What you should see
+
+```
+a frame, as @pipeline.predict would push it:
+  mydevice.grip              +0.80
+  mydevice.wrist.pronation   -0.40
+out of range and NaN, both handled before you see them:
+  mydevice.grip              +1.00
+  mydevice.wrist.pronation   +0.00
+teardown, which rests every control first:
+  mydevice.grip              +0.00
+  mydevice.wrist.pronation   +0.00
+  stopped
+```
+
+Three things happened without you writing them. `5.0` arrived at your device as `1.0`, because
+it declared `hi=1.0`. A `NaN` arrived as `0.0` rather than as full deflection. And every
+control was returned to rest *before* teardown, so the device does not keep its last grip.
+That is [`ControlBus`][myogestic.controls.ControlBus], and it is the reason a target is three
+methods rather than thirty.
+
+## Change these three things
+
+Copy `my_device.py` next to your own code and edit the three marked lines:
+
+| | what | where |
+|---|---|---|
+| **1** | **Name your controls.** Two or more dotted lowercase segments; the first is your namespace. Name a *direction*, so `+1` means something: `grip.close`, not `grip.motor`. | `ADDRESSES` |
+| **2** | **Drive your hardware.** Replace the `print` with your call: `self._port.write(...)`, `self._motors.set(...)`, an MQTT publish, anything. | in `send` |
+| **3** | **Release your hardware.** Close the port, disconnect, power down. | in `stop` |
+
+Nothing else has to change. If your device only moves one way, declare `lo=0.0` in
+`capabilities` and MyoGestic will refuse a map that asks for the other direction.
+
+To check a control map against your device before running anything:
+
+```bash
+uv run python tools/inspect_control_map.py my-map.toml
+```
+
+It calls only `capabilities()` and `resolve()`, so it builds no target and moves nothing.
+
+## The contract, in full
+
+If "control map", "address" and "alias" are new words,
+[Concepts › Controls](../concepts/controls.md) explains the system this page uses. A
+[remote target](drive-a-remote-target.md) is the separate case where your device is already
+its own program and the target is written for you.
 
 ```python
 class Target(Protocol):
