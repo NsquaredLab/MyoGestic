@@ -1,4 +1,4 @@
-# Outputs
+# Outlets
 
 An `Outlet` owns a `.push(data)` method plus a daemon thread that sends the latest pushed
 value to its destination at a steady rate. See [Publish a data stream](../how-to/add-an-output.md).
@@ -8,7 +8,7 @@ value to its destination at a steady rate. See [Publish a data stream](../how-to
     no neutral frame on shutdown. A hand, a motor, a haptic or a cursor is a
     [`Target`][myogestic.controls.Target] — see [Drive your own device](../how-to/add-a-target.md).
 
-    Outputs are part of that road rather than an alternative to it:
+    An outlet is part of that road rather than an alternative to it:
     [`RemoteTarget`][myogestic.remote.RemoteTarget] builds one
     [`LSLOutlet`][myogestic.outputs.LSLOutlet] per control it drives.
 
@@ -24,6 +24,6 @@ latest-wins slot, and per-error-kind deduplication. Subclass it to add `_send`.
 
 ::: myogestic.outputs.Outlet
 
-## Built-in outputs
+## Built-in outlets
 
 ::: myogestic.outputs.LSLOutlet

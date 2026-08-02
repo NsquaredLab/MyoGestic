@@ -71,7 +71,7 @@ ControlBus(controls, targets=[...], smoothing=None, hz=50, on_warn=None)
 connect_controls(control_map, targets, ...) -> ControlBus | None  # None while unreachable
 ```
 
-## Outputs
+## Outlets
 
 [`LSLOutlet`][myogestic.outputs.LSLOutlet] — a paced sender, for telemetry or as a target's
 transport. It drives nothing on its own: no aliases, no range, no rest-on-stop.
