@@ -45,7 +45,7 @@ env_min, env_max = stream.get_display(n_pixels=800)
 # both shape == (n_pixels, n_channels)
 ```
 
-Returns a min/max envelope decimated to `n_pixels` columns - typical screen widths land at 300–1500. 64 channels at 2048 Hz with `window_ms=10000` is 64 × 2 × 800 = ~102K points, which ImPlot draws at 60 fps without breaking a sweat. The decimation uses [tsdownsample](https://github.com/predict-idlab/tsdownsample)'s M4 algorithm under the hood - preserves visual peaks without sub-sampling artefacts.
+Returns a min/max envelope decimated to `n_pixels` columns - typical screen widths land at 300–1500. 64 channels at 2048 Hz with `window_ms=10000` is 64 × 2 × 800 = ~102K points, which ImPlot draws at 60 fps. The decimation uses [tsdownsample](https://github.com/predict-idlab/tsdownsample)'s M4 algorithm under the hood - preserves visual peaks without sub-sampling artefacts.
 
 ### `get_raw_snapshot()` - for diagnostics
 

@@ -49,10 +49,10 @@ One Euro's parameters update *in place* - no rebuild - so smoothing history surv
 
 - `hz` - your tick rate (`predict_hz`). Used as fallback dt when `timestamp` isn't passed.
 - `min_cutoff_hz` - cutoff (Hz) at zero velocity. Lower = smoother at rest. Default 1.0.
-- `beta` - velocity-to-cutoff gain. Higher = more responsive on fast moves. Default 0.02. **Bump this if the hand feels laggy on fast clenches; lower if it twitches at rest.**
+- `beta` - velocity-to-cutoff gain. Higher = more responsive on fast moves. Default 0.02. **Increase it if fast movements lag; decrease it if the output varies at rest.**
 - `derivative_cutoff_hz` - cutoff for the velocity smoother. Rarely needs tuning. Default 1.0.
 
-The filter's secret is that it adapts: cutoff = `min_cutoff_hz + beta * |velocity|`. Fast motion → high cutoff (responsive); slow motion → low cutoff (smooth).
+The filter adapts its cutoff: cutoff = `min_cutoff_hz + beta * |velocity|`. Fast motion → high cutoff (responsive); slow motion → low cutoff (smooth).
 
 ### Gaussian tuning
 

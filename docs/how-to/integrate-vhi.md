@@ -43,8 +43,8 @@ link = ControlLink(CONTROL_MAP, [RemoteTarget(client=vhi_control, interface=vhi)
 
 One target drives the whole map, both hands included; no stream is named and none is counted.
 See [Negotiating with the target](../api/controls.md#negotiating-with-the-target) for what that
-resolves and what it refuses, and [Binding is deferred, not
-decided](../concepts/controls.md#binding-is-deferred-not-decided) for why this is a
+resolves and what it refuses, and [Binding retries while the target is
+unavailable](../concepts/controls.md#binding-retries-while-the-target-is-unavailable) for why this is a
 `ControlLink` and not a bus: an application that launches VHI from its own button necessarily
 binds before VHI exists.
 

@@ -13,7 +13,7 @@ fire  = "keyboard.tap.edit.space"       # one press per crossing
 Both targets share one file and one `ControlBus`. Nothing in the map format, the bus or the
 core distinguishes a key from a finger.
 
-## Nothing here is new
+## Keyboard controls are discrete DOFs
 
 A key is a **two-state discrete control**, so every part of "press it when the signal goes
 over 0.5" already existed:
@@ -54,7 +54,7 @@ keyboard
 where one gesture should mean one keystroke however long you hold it.
 
 !!! danger "This types into whatever window has focus"
-    A twitchy signal on `keyboard.tap.edit.enter` acts on your terminal. A
+    A rapidly changing signal on `keyboard.tap.edit.enter` submits repeatedly to the focused window. A
     [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget] therefore starts **disarmed** and
     sends nothing until [`arm`][myogestic.keyboard.KeyboardTarget.arm] is called; it disarms
     itself on `stop`, on a backend failure, and when the process exits.
@@ -69,8 +69,8 @@ where one gesture should mean one keystroke however long you hold it.
 
     On macOS the process also needs **Accessibility** permission, under System Settings ›
     Privacy & Security › Accessibility. Without it `pynput` reports success and nothing
-    happens, indistinguishable from a broken map, so `arm` checks and says so rather than
-    letting you hunt for it.
+    happens, indistinguishable from a broken map, so `arm` checks the permission and raises
+    with the reason.
 
 ## Reference
 

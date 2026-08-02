@@ -32,7 +32,7 @@ Size comes from the global scale, which resolves
 
 ## Panels
 
-`panel_header(title, icon)` renders the one true panel title: **uppercased, muted
+`panel_header(title, icon)` renders the standard panel title: **uppercased, muted
 (`text_disabled`), optional Font-Awesome icon, ellipsis-truncated** when the panel is too narrow
 (icon-only when there is no room at all). Pass `reserve=` to keep space for a right-aligned
 control so the *title* collapses instead of pushing it off.
