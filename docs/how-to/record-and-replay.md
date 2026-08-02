@@ -155,7 +155,9 @@ Your `@pipeline.predict` runs against the replayed data - same shape, same chann
 - **Comparing models** on a fixed input.
 - **Demos** without hardware.
 
-The replay loops by default; set `speed=0` if you want to step manually (TODO: not currently exposed).
+The replay loops back to the start when it reaches the end. `speed` scales the pacing against
+wall-clock time; `speed=0` halts it after the first chunk rather than stepping, since there is
+no manual-advance call.
 
 ## Common mistakes
 

@@ -114,7 +114,7 @@ def train(data):
 
 ## Where to put the filter
 
-**Inside `predict()`, before the output `.push()`.** That's the only place. The filter runs on the predict thread, smooths the freshly-computed pose, and pushes the smoothed value. Both the actuator (`vhi_outlet.push`) and the widgets (`pipeline.predictions`) see the smoothed version.
+**Inside `predict()`, before the output `.push()`.** That's the only place. The filter runs on the predict thread, smooths the freshly computed pose, and pushes the smoothed value. Both the actuator (`vhi_outlet.push`) and the widgets (`pipeline.predictions`) see the smoothed version.
 
 Don't filter inside the model - the model should produce raw predictions; smoothing is a separate concern that the user can tune live.
 
