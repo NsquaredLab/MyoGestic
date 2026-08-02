@@ -132,13 +132,13 @@ nav:
           - tutorials/index.md
           - EMG classification: tutorials/emg-classification.md
           - EMG regression with VHI: tutorials/emg-regression-with-vhi.md
-          - Your first remote target: tutorials/your-first-remote-target.md
+          - Your first remote target (a separate program): tutorials/your-first-remote-target.md
           - Examples directory: tutorials/examples-index.md
       - How-to:
           - how-to/index.md
           - Add a custom source: how-to/add-a-source.md
           - Drive your own device: how-to/add-a-target.md
-          - Drive a remote target: how-to/drive-a-remote-target.md
+          - Drive a remote target (a separate program): how-to/drive-a-remote-target.md
           - Add a custom widget: how-to/add-a-widget.md
           - Add a custom model: how-to/add-a-model.md
           - Enable on-disk recording: how-to/enable-recording.md
