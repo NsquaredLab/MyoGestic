@@ -1,29 +1,48 @@
-# How-to guides
+# Guides
 
-Recipes for specific tasks. Each guide assumes you've worked through [Getting Started](../getting-started.md) and at least skimmed [Concepts](../concepts/index.md).
+Every task guide, grouped by what you are trying to do. If you are new, start with
+[EMG classification](../tutorials/emg-classification.md): it runs in one command and
+establishes the App + Stream + Pipeline pattern everything else assumes.
+
+## Start here
+
+Complete runnable experiments, walked through line by line against a real file in `examples/`.
+
+- [EMG classification](../tutorials/emg-classification.md) - two-class Rest/Fist with CatBoost on RMS+MAV features. The best first read.
+- [EMG regression with VHI](../tutorials/emg-regression-with-vhi.md) - continuous 5-DOF control, recorded through the Virtual Hand and pushed back to it.
+- [Examples directory](../tutorials/examples-index.md) - one paragraph on each runnable example, with its command and what is worth changing.
+
+## Driving a device
+
+Anything that *moves* is a **target**: three methods, and a TOML control map naming which
+model output drives which control. [Concepts › Controls](../concepts/controls.md) explains the
+system itself.
+
+- [Drive your own device](add-a-target.md) - your prosthesis, motors or cursor, from Python. **Start here**: the copyable example runs without hardware.
+- [Drive a remote target](drive-a-remote-target.md) - the contract to serve if your device is already its own program.
+- [Build a remote target, stage by stage](../tutorials/your-first-remote-target.md) - that same contract, built in seven stages with a checkpoint at each.
+- [Integrate the Virtual Hand](integrate-vhi.md) - the one remote target this project ships.
+- [Install the Virtual Hand](install-vhi.md) - the installer CLI, and where a build is looked for.
+
+## Recording
+
+- [Enable on-disk recording](enable-recording.md) - the four lines that start writing sessions.
+- [Record and replay](record-and-replay.md) - capture sessions, read them back programmatically.
+- [Record good training data](record-good-training-data.md) - cycle-style recording, how many cycles you actually need, verifying templates before training.
+
+## Models and features
+
+- [Add a custom model](add-a-model.md) - wire `extract` / `train` / `predict` for any ML library.
+- [Feature extraction cookbook](feature-extraction-cookbook.md) - copy-paste `@pipeline.extract` snippets (RMS+MAV, bandpass+envelope, spectral, sliding RMS, onset detection, multi-stream fusion).
+- [Use the recipe feature set](use-recipe-features.md) - the shipped feature recipes.
+- [Keep state between pipeline stages](inter-stage-state.md) - rolling windows, stateful models, gating side effects on change.
+- [Post-process predictions](post-process-output.md) - `PostProcessor` and `myogestic.outputs.filters` for output smoothing.
 
 ## Extending the framework
 
-- [Add a custom source](add-a-source.md) - implement the `Source` protocol for a new device, file format, or transport.
-- [Drive your own device](add-a-target.md) - implement the `Target` protocol so a control map drives your prosthesis on a serial port, your motors, your cursor. Three methods and a write to a port. **Everything MyoGestic moves goes through one of these.**
-    - [Drive a remote target](drive-a-remote-target.md) - only if your device is *already its own program*, like the Virtual Hand. MyoGestic's side is written for you (`RemoteTarget`); this page is the contract yours has to serve.
-- [Add a custom widget](add-a-widget.md) - write a stateless function that draws ImGui commands from `ctx`.
-- [Add a custom model](add-a-model.md) - wire `extract` / `train` / `predict` for any ML library.
-
-## Recording and post-processing
-
-- [Record and replay](record-and-replay.md) - capture sessions, read them back programmatically.
-- [Record good training data](record-good-training-data.md) - cycle-style recording, how many cycles you actually need, verifying templates before training.
-- [Feature extraction cookbook](feature-extraction-cookbook.md) - copy-paste `@pipeline.extract` snippets (RMS+MAV, bandpass+envelope, spectral, sliding RMS, onset detection, multi-stream fusion).
-- [Post-process predictions](post-process-output.md) - `PostProcessor` and `myogestic.outputs.filters` for output smoothing.
-- [Publish a data stream](add-an-output.md) - an `Output` is a paced sender for telemetry: predictions to a recorder, an LSL stream another application reads. If something *moves*, you want a target, not this.
-
-## The Virtual Hand
-
-The one remote target this project ships. The contract it serves is generic — see [Drive a remote target](drive-a-remote-target.md) — so a device that is not a hand needs neither of these pages.
-
-- [Install the Virtual Hand](install-vhi.md) - the installer CLI, and where a build is looked for.
-- [Integrate the Virtual Hand](integrate-vhi.md) - `myogestic.vhi.virtual_hand`, the launcher pattern, and what VHI calls its own controls.
+- [Add a custom source](add-a-source.md) - implement the `Source` protocol for a new device, file format or transport.
+- [Add a custom widget](add-a-widget.md) - a class with a `.ui(ctx)` method that draws ImGui commands.
+- [Publish a data stream](add-an-output.md) - an `Output` is a paced sender for telemetry: predictions to a recorder, a stream another application reads. If something *moves*, you want a target, not this.
 
 ## Operations
 

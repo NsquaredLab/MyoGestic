@@ -128,29 +128,33 @@ nav:
   - Getting Started: getting-started.md
   - Anatomy of an app: anatomy.md
   - Guides:
-      - Tutorials:
+      - how-to/index.md
+      - Start here:
           - tutorials/index.md
           - EMG classification: tutorials/emg-classification.md
           - EMG regression with VHI: tutorials/emg-regression-with-vhi.md
-          - Your first remote target (a separate program): tutorials/your-first-remote-target.md
           - Examples directory: tutorials/examples-index.md
-      - How-to:
-          - how-to/index.md
-          - Add a custom source: how-to/add-a-source.md
+      - Driving a device:
           - Drive your own device: how-to/add-a-target.md
-          - Drive a remote target (a separate program): how-to/drive-a-remote-target.md
-          - Add a custom widget: how-to/add-a-widget.md
-          - Add a custom model: how-to/add-a-model.md
+          - Drive a remote target: how-to/drive-a-remote-target.md
+          - Build a remote target, stage by stage: tutorials/your-first-remote-target.md
+          - Integrate the Virtual Hand: how-to/integrate-vhi.md
+          - Install the Virtual Hand: how-to/install-vhi.md
+      - Recording:
           - Enable on-disk recording: how-to/enable-recording.md
           - Record and replay: how-to/record-and-replay.md
           - Record good training data: how-to/record-good-training-data.md
+      - Models and features:
+          - Add a custom model: how-to/add-a-model.md
           - Feature extraction cookbook: how-to/feature-extraction-cookbook.md
           - Use the recipe feature set: how-to/use-recipe-features.md
           - Keep state between pipeline stages: how-to/inter-stage-state.md
           - Post-process predictions: how-to/post-process-output.md
+      - Extending the framework:
+          - Add a custom source: how-to/add-a-source.md
+          - Add a custom widget: how-to/add-a-widget.md
           - Publish a data stream: how-to/add-an-output.md
-          - Integrate the Virtual Hand: how-to/integrate-vhi.md
-          - Install the Virtual Hand: how-to/install-vhi.md
+      - Operations:
           - Run headless (no GUI): how-to/headless-mode.md
   - Concepts:
       - concepts/index.md
