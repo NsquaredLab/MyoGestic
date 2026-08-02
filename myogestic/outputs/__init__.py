@@ -1,9 +1,14 @@
 """Output sinks — the send-side of myogestic.
 
-An [`Output`][] is the counterpart to a ``Source``: push prediction-control
-vectors out to a downstream consumer. The base class lives in
-[`myogestic.outputs.base`][]; concrete sinks are [`LSLOutlet`][] (LSL) and
-[`UDPOutput`][] (UDP datagrams).
+An [`Output`][] is the counterpart to a ``Source``: push a vector out to a
+downstream consumer at a steady rate. The base class lives in
+[`myogestic.outputs.base`][]; the one shipped sink is [`LSLOutlet`][].
+
+An output is a *paced sender*, not a way to drive a device. Anything that
+moves is a [`myogestic.controls.Target`][], which is where a control map's
+declared ranges, clamping and rest-on-teardown live. A target may write
+*through* an output — [`myogestic.remote.RemoteTarget`][] builds one
+[`LSLOutlet`][] per control it drives.
 
 Output-side smoothing filters (applied to the prediction-output vector *before*
 it leaves the app) live in [`myogestic.outputs.filters`][] and are re-exported
@@ -26,12 +31,10 @@ from myogestic.outputs.filters import (
     make_filter,
 )
 from myogestic.outputs.lsl import LSLOutlet
-from myogestic.outputs.udp import UDPOutput
 
 __all__ = [
     "Output",
     "LSLOutlet",
-    "UDPOutput",
     "VectorFilter",
     "IdentityFilter",
     "GaussianFilter",
@@ -40,6 +43,3 @@ __all__ = [
     "make_filter",
     "EdgeTrigger",
 ]
-
-# `SerialOutput` is opt-in. Import it directly when you have pyserial:
-#     from myogestic.outputs.serial_output import SerialOutput

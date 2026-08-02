@@ -241,7 +241,7 @@ Last line of every script. In order:
 ## What's not in this script
 
 - **Recording.** Streams *flow* whether you record or not. Recording starts when [`app.start_recording()`][myogestic.App.start_recording] is called (typically from the [`RecordingControls`][myogestic.widgets.RecordingControls] widget's **Record** button). See [Recording](concepts/recording.md).
-- **Outputs.** This skeleton predicts a class index but doesn't push to anything physical. Add an [`LSLOutlet`][myogestic.outputs.LSLOutlet], [`UDPOutput`][myogestic.outputs.UDPOutput], `SerialOutput`, or your own subclass and call `outlet.push(value)` from `predict()`. See [Add a custom output](how-to/add-an-output.md).
+- **Driving something.** This skeleton predicts a class index but doesn't move anything. Anything that moves — a prosthesis on a serial port, a motor controller, a cursor, the Virtual Hand — is a [`Target`][myogestic.controls.Target]: three methods, and a TOML control map naming which output drives which control. See [Drive your own device](how-to/add-a-target.md). To *publish* a stream rather than drive something, an [`LSLOutlet`][myogestic.outputs.LSLOutlet] pushed from `predict()` is the whole of it — see [Publish a data stream](how-to/add-an-output.md).
 - **Multi-stream.** A second `Stream("imu", ...)` and your `extract()` sees `windows["imu"]` too. Match the [`iter_aligned_windows`][myogestic.session.iter_aligned_windows] pattern in `train()` for paired primary/target streams. See [Recording](concepts/recording.md).
 - **Bridges.** Heavy-data sources (webcam, ultrasound) run as subprocesses via [`app.bridges(...)`][myogestic.App.bridges]. See [Threading](concepts/threading.md).
 

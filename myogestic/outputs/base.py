@@ -1,7 +1,13 @@
 """The [`Output`][] base class — the send-side counterpart to ``Source``.
 
-Concrete outputs (``LSLOutlet``, ``UDPOutput``, ``SerialOutput``) subclass this;
-they live in their own modules and are re-exported from [`myogestic.outputs`][].
+[`LSLOutlet`][myogestic.outputs.LSLOutlet] subclasses this; so does any sink you
+write for a transport of your own.
+
+This is a *paced sender*, not a way to drive a device. Anything that moves is a
+[`myogestic.controls.Target`][] — three methods, and the control map's declared
+ranges, clamping and rest-on-teardown come with it. A target may write *through*
+one of these: [`myogestic.remote.RemoteTarget`][] builds one
+[`LSLOutlet`][myogestic.outputs.LSLOutlet] per control it drives.
 """
 
 from __future__ import annotations
@@ -50,7 +56,7 @@ class Output:
        ``data`` as read-only; validate shape; raise on misuse rather
        than silently mis-sending.
     3. Override [`stop`][] if you need to close a resource (see
-       [`UDPOutput`][myogestic.outputs.UDPOutput] for an example).
+       [`LSLOutlet.stop`][myogestic.outputs.LSLOutlet.stop] for an example).
 
     Outputs are **user-owned**: instantiate them at module scope, call
     ``.push(data)`` from inside ``@pipeline.predict``. Do not register

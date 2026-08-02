@@ -48,9 +48,10 @@ Auto-generated from docstrings via [mkdocstrings](https://mkdocstrings.github.io
 
     ---
 
-    Push prediction output to LSL, UDP, or serial destinations.
+    Publish a vector to a downstream consumer at a steady rate. To *drive* something,
+    see [`Target`][myogestic.controls.Target].
 
-    [`LSLOutlet`][myogestic.outputs.LSLOutlet] · [`UDPOutput`][myogestic.outputs.UDPOutput]
+    [`LSLOutlet`][myogestic.outputs.LSLOutlet]
 
     [:octicons-arrow-right-24: Outputs API](outputs.md)
 
