@@ -35,12 +35,6 @@ uv run --extra grpc python drive.py            # terminal 2 — MyoGestic
 MyoGestic writes and your target reads, so running only the target publishes nothing and
 nothing moves.
 
-!!! tip "liblsl is chatty"
-    Anything touching LSL prints network-interface enumeration and multicast-bind warnings to
-    **stderr** on startup: `Could not bind multicast responder …`, `netif 'utun0' …`. They
-    are noise on a laptop with VPN interfaces up, not failures. Every output quoted on this
-    page is stdout; add `2>/dev/null` if you want to see only that.
-
 ## First, the wiring
 
 The MyoGestic side is two objects, and it is the same two for every remote target:
