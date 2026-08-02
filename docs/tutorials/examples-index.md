@@ -125,7 +125,7 @@ sklearn-shaped classifier.
 
 ### `emg_classification_grpc.py` - add the gRPC control plane
 
-Same classifier, plus the `VhiControlClient` gRPC plane: each predicted
+Same classifier, plus the `RendererClient` gRPC plane: each predicted
 class change commands a **discrete DOF**, whose declared
 `debounce_s` gates the tick-to-tick argmax flicker, and a `VhiMovementPanel`
 in the UI lets the user click movements directly. Demonstrates the

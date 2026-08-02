@@ -11,10 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **One target drives the whole map.** VHI used to render its two hands on two wide
   streams, and an application had to say which one it drove *before* it had read the map:
-  `VhiTarget(vhi_outlet, client=…)` bound whichever hand the outlet was built for, so a
+  `RendererTarget(vhi_outlet, client=…)` bound whichever hand the outlet was built for, so a
   map naming the operator's hand rendered nowhere and the editor hid those addresses to
   stop anyone writing one. Now every control has a stream of its own, named for its own
-  address, and one `VhiTarget(client=…, interface=vhi)` owns one outlet per address the
+  address, and one `RendererTarget(client=…, interface=vhi)` owns one outlet per address the
   map names — both hands included. An application no longer chooses a hand, there is
   nothing left for it to count, and a user editing a map sees every address their
   renderer offers.
@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **never** numerically low-pass filtered — averaging "rest" and "fist" interpolates
   through a state nobody selected — and that is enforced structurally: the filter only
   ever receives the continuous vector.
-- **`myogestic.vhi.VhiTarget` — renders control DOFs on a Virtual Hand.** It *asks* which
+- **`myogestic.vhi.RendererTarget` — renders control DOFs on a Virtual Hand.** It *asks* which
   contract the hand speaks rather than assuming, and refuses a configuration it cannot
   fully render rather than rendering part of it — a partly-understood negotiation would
   leave some DOFs believed rendered and others quietly dropped, and a dropped joint is
@@ -123,13 +123,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and which controls each carries, is in the manifest it answers with — so MyoGestic
   writes no stream name down anywhere except the one behind the editor's
   pose-versus-movement warning, and a renderer that renames a stream, or ships a third,
-  needs no configuration at all. `VhiTarget(…, stream="output"|"control_pose")` is gone
+  needs no configuration at all. `RendererTarget(…, stream="output"|"control_pose")` is gone
   for the same reason: pass `stream_name=` only to split one map across a target per
   hand. `ControlMapEditor(…, stream=…)` is gone outright — the picker offers every
   address every manifest reports, because hiding one hand made wanting it impossible to
   express.
 
-  An outlet you build and hand to `VhiTarget` is now **checked against the stream the map
+  An outlet you build and hand to `RendererTarget` is now **checked against the stream the map
   resolved to** and refused if they disagree. That could not happen before, because both
   came off `output_stream_name`; with the name on one side and the map on the other it
   can, and both hands number their channels from 0, so the leak would be silent. `LSLOutlet`
@@ -138,7 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The VHI 1.x bridge is gone. MyoGestic now requires VHI 2.0 or newer.** The v1 gRPC
   client, the vendored v1 `.proto` and its stubs, `InterfaceSpec.control_client()`, and
-  every fallback branch in `VhiTarget` — the legacy pose path, the address-to-channel
+  every fallback branch in `RendererTarget` — the legacy pose path, the address-to-channel
   table it routed through, and v1 `SetMovement` for held states.
 
   The substantive part is what replaces the fallback: **a refusal**. `bind` used to warn
@@ -161,6 +161,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (breaking)
 
+- **`myogestic.renderer` — the generic half moved out from under the hand's name.** The
+  target, the two gRPC clients, `InterfaceSpec`, `PoseSink` and the wire contract were all
+  in `myogestic.vhi`, and none of them is about a hand: they read a manifest, publish one
+  stream per address and forward discrete edges. Someone integrating a robot arm imported
+  `myogestic.vhi.VhiTarget` and reasonably concluded they had taken a wrong turn.
+
+  | was | is |
+  |---|---|
+  | `myogestic.vhi.VhiTarget` | `myogestic.renderer.RendererTarget` |
+  | `myogestic.vhi.VhiControlClient` | `myogestic.renderer.RendererClient` |
+  | `myogestic.vhi.VhiRecordingClient` | `myogestic.renderer.RecordingClient` |
+  | `myogestic.vhi.InterfaceSpec` | `myogestic.renderer.InterfaceSpec` |
+  | `myogestic.vhi.PoseSink` | `myogestic.renderer.PoseSink` |
+  | `myogestic/vhi/_proto/myogestic_vhi.proto` | `myogestic/renderer/_proto/renderer_control.proto` |
+
+  **No aliases and no shims.** A second name for one thing is what this removes; update the
+  import. `myogestic.vhi` keeps exactly what is about the Virtual Hand: `virtual_hand()`,
+  the install/version gate behind it, and `pose` — the layout of VHI's *recorded*
+  nine-channel pose.
+
+  `InterfaceSpec` gained two fields so the generic launcher can stay generic:
+  `install_hint` (appended to the "not installed" error — how a renderer is installed is
+  the renderer's business) and `version_gate` (a callable that refuses an installed build
+  too old to drive; VHI's reads the `vhi-version.txt` marker its own installer leaves).
+
+  `myogestic.widgets.ControlMapEditor` moved with them, out of `myogestic/widgets/vhi/`:
+  it edits a map against whatever target answers, and never knew what a hand was. The
+  public import is unchanged.
+
+- **BREAKING: the proto is named for the contract, not for VHI.** `package myogestic.vhi`
+  → `package myogestic.renderer`, `service VhiControl` → `service RendererControl`. Every
+  field number, name and type is unchanged — this renames identifiers, not the wire's
+  data — but the **service path** moved to
+  `/myogestic.renderer.RendererControl/<Method>`, so MyoGestic and VHI must be upgraded
+  together. A mismatched pair fails at connect with `UNIMPLEMENTED`, not silently.
+
 - **`ControlCapability.stream_name` and `.channel` are gone, and so is the shape they
   described.** A streamed control's LSL stream is named for the control's own address and
   is one channel wide, so both fields could only ever repeat what `address` already said.
@@ -168,11 +204,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   well, so a later field cannot inherit either spelling in JSON or text format.
   `myogestic.controls.Capability` loses the two attributes to match, and with them go the
   width computation, the outlet/stream mismatch refusal, the channel map, and the
-  by-address/elsewhere split inside `VhiTarget`. A renderer still serving them reports
+  by-address/elsewhere split inside `RendererTarget`. A renderer still serving them reports
   vocabulary 1 and is refused by version.
 - **`myogestic.vhi.vhi_targets` is gone.** It existed to build one target per stream a map
-  spanned; there is one target now. `[VhiTarget(client=client, interface=vhi)]`.
-- **`VhiTarget` takes no outlet and no `stream_name`.** It owns one outlet per address it
+  spanned; there is one target now. `[RendererTarget(client=client, interface=vhi)]`.
+- **`RendererTarget` takes no outlet and no `stream_name`.** It owns one outlet per address it
   drives and builds every one of them, so the only sink parameter is `interface=` — the
   thing they are built from, called once per address as
   `stream_outlet(address, n_channels=1)`. A recorder or a test double substitutes there
@@ -198,9 +234,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state machine, not two independent responsibilities. The per-capability
   `ContinuousEncoding` field is gone from the manifest, and `control_pose_encoding` narrows
   to a plain `control_pose` bool on both `DeclareRequest` and `DeclareReply`: the sign
-  convention it used to carry left the wire entirely once `VhiTarget` stopped computing one
+  convention it used to carry left the wire entirely once `RendererTarget` stopped computing one
   to negate. On the Python side, `VhiCanonicalClient` and `VhiTrainingAidClient` become
-  `VhiControlClient` and `VhiRecordingClient`, both bound to the one stub. None of this
+  `RendererClient` and `RecordingClient`, both bound to the one stub. None of this
   degrades gracefully — an old MyoGestic against a new VHI, or the reverse, refuses to link
   at all: wrong service name, wrong RPC names, a field that no longer exists. **MyoGestic
   and VHI must be upgraded together**; there is no staged rollout and no version this pair
@@ -267,9 +303,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`examples/synthetic/vhi_playground.py` is now `control_map_studio.py`**, and drives VHI
   and the keyboard from one map. The old name stopped being true the moment a second target
   existed.
-- **`VhiTarget` can build its own stream.** `VhiTarget(client=…, interface=…)` with no
+- **`RendererTarget` can build its own stream.** `RendererTarget(client=…, interface=…)` with no
   outlet publishes one as wide as the renderer's pose layout, so an application does not
-  have to know that width to construct an outlet. `VhiTarget(outlet, …)` is unchanged.
+  have to know that width to construct an outlet. `RendererTarget(outlet, …)` is unchanged.
 
   Values sit at the renderer's own channel indices, because a channel *is* an address: the
   manifest says `vhi.prediction.index` is channel 2 and both ends read that from the same

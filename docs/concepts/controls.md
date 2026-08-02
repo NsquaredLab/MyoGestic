@@ -199,9 +199,12 @@ renderer route end to end on hardware of your own, follow
 seven stages with a checkpoint at each.
 
 A renderer still needs a target on this side to talk to it — but you do not write that one:
-[`VhiTarget`][myogestic.vhi.VhiTarget] is the shipped adapter for a VHI-shaped renderer, and it
-is what publishes one LSL stream per address and forwards discrete edges over gRPC. See
-[Integrate the Virtual Hand](../how-to/integrate-vhi.md).
+[`RendererTarget`][myogestic.renderer.RendererTarget] is the shipped adapter for **any**
+renderer that serves the contract. It reads the manifest, publishes one LSL stream per
+address and forwards discrete edges over gRPC, and it knows nothing about what the renderer
+renders. The Virtual Hand is one such renderer — see
+[Integrate the Virtual Hand](../how-to/integrate-vhi.md) — and
+[Integrate your own interface](../tutorials/integrate-your-interface.md) builds another.
 
 ## Binding is deferred, not decided
 

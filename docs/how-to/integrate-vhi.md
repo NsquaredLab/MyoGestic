@@ -16,7 +16,7 @@ planes at once:
 
 You don't have to pick one, and mostly you don't choose at all: declare what
 you control and hand it to a
-[`ControlBus`](../api/controls.md) with a `VhiTarget`. The target negotiates,
+[`ControlBus`](../api/controls.md) with a `RendererTarget`. The target negotiates,
 puts continuous values on LSL, and sends discrete states over gRPC.
 
 !!! tip "Watch it happen first"
@@ -52,13 +52,14 @@ gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }
 # One control may take only one output, so no two entries may name the same address.
 ```
 
-Load it, and hand the result to a bus with a `VhiTarget`:
+Load it, and hand the result to a bus with a `RendererTarget`:
 
 ```python
 import tomllib
 
 from myogestic.controls import ControlLink, load_control_map
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.renderer import RendererTarget
+from myogestic.vhi import virtual_hand
 
 vhi = virtual_hand()
 vhi_control = vhi.control_client()
@@ -71,7 +72,7 @@ with open("hand.toml", "rb") as f:            # "rb" — tomllib requires binary
 # Nothing is resolved yet: `link.bus` stays None until `link.ensure()` finds VHI up.
 link = ControlLink(
     CONTROL_MAP,
-    [VhiTarget(client=vhi_control, interface=vhi)],
+    [RendererTarget(client=vhi_control, interface=vhi)],
     hz=32,
 )
 ```
@@ -112,7 +113,7 @@ encodes, and sends.
 !!! tip "Declare DOFs, don't push channels"
     The rest of this page shows the transport underneath, which is worth
     understanding when something misbehaves. But application code should not
-    contain stream names or sign flips — that is what `VhiTarget` is for, and the four
+    contain stream names or sign flips — that is what `RendererTarget` is for, and the four
     wrong pose tables this project fixed all came from hand-written channel maps.
 
 ![VHI dual-plane integration](../images/vhi-integration.svg){ align=center }
@@ -120,7 +121,7 @@ encodes, and sends.
 ## The one-liner that wires it up
 
 ```python
-from myogestic.vhi.interfaces import virtual_hand
+from myogestic.vhi import virtual_hand
 
 vhi = virtual_hand()                  # resolves install path + gRPC endpoint
 vhi_control = vhi.control_client()   # negotiates the control space (v2)
@@ -136,7 +137,7 @@ exports is in the manifest a *running* VHI answers with, and each control's stre
 named for that control's own address — so a target names its outlets from that answer,
 after negotiating, and nothing on this side has a table to go stale. That is why no
 outlet is built here: until the map has been read against the manifest, there is nothing
-that says which streams it needs. `VhiTarget` and the `interface=` it is given are what
+that says which streams it needs. `RendererTarget` and the `interface=` it is given are what
 do that, at `bind`.
 
 If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
@@ -184,7 +185,7 @@ except FileNotFoundError as e:
 !!! tip "Prefer the control standard"
     Everything below describes the transport underneath, which is worth knowing when
     something misbehaves. New work should declare DOFs by name and let
-    [`VhiTarget`](../api/controls.md) negotiate — then no stream name appears in your
+    [`RendererTarget`](../api/controls.md) negotiate — then no stream name appears in your
     code at all.
 
 VHI subscribes to **one float32 stream per DOF, named after the address itself and one
@@ -362,7 +363,7 @@ the renderer starts:
 
 | Call | Effect |
 |---|---|
-| `control_client().capabilities()` | The manifest — every control VHI exports. Returns `None` when VHI has not answered; `VhiTarget` defers and retries. `resolve()` and `VhiTarget.bind` are what validate a configuration against it. |
+| `control_client().capabilities()` | The manifest — every control VHI exports. Returns `None` when VHI has not answered; `RendererTarget` defers and retries. `resolve()` and `RendererTarget.bind` are what validate a configuration against it. |
 | `control_client().set_control(...)` | Command a frame. Fire-and-forget; safe from the predict thread. |
 | `control_client().sweep(name)` | Drive one DOF across its range and report which bones moved, in signed degrees. Verification only — it animates a joint. |
 | `control_client().set_presentation(blend=...)` | Renderer blending. Appearance only. |
@@ -464,7 +465,7 @@ Or attach `pylsl`'s `lslviewer.py` to one of the streams — `vhi.prediction.ind
 for a single DOF going out, `VHI_Predict` for all nine coming back. For
 the gRPC plane, the standard `grpcurl` works against the local server
 when VHI is running - the proto is at
-`myogestic/vhi/_proto/myogestic_vhi.proto`.
+`myogestic/renderer/_proto/renderer_control.proto`.
 
 ## Common mistakes
 
@@ -472,7 +473,7 @@ See the full **[Troubleshooting](../troubleshooting.md)** index for
 symptom-organised debugging.
 
 * **Publishing to a stream you named yourself.** Map your names onto addresses and let
-  `VhiTarget` publish. A hand-built outlet hard-codes a stream name, and that name is the
+  `RendererTarget` publish. A hand-built outlet hard-codes a stream name, and that name is the
   renderer's to declare — VHI changed every one of them when it moved to one stream per
   DOF, and every application that had let the manifest answer needed no edit at all.
 * **Numerically filtering a discrete control.** It interpolates through states nobody
@@ -494,6 +495,6 @@ symptom-organised debugging.
 * [Edge trigger](../concepts/edge-trigger.md) - fire-on-change pattern.
 * [Examples directory](../tutorials/examples-index.md) - every shipped
   example wires VHI either via LSL, gRPC, or both.
-* [`myogestic.vhi.interfaces.virtual_hand`](../api/core.md) - full signature.
+* [`myogestic.vhi.virtual_hand`](../api/core.md) - full signature.
 * [`myogestic.widgets.vhi.panel.VhiMovementPanel`](../api/widgets.md) -
   movement palette API.

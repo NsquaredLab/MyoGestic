@@ -40,26 +40,23 @@ the shape of the system. MyoGestic writes and your renderer reads.
     are noise on a laptop with VPN interfaces up, not failures. Every output quoted on this
     page is stdout; add `2>/dev/null` if you want to see only that.
 
-## First, the naming
+## First, the wiring
 
-MyoGestic's adapter for a renderer is called `VhiTarget`, and it speaks the proto in
-`myogestic/vhi/_proto/myogestic_vhi.proto`. That is history, not a requirement: it is the
-**generic** renderer adapter, and the Virtual Hand happens to be the renderer that shipped
-first. Your rig is not a hand, will not use `virtual_hand()`, and has no Godot binary to
-launch. It still uses all three of these:
+The MyoGestic side is two objects, and it is the same two for every renderer:
 
 ```python
-from myogestic.vhi import InterfaceSpec, VhiTarget
+from myogestic.renderer import InterfaceSpec, RendererTarget
 
 #: Your endpoint and your outlet settings. `process=[]` because nothing launches this —
 #: you start your own device. `output_hz` is how fast MyoGestic re-sends each value.
 rig = InterfaceSpec(name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051)
 
-target = VhiTarget(client=rig.control_client(), interface=rig)
+target = RendererTarget(client=rig.control_client(), interface=rig)
 ```
 
-That is the whole MyoGestic-side wiring, and it does not change again. `virtual_hand()` is
-just this call with VHI's numbers filled in and a Godot path resolved.
+That is the whole MyoGestic-side wiring, and it does not change again. `virtual_hand()`
+is this same call with VHI's numbers filled in and a Godot path resolved — you will not
+use it, because your rig is not a hand and has no Godot binary to launch.
 
 `name=` looks cosmetic and is not: every stream this spec publishes carries the `source_id`
 `myogestic:<name>:<address>`, which is what lets your renderer find the same stream again
@@ -81,8 +78,8 @@ from concurrent import futures
 
 import grpc
 
-from myogestic.vhi._proto import myogestic_vhi_pb2 as pb2
-from myogestic.vhi._proto import myogestic_vhi_pb2_grpc as pb2_grpc
+from myogestic.renderer._proto import renderer_control_pb2 as pb2
+from myogestic.renderer._proto import renderer_control_pb2_grpc as pb2_grpc
 
 #: Your addresses, in your own namespace. The first segment namespaces the device, so
 #: `rig.*` cannot collide with `vhi.*` or `keyboard.*` in one map. The address is also the
@@ -93,7 +90,7 @@ ADDRESSES = ["rig.gripper.closure", "rig.wrist.pronation"]
 LO, HI, REST = -1.0, 1.0, 0.0
 
 
-class RigRenderer(pb2_grpc.VhiControlServicer):
+class RigRenderer(pb2_grpc.RendererControlServicer):
     """Two axes. Holds the last value it was sent, per address."""
 
     def __init__(self, port: int = 50051) -> None:
@@ -115,7 +112,7 @@ class RigRenderer(pb2_grpc.VhiControlServicer):
     def serve(self) -> None:
         """Start the gRPC server."""
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
-        pb2_grpc.add_VhiControlServicer_to_server(self, self._server)
+        pb2_grpc.add_RendererControlServicer_to_server(self, self._server)
         self._server.add_insecure_port(f"127.0.0.1:{self._port}")
         self._server.start()
 
@@ -171,9 +168,10 @@ client, so the answer you see is the one MyoGestic will get:
 ```python
 """probe.py"""
 
-from myogestic.vhi import virtual_hand
+from myogestic.renderer import InterfaceSpec
 
-client = virtual_hand(grpc_port=50051).control_client()
+rig = InterfaceSpec(name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051)
+client = rig.control_client()
 for cap in client.capabilities():
     print(f"{cap.address:20s} {cap.kind}  [{cap.lo:+.1f}, {cap.hi:+.1f}]  rest={cap.rest:+.1f}")
 client.stop()
@@ -183,9 +181,6 @@ client.stop()
 rig.gripper.closure  continuous  [-1.0, +1.0]  rest=+0.0
 rig.wrist.pronation  continuous  [-1.0, +1.0]  rest=+0.0
 ```
-
-(`virtual_hand(grpc_port=…)` is used here only because it is the shortest way to a client on
-a port. The `InterfaceSpec` from the previous section gives the same thing.)
 
 !!! warning "Not `tools/inspect_control.py`"
     It looks like the tool for this and it is not. It takes no arguments and always loads
@@ -283,7 +278,7 @@ Resolved against a live target
 my-rig.toml is usable against this target.
 ```
 
-It reaches your renderer at `127.0.0.1:50051` — set `VHI_GRPC_PORT` if you moved it. With
+It reaches your renderer at `127.0.0.1:50051`. With
 nothing running the second section says so instead, and it still exits `0`; that is the
 "structurally valid" answer, not a pass.
 
@@ -344,7 +339,7 @@ there is something to run.
 import tomllib
 
 from myogestic.controls import ControlLink, load_control_map
-from myogestic.vhi import InterfaceSpec, VhiTarget
+from myogestic.renderer import InterfaceSpec, RendererTarget
 
 rig = InterfaceSpec(
     name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051
@@ -358,7 +353,7 @@ client = rig.control_client()
 with open("my-rig.toml", "rb") as handle:   # "rb" — tomllib requires binary
     control_map = load_control_map(tomllib.load(handle))
 
-link = ControlLink(control_map, [VhiTarget(client=client, interface=rig)], hz=32)
+link = ControlLink(control_map, [RendererTarget(client=client, interface=rig)], hz=32)
 try:
     print(link.ensure())
 finally:
@@ -393,7 +388,7 @@ retry will retry for ever. Run `drive.py` against `my_renderer.py --antique` and
 row three — a `logging.WARNING` on the `myogestic.controls` logger:
 
 ```
-VhiTarget refused the handshake: rig speaks control vocabulary 1, and MyoGestic needs 2 or newer. …
+RendererTarget refused the handshake: rig speaks control vocabulary 1, and MyoGestic needs 2 or newer. …
 ```
 
 That reaches stderr even with logging unconfigured, but in a GUI application stderr is a
@@ -615,7 +610,7 @@ Finally, `serve` starts both threads and `stop` shuts them down properly:
     def serve(self) -> None:
         """Start the gRPC server, the inlet reader and the status printer."""
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
-        pb2_grpc.add_VhiControlServicer_to_server(self, self._server)
+        pb2_grpc.add_RendererControlServicer_to_server(self, self._server)
         self._server.add_insecure_port(f"127.0.0.1:{self._port}")
         self._server.start()
         for target in (self._read, self._watch):
@@ -687,7 +682,7 @@ rig: gripper.closure=+0.00  wrist.pronation=+0.00
 rig: gripper.closure=+1.00  wrist.pronation=-1.00
 ```
 
-The first line is the rest frame `VhiTarget` puts on the wire the moment negotiation
+The first line is the rest frame `RendererTarget` puts on the wire the moment negotiation
 settles; the second is your loop. Both axes, with the right signs on the right ones. Equal
 values on both would prove nothing — `+1` and `+1` looks identical whether the streams are
 correctly wired or crossed, or whether one value is being written onto both. That is why
@@ -774,7 +769,7 @@ atomic within, and whether the printer catches the moment between them is luck. 
 *last* line, never the count.
 
 That is [`ControlBus.stop`][myogestic.controls.ControlBus.stop] delivering the neutral frame
-*before* tearing the targets down, and `VhiTarget` pushing **and flushing** each stream's
+*before* tearing the targets down, and `RendererTarget` pushing **and flushing** each stream's
 declared rest before it releases the outlet. The send loop is paced, so a pushed-but-unflushed
 rest would sit unsent while the outlet went away.
 
@@ -979,7 +974,7 @@ mode = { target = "rig.mode", debounce_s = 0.1 }
 
 !!! warning "Neither side notices that you edited those two files"
     [`ControlLink.ensure()`][myogestic.controls.ControlLink.ensure] returns its cached bus
-    without a second handshake once it has one, and `VhiTarget` caches what it resolved and
+    without a second handshake once it has one, and `RendererTarget` caches what it resolved and
     has no detection of a changed manifest. Restarting your renderer is not enough; the
     running MyoGestic side will keep driving the old two-address contract for ever.
 
@@ -1104,7 +1099,8 @@ bus — which is exactly what some other program on the network would do:
 applied: False  rejected: {'rig.mode': "'banana' is not one of ['rest', 'active']"}
 ```
 
-The client logs that as `VHI rejected these control addresses: {…}` and nothing raises.
+The client logs that as `the renderer rejected these control addresses: {…}` and nothing
+raises.
 
 !!! warning "`applied=False` does not mean *nothing* happened"
     The handler above validates and applies **per entry**, so a request carrying one good
@@ -1154,8 +1150,8 @@ from contextlib import suppress
 import grpc
 from mne_lsl.lsl import StreamInlet, resolve_streams
 
-from myogestic.vhi._proto import myogestic_vhi_pb2 as pb2
-from myogestic.vhi._proto import myogestic_vhi_pb2_grpc as pb2_grpc
+from myogestic.renderer._proto import renderer_control_pb2 as pb2
+from myogestic.renderer._proto import renderer_control_pb2_grpc as pb2_grpc
 
 #: Your addresses. Each name states the direction `+1` moves in.
 ADDRESSES = ["rig.gripper.closure", "rig.wrist.pronation"]
@@ -1175,7 +1171,7 @@ MODE_CAPABILITY = pb2.ControlCapability(
 )
 
 
-class RigRenderer(pb2_grpc.VhiControlServicer):
+class RigRenderer(pb2_grpc.RendererControlServicer):
     """Two axes and a mode. Holds the last value it was sent, per address.
 
     Parameters
@@ -1243,7 +1239,7 @@ class RigRenderer(pb2_grpc.VhiControlServicer):
     def serve(self) -> None:
         """Start the gRPC server, the inlet reader and the status printer."""
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
-        pb2_grpc.add_VhiControlServicer_to_server(self, self._server)
+        pb2_grpc.add_RendererControlServicer_to_server(self, self._server)
         self._server.add_insecure_port(f"127.0.0.1:{self._port}")
         self._server.start()
         for target in (self._read, self._watch):
@@ -1397,7 +1393,7 @@ import time
 import tomllib
 
 from myogestic.controls import ControlLink, load_control_map
-from myogestic.vhi import InterfaceSpec, VhiTarget
+from myogestic.renderer import InterfaceSpec, RendererTarget
 
 rig = InterfaceSpec(
     name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051
@@ -1411,7 +1407,7 @@ client = rig.control_client()
 with open("my-rig.toml", "rb") as handle:  # "rb" — tomllib requires binary
     control_map = load_control_map(tomllib.load(handle))
 
-link = ControlLink(control_map, [VhiTarget(client=client, interface=rig)], hz=32)
+link = ControlLink(control_map, [RendererTarget(client=client, interface=rig)], hz=32)
 
 try:
     bus = link.ensure()
@@ -1452,5 +1448,5 @@ that you know why each part is there, and what each part it leaves out would hav
   convention
 - [Drive your own device](../how-to/add-a-target.md) — the in-process route, if a renderer
   turns out to be more than you need
-- `myogestic/vhi/_proto/myogestic_vhi.proto` — the wire contract; generate stubs from it for
+- `myogestic/renderer/_proto/renderer_control.proto` — the wire contract; generate stubs from it for
   any language other than Python

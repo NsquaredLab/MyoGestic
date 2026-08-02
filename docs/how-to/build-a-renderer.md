@@ -27,7 +27,7 @@ last commanded to — which is what these DOFs actually are: independently actua
 possibly driven by different processes at different rates. Two programs can each own a
 finger.
 
-MyoGestic drives all of it with one [`VhiTarget`](../api/controls.md), which publishes one
+MyoGestic drives all of it with one [`RendererTarget`](../api/controls.md), which publishes one
 outlet per address the map names.
 
 Publishing a read-back of your own is optional; VHI does it (`VHI_Predict`,
@@ -79,7 +79,7 @@ stops looking.
 ## The whole renderer
 
 The reference renderer, complete — every method is the real one; nothing is elided. It
-talks to the service defined in `myogestic/vhi/_proto/myogestic_vhi.proto`; generate
+talks to the service defined in `myogestic/renderer/_proto/renderer_control.proto`; generate
 stubs from that file for any language other than Python:
 
 ```python
@@ -115,7 +115,8 @@ vocabulary-1 renderer and is refused by version.
 
 An application no longer picks its targets either: `vhi_targets()` existed to build one
 target per stream a map spanned, and one target now drives the whole map. It is
-`[VhiTarget(client=…, interface=vhi)]`.
+`[RendererTarget(client=…, interface=spec)]`, and it is named for what it drives — a
+renderer — rather than for the first renderer that shipped.
 
 ## See also
 

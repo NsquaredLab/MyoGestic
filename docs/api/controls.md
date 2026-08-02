@@ -182,13 +182,13 @@ an ordering that is easy to get subtly wrong per-application.
 
 ## Targets
 
-::: myogestic.vhi.VhiTarget
+::: myogestic.renderer.RendererTarget
 
-::: myogestic.vhi.PoseSink
+::: myogestic.renderer.PoseSink
 
 ### Negotiating with the target
 
-A target does not have to guess what an application can render. Hand `VhiTarget` a
+A target does not have to guess what an application can render. Hand `RendererTarget` a
 control client and it **asks** at bind time, then encodes according to the answer.
 
 **One target drives the whole map.** It owns one LSL outlet per address it drives, each
@@ -201,8 +201,8 @@ client = vhi.control_client()
 # No stream is named here and none is counted. `interface=` is why: which controls exist
 # is the manifest's answer, and each one's stream is named for its own address, so both
 # facts arrive together once `bind` has something to ask.
-target = VhiTarget(client=client, interface=vhi)
-bus = connect_controls(control_map, [target])   # None while VHI is unreachable
+target = RendererTarget(client=client, interface=vhi)
+bus = connect_controls(control_map, [target])   # None while the renderer is unreachable
 ```
 
 An application that launches its own renderer binds before the renderer exists, so it
@@ -210,11 +210,11 @@ holds a [`ControlLink`][myogestic.controls.ControlLink] instead and calls `ensur
 each handler that needs the hand — same arguments, plus the retry.
 
 The client is **required**, because every address, range and state comes from that
-answer. A Virtual Hand older than 2.0 has no manifest to answer with, so it is never
-distinguishable from one that is simply not up yet — MyoGestic 2.x has no fallback and
-no table to fall back to. One that *does* answer but reports an older
+answer. A renderer with no manifest to answer with — a Virtual Hand older than 2.0, say —
+is never distinguishable from one that is simply not up yet, and MyoGestic 2.x has no
+fallback and no table to fall back to. One that *does* answer but reports an older
 `vocabulary_version` is refused by name, since it would be listening for a stream layout
-this client no longer publishes and would report nothing while the hand stayed still.
+this client no longer publishes and would report nothing while the rig stayed still.
 
 What it refuses, rather than half-rendering: a renderer too old for the vocabulary this
 client speaks, an address the renderer does not export, one it does not export as a
@@ -223,13 +223,14 @@ than none — it would leave some controls believed rendered and others quietly 
 and a dropped control is indistinguishable from one that is working and holding still.
 
 One case is **deferred** rather than refused: a renderer that has not answered *at all*.
-An application that launches VHI from its own button binds before VHI exists, so nothing
-is decided until [`negotiate`][myogestic.vhi.VhiTarget.negotiate] settles it. A renderer
+An application that launches its renderer from its own button binds before that renderer
+exists, so nothing is decided until
+[`negotiate`][myogestic.renderer.RendererTarget.negotiate] settles it. A renderer
 old enough to have no manifest looks identical to one that is simply not up yet — both
 answer `capabilities()` with `None` — so it is deferred the same way, retried forever
 rather than refused outright.
 
-::: myogestic.vhi.interfaces.InterfaceSpec.control_client
+::: myogestic.renderer.InterfaceSpec.control_client
 
 ### Three layers of smoothing, and why they are not interchangeable
 
@@ -273,7 +274,7 @@ While a recording trajectory runs it owns the control hand, and discrete DOFs ar
 refused with a reason rather than silently interrupting the trajectory a recording is
 aligned against. Continuous DOFs are unaffected.
 
-::: myogestic.vhi.interfaces.InterfaceSpec.recording_client
+::: myogestic.renderer.InterfaceSpec.recording_client
 
 ## Encoding helpers
 
