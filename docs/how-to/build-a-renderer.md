@@ -46,7 +46,7 @@ it.
 
 | you may | for |
 |---|---|
-| serve `SetControl` | discrete DOFs — held states and gestures, which do not belong on a per-tick stream |
+| serve `SetControl` | discrete DOFs — held states and gestures, which do not belong on a per-tick stream. Both maps are keyed by **address**, exactly as the manifest publishes them and as your streams are named: resolve the *control* from the key and the *state* from the value, and refuse an address you do not export. Resolving on the state alone would leave two discrete controls that share a state name indistinguishable |
 | serve `SweepControl` | letting a client sweep one DOF and read back the degrees it produced, as a direction check |
 | serve `SetPresentation` | for a client asking you to smooth incoming poses |
 | serve the four recording RPCs | driving a ground-truth hand through a capture session |

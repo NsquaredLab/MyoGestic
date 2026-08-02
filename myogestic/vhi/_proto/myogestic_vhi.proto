@@ -182,24 +182,31 @@ enum Kind {
 }
 
 message SetControlRequest {
-  // Continuous DOF values by control name. Each must be finite and inside the
+  // Continuous DOF values by control address. Each must be finite and inside the
   // range declared for it.
   map<string, float> continuous = 1;
-  // Discrete DOF states by control name. Each must be one of that DOF's
+  // Discrete DOF states by control address. Each must be one of that DOF's
   // declared states. Kept separate from continuous on purpose: a held state and
   // a number are not the same kind of command.
   //
-  // A state is resolved against the renderer's own vocabulary — for VHI, the
-  // movement names it currently offers, matched case-insensitively. An unresolved
-  // state is refused by name in ControlAck.rejected, so a client never has to
-  // guess whether "fist" means anything here.
+  // The key is the address the manifest published, exactly as for continuous — not
+  // the client's own alias for the control, which the renderer has never seen and
+  // could not interpret. So a renderer resolves the *control* from the key and the
+  // *state* from the value: for VHI the states are the movement names it currently
+  // offers, matched case-insensitively. Resolving on the state alone cannot tell two
+  // discrete controls apart that happen to share a state name.
+  //
+  // An address this renderer does not export, and a state that control does not
+  // declare, are both refused by address in ControlAck.rejected — so a client never
+  // has to guess whether "fist" means anything here, or which control it meant.
   map<string, string> discrete = 2;
 }
 
 message ControlAck {
   // true: every value in the request was applied.
   bool applied = 1;
-  // Names that were rejected, with the reason. Empty when applied == true.
+  // Addresses that were rejected, with the reason. Keyed the same way the request
+  // was. Empty when applied == true.
   map<string, string> rejected = 2;
 }
 

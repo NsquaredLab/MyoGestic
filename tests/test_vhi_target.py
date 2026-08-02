@@ -466,7 +466,9 @@ def test_a_discrete_only_configuration_publishes_no_stream_at_all():
     assert interface.built == []
     assert target.negotiated is True
     target.send({"g": "Fist"}, {"g": "Fist"})
-    assert target._client.sent == [(None, {"g": "Fist"})]
+    # By address, not by the alias `g`: the renderer has never seen the left-hand side of
+    # this map and could not resolve it against anything it advertised.
+    assert target._client.sent == [(None, {"vhi.control.gesture": "Fist"})]
 
 
 def test_stop_without_a_stream_does_not_raise():
@@ -1362,7 +1364,7 @@ def test_a_foreign_edge_is_not_forwarded_to_vhi():
     target = VhiTarget(client=client, interface=FakeInterface())
     target.bind(controls)
     target.send({"grip": "Fist", "walk": "down"}, {"grip": "Fist", "walk": "down"})
-    assert client.sent == [(None, {"grip": "Fist"})]
+    assert client.sent == [(None, {"vhi.control.gesture": "Fist"})]
 
 
 def test_a_frame_of_only_foreign_edges_sends_nothing_at_all():

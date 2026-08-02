@@ -587,13 +587,18 @@ MODE_CAPABILITY = pb2.ControlCapability(
 class RigRenderer(pb2_grpc.VhiControlServicer):   # ...continued
 
     def SetControl(self, request, context):  # noqa: N802 - gRPC's spelling
-        """Apply held states. Refuse by name anything this rig cannot do."""
+        """Apply held states. The key is one of your addresses; the value is a state."""
         rejected = {}
-        for key, state in request.discrete.items():
-            if state in MODES:
-                self.mode = state
+        for address, state in request.discrete.items():
+            #: Two lookups, not one: which control, then which of its states. Resolving
+            #: on the state alone would make two discrete controls that share a state
+            #: name indistinguishable, and would accept an address you never advertised.
+            if address != MODE_CAPABILITY.address:
+                rejected[address] = f"{address!r} is not a discrete control of this rig"
+            elif state not in MODES:
+                rejected[address] = f"{state!r} is not one of {list(MODES)}"
             else:
-                rejected[key] = f"{state!r} is not one of {list(MODES)}"
+                self.mode = state
         return pb2.ControlAck(applied=not rejected, rejected=rejected)
 ```
 
@@ -687,18 +692,21 @@ To see a populated `rejected`, send a state the rig does not have without going 
 bus — which is exactly what some other program on the network would do:
 
 ```
-applied: False  rejected: {'mode': "'banana' is not one of ['rest', 'active']"}
+applied: False  rejected: {'rig.mode': "'banana' is not one of ['rest', 'active']"}
 ```
 
-A rejection is logged by the client as `VHI rejected control values: {…}` and nothing raises;
-the frame is simply not applied.
+A rejection is logged by the client as `VHI rejected these control addresses: {…}` and
+nothing raises; the frame is simply not applied.
 
-!!! note "The key in `request.discrete` is the client's **alias**, not your address"
-    MyoGestic forwards the map's *left-hand* name — `mode`, not `rig.mode`. You cannot match
-    those keys against the addresses you advertised, and that is why the code above resolves
-    on the **state** and uses the key only to report a rejection. VHI does the same. With
-    more than one discrete control this is genuinely ambiguous today, so keep to one, or
-    give your states names that are unique across them.
+!!! note "The key in `request.discrete` is your **address**, not the client's alias"
+    `rig.mode`, not `mode` — the same way `continuous` is keyed, and the same way your
+    streams are named. The alias is the *left*-hand side of somebody else's map: a name they
+    invented, which you have never seen and could not interpret. So match the key against
+    the addresses you advertised and refuse one you did not, exactly as the code above does.
+
+    This is what lets a rig have more than one discrete control. Give two of them a state
+    called `hold` and a command still says which one it is for — the key does, and only the
+    key can.
 
 ## What you have
 

@@ -301,7 +301,10 @@ class VhiControlClient:
                 self.connected = True
                 self._seen_errors.clear()
                 if not ack.applied:
-                    log.warning("VHI rejected control values: %s", dict(ack.rejected))
+                    # Keyed by address, because that is what the request was keyed by — the
+                    # renderer only ever sees addresses, so it can only refuse one by name.
+                    # A reader holding the map that produced this reads the right-hand side.
+                    log.warning("VHI rejected these control addresses: %s", dict(ack.rejected))
             except Exception as e:  # noqa: BLE001 - the worker must survive
                 self.connected = False
                 self._log_failure("set_control", e)

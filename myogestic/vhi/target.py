@@ -164,8 +164,11 @@ class VhiTarget:
         #: The configuration still awaiting a reachable VHI, or None once settled.
         self._pending: ControlSet | None = None
         self._dofs: tuple[Continuous, ...] = ()
-        #: Names of the held states this target commands over gRPC once negotiated.
-        self._discrete: tuple[str, ...] = ()
+        #: Held states this target commands over gRPC once negotiated, as (alias, address)
+        #: — the same shape as `_routed` and for the same reason: the alias is what the bus
+        #: hands us, the address is what goes on the wire, and a fan-out has several of the
+        #: latter per one of the former.
+        self._discrete: tuple[tuple[str, str], ...] = ()
         #: One outlet per address driven, keyed by address. Owned outright: replaced only
         #: through `_publish`, which retires what it drops.
         self._outlets: dict[str, PoseSink] = {}
@@ -184,7 +187,7 @@ class VhiTarget:
         `ControlBus` reads this to check that every control was claimed by *someone* — a
         map may also name controls another target renders, a keyboard's for instance.
         """
-        return frozenset({alias for alias, *_ in self._routed} | set(self._discrete))
+        return frozenset(alias for alias, *_ in (*self._routed, *self._discrete))
 
     @property
     def negotiated(self) -> bool:
@@ -370,7 +373,17 @@ class VhiTarget:
         # `ControlBus`'s every-alias-is-claimed check would see a foreign control as
         # covered.
         self._dofs = tuple(dof for dof in controls.continuous if dof.name in mine)
-        self._discrete = tuple(dof.name for dof in controls.discrete if dof.name in mine)
+        # Addressed exactly like the continuous ones. A discrete command has to name the
+        # control it is *for*: `dof.name` is the alias, a name the user invented on the
+        # left-hand side of their own map, and the renderer has never seen it. Resolving on
+        # the state instead — the only thing left once the key is meaningless — cannot tell
+        # two controls apart that happen to share a state name.
+        self._discrete = tuple(
+            (dof.name, ref.address)
+            for dof in controls.discrete
+            if dof.name in mine
+            for ref in routes.get(dof.name, (TargetRef(dof.name),))
+        )
         self._publish(
             tuple(address for *_, address in slots),
             {address: float(cap.rest) for address, cap in exported.items()},
@@ -495,7 +508,11 @@ class VhiTarget:
         # Only *our* edges. `changed` is the bus's, so on a shared map it also carries the
         # edges of every other target, and forwarding those makes VHI log a rejection per
         # keystroke.
-        ours = {name: state for name, state in changed.items() if name in self._discrete}
+        # Keyed by address, like every stream this target publishes: the renderer looks the
+        # control up by the key and the state up by the value.
+        ours = {
+            address: changed[alias] for alias, address in self._discrete if alias in changed
+        }
         if not ours:
             return
         if self._negotiated:
