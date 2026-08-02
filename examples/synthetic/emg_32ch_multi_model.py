@@ -194,7 +194,6 @@ _load_dialog: object | None = None  # in-flight pfd.open_file future, None if id
 # we don't call pipeline_panel directly (custom layout with the recipe
 # selector + save/load row).
 _MODEL_WIDGET_ID = "ml_multi"
-_autoscroll_on = True
 _popout_open = False
 
 _train_btn = TrainButton(pipeline)
@@ -237,7 +236,7 @@ def model_panel() -> None:
     Log inherits the same autoscroll + popout UX as ``pipeline_panel``
     and the process launcher's log — same icons, same tooltips.
     """
-    global selected_model_idx, _load_dialog, _autoscroll_on, _popout_open
+    global selected_model_idx, _load_dialog, _popout_open
 
     # Render the popout window first so it survives even if this panel
     # scrolls out of view next frame (same pattern as pipeline_panel).
@@ -246,7 +245,6 @@ def model_panel() -> None:
             _MODEL_WIDGET_ID,
             pipeline.train_log,
             title="Model training log",
-            autoscroll=_autoscroll_on,
         )
         if not still_open:
             _popout_open = False
@@ -261,8 +259,8 @@ def model_panel() -> None:
     imgui.same_line()
     _predict_btn.ui()
     imgui.same_line()
-    _autoscroll_on, _popout_open = render_log_buttons(
-        _MODEL_WIDGET_ID, autoscroll=_autoscroll_on, popped_out=_popout_open
+    _popout_open = render_log_buttons(
+        _MODEL_WIDGET_ID, popped_out=_popout_open
     )
 
     if _popout_open:
