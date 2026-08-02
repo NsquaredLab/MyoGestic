@@ -698,7 +698,7 @@ class TestTheMapPicksTheHand:
         assert editor.save() is True
 
     def test_a_map_naming_both_hands_saves(self, tmp_path):
-        """`VhiTarget` drives whatever addresses the map names, so a mixed map is fine."""
+        """`RendererTarget` drives whatever addresses the map names, so a mixed map is fine."""
         path = tmp_path / "controls.toml"
         path.write_text(
             '[dofs]\nmodel = "vhi.prediction.thumb.flexion"\noperator = "vhi.control.pose.thumb.flexion"\n'
@@ -1103,7 +1103,7 @@ class TestTheAddressTree:
 
     def _tree(self, *addresses):
         from myogestic.controls import Capability
-        from myogestic.widgets.vhi.control_map_editor import address_tree
+        from myogestic.widgets.control_map_editor import address_tree
 
         return address_tree([Capability(a, "continuous") for a in addresses])
 
@@ -1127,7 +1127,7 @@ class TestTheAddressTree:
         settled on one spelling per control, and another target may do it again — so a
         branch must be able to carry its own capability. Nothing in `address_tree` is
         VHI-specific; these two are just the shortest example of the shape."""
-        from myogestic.widgets.vhi.control_map_editor import _LEAF
+        from myogestic.widgets.control_map_editor import _LEAF
 
         tree = self._tree("vhi.prediction.thumb", "vhi.prediction.thumb.abduction")
         thumb = tree["vhi"]["prediction"]["thumb"]
@@ -1135,7 +1135,7 @@ class TestTheAddressTree:
         assert "abduction" in thumb
 
     def test_a_leaf_holds_the_capability_itself(self):
-        from myogestic.widgets.vhi.control_map_editor import _LEAF
+        from myogestic.widgets.control_map_editor import _LEAF
 
         tree = self._tree("vhi.prediction.index")
         assert tree["vhi"]["prediction"]["index"][_LEAF].address == "vhi.prediction.index"
@@ -1143,7 +1143,7 @@ class TestTheAddressTree:
     def test_it_scales_to_a_whole_keyboard(self):
         """214 addresses, four segments each — the case the tree exists for."""
         from myogestic.keyboard import keyboard_capabilities
-        from myogestic.widgets.vhi.control_map_editor import address_tree
+        from myogestic.widgets.control_map_editor import address_tree
 
         tree = address_tree(keyboard_capabilities())
         assert sorted(tree) == ["keyboard"]
@@ -1989,7 +1989,7 @@ def test_the_search_box_offers_typing_only_while_a_target_is_silent():
     Silent about that once everything has answered: the tree below is then the whole of
     what is possible, and telling someone to type an address is noise.
     """
-    from myogestic.widgets.vhi.control_map_editor import _search_hint
+    from myogestic.widgets.control_map_editor import _search_hint
 
     assert "type an address" in _search_hint(False)
     assert "type an address" not in _search_hint(True)

@@ -113,7 +113,7 @@ def test_a_missing_reply_is_refused():
 
 # --- checks 2-4: round-trip, the client's own stack, the control hand -----------
 #
-# The three producers are a raw frame, the same value through a negotiated `VhiTarget`,
+# The three producers are a raw frame, the same value through a negotiated `RendererTarget`,
 # and that again while the control hand's stream is published too. They used to be three
 # *declarations*, which since `Declare` was removed were the same thing measured three
 # times — a cross-check comparing a value against itself.
@@ -172,7 +172,7 @@ HELD = [1.0] * 12
 def test_three_agreeing_producers_pass(producers):
     assert producers(HELD, HELD, HELD) == {
         "raw frame": 1.0,
-        "through a VhiTarget": 1.0,
+        "through a RendererTarget": 1.0,
         "+ control hand": 1.0,
     }
 

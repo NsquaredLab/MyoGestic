@@ -23,7 +23,8 @@ import tomllib
 import numpy as np
 
 from myogestic.controls import ControlBus, load_control_map, resolve, substitute_rest
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.renderer import RendererTarget
+from myogestic.vhi import virtual_hand
 
 #: The real file a user copies and edits.
 CONTROL_FILE = (
@@ -138,10 +139,10 @@ def step_4_drive(control_map, controls, client, capabilities):
 
     # One target for the whole map: it owns one stream per control it drives, each named
     # for that control's own address, all built after negotiation says which those are.
-    target = VhiTarget(client=client, interface=virtual_hand())
+    target = RendererTarget(client=client, interface=virtual_hand())
     bus = ControlBus(controls, targets=[target], hz=32)
     settled = target.negotiate()
-    print(f"\n  one VhiTarget for the whole map; negotiate() -> {settled}")
+    print(f"\n  one RendererTarget for the whole map; negotiate() -> {settled}")
     for _alias, _weight, _lo, _hi, address in sorted(target._routed, key=lambda r: r[4]):
         print(f"    {address:38s} its own stream, one channel wide")
     print("  Nothing above was written here: the names are all the manifest's, which is")
@@ -237,7 +238,7 @@ def step_6_commands():
   The contracts themselves:
       myogestic/controls.py                        the standard
       myogestic/_controls_map.py                   aliases, addresses, resolution
-      myogestic/vhi/_proto/myogestic_vhi.proto     the wire contract""")
+      myogestic/renderer/_proto/renderer_control.proto     the wire contract""")
 
 
 def main() -> None:

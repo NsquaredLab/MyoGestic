@@ -1,7 +1,7 @@
 """Control-map studio — edit the TOML, and drive whatever it names.
 
 The shortest path from a TOML control map to a hand that moves. No model, no EMG, no
-training: one slider per name in the file, sent straight through a `VhiTarget` to VHI's
+training: one slider per name in the file, sent straight through a `RendererTarget` to VHI's
 **predicted** hand.
 
 Run with:
@@ -52,7 +52,8 @@ from imgui_bundle import portable_file_dialogs as pfd
 from myogestic import App, Fr, Grid, Px
 from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.keyboard import KeyboardTarget
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.renderer import RendererTarget
+from myogestic.vhi import virtual_hand
 from myogestic.widgets import AppLogo, ControlMapEditor, ProcessLauncher
 from myogestic.widgets.common import DANGER, SUCCESS, WARNING, muted, panel_header
 
@@ -330,7 +331,7 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
         controls = resolve(bindable, capabilities)
         # One VHI target for the whole map: it publishes a stream per address it drives,
         # each named for that address, so this file states neither a hand nor a width.
-        vhi_target = VhiTarget(client=vhi_control, interface=vhi)
+        vhi_target = RendererTarget(client=vhi_control, interface=vhi)
         # Both targets share one map. `ControlBus` checks that *someone* claims every
         # alias, so a keyboard address in a VHI-only app is caught here rather than
         # rendering nowhere and looking like a control that works and holds still.

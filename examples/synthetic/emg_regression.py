@@ -30,6 +30,7 @@ from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_regressor
+from myogestic.renderer import RendererTarget
 from myogestic.session import (
     iter_aligned_windows,
     iter_labeled_windows,
@@ -37,7 +38,7 @@ from myogestic.session import (
 )
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import virtual_hand
 from myogestic.vhi.pose import ADDRESS_CHANNELS, POSE_DOFS, split_pose
 from myogestic.widgets import (
     AppLogo,
@@ -69,7 +70,7 @@ output_filter = PostProcessor(hz=32)
 # VHI declares. What an address means — number or held state, its range, its states — is
 # VHI's to say, so this stays unresolved until VHI answers (see `link` below).
 #
-# No VHI channel number appears here, and none should: `VhiTarget` owns the
+# No VHI channel number appears here, and none should: `RendererTarget` owns the
 # translation to whatever the hand happens to want on the wire.
 # --8<-- [start:dofs]
 CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "regression.toml"
@@ -146,14 +147,14 @@ pipeline = Pipeline(app)
 # `link.bus` stays None until `link.ensure()` succeeds, on the first click that needs it.
 #
 # Once built, one bus owns the whole output path: substitute rest -> clip -> smooth ->
-# clip again -> hand it to every target. `VhiTarget` is what turns resolved aliases into
+# clip again -> hand it to every target. `RendererTarget` is what turns resolved aliases into
 # whatever this VHI renders on the wire, on whichever of its streams the map's addresses
 # turn out to be on. No hand and no stream is named here: the target looks this file's
 # addresses up in VHI's manifest and publishes one stream per address it drives, each
 # named for that address and one channel wide.
 link = ControlLink(
     CONTROL_MAP,
-    [VhiTarget(client=vhi_control, interface=vhi)],
+    [RendererTarget(client=vhi_control, interface=vhi)],
     ctx=app.ctx,
     smoothing=output_filter,
     hz=32,

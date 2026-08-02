@@ -22,10 +22,11 @@ from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
 from myogestic.recipes.features import mav, rms, var, wl, zc
+from myogestic.renderer import RendererTarget
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -109,7 +110,7 @@ pipeline = Pipeline(app)
 # --8<-- [end:setup]
 
 # The link and its target own the wire. VHI's continuous inlet takes control values, and
-# `VhiTarget` negotiates the space and refuses a VHI it cannot fully drive rather than
+# `RendererTarget` negotiates the space and refuses a VHI it cannot fully drive rather than
 # guessing. Nothing is resolved here: the aliases above mean nothing until VHI has said
 # what its addresses do, and this script launches VHI itself. `link.ensure()` binds on
 # the first click that finds VHI up, and `link.bus` is None until then.
@@ -118,7 +119,7 @@ link = ControlLink(
     # No hand and no stream is named: the target looks this file's addresses up in VHI's
     # manifest and publishes one stream per address it drives, each named for that
     # address and one channel wide.
-    [VhiTarget(client=vhi_control, interface=vhi)],
+    [RendererTarget(client=vhi_control, interface=vhi)],
     ctx=app.ctx,
     smoothing=output_filter,
     hz=32,

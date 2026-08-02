@@ -37,10 +37,11 @@ from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier
 from myogestic.recipes.features import mav, rms, var, wl
+from myogestic.renderer import RendererTarget
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
 from myogestic.tools.emg_generator import control_outlet
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     AppLogo,
     FeatureSelector,
@@ -174,7 +175,7 @@ def train(data: TrainingData):
 # address it drives, named for that address.
 link = ControlLink(
     CONTROL_MAP,
-    [VhiTarget(client=vhi_control, interface=vhi)],
+    [RendererTarget(client=vhi_control, interface=vhi)],
     ctx=app.ctx,
     smoothing=output_filter,
     hz=pipeline.predict_hz,

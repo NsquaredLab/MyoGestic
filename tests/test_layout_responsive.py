@@ -776,7 +776,6 @@ class TestThePickerPopupIsBounded:
             pathlib.Path(__file__).resolve().parent.parent
             / "myogestic"
             / "widgets"
-            / "vhi"
             / "control_map_editor.py"
         ).read_text()
         popup = source.split("begin_combo")[1].split("end_combo")[0]
@@ -1155,7 +1154,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
 
         fake_keys = _Keys()
         monkeypatch.setattr(studio, "keys", fake_keys)
-        monkeypatch.setattr(studio, "VhiTarget", lambda **kw: _Target())
+        monkeypatch.setattr(studio, "RendererTarget", lambda **kw: _Target())
         monkeypatch.setattr(studio, "ControlBus", _Bus)
 
         path = tmp_path / "keys.toml"

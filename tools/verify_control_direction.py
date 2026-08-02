@@ -31,7 +31,7 @@ Four things are checked per run:
 2. **Round-trip.** A control +1 pushed raw on the DOF's own one-channel stream must read
    back as +1 on `VHI_Predict`, so the renderer is the identity rather than a sign flip
    — and *every* frame of the hold must read the same, not only the last.
-3. **The client's own stack.** The same +1 driven through a `VhiTarget` and a
+3. **The client's own stack.** The same +1 driven through a `RendererTarget` and a
    `ControlBus` must render identically to that raw frame. A different producer, not a
    different declaration: the stream name and the range both come from the renderer's
    manifest rather than from a constant in this file, so this is the check that catches
@@ -82,7 +82,8 @@ import numpy as np
 from mne_lsl.lsl import StreamInlet, resolve_streams
 
 from myogestic.controls import ControlBus, load_control_map, resolve
-from myogestic.vhi import VhiTarget, virtual_hand
+from myogestic.renderer import RendererTarget
+from myogestic.vhi import virtual_hand
 
 #: The DOF driven throughout: the predicted hand's index, whose bare name denotes
 #: flexion. Positive X is flexion on this rig — `MovementPoses` reads the other way round
@@ -237,7 +238,7 @@ def _negotiated_bus(vhi, client, *, control_hand: bool = False) -> ControlBus:
         raise Failure("VHI did not answer GetControlManifest")
     dofs = {"probe": DOF} | ({"pose": POSE_DOF} if control_hand else {})
     control_map = load_control_map({"dofs": dofs})
-    target = VhiTarget(client=client, interface=vhi)
+    target = RendererTarget(client=client, interface=vhi)
     bus = ControlBus(resolve(control_map, capabilities), targets=[target], hz=32)
     if not target.negotiate():
         raise Failure("the target never settled its contract with VHI")
@@ -268,7 +269,7 @@ def check_round_trip(vhi, client, outlet, inlet: StreamInlet) -> dict[str, float
     """2-4. Identity and frame stability, from producers that genuinely differ.
 
     A raw frame this file wrote onto the DOF's own stream; the same value through a
-    `VhiTarget` and a `ControlBus`, where the stream name and the range come from the
+    `RendererTarget` and a `ControlBus`, where the stream name and the range come from the
     manifest instead; and that again while the control hand's stream is also being
     published. The three must agree — they vary who writes the frame and what else the
     renderer is reading, never what it was told, because there is nothing left to tell it.
@@ -282,7 +283,7 @@ def check_round_trip(vhi, client, outlet, inlet: StreamInlet) -> dict[str, float
     # raised above this line.
     outlet.stop()
 
-    for label, control_hand in (("through a VhiTarget", False), ("+ control hand", True)):
+    for label, control_hand in (("through a RendererTarget", False), ("+ control hand", True)):
         bus = _negotiated_bus(vhi, client, control_hand=control_hand)
         try:
             _await_binding(_through(bus), inlet, label)

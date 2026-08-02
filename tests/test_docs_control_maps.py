@@ -24,7 +24,7 @@ import pytest
 
 from myogestic.controls import Capability, ControlBus, load_control_map, resolve
 from myogestic.keyboard import KeyboardTarget, keyboard_capabilities
-from myogestic.vhi import VhiTarget
+from myogestic.renderer import RendererTarget
 
 DOCS = pathlib.Path(__file__).resolve().parent.parent / "docs"
 
@@ -114,7 +114,7 @@ def test_a_documented_mapping_loads_resolves_and_routes(page, line, block):
     # aliases without any way to press anything, so this suite cannot type.
     bus = ControlBus(
         controls,
-        targets=[VhiTarget(client=_Client(), interface=_Interface()), KeyboardTarget()],
+        targets=[RendererTarget(client=_Client(), interface=_Interface()), KeyboardTarget()],
         hz=50,
     )
     bus.stop()
@@ -160,7 +160,7 @@ def test_the_check_would_have_caught_the_defect_it_was_written_for():
     }
     controls = resolve(load_control_map(shipped), VHI_MANIFEST)
     with pytest.raises(ValueError, match="both map to"):
-        ControlBus(controls, targets=[VhiTarget(client=_Client(), interface=_Interface())], hz=50)
+        ControlBus(controls, targets=[RendererTarget(client=_Client(), interface=_Interface())], hz=50)
 
 
 # There used to be a second conflict case here: `vhi.prediction.thumb` and
