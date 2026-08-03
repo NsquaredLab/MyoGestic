@@ -117,12 +117,12 @@ One per process. [`App`][myogestic.App] owns the GUI loop, the shared [`Context`
 app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=200))
 ```
 
-A [`Stream`][myogestic.Stream] wraps a [`Source`](concepts/streams.md) plus a fixed-memory ring buffer. Each stream owns one daemon acquisition thread that polls the source, appends to the buffer, refreshes the display snapshot, and (when `app.start_recording()` is active) writes to a Zarr array.
+A [`Stream`][myogestic.Stream] wraps a [`Source`](concepts/streams.md) plus a fixed-memory ring buffer. Each stream owns one daemon acquisition thread that polls the source, appends to the buffer, and (when `app.start_recording()` is active) writes to a Zarr array. Plotting and prediction copy only their requested recent tail, so acquisition work does not grow as the history fills.
 
 Two reads come out the other side:
 
 - `stream.get_window()` returns the most recent `window_ms` of data, **channels-first** `(n_channels, n_samples)`. This is what feature extractors and ML models consume.
-- `stream.get_display(n_pixels)` returns a min/max envelope decimated for rendering. This is what [`SignalViewer`][myogestic.widgets.SignalViewer] consumes.
+- `stream.get_raw_snapshot_stable(duration_s)` returns a stable recent tail for rendering. [`SignalViewer`][myogestic.widgets.SignalViewer] requests only its visible duration and decimates it to the live plot width.
 
 [`app.streams(*streams)`][myogestic.App.streams] registers one or more. The same method takes any `Source` implementation, so swapping [`LSLSource`][myogestic.sources.LSLSource] for [`ReplaySource`][myogestic.sources.ReplaySource] (offline replay) or your own custom source changes one line.
 

@@ -1,4 +1,4 @@
-"""Raw signal viewer — every sample, no decimation, zero-alloc render.
+"""Raw signal viewer — every visible sample, no decimation, bounded-copy render.
 
 For when you need to see every sample exactly (debugging glitches,
 validating timestamps, sanity-checking acquisition). For higher-channel
@@ -37,7 +37,7 @@ _raw_viewers: dict[str, _RawViewerState] = {}
 
 
 class RawSignalViewer:
-    """Raw signal viewer — every sample, no decimation, zero-alloc render path.
+    """Raw signal viewer — every visible sample, no decimation, bounded-copy render path.
 
     Construct once with the stream name (+ optional size / channel height),
     then call [`ui`][] with the live ``ctx`` each frame.
@@ -91,11 +91,13 @@ class RawSignalViewer:
         if changed:
             r.window = new_win
 
-        snapshot = stream.get_raw_snapshot()
+        # Request only the visible tail. Copying the full acquisition history
+        # every frame makes a short raw view slow down as a long buffer fills.
+        snapshot = stream.get_raw_snapshot_stable(r.window)
         if snapshot is None:
             imgui.text_disabled(f"{stream_name}: no data")
             return
-        all_ts, all_data = snapshot
+        _, _, _, all_ts, all_data = snapshot
         n_win = int(r.window * stream.info.fs)
         if len(all_data) > n_win:
             data = all_data[-n_win:]

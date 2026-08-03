@@ -140,7 +140,7 @@ Construct once (setup scope), then call `.ui(...)` each frame in `@app.ui`. Full
 SignalViewer(stream_name, selectable=False, scale_mode="auto",
              y_range=(-1, 1), show_diagnostics=False, show_markers=False)
   .ui(ctx)
-RawSignalViewer(stream_name)                        # every-sample, zero-alloc
+RawSignalViewer(stream_name)                        # every visible sample, bounded copy
   .ui(ctx)
 RecordingControls(class_names, *, on_record, on_stop, on_gesture=None)
   .ui(ctx)

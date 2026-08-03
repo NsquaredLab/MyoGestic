@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.3] - 2026-08-03
+
+### Fixed
+
+- Live streams no longer unwrap the entire acquisition ring on every source chunk or
+  prediction tick. Acquisition appends remain constant-time, while prediction and signal
+  viewers copy only their requested recent tail; long buffers therefore no longer make the
+  plot progressively stutter or starve high-rate sources as they fill.
+
 ## [2.5.2] - 2026-08-03
 
 ### Added
