@@ -9,8 +9,9 @@ from __future__ import annotations
 from itertools import pairwise
 
 import numpy as np
+import pytest
 
-from myogestic.tools.emg_generator import _class_pattern, _read_mode
+from myogestic.tools.emg_generator import _class_pattern, _paced_delay, _read_mode
 
 # --- _class_pattern ---------------------------------------------------------
 
@@ -85,3 +86,33 @@ def test_read_mode_keeps_previous_when_inlet_idle():
 
 def test_read_mode_with_none_inlet_returns_previous():
     assert _read_mode(None, n_classes=4, mode_idx=2) == 2
+
+
+# --- _paced_delay -----------------------------------------------------------
+
+
+def test_paced_delay_sleeps_to_an_absolute_deadline():
+    deadline, sleep_s = _paced_delay(deadline=1.0, interval=0.01, now=1.004)
+
+    assert deadline == pytest.approx(1.01)
+    assert sleep_s == pytest.approx(0.006)
+
+
+def test_paced_delay_repays_a_small_scheduler_overshoot():
+    deadline, sleep_s = _paced_delay(deadline=1.0, interval=0.01, now=1.012)
+    assert deadline == pytest.approx(1.01)
+    assert sleep_s == 0.0
+
+    deadline, sleep_s = _paced_delay(deadline, interval=0.01, now=1.013)
+    assert deadline == pytest.approx(1.02)
+    assert sleep_s == pytest.approx(0.007)
+
+
+def test_paced_delay_rebases_after_a_long_stall_without_bursting():
+    deadline, sleep_s = _paced_delay(deadline=1.0, interval=0.01, now=1.05)
+    assert deadline == pytest.approx(1.05)
+    assert sleep_s == 0.0
+
+    deadline, sleep_s = _paced_delay(deadline, interval=0.01, now=1.051)
+    assert deadline == pytest.approx(1.06)
+    assert sleep_s == pytest.approx(0.009)
