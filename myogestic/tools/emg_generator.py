@@ -1,4 +1,4 @@
-"""Controllable EMG signal generator.
+r"""Controllable EMG signal generator.
 
 Outputs fake EMG via LSL. Reads a control stream to switch between class
 patterns. Default behavior is binary (rest / fist) — pass ``--classes N``
@@ -96,6 +96,21 @@ DEFAULT_CONTROL_STREAM = "EMG_Control"
 _CONTROL_PROBE_EVERY_S = 1.0
 
 
+def _paced_delay(deadline: float, interval: float, now: float) -> tuple[float, float]:
+    """Advance an absolute tick deadline and return ``(deadline, sleep_s)``.
+
+    A relative ``sleep(interval - work_time)`` starts every period from the
+    scheduler's delayed wake-up, so small overshoots become permanent cadence
+    error. Absolute deadlines repay a small overshoot on the following period.
+    If a producer is at least one whole interval late, rebase instead of
+    emitting a burst of catch-up chunks.
+    """
+    deadline += interval
+    if now - deadline >= interval:
+        return now, 0.0
+    return deadline, max(0.0, deadline - now)
+
+
 def control_outlet(name: str = DEFAULT_CONTROL_STREAM) -> StreamOutlet:
     """LSL outlet for steering the EMG generator from another script.
 
@@ -141,7 +156,9 @@ def main(
     ] = 2,
     control_stream_name: Annotated[
         str,
-        typer.Option("--control", help="Control stream name (1ch float; sample value = class index)."),
+        typer.Option(
+            "--control", help="Control stream name (1ch float; sample value = class index)."
+        ),
     ] = "EMG_Control",
     multi_dof: Annotated[
         bool,
@@ -198,6 +215,7 @@ def main(
 
     rng = np.random.default_rng()
     next_probe = 0.0
+    deadline = time.perf_counter()
     try:
         while True:
             t0 = time.perf_counter()
@@ -254,9 +272,9 @@ def main(
             # 2048 and the viewer drew the handful of samples that made it through.
             outlet.push_chunk(samples)
 
-            elapsed = time.perf_counter() - t0
-            if elapsed < interval:
-                time.sleep(interval - elapsed)
+            deadline, sleep_s = _paced_delay(deadline, interval, time.perf_counter())
+            if sleep_s > 0.0:
+                time.sleep(sleep_s)
 
     except KeyboardInterrupt:
         print("EMG generator stopped")

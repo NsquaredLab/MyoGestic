@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.4] - 2026-08-03
+
+### Fixed
+
+- The synthetic EMG generator now paces chunks against an absolute monotonic deadline.
+  Small operating-system sleep overshoots are corrected on the next tick instead of
+  becoming permanent delivery jitter; long stalls rebase without bursty catch-up output.
+
 ## [2.5.3] - 2026-08-03
 
 ### Fixed
