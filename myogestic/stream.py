@@ -165,6 +165,31 @@ def _unwrap_ring_into(rb: RingBuffer, out: np.ndarray, cap: int) -> int:
     return n
 
 
+def _copy_ring_tail_into(rb: RingBuffer, out: np.ndarray, count: int, cap: int) -> int:
+    """Copy at most the newest ``count`` ring rows into ``out`` chronologically.
+
+    Unlike :func:`_unwrap_ring_into`, the work is bounded by the requested tail rather
+    than the ring's current fill. This matters for long acquisition buffers: prediction
+    and a five-second viewer must not repeatedly copy sixty seconds of history.
+    """
+    n = rb.shape[0]
+    take = min(n, max(0, int(count)))
+    if take == 0:
+        return 0
+
+    logical_start = n - take
+    if not rb.is_full:
+        out[:take] = rb._arr[logical_start:n]
+        return take
+
+    physical_start = (rb._idx_L + logical_start) % cap
+    first = min(take, cap - physical_start)
+    out[:first] = rb._arr[physical_start : physical_start + first]
+    if first < take:
+        out[first:take] = rb._arr[: take - first]
+    return take
+
+
 class Stream:
     """A named ring-buffered live stream backed by a [`Source`][].
 
@@ -179,9 +204,9 @@ class Stream:
       process is never picked up behind you.
     - One daemon **acquisition thread** is started per Stream when
       ``App.run()`` begins. Once attached it loops ``source.read()``,
-      appends to the ring buffer, refreshes the display snapshot, and
-      (if a recording session is active) appends to the session's Zarr
-      store. Until then it waits.
+      appends to the ring buffer and, if a recording session is active,
+      appends to the session's Zarr store. Display and prediction consumers
+      copy only the bounded tail they request. Until attached it waits.
     - [`get_window`][] and [`get_display`][] are then readable
       concurrently from other threads.
     - The ring buffer holds the last ``buffer_ms`` of samples so
@@ -261,11 +286,11 @@ class Stream:
         self._m4_work_t: np.ndarray | None = None
         self._win_d = np.empty(0)
         self._win_t = np.empty(0)
-        # Display-buffer identity for stateful render-side consumers. `epoch`
-        # bumps on every (re)allocation. `_total_seq` counts samples appended
-        # this epoch (written only under `_lock`); `_display_seq_end` is
-        # `_total_seq` captured together with `_display_n` under the same lock,
-        # so a reader gets a consistent (count, newest-sequence) pair.
+        # Buffer identity for stateful render-side consumers. `epoch` bumps on
+        # every (re)allocation and `_total_seq` counts samples appended this
+        # epoch (written only under `_lock`). The legacy full-display snapshot
+        # is refreshed only on demand; the normal viewer reads a bounded tail
+        # directly from the ring instead.
         self.epoch = 0
         self._total_seq = 0
         self._display_seq_end = 0
@@ -424,11 +449,6 @@ class Stream:
         self.status = "connected"
         self.last_error = ""
 
-        # Raw snapshot every chunk (cheap memcpy). M4 decimation must NOT run
-        # here — at 120-256 channels it starves the socket read; get_display()
-        # computes it lazily on the render thread instead.
-        self._update_raw_snapshot()
-
         # `_session_lock` spans the check-and-append so `detach_session()`
         # cannot null the session and clear its stores mid-append.
         with self._session_lock:
@@ -444,7 +464,6 @@ class Stream:
             delay = self._acquire_step()
             if delay > 0:
                 time.sleep(delay)
-
 
     def _validate_chunk(self, data: np.ndarray, ts: np.ndarray) -> str | None:
         """Check that a chunk from `source.read()` matches the StreamInfo.
@@ -484,7 +503,12 @@ class Stream:
         return None
 
     def _update_raw_snapshot(self) -> None:
-        """Unwrap ring buffer into display arrays. Zero alloc, every chunk."""
+        """Unwrap the full ring into legacy display arrays on demand.
+
+        The acquisition loop deliberately never calls this method. Copying a
+        growing/full history for every small source chunk makes acquisition
+        progressively slower and eventually starves the source.
+        """
         if self._data is None or self._timestamps is None:
             return
         with self._lock:
@@ -502,6 +526,9 @@ class Stream:
         Called lazily from [`get_display`][] on the render thread, so it copies
         the display buffer under the lock before decimating.
         """
+        # `get_display` is the legacy full-buffer API. Refresh its contiguous
+        # snapshot here rather than burdening every acquisition chunk.
+        self._update_raw_snapshot()
         with self._lock:
             n = self._display_n
             if n < 2:
@@ -587,18 +614,13 @@ class Stream:
                 np.empty((0, 0), dtype=np.float32),
                 np.empty(0, dtype=np.float64),
             )
+        n = max(0, int(self._window * self.info.fs))
         with self._lock:
-            nd = _unwrap_ring_into(self._data, self._win_d, self._cap)
-            _unwrap_ring_into(self._timestamps, self._win_t, self._cap)
+            nd = _copy_ring_tail_into(self._data, self._win_d, n, self._cap)
+            _copy_ring_tail_into(self._timestamps, self._win_t, n, self._cap)
         if nd == 0:
             return self._win_d[:0].T.astype(np.float32, copy=False), self._win_t[:0]
-        n = int(self._window * self.info.fs)
-        if nd < n:
-            return self._win_d[:nd].T.astype(np.float32, copy=False), self._win_t[:nd]
-        return (
-            self._win_d[nd - n : nd].T.astype(np.float32, copy=False),
-            self._win_t[nd - n : nd],
-        )
+        return self._win_d[:nd].T.astype(np.float32, copy=False), self._win_t[:nd]
 
     def get_display(self, n_pixels: int = 800) -> tuple[np.ndarray, np.ndarray] | None:
         """M4-decimated display snapshot, computed on demand on the render thread.
@@ -614,7 +636,12 @@ class Stream:
         return self._m4_t[:n], self._m4_d[:n]
 
     def get_raw_snapshot(self) -> tuple[np.ndarray, np.ndarray] | None:
-        """Lock-free read of the display snapshot."""
+        """Return an on-demand full, contiguous ring snapshot.
+
+        Prefer :meth:`get_raw_snapshot_stable` with ``duration_s`` for live
+        widgets; this compatibility API necessarily copies the whole buffer.
+        """
+        self._update_raw_snapshot()
         n = self._display_n
         if n < 2:
             return None
@@ -642,31 +669,37 @@ class Stream:
         are buffered (or the stream is not connected).
         """
         with self._lock:
-            n = self._display_n
-            if n < 2 or self.info is None:
+            if self._data is None or self._timestamps is None or self.info is None:
+                return None
+            n = self._data.shape[0]
+            if n < 2:
                 return None
             fs = self.info.fs
             if duration_s is None or not np.isfinite(fs) or fs <= 0.0:
-                start = 0
+                take = n
             else:
-                start = max(0, n - (int(duration_s * fs) + 4))
+                take = min(n, int(duration_s * fs) + 4)
+            ts = np.empty(take, dtype=np.float64)
+            data = np.empty((take, self.info.n_channels), dtype=self.info.dtype)
+            _copy_ring_tail_into(self._timestamps, ts, take, self._cap)
+            _copy_ring_tail_into(self._data, data, take, self._cap)
             return (
                 self.epoch,
-                self._display_seq_end,
+                self._total_seq,
                 fs,
-                self._display_t[start:n].copy(),
-                self._display_d[start:n].copy(),
+                ts,
+                data,
             )
 
     def last_timestamp(self) -> float | None:
         """Most recent sample timestamp, or None if no samples yet.
 
-        Holds `_lock` so a concurrent `reconnect()` (which zeroes `_display_n`
-        and reallocates `_display_t`) cannot strand the read on a torn buffer.
+        Reads the ring tail under `_lock`, so a concurrent reconnect or append
+        cannot strand the read on a torn buffer.
         """
         with self._lock:
-            n = self._display_n
-            if n < 1 or self._display_t.shape[0] < n:
+            if self._timestamps is None or self._timestamps.shape[0] < 1:
                 return None
-            ts = float(self._display_t[n - 1])
+            _copy_ring_tail_into(self._timestamps, self._win_t, 1, self._cap)
+            ts = float(self._win_t[0])
         return ts if ts > 0.0 else None

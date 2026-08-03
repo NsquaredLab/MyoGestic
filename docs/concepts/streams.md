@@ -45,7 +45,7 @@ env_min, env_max = stream.get_display(n_pixels=800)
 # both shape == (n_pixels, n_channels)
 ```
 
-Returns a min/max envelope decimated to `n_pixels` columns - typical screen widths land at 300–1500. 64 channels at 2048 Hz with `window_ms=10000` is 64 × 2 × 800 = ~102K points, which ImPlot draws at 60 fps. The decimation uses [tsdownsample](https://github.com/predict-idlab/tsdownsample)'s M4 algorithm under the hood - preserves visual peaks without sub-sampling artefacts.
+Returns an on-demand full-history M4 snapshot for compatibility. New widgets should request a bounded tail with `get_raw_snapshot_stable(duration_s)` and decimate it to their actual plot width, as `SignalViewer` does.
 
 ### `get_raw_snapshot()` - for diagnostics
 
@@ -55,14 +55,14 @@ ts, data = stream.get_raw_snapshot()
 # ts.shape   == (capacity,)
 ```
 
-The full ring-buffer contents in their native orientation. Used by `RawSignalViewer` for zero-allocation rendering of every sample. Most user code should prefer `get_window` or `get_display`.
+An on-demand contiguous copy of the full ring-buffer contents in their native orientation. Most user code should prefer `get_window`, or `get_raw_snapshot_stable(duration_s)` when a stable recent tail is required. `RawSignalViewer` uses the latter so its work is bounded by the visible duration.
 
 ## Why dvg-ringbuffer
 
-The ring buffer ([`dvg-ringbuffer`](https://github.com/Dennis-van-Gils/python-dvg-ringbuffer)) keeps a fixed memory address once full. That matters for two reasons:
+The ring buffer ([`dvg-ringbuffer`](https://github.com/Dennis-van-Gils/python-dvg-ringbuffer)) keeps memory bounded while acquisition runs indefinitely. That matters for two reasons:
 
-1. **Zero-copy reads when full.** No `np.copy` cost on every `get_window` call.
-2. **JIT-friendly.** Numba compiles against a stable address, so any JIT-compiled feature extractor gets a fixed buffer to work against.
+1. **Constant acquisition cost.** Appending a chunk never unwraps or copies the accumulated history.
+2. **Bounded consumer reads.** `get_window()` copies only the prediction window and `SignalViewer` only its visible tail, even when the ring holds much more history.
 
 A `threading.Lock` guards reads and writes; overhead is ~1–5 microseconds per access - negligible compared to the actual work each thread does.
 
