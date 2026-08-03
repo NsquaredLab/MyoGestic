@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ControlLinkConnector` provides rate-limited, single-flight background retries for a
+  deferred `ControlLink`, so UI loops can reconnect application-launched targets without
+  blocking either rendering or prediction.
+
+### Fixed
+
+- `myogestic-install-vhi --tag latest` now records the resolved release tag in
+  `vhi-version.txt` instead of the literal moving selector `latest`. The launch-time
+  compatibility gate can therefore identify an old installed VHI reliably.
+- A reachable server that does not implement `GetControlManifest` is now reported as an
+  incompatible pre-v2 target with an upgrade command, rather than retried forever as if it
+  were unreachable.
+
 ## [2.5.1] - 2026-08-03
 
 ### Fixed

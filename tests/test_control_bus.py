@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import math
 import types
+from threading import Event
+from time import monotonic, sleep
 
 import numpy as np
 import pytest
@@ -20,6 +22,7 @@ from myogestic.controls import (
     Continuous,
     ControlBus,
     ControlLink,
+    ControlLinkConnector,
     ControlSet,
     Discrete,
     load_control_map,
@@ -29,8 +32,8 @@ from myogestic.controls import (
 #: set is what the bus operates on, and its keys are the user's own names.
 MIXED = ControlSet(
     dofs={
-        "a": Continuous("a"),                              # signed [-1, 1]
-        "g": Continuous("g", lo=0.0, hi=1.0),              # one-way
+        "a": Continuous("a"),  # signed [-1, 1]
+        "g": Continuous("g", lo=0.0, hi=1.0),  # one-way
         "hand.grasp": Discrete("hand.grasp", ("rest", "fist"), "rest"),
     }
 )
@@ -483,8 +486,8 @@ def test_control_link_stays_unbound_while_the_target_cannot_answer():
 
     assert link.ensure() is None
     assert link.bus is None
-    assert target.bound == 0        # nothing was bound, so nothing was left half-built
-    assert link.ensure() is None    # a retry asks again rather than caching the failure
+    assert target.bound == 0  # nothing was bound, so nothing was left half-built
+    assert link.ensure() is None  # a retry asks again rather than caching the failure
     assert target.asked == 2
 
 
@@ -522,8 +525,8 @@ def test_control_link_ensure_is_idempotent_once_bound():
     second = link.ensure()
 
     assert second is first
-    assert target.asked == asked    # no second handshake
-    assert target.bound == 1        # and no second bind
+    assert target.asked == asked  # no second handshake
+    assert target.bound == 1  # and no second bind
 
 
 def test_control_link_stop_rests_the_target_and_clears_the_bus():
@@ -537,7 +540,7 @@ def test_control_link_stop_rests_the_target_and_clears_the_bus():
 
     assert link.bus is None
     assert target.stopped == 1
-    link.stop()                     # idempotent: a second teardown is a no-op
+    link.stop()  # idempotent: a second teardown is a no-op
     assert target.stopped == 1
 
 
@@ -545,4 +548,87 @@ def test_control_link_bus_is_read_only():
     """The bus is the link's to own — an app that could assign it could desync `ensure`."""
     link = _link(_LateTarget())
     with pytest.raises(AttributeError):
-        link.bus = "not a bus"      # type: ignore[misc]
+        link.bus = "not a bus"  # type: ignore[misc]
+
+
+# --- ControlLinkConnector --------------------------------------------------------
+
+
+def _wait_until(predicate, *, timeout_s: float = 1.0) -> bool:
+    """Wait briefly for one background connector transition."""
+    deadline = monotonic() + timeout_s
+    while monotonic() < deadline:
+        if predicate():
+            return True
+        sleep(0.005)
+    return bool(predicate())
+
+
+def test_connector_retries_in_the_background_until_the_target_answers():
+    """A UI loop can keep rendering while an application-launched target starts."""
+    target = _LateTarget()
+    connector = ControlLinkConnector(_link(target), retry_s=0.0)
+
+    assert connector.poll() is True
+    assert _wait_until(lambda: not connector.busy)
+    assert connector.connected is False
+    assert connector.status == "waiting for control targets"
+
+    target.up = True
+    assert connector.poll() is True
+    assert _wait_until(lambda: connector.connected)
+    assert target.bound == 1
+    connector.stop()
+
+
+def test_connector_allows_only_one_capability_request_at_a_time():
+    """A fast UI loop must not fan one slow RPC out into many threads."""
+    entered = Event()
+    release = Event()
+
+    class BlockingTarget(_LateTarget):
+        def capabilities(self):
+            self.asked += 1
+            entered.set()
+            release.wait(timeout=1.0)
+            return [Capability("cursor.x", "continuous", lo=-1.0, hi=1.0)]
+
+    target = BlockingTarget()
+    connector = ControlLinkConnector(_link(target), retry_s=0.0)
+
+    assert connector.poll() is True
+    assert entered.wait(timeout=1.0)
+    assert connector.poll(force=True) is False
+    assert connector.ensure_now() is None
+    assert target.asked == 1
+
+    release.set()
+    assert _wait_until(lambda: connector.connected)
+    connector.stop()
+
+
+def test_connector_tears_down_a_bus_that_resolves_during_stop():
+    """Closing the app during an RPC must not leave its late-created bus alive."""
+    entered = Event()
+    release = Event()
+
+    class BlockingTarget(_LateTarget):
+        def capabilities(self):
+            self.asked += 1
+            entered.set()
+            release.wait(timeout=1.0)
+            return [Capability("cursor.x", "continuous", lo=-1.0, hi=1.0)]
+
+    target = BlockingTarget()
+    link = _link(target)
+    connector = ControlLinkConnector(link, retry_s=0.0)
+
+    assert connector.poll() is True
+    assert entered.wait(timeout=1.0)
+    connector.stop(timeout_s=0.0)
+    release.set()
+
+    assert _wait_until(lambda: not connector.busy)
+    assert link.bus is None
+    assert target.stopped == 1
+    assert connector.status == "control connection stopped"

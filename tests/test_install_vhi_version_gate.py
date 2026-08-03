@@ -79,6 +79,30 @@ class TestTheInstallerRefusesAnOldRelease:
         monkeypatch.setattr(install_vhi, "_resolve_latest_tag", lambda: "main")
         assert install_vhi._check_supported("main") == "main"
 
+    def test_latest_records_the_concrete_release_it_installed(self, tmp_path, monkeypatch):
+        """A literal ``latest`` marker cannot protect a later launch from an old VHI."""
+        dest = tmp_path / "vhi"
+        downloaded: list[str] = []
+
+        def unpack(_archive, staging):
+            (staging / "VHI.app").mkdir(parents=True)
+
+        monkeypatch.setattr(install_vhi, "_resolve_asset", lambda: "VHI-test.zip")
+        monkeypatch.setattr(install_vhi, "_check_supported", lambda _tag: "v2.3.0")
+        monkeypatch.setattr(install_vhi, "_download", lambda url, _archive: downloaded.append(url))
+        monkeypatch.setattr(install_vhi, "_unpack", unpack)
+        monkeypatch.setattr(install_vhi, "_validate", lambda _staging: None)
+        monkeypatch.setattr(install_vhi, "_restore_exec_bits", lambda _staging: None)
+        monkeypatch.setattr(install_vhi, "_strip_quarantine", lambda _dest: None)
+        monkeypatch.setattr(install_vhi, "_macos_gatekeeper_note", lambda _dest: None)
+
+        install_vhi._install(tag="latest", dest=dest, no_verify=True)
+
+        marker = (dest / "vhi-version.txt").read_text()
+        assert "installed_tag=v2.3.0" in marker
+        assert "installed_tag=latest" not in marker
+        assert "/releases/download/v2.3.0/" in downloaded[0]
+
 
 class TestTheLauncherRefusesAnOldInstall:
     @staticmethod

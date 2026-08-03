@@ -48,10 +48,8 @@ REPO = "NsquaredLab/MyoGestic-VHI"
 #: which has no control manifest to negotiate against at all — so an install of it would
 #: be refused at every launch, which is what this gate catches before the download.
 #:
-#: Still v2 despite the single-service rewrite: v2 has never been released (v1.0.0 is the
-#: only tag on the repo), so there is no published VHI build serving the old two-service
-#: contract for anything to be incompatible *with*. v2.0.0 will be the first release that
-#: carries the one control service.
+#: VHI v2.0.0 is the first release that carries the one control service and its
+#: manifest. Older releases cannot negotiate controls with MyoGestic 2.5+.
 MIN_VHI_TAG = "v2.0.0"
 
 # (system, machine) → release asset. Darwin/x86_64 is absent: only an arm64
@@ -384,7 +382,11 @@ def _install(
     dest = dest or _default_dest()
     asset = _resolve_asset()
     resolved = _check_supported(tag)
-    url = _download_url(tag, asset)
+    # Once ``latest`` has been resolved, pin every subsequent request to that
+    # concrete release. Otherwise the pointer could move between the check,
+    # digest fetch, and archive download while the marker still records the
+    # release we checked.
+    url = _download_url(resolved, asset)
 
     label = tag if resolved == tag else f"{tag} ({resolved})"
     print(f"Installing VHI {label} → {dest}")
@@ -409,7 +411,7 @@ def _install(
 
     # Fetch the expected digest before download so a missing-tag-on-API error
     # surfaces immediately, not after a 150 MB download.
-    expected_digest = None if no_verify else _fetch_release_digest(tag, asset)
+    expected_digest = None if no_verify else _fetch_release_digest(resolved, asset)
 
     # Atomic install: stage in a temp dir, validate, then swap with dest.
     # A failed download or malformed archive never leaves a half-installed
@@ -424,7 +426,9 @@ def _install(
         _unpack(archive, staging)
         _validate(staging)
         _restore_exec_bits(staging)
-        _write_marker(staging, tag, asset)
+        # ``latest`` is only a moving download selector. Persist the concrete tag
+        # resolved above so the launch-time version gate can actually compare it.
+        _write_marker(staging, resolved, asset)
 
         if dest.exists():
             shutil.rmtree(dest)
@@ -435,7 +439,7 @@ def _install(
         shutil.move(str(staging), str(dest))
 
     _strip_quarantine(dest)
-    print(f"✓ VHI {tag} installed at {dest}")
+    print(f"✓ VHI {resolved} installed at {dest}")
     _macos_gatekeeper_note(dest)
 
 

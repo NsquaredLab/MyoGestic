@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Callable, Mapping, Sequence
+from threading import Lock, Thread, current_thread
+from time import monotonic
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
@@ -146,8 +148,20 @@ class ControlBus:
     """
 
     __slots__ = (
-        "_controls", "_targets", "_smoothing", "_hz", "_dead_zone", "_hysteresis",
-        "_triggers", "_fired", "_lo", "_hi", "_names", "_sign", "_reported", "_on_warn",
+        "_controls",
+        "_targets",
+        "_smoothing",
+        "_hz",
+        "_dead_zone",
+        "_hysteresis",
+        "_triggers",
+        "_fired",
+        "_lo",
+        "_hi",
+        "_names",
+        "_sign",
+        "_reported",
+        "_on_warn",
     )
 
     def __init__(
@@ -186,9 +200,7 @@ class ControlBus:
         self._triggers: dict[str, EdgeTrigger[str]] = {}
         for dof in controls.discrete:
             ticks = max(1, math.ceil(dof.debounce_s * self._hz))
-            self._triggers[dof.name] = EdgeTrigger(
-                self._record(dof.name), n_stable_ticks=ticks
-            )
+            self._triggers[dof.name] = EdgeTrigger(self._record(dof.name), n_stable_ticks=ticks)
 
         for target in self._targets:
             target.bind(controls)
@@ -282,8 +294,7 @@ class ControlBus:
 
         if self._smoothing is not None and self._names:
             vec = self._smoothing(encode(self._controls, values))
-            vec = np.nan_to_num(np.asarray(vec, dtype=np.float32), nan=0.0,
-                                posinf=0.0, neginf=0.0)
+            vec = np.nan_to_num(np.asarray(vec, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
             # Per-channel, because each DOF declares its own domain; a global rail
             # would let a one-way DOF emit the direction it says it cannot.
             vec = np.clip(vec, self._lo, self._hi)
@@ -378,7 +389,9 @@ def connect_controls(
         Every target the map may name, already constructed. Each is asked what it exports;
         one that answers `None` — a remote target that has not started — makes the whole call
         return `None`, because a map resolved against a partial manifest would bind some
-        aliases and silently drop the rest.
+        aliases and silently drop the rest. The target list is therefore one atomic failure
+        domain. Use separate calls or links for targets that should remain independently
+        useful when another one is unavailable.
     ctx
         The app's `~myogestic.Context`. Given one, the map is recorded as
         ``ctx.control_space`` so a recording carries the mapping it was made under, and
@@ -469,7 +482,8 @@ class ControlLink:
     Call `ensure` from a UI handler or a training thread — anywhere that can afford to
     block — and **never from ``@pipeline.predict``**: asking a target what it exports
     costs a blocking RPC, and that callback has a deadline. `predict` reads `bus` and
-    no-ops while it is `None`.
+    no-ops while it is `None`. One link is one atomic failure domain: if independently
+    useful targets may start or fail separately, give each its own map and link.
     """
 
     __slots__ = ("_bus", "_control_map", "_ctx", "_hz", "_smoothing", "_targets")
@@ -522,3 +536,169 @@ class ControlLink:
         bus, self._bus = self._bus, None
         if bus is not None:
             bus.stop()
+
+
+class ControlLinkConnector:
+    """Resolve a deferred `ControlLink` without blocking UI or prediction frames.
+
+    A target launched from an application's process panel cannot answer its capability
+    request when the application first opens. `ControlLink` deliberately keeps the
+    blocking retry explicit; this coordinator supplies a rate-limited, single-flight
+    background retry for UI loops.
+
+    Parameters
+    ----------
+    link
+        The `ControlLink` to resolve. It remains the owner of the eventual bus.
+    retry_s
+        Minimum time between background attempts. ``poll(force=True)`` bypasses this
+        interval, but never starts a second attempt while one is in flight.
+
+    Notes
+    -----
+    Call `poll` from a UI loop. Prediction code only reads ``link.bus`` or ``connected``;
+    it never calls `ControlLink.ensure`, which may block on a remote procedure call.
+    """
+
+    __slots__ = (
+        "_busy",
+        "_last_attempt",
+        "_last_error",
+        "_link",
+        "_lock",
+        "_retry_s",
+        "_status",
+        "_stopped",
+        "_worker",
+    )
+
+    def __init__(self, link: ControlLink, *, retry_s: float = 2.0) -> None:
+        if retry_s < 0 or not math.isfinite(retry_s):
+            raise ValueError("retry_s must be finite and non-negative")
+        self._link = link
+        self._retry_s = float(retry_s)
+        self._lock = Lock()
+        self._worker: Thread | None = None
+        self._last_attempt = float("-inf")
+        self._last_error: Exception | None = None
+        self._busy = False
+        self._stopped = False
+        self._status = "controls not connected"
+
+    @property
+    def connected(self) -> bool:
+        """Whether the link has resolved to a bus."""
+        return self._link.bus is not None
+
+    @property
+    def busy(self) -> bool:
+        """Whether a capability request is currently in flight."""
+        with self._lock:
+            return self._busy
+
+    @property
+    def status(self) -> str:
+        """A short status suitable for an application's process panel."""
+        if self.connected:
+            return "controls connected"
+        with self._lock:
+            return self._status
+
+    @property
+    def last_error(self) -> Exception | None:
+        """The most recent unexpected connection error, or `None`."""
+        with self._lock:
+            return self._last_error
+
+    def _attempt(self) -> ControlBus | None:
+        try:
+            bus = self._link.ensure()
+        except Exception as exc:  # noqa: BLE001 - report background failures as state
+            with self._lock:
+                self._last_error = exc
+                self._status = f"control connection failed: {exc}"
+            return None
+
+        with self._lock:
+            self._last_error = None
+            self._status = (
+                "controls connected" if bus is not None else "waiting for control targets"
+            )
+        return bus
+
+    def _run(self) -> None:
+        bus = self._attempt()
+        with self._lock:
+            self._busy = False
+            stopped = self._stopped
+            if stopped:
+                self._status = "control connection stopped"
+        if stopped and bus is not None:
+            # The application may have closed while a target RPC was in flight.
+            self._link.stop()
+
+    def poll(self, *, force: bool = False) -> bool:
+        """Start one non-blocking connection attempt when it is due.
+
+        Returns
+        -------
+        bool
+            `True` only when this call started a worker.
+        """
+        if self.connected:
+            return False
+
+        now = monotonic()
+        with self._lock:
+            if self._stopped or self._busy:
+                return False
+            if not force and now - self._last_attempt < self._retry_s:
+                return False
+            self._last_attempt = now
+            self._last_error = None
+            self._busy = True
+            self._status = "connecting controls…"
+            worker = Thread(target=self._run, name="control-link-connect", daemon=True)
+            self._worker = worker
+        try:
+            worker.start()
+        except Exception:
+            with self._lock:
+                self._busy = False
+            raise
+        return True
+
+    def ensure_now(self) -> ControlBus | None:
+        """Make one synchronous attempt unless a background worker owns it."""
+        if self.connected:
+            return self._link.bus
+        with self._lock:
+            if self._stopped or self._busy:
+                return self._link.bus
+            self._last_attempt = monotonic()
+            self._last_error = None
+            self._busy = True
+            self._status = "connecting controls…"
+        try:
+            bus = self._attempt()
+            with self._lock:
+                stopped = self._stopped
+            if stopped and bus is not None:
+                self._link.stop()
+                return None
+            return bus
+        finally:
+            with self._lock:
+                self._busy = False
+                if self._stopped:
+                    self._status = "control connection stopped"
+
+    def stop(self, *, timeout_s: float = 4.0) -> None:
+        """Stop retrying, tear down the bus, and briefly join an in-flight request."""
+        with self._lock:
+            self._stopped = True
+            self._status = "control connection stopped"
+            worker = self._worker
+        self._link.stop()
+        if worker is not None and worker is not current_thread():
+            worker.join(timeout=max(0.0, timeout_s))
