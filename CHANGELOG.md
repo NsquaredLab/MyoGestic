@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-08-03
+
+### Fixed
+
+- `Session.save_meta` now writes `pose_convention` into `meta.json`. Without it, a session
+  recorded by 2.5.0 was indistinguishable from a pre-2.5 one — `migrate_vhi_sessions` reads
+  an absent key as legacy — so running the migration over a sessions folder negated the
+  correct recordings into the old convention. The damage was silent and looked exactly like
+  a hand driven backwards. Sessions written by 2.5.0 carry no stamp and still need one added
+  by hand (`"pose_convention": "standard"`) or a re-pack under this version; do **not** run
+  the migration on them.
+- `myogestic.tools.migrate_vhi_sessions` imports `POSE_CONVENTION` from
+  `myogestic.session` instead of defining its own copy, so a migrated session and a freshly
+  recorded one cannot drift into disagreeing about what convention they are in.
+
 ## [2.5.0] - 2026-08-02
 
 MyoGestic 2.5 and **Virtual Hand Interface 2.0 are one release** and must be upgraded
