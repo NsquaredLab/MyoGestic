@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.5] - 2026-08-03
+
+### Fixed
+
+- `VhiMovementPanel.ui(auto_refresh=False)` can now keep cached VHI controls visible
+  without scheduling periodic state RPCs. Latency-sensitive prediction views can pause
+  background gRPC polling while preserving explicit Refresh and control delivery.
+
 ## [2.5.4] - 2026-08-03
 
 ### Fixed
