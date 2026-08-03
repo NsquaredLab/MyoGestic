@@ -178,10 +178,20 @@ def test_a_freshly_recorded_session_is_not_migrated_again():
         session.save_meta("StampTest")
         path = session.pack_to_zip()
 
-        assert json.loads(zipfile.ZipFile(path).read("meta.json"))["pose_convention"] == POSE_CONVENTION
+        # Every handle here is closed before the temp dir goes: on Windows an open one
+        # blocks the delete and the failure surfaces as a PermissionError in teardown,
+        # nowhere near the assertion that leaked it.
+        with zipfile.ZipFile(path) as zf:
+            assert json.loads(zf.read("meta.json"))["pose_convention"] == POSE_CONVENTION
+
         assert "already standard" in migrate(path), "the migrator did not recognise its own convention"
 
         with zipfile.ZipFile(path) as zf:
             assert not any(n.endswith(".legacy.bak") for n in zf.namelist())
-        after = zarr.open_array(store=zarr.storage.ZipStore(path, mode="r"), path="vhi_control.zarr")
-        assert np.array_equal(np.asarray(after[:]), fist), "a standard-convention fist was flipped"
+
+        store = zarr.storage.ZipStore(path, mode="r")
+        try:
+            after = np.asarray(zarr.open_array(store=store, path="vhi_control.zarr")[:])
+        finally:
+            store.close()
+        assert np.array_equal(after, fist), "a standard-convention fist was flipped"
