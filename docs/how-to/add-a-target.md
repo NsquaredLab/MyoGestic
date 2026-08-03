@@ -192,6 +192,11 @@ Call `ensure()` from anywhere that can afford to block: a UI handler, a training
 from `@pipeline.predict`, which has its own thread and a deadline - read `link.bus` there and
 no-op while it is `None`.
 
+If a UI loop should reconnect automatically, wrap the link in
+[`ControlLinkConnector`][myogestic.controls.ControlLinkConnector] and call its non-blocking
+`poll()` from that loop. Resolution is atomic across all targets in one link; use separate maps
+and links when one output should keep working while another is unavailable.
+
 If your target's vocabulary is fixed and you have the capabilities in hand already, build
 the bus directly instead; `connect_controls` is only the lazy-resolve convenience:
 

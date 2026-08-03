@@ -176,6 +176,8 @@ an ordering that is easy to get subtly wrong per-application.
 
 ::: myogestic.controls.ControlLink
 
+::: myogestic.controls.ControlLinkConnector
+
 ## Targets
 
 Anything that moves is a target: three methods and a list of `Capability`. The protocol is
@@ -211,7 +213,9 @@ bus = connect_controls(control_map, [target])   # None while the far side is unr
 
 An application that launches its own target binds before that target exists, so it
 holds a [`ControlLink`][myogestic.controls.ControlLink] instead and calls `ensure()` from
-each handler that needs the hand: same arguments, plus the retry.
+each handler that needs the hand. A UI loop that should reconnect automatically wraps the
+link in [`ControlLinkConnector`][myogestic.controls.ControlLinkConnector] and calls
+`poll()`; the blocking capability request then runs in one rate-limited background worker.
 
 The client is **required**: every address, range and state comes from that answer. A
 target that answers but reports an older `vocabulary_version` is refused by name, since it

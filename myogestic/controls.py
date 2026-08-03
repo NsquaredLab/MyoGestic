@@ -34,7 +34,13 @@ here decides that.
 
 from __future__ import annotations
 
-from myogestic._controls_bus import ControlBus, ControlLink, Target, connect_controls
+from myogestic._controls_bus import (
+    ControlBus,
+    ControlLink,
+    ControlLinkConnector,
+    Target,
+    connect_controls,
+)
 from myogestic._controls_core import (
     STANDARD_VERSION,
     Continuous,
@@ -68,6 +74,7 @@ __all__ = [
     "ControlMap",
     "ControlBus",
     "ControlLink",
+    "ControlLinkConnector",
     "connect_controls",
     "ControlSet",
     "Discrete",

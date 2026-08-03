@@ -29,7 +29,7 @@ import pytest
 
 from myogestic.controls import Capability, ControlBus, ControlSet
 from myogestic.outputs.filters import GaussianFilter
-from myogestic.remote._control import _QUEUE_DEPTH
+from myogestic.remote._control import _QUEUE_DEPTH, RemoteClient
 from myogestic.remote.target import RemoteTarget
 from myogestic.vhi.pose import POSE_DOFS
 
@@ -290,9 +290,7 @@ def test_send_ignores_the_changed_map():
 
 
 def test_a_one_way_dof_never_emits_the_direction_it_excludes():
-    target, interface = _bound(
-        **{"index.flexion": {"kind": "continuous", "range": [0.0, 1.0]}}
-    )
+    target, interface = _bound(**{"index.flexion": {"kind": "continuous", "range": [0.0, 1.0]}})
     index = interface.live["index.flexion"]
     target.send({"index.flexion": 1.0}, {})
     assert index.last == pytest.approx(1.0)
@@ -303,7 +301,7 @@ def test_a_one_way_dof_never_emits_the_direction_it_excludes():
 def test_every_send_pushes_exactly_one_sample_per_stream():
     """Latest-wins downstream: a target that pushed twice would drop a tick."""
     target, interface = _bound()
-    bound = len(interface.live["index.flexion"].samples)   # bind pushed rest
+    bound = len(interface.live["index.flexion"].samples)  # bind pushed rest
     for _ in range(5):
         target.send(dict.fromkeys(POSE_DOFS, 0.0), {})
     assert len(interface.live["index.flexion"].samples) - bound == 5
@@ -352,7 +350,7 @@ def test_stop_releases_every_outlet_even_when_one_of_them_is_dead():
         "one dead outlet must not strand the others on the network"
     )
     assert target._outlets == {} and target._routed == ()
-    target.stop()   # and the retry is a no-op, not a second round of stops
+    target.stop()  # and the retry is a no-op, not a second round of stops
     assert all(o.stops == 1 for o in interface.built)
 
 
@@ -431,7 +429,7 @@ def test_a_refused_rebind_leaves_no_stream_behind():
     target.bind(_controls("index.flexion"))
     first = interface.live["index.flexion"]
 
-    target._client.addresses = ()   # the target came back exporting nothing
+    target._client.addresses = ()  # the target came back exporting nothing
     with pytest.raises(ValueError, match="has no place for"):
         target.bind(_controls("index.flexion"))
     assert first.stops == 1
@@ -440,7 +438,7 @@ def test_a_refused_rebind_leaves_no_stream_behind():
         "routes key into `_outlets`, so leaving them would make `send` raise per tick"
     )
     assert target.claims == frozenset(), "and `claims` would over-report what is driven"
-    target.send({"index.flexion": 1.0}, {})   # must not raise
+    target.send({"index.flexion": 1.0}, {})  # must not raise
 
 
 def test_a_binding_that_renders_nothing_of_ours_publishes_nothing():
@@ -745,9 +743,7 @@ def test_a_mixed_configuration_negotiates_both_kinds():
     client = FakeClient(("index.flexion",))
     interface = FakeInterface()
     target = RemoteTarget(client=client, interface=interface)
-    target.bind(
-        build_controls({"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]})
-    )
+    target.bind(build_controls({"index.flexion": "continuous", "hand.grasp": ["rest", "fist"]}))
     assert target.negotiated is True
     target.send({"index.flexion": 1.0, "hand.grasp": "fist"}, {"hand.grasp": "fist"})
     assert interface.live["index.flexion"].last == pytest.approx(1.0)
@@ -761,6 +757,29 @@ def test_the_control_client_is_publicly_importable():
 
     assert "RemoteClient" in remote_pkg.__all__
     assert remote_pkg.RemoteClient.__name__ == "RemoteClient"
+
+
+def test_a_pre_manifest_server_is_reported_as_incompatible_not_unreachable():
+    """UNIMPLEMENTED is permanent; retrying it forever hid an installed VHI v1."""
+    grpc = pytest.importorskip("grpc")
+
+    class Unimplemented(grpc.RpcError):
+        def code(self):
+            return grpc.StatusCode.UNIMPLEMENTED
+
+    class OldStub:
+        def GetControlManifest(self, _request, *, timeout):
+            raise Unimplemented()
+
+    client = RemoteClient.__new__(RemoteClient)
+    client.target = "127.0.0.1:50051"
+    client._stub = OldStub()
+    client.connected = True
+
+    with pytest.raises(ValueError, match=r"VHI v2\.0\.0 or newer") as excinfo:
+        client.capabilities()
+    assert "myogestic-install-vhi --force" in str(excinfo.value)
+    assert client.connected is False
 
 
 def test_the_remote_package_still_rejects_unknown_attributes():
@@ -778,12 +797,15 @@ def test_importing_the_remote_package_does_not_require_grpc():
 
     result = subprocess.run(
         [
-            sys.executable, "-c",
+            sys.executable,
+            "-c",
             "import sys; import myogestic.remote, myogestic.vhi; "
             "assert 'grpc' not in sys.modules, 'importing the target package pulled in grpc'; "
             "print('ok')",
         ],
-        capture_output=True, text=True, check=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     assert "ok" in result.stdout
@@ -806,7 +828,7 @@ def test_an_unreachable_vhi_defers_instead_of_failing_the_configuration():
     simply is not there yet, and the same configuration will be fine in a second.
     """
     target = RemoteTarget(client=Deaf(), interface=FakeInterface())
-    target.bind(build_controls({"g": ["rest", "fist"]}))   # must not raise
+    target.bind(build_controls({"g": ["rest", "fist"]}))  # must not raise
     assert target.negotiated is False
 
 
@@ -815,7 +837,7 @@ def test_a_deferred_edge_is_dropped_loudly_rather_than_raising():
     client = Deaf()
     target = RemoteTarget(client=client, interface=FakeInterface())
     target.bind(build_controls({"g": ["rest", "fist"]}))
-    target.send({"g": "fist"}, {"g": "fist"})   # must not raise
+    target.send({"g": "fist"}, {"g": "fist"})  # must not raise
     assert client.sent == []
 
 
@@ -1019,9 +1041,7 @@ def test_a_weight_scales_one_member_of_a_fan_out():
 
 def test_a_weight_cannot_push_a_value_past_the_targets_range():
     """Weight applies first, then the target's own range — the gain is not an escape."""
-    target, interface, _ = _routed_target(
-        {"a": [{"target": "vhi.grip.force", "weight": 1.0}]}
-    )
+    target, interface, _ = _routed_target({"a": [{"target": "vhi.grip.force", "weight": 1.0}]})
     target.send({"a": 5.0}, {})
     assert interface.live["vhi.grip.force"].last == pytest.approx(1.0)
 
@@ -1031,9 +1051,7 @@ def test_two_aliases_on_one_control_are_refused_rather_than_racing():
     from myogestic.controls import load_control_map, resolve
 
     controls = resolve(
-        load_control_map(
-            {"dofs": {"a": "vhi.prediction.index", "b": "vhi.prediction.index"}}
-        ),
+        load_control_map({"dofs": {"a": "vhi.prediction.index", "b": "vhi.prediction.index"}}),
         MANIFEST,
     )
     target = RemoteTarget(client=ManifestClient(), interface=FakeInterface())
@@ -1120,9 +1138,7 @@ def test_one_target_follows_the_map_onto_the_operators_hand():
     """
     from myogestic.controls import load_control_map, resolve
 
-    controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_HANDS
-    )
+    controls = resolve(load_control_map({"dofs": {"a": "vhi.control.pose.index"}}), TWO_HANDS)
     interface = FakeInterface()
     target = RemoteTarget(client=ManifestClient(TWO_HANDS), interface=interface)
     target.bind(controls)
@@ -1139,7 +1155,7 @@ def test_one_target_drives_both_hands_from_one_map():
     controls = _two_hand_controls()
     interface = FakeInterface()
     target = RemoteTarget(client=ManifestClient(TWO_HANDS), interface=interface)
-    bus = ControlBus(controls, targets=[target], hz=32)   # refuses an unclaimed alias
+    bus = ControlBus(controls, targets=[target], hz=32)  # refuses an unclaimed alias
     assert target.claims == {"model_index", "operator_thumb", "gesture"}
     bus.push({"model_index": 1.0, "operator_thumb": -1.0})
     assert interface.live["vhi.prediction.index"].last == pytest.approx(1.0)
@@ -1169,7 +1185,7 @@ def test_a_held_state_is_claimed_alongside_the_streams():
 
 
 def test_an_address_no_target_exports_is_still_refused():
-    """"Not mine" must not swallow a typo, and the refusal names both namespaces.
+    """ "Not mine" must not swallow a typo, and the refusal names both namespaces.
 
     A namespace mix-up is the likely mistake — `…index` on the wrong one moves the other
     hand and nothing reports anything — so the sentence has to say which is which rather
@@ -1177,9 +1193,7 @@ def test_an_address_no_target_exports_is_still_refused():
     """
     from myogestic.controls import load_control_map, resolve
 
-    controls = resolve(
-        load_control_map({"dofs": {"a": "vhi.prediction.index"}}), TWO_HANDS
-    )
+    controls = resolve(load_control_map({"dofs": {"a": "vhi.prediction.index"}}), TWO_HANDS)
     thinner = [cap for cap in TWO_HANDS if cap.address != "vhi.prediction.index"]
     target = RemoteTarget(client=ManifestClient(thinner), interface=FakeInterface())
     with pytest.raises(ValueError, match="no target can drive") as excinfo:
@@ -1209,9 +1223,7 @@ def test_a_control_no_target_claims_is_refused_by_the_bus():
     from myogestic.controls import load_control_map, resolve
 
     key = _cap("keyboard.hold.letter.w", kind="discrete", states=("up", "down"))
-    controls = resolve(
-        load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [key]
-    )
+    controls = resolve(load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [key])
     target = RemoteTarget(client=ManifestClient(TWO_HANDS), interface=FakeInterface())
     with pytest.raises(ValueError, match="no target drives"):
         ControlBus(controls, targets=[target], hz=32)
@@ -1289,10 +1301,12 @@ class TestItClaimsOnlyWhatVhiExports:
     @staticmethod
     def _vhi_only_client():
         # The target asks its *own* client, which knows nothing of a keyboard.
-        return ManifestClient([
-            _cap("vhi.prediction.index"),
-            _cap("vhi.control.gesture", kind="discrete", states=("Rest", "Fist")),
-        ])
+        return ManifestClient(
+            [
+                _cap("vhi.prediction.index"),
+                _cap("vhi.control.gesture", kind="discrete", states=("Rest", "Fist")),
+            ]
+        )
 
     def test_a_foreign_control_is_not_claimed(self):
         """`ControlBus` trusts `claims` to catch an alias nothing drives. Over-claiming
@@ -1321,9 +1335,7 @@ class TestItClaimsOnlyWhatVhiExports:
         bus checks that *someone* claims every alias, so this is simply not our business."""
         from myogestic.controls import load_control_map, resolve
 
-        controls = resolve(
-            load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [KEY]
-        )
+        controls = resolve(load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [KEY])
         target = RemoteTarget(client=self._vhi_only_client(), interface=FakeInterface())
         target.bind(controls)
         assert target.claims == frozenset()
@@ -1333,9 +1345,7 @@ class TestItClaimsOnlyWhatVhiExports:
         """The filter exists to keep this check honest, so prove it still fires."""
         from myogestic.controls import ControlBus, load_control_map, resolve
 
-        controls = resolve(
-            load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [KEY]
-        )
+        controls = resolve(load_control_map({"dofs": {"walk": "keyboard.hold.letter.w"}}), [KEY])
         target = RemoteTarget(client=self._vhi_only_client(), interface=FakeInterface())
         with pytest.raises(ValueError, match="no target drives"):
             ControlBus(controls, targets=[target], hz=32)
@@ -1410,7 +1420,7 @@ class TestTheControlQueueCannotGrowForever:
         """The bound has to be in `__init__`, not just in the drop path above."""
         from myogestic.remote._control import RemoteClient
 
-        client = RemoteClient(host="127.0.0.1", port=59999)   # nothing listening
+        client = RemoteClient(host="127.0.0.1", port=59999)  # nothing listening
         try:
             assert client._commands.maxsize == _QUEUE_DEPTH, "the queue is unbounded"
         finally:
@@ -1433,9 +1443,9 @@ class TestTheControlQueueCannotGrowForever:
         client = self._client()
         for i in range(_QUEUE_DEPTH):
             client.set_control(discrete={"gesture": f"s{i}"})
-        client.set_control(discrete={"gesture": "Rest"})   # what ControlBus.stop sends
+        client.set_control(discrete={"gesture": "Rest"})  # what ControlBus.stop sends
 
-        client._thread = threading.current_thread()        # skip the join
+        client._thread = threading.current_thread()  # skip the join
         client._channel = types.SimpleNamespace(close=lambda: None)
         client.stop()
 

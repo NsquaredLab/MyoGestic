@@ -57,6 +57,7 @@ def _vocabulary(reported: str) -> int:
     except ValueError:
         return 0
 
+
 #: How many un-sent control frames to hold before dropping the oldest. `set_control` is fed
 #: from the predict thread at ``predict_hz`` while `_send_loop` drains one *blocking* RPC at
 #: a time, so a target that accepts the connection without answering costs `_RPC_TIMEOUT_S`
@@ -102,9 +103,7 @@ class RemoteClient:
         self.connected = False
 
         self._running = True
-        self._thread = threading.Thread(
-            target=self._send_loop, name="RemoteClient", daemon=True
-        )
+        self._thread = threading.Thread(target=self._send_loop, name="RemoteClient", daemon=True)
         self._thread.start()
 
     # --- fire-and-forget -----------------------------------------------------
@@ -156,15 +155,16 @@ class RemoteClient:
         Returns
         -------
         list[Capability] or None
-            ``None`` when the target is unreachable or predates the manifest; the caller
-            defers and retries once it is reachable, rather than guessing a vocabulary.
+            ``None`` when the target is unreachable; the caller defers and retries once
+            it is reachable, rather than guessing a vocabulary.
 
         Raises
         ------
         ValueError
-            When the target answers with a vocabulary older than `_MIN_VOCABULARY`.
-            Deliberately not ``None``: unreachable means "try again", while too old means
-            "this pair will never work", and the two must not be handled the same way.
+            When the target predates the manifest RPC or answers with a vocabulary older
+            than `_MIN_VOCABULARY`. Deliberately not ``None``: unreachable means "try
+            again", while too old means "this pair will never work", and the two must not
+            be handled the same way.
         """
         from myogestic.controls import Capability
 
@@ -172,6 +172,17 @@ class RemoteClient:
             manifest = self._stub.GetControlManifest(
                 pb2.GetControlManifestRequest(), timeout=_RPC_TIMEOUT_S
             )
+        except grpc.RpcError as e:
+            self.connected = False
+            if e.code() == grpc.StatusCode.UNIMPLEMENTED:
+                raise ValueError(
+                    f"a server is reachable at {self.target}, but it does not implement "
+                    f"GetControlManifest. It predates the control contract this "
+                    f"MyoGestic uses. If this is VHI, install VHI v2.0.0 or newer "
+                    f"with `myogestic-install-vhi --force`."
+                ) from e
+            self._log_failure("capabilities", e, level=logging.DEBUG)
+            return None
         except Exception as e:  # noqa: BLE001 - absence is an answer during migration
             self.connected = False
             self._log_failure("capabilities", e, level=logging.DEBUG)
@@ -312,7 +323,9 @@ class RemoteClient:
                 self.connected = False
                 self._log_failure("set_control", e)
 
-    def _log_failure(self, operation: str, error: Exception, *, level: int = logging.WARNING) -> None:
+    def _log_failure(
+        self, operation: str, error: Exception, *, level: int = logging.WARNING
+    ) -> None:
         # Keyed on the gRPC status code, not str(error): grpc varies the field order
         # of debug_error_string between calls, so a string key would never dedup.
         call = error if isinstance(error, grpc.Call) else None

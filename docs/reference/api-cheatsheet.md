@@ -51,7 +51,7 @@ SerialSource(port, baud, n_channels, fs)  # extras:[serial]; from myogestic.sour
 
 Anything that *moves* is a target. Three methods, any transport.
 
-[`Target`][myogestic.controls.Target] · [`Capability`][myogestic.controls.Capability] · [`ControlBus`][myogestic.controls.ControlBus] · [`ControlLink`][myogestic.controls.ControlLink] · [`RemoteTarget`][myogestic.remote.RemoteTarget] · [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget]
+[`Target`][myogestic.controls.Target] · [`Capability`][myogestic.controls.Capability] · [`ControlBus`][myogestic.controls.ControlBus] · [`ControlLink`][myogestic.controls.ControlLink] · [`ControlLinkConnector`][myogestic.controls.ControlLinkConnector] · [`RemoteTarget`][myogestic.remote.RemoteTarget] · [`KeyboardTarget`][myogestic.keyboard.KeyboardTarget]
 
 <!--docs:skip-->
 ```python
@@ -69,6 +69,7 @@ resolve(control_map, capabilities) -> ControlSet # needs a live target's answer
 ControlBus(controls, targets=[...], smoothing=None, hz=50, on_warn=None)
   .push(values) -> dict    .select(name, state) -> bool    .stop() -> None
 connect_controls(control_map, targets, ...) -> ControlBus | None  # None while unreachable
+ControlLinkConnector(link, retry_s=2.0).poll() -> bool  # non-blocking UI retry
 ```
 
 ## Outlets

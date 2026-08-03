@@ -264,6 +264,30 @@ assert link.bus is None  # and read this from the predict thread
   blocking RPC, and that callback runs at `predict_hz` with a deadline. A frame with no bus is
   much cheaper than a stalled control loop.
 
+For automatic reconnect from a UI loop, use
+[`ControlLinkConnector`][myogestic.controls.ControlLinkConnector]. Its `poll()` returns
+immediately, rate-limits attempts, and never starts a second capability request while the first
+is still in flight:
+
+```python
+from myogestic.controls import ControlLinkConnector
+
+connector = ControlLinkConnector(link, retry_s=2.0)
+
+def update_ui():
+    connector.poll()
+    status_label.set_text(connector.status)
+```
+
+Prediction still reads `link.bus`; `poll()` belongs only in the UI loop. Call
+`connector.stop()` during teardown to stop retrying and rest a bus that has connected.
+
+!!! warning "One link is one failure domain"
+    Resolution is atomic across every target in a link. If any target cannot provide its
+    manifest, none are bound: resolving a partial manifest would silently drop aliases aimed at
+    the missing target. Give independently useful outputs separate maps and links, so an
+    unavailable visualisation cannot disable a keyboard, robot, or another output.
+
 A device that answers `None` is distinct from one that answers with an empty list: `None` means
 "cannot say yet", and an empty manifest would mean "drives nothing", which resolves without
 error into a bus that drives nothing.
