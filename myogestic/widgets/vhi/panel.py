@@ -82,9 +82,18 @@ class VhiMovementPanel:
         self._min_interval_s = min_interval_s
         self._title = title
 
-    def ui(self) -> None:
-        """Render the panel — call once per frame inside ``@app.ui``."""
-        request_vhi_state_refresh(self._client, self._cache, min_interval_s=self._min_interval_s)
+    def ui(self, *, auto_refresh: bool = True) -> None:
+        """Render the panel — call once per frame inside ``@app.ui``.
+
+        Set ``auto_refresh=False`` in latency-sensitive phases such as live
+        prediction. The last cached state remains visible and the panel's explicit
+        Refresh button still starts one background request, but no periodic gRPC
+        work is scheduled from the frame loop.
+        """
+        if auto_refresh:
+            request_vhi_state_refresh(
+                self._client, self._cache, min_interval_s=self._min_interval_s
+            )
         snap = self._cache.snapshot()
         vhi_movement_palette(
             snap.movements,
