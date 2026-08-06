@@ -120,24 +120,63 @@ configuration is fixed at construction. Collapsing them would mean either faking
 
 ## Connect flow
 
+On a daemon thread (`accept_timeout` defaults to 30 s and would freeze the UI):
+
 ```python
+stream.stop()                            # disconnect the OLD source, halt the loop
 stream._source = dev.factory(**chosen)   # swap the source object
-threading.Thread(target=stream.reconnect, daemon=True).start()
+if stream.reconnect():
+    stream.start()
 ```
 
-`Stream.reconnect()` already takes `self._lock` for the whole swap and calls
-`_allocate_buffers()` from the returned `StreamInfo`, so changing device *and* geometry
-in one click (64 ch @ 2 kHz → 384 ch @ 512 Hz) is handled by existing code. Connecting
-must be off-thread: `accept_timeout` on the OTB sources defaults to 30 s and would
-freeze the UI.
+**`stop()` first is load-bearing, not tidiness.** `Stream.reconnect()` only ever calls
+`reconnect()`/`connect()` on `self._source`, which by then is the *new* object — the
+replaced source is never disconnected. For Muovi and Sessantaquattro that leaks the
+**listening** server socket, which only their `disconnect()` override closes; the next
+Connect to the same device then fails `EADDRINUSE` on the fixed port (54321 / 45454).
+`SO_REUSEADDR` is set on both but does not permit binding over a live listener.
 
-Assigning `stream._source` reaches past a private name. The alternative — adding a
-public `Stream.set_source()` — is a public API addition for one caller; noted as the
-upgrade path in a `ponytail:` comment rather than built now.
+`stop()` also closes a race. `_acquire_step` skips `self._source.read()` only while
+`_connected` is False, and `_connected` is still True at the instant `_source` is
+reassigned — so without `stop()` the acquire thread can call `read()` on a
+freshly-constructed, unconnected source. `stop()` sets `_running = False` before the
+swap, so the loop is already out.
 
-Guards: the Connect button is disabled while a connect is in flight; a device combo
-change while connected does nothing until Connect is pressed (so the plot does not
-silently swap under a running recording).
+`reconnect()` then takes `self._lock` for the whole swap and calls `_allocate_buffers()`
+from the returned `StreamInfo`, so changing device *and* geometry in one click
+(64 ch @ 2 kHz → 384 ch @ 512 Hz) needs no new code.
+
+Assigning `stream._source` reaches past a private name. The alternative — a public
+`Stream.set_source()` — is public API for one caller; noted as the upgrade path in a
+`ponytail:` comment rather than built now.
+
+**Guards**
+- Connect disabled while a connect is in flight.
+- Connect disabled while `ctx.state == "recording"`, with the reason in the tooltip.
+  `reconnect()` does not detach the session, so the acquire loop would keep appending
+  to the same zarr key at the new channel width and corrupt the recording.
+- Changing the device combo does nothing until Connect is pressed.
+
+## Memory footprint
+
+`_allocate_buffers` sets `_cap = fs * buffer_seconds` and allocates a `RingBuffer` plus
+`_display_d` plus `_win_d` — roughly **3 × cap × n_channels × itemsize**. The combos
+make the worst case one click away: Quattrocento at "384 ch" + "10240 Hz" against a
+60 s buffer is ~940 MB per array, ~2.8 GB total.
+
+Two mitigations, both cheap:
+
+- `DevicePicker` renders the estimate for the current selection as a muted line under
+  the combos (`~2.8 GB buffer` at 60 s), in `WARNING` colour above 1 GB. The number is
+  `3 * fs * buffer_s * n_ch * 4`, read from `stream._buffer_seconds` and the selected
+  options — no new plumbing.
+- `examples/devices_app.py` uses the default 10 s buffer, not the 60 s that
+  `sessantaquattro_app.py` hardcodes.
+
+Deriving `fs`/`n_ch` from the chosen options before connecting means the shipped
+`Device` entries need those two numbers per choice anyway — they are already in the
+labels, so the estimate reads them from `C.QUATTRO_BIO_BY_MODE` /
+`C.SESSANTAQUATTRO_BIO_BY_NCH` / `C.*_FS_BY_MODE` rather than from a second table.
 
 ## Error handling
 
@@ -157,6 +196,9 @@ rendering:
   "384 ch" on Quattrocento yields a source whose `nch_mode` maps to
   `QUATTRO_BIO_BY_MODE[3] == 384`.
 - `DEFAULT_DEVICES` labels are unique (they are ImGui combo entries).
+- Swapping the source on a `Stream` closes the previous source: connect a fake source,
+  swap to a second, assert the first saw `disconnect()`. This is the regression test for
+  the leaked-listener bug above, and it needs no hardware.
 
 The ImGui rendering is not unit-testable and is covered by the standalone example.
 
