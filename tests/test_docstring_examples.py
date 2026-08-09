@@ -18,6 +18,7 @@ from myogestic import EdgeTrigger, Fr, Grid, Px, StreamInfo, TrainingData
 from myogestic import controls as _controls
 from myogestic.outputs import filters
 from myogestic.recipes import estimators, features
+from myogestic.tracking import Calibration, Trapezoid
 from myogestic.vhi import pose as _pose
 
 # Objects whose docstring Examples are deterministic and dependency-free.
@@ -37,6 +38,8 @@ RUNNABLE = [
     _controls.decode,
     StreamInfo,
     TrainingData,
+    Trapezoid,
+    Calibration,
     Grid,
     Px,
     Fr,
