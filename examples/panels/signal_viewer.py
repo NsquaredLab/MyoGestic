@@ -13,9 +13,8 @@ Run with:
     uv run python examples/panels/signal_viewer.py
 """
 
-from _fixtures import SyntheticSource
-
 from myogestic import App, Stream
+from myogestic.sources import SyntheticSource
 from myogestic.widgets import SignalViewer
 
 app = App("panel: signal_viewer")

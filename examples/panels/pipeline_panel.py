@@ -22,11 +22,11 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from _fixtures import SyntheticSource
 
 from myogestic import App, Stream, TrainingData
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import LoadModelButton, PipelinePanel, SaveModelButton
+from myogestic.sources import SyntheticSource
 
 CLASSES = ["Rest", "Fist", "Open", "Pinch"]
 MODEL_PATH = str(Path(tempfile.mkdtemp(prefix="panel_pipeline_")) / "model.pkl")

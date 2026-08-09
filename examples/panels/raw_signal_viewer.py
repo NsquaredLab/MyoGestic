@@ -9,9 +9,8 @@ Run with:
     uv run python examples/panels/raw_signal_viewer.py
 """
 
-from _fixtures import SyntheticSource
-
 from myogestic import App, Stream
+from myogestic.sources import SyntheticSource
 from myogestic.widgets import RawSignalViewer
 
 app = App("panel: raw_signal_viewer")

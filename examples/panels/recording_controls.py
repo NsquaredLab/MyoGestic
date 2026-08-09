@@ -14,9 +14,8 @@ Run with:
 
 import tempfile
 
-from _fixtures import SyntheticSource
-
 from myogestic import App, Stream
+from myogestic.sources import SyntheticSource
 from myogestic.widgets import RecordingControls
 
 CLASSES = ["Rest", "Fist", "Open", "Pinch"]
