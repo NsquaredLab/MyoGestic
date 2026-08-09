@@ -466,3 +466,36 @@ def test_the_discrete_iterator_is_untouched():
         assert window.shape == (2, 20)
         assert ts.shape == (20,)
         assert isinstance(class_index, int)
+
+
+def test_the_zero_window_hint_names_the_dominant_cause():
+    """Four unrelated causes produce the identical outcome — 0 windows — so the message
+    is the only thing that separates them, and it has to carry numbers for the one that
+    is not fixable by recording differently.
+
+    A real Galvani take hit this: 8 ch at a declared 2000 Hz delivering ~960, so a
+    400-sample window spanned 411 ms against 200 ms nominal and *every* window was
+    rejected. `train` then reported "Need at least 2 windows, got 0. Record longer
+    trials." — advice that could not possibly work.
+    """
+    from myogestic.session._windows import _zero_window_hint
+
+    stretched = _zero_window_hint(
+        {"outside": 2, "stretched": 277, "phase": 0, "hole": 0}, 0.411, 400, 2000.0, ["hold"]
+    )
+    assert "973 Hz" in stretched, stretched
+    assert "declares 2000 Hz" in stretched
+    assert "Recording longer cannot help" in stretched
+
+    assert "time span" in _zero_window_hint(
+        {"outside": 9, "stretched": 0, "phase": 0, "hole": 0}, 0.2, 400, 2000.0, ["hold"]
+    )
+    assert "did the block run?" in _zero_window_hint(
+        {"outside": 0, "stretched": 0, "phase": 40, "hole": 0}, 0.2, 400, 2000.0, ["hold"]
+    )
+    assert "holes" in _zero_window_hint(
+        {"outside": 0, "stretched": 0, "phase": 0, "hole": 7}, 0.2, 400, 2000.0, ["hold"]
+    )
+    assert "too short" in _zero_window_hint(
+        {"outside": 0, "stretched": 0, "phase": 0, "hole": 0}, 0.0, 400, 2000.0, ["hold"]
+    )
