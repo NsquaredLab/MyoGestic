@@ -45,18 +45,11 @@ _SPIN = 0.75
 #: assert an exact trajectory, and alternating in sign so a subject cannot learn one.
 _SERVE_VY = 0.35
 
-#: The longest single frame the game simulates. A longer gap is **clamped to this, not
-#: skipped and not simulated whole**. The widget only ticks while it is rendered, so a
-#: hidden tab, a collapsed cell or a GC pause delivers one enormous ``dt``, and the two
-#: obvious rules both fail on it: integrating it whole throws the paddle
-#: ``_PADDLE_SPEED * dt`` in a single frame — 0.70 court ``y`` at half a second, 44% of
-#: its entire travel — while zeroing it *freezes the game outright* for as long as
-#: frames stay that slow, ball and integrator alike, with the header still showing a
-#: rally in progress and no way back. Clamping does neither. The court advances a tenth
-#: of a second per frame and keeps running, in slow motion, below 10 fps; at a saturated
-#: command that is 0.14 court ``y`` of paddle and 0.055 of ball, a hitch rather than a
-#: teleport. The swept paddles in `_step` are the second line of defence: one is a rule,
-#: the other is arithmetic that stays right if the rule moves.
+#: The longest single frame the game simulates: a longer gap is **clamped to this**, not
+#: skipped and not simulated whole. A hidden tab or a GC pause delivers one enormous
+#: ``dt``, and both obvious rules fail on it — integrating it whole throws the paddle
+#: 44% of its travel in one frame, zeroing it freezes the game for as long as frames stay
+#: slow. Clamping runs the court in slow motion instead.
 _MAX_STEP_S = 0.1
 
 #: Ball and paddle in frame heights, so both follow ``ui_scale``.
@@ -69,27 +62,16 @@ _PADDLE_EM = 0.20
 _PADDLE_SPEED = 1.4
 
 #: Width of the band around zero that drives the paddle at nothing, in ``"velocity"``
-#: control. A velocity controller integrates *bias* as readily as intent: a decoder
-#: resting at +0.05 is +0.05 forever, and 0.05 x 1.4 court y per second walks the paddle
-#: into the ceiling in about twelve seconds while the subject holds still. 0.10 is twice
-#: the resting offset a decoder trained on a rest class typically shows, and because what
-#: is left is rescaled back over the full speed (see `PongTask._drive`) it costs no top
-#: speed at all: the only range spent is the quietest tenth, which is spent on
-#: "hold still".
+#: control, which integrates *bias* as readily as intent: +0.05 forever walks the paddle
+#: into the ceiling in twelve seconds. What is left is rescaled over the full speed
+#: (`PongTask._drive`), so the band costs no top speed.
 #:
-#: **It slows the drift, it does not stop it, and no memoryless rule could.** A
-#: *constant* command inside the band integrates to exactly nothing, which is the easy
-#: case and the one that is easy to test. A real decoder emits bias *plus* noise, and
-#: rectifying that leaves a positive mean however narrow the band is — the band clips
-#: away the half of the noise that would have cancelled the bias. Measured on this
-#: widget's own `PongTask._tick` at 60 Hz, ``paddle_size=0.4`` and a bias of 0.05, over
-#: five seeds: noiseless the paddle never moves; at a command sd of 0.05 it is flat
-#: against the wall after 122 s, at 0.10 after 30 s. That sd is post-filter — through
-#: this app's own 1€ smoother it is a raw decoder sd of about 0.2. Only a leak *bounds*
-#: a drifting integrator, and a leak is the fatigue `PongTask._drive` refuses; what
-#: bounds it here is the court clamp, the subject driving the paddle back off the wall,
-#: and Serve recentring it for the next rally. ``control="position"`` cannot drift at
-#: all and is the mode to reach for when the command is genuinely continuous.
+#: **It slows the drift, it does not stop it, and no memoryless rule could** — rectifying
+#: bias-plus-noise leaves a positive mean however narrow the band. Measured at 60 Hz with
+#: bias 0.05: noiseless the paddle never moves, at a command sd of 0.05 it reaches the
+#: wall after 122 s, at 0.10 after 30 s. Only a leak bounds a drifting integrator, and a
+#: leak is the sustained contraction `_drive` refuses; ``control="position"`` cannot
+#: drift at all.
 _DEAD_ZONE = 0.10
 
 #: Floor for a court that fills its cell. Below this the paddle is taller than the
@@ -627,16 +609,12 @@ class PongTask:
             default, draws nothing and leaves the court exactly as it was. The ghost does
             not play the ball and is not a second player.
         effort
-            How hard the subject is contracting *right now*, on ``0..1``, drawn as a
-            magnitude gauge at the left of the court with a tick at ``abs(target)``.
-
-            This exists for the training block, where there is no model yet and so no
-            honest way to move the paddle: without it a subject is asked to follow a
-            cursor with no feedback of any kind, which is not a task anyone can perform.
-            Deliberately **unsigned** — amplitude is knowable without a decoder and
-            direction is not, and a gauge that inferred the sign from `target` would show
-            the subject their own instruction and call it feedback. ``None`` draws
-            nothing.
+            How hard the subject is contracting now, on ``0..1``, drawn as a magnitude
+            gauge at the left of the court with a tick at ``abs(target)``. For the
+            training block, where there is no model yet and so no honest way to move the
+            paddle. Deliberately **unsigned**: amplitude is knowable without a decoder
+            and direction is not, so a gauge taking its sign from `target` would show the
+            subject their own instruction. ``None`` draws nothing.
         """
         imgui.push_id(self._widget_id)
         try:
@@ -709,26 +687,15 @@ class PongTask:
         )
 
         if ghost is not None:
-            # A reference, not a player: the paddle's own geometry so the two share one
-            # mental model, hollow and in the secondary tone so it can never be mistaken
-            # for something that plays the ball.
-            #
-            # Drawn *after* the paddle and a few pixels outside it, which is not cosmetic.
-            # The obvious version — same rect, drawn first — makes the outline vanish
-            # under the fill when the subject is on target, and that reads as elegant
-            # until you use it: a block opens with `Pursuit.rest_s` seconds at exactly
-            # 0.0, a velocity-mode paddle also starts at 0.0, so the first thing the
-            # subject sees on pressing Start is *nothing at all* for five seconds. An
-            # absent reference and a perfectly tracked one must not look the same. Now
-            # the fill nests inside the outline, which says "on it" just as clearly and
-            # is always visible. The right edge stays on the plane so the bracket cannot
-            # spill outside the court.
+            # A reference, not a player: the paddle's geometry, hollow, secondary tone.
+            # Drawn *after* the paddle and a few pixels outside it — the obvious version
+            # (same rect, drawn first) vanishes under the fill exactly when the subject is
+            # on target, and an absent reference must not look like a tracked one. The
+            # right edge stays on the plane so the bracket cannot spill out of the court.
             pad = max(3.0, thick * 0.4)
             tone = imgui.get_color_u32(muted())
-            # The level line is what you actually track: it crosses the whole court, so it
-            # is unmissable at a glance and the error reads as the gap between it and the
-            # bar — where a bracket alone, a few pixels around a paddle sitting on it, is
-            # something you have to hunt for.
+            # The level line is what you track: it crosses the whole court, so the error
+            # reads as the gap between it and the bar.
             dl.add_line(at(0.0, ghost), at(1.0, ghost), tone)
             crown = at(1.0, ghost + self._half)
             base = at(1.0, ghost - self._half)
@@ -742,8 +709,7 @@ class PongTask:
 
         if effort is not None and math.isfinite(effort):
             # A magnitude meter, not a second paddle: it grows from the centre line, so
-            # its height is comparable to how far the level line sits from centre without
-            # claiming to know which way the contraction went.
+            # its height compares to the level line's without claiming a direction.
             gx, w = 0.05, max(thick * 0.7, 4.0)
             floor_, ceil_ = at(gx, 0.0), at(gx, 1.0)
             dl.add_line(floor_, ceil_, faint)
