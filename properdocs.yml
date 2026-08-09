@@ -134,6 +134,9 @@ nav:
           - EMG classification: tutorials/emg-classification.md
           - EMG regression with VHI: tutorials/emg-regression-with-vhi.md
           - Examples directory: tutorials/examples-index.md
+      - Connecting hardware:
+          - Pick a device from the UI: how-to/pick-a-device.md
+          - Connect OTB devices: how-to/connect-otb-devices.md
       - Driving a device:
           - Drive your own device: how-to/add-a-target.md
           - Drive a remote target: how-to/drive-a-remote-target.md
@@ -144,6 +147,8 @@ nav:
           - Enable on-disk recording: how-to/enable-recording.md
           - Record and replay: how-to/record-and-replay.md
           - Record good training data: how-to/record-good-training-data.md
+          - Record for proportional control: how-to/record-for-proportional-control.md
+          - Track a force target: how-to/track-a-force-target.md
       - Models and features:
           - Add a custom model: how-to/add-a-model.md
           - Feature extraction cookbook: how-to/feature-extraction-cookbook.md
