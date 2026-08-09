@@ -220,6 +220,15 @@ class OneEuroFilter:
         passes ``x`` through to seed the filter state.
         """
         x_arr = np.asarray(x, dtype=np.float64)
+        if not np.isfinite(x_arr).all():
+            # A diverged model reads as NaN, and this filter is recursive: fold one in
+            # and `_x_prev` is NaN forever, so every later sample comes back NaN long
+            # after the model recovered. Hold the last good value for those components
+            # instead — the same thing the widgets do with a non-finite command — and
+            # refuse to *seed* on one at all, since there is nothing to hold yet.
+            if self._x_prev is None:
+                return x_arr.astype(x.dtype, copy=False)
+            x_arr = np.where(np.isfinite(x_arr), x_arr, self._x_prev)
         if timestamp is not None and self._timestamp_prev is not None:
             dt = max(1e-6, timestamp - self._timestamp_prev)
         else:
