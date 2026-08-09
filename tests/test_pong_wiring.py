@@ -849,6 +849,77 @@ def test_the_block_closes_only_the_take_it_opened(app_module, monkeypatch):
     assert stopped == [], "stopped a recording this app did not start"
 
 
+class _NoisyStream:
+    """A stream at a resting level, so every sample differs only by noise."""
+
+    def __init__(self, seed: int = 0) -> None:
+        self.amp = 0.0
+        self._rng = np.random.default_rng(seed)
+
+    def get_window(self):
+        data = (0.05 + self.amp) * self._rng.standard_normal((8, 400)).astype(np.float32)
+        return data, np.zeros(400)
+
+
+def test_resting_noise_cannot_set_the_effort_scale(app_module, monkeypatch):
+    """The gauge must read nothing at rest, not swing over its whole range.
+
+    `_effort` scales itself against the strongest contraction the block has seen, so
+    without a floor the scale is set by whichever *resting* sample happened to land
+    highest — and every later sample then reads as a large fraction of that noise. Left
+    in, it showed 0.815 two seconds into a block where nobody had moved, which is worse
+    than showing nothing: the subject cannot tell it apart from real effort.
+    """
+    stream = _NoisyStream()
+    monkeypatch.setitem(app_module["app"].ctx.streams, "emg", stream)
+
+    class Running:
+        running = True
+        elapsed = 1.0
+
+    monkeypatch.setitem(app_module["_effort"].__globals__, "target", Running())
+    app_module["_EFFORT"].update(rest=[], peak=0.0, shape=[], sign=[], asked=[], got=[])
+
+    at_rest = [app_module["_effort"](app_module["app"].ctx) for _ in range(40)]
+    assert max(at_rest) < 0.05, f"resting noise drove the gauge to {max(at_rest):.3f}"
+
+    # A real contraction still registers, and still tops out at 1.0.
+    stream.amp = 1.0
+    working = [app_module["_effort"](app_module["app"].ctx) for _ in range(6)]
+    assert max(working) == pytest.approx(1.0), f"a full contraction read {max(working):.3f}"
+    stream.amp = 0.25
+    eased = [app_module["_effort"](app_module["app"].ctx) for _ in range(6)][-1]
+    assert 0.1 < eased < 0.45, f"a quarter contraction read {eased:.3f}"
+
+
+def test_the_verdict_refuses_to_judge_one_sided_data(app_module):
+    """A number is worse than no number when the take cannot support it.
+
+    The separation figure compares the two directions, so with only one recorded it is
+    meaningless — and a confident-looking "separation 0.4" would send someone off to
+    retrain electrodes when the real problem is that they never did the other gesture.
+    """
+    eff = app_module["_EFFORT"]
+    eff.update(rest=[], peak=1.0, shape=[], sign=[], asked=[], got=[])
+    assert "too short" in app_module["_verdict"](), "judged an empty block"
+
+    rng = np.random.default_rng(4)
+    for _ in range(60):  # plenty of samples, but every one of them "Up"
+        eff["shape"].append(rng.random(8))
+        eff["sign"].append(1.0)
+        eff["asked"].append(0.5)
+        eff["got"].append(0.5)
+    assert "too short" in app_module["_verdict"](), "judged a block with one direction"
+
+    for _ in range(60):  # now the other half exists
+        eff["shape"].append(rng.random(8))
+        eff["sign"].append(-1.0)
+        eff["asked"].append(0.5)
+        eff["got"].append(0.5)
+    out = app_module["_verdict"]()
+    assert "separation" in out and "too short" not in out, out
+
+
 def test_the_ghost_is_driven_only_while_a_block_runs(app_module, monkeypatch, implot_frame):
     """The cursor reaches the court, and only then — asserted at `PongTask.ui` itself.
 
@@ -860,7 +931,9 @@ def test_the_ghost_is_driven_only_while_a_block_runs(app_module, monkeypatch, im
     """
     seen: list[float | None] = []
     monkeypatch.setattr(
-        type(app_module["pong"]), "ui", lambda self, command, target=None: seen.append(target)
+        type(app_module["pong"]),
+        "ui",
+        lambda self, command, target=None, effort=None: seen.append(target),
     )
     ctx = app_module["app"].ctx
 

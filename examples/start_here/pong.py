@@ -509,6 +509,85 @@ def _cursor() -> float | None:
     return PURSUIT.value_at(target.elapsed) if target.running else None
 
 
+#: Live-effort state for the current block. Both references come from the block itself,
+#: so the gauge needs no calibration step: `Pursuit` opens with `rest_s` seconds pinned at
+#: 0.0, which is the baseline, and it reaches full deflection, which sets the scale.
+_EFFORT: dict = {"rest": [], "peak": 0.0, "shape": [], "sign": [], "asked": [], "got": []}
+
+
+def _effort(ctx) -> float | None:
+    """How hard the subject is contracting now, on ``0..1``, with no model involved.
+
+    Total RMS across channels, referenced to this block's own rest phase and scaled by the
+    strongest contraction it has seen. That matters because during a block there *is* no
+    model: without this the subject is asked to follow a cursor with no feedback of any
+    kind, which is not a task anyone can perform. It is deliberately amplitude only —
+    direction needs exactly the labels the block is being recorded to provide.
+
+    Self-scaling has one honest cost: the first real contraction defines the top of the
+    gauge, so it reads full whatever it was. It settles within a couple of excursions, and
+    the tick at the asked-for level is what the subject actually aims at.
+    """
+    stream = ctx.streams.get("emg")
+    if stream is None:
+        return None
+    data, _ts = stream.get_window()
+    if data.size == 0:
+        return None
+    per_channel = np.sqrt((data.astype(np.float64) ** 2).mean(axis=-1))
+    total = float(per_channel.sum())
+
+    level = _cursor()
+    if level is not None and PURSUIT.phase_at(target.elapsed) == "rest":
+        _EFFORT["rest"].append(total)
+    rest_totals = _EFFORT["rest"]
+    rest = float(np.median(rest_totals)) if rest_totals else total
+    above = max(total - rest, 0.0)
+
+    # The floor is what makes this usable rather than maddening. Without it `peak` is set
+    # by whichever resting sample happened to land highest, so the gauge reads near full
+    # on noise and swings 0..1 through the whole rest phase — measured at 0.815 two
+    # seconds in. Only an excursion clear of the resting spread is allowed to define the
+    # scale, and until one arrives the gauge honestly reads nothing.
+    spread = float(np.std(rest_totals)) if len(rest_totals) > 2 else 0.0
+    if above > max(4.0 * spread, 1e-9) and above > _EFFORT["peak"]:
+        _EFFORT["peak"] = above
+    got = above / _EFFORT["peak"] if _EFFORT["peak"] > 0.0 else 0.0
+    got = min(max(got, 0.0), 1.0)
+
+    # Kept for the verdict: the spatial pattern says whether the two directions were
+    # distinguishable at all, which is the one thing no live gauge can show.
+    if level is not None and total > 0.0:
+        _EFFORT["shape"].append(per_channel / total)
+        _EFFORT["sign"].append(float(np.sign(level)))
+        _EFFORT["asked"].append(abs(level))
+        _EFFORT["got"].append(got)
+    return got
+
+
+def _verdict() -> str:
+    """Was that take any good — as two numbers, straight after the block.
+
+    `r` is how well the subject's effort followed what was asked; `sep` is the best
+    single-channel separation between the two directions on the amplitude-normalised
+    pattern, in units of pooled standard deviation. `sep` is the one that decides whether
+    a decoder can be fitted at all: on real recordings a clean pair reaches 8-11 and
+    amplitude alone manages 0.5, so a low number means the two gestures went out on the
+    same muscles however well the cursor was tracked.
+
+    Indicative, not a statistic: frames overlap, so the sample count is not an *n*.
+    """
+    asked, got = np.asarray(_EFFORT["asked"]), np.asarray(_EFFORT["got"])
+    sign, shape = np.asarray(_EFFORT["sign"]), np.asarray(_EFFORT["shape"])
+    if len(asked) < 20 or sign.min() >= 0.0 or sign.max() <= 0.0:
+        return "too short to judge"
+    r = float(np.corrcoef(asked, got)[0, 1]) if asked.std() > 0 and got.std() > 0 else 0.0
+    dn, up = shape[sign < 0], shape[sign > 0]
+    pooled = np.sqrt((dn.var(0) + up.var(0)) / 2.0)
+    sep = float(np.max(np.abs(dn.mean(0) - up.mean(0)) / np.maximum(pooled, 1e-12)))
+    return f"effort followed the cursor r={r:+.2f} · direction separation {sep:.1f}"
+
+
 def _start_block() -> None:
     """Connect the cursor stream, start recording, and run the block. One press.
 
@@ -520,6 +599,8 @@ def _start_block() -> None:
     Nothing here happens on its own. This is the "explicit press" the rule asks for, and
     it is also why the target stream is left disconnected at import.
     """
+    _EFFORT.update(rest=[], peak=0.0, shape=[], sign=[], asked=[], got=[])
+    block["verdict"] = ""
     if target_stream.info is None and not target_stream.reconnect():
         app.ctx.log(f"cursor stream did not start: {target_stream.last_error}")
         return
@@ -531,6 +612,8 @@ def _start_block() -> None:
 
 def _end_block() -> None:
     """Stop the block, and the recording if this app's own press started one."""
+    block["verdict"] = _verdict()
+    app.ctx.log(f"[block] {block['verdict']}")
     target.stop()
     if block["recording"]:
         block["recording"] = False
@@ -556,6 +639,8 @@ def block_ui() -> None:
         if imgui.button(f"{fa.ICON_FA_CROSSHAIRS}  Follow the cursor", full):
             _start_block()
         imgui.text_colored(muted(), "records the EMG and the cursor it asks for")
+        if block.get("verdict"):
+            mono_text(block["verdict"], muted())
 
 
 def _command(ctx) -> float:
@@ -677,7 +762,7 @@ def pong_ui(ctx):
                 # The ghost is the cursor and nothing else: `None` outside a block, so
                 # the court is exactly what it was whenever no one is being asked to
                 # follow anything.
-                pong.ui(_command(ctx), _cursor())
+                pong.ui(_command(ctx), _cursor(), _effort(ctx))
                 imgui.end_tab_item()
             selected, _ = imgui.begin_tab_item("Signal")
             if selected:

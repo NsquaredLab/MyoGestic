@@ -97,6 +97,9 @@ _DEAD_ZONE = 0.10
 #: overflows rather than collapsing to a sliver — `_plot.py::_MIN_PLOT_H`'s argument.
 _MIN_COURT_H = 80.0
 
+#: Guards the gauge's divide when a degenerate paddle leaves no travel.
+_EPS_LIMIT = 1e-9
+
 
 @dataclass(frozen=True)
 class Ball:
@@ -602,7 +605,9 @@ class PongTask:
         return " · ".join(parts)
 
     # --- render --------------------------------------------------------------
-    def ui(self, command: float, target: float | None = None) -> None:
+    def ui(
+        self, command: float, target: float | None = None, effort: float | None = None
+    ) -> None:
         """Render the game. Call once per frame.
 
         Parameters
@@ -621,6 +626,17 @@ class PongTask:
             produced exactly what the recording says they were asked for. ``None``, the
             default, draws nothing and leaves the court exactly as it was. The ghost does
             not play the ball and is not a second player.
+        effort
+            How hard the subject is contracting *right now*, on ``0..1``, drawn as a
+            magnitude gauge at the left of the court with a tick at ``abs(target)``.
+
+            This exists for the training block, where there is no model yet and so no
+            honest way to move the paddle: without it a subject is asked to follow a
+            cursor with no feedback of any kind, which is not a task anyone can perform.
+            Deliberately **unsigned** — amplitude is knowable without a decoder and
+            direction is not, and a gauge that inferred the sign from `target` would show
+            the subject their own instruction and call it feedback. ``None`` draws
+            nothing.
         """
         imgui.push_id(self._widget_id)
         try:
@@ -631,12 +647,12 @@ class PongTask:
                 fa.ICON_FA_TABLE_TENNIS_PADDLE_BALL,
                 status=SUCCESS if self._ball is not None else IDLE,
             )
-            self._court_ui(ghost)
+            self._court_ui(ghost, effort)
             self._controls_ui(ghost)
         finally:
             imgui.pop_id()
 
-    def _court_ui(self, ghost: float | None) -> None:
+    def _court_ui(self, ghost: float | None, effort: float | None = None) -> None:
         """The court, the paddle, the ball and the score, on one draw list."""
         dl = imgui.get_window_draw_list()
         origin = imgui.get_cursor_screen_pos()
@@ -723,6 +739,30 @@ class PongTask:
                 rounding=thick * 0.5,
                 thickness=1.5,
             )
+
+        if effort is not None and math.isfinite(effort):
+            # A magnitude meter, not a second paddle: it grows from the centre line, so
+            # its height is comparable to how far the level line sits from centre without
+            # claiming to know which way the contraction went.
+            gx, w = 0.05, max(thick * 0.7, 4.0)
+            floor_, ceil_ = at(gx, 0.0), at(gx, 1.0)
+            dl.add_line(floor_, ceil_, faint)
+            tip = at(gx, min(max(effort, 0.0), 1.0))
+            dl.add_rect_filled(
+                imgui.ImVec2(tip.x - w * 0.5, tip.y),
+                imgui.ImVec2(tip.x + w * 0.5, floor_.y),
+                imgui.get_color_u32(primary()),
+                rounding=w * 0.5,
+            )
+            if ghost is not None:
+                # What is being asked for, on the gauge's own scale, so "reach the tick"
+                # is the whole instruction.
+                mark = at(gx, min(abs(ghost) / max(self._limit, _EPS_LIMIT), 1.0))
+                dl.add_line(
+                    imgui.ImVec2(mark.x - w, mark.y),
+                    imgui.ImVec2(mark.x + w, mark.y),
+                    imgui.get_color_u32(muted()),
+                )
 
         if self._ball is not None:
             # The text tone, not a series colour: the ball is the one thing that must
