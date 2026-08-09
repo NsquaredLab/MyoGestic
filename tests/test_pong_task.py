@@ -862,6 +862,74 @@ def test_the_ghost_marks_the_court_only_when_a_target_is_given(imgui_frame):
     assert drawn["ghost"] > drawn["bare"], "the target put no marker on the court"
 
 
+class _RectRecorder:
+    """Captures the rectangles a court draw submits, in submission order."""
+
+    def __init__(self) -> None:
+        self.fills: list[tuple[float, float, float, float]] = []
+        self.outlines: list[tuple[float, float, float, float]] = []
+        self.lines: list[tuple[float, float, float, float]] = []
+        self.order: list[str] = []
+
+    def add_rect_filled(self, a, b, col, **kw):
+        self.fills.append((a.x, a.y, b.x, b.y))
+        self.order.append("fill")
+
+    def add_rect(self, a, b, col, **kw):
+        self.outlines.append((a.x, a.y, b.x, b.y))
+        self.order.append("outline")
+
+    def add_line(self, a, b, col, *args, **kw):
+        self.lines.append((a.x, a.y, b.x, b.y))
+        self.order.append("line")
+
+    def __getattr__(self, _name):  # add_line / add_circle_filled / add_text — ignored
+        return lambda *a, **k: None
+
+
+def test_a_perfectly_tracked_ghost_is_still_visible(imgui_frame, monkeypatch):
+    """An absent reference and a perfectly tracked one must not look the same.
+
+    The obvious rendering — the ghost at the paddle's own rect, drawn first — hides it
+    under the fill exactly when the subject is on target. That looks elegant and then
+    fails at the only moment it has to work: a block opens with `Pursuit.rest_s` seconds
+    of target 0.0 and a velocity-mode paddle also sits at 0.0, so pressing Start showed
+    nothing whatsoever for five seconds. Reported from a real session.
+
+    So the ghost must brace the paddle rather than hide beneath it: submitted *after* the
+    fill, and extending past it on the three sides that are inside the court.
+    """
+    task = PongTask(widget_id="pong_coincident")
+    rec = _RectRecorder()
+    monkeypatch.setattr("myogestic.widgets.pong.imgui.get_window_draw_list", lambda: rec)
+
+    # Paddle and ghost on the same command — the coincident case.
+    task._aim(0.0)
+    imgui_frame(lambda: task._court_ui(task._ghost_y(0.0)))
+
+    assert len(rec.fills) == 2, f"expected court + paddle fills, got {len(rec.fills)}"
+    assert len(rec.outlines) == 2, f"expected court border + ghost, got {len(rec.outlines)}"
+    paddle, ghost = rec.fills[-1], rec.outlines[-1]
+
+    assert rec.order.index("fill") < len(rec.order) - 1
+    assert rec.order[-1] == "outline", "the ghost was submitted before the paddle covered it"
+
+    px0, py0, _px1, py1 = paddle
+    gx0, gy0, _gx1, gy1 = ghost
+    assert gx0 < px0, "the ghost does not reach left of the paddle"
+    assert gy0 < py0, "the ghost does not clear the top of the paddle"
+    assert gy1 > py1, "the ghost does not clear the bottom of the paddle"
+
+    # ...and the level line, which is the part you can actually find at a glance: it
+    # crosses the court at the target, so it is visible however the paddle is placed.
+    court = rec.fills[0]
+    level = [ln for ln in rec.lines if abs(ln[0] - court[0]) < 1.0 and ln[1] == ln[3]]
+    assert level, "no horizontal line spans the court at the target level"
+    x0, y, x1, _ = level[-1]
+    assert x1 - x0 > (court[2] - court[0]) * 0.9, "the level line does not cross the court"
+    assert abs(y - (py0 + py1) / 2) < 2.0, "the level line is not at the tracked level"
+
+
 def test_a_ghost_renders_through_the_public_call_and_leaves_the_id_stack_alone(imgui_frame):
     """An unbalanced id stack surfaces as ``Missing PopID()`` far from its cause.
 
