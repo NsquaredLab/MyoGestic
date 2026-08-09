@@ -25,6 +25,26 @@ app.run()
 
 Click **Record** → data flows into `sessions/<timestamp>/`. Click **Stop** → that folder packs into `sessions/<timestamp>.session.zip`. No further setup required.
 
+## Just capture, and name it afterwards
+
+`RecordingControls` above is built for *labelled* data: one button per gesture class, each click writing a label event. When you only want to collect a stretch of signal, `RecordButton` is the simpler control — Record, Stop, and a dialog asking what to call the take:
+
+```python
+from myogestic.widgets import RecordButton
+
+recorder = RecordButton(
+    on_record=app.start_recording,
+    on_stop=app.stop_recording,
+    on_discard=app.discard_recording,   # optional; omit and the dialog offers no Discard
+)
+```
+
+**Capture ends the moment you press Stop**, not when you press Save — the streams are detached before the dialog opens, so the seconds spent typing never reach the recording.
+
+The name is written to `meta.json` and appended to the archive filename, so a saved take is `sessions/<timestamp>_<name>.session.zip` and shows up in `SessionManager` by name rather than by timestamp alone. Naming is optional; the timestamp always identifies a session on its own. What you type is slugged down to ASCII letters, digits, `-` and `_` before it touches a path, so a name can never escape the sessions folder.
+
+**Discard** deletes the take outright — the folder is removed and no archive is written. That is `app.discard_recording()`, and it is the counterpart to `stop_recording()` rather than a wrapper around it: nothing is saved and then cleaned up.
+
 ## Lifecycle in detail
 
 ```
