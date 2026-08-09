@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 
 import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui, implot
+
+from myogestic._theme import mono_font
 
 # 10 distinct colors for class labels (Category10-like)
 PALETTE = np.array(
@@ -185,7 +188,7 @@ def destructive_button(label: str, *, tooltip: str = "") -> bool:
 
 def label_column(
     label: str,
-    among: tuple[str, ...],
+    among: Sequence[str],
     *,
     reserve: float = 0.0,
     max_width: float = 0.0,
@@ -273,6 +276,50 @@ def segmented(widget_id: str, options: list[str], selected: int) -> int:
     return result
 
 
+#: Every band of `format_age` is this many characters, so the read-out holds a
+#: constant width in the mono face and stops shuffling while you watch it.
+_AGE_WIDTH = 11
+
+
+def format_age(seconds: float | None) -> str:
+    """Age of a stream's newest sample, at a fixed width.
+
+    ``last   9 ms`` / ``last 999 ms`` / ``last  1.4 s`` / ``last  >99 s`` — all
+    11 characters, so paired with `mono_text` the value can update every frame
+    without the text around it moving.
+
+    Padding to a fixed *digit count* is not enough on its own. The UI face is
+    proportional and its digits are not tabular: on macOS, SF Pro renders ``1``
+    at 6 px and ``9`` at 9 px, so ``last 111 ms`` and ``last 999 ms`` differ by
+    9 px however they are padded. Only a monospaced face holds still.
+    """
+    if seconds is None:
+        return "last   — ms"
+    ms = seconds * 1000.0
+    if ms < 999.5:
+        return f"last {ms:3.0f} ms"
+    if seconds < 99.95:
+        return f"last {seconds:4.1f} s"
+    return "last  >99 s"
+
+
+def mono_text(text: str, color: imgui.ImVec4 | None = None) -> None:
+    """Draw ``text`` in the mono face — for a value that changes as you watch it.
+
+    Falls back to the UI face when the mono one could not be loaded, which costs
+    only the alignment.
+    """
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, imgui.get_font_size())
+    if color is None:
+        imgui.text_unformatted(text)
+    else:
+        imgui.text_colored(color, text)
+    if font is not None:
+        imgui.pop_font()
+
+
 def panel_header(
     title: str,
     icon: str | None = None,
@@ -296,28 +343,51 @@ def panel_header(
     *title* collapses instead of pushing those controls off the panel.
 
     Pass ``status`` — one of `SUCCESS`, `IDLE`, `DANGER`, `WARNING` — to put a filled
-    circle before the title in that colour. Colour is the *only* thing the dot carries,
-    so it must not be the only place the state is available: give the header a tooltip
-    with the detail (a PID, an exit code) for anyone who cannot read the hue.
+    circle in that colour at the **right** end of the header row. Right-aligned so the
+    titles of stacked panels line up on their first glyph: a dot before the title would
+    indent the ones that have state and leave the ones that don't hanging. Colour is the
+    *only* thing the dot carries, so it must not be the only place the state is
+    available: give the header a tooltip with the detail (a PID, an exit code) for
+    anyone who cannot read the hue.
+
+    It sits inside ``reserve``, so a right-aligned control placed after the header —
+    `panel_header_button` does this — still gets its space, with the dot to its left.
 
     Examples
     --------
     >>> from myogestic.widgets import panel_header
     >>> panel_header("MODEL")
     """
+    style = imgui.get_style()
+    dot_w = imgui.calc_text_size(fa.ICON_FA_CIRCLE).x if status is not None else 0.0
+    # The header sits in its own band, inset from the panel's content box on
+    # every side rather than starting in its corner. Text sits high in its line
+    # box, so `window_padding` alone leaves the glyphs looking closer to the
+    # border than the number suggests. Deliberately *not* flush with the
+    # controls below: the title is a label for the panel, not the first row of
+    # it. Not paired with a trailing `spacing()` either — `panel_header_button`
+    # does `same_line()` straight after this and would land beside the spacer
+    # instead of beside the title.
+    inset = style.item_spacing.x
+    imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + style.item_spacing.y)
+    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + inset)
     # Grouped so the dot and the title are one item for hit-testing: a following
     # `set_item_tooltip` would otherwise attach to the title text alone, leaving the dot
     # — the part whose colour needs explaining — unhoverable.
     imgui.begin_group()
-    if status is not None:
-        # Drawn *before* the title, so the cursor has already advanced when `_fit_header`
-        # measures what is left — the truncation below needs no adjustment for it.
-        imgui.text_colored(status, fa.ICON_FA_CIRCLE)
-        imgui.same_line()
-    muted = imgui.get_style().color_(imgui.Col_.text_disabled)
+    muted = style.color_(imgui.Col_.text_disabled)
     imgui.push_style_color(imgui.Col_.text, muted)
-    imgui.text(_fit_header(title.upper(), icon, reserve))
+    # The title truncates against the dot's space as well as the caller's `reserve`,
+    # so a long title yields to the state rather than pushing it off the row.
+    gap = style.item_spacing.x if status is not None else 0.0
+    imgui.text(_fit_header(title.upper(), icon, reserve + dot_w + gap + inset))
     imgui.pop_style_color()
+    if status is not None:
+        imgui.same_line()
+        shift = imgui.get_content_region_avail().x - reserve - dot_w - inset
+        if shift > 0:
+            imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + shift)
+        imgui.text_colored(status, fa.ICON_FA_CIRCLE)
     imgui.end_group()
 
 
