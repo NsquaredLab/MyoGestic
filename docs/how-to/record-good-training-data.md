@@ -66,4 +66,7 @@ See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by 
 - **Recording before the signal stabilises.** EMG amplifiers settle for 1-2 seconds after starting. If you click Record immediately after Start, your first cycle is biased low.
 - **Mixing test mode with real recordings.** The synthetic generator emits fundamentally different patterns from real EMG. A model trained on synthetic test data won't transfer.
 
-See also: [Record and replay](record-and-replay.md).
+See also: [Record and replay](record-and-replay.md), and
+[Record for proportional control](record-for-proportional-control.md) if what you want is a
+*graded* command rather than a class — cued classes are three distinct target values, and
+what a fit does between them comes from the estimator rather than the recording.
