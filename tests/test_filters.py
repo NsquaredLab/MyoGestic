@@ -70,6 +70,29 @@ def test_one_euro_reset_clears_state():
     assert np.isclose(out[0], 10.0)
 
 
+def test_one_euro_does_not_latch_on_a_nan():
+    """One NaN from a diverged model must not silence the output for the whole session.
+
+    The filter is recursive, so folding a NaN into `_x_prev` makes every later sample
+    NaN — the model recovers and nothing downstream ever hears about it. Worse, the
+    consumers read a NaN as a valid number: `min(max(nan, -1.0), 1.0)` is nan, and a
+    nearest-pose lookup on it picks index 0.
+    """
+    f = OneEuroFilter(hz=32)
+    f(np.array([0.5, 0.5]))
+    held = f(np.array([np.nan, 0.5]))
+    assert np.isfinite(held).all(), held
+
+    for _ in range(6):
+        out = f(np.array([0.5, 0.5]))
+    assert np.allclose(out, 0.5, atol=1e-2), out
+
+    # And a NaN on the very first call must not seed the filter with one either.
+    fresh = OneEuroFilter(hz=32)
+    fresh(np.array([np.nan]))
+    assert np.isfinite(fresh(np.array([0.5]))).all()
+
+
 def test_one_euro_rejects_bad_args():
     with pytest.raises(ValueError, match="hz"):
         OneEuroFilter(hz=0)
