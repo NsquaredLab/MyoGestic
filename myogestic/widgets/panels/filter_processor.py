@@ -430,6 +430,16 @@ class PostProcessor(FilterProcessor):
     ``one_euro`` selected by default. For a custom palette, use
     [`FilterProcessor`][] directly.
 
+    Parameters
+    ----------
+    hz
+        Sample rate forwarded to filters that need it (e.g. ``one_euro``). Set
+        it to the rate your predictions actually arrive at, or the smoothing is
+        tuned for the wrong timebase.
+    widget_id
+        ImGui id scope — give each instance a unique value if you render more
+        than one.
+
     Examples
     --------
     >>> from myogestic.widgets import PostProcessor

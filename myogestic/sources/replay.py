@@ -17,6 +17,18 @@ class ReplaySource:
     Accepts either a folder-format session or a `.session.zip` archive —
     delegates to `open_session_store` so both layouts work transparently.
 
+    Parameters
+    ----------
+    session_path
+        Session folder or ``.session.zip`` archive to read.
+    stream_name
+        Which recorded stream to replay. `connect` raises `ValueError` listing
+        what the session does contain if this is not one of them.
+    speed
+        Playback rate multiplier. ``1.0`` replays in real time; ``2.0`` is twice
+        as fast, ``0.5`` half. Only the pacing changes — every sample is still
+        delivered.
+
     Examples
     --------
     >>> from myogestic import Stream

@@ -64,6 +64,19 @@ app.run()
 That's the whole loop. Add a `Pipeline`, decorate `extract` / `train` /
 `predict`, and you have a closed-loop experiment.
 
+For a whole protocol rather than a loop to build on,
+[`examples/start_here/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/start_here)
+holds applications you can take to a session unmodified — they pick their
+hardware from a dropdown, so the same file runs against any supported amplifier
+or against the synthetic one when you have none:
+
+- `force_ramps.py` - isometric force ramps: track a trapezoid at a set %MVC,
+  with the EMG, the force and the target all recorded together
+- `myocontrol.py` - record cued Rest/Fist trials, train a classifier or a
+  regressor, and drive the Virtual Hand from the prediction
+- `pong.py` - chase a cursor with the paddle, train one signed `[-1, +1]`
+  command, and play Pong with your wrist; the Virtual Hand only mirrors it
+
 Six runnable end-to-end demos live in
 [`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic):
 

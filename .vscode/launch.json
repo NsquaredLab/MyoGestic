@@ -256,6 +256,50 @@
       "env": { "PYTHONUNBUFFERED": "1" },
       "presentation": { "group": "3-examples", "order": 7 }
     },
+    {
+      "name": "Example: force ramps protocol (any amplifier, no VHI)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/start_here/force_ramps.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (core only)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "3-examples", "order": 8 }
+    },
+    {
+      "name": "Example: myocontrol protocol, record → train → VHI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/start_here/myocontrol.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (examples + grpc)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "3-examples", "order": 9 }
+    },
+    {
+      // Plays with no Virtual Hand at all — the wrist only mirrors the paddle. Pick the
+      // synthetic device in the Source tab to try it with no amplifier either.
+      "name": "Example: pong protocol, graded wrist control (VHI optional)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/start_here/pong.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "uv: sync (examples + grpc)",
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "presentation": { "group": "3-examples", "order": 10 }
+    },
 
     {
       "name": "Prerequisite: Virtual Hand (leave running)",

@@ -12,6 +12,13 @@ Complete runnable experiments, walked through line by line against a real file i
 - [EMG regression with VHI](../tutorials/emg-regression-with-vhi.md) - continuous 5-DOF control, recorded through the Virtual Hand and pushed back to it.
 - [Examples directory](../tutorials/examples-index.md) - one paragraph on each runnable example, with its command and what is worth changing.
 
+## Connecting hardware
+
+Getting samples out of an amplifier and into a `Stream`.
+
+- [Pick a device from the UI](pick-a-device.md) - `DevicePicker`: choose the amplifier from a dropdown at runtime instead of hardcoding it. **Start here** if you are new to the hardware.
+- [Connect OTB devices](connect-otb-devices.md) - the OT Bioelettronica sources in detail: wiring, modes, channel geometry, dropout counters.
+
 ## Driving a device
 
 Anything that *moves* is a **target**: three methods, and a TOML control map naming which
@@ -29,10 +36,13 @@ system itself.
 - [Enable on-disk recording](enable-recording.md) - the four lines that start writing sessions.
 - [Record and replay](record-and-replay.md) - capture sessions, read them back programmatically.
 - [Record good training data](record-good-training-data.md) - cycle-style recording, how many cycles you actually need, verifying templates before training.
+- [Record for proportional control](record-for-proportional-control.md) - the graded counterpart: why three cued classes make a three-class model whatever you fit, and the followed-cursor block that fixes it.
+- [Track a force target](track-a-force-target.md) - isometric force tracking against a trapezoid, on an amplifier AUX channel, with the target recorded as its own stream.
 
 ## Models and features
 
 - [Add a custom model](add-a-model.md) - wire `extract` / `train` / `predict` for any ML library.
+- [Record for proportional control](record-for-proportional-control.md) - if your regressor is dead below 30 % effort or goes the wrong way when the subject contracts harder, the fix is in the recording protocol.
 - [Feature extraction cookbook](feature-extraction-cookbook.md) - copy-paste `@pipeline.extract` snippets (RMS+MAV, bandpass+envelope, spectral, sliding RMS, onset detection, multi-stream fusion).
 - [Use the recipe feature set](use-recipe-features.md) - the shipped feature recipes.
 - [Keep state between pipeline stages](inter-stage-state.md) - rolling windows, stateful models, gating side effects on change.

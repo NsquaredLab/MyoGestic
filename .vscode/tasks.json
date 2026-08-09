@@ -24,6 +24,20 @@
       }
     },
     {
+      "label": "uv: sync (core only)",
+      "detail": "Core dependencies only — what a protocol that names no optional target needs.",
+      "type": "shell",
+      "command": "uv sync --inexact",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true,
+        "close": true
+      }
+    },
+    {
       "label": "uv: sync (grpc only)",
       "detail": "Lean sync for the tools — no CatBoost, MyoVerse or torch.",
       "type": "shell",
