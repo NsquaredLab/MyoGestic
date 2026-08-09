@@ -19,6 +19,7 @@ in `myogestic.ml.widgets` (they require `Pipeline(app)`).
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -31,6 +32,9 @@ from myogestic.widgets.common import (
     IDLE,
     ON_PILL_TEXT,
     PILL_BG,
+    destructive_button,
+    mono_text,
+    muted,
     panel_header,
     pop_selected,
     push_selected,
@@ -89,13 +93,257 @@ def _safe_label_index(current: int, n_classes: int) -> int:
     return current if 0 <= current < n_classes else -1
 
 
+_POPUP_ID = "Save recording##rec_save"
+_NAME_MAX = 64
+
+
+def _elapsed_str(seconds: float) -> str:
+    """``m:ss`` for a duration, the way a stopwatch reads."""
+    minutes, secs = divmod(int(seconds), 60)
+    return f"{minutes}:{secs:02d}"
+
+
+class RecordButton:
+    """One button that records, and asks what to call the take when it stops.
+
+    The plain-recording counterpart to `RecordingControls`: no per-class label
+    buttons, no gesture protocol — press Record, press Stop, name what you just
+    captured. For an app whose job is *collect some data*, rather than one
+    building a labelled training set.
+
+    Capture ends the instant Stop is pressed — the streams are detached before
+    the dialog opens — so the seconds spent typing a name are never recorded.
+    The name is written to the session's ``meta.json`` and into the archive
+    filename, so it shows up in `SessionManager` and is findable on disk.
+
+    Parameters
+    ----------
+    on_record
+        Called when Record is clicked (idle → recording). Pass
+        ``app.start_recording``.
+    on_stop
+        Called when the dialog is saved. Pass ``app.stop_recording``.
+    on_discard
+        Called when the dialog is discarded. Pass ``app.discard_recording``.
+        Omit it and the dialog offers no Discard — appropriate for an app where
+        deleting a take should not be one click away.
+    widget_id
+        ImGui id scope and state key. Defaults to ``"recorder"``. Give each
+        instance its own when an app renders more than one: ImGui derives a
+        control's identity from its label plus the enclosing scope, and a
+        `Grid` cell is a single child window — so two of these in one cell
+        share every slider, popup and plot until they are told apart.
+    show_header
+        Render the standard ``panel_header``.
+
+    Examples
+    --------
+    >>> from myogestic.widgets import RecordButton
+    >>> recorder = RecordButton(
+    ...     on_record=app.start_recording,
+    ...     on_stop=app.stop_recording,
+    ...     on_discard=app.discard_recording,
+    ... )
+    >>> recorder.ui(ctx)
+    """
+
+    def __init__(
+        self,
+        *,
+        on_record: Callable[[], None],
+        on_stop: Callable[[], None],
+        on_discard: Callable[[], None] | None = None,
+        show_header: bool = True,
+        widget_id: str | None = None,
+    ) -> None:
+        self._on_record = on_record
+        self._widget_id = widget_id or "recorder"
+        self._on_stop = on_stop
+        self._on_discard = on_discard
+        self._show_header = show_header
+        self._name = ""
+        self._naming = False
+        self._started: float | None = None
+        self._captured = 0.0
+
+    def ui(self, ctx: Context) -> None:
+        """Render the recorder. Call once per frame inside ``@app.ui``.
+
+        Deliberately the same shape as `DevicePicker`: status dot in the header,
+        one full-width action, one muted detail line. Stacked in the same column
+        the two panels should read as one instrument, not two widgets that grew
+        up apart. The header icon is an archive rather than the usual record
+        circle — beside a status dot, a second circle reads as a second state.
+
+        Drawn inside an ImGui id scope named by ``widget_id``, so two recorders
+        in one `Grid` cell do not share a button and a naming dialog.
+        """
+        imgui.push_id(self._widget_id)
+        try:
+            recording = ctx.state == AppState.RECORDING
+            self._sync(recording)
+            tone, detail = self._state(recording)
+
+            if self._show_header:
+                # No tooltip: the line below the button already says this, and the
+                # elapsed clock in it would need keeping in step in two places.
+                panel_header("RECORDING", fa.ICON_FA_BOX_ARCHIVE, status=tone)
+
+            self._button(ctx, recording)
+            # Mono: the clock ticks while you watch it, and the UI face's digits are
+            # not tabular, so a proportional one shuffles the text as it counts.
+            mono_text(detail, muted())
+            self._dialog(ctx)
+        finally:
+            imgui.pop_id()
+
+    # --- logic (no ImGui: everything here is unit-testable) -----------------
+
+    def _sync(self, recording: bool) -> None:
+        """Drop a stale dialog.
+
+        Somebody else — a protocol script, a headless driver — can call
+        ``stop_recording`` while the dialog is open, leaving nothing to name.
+        """
+        if self._naming and not recording:
+            self._reset()
+
+    def _stop(self, ctx: Context) -> None:
+        """End capture *now*, and switch to naming.
+
+        Detaching here rather than in the dialog's Save is the whole point: the
+        operator's reaction time and however long they spend typing would
+        otherwise be appended to the recording. `App.stop_recording` detaches
+        again when it finally runs, which is harmless — ``detach_session`` takes
+        the stream lock and simply clears an already-cleared session.
+        """
+        for stream in ctx.streams.values():
+            stream.detach_session()
+        self._captured = time.monotonic() - self._started if self._started else 0.0
+        self._started = None
+        self._naming = True
+
+    def _save(self, ctx: Context) -> None:
+        """Attach the typed name to the session, then let the App finalise it."""
+        if ctx.session is not None:
+            # Read back by `Session.save_meta`, which `stop_recording` calls
+            # before packing — so this has to land before, not after.
+            ctx.session.name = self._name.strip()
+        self._on_stop()
+        self._reset()
+
+    def _discard(self) -> None:
+        """Throw the take away. Only offered when the app provided a handler."""
+        if self._on_discard is not None:
+            self._on_discard()
+        self._reset()
+
+    def _reset(self) -> None:
+        self._naming = False
+        self._name = ""
+        self._started = None
+
+    def _state(self, recording: bool) -> tuple[imgui.ImVec4, str]:
+        """State tone and its one-line detail, matching `DevicePicker`'s status line."""
+        if self._naming:
+            return IDLE, f"naming · {_elapsed_str(self._captured)}"
+        if recording:
+            elapsed = time.monotonic() - self._started if self._started else 0.0
+            return DANGER, f"recording · {_elapsed_str(elapsed)}"
+        return IDLE, "not recording"
+
+    # --- rendering ----------------------------------------------------------
+    def _button(self, ctx: Context, recording: bool) -> None:
+        """Record ↔ Stop, full width. The glyph shows what clicking will do."""
+        full = imgui.ImVec2(-1, 0)
+        if self._naming:
+            imgui.begin_disabled()
+            imgui.button(f"{fa.ICON_FA_STOP}  Stop", full)
+            imgui.end_disabled()
+            return
+
+        if recording:
+            if imgui.button(f"{fa.ICON_FA_STOP}  Stop", full):
+                self._stop(ctx)
+        elif imgui.button(f"{fa.ICON_FA_CIRCLE_DOT}  Record", full):
+            self._name = ""
+            self._started = time.monotonic()
+            self._on_record()
+
+    def _dialog(self, ctx: Context) -> None:
+        """The naming modal. Deliberately has no way out but Save or Discard.
+
+        Re-opened every frame while naming because ImGui closes popups on Esc:
+        dismissing it would strand a finalised-but-unpacked session with no
+        control left to resolve it.
+        """
+        if self._naming and not imgui.is_popup_open(_POPUP_ID):
+            imgui.open_popup(_POPUP_ID)
+
+        # Centre on the viewport, not on whatever panel happens to host the
+        # widget — the dialog is app-modal, so it should not look anchored to a
+        # cell in the grid.
+        center = imgui.get_main_viewport().get_center()
+        imgui.set_next_window_pos(center, imgui.Cond_.appearing, imgui.ImVec2(0.5, 0.5))
+        opened, _ = imgui.begin_popup_modal(_POPUP_ID, None, imgui.WindowFlags_.always_auto_resize)
+        if not opened:
+            return
+        try:
+            imgui.text(f"Captured {_elapsed_str(self._captured)}.")
+            imgui.set_next_item_width(280)
+            if imgui.is_window_appearing():
+                imgui.set_keyboard_focus_here()
+            changed, typed = imgui.input_text_with_hint(
+                "##rec_name", "e.g. subject-03 fist", self._name
+            )
+            if changed:
+                self._name = typed[:_NAME_MAX]
+            imgui.text_colored(
+                muted(), "Optional — the timestamp always identifies the session."
+            )
+            imgui.spacing()
+
+            if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save", imgui.ImVec2(120, 0)):
+                self._save(ctx)
+                imgui.close_current_popup()
+            if self._on_discard is not None:
+                imgui.same_line()
+                if destructive_button(
+                    f"{fa.ICON_FA_TRASH}  Discard",
+                    tooltip=f"Delete these {_elapsed_str(self._captured)} of data permanently",
+                ):
+                    self._discard()
+                    imgui.close_current_popup()
+        finally:
+            imgui.end_popup()
+
+
+
 class RecordingControls:
     """Record/Stop toggle + per-class label buttons + state pill.
 
     Construct once with the class names and callbacks, then call [`ui`][]
     with the live ``ctx`` each frame. Pass ``app.start_recording`` /
     ``app.stop_recording`` for ``on_record`` / ``on_stop`` if you're using
-    the standard App.
+    the standard App. For plain capture with no gesture protocol, use
+    `RecordButton` instead.
+
+    Parameters
+    ----------
+    class_names
+        One label button per name. Clicking one while recording snaps a label
+        event at that moment; outside a recording it sets the class the next
+        Record will start in. ``None`` renders the transport alone. The names
+        are mirrored into ``ctx.class_names`` so `App.stop_recording` persists
+        them in the session's ``meta.json`` — old recordings stay
+        self-describing.
+    on_record
+        Called when Record is clicked (idle → recording).
+    on_stop
+        Called when Stop is clicked (recording → idle).
+    on_gesture
+        Optional ``(class_index) -> None`` for side effects on a label-button
+        click — cueing a subject, switching a fake-signal generator.
 
     Examples
     --------
