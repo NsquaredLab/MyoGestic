@@ -186,6 +186,20 @@ class ProcessLauncher:
     live subprocess registry is app-global, so processes are still killed on
     exit (``atexit`` + ``App.run`` cleanup) regardless of instance lifetime.
 
+    Parameters
+    ----------
+    processes
+        The launchable processes, as ``(name, argv)`` tuples.
+    widget_id
+        ImGui id scope for this launcher. Auto-generated from the process names
+        when empty; set it explicitly if two launchers offer the same names.
+    log_height
+        Height in pixels of an **optional** inline log. ``<= 0`` (the default)
+        draws no inline log at all: the state is the header's dot and the output
+        is one click away in the ``↗`` popout window, which can be moved, resized
+        and left open while the dropdown moves to another process. Pass a
+        positive height to get a strip under the controls instead.
+
     Examples
     --------
     >>> import sys
@@ -208,6 +222,29 @@ class ProcessLauncher:
     def ui(self) -> None:
         """Render the launcher. Call once per frame inside ``@app.ui``."""
         _render_process_launcher(self._processes, self._widget_id, self._log_height)
+
+    def running(self, name: str) -> bool:
+        """Whether the process called ``name`` is alive **because this panel started it**.
+
+        For an app that has something to do once a target is up — bind a control map to a
+        target it just launched, enable a control that needs it — rather than asking the
+        operator to press a second button confirming the press they already made.
+
+        Says nothing about a process started outside the app: the registry only holds what
+        this panel launched, so a target that was already running reads ``False``. Treat it
+        as "I started this", not as "this is reachable"; the target's own handshake is what
+        answers reachability.
+
+        Parameters
+        ----------
+        name
+            The process name, as given in the ``(name, argv)`` tuple.
+        """
+        # The auto-generated id has to be derived the same way `_render_process_launcher`
+        # does it, or this reads a key nothing writes and quietly answers False forever.
+        widget_id = self._widget_id or "_".join(n for n, _ in self._processes)
+        state = _procs.get((widget_id, name))
+        return state is not None and state.alive
 
 
 def _render_process_launcher(

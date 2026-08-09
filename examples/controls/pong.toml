@@ -1,0 +1,19 @@
+# What `start_here/pong.py` drives.
+#   left  = your name for a model output
+#   right = a control VHI declares (it owns the kind, range and states)
+#
+# One alias, because the game is one number. That also removes a whole class of bug:
+# `push` completes the frame from every *declared* alias, so a second control here would
+# be rested on every tick this app forgot to name it — a hand that twitches for no
+# reason the operator can see.
+
+[dofs]
+
+# The paddle, mirrored onto the wrist. `weight = -1.0` is anatomy, not a correction: `+1`
+# means the direction the address *names*, and flexion is palm-ward, which with a
+# pronated forearm carries the hand **down** while `+1` on the paddle is up.
+#
+# No `threshold_fraction`: it forces `lo = 0.0`, and with nothing driving the negative
+# half Down becomes unreachable — the paddle would sit in the top half of the court and
+# never come back.
+paddle = { target = "vhi.prediction.wrist.flexion", weight = -1.0 }

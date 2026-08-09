@@ -109,6 +109,10 @@ not of the hand.
 Sliders can pose the operator's hand while a model drives the predicted one, and a map naming
 both is still one `RemoteTarget` and one bus. The two hands are simply more addresses.
 
+[`examples/start_here/myocontrol.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/start_here/myocontrol.py)
+is this table as a complete protocol: a model fanning out to the predicted digits while
+`vhi.control.gesture` cues the subject on the other hand, over one map and one bus.
+
 ### The nine channels of a recorded pose
 
 VHI publishes two **read-backs**, `VHI_Predict` and `VHI_Control`, so a client can see what
