@@ -12,7 +12,8 @@ from myogestic.widgets.panels.image import Image
 from myogestic.widgets.panels.log_panel import LogPanel
 from myogestic.widgets.panels.popout import popout_panel
 from myogestic.widgets.panels.process_launcher import ProcessLauncher
-from myogestic.widgets.panels.recording import RecordingControls
+from myogestic.widgets.panels.recording import RecordButton, RecordingControls
+from myogestic.widgets.panels.stream_manager import StreamManager
 
 __all__ = [
     "BUILTIN_FILTERS",
@@ -24,6 +25,8 @@ __all__ = [
     "LogPanel",
     "PostProcessor",
     "ProcessLauncher",
+    "RecordButton",
     "RecordingControls",
+    "StreamManager",
     "popout_panel",
 ]
