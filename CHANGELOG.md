@@ -7,6 +7,172 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `examples/start_here/myocontrol.py` is a second complete protocol: pick an amplifier from
+  a dropdown, record cued Rest/Fist trials, train a classifier or a regressor, and drive the
+  Virtual Hand from the prediction. The mode is bound into the model `train` returns rather
+  than read live, so moving the switch under a loaded model cannot send a class index down
+  the regression branch. It runs on the shipped `examples/controls/hand.toml` unmodified.
+- `PongTask` renders Pong from one signed command in `[-1, +1]`, and
+  `examples/start_here/pong.py` is the protocol around it: a recorded training block, one
+  model, and a paddle that only returns the ball if the contraction is graded. It is
+  the first shipped example whose command is signed — Down is a real `-1`, not the absence
+  of Up — so the negative half a one-way fit never sees is exercised end to end. The
+  Virtual Hand mirrors the paddle when the Hand tab is bound and is never required. The
+  synthetic source gained a `direction` knob that splits its activation across an
+  agonist/antagonist channel pair, which makes Down and Up separable with no hardware;
+  the default of `0.0` is what the source did before.
+- `directional_decoder` is the model that game needed, and `pong.py` now trains it by
+  default (its mode switch reads Proportional / Regression / Classification, Proportional
+  first). **Amplitude cannot carry direction.** On three 8-channel bracelet recordings,
+  overall loudness barely tells Down from Up — d' = 0.52 — while the *amplitude-normalised*
+  pattern separates the very same windows cleanly, per-channel d' up to 10.9. One regressor
+  over raw features therefore learns whichever cue was louder in the training set: the
+  CatBoost regressor `pong.py` shipped with learned "louder = Down", because Down simply
+  happened to be recorded harder, which made it **non-monotonic in effort** — scaling every
+  channel 1.0 → 1.3 → 1.6 moved its Up prediction 1.000 → 0.882 → 0.723, so contracting
+  harder drove the paddle the wrong way, and it was dead below ~30% effort. The recipe
+  estimates the two cues apart and multiplies them: `activation` (the row total, rescaled so
+  rest reads 0 and a typical contraction reads 1) times `direction` (the unit-sum row
+  projected onto the Fisher axis from the mean Down shape to the mean Up shape). A global
+  electrode gain cancels out of the shape exactly *as long as every ticked feature answers
+  that gain the same way* — RMS, MAV and WL all scale by `g`, VAR by `g²`, ZC not at all —
+  so within one of those groups it cannot touch the sign and can only raise the magnitude.
+  Across two of them it can, which is why the input contract names the condition and
+  `pong.py` refuses a mixed set in Proportional mode instead of training on it. Rest needs
+  no dead-zone hack because `activation` is 0 there. It has no dependencies, its only knob
+  is `shrinkage` (a conditioning knob rather than a correctness requirement, and now
+  range-checked), and `fit` refuses outright — naming the missing block — if the training
+  set has no rest windows or only one direction, or if `X` carries a NaN, which would
+  otherwise pass every `<= 0` guard and make *every* later prediction NaN. Features must be
+  non-negative and grow with contraction; signed or mean-centred features break the split.
+  The effort span is fitted **per window** — `median((total - rest_) / abs(y))` over the
+  windows whose target reaches `abs(y) >= 0.5` — rather than read off the non-rest median,
+  which treats every non-rest window as a full contraction. On a `Pursuit` block the median
+  non-rest window sits at `abs(y) = 0.358`, so that rule fitted a span of 1.76 against a
+  true 4.23, `activation` saturated, and the command pegged at about 40 % effort; the
+  transfer curve over nine held levels goes from **MAE 0.179 and non-monotone** to **0.084
+  and strictly monotone** on the identical recording. It costs a cued block nothing, and
+  exactly nothing: every non-rest window there has `abs(y) == 1`, so the threshold selects
+  the same windows, dividing by 1 is a no-op, and a median is translation-equivariant —
+  both rules return the same float. Below three qualifying windows `fit` raises, naming the
+  count and the largest `abs(y)` in the block, rather than quietly fitting a span on two.
+- **Follow the cursor** is a second training block for `pong.py`, and the reason for it is
+  measured rather than argued. Three cued classes are three distinct target values, so a
+  tree ensemble fitted on them is a three-class model whatever it is called — its output is
+  an average of training targets, so it cannot emit a level the block never asked for. On
+  real recordings the CatBoost regressor was dead below ~30 % effort and non-monotonic in
+  it; a simulation of the same protocol emits **-0.34** at a true **+0.50**. Training on
+  densely covered levels instead cut CatBoost's intermediate-effort MAE **0.402 → 0.029**.
+  `myogestic.tracking.Pursuit` is the block that covers them: rest at exactly `0`, then a
+  smooth aperiodic wander over signed `[-1, +1]`, deterministic arithmetic on the hop index
+  so two sessions record the identical path and a test can assert an exact value. It is
+  drawn as a ghost paddle by the new `PongTask.ui(target=…)` and recorded beside the EMG by
+  `TargetSource`, which now takes any `Trajectory` — the structural protocol `Trapezoid` and
+  `Pursuit` both satisfy — and codes the stretches with no block running `idle` rather than
+  `rest`, so the wait while the operator sets a block up cannot merge into that block's rest
+  phase. `myogestic.session.iter_target_windows` pairs each EMG window with the recorded
+  cursor value at the window's **end**, which is the causal choice (the centre would train
+  the model to predict the past by half a window), aligns by timestamp rather than index,
+  and drops a window whose end falls outside the target's own span instead of inventing
+  ground truth for it. `pong.py` routes each selected session by whether it carries the
+  target stream, so cursor and cued recordings train together in one signed column.
+  **Be precise about what this buys.** The active ingredient is the *number of distinct
+  target levels*, not pursuit and not continuity: a cued staircase of eleven holds **beat**
+  the pursuit block, 0.0367 against 0.0548 MAE, on 4 of 4 seed pairs, and a linear model
+  gains nothing at all, because least squares already draws a straight line through three
+  levels. The win is large specifically for the tree ensembles shipped here. The argument
+  for a followed cursor over a staircase is human rather than statistical: told "go to 0.6"
+  a subject has no idea what 0.6 feels like, while a cursor gives continuous visual error
+  feedback, so the intermediate levels are reachable at all.
+- `PongTask(control="position")` maps the command straight onto the paddle's height instead
+  of integrating it as a velocity. Velocity remains the default and is what turns a coarse
+  decoder into a complete controller — three outputs become up / hold / down, which reach
+  every height — but it accumulates a resting bias and needs a dead zone. Position cannot
+  drift, needs no dead zone, and puts the paddle exactly where the model's output says,
+  which makes it the honest mode to debug against once the command is genuinely continuous.
+  `pong.py` exposes both on its Model tab.
+- `PongTask(opponent=…)` puts a second paddle at the far wall instead of the plain wall to
+  rally against, which gives the drill a score the subject is playing for rather than an
+  open-ended rally. The factor is that paddle's top tracking speed as a multiple of
+  `ball_speed` — ~0.6 is a fair rally, 1.0 and above is hard — and it is the whole
+  difficulty. `pong.py` exposes Easy / Fair / Hard on its Model tab and ships playing Fair;
+  changing it rebuilds the court, since a score against a slower paddle should not carry
+  over. `opponent=None` remains the default and is the wall exactly as before.
+
+### Fixed
+
+- `PongTask` now advances the opponent's paddle only as far as the ball's arrival instant,
+  not to the end of the frame, before deciding whether it reached. A hitch frame — a GC
+  pause, a model fit, an LSL reconnect — used to buy the far paddle reach its speed cap does
+  not have, so the frame rate was a difficulty knob alongside `opponent`: at shipped Hard
+  settings the points it conceded moved 23% between 144 Hz and 2.5 Hz. A frame that returns
+  two balls also scores two hits now instead of one, and a non-finite `ball_speed` is
+  refused at construction rather than raising from inside `_bounce` one frame later.
+- `open_session_store` restores `Session.name`. It is written to `meta.json` for exactly
+  this reason, but the reader rebuilds the Session with `__new__`, so reading `.name` off a
+  reopened session raised `AttributeError` rather than returning what was recorded.
+- `DevicePicker`'s scan worker writes its results to the stream it was started for. With
+  `selectable=True`, switching the panel mid-scan delivered the outlet list to whichever
+  stream was showing when `discover()` returned, and left the scanned one reading "nothing
+  found" permanently — its auto-rescan guard was already satisfied. `_connect` already held
+  its stream's state for the same reason; `_start_scan` now does too.
+- `OneEuroFilter` no longer latches on a non-finite sample. It is recursive, so one NaN from
+  a diverged model used to make every later output NaN for the rest of the session; the last
+  finite value is held for those components instead, and a NaN on the first call does not
+  seed the filter at all.
+- `PongTask` **clamps** a long frame instead of skipping it. The old rule zeroed `dt` past
+  half a second, which failed on both sides: a sustained frame time just *over* the bar
+  froze the game outright — ball, paddle and integrator, with the header still showing a
+  rally and no way back — while a frame just *under* it was integrated whole and moved the
+  paddle 0.70 court `y`, 44 % of its entire travel, in one frame, which is precisely what
+  the rule existed to prevent. One frame is now worth at most 0.1 s: below 10 fps the game
+  runs in slow motion rather than teleporting or freezing.
+- `PongTask` sweeps the **subject's** paddle to each crossing instant, as it already did the
+  opponent's. `_drive` ran before `_step`, so a ball was adjudicated against the position
+  the paddle reached by the *end* of the frame — one it was never at when the ball arrived
+  — which made the frame rate a difficulty knob in velocity control: 1.3 % of crossings
+  scored the wrong way at 60 Hz, 6.0 % at 10 Hz, in both directions.
+- `PongTask(control="position")` and the pursuit ghost now **scale** the command onto the
+  paddle's travel instead of clipping it. Clipping made every command from 0.82 up one
+  single place, so the top and bottom 18 % of the range were dead — and worse, the ghost
+  saturated at 0.82 while the session recorded the raw `±1`, so a subject tracking it
+  perfectly at full deflection was labelled up to 0.18 control units away from the
+  reference they were actually shown. That is 7.4 % of a default `Pursuit()` block, all of
+  it at the extremes, which is where a proportional decoder's gain is set.
+- Pressing **Serve** recentres the subject's paddle, not just the opponent's, and
+  `_DEAD_ZONE` no longer claims to stop drift. It stops a *constant* resting bias exactly
+  and slows a noisy one; it cannot stop a noisy one, because rectifying bias-plus-noise
+  clips away the half of the noise that would have cancelled the bias. Measured at 60 Hz
+  with a bias of 0.05: noiseless the paddle never moves, at a command sd of 0.05 it is flat
+  against the wall after 122 s and at 0.10 after 30 s. Only a leak bounds a drifting
+  integrator and `_drive` gives the reason there is none, so what is left is the court
+  clamp, the subject, and a Serve that starts the next rally from the centre.
+- `PongTask(ball_speed=...)` refuses a non-positive speed. `max(ball_speed, 0.0)` absorbed a
+  sign typo into a zero-velocity ball parked at centre court — a permanently dead game with
+  the header still green — where `control`, `opponent` and a non-finite `ball_speed` are all
+  refused out loud.
+- `directional_decoder.fit` refuses a target outside `[-1, +1]`. Its docstring always said
+  the target was signed control units, and nothing checked: every other guard in `fit` is a
+  `<= 0` test, and none of them notices a wrong *scale*. `Trapezoid` records percent of MVC
+  through the same `TargetSource`, under the same stream name, with the identical channel
+  names, into the same `sessions/` folder, and a `StreamInfo` carries no unit — so one such
+  session ticked beside a cursor block collapsed `span_` from 4.17 to 0.046 and turned a
+  graded transfer curve into a hard three-step staircase, with every guard passing.
+- `examples/start_here/pong.py` routes a session by what its target stream *holds*, not by
+  whether it exists. `TargetSource` keeps emitting baseline with phase `idle` after a block
+  ends and the stream stays attached, so every cued take recorded after a pursuit block
+  carries a `target` stream — which `split_sessions_by_stream` calls a pursuit session, and
+  `iter_target_windows` then correctly yields nothing from, leaving the label track unread
+  and the session silently dropped. The target path is now the preferred reading and the
+  label track the fallback: a session the target path cannot use (all `idle`, or a stream
+  recorded empty by a take stopped inside the source's 100 ms chunk) is read from its labels
+  instead of being dropped or taking the whole selection down with it. `train` also
+  range-checks each session and refuses a force-ramp recording **by name**, and its
+  per-session breakdown goes to `ctx.log` — which `LogPanel` renders — rather than to a
+  `print` nothing in `Pipeline` captures.
+
 ## [2.5.5] - 2026-08-03
 
 ### Fixed
