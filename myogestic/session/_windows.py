@@ -176,6 +176,37 @@ def iter_labeled_windows(
             sess.close()
 
 
+def _zero_window_hint(
+    dropped: dict[str, int], widest: float, win_samples: int, fs: float, wanted: list[str]
+) -> str:
+    """Name the dominant reason every window was rejected, and what to do about it.
+
+    Worth its own function because the outcome is identical for four unrelated causes and
+    the operator sees only "0 windows". The `stretched` case is the one that needs numbers:
+    it fires when a stream delivers fewer samples than its declared `fs` claims, so the
+    window holds the right sample *count* over the wrong amount of time, and no amount of
+    recording longer will change it.
+    """
+    if not dropped or not any(dropped.values()):
+        return "the stream was too short to fill one window."
+    reason = max(dropped, key=lambda k: dropped[k])
+    nominal = (win_samples - 1) / fs if fs > 0 else 0.0
+    if reason == "stretched":
+        rate = win_samples / widest if widest > 0 else 0.0
+        return (
+            f"{win_samples} samples spanned up to {widest * 1000:.0f} ms of wall time "
+            f"against {nominal * 1000:.0f} ms nominal, so the stream delivered about "
+            f"{rate:.0f} Hz where it declares {fs:.0f} Hz — roughly "
+            f"{1 - rate / fs:.0%} of samples never arrived. Recording longer cannot help; "
+            f"fix the acquisition rate, or record at a rate the device sustains."
+        )
+    if reason == "outside":
+        return "no window ended inside the target stream's own time span."
+    if reason == "phase":
+        return f"every window fell outside the kept phases {wanted} — did the block run?"
+    return "the target stream has holes wider than a few of its own sample periods."
+
+
 def iter_target_windows(
     paths: list[str] | list[Path],
     stream_name: str,
@@ -380,24 +411,35 @@ def iter_target_windows(
             max_span = _MAX_SPAN_SLACK * (win_samples - 1) / fs
 
             yielded = 0
+            # Tallied per reason, because "no windows" has four causes with four different
+            # fixes and the operator cannot tell them apart from the outcome. The widest
+            # span seen is carried too: on a stream whose delivery rate does not match its
+            # declared `fs`, that number *is* the diagnosis.
+            dropped = {"outside": 0, "stretched": 0, "phase": 0, "hole": 0}
+            widest = 0.0
             for start in range(0, len(data) - win_samples + 1, hop_samples):
                 stop = start + win_samples
                 t_end = ts[stop - 1]
                 if t_end < target_ts[0] or t_end > target_ts[-1]:
+                    dropped["outside"] += 1
                     continue
                 # These are win_samples *recorded* samples, not win_samples worth of
                 # wall time: across a dropout they reach back arbitrarily far, and the
                 # target at t_end answers for none of them.
+                widest = max(widest, float(t_end - ts[start]))
                 if t_end - ts[start] > max_span:
+                    dropped["stretched"] += 1
                     continue
                 # Phase is a code, so it is held from the last target sample at or before
                 # the window end — interpolating it would invent a phase 1.5.
                 held = int(np.searchsorted(target_ts, t_end, side="right")) - 1
                 code = int(round(float(codes[held])))
                 if code not in wanted_codes:
+                    dropped["phase"] += 1
                     continue
                 nxt = held + 1
                 if nxt < len(target_ts) and target_ts[nxt] - target_ts[held] > max_gap:
+                    dropped["hole"] += 1
                     continue  # a hole: nothing was recorded across it to interpolate
                 if nxt == len(target_ts) or code != int(round(float(codes[nxt]))):
                     # A step, or the very last sample. Hold, so the value comes from the
@@ -408,13 +450,11 @@ def iter_target_windows(
                 yield data[start:stop].T, ts[start:stop], value
                 yielded += 1
             if yielded == 0:
-                log.info(
-                    "%s: no window kept — check that %r overlaps %r in time and that the "
-                    "block ran (phases kept: %s)",
+                log.warning(
+                    "%s: every window rejected (%s). %s",
                     path,
-                    target_stream_name,
-                    stream_name,
-                    sorted(wanted),
+                    ", ".join(f"{k}={v}" for k, v in dropped.items() if v),
+                    _zero_window_hint(dropped, widest, win_samples, fs, sorted(wanted)),
                 )
         finally:
             sess.close()
