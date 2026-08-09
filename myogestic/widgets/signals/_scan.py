@@ -8,9 +8,10 @@ from __future__ import annotations
 import threading as _threading
 from dataclasses import dataclass, field
 
+from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import DANGER, muted
+from myogestic.widgets.common import DANGER, IDLE, WARNING, muted
 
 
 @dataclass
@@ -82,20 +83,65 @@ def _scan_panel(stream_name: str, stream: object) -> None:
             s.results = []
 
 
-def _disconnected_ui(stream_name: str, stream: object) -> None:
-    """Show reconnect + scan UI when a stream is disconnected."""
+def _centered(width: float, item_w: float) -> None:
+    """Put the next item in the middle of a ``width``-wide row."""
+    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max((width - item_w) * 0.5, 0.0))
+
+
+def _disconnected_ui(stream_name: str, stream: object, *, show_connect: bool = True) -> None:
+    """The empty state for a stream with nothing to draw.
+
+    Centred in the panel rather than tucked into its top-left corner: with no
+    plot to fill it, a viewer cell is mostly blank, and a message in the corner
+    of all that space reads as a rendering failure rather than as a prompt.
+
+    **A stream nobody has attached yet is `IDLE`, not `DANGER`.** Opening red
+    tells a first-time user their app is broken when it is only waiting. Red is
+    kept for a real ``last_error``, and amber for a connection that was working
+    and dropped — a distinction worth making, because only one of the three is
+    worth investigating.
+
+    ``show_connect=False`` drops the button and the scan list, leaving the
+    message alone. For an app where another widget owns connecting: this button
+    attaches whatever source the stream already holds, which is *not* what a
+    `DevicePicker`'s Connect does, and two controls with one name doing two
+    things is the bug this exists to avoid.
+    """
     from myogestic.stream import Stream
 
     if not isinstance(stream, Stream):
-        imgui.text(f"{stream_name}: disconnected")
+        imgui.text_colored(muted(), f"{stream_name}: unavailable")
         return
 
-    imgui.text_colored(DANGER, f"{stream_name}: disconnected")
     if stream.last_error:
-        imgui.same_line()
-        imgui.text_colored(muted(), f"({stream.last_error})")
+        tone, title, hint = DANGER, stream.last_error, "Check the device, then try again."
+    elif stream.info is not None:
+        tone, title, hint = WARNING, "Connection lost", "The source stopped sending."
+    else:
+        tone, title, hint = IDLE, "Not connected", "Choose a source and connect it."
+    retry = stream.info is not None or bool(stream.last_error)
+    label = (
+        f"{fa.ICON_FA_ARROWS_ROTATE}  Try again" if retry else f"{fa.ICON_FA_PLUG}  Connect"
+    )
 
-    if imgui.button(f"Reconnect##{stream_name}"):
+    style = imgui.get_style()
+    avail = imgui.get_content_region_avail()
+    row = imgui.get_text_line_height_with_spacing()
+    block_h = row * 2 + (imgui.get_frame_height() + style.item_spacing.y * 2 if show_connect else 0.0)
+    imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + max((avail.y - block_h) * 0.5, 0.0))
+
+    _centered(avail.x, imgui.calc_text_size(title).x)
+    imgui.text_colored(tone, title)
+    _centered(avail.x, imgui.calc_text_size(hint).x)
+    imgui.text_colored(muted(), hint)
+    imgui.spacing()
+
+    if not show_connect:
+        return
+
+    button_w = imgui.calc_text_size(label).x + style.frame_padding.x * 2
+    _centered(avail.x, button_w)
+    if imgui.button(f"{label}##{stream_name}_reconnect"):
         import sys as _sys
 
         if _sys.platform == "emscripten":
@@ -112,5 +158,5 @@ def _disconnected_ui(stream_name: str, stream: object) -> None:
 
     discover_fn = getattr(stream._source, "discover", None)
     if discover_fn is not None:
-        imgui.same_line()
+        imgui.spacing()
         _scan_panel(stream_name, stream)

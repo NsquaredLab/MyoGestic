@@ -42,6 +42,26 @@ class RawSignalViewer:
     Construct once with the stream name (+ optional size / channel height),
     then call [`ui`][] with the live ``ctx`` each frame.
 
+    Parameters
+    ----------
+    stream_name
+        Stream to draw, as registered with ``app.streams``.
+    size
+        Plot size in pixels, ``(width, height)``. A negative width fills the
+        available space, which is what the default ``(-1, 300)`` does.
+    show_connect
+        Offer a Connect button while the stream is detached. Turn it **off** in
+        an app where another widget owns connecting — a `StreamPanel` or a
+        `DevicePicker` — or the app shows two controls named Connect that do
+        different things: this one attaches whatever source the stream already
+        holds, a picker's builds a new one from its dropdown.
+    channel_height
+        Vertical spacing between channel traces, in signal units. ``0`` (the
+        default) derives it from the data's own range each frame, so the
+        channels stay separated whatever the amplitude. Set it explicitly when
+        several viewers must be read against each other — with per-viewer
+        autoscaling a quiet channel and a loud one render identically.
+
     Examples
     --------
     >>> from myogestic.widgets import RawSignalViewer
@@ -55,10 +75,12 @@ class RawSignalViewer:
         *,
         size: tuple[float, float] = (-1, 300),
         channel_height: float = 0.0,
+        show_connect: bool = True,
     ) -> None:
         self._stream_name = stream_name
         self._size = size
         self._channel_height = channel_height
+        self._show_connect = show_connect
 
     def ui(self, ctx: Context) -> None:
         """Render the raw viewer. Call once per frame inside ``@app.ui``."""
@@ -71,7 +93,7 @@ class RawSignalViewer:
             imgui.text(f"{stream_name}: not found")
             return
         if stream.status != "connected" or stream.info is None:
-            _disconnected_ui(stream_name, stream)
+            _disconnected_ui(stream_name, stream, show_connect=self._show_connect)
             return
 
         r = _raw_viewers.get(stream_name)
