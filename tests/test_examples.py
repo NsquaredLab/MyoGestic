@@ -26,16 +26,28 @@ import myogestic.core
 import myogestic.vhi.interfaces
 
 _EXAMPLES_ROOT = Path(__file__).resolve().parent.parent / "examples"
-# `panels/*.py` are single-widget demos; `panels/_fixtures.py` is a shared
-# helper, not an example, so underscore-prefixed files are skipped.
+# `panels/*.py` are single-widget demos; underscore-prefixed files are skipped
+# as shared helpers rather than examples.
 #
 # `reference_target.py` is not a MyoGestic App: it is a target, the thing an App
 # drives. Its `__main__` serves forever (there is no `App.run` to stub), and
 # `tests/test_reference_target.py` already runs it for real, driven by a live
 # `ControlBus` — a stronger check than "does it wire up" ever gives the App examples.
+# `start_here/` is in the list, `examples/otb/` is not, and the line between them is
+# **construct vs connect** — not which folder a file sits in. A `start_here/` app seeds
+# its stream with `DEFAULT_DEVICES[0].factory()`, which is a Muovi: the same OTB class,
+# merely not dialled. `MuoviSource.__init__` opens no socket, so importing it costs
+# nothing. Every `otb/` script *connects* at import and would hang CI waiting for an
+# amplifier. A default that connects in its constructor would break this list wherever
+# it lived.
+#
+# `""` — the root of `examples/` — is kept although nothing lives there now, so a script
+# dropped in beside the folders is covered rather than quietly untested. That is the
+# failure this list has already had once: moving the flagship example down into
+# `start_here/` took it out of the glob, and the only sign was two tests fewer.
 EXAMPLES = sorted(
     p
-    for sub in ("synthetic", "panels")
+    for sub in ("", "start_here", "synthetic", "panels")
     for p in (_EXAMPLES_ROOT / sub).glob("*.py")
     if not p.name.startswith("_") and p.name != "reference_target.py"
 )
@@ -49,9 +61,9 @@ def test_example_wires_up(path, monkeypatch):
     # The GUI (and headless) run loop blocks forever — replace it with a no-op so
     # the script completes right after building the app.
     monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
-    # Panel examples import a sibling `_fixtures` module; running via runpy
-    # (unlike a real `python examples/panels/foo.py`) doesn't put the script's
-    # own directory on sys.path, so add it.
+    # An example may import a sibling module; running via runpy (unlike a real
+    # `python examples/panels/foo.py`) doesn't put the script's own directory on
+    # sys.path, so add it.
     monkeypatch.syspath_prepend(str(path.parent))
     # Examples call `vhi.launcher()` at module level, which raises FileNotFoundError
     # unless the VHI binary is installed (an environment dep, not part of the API
@@ -139,7 +151,8 @@ def test_examples_survive_an_unlaunchable_target(monkeypatch):
     vhi_examples = [
         path
         for path in EXAMPLES
-        if "vhi" in path.read_text(encoding="utf-8") and path.parent.name == "synthetic"
+        if "vhi" in path.read_text(encoding="utf-8")
+        and path.parent.name in {"synthetic", "start_here"}
     ]
     assert vhi_examples, "no VHI examples found — has the layout moved?"
     for path in vhi_examples:
@@ -154,3 +167,31 @@ def test_examples_survive_an_unlaunchable_target(monkeypatch):
                 f"Use `vhi.launchable()` rather than `vhi.launcher()` for a "
                 f"ProcessLauncher row."
             )
+
+
+def test_every_example_outside_otb_is_in_the_list():
+    """A folder added under `examples/` is otherwise silently untested.
+
+    `EXAMPLES` names its folders, so adding one and not naming it here costs nothing
+    visible — the suite still passes, with fewer tests in it. That is precisely how the
+    flagship example lost both of its checks when it moved into `start_here/`: green
+    run, two tests gone, no failure to read.
+    """
+    covered = {p.resolve() for p in EXAMPLES}
+    found = {
+        p.resolve()
+        for p in _EXAMPLES_ROOT.rglob("*.py")
+        if "otb" not in p.relative_to(_EXAMPLES_ROOT).parts
+        and "__pycache__" not in p.parts
+        and not p.name.startswith("_")
+        and p.name != "reference_target.py"
+    }
+
+    missing = sorted(str(p.relative_to(_EXAMPLES_ROOT)) for p in found - covered)
+
+    assert not missing, (
+        "Example(s) no test runs:\n  "
+        + "\n  ".join(missing)
+        + "\n\nAdd the folder to EXAMPLES above, or exclude it deliberately the way "
+        "`otb/` is — with the reason written down."
+    )

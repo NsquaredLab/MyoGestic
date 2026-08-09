@@ -1,7 +1,9 @@
 # Examples directory
 
 Every runnable example under [`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic),
-what it teaches, and what's tweakable. All of them are hardware-free - the
+what it teaches, and what's tweakable, plus the complete protocols in
+[`examples/start_here/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/start_here).
+All of them are hardware-free - the
 `ProcessLauncher` panel spawns `myogestic.tools.emg_generator` for you,
 so one terminal is enough.
 
@@ -46,6 +48,9 @@ A ready-to-copy declaration ships at
 [`examples/controls/hand.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/hand.toml)
 — signed continuous DOFs, a discrete grasp state, a one-way range, and a `debounce_s`
 stability gate, with the mapping-first short forms alongside the explicit table form.
+[`examples/controls/myocontrol.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/myocontrol.toml)
+declares the narrower thing an app should: only the two aliases it actually pushes. A map
+listing a control the app never drives shows a row in its panel that never moves.
 
 To watch it load and drive a hand end to end:
 
@@ -247,6 +252,120 @@ uv run --extra grpc python examples/synthetic/vhi_control_hand.py
 [`examples/controls/control_hand.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/control_hand.toml)
 — a slider appears for it and nothing else changes.
 
+### `start_here/myocontrol.py` - the whole loop as a protocol
+
+What the demos above teach one at a time, assembled into an application you could take to a
+subject unmodified: a device dropdown instead of a named source, Rest/Fist trials shown
+on the control hand and recorded to a session folder, and a Train that builds either a classifier or a regressor.
+The switch chooses what the *next* Train builds — the mode rides inside the model, so
+flipping it under a loaded model cannot run a class index down the regression branch. One
+control map serves both, because **classification is regression that emits a constant**:
+a class names how closed the hand should be, `POSES` says what that constant is, and it
+goes out in the same units a regressor's own numbers do. Nothing downstream can tell the
+two apart.
+
+The map declares two aliases, named for the hands they drive, and both are commanded
+every frame — `prediction` on `vhi.prediction.*`, the model's output, and `control` on
+`vhi.control.pose.*`, the class the operator selected. Same kind of value, different
+source. The two hands are allowed to disagree; that disagreement is what you are
+watching.
+
+```bash
+uv run --extra examples --extra grpc python examples/start_here/myocontrol.py
+```
+
+VHI is optional: nothing binds until you press **Connect** on the Hand tab, and until then
+`predict` pushes nothing and everything else runs.
+
+**What to tweak:** `CLASSES` and `POSES` together - a class is a name plus how closed the
+hand is for it, and the module refuses at import if the two disagree. The names are yours;
+nothing downstream matches them against VHI's vocabulary. Also the ticked features, and
+`iterations` on either estimator.
+
+### `start_here/pong.py` - the first signed example
+
+Everything else that ships is one-way: `fist` runs 0..1, `%MVC` runs 0..1, and rest is
+simply the bottom of the range. Here the command is **signed**, in `[-1, +1]`, and Down is
+a real `-1` rather than the absence of Up — a wrist is the canonical bidirectional DOF, and
+the negative half is a direction a one-way fit never sees. One model emits one number; that
+number moves a [`PongTask`][myogestic.widgets.PongTask] paddle, `+1` at the top of the
+court, against an opponent paddle that plays it back. A rally is the reason for the game:
+it rewards *graded* contraction, where a trapezoid only rewards tracking and a gesture
+classifier rewards nothing continuous at all.
+
+Two ways to record the training set, and the Model tab starts either. **Follow the cursor**
+runs a [`Pursuit`][myogestic.tracking.Pursuit] block — a ghost paddle wanders the court, the
+subject chases it, and the cursor is recorded beside the EMG on the `target` stream. The
+Down / Rest / Up buttons cue the older three-class protocol. Prefer the cursor: three cued
+classes are three distinct target values, so a tree ensemble fitted on them is a three-class
+model whatever it is called — dead below about 30 % effort and non-monotonic in it. Densely
+covered levels cut the CatBoost error at intermediate efforts 14x. **What that measurement
+actually says** is that the active ingredient is the *number of distinct target levels*, not
+pursuit as such: a cued staircase of eleven holds scores at least as well, and a linear
+model gains nothing either way, because least squares already draws a straight line through
+three points. What a followed cursor buys over a staircase is human — told "go to 0.6" a
+subject has no idea what 0.6 feels like, while a cursor gives continuous visual error
+feedback, so the intermediate levels are reachable at all.
+[Record for proportional control](../how-to/record-for-proportional-control.md) is the
+protocol on its own, with the numbers.
+
+The mode switch offers **Proportional**, Regression and Classification, and Proportional is
+the default because the obvious baseline is wrong here in an instructive way. A regressor
+handed raw features learns whichever cue is louder in the training set, and loudness is not
+direction: the CatBoost fit this example shipped with learned "louder = Down", so
+contracting harder walked the paddle the wrong way. `Proportional` is
+[`directional_decoder`][myogestic.recipes.estimators.directional_decoder], which estimates
+*how much* and *which way* separately and multiplies them. Both other modes still train and
+run — switching is the point, and the bound mode travels inside the model, so moving the
+switch under a loaded model changes nothing until the next Train. Cursor and cued sessions
+also train *together*: a class is a constant target, so both protocols land in the same
+signed column.
+
+```bash
+uv run --extra examples --extra grpc python examples/start_here/pong.py
+```
+
+The Virtual Hand is a **mirror**, not a target: the paddle follows a plain float whether or
+not VHI ever answers, and the one alias in
+[`examples/controls/pong.toml`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/controls/pong.toml)
+carries the same float to the wrist once the Hand tab is bound. Its `weight = -1.0` is
+anatomy rather than a correction — flexion is palm-ward, which on a pronated forearm is
+down. With no hardware at all, the synthetic amplifier's `direction` slider drives an
+agonist/antagonist pair, so Down and Up are separable signals and the whole loop demos on
+one machine.
+
+**What to tweak:** `CLASSES` and `POSES` together, as in `myocontrol.py` — but keep a
+negative entry, since a table that never goes below zero pins the paddle to the top half.
+Difficulty is **Easy / Fair / Hard** on the Model tab, which is `OPPONENTS` in the file (the
+opponent's top speed as a multiple of `ball_speed`); changing it clears the court, because a
+score won against a slower paddle should not carry over. `PongTask(paddle_size=...)` and
+`ball_speed` are the two knobs left in code.
+
+### `start_here/force_ramps.py` - a protocol with no model in it
+
+The other two `start_here` apps train something. This one does not: it is the standard
+HD-EMG isometric protocol — rest, ramp, hold, ramp down, recover — and the only thing being
+produced is a recording good enough to analyse months later.
+[`TrackingTask`][myogestic.widgets.TrackingTask] draws the trapezoid and the live force
+together, so the subject follows one line with another, and Start stays disabled until Zero
+and MVC have both been captured, because force in device counts and a target in %MVC are
+not comparable without them. Those two numbers go into the session's `extras`, alongside
+the target as its own recorded stream, which is what makes the tracking error recoverable
+from the archive alone.
+
+```bash
+uv run python examples/start_here/force_ramps.py
+```
+
+A synthetic load cell sits in the device list beside the real amplifiers, with an **Effort**
+slider you drag yourself — nothing follows the target for you, so the whole loop demos with
+nothing plugged in. See [Track a force target](../how-to/track-a-force-target.md) for the
+wiring, and `examples/panels/tracking_task.py` for the widget on its own.
+
+**What to tweak:** the `Trapezoid` shape (every segment is seconds, plus `level_pct` and how
+many repetitions), and `channel=` on the task — the auxiliary channel your transducer is
+actually on.
+
 ## Choosing where to start
 
 * **Brand new** - [Anatomy of an app](../anatomy.md) →
@@ -262,6 +381,12 @@ uv run --extra grpc python examples/synthetic/vhi_control_hand.py
 * **Comparing models** - `emg_32ch_multi_model.py`.
 * **Multi-monitor / docking** - `emg_popout_layout.py`.
 * **Posing the control hand for setup or labelling** - `vhi_control_hand.py`.
+* **A session to run, not a loop to build on** - `start_here/myocontrol.py`, which is the
+  classification and regression flows in one application that names no hardware.
+* **A bidirectional DOF, or a task a subject will stay with** - `start_here/pong.py`, the
+  one signed example: Down is `-1`, and the rally is what trains graded control.
+* **Recording a protocol rather than training a model** - `start_here/force_ramps.py`,
+  isometric trapezoids with the calibration that makes them readable later.
 * **Custom extension point** - skip the examples and read the
   [guides](../how-to/index.md) - each is a recipe for one
   extension point.

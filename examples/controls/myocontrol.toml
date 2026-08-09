@@ -1,0 +1,34 @@
+# What `myocontrol.py` drives.
+#   left  = your name for a model output
+#   right = a control VHI declares (it owns the kind, range and states)
+#
+# Two hands, one number: how closed. The names match the hands — `prediction` is the one
+# the model moves, `control` is the operator's. Both take the same kind of value from
+# different sources, which is the same reason one map serves a classifier and a
+# regressor. There is no entry per recorded class: `Rest` and `Fist` are values of one
+# control, not controls of their own.
+
+[dofs]
+
+# What the model produced. A fist is not five flexions: the thumb comes *across* the
+# fingers as it curls, and across is adduction — the opposite of what the abduction DOF's
+# name denotes — so it rides along at -1. Left at its rest of 0 the thumb stays splayed
+# away from the palm and the hand never looks closed.
+prediction = { targets = [
+  { target = "vhi.prediction.thumb.flexion" },
+  { target = "vhi.prediction.thumb.abduction", weight = -1.0 },
+  { target = "vhi.prediction.index" },
+  { target = "vhi.prediction.middle" },
+  { target = "vhi.prediction.ring" },
+  { target = "vhi.prediction.little" },
+] }
+
+# The operator's selection, on the control hand. Same shape, same units.
+control = { targets = [
+  { target = "vhi.control.pose.thumb.flexion" },
+  { target = "vhi.control.pose.thumb.abduction", weight = -1.0 },
+  { target = "vhi.control.pose.index" },
+  { target = "vhi.control.pose.middle" },
+  { target = "vhi.control.pose.ring" },
+  { target = "vhi.control.pose.little" },
+] }
