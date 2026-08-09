@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 import time
@@ -38,6 +39,9 @@ SUPPORTED_DTYPES: tuple[np.dtype, ...] = tuple(
         np.int64,
     )
 )
+
+
+log = logging.getLogger("myogestic")
 
 
 @dataclass(frozen=True)
@@ -261,6 +265,10 @@ class Stream:
         # `_lock` (display buffers, read by the GUI thread) so rendering never
         # blocks on Zarr disk I/O.
         self._session_lock = threading.Lock()
+        # Held for the duration of a connection attempt. Distinct from `_lock`:
+        # this one serialises *attempts*, while `_lock` guards the buffers for
+        # the microseconds it takes to swap them.
+        self._connect_lock = threading.Lock()
         self.status = "disconnected"
         self.last_error = ""
         self.info: StreamInfo | None = None
@@ -338,30 +346,96 @@ class Stream:
         disconnect + connect. Either way the source is connected ONCE, then
         buffers are (re)allocated from the returned StreamInfo.
 
-        Holds `self._lock` for the whole swap so the acquire loop never reads
-        a half-torn state.
+        **One attempt at a time.** A second caller while one is in flight is
+        refused rather than queued: an app can offer more than one way to
+        connect a stream (a device picker, a viewer's own button), and two
+        attempts racing used to interleave — the queued one would wake up inside
+        the lock and re-run against whatever source the first had since swapped
+        in, reconnecting a live source out from under the buffers.
+
+        **The source is connected outside `self._lock`.** That lock is taken by
+        the acquire loop and by every render-side read, while an OTB
+        ``accept()`` blocks for ``accept_timeout`` — 30 s by default. Holding it
+        across the attempt froze the whole GUI for as long as a device took to
+        answer, or to not answer. It is now taken twice and briefly: once to
+        mark the stream detached, once to publish the new buffers.
+        """
+        if not self._connect_lock.acquire(blocking=False):
+            self.last_error = "a connection attempt is already in flight"
+            return False
+        if self._session is not None:
+            # `_allocate_buffers` would resize the ring under a session whose
+            # zarr arrays are already sized for the old geometry, and the next
+            # append would raise out of the acquire loop.
+            self.last_error = "cannot reconnect while recording"
+            self._connect_lock.release()
+            return False
+        try:
+            with self._lock:
+                self._connected = False
+                self._display_n = 0
+                self._m4_n = 0
+                self.status = "disconnected"
+
+            # Read once: if another thread swaps `_source` mid-attempt we still
+            # connect the one this call was asked for, and publish its geometry.
+            source = self._source
+            try:
+                if hasattr(source, "reconnect"):
+                    # `reconnect` is an optional Source extension (not in the
+                    # Protocol); the hasattr guard makes the call safe.
+                    info = source.reconnect(target)  # type: ignore
+                else:
+                    source.disconnect()
+                    info = source.connect()
+            except Exception as e:
+                self.last_error = str(e)
+                return False
+
+            # Checked again, because the whole point of connecting off-thread is
+            # that it takes time: an operator can press Record during the 30 s an
+            # OTB source spends waiting for a device to dial in. Publishing new
+            # buffers now would resize the ring under a session already sized for
+            # the old geometry.
+            if self._session is not None:
+                self.last_error = "cannot reconnect while recording"
+                try:
+                    source.disconnect()
+                except Exception:
+                    pass  # nothing to keep — this attempt is being abandoned
+                return False
+
+            with self._lock:
+                self.info = info
+                # Re-init buffers for a potentially different channel count/fs.
+                self._allocate_buffers()
+            return True
+        finally:
+            self._connect_lock.release()
+
+    def disconnect(self) -> None:
+        """Detach the source, leaving the acquire loop running and idle.
+
+        The counterpart to [`reconnect`][]. **Not** `stop`: that ends the
+        acquire thread, which `App.run` starts once and owns — a stream stopped
+        that way could not be brought back from the UI.
+
+        ``info`` is cleared along with the connection. A stream that was
+        deliberately detached has no geometry, and leaving the old one behind
+        makes a viewer report the connection as *lost* rather than as closed on
+        purpose.
         """
         with self._lock:
             self._connected = False
             self._display_n = 0
             self._m4_n = 0
             self.status = "disconnected"
-
-            try:
-                if hasattr(self._source, "reconnect"):
-                    # `reconnect` is an optional Source extension (not in the
-                    # Protocol); the hasattr guard makes the call safe.
-                    self.info = self._source.reconnect(target)  # type: ignore
-                else:
-                    self._source.disconnect()
-                    self.info = self._source.connect()
-            except Exception as e:
-                self.last_error = str(e)
-                return False
-
-            # Re-init buffers for a potentially different channel count/fs.
-            self._allocate_buffers()
-            return True
+            self.info = None
+            self.last_error = ""
+        try:
+            self._source.disconnect()
+        except Exception:
+            pass  # already gone, or never opened anything
 
     def start(self) -> None:
         """Start the acquisition loop (a daemon thread, or a per-frame task in the browser)."""
@@ -459,9 +533,25 @@ class Stream:
         return 0.0
 
     def _acquire_loop(self) -> None:
-        """Daemon-thread variant: tight loop with time.sleep pacing."""
+        """Daemon-thread variant: tight loop with time.sleep pacing.
+
+        Every step is guarded. A raise used to end this thread for the life of
+        the process — `App.run` starts it once and nothing restarts it — while
+        `status` stayed ``"connected"`` and ``last_error`` stayed empty. The
+        result was a stream that looked healthy in every panel and recorded and
+        plotted nothing, with no route back from the UI. Surviving the error and
+        reporting it is the difference between a visible fault and a silent one.
+        """
         while self._running:
-            delay = self._acquire_step()
+            try:
+                delay = self._acquire_step()
+            except Exception as e:
+                log.exception("acquire step failed for stream %r: %s", self.name, e)
+                with self._lock:
+                    self._connected = False
+                    self.status = "disconnected"
+                    self.last_error = str(e)
+                delay = 0.5
             if delay > 0:
                 time.sleep(delay)
 
