@@ -144,6 +144,37 @@ class Context:
     Extensions may add own fields dynamically on the owning `App`, but
     `Context` itself is core-only.
 
+    Attributes
+    ----------
+    streams
+        Every registered `Stream`, by name. What a widget looks its own stream
+        up in.
+    bridges
+        Registered remote-target bridges, by name. Unlike ``streams`` these are
+        not started for you — see `App.bridges`.
+    state
+        The recording state machine: ``"idle"`` or ``"recording"``. Extensions
+        add their own states (``myogestic.ml`` adds ``"training"``). Check it
+        rather than tracking recording yourself.
+    session
+        The `Session` being written while ``state == "recording"``, else
+        ``None``. Set its ``name`` before `App.stop_recording` to label the take.
+    class_names
+        Names for the label class indices, mirrored here by the recording
+        widgets so `App.stop_recording` can persist them in ``meta.json``.
+    control_space
+        Optional `myogestic.controls.ControlSet` this app commands. Set once at
+        setup (``app.ctx.control_space = CONTROLS``); every recording then
+        stores the space it was made under.
+    current_label
+        Class index a label click would record right now; ``-1`` for rest / no
+        class.
+    status_message
+        One line of transient status, written by the recording lifecycle.
+    logs
+        The app-event lines `LogPanel` renders. Append via [`log`][], which
+        timestamps and bounds them.
+
     Examples
     --------
     >>> from myogestic import Context
@@ -158,9 +189,6 @@ class Context:
     state: str = AppState.IDLE
     session: Session | None = None
     class_names: list[str] = field(default_factory=list)
-    #: Optional `myogestic.controls.ControlSet` this app commands. Set once at setup
-    #: (``app.ctx.control_space = CONTROLS``); every recording then stores the space it
-    #: was made under.
     control_space: Any = None
     current_label: int = -1
     status_message: str = ""
@@ -257,6 +285,65 @@ class App:
         """
         for s in streams:
             self.ctx.streams[s.name] = s
+
+    def add_stream(self, stream: Stream) -> bool:
+        """Register a stream, and start it if the app is already running.
+
+        The counterpart to [`remove_stream`][myogestic.App.remove_stream], for an
+        app that lets the operator add a device rather than declaring its streams
+        up front. Before `run`, this is `streams` with a return value; after it,
+        it also does the `Stream.start` that `run` would have done — nothing else
+        will, because `run` starts each stream exactly once on the way in.
+
+        Refused while recording, and refused for a name already taken. A session
+        sizes one Zarr array per stream at `start_recording`, so a stream that
+        appears afterwards has nowhere to write; and overwriting a live name
+        would strand the running acquire thread of whatever it replaced.
+
+        Returns
+        -------
+        bool
+            ``False`` if the stream was refused, with the reason in
+            ``ctx.status_message``.
+        """
+        if self.ctx.state == AppState.RECORDING:
+            self.ctx.status_message = "Cannot add a stream while recording"
+            return False
+        if stream.name in self.ctx.streams:
+            self.ctx.status_message = f"A stream named {stream.name!r} already exists"
+            return False
+        self.ctx.streams[stream.name] = stream
+        if self._running:
+            # `run` has been past already; this is the start it would have done.
+            stream.start()
+        self.ctx.log(f"stream added: {stream.name}")
+        return True
+
+    def remove_stream(self, name: str) -> bool:
+        """Stop a stream and unregister it.
+
+        Stops the acquire thread and disconnects the source, then drops the name
+        from ``ctx.streams``. Widgets bound to it by name report it missing
+        rather than failing — that is why they look it up every frame.
+
+        Refused while recording: `stop_recording` walks ``ctx.streams`` to detach
+        the session, so a stream removed mid-take would keep the session
+        attached and never be finalised.
+
+        Returns
+        -------
+        bool
+            ``False`` if the stream was refused or was not registered.
+        """
+        if self.ctx.state == AppState.RECORDING:
+            self.ctx.status_message = "Cannot remove a stream while recording"
+            return False
+        stream = self.ctx.streams.pop(name, None)
+        if stream is None:
+            return False
+        stream.stop()
+        self.ctx.log(f"stream removed: {name}")
+        return True
 
     def bridges(self, *bridges: Any) -> None:
         """Register one or more Bridge subprocesses with the app.
@@ -414,6 +501,40 @@ class App:
                 _finalize()
             else:
                 threading.Thread(target=_finalize, daemon=True).start()
+
+    def discard_recording(self) -> None:
+        """Stop the active recording and delete it, unsaved and unpacked.
+
+        The counterpart to [`stop_recording`][myogestic.App.stop_recording] for a
+        take the operator threw away — a false start, a bad trial. Detaches every
+        stream, removes the session folder, and returns to ``"idle"``. Nothing is
+        written to ``meta.json`` and no archive is produced, so a discarded
+        recording leaves no trace to clean up later.
+
+        Refuses to run if ``ctx.state`` isn't ``"recording"``.
+        """
+        if not can_transition(self.ctx.state, AppState.IDLE):
+            self.ctx.status_message = (
+                f"Cannot discard recording: state is {self.ctx.state!r}, expected 'recording'."
+            )
+            return
+        self.ctx.state = AppState.IDLE
+        # Before touching the folder: detach_session() waits for any in-flight
+        # append, so the rmtree below cannot race the acquire thread.
+        for stream in self.ctx.streams.values():
+            stream.detach_session()
+        session = self.ctx.session
+        self.ctx.session = None
+        if session is None:
+            return
+        try:
+            session.discard()
+            self.ctx.status_message = "Recording discarded"
+            self.ctx.log(f"Recording discarded → {session.path}")
+        except Exception as e:
+            log.exception("discard failed: %s", e)
+            self.ctx.status_message = f"Discard failed: {e} - folder kept"
+            self.ctx.log(f"Discard failed: {e} - folder kept at {session.path}")
 
     # --- Run ---
 
