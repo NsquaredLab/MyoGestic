@@ -861,3 +861,383 @@ def test_unscoped_resolve_enabled_is_unchanged():
     b = resolve_enabled(ViewerState(), "emg", 8, scope=None)
     assert a == b == set(range(8))
     assert resolve_enabled(ViewerState(), "emg", 320) == set(range(16))
+
+
+def test_the_control_rows_leave_the_id_stack_balanced(implot_frame):
+    """The two control rows are ImGui tables; an unclosed one corrupts the frame.
+
+    `begin_table` pushes an ID that only `end_table` pops, and the failure
+    surfaces far from the cause — as ``Missing PopID()`` at whatever
+    ``end_child`` the viewer happens to sit inside. Render it in a child window
+    so that assert fires here instead of in somebody's app.
+    """
+    from imgui_bundle import imgui
+
+    from myogestic import Stream
+    from myogestic.core import Context
+    from myogestic.sources import SyntheticSource
+    from myogestic.widgets import SignalViewer
+
+    ctx = Context()
+    stream = Stream("emg", source=SyntheticSource(n_channels=64, fs=500.0), window_ms=500)
+    assert stream.reconnect()
+    stream.status = "connected"
+    ctx.streams["emg"] = stream
+    viewer = SignalViewer("emg")
+
+    def draw() -> None:
+        imgui.begin_child("cell", imgui.ImVec2(900, 400))
+        viewer.ui(ctx)
+        imgui.end_child()
+
+    implot_frame(draw)
+
+
+def test_a_collapsed_viewer_gives_the_footer_row_back_to_the_plot(imgui_frame):
+    """Hiding the chrome must hand its space to the plot, not leave a dead strip.
+
+    The footer row — fps, sample rate, buffer fill — is the only thing an
+    auto-sized plot reserves for. It used to be a hardcoded 25 px subtracted
+    whether or not the footer was drawn, so collapsing made the read-out vanish
+    without the plot growing into the gap.
+    """
+    from imgui_bundle import imgui
+
+    from myogestic.widgets.signals._plot import resolve_plot_height
+
+    def check() -> None:
+        expanded = resolve_plot_height(-1, show_controls=True)
+        collapsed = resolve_plot_height(-1, show_controls=False)
+        reclaimed = collapsed - expanded
+        assert reclaimed > 0, "collapsing gained the plot nothing"
+        assert reclaimed == pytest.approx(imgui.get_text_line_height_with_spacing())
+
+    imgui_frame(check)
+
+
+def test_an_explicit_plot_height_is_honoured_either_way(imgui_frame):
+    """`RawSignalViewer` passes a fixed height; the footer must not eat into it."""
+    from myogestic.widgets.signals._plot import resolve_plot_height
+
+    def check() -> None:
+        assert resolve_plot_height(300.0, show_controls=True) == 300.0
+        assert resolve_plot_height(300.0, show_controls=False) == 300.0
+
+    imgui_frame(check)
+
+
+def _empty_state_height(*, implot_frame, **viewer_kwargs) -> float:
+    """Vertical space the detached-stream empty state consumes.
+
+    ``viewer_kwargs`` go straight to `SignalViewer`, so any flag that claims to
+    remove chrome can be measured rather than eyeballed.
+    """
+    from imgui_bundle import imgui
+
+    from myogestic import Stream
+    from myogestic.core import Context
+    from myogestic.sources import SyntheticSource
+    from myogestic.widgets import SignalViewer
+
+    ctx = Context()
+    # Never connected: `stream.info is None`, so the viewer renders its empty state.
+    ctx.streams["emg"] = Stream("emg", source=SyntheticSource(n_channels=4), window_ms=200)
+    viewer = SignalViewer("emg", **viewer_kwargs)
+    measured: list[float] = []
+
+    def draw() -> None:
+        imgui.begin_child("cell", imgui.ImVec2(600, 400))
+        before = imgui.get_cursor_pos_y()
+        viewer.ui(ctx)
+        measured.append(imgui.get_cursor_pos_y() - before)
+        imgui.end_child()
+
+    implot_frame(draw)
+    return measured[0]
+
+
+def test_show_connect_false_removes_the_button_rather_than_hiding_it(implot_frame):
+    """It must take no space, not just be invisible.
+
+    An app with a `DevicePicker` turns this off so there is exactly one control
+    named Connect. The viewer's own attaches whatever source the stream already
+    holds — which stops matching the picker's dropdown the moment it changes.
+    """
+    from imgui_bundle import imgui
+
+    with_button = _empty_state_height(show_connect=True, implot_frame=implot_frame)
+    without = _empty_state_height(show_connect=False, implot_frame=implot_frame)
+
+    assert without < with_button, "turning the button off reclaimed nothing"
+    freed = with_button - without
+    assert freed >= imgui.get_frame_height() * 0.5, f"only {freed:.1f}px freed"
+
+
+def test_show_title_false_reclaims_the_header_row_rather_than_blanking_it(implot_frame):
+    """The header must cost nothing when off, not render an empty strip.
+
+    This exists for a viewer inside a tab: the tab label already names the
+    panel, so a `panel_header` under it is the title twice. If the row were
+    merely blanked the tab would still pay for it — the padding it was meant to
+    remove would just be invisible instead of gone.
+    """
+    from imgui_bundle import imgui
+
+    with_title = _empty_state_height(implot_frame=implot_frame)
+    without = _empty_state_height(show_title=False, implot_frame=implot_frame)
+
+    assert without < with_title, "hiding the title reclaimed no vertical space"
+    freed = with_title - without
+    assert freed >= imgui.get_frame_height() * 0.5, f"only {freed:.1f}px freed"
+
+
+def _header_frame(implot_frame, monkeypatch, names, *, widget_id, click="", frames=1):
+    """Render ``frames`` frames of a selectable viewer over ``names``.
+
+    Returns ``(viewer_state, button_labels_from_the_last_frame)``. The header's
+    buttons are stubbed rather than clicked through the input queue — the ids are
+    this widget's own, so the stub reports exactly which controls were drawn, and
+    ``click`` presses the one whose id ends with it.
+
+    Parameters
+    ----------
+    names
+        Streams to register. None of them is connected: the viewer draws its
+        empty state under the header, and the header is what is under test.
+    widget_id
+        Viewer state is module-global, keyed by this — give every test its own.
+    """
+    from imgui_bundle import imgui
+
+    from myogestic import Stream
+    from myogestic.core import Context
+    from myogestic.sources import SyntheticSource
+    from myogestic.widgets import SignalViewer
+    from myogestic.widgets.signals._state import get_viewer_state
+
+    ctx = Context()
+    for name in names:
+        ctx.streams[name] = Stream(name, source=SyntheticSource(n_channels=4), window_ms=200)
+    viewer = SignalViewer(names[0], selectable=True, widget_id=widget_id)
+
+    drawn: list[str] = []
+
+    def small_button(label, *args, **kwargs):
+        drawn.append(label)
+        return bool(click) and label.endswith(click)
+
+    monkeypatch.setattr(imgui, "small_button", small_button)
+    for _ in range(frames):
+        drawn.clear()
+        implot_frame(lambda: viewer.ui(ctx))
+
+    v = get_viewer_state(
+        ctx,
+        widget_id,
+        n_pixels=None,
+        scale_mode="auto",
+        y_range=(-1.0, 1.0),
+        show_markers=False,
+        window_s=5.0,
+        stream_name=names[0],
+    )
+    return v, drawn
+
+
+def test_the_stream_arrows_appear_only_when_there_is_another_stream_to_reach(
+    implot_frame, monkeypatch
+):
+    """One stream must draw no arrows — every shipped example has exactly one.
+
+    A pair of arrows that cycles back to the stream you are already on is a
+    control that does nothing, in every single-stream app in the repo. They earn
+    their place only once `ctx.streams` holds somewhere to go.
+    """
+    _, alone = _header_frame(implot_frame, monkeypatch, ["emg"], widget_id="thdr_alone")
+    _, pair = _header_frame(implot_frame, monkeypatch, ["emg", "target"], widget_id="thdr_pair")
+
+    assert not [b for b in alone if "_stream" in b], f"dead arrows drawn: {alone}"
+    assert len(alone) == 1, f"the chrome toggle is the whole header: {alone}"
+    assert [b for b in pair if b.endswith("_prev_stream")], pair
+    assert [b for b in pair if b.endswith("_next_stream")], pair
+    assert len(pair) == 3, f"arrows must be added to the toggle, not replace it: {pair}"
+
+
+def test_next_steps_to_the_following_stream_and_wraps_round(implot_frame, monkeypatch):
+    """Two buttons have to reach every stream, so the last one leads back to the first.
+
+    The freeze goes with the switch: a paused viewer that changed stream would
+    keep showing the *old* stream's frozen samples under the new stream's title
+    until somebody happened to press Resume.
+    """
+    import numpy as np
+
+    names = ["emg", "target"]
+    v, _ = _header_frame(
+        implot_frame, monkeypatch, names, widget_id="thdr_next", click="_next_stream"
+    )
+    assert v.selected_stream == "target"
+
+    v.paused = True
+    v.frozen_data = np.zeros((4, 4))
+    v.frozen_ts = np.zeros(4)
+    v, _ = _header_frame(
+        implot_frame, monkeypatch, names, widget_id="thdr_next", click="_next_stream"
+    )
+    assert v.selected_stream == "emg", "the last stream must wrap back to the first"
+    assert not v.paused and v.frozen_data is None and v.frozen_ts is None
+
+
+def test_prev_steps_backwards_from_the_first_stream_to_the_last(implot_frame, monkeypatch):
+    """Backwards from the first entry is the last one, not a clamp at zero."""
+    v, _ = _header_frame(
+        implot_frame,
+        monkeypatch,
+        ["emg", "target", "aux"],
+        widget_id="thdr_prev",
+        click="_prev_stream",
+    )
+    assert v.selected_stream == "aux"
+
+
+# --- the "1:1" toggle: Detail alone cannot reach every sample ----------------
+def test_detail_at_full_still_decimates_a_fast_stream():
+    """The reason the toggle exists. Detail tops out a few points per pixel, so a
+    2 kHz stream over a 5 s window is reduced however far right the slider goes."""
+    from myogestic.widgets.signals._state import ViewerState, resolve_decimation_target
+
+    v = ViewerState()  # detail_factor defaults to full
+    n_out = resolve_decimation_target(600.0, v)
+
+    assert n_out < 2000 * 5.0, "full detail already draws every sample — toggle is moot"
+
+
+def test_one_to_one_asks_for_more_points_than_any_window_holds():
+    """It works by *out-running* the reduction rather than by a separate code path:
+    `minmax_grid_all_shared_x` returns its input untouched once ``n <= n_out``."""
+    import numpy as np
+
+    from myogestic.widgets.signals._state import (
+        ViewerState,
+        minmax_grid_all_shared_x,
+        resolve_decimation_target,
+    )
+
+    n = 10_000
+    data = np.random.default_rng(0).standard_normal((n, 8)).astype(np.float32)
+    t = np.arange(n) / 2000.0
+
+    v = ViewerState()
+    reduced = minmax_grid_all_shared_x(t, data, resolve_decimation_target(600.0, v), 5.0)[1]
+    v.one_to_one = True
+    every = minmax_grid_all_shared_x(t, data, resolve_decimation_target(600.0, v), 5.0)[1]
+
+    assert reduced.shape[1] < n, "decimation did nothing to compare against"
+    assert every.shape[1] == n, "1:1 did not return every sample"
+    assert np.allclose(every, data.T), "1:1 altered the samples it drew"
+
+
+def test_one_to_one_survives_a_plot_with_no_width_yet():
+    """First frame reports width <= 0 and falls back to a fixed target; the toggle
+    must win over that too, or 1:1 flickers off for a frame on every layout change."""
+    from myogestic.widgets.signals._state import ViewerState, resolve_decimation_target
+
+    v = ViewerState(one_to_one=True)
+
+    assert resolve_decimation_target(0.0, v) == resolve_decimation_target(1200.0, v)
+
+
+def test_a_capped_n_pixels_does_not_override_one_to_one():
+    """`n_pixels` is a cap for the *density* path. Applied to the toggle it would
+    silently re-enable decimation for any app that sets one."""
+    from myogestic.widgets.signals._state import ViewerState, resolve_decimation_target
+
+    v = ViewerState(one_to_one=True, n_pixels=800)
+
+    assert resolve_decimation_target(1200.0, v) > 100_000
+
+
+def test_one_to_one_drops_itself_when_the_window_grows_past_its_budget(implot_frame):
+    """The window slider can be dragged after the toggle is on, and 1:1 has no ceiling
+    of its own — so the budget has to be re-checked every frame, not only at the click.
+
+    Dropped rather than left on and quietly clamped: a toggle claiming to show every
+    sample while showing a reduction is worse than one that turns itself off in view.
+    """
+    from imgui_bundle import imgui
+
+    from myogestic import Stream
+    from myogestic.core import Context
+    from myogestic.sources import SyntheticSource
+    from myogestic.widgets.signals._controls import _ONE_TO_ONE_MAX_POINTS, render_controls
+    from myogestic.widgets.signals._state import ViewerState
+
+    ctx = Context()
+    stream = Stream("emg", source=SyntheticSource(n_channels=8, fs=2000.0), window_ms=500)
+    assert stream.reconnect()
+    ctx.streams["emg"] = stream
+    enabled = set(range(8))
+
+    def draw(v: ViewerState) -> None:
+        def inner() -> None:
+            imgui.begin_child("cell", imgui.ImVec2(900, 400))
+            render_controls(ctx, "emg", "emg", stream, v, False, enabled=enabled, scope=[])
+            imgui.end_child()
+
+        implot_frame(inner)
+
+    affordable = ViewerState(one_to_one=True, window=0.8)  # 12.8k points
+    draw(affordable)
+    assert affordable.one_to_one is True, "a modest window was refused"
+
+    ruinous = ViewerState(one_to_one=True, window=60.0)  # 960k points
+    assert _ONE_TO_ONE_MAX_POINTS < 60.0 * 2000.0 * 8
+    draw(ruinous)
+    assert ruinous.one_to_one is False, "1:1 stayed on for a window it cannot afford"
+
+    stream.disconnect()
+
+
+@pytest.mark.parametrize("start_on", [False, True])
+def test_clicking_one_to_one_leaves_the_style_stack_balanced(implot_frame, start_on):
+    """A click flips the flag *between* `push_selected` and `pop_selected`.
+
+    Guarding the pop on the flag itself therefore disagrees with the push on the one
+    frame that matters: turning on pops a colour never pushed (``PopStyleColor() too
+    many times``), turning off pushes three and leaks them into every widget after.
+
+    A layout pass alone cannot catch this — `small_button` returns False with no mouse,
+    so the toggle never flips and both branches agree. The click has to be simulated.
+    """
+    from imgui_bundle import imgui
+
+    from myogestic import Stream
+    from myogestic.core import Context
+    from myogestic.sources import SyntheticSource
+    from myogestic.widgets.signals import _controls
+    from myogestic.widgets.signals._state import ViewerState
+
+    ctx = Context()
+    stream = Stream("emg", source=SyntheticSource(n_channels=8, fs=2000.0), window_ms=500)
+    assert stream.reconnect()
+    ctx.streams["emg"] = stream
+    v = ViewerState(one_to_one=start_on, window=0.5)
+
+    real = imgui.small_button
+    imgui.small_button = lambda label, *a, **k: (
+        True if label.startswith("1:1##") else real(label, *a, **k)
+    )
+    try:
+        def inner() -> None:
+            imgui.begin_child("cell", imgui.ImVec2(900, 400))
+            _controls.render_controls(
+                ctx, "emg", "emg", stream, v, False, enabled=set(range(8)), scope=[]
+            )
+            imgui.end_child()
+
+        implot_frame(inner)  # an unbalanced push or pop raises here
+    finally:
+        imgui.small_button = real
+        stream.disconnect()
+
+    assert v.one_to_one is not start_on, "the simulated click did not toggle anything"

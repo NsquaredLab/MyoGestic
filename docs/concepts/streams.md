@@ -97,6 +97,33 @@ info.channel_names  # ["EMG_01", "EMG_02", ...] or None
 
 `SignalViewer` uses these names in its channel toggle list. If a source returns `None`, names default to `"ch_0"`, `"ch_1"`, …
 
+## Reading the waveform, not the envelope
+
+`SignalViewer` MinMax-decimates: it keeps each bucket's **minimum and maximum**, so peak
+height and burst timing are exact at any reduction — what coarsens is shape *within* a
+bucket. At 2 kHz over a 5 s window on a 600 px plot that bucket is about 5 ms, which is
+also roughly one pixel, so the trace is as faithful as the display can be.
+
+Reading a feature shorter than that — a single motor-unit action potential — needs
+decimation **off**, not turned up. **Detail** tops out at a few points per pixel by
+design, because its ceiling is what stops a wide rig from stalling the frame rate. The
+**1:1** toggle beside it removes the reduction entirely:
+
+| Want | Use |
+|---|---|
+| Amplitude, bursts, envelope | Leave it alone — MinMax is exact for these |
+| Waveform shape below ~5 ms | **1:1**, or shorten the window until the footer reads `(raw)` |
+| Every sample, always, no toggle | [`RawSignalViewer`][myogestic.widgets.RawSignalViewer] |
+
+The footer says which you are looking at: `MinMax 10,000→1,802 pts/ch` against
+`10,000 pts/ch (raw)`. Shortening the window reaches `(raw)` on its own, because
+decimation stops once the window fits the point budget — at 600 px and full Detail that
+is a 0.9 s window at 2 kHz.
+
+1:1 refuses, and turns itself back off, above 250,000 points per frame across the drawn
+channels; 64 channels of 2 kHz over 10 s is 1.3 M points a frame for detail no display
+can resolve. Hover the toggle for the count at your current settings.
+
 ## Common mistakes
 
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.

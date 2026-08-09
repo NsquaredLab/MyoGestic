@@ -17,6 +17,30 @@ if TYPE_CHECKING:
     from myogestic.widgets.signals._state import SignalFrame, ViewerState
 
 
+#: Floor for an auto-sized plot: below this a trace is unreadable, so a cell too
+#: short to hold one overflows rather than collapsing to a sliver.
+_MIN_PLOT_H = 50.0
+
+
+def resolve_plot_height(requested: float, *, show_controls: bool) -> float:
+    """Height for the plot, in pixels. Call inside the viewer's own layout.
+
+    A positive ``requested`` is honoured as-is. Otherwise the plot takes the
+    space that is left, minus the footer row — **but only when there is going to
+    be a footer**. Collapsing the chrome hides it, and reserving for it anyway
+    left a dead strip where the read-out used to be instead of giving the plot
+    the space back.
+
+    The footer is one line of text plus a `small_button`, which ImGui draws at
+    text height, so that row *is* ``text_line_height_with_spacing`` — and unlike
+    the hardcoded 25 px this replaces, it follows ``ui_scale``.
+    """
+    if requested > 0:
+        return requested
+    footer_h = imgui.get_text_line_height_with_spacing() if show_controls else 0.0
+    return max(imgui.get_content_region_avail().y - footer_h, _MIN_PLOT_H)
+
+
 def render_plot(
     ctx: Context,
     stream_name: str,
@@ -43,9 +67,8 @@ def render_plot(
         v.pc_ease_t = 0.0  # snap per-channel ranges when it's next re-enabled
     ensure_specs(v, frame.n_channels)
 
-    plot_w, plot_h = size
-    if plot_h <= 0:
-        plot_h = max(imgui.get_content_region_avail().y - 25, 50)
+    plot_w = size[0]
+    plot_h = resolve_plot_height(size[1], show_controls=v.show_controls)
 
     ensure_implot_style()
     if implot.begin_plot(

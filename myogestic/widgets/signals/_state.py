@@ -127,6 +127,7 @@ class ViewerState:
 
     n_pixels: int | None = None  # optional hard cap on drawn points; None/0 = no cap
     detail_factor: float = 3.0  # draw density (points per plot pixel); the "Detail" slider drives it
+    one_to_one: bool = False  # draw every sample, no MinMax; the "1:1" toggle drives it
     window: float = 1.0
     gain: float = 1.0
     channels: set[int] = field(default_factory=set)
@@ -148,7 +149,7 @@ class ViewerState:
     per_channel_scale: bool = False
     # Pending "Rescale/Fit & lock" click, remembering which BASIS it applies to ("shared"
     # fits the one shared y-range; "per_channel" fits each channel's lane) so a same-frame
-    # Per-Ch toggle can't misapply it. `None` = no request. Consumed once in `viewer.py`.
+    # Per channel toggle can't misapply it. `None` = no request. Consumed once in `viewer.py`.
     rescale_pending: str | None = None
     # Auto-scale easing state (see `_plot.update_auto_scale`). `scale_ease_t` is the last
     # frame's `perf_counter` (dt source); `scale_ease_key` is the (stream, channels,
@@ -202,6 +203,31 @@ class ViewerState:
     frozen_epoch: int = 0
     frozen_seq: int = 0
     frozen_fs: float = 0.0
+
+
+def select_stream(v: ViewerState, name: str) -> None:
+    """Point a `selectable` viewer at ``name``, dropping any frozen window.
+
+    The one place a stream switch happens, because the freeze is what makes two
+    routes diverge: a paused viewer that changes stream keeps showing the *old*
+    stream's frozen samples under the new stream's title until someone presses
+    Resume. Both the transport dropdown and the header's prev/next arrows go
+    through here.
+
+    Channel selection is deliberately *not* reset: `resolve_enabled` keys it by
+    ``(stream, n_channels)`` and restores each stream's own set.
+
+    Parameters
+    ----------
+    v
+        The viewer's state.
+    name
+        Stream to show.
+    """
+    v.selected_stream = name
+    v.paused = False
+    v.frozen_ts = None
+    v.frozen_data = None
 
 
 @dataclass
@@ -347,6 +373,13 @@ _DECIMATE_MIN_POINTS = 64
 #: width and no explicit `n_pixels` cap is set. Self-corrects next frame.
 _DECIMATE_FALLBACK_POINTS = 2000
 
+#: Asked for by the "1:1" toggle: larger than any window a ring buffer can hold, so
+#: `minmax_grid_all_shared_x` takes its ``n <= n_out`` pass-through and returns the
+#: samples untouched. Deliberately not a real point count — what keeps 1:1 affordable
+#: is the budget the toggle itself enforces (`_controls._ONE_TO_ONE_MAX_POINTS`), which
+#: can see the channel count and the window; this function sees neither.
+_ONE_TO_ONE_TARGET = 1 << 24
+
 
 def resolve_decimation_target(plot_width_px: float, v: ViewerState) -> int:
     """MinMax decimation output size, sized to the plot's own pixel width.
@@ -357,7 +390,14 @@ def resolve_decimation_target(plot_width_px: float, v: ViewerState) -> int:
     ``plot_width_px * v.detail_factor``. `v.n_pixels` is an *optional* hard
     cap (`None`/`0` = no cap) and the fallback when `plot_width_px` isn't
     available yet (the very first frame, reported as `<= 0`).
+
+    ``v.one_to_one`` overrides all of it and asks for every sample. Detail tops out at
+    a few points per pixel — more than a display can resolve, but not the raw signal —
+    so reading a waveform shorter than a bucket needs decimation off rather than turned
+    up.
     """
+    if v.one_to_one:
+        return _ONE_TO_ONE_TARGET
     if plot_width_px <= 0:
         target = v.n_pixels or _DECIMATE_FALLBACK_POINTS
     else:
