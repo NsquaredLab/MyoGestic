@@ -86,17 +86,12 @@ PREDICT_HZ = 32
 #: Three cued classes on one signed axis. Down is a real ``-1``, not a second one-way
 #: channel: a wrist is the canonical bidirectional DOF and the paddle needs both halves.
 CLASSES = ["Down", "Rest", "Up"]
-# Proportional first, and it is the default, because the honest baseline is *wrong* in a
-# way no read-out shows: the CatBoost regressor is non-monotonic in effort on real data.
-# Scaling every channel by 1.0 -> 1.3 -> 1.6 moved its Up prediction 1.000 -> 0.882 ->
-# 0.723, so contracting harder walks the paddle the wrong way — it had learned "louder =
-# Down" because Down simply happened to be recorded harder. `directional_decoder`
-# estimates effort and direction apart and multiplies them, and as long as every ticked
-# feature answers a gain the same way (see `_DEGREE_1` below) that gain cancels out of the
-# direction term exactly, so it can only change the magnitude and never the sign.
-#
-# The other two stay. Regression is the baseline that has to be felt to be believed, and
-# Classification is the floor under both: it can only ever put the paddle in three places.
+# Proportional is the default because the baseline is *wrong* in a way no read-out shows:
+# on real data the CatBoost regressor is non-monotonic in effort — scaling every channel
+# 1.0 -> 1.3 -> 1.6 moved its Up prediction 1.000 -> 0.882 -> 0.723, having learned
+# "louder = Down" because Down happened to be recorded harder. `directional_decoder`
+# estimates effort and direction apart, so a gain can change the magnitude but never the
+# sign. The other two stay as baselines worth feeling.
 MODES = ["Proportional", "Regression", "Classification"]
 
 #: How the command reaches the paddle, in `PongTask`'s own words, lower-cased for it.
@@ -795,17 +790,10 @@ def pong_ui(ctx):
     with grid[4:6, 2]:
         pipeline.training_data = sessions.ui()
 
-    # Stream it, do not fire it once. VHI's prediction hand follows a pose only while its
-    # streams are *live* — `ControlPoseStaleAfterSeconds` is 5 s — and on the falling edge
-    # it calls `StopToRest()` and hands the rig back to its own movement animation. So one
-    # push moves the wrist and five seconds of silence returns it.
-    #
-    # Not the same thing as the outlet repeating its last value, which it does forever at
-    # ~29 Hz. That keeps a value on the wire; VHI's liveness check is on the *arrival* of
-    # samples.
-    #
-    # While predicting, the predict loop is already that producer at PREDICT_HZ. The
-    # guard keeps the two from driving one set of outlets at two different rates.
+    # Stream it, do not fire it once: VHI follows a pose only while samples keep
+    # *arriving* (`ControlPoseStaleAfterSeconds` is 5 s, then `StopToRest()`), and the
+    # outlet repeating its last value forever does not count. While predicting the predict
+    # loop is already that producer, hence the guard.
     bus = link.bus
     if bus is not None and ctx.state != "predicting":
         bus.push({"paddle": held_cue})
