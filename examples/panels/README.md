@@ -10,25 +10,30 @@ uv run python examples/panels/signal_viewer.py
 ```
 
 Each script is self-contained: a module docstring, a minimal `App`, inline
-dummy data, one `@app.ui` panel, `app.run()`. The only shared piece is
-[`_fixtures.py`](_fixtures.py) — a paced synthetic `Stream` source reused by
-the stream-backed examples.
+dummy data, one `@app.ui` panel, `app.run()`. The stream-backed ones feed on
+`myogestic.sources.SyntheticSource` — a paced fake amplifier that ships with
+the package, so an example is also a working recipe.
 
 | Script | Widget | Shows |
 |--------|--------|-------|
 | `signal_viewer.py` | [`signal_viewer`][sv] | Live decimated 8-ch scope, per-channel toggles, display filters |
 | `raw_signal_viewer.py` | [`raw_signal_viewer`][rsv] | Every-sample 4-ch viewer (no decimation) |
 | `stream_panel.py` | [`stream_panel`][sp] | Per-stream status + Scan → Connect flow (starts disconnected) |
+| `device_picker.py` | [`DevicePicker`][dp] | Device dropdown + per-device options → Connect (two synthetic devices, then the real OTB list) |
+| `stream_manager.py` | [`StreamManager`][sm2] | Add/remove streams at runtime, each row showing live rate, channels and sample age |
 | `line_plot.py` | [`line_plot`][lp] | Static multi-channel line plot with legend |
 | `heatmap.py` | [`heatmap`][hm] | Labelled 2-D heatmap (mock confusion matrix) |
 | `scatter2d.py` | [`scatter2d`][s2] | 2-D scatter, per-class colouring |
 | `scatter3d.py` | [`scatter3d`][s3] | 3-D scatter with orbit camera |
 | `recording_controls.py` | [`recording_controls`][rc] | Record toggle + per-class buttons + state pill (records to a temp dir) |
+| `record_button.py` | [`RecordButton`][rb] | Record → Stop → name-the-take dialog, no classes (records to a temp dir) |
 | `session_manager.py` | [`session_manager`][sm] | Session picker over three mock sessions |
 | `prediction_label.py` | [`prediction_label`][pl] | Predicted class + confidence read-out |
 | `feature_selector.py` | [`FeatureSelector`][fs] | Feature tick-list + active count |
 | `template_inspector.py` | [`template_inspector`][ti] | Accept/reject/select table of rows |
 | `trial_preview.py` | [`trial_preview`][tp] | Stacked waveform + shaded band overlay |
+| `pong.py` | [`PongTask`][pg] | Pong driven by one signed command, from a slider (no model) |
+| `tracking_task.py` | [`TrackingTask`][tt] | Zero/MVC capture then a trapezoid to follow, against a synthetic force channel |
 | `post_processor.py` | [`PostProcessor`][pp2] | Live-tunable output smoother (extensible filter palette) |
 | `process_launcher.py` | [`process_launcher`][pr] | Start/stop external subprocesses |
 | `log_panel.py` | [`log_panel`][lg] | App-event log (seeded with dummy lines) |
@@ -57,16 +62,21 @@ and the non-widget helpers `TemplateInspectorRow`, `request_vhi_state_refresh`,
 [sv]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.signal_viewer
 [rsv]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.raw_signal_viewer
 [sp]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.stream_panel
+[dp]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.DevicePicker
+[sm2]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.StreamManager
 [lp]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.line_plot
 [hm]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.heatmap
 [s2]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.scatter2d
 [s3]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.scatter3d
 [rc]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.recording_controls
+[rb]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.RecordButton
 [sm]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.session_manager
 [pl]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.prediction_label
 [fs]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.FeatureSelector
 [ti]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.template_inspector
 [tp]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.trial_preview
+[pg]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.PongTask
+[tt]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.TrackingTask
 [pp2]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.PostProcessor
 [pr]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.process_launcher
 [lg]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.log_panel
