@@ -61,6 +61,8 @@ def _session_row(path: Path) -> dict | None:
             # (symlinks, /var vs /private/var on macOS, relative vs absolute).
             "path": str(path.resolve()),
             "name": path.name,
+            # What the operator called this take, when they named it on Stop.
+            "session_name": str(meta.get("name") or ""),
             "date_str": _date_str(meta, path),
             "streams_str": _streams_str(streams_meta),
             "n_labels": len(labels),

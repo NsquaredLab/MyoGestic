@@ -10,6 +10,7 @@ from myogestic.session._windows import (
     SessionSplit,
     iter_aligned_windows,
     iter_labeled_windows,
+    iter_target_windows,
     split_sessions_by_stream,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "open_session_store",
     "iter_labeled_windows",
     "iter_aligned_windows",
+    "iter_target_windows",
     "split_sessions_by_stream",
 ]
