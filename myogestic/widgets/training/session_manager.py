@@ -41,6 +41,21 @@ class SessionManager:
         def ui(ctx):
             pipeline.training_data = sessions.ui()
 
+    Parameters
+    ----------
+    base_path
+        Folder scanned for ``.session.zip`` archives and session folders. Not
+        read until you press **Scan folder** — opening an app does not present
+        every session anyone ever recorded.
+    title
+        Panel header text. Also part of the widget's ImGui id scope, so two
+        managers over the same folder need different titles to keep separate
+        selections.
+    class_names
+        Human-readable names for the label class indices, used to render the
+        per-class filter buttons. ``None`` falls back to whatever each session
+        recorded in its own ``meta.json``, then to ``c0``, ``c1``, …
+
     Examples
     --------
     >>> from myogestic.widgets import SessionManager
@@ -186,9 +201,16 @@ def render_session_rows(
         if changed:
             row["selected"] = checked
         imgui.same_line()
+        # The operator's own name leads when there is one — that is what they
+        # will be scanning for. The timestamp always follows, since it is the
+        # only part guaranteed unique.
+        stamp = row.get("date_str", row["name"])
+        given = row.get("session_name", "")
         imgui.text_colored(
             primary(),
-            f"{row.get('date_str', row['name'])}  ·  {row.get('streams_str', '')}",
+            f"{given}  ·  {stamp}  ·  {row.get('streams_str', '')}"
+            if given
+            else f"{stamp}  ·  {row.get('streams_str', '')}",
         )
         render_label_counts(row, class_names)
 

@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.util import find_spec
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import zarr
@@ -185,6 +185,23 @@ class Recording:
     timestamps: np.ndarray  # (n_samples,)
 
 
+#: Cap on the slug appended to an archive name — long enough to be recognisable,
+#: short enough to keep the whole path under filesystem limits.
+_SLUG_MAX = 40
+
+
+def _slug(name: str) -> str:
+    """Filename-safe form of a user-typed session name, or ``""`` if nothing survives.
+
+    The result is concatenated into a path, so this is a **whitelist**: anything
+    outside ASCII alphanumerics, ``-`` and ``_`` becomes a dash. That rules out
+    path separators, ``..`` and non-portable characters by construction rather
+    than by remembering to check for each of them.
+    """
+    kept = "".join(c if c.isascii() and (c.isalnum() or c in "-_") else "-" for c in name)
+    return "-".join(filter(None, kept.split("-")))[:_SLUG_MAX].strip("-_")
+
+
 class Session:
     """One recording session on disk: per-stream Zarr arrays + a label track.
 
@@ -229,6 +246,17 @@ class Session:
         # pack thread wipe the new recording (and collide on the .session.zip path).
         self.path = Path(base_path) / f"{ts}_{uuid.uuid4().hex[:8]}"
         self.path.mkdir(parents=True, exist_ok=True)
+        #: Free-form facts a widget contributed about this recording, merged into
+        #: ``meta.json`` under ``"extras"``. For anything the raw arrays cannot
+        #: express on their own — a force calibration is the motivating case: the
+        #: force is recorded in device counts and the target in %MVC, so without
+        #: the zero and MVC that relate them the tracking error is not
+        #: recoverable months later. Values must be JSON-serialisable.
+        self.extras: dict[str, Any] = {}
+        #: Human-readable name for this recording. Set it before `save_meta`
+        #: (the recorder widget does so when the user names the session on Stop);
+        #: it lands in ``meta.json`` and in the packed archive's filename.
+        self.name: str = ""
         self.stores: dict[str, zarr.Array] = {}
         self.ts_stores: dict[str, zarr.Array] = {}
         self.label_track: list[LabelEvent] = []
@@ -330,6 +358,10 @@ class Session:
                 for name, info in self._streams_info.items()
             },
         }
+        if self.name:
+            meta["name"] = self.name
+        if self.extras:
+            meta["extras"] = dict(self.extras)
         if class_names is not None:
             meta["class_names"] = list(class_names)
         if control_space is not None:
@@ -356,7 +388,8 @@ class Session:
         self.ts_stores.clear()
         gc.collect()
 
-        zip_path = self.path.with_name(self.path.name + ".session.zip")
+        stem = f"{self.path.name}_{slug}" if (slug := _slug(self.name)) else self.path.name
+        zip_path = self.path.with_name(stem + ".session.zip")
         tmp_path = zip_path.with_suffix(zip_path.suffix + ".tmp")
         if tmp_path.exists():
             tmp_path.unlink()
@@ -371,12 +404,18 @@ class Session:
                 names = zf.namelist()
                 if "meta.json" not in names:
                     raise RuntimeError("meta.json missing in packed zip")
-            store = zarr.storage.ZipStore(tmp_path, mode="r")
-            try:
-                for name in self._streams_info:
-                    zarr.open_array(store=store, path=f"{name}.zarr", mode="r")
-            finally:
-                store.close()
+            # Guarded: a session recorded with no connected stream has no arrays
+            # to verify, and a `ZipStore` that never opened one raises
+            # `AttributeError: _lock` on close. Reachable from the UI — Record
+            # before Connect gives exactly this session — so it must pack, not
+            # blow up in the finalise thread and report "Pack failed".
+            if self._streams_info:
+                store = zarr.storage.ZipStore(tmp_path, mode="r")
+                try:
+                    for name in self._streams_info:
+                        zarr.open_array(store=store, path=f"{name}.zarr", mode="r")
+                finally:
+                    store.close()
         except Exception:
             tmp_path.unlink(missing_ok=True)
             raise
@@ -387,6 +426,18 @@ class Session:
         _robust_rmtree(self.path)
         self.path = zip_path
         return zip_path
+
+    def discard(self) -> None:
+        """Delete this session's folder and everything recorded into it.
+
+        For a recording the operator threw away — a false start, a bad trial.
+        Releases the Zarr handles first, exactly as `pack_to_zip` does: on
+        Windows the folder cannot be removed while any chunk file is still open.
+        """
+        self.stores.clear()
+        self.ts_stores.clear()
+        gc.collect()
+        _robust_rmtree(self.path)
 
     def get_trials(
         self,

@@ -63,6 +63,11 @@ def open_session_store(path: str | Path) -> Session:
     ]
     session._streams_info = {}
     session.class_names = list(meta.get("class_names") or [])
+    session.extras = dict(meta.get("extras") or {})
+    # `Session.__new__` skips `__init__`, so every attribute a caller can read has to
+    # be set here or it raises AttributeError instead of coming back empty. `name` is
+    # written to meta.json precisely so it survives this trip.
+    session.name = str(meta.get("name") or "")
     # Always set (None for folder sessions): keeps Session.close() safe even
     # though open_session_store bypasses __init__ via Session.__new__.
     session._zip_store = zip_store
