@@ -83,7 +83,11 @@ def apply_theme() -> None:
     style.popup_rounding = 8.0
     style.scrollbar_rounding = 6.0
     style.tab_rounding = 6.0
-    style.window_padding = imgui.ImVec2(12, 12)
+    # The box's inner padding, and the only thing keeping a full-width control
+    # (`set_next_item_width(-1)`, a `(-1, 0)` button) off the panel border. It
+    # applies to every container — the main window, a bordered `Grid` cell, a
+    # popped-out panel — so a panel breathes the same wherever it is drawn.
+    style.window_padding = imgui.ImVec2(18, 16)
     style.frame_padding = imgui.ImVec2(10, 6)
     style.item_spacing = imgui.ImVec2(8, 8)
     style.item_inner_spacing = imgui.ImVec2(6, 4)

@@ -62,7 +62,7 @@ Inline actions that sit in a row of pills (`All` / `None` / `Invert` / `Edit…`
 
 One glyph per meaning, and the glyph **shows what clicking will do**, not what the state currently
 is. A toggle therefore swaps its icon: `PLAY`↔`PAUSE` on transport, `ANGLES_DOWN`↔`ARROW_DOWN` on
-log autoscroll, the expand↔collapse arrows on pop-out, `ANGLES_UP`↔`BARS` on panel chrome. A button
+log autoscroll, the expand↔collapse arrows on pop-out, `ANGLES_UP`↔`ANGLES_DOWN` on panel chrome. A button
 whose icon never changes reads as a one-shot action.
 
 Established meanings. Reuse them rather than picking a near-synonym:
@@ -108,11 +108,15 @@ Four tokens, and they mean the same thing everywhere:
 | `WARNING` | works, but something about it is worth knowing |
 | `DANGER` | failed, refused, or destructive |
 
-`panel_header(title, icon, status=…)` puts a `CIRCLE` in one of them before the title, so a
-panel says how its subject is doing without spending a row on the word. **Colour is the only
-thing a dot carries**, so the state has to live somewhere else as well: give the header a
-tooltip with the detail (a PID, an exit code) so the fact survives for a reader who cannot
-tell the hues apart.
+`panel_header(title, icon, status=…)` puts a `CIRCLE` in one of them at the **right** end
+of the header row, so a panel says how its subject is doing without spending a row on the
+word — and stacked panels still line their titles up on the first glyph, which a leading
+dot would break for whichever of them happen to carry state. **Colour is the only
+thing a dot carries**, so the state has to live somewhere else as well — either a visible
+read-out in the panel, or a tooltip on the header with the detail (a PID, an exit code) —
+so the fact survives for a reader who cannot tell the hues apart. **One of the two, not
+both.** A panel that already prints its state in words gains nothing from a tooltip
+repeating it, and gains a second copy to keep in step.
 
 ## Plots
 
@@ -144,12 +148,78 @@ Two different affordances, two different jobs; don't substitute one for the othe
 
 - **Pop out** (`popout_panel`): the panel becomes its own dockable, tearable window. For a panel
   the user wants *bigger*, or on another monitor.
-- **Collapse chrome** (`SignalViewer(show_controls=…)` and its `≡` header toggle): title,
-  controls, channel bar and footer fold away, leaving the plot. For a panel whose cell is
-  *fixed*, a tile in a `Grid`, where the chrome costs more than it gives.
+- **Collapse chrome** (`SignalViewer(show_controls=…)` and its `ANGLES_UP`↔`ANGLES_DOWN` header
+  toggle): controls, channel bar and footer fold away, leaving the plot and its title — a panel
+  that loses its name is one you cannot identify at a glance, and the toggle has to stay
+  somewhere. For a panel whose cell is *fixed*, a tile in a `Grid`, where the chrome costs more
+  than it gives. Dropping the title too is `show_title=False`, which takes the whole header row.
 
 Layout itself is always [`Grid`](grid-layout.md) with `Px`/`Fr` tracks. Widgets do not position
 themselves.
+
+### Four ways a row lies to you
+
+Inside a widget, laying out one row is still immediate-mode arithmetic, and four of its rules
+read backwards. Each of these has produced a shipped layout bug in this codebase more than once,
+and none of them fails loudly — you get a plausible-looking row that is wrong.
+
+**`same_line(offset)` measures from the window edge, not from the item**, and it ignores
+`imgui.indent`. Inside an indented block or a popup it therefore lands the next item *on top of*
+the one before it, or collapses the gutter you were trying to create. Set the column explicitly
+instead:
+
+```python
+left = imgui.get_cursor_pos_x()
+imgui.text(f"{n}.")
+imgui.same_line()
+imgui.set_cursor_pos_x(left + gutter)   # not same_line(gutter)
+```
+
+**Measure the space left *after* `same_line()`, never before.** Before the call the cursor has
+already wrapped to the next line, so `get_content_region_avail().x` reports the whole row — and a
+right-aligned control offset by it overshoots by the width of everything already on the row, which
+puts it off the panel edge:
+
+```python
+imgui.same_line()                                # first
+avail = imgui.get_content_region_avail().x       # then measure
+if avail > button_w:
+    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + avail - button_w)
+```
+
+**`ItemSpacing.y` is charged when the item is placed, so it sets the gap *below* it.** To tighten
+the space between two rows, push the smaller spacing around the **upper** one and pop after its
+last item. Pushing it around the lower one shortens the gap under *that*, which pulls the next row
+up instead — the same fault, inverted:
+
+```python
+imgui.push_style_var(imgui.StyleVar_.item_spacing, imgui.ImVec2(sp.x, 0.0))
+name_row()          # the row whose *trailing* gap is being closed
+imgui.pop_style_var()
+detail_row()
+```
+
+**A push/pop pair is guarded on the value as it was at push time**, never on the live one. A
+toggle button flips its own state *between* the two, so a pop guarded on the flag itself
+disagrees with the push on the one frame the user clicks — popping a colour that was never
+pushed, or leaking three into every widget after it. Read it into a local first:
+
+```python
+selected = v.enabled          # not `if v.enabled:` on both sides
+if selected:
+    push_selected()
+if imgui.small_button("1:1"):
+    v.enabled = not v.enabled
+if selected:
+    pop_selected()
+```
+
+A layout pass cannot catch this: with no mouse, `small_button` returns False, the flag never
+flips and both branches agree. Simulate the click in the test.
+
+A related one: plain `imgui.text` sits at the **top** of its line box. On a row made frame-height
+by a button beside it, the text floats above a band of empty row — call
+`imgui.align_text_to_frame_padding()` first.
 
 ## Identity
 

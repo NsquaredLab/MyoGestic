@@ -105,3 +105,40 @@ def test_plot_widgets_apply_the_app_plot_style(path: pathlib.Path):
         "Call it at the top of the widget so the plot matches the app "
         "(see docs/concepts/visual-language.md)."
     )
+
+
+#: Draw-list calls whose trailing parameters have swapped order between
+#: imgui_bundle releases, mapped to how many arguments may safely be positional.
+#: `add_polyline(points, col, flags, thickness)` on 1.92.601 became
+#: `add_polyline(points, col, thickness, flags)` on 1.92.801 — same names, same
+#: types on the wire for `flags=0, thickness=2.0`, so a positional call is silently
+#: correct on one version and a TypeError on the other. `add_rect` moved the same
+#: pair. Both are still fine by keyword. `add_line` is listed on the same habit rather
+#: than on a break of its own: `thickness` is its last positional too, and one rule for
+#: the three of them beats a reader having to remember which have already bitten.
+_POSITIONAL_LIMIT = {"add_polyline": 2, "add_rect": 4, "add_line": 3}
+
+
+@pytest.mark.parametrize("path", _py_files(), ids=_rel)
+def test_drawlist_calls_pass_thickness_and_flags_by_keyword(path: pathlib.Path):
+    """``imgui-bundle>=1.5.0`` is the floor, so users resolve versions we never ran.
+
+    This shipped: the force-tracking sketch called ``add_polyline`` positionally, which
+    was right on the version pinned here and a ``TypeError`` on the one a downstream
+    project had resolved. Nothing in the suite could catch it — the code is correct
+    against the installed bundle, and there is only ever one installed.
+    """
+    offenders = []
+    for node in _calls(_tree(path)):
+        name = _call_name(node).rsplit(".", 1)[-1]
+        limit = _POSITIONAL_LIMIT.get(name)
+        if limit is not None and len(node.args) > limit:
+            offenders.append(f"{_rel(path)}:{node.lineno} ({name})")
+
+    assert not offenders, (
+        "Draw-list call(s) passing thickness/flags positionally:\n  "
+        + "\n  ".join(offenders)
+        + "\n\nThose two parameters swapped order between imgui_bundle releases. Pass "
+        "them by keyword — `add_polyline(pts, col, thickness=2.0, flags=0)` — which is "
+        "correct on every version."
+    )

@@ -57,7 +57,7 @@ mode both render correctly without per-panel styling.
 ## How sizes resolve
 
 Each frame, the grid measures the parent window, subtracts `Px` totals
-and the gutters between tracks (`GUTTER = 6` px), then divides what's
+and the gutters between tracks (`GUTTER = 12` px), then divides what's
 left among the `Fr` tracks proportionally to their values:
 
 * `[Fr(1), Fr(2)]` over 600 px of remaining space → `200, 400`.

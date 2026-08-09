@@ -41,7 +41,12 @@ from dataclasses import dataclass
 
 from imgui_bundle import imgui
 
-GUTTER: float = 6
+#: Gap between adjacent cells, in pixels. The panels themselves carry a border
+#: and `window_padding`, so this only has to separate two cards — but at 6 px
+#: they read as one slab with lines drawn on it rather than as separate panels.
+#: Unlike the theme's padding this is not touched by `scale_all_sizes`, so it
+#: stays constant across `ui_scale`.
+GUTTER: float = 12
 
 
 def _validate_value(value: object, kind: str) -> float:
