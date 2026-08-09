@@ -930,6 +930,34 @@ def test_a_perfectly_tracked_ghost_is_still_visible(imgui_frame, monkeypatch):
     assert abs(y - (py0 + py1) / 2) < 2.0, "the level line is not at the tracked level"
 
 
+def test_the_effort_gauge_is_unsigned_and_optional(imgui_frame, monkeypatch):
+    """Amplitude is knowable during a block; direction is not, and the gauge must not fake it.
+
+    A gauge that took its sign from `target` would be showing the subject their own
+    instruction back and calling it feedback — it would read "correct" while they
+    contracted the wrong way, which is exactly the mistake the block exists to catch.
+    """
+
+    def fills_for(target, effort):
+        task = PongTask(widget_id="pong_gauge")
+        task._aim(0.0)
+        rec = _RectRecorder()
+        monkeypatch.setattr("myogestic.widgets.pong.imgui.get_window_draw_list", lambda: rec)
+        imgui_frame(lambda: task._court_ui(task._ghost_y(target), effort))
+        return rec.fills
+
+    assert len(fills_for(0.5, None)) == 2, "a gauge was drawn with no effort to show"
+    assert len(fills_for(0.5, 0.4)) == 3, "the effort gauge put nothing on the court"
+
+    # Same effort, opposite instruction: the bar is identical.
+    up, down = fills_for(0.5, 0.4)[-1], fills_for(-0.5, 0.4)[-1]
+    assert up == down, f"the gauge followed the target's sign: {up} vs {down}"
+
+    # ...and it does grow with effort.
+    weak, strong = fills_for(0.5, 0.2)[-1], fills_for(0.5, 0.9)[-1]
+    assert strong[1] < weak[1], "a harder contraction did not raise the gauge"
+
+
 def test_a_ghost_renders_through_the_public_call_and_leaves_the_id_stack_alone(imgui_frame):
     """An unbalanced id stack surfaces as ``Missing PopID()`` far from its cause.
 
