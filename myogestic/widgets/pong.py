@@ -308,10 +308,12 @@ class PongTask:
     not finite — a diverged model reads as ``NaN`` — leaves the paddle where it was
     rather than throwing it to an end of the court.
 
-    Pass `ui` a `target` and a ghost paddle is drawn for that command: the reference a
-    subject tracks while a training block records. Generating that trajectory and
-    recording against it belong to the app — see `myogestic.tracking.Pursuit` — and the
-    widget only draws the number it is handed.
+    Pass `ui` a `target` and the reference a subject tracks while a training block
+    records is drawn for that command: a line across the court at the level, and a hollow
+    bracket where a paddle obeying it would sit. The line is what you follow — the error
+    is the gap between it and your bar. Generating that trajectory and recording against
+    it belong to the app — see `myogestic.tracking.Pursuit` — and the widget only draws
+    the number it is handed.
 
     Parameters
     ----------
@@ -682,22 +684,6 @@ class PongTask:
                 rounding=thick * 0.5,
             )
 
-        if ghost is not None:
-            # A reference, not a player: the paddle's own geometry so the two share one
-            # mental model, but hollow and in the secondary tone so it can never be
-            # mistaken for something that plays the ball. Drawn *before* the paddle, so
-            # the subject's own filled bar covers it when they are on it — the outline
-            # vanishing under the fill is what perfect tracking looks like.
-            crown = at(1.0, ghost + self._half)
-            base = at(1.0, ghost - self._half)
-            dl.add_rect(
-                imgui.ImVec2(crown.x - thick, crown.y),
-                imgui.ImVec2(base.x, base.y),
-                imgui.get_color_u32(muted()),
-                rounding=thick * 0.5,
-                thickness=1.5,
-            )
-
         top, bottom = at(1.0, self._paddle + self._half), at(1.0, self._paddle - self._half)
         dl.add_rect_filled(
             imgui.ImVec2(top.x - thick, top.y),
@@ -705,6 +691,38 @@ class PongTask:
             imgui.get_color_u32(primary()),
             rounding=thick * 0.5,
         )
+
+        if ghost is not None:
+            # A reference, not a player: the paddle's own geometry so the two share one
+            # mental model, hollow and in the secondary tone so it can never be mistaken
+            # for something that plays the ball.
+            #
+            # Drawn *after* the paddle and a few pixels outside it, which is not cosmetic.
+            # The obvious version — same rect, drawn first — makes the outline vanish
+            # under the fill when the subject is on target, and that reads as elegant
+            # until you use it: a block opens with `Pursuit.rest_s` seconds at exactly
+            # 0.0, a velocity-mode paddle also starts at 0.0, so the first thing the
+            # subject sees on pressing Start is *nothing at all* for five seconds. An
+            # absent reference and a perfectly tracked one must not look the same. Now
+            # the fill nests inside the outline, which says "on it" just as clearly and
+            # is always visible. The right edge stays on the plane so the bracket cannot
+            # spill outside the court.
+            pad = max(3.0, thick * 0.4)
+            tone = imgui.get_color_u32(muted())
+            # The level line is what you actually track: it crosses the whole court, so it
+            # is unmissable at a glance and the error reads as the gap between it and the
+            # bar — where a bracket alone, a few pixels around a paddle sitting on it, is
+            # something you have to hunt for.
+            dl.add_line(at(0.0, ghost), at(1.0, ghost), tone)
+            crown = at(1.0, ghost + self._half)
+            base = at(1.0, ghost - self._half)
+            dl.add_rect(
+                imgui.ImVec2(crown.x - thick - pad, crown.y - pad),
+                imgui.ImVec2(base.x, base.y + pad),
+                tone,
+                rounding=thick * 0.5,
+                thickness=1.5,
+            )
 
         if self._ball is not None:
             # The text tone, not a series colour: the ball is the one thing that must
