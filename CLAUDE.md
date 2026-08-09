@@ -55,3 +55,17 @@ a loud one render identically.
 
 Do **not** add AI attribution — no `Co-Authored-By: Claude`, no "Generated with" footer, in commit
 messages or PR bodies.
+
+## Releasing
+
+**A version bump and `uv lock` go in the same commit.** Every CI step runs
+`uv --locked`, so bumping `version` in `pyproject.toml` alone fails Docs *and* Tests at the
+sync step — in 13 seconds, before a single test runs. The lock's only change is the project
+version line. There is a local `.git/hooks/pre-commit` that refuses a commit staging
+`pyproject.toml` against a stale lock, but hooks are not version-controlled, so on a fresh
+clone this is on you.
+
+Then: tag `vX.Y.Z`, push the tag (that triggers the PyPI publish), and create the GitHub
+release with the CHANGELOG section as its notes. **PyPI is immutable** — once a version
+publishes, do not move the tag, or the tag's tree and the published artifact disagree. Fix
+forward with a follow-up commit instead.
