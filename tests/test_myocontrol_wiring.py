@@ -267,3 +267,47 @@ def test_the_ui_streams_the_frame_while_the_predict_loop_is_not(app_module):
     assert 'ctx.state != "predicting"' in source, (
         "the UI would drive the same outlets as the predict loop, at a different rate"
     )
+
+
+def test_train_refuses_a_take_conditioned_differently_from_the_switch(app_module, tmp_path):
+    """Fitting on unfiltered signal and predicting through a notch is silent and fatal.
+
+    The notch conditions acquisition, so a filtered session holds filtered samples and
+    nothing in the arrays says so. Train on raw takes with SIGNAL set to 50 Hz and the
+    model meets an input distribution it never saw, while every read-out stays healthy —
+    the same shape of bug as concatenating %MVC targets with signed control units.
+    """
+
+    from myogestic import TrainingData
+    from myogestic.session import Session
+    from myogestic.stream import StreamInfo
+
+    def _take(notch_hz: int | None) -> str:
+        sess = Session(base_path=str(tmp_path))
+        sess.init_stream("emg", StreamInfo(n_channels=2, fs=100.0, dtype=np.dtype("float32")))
+        sess.append("emg", np.zeros((50, 2), dtype=np.float32), np.arange(50) / 100.0)
+        sess.add_label(0.0, 0)
+        if notch_hz is not None:
+            sess.extras["conditioning"] = {"emg": {"notch_hz": notch_hz}}
+        sess.save_meta("test", ["Rest", "Fist"])
+        sess.close()
+        return str(sess.path)
+
+    raw, filtered = _take(None), _take(50)
+    notch = app_module["notch"]
+    train = app_module["train"]
+
+    notch["index"] = app_module["NOTCH_HZ"].index(50)  # SIGNAL says 50 Hz
+    with pytest.raises(ValueError, match="recorded with notch"):
+        train(TrainingData(paths=[raw], classes=set()))
+
+    notch["index"] = 0  # SIGNAL says off
+    with pytest.raises(ValueError, match="recorded with notch"):
+        train(TrainingData(paths=[filtered], classes=set()))
+
+    # And a matched pair gets past the guard — it fails later, on having no windows,
+    # which is a different error and proves the guard is not simply refusing everything.
+    notch["index"] = app_module["NOTCH_HZ"].index(50)
+    with pytest.raises(ValueError) as excinfo:
+        train(TrainingData(paths=[filtered], classes=set()))
+    assert "recorded with notch" not in str(excinfo.value), str(excinfo.value)
