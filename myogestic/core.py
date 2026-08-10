@@ -426,6 +426,14 @@ class App:
             self.ctx.session.init_stream(name, stream.info)
             stream.attach_session(self.ctx.session)
             n_ready += 1
+            # What the samples were conditioned with, recorded beside them. A notch is
+            # applied to acquisition, so a filtered take holds filtered samples and the
+            # raw is gone — a later reader has no way to tell from the arrays alone, and
+            # training on a mix of filtered and unfiltered takes is a silent
+            # inconsistency in the one thing a model is most sensitive to.
+            if stream.notch_hz:
+                conditioning = self.ctx.session.extras.setdefault("conditioning", {})
+                conditioning[name] = {"notch_hz": int(stream.notch_hz)}
         if n_ready == 0:
             self.ctx.status_message = "No connected streams to record"
             self.ctx.log("Recording: no connected streams")

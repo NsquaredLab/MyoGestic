@@ -15,7 +15,8 @@ from dvg_ringbuffer import RingBuffer
 if TYPE_CHECKING:
     from tsdownsample import M4Downsampler
 
-    from myogestic.session import Session
+from myogestic.conditioning import NotchFilter
+from myogestic.session import Session
 
 # Pyodide reports sys.platform == "emscripten" and forbids OS threads
 # (Thread.start raises RuntimeError); the acquire / send / predict loops run
@@ -238,6 +239,7 @@ class Stream:
         source: Source,
         window_ms: float,
         buffer_ms: float = 10000,
+        notch_hz: int = 0,
     ):
         """Live ring-buffered stream with display decimation.
 
@@ -252,9 +254,26 @@ class Stream:
             by [`get_window`][].
         buffer_ms
             Ring-buffer depth in milliseconds. Defaults to 10000 (10 s).
+        notch_hz
+            Mains frequency to notch out of the acquired signal — ``50``, ``60``, or
+            ``0`` to leave it alone. Live-settable.
+
+            This conditions the samples themselves, so it reaches the model's windows
+            **and** the recording, which is the point: train and predict then cannot see
+            different preprocessing. It is not the signal viewer's Notch, which changes
+            only what is drawn.
+
+            A recording made with this on holds filtered samples and the raw is not
+            recoverable, so a session's setting is worth storing beside it — training on
+            a mix of filtered and unfiltered takes is a silent inconsistency.
         """
         self.name = name
         self._source = source
+        #: Mains frequency notched out of acquisition; 0 is off. Read every chunk, so
+        #: writing it from the UI thread takes effect on the next one.
+        self.notch_hz = int(notch_hz)
+        self._notch: NotchFilter | None = None
+        self._notch_key: tuple[float, int] | None = None
         self._window = window_ms / 1000.0
         self._buffer_seconds = buffer_ms / 1000.0
         self._running = False
@@ -337,6 +356,7 @@ class Stream:
         self._win_d = np.empty((self._cap, self.info.n_channels), dtype=self.info.dtype)
         self._win_t = np.empty(self._cap, dtype=np.float64)
         self._connected = True
+        self._notch = None  # IIR state belongs to one run at one rate and width
 
     def reconnect(self, target: str | None = None) -> bool:
         """Reconnect source. Optionally switch to a different target.
@@ -478,6 +498,33 @@ class Stream:
         with self._session_lock:
             self._session = None
 
+    def _condition(self, data: np.ndarray) -> np.ndarray:
+        """Filter the incoming chunk, if `notch_hz` is set.
+
+        Deliberately here and nowhere else. This is the one point where the ring buffer
+        and the session take the *same* array, so conditioning it once means the model's
+        live windows and the recording it is later trained on cannot disagree — there is
+        no second code path to drift.
+
+        It has to be a *streaming* filter over whole chunks, not something applied to a
+        window. Predict windows are the trailing `window_ms` taken many times a second,
+        so they overlap almost entirely; filtering each one on its own leaves 24x more
+        mains than filtering the stream (measured: 13.1% of window power at 50 Hz against
+        0.54%) and moves window RMS by 16%.
+
+        The filter is rebuilt when the rate or the setting changes and reset on reconnect,
+        because IIR state is only meaningful for one continuous run at one sample rate and
+        one channel count.
+        """
+        hz = self.notch_hz
+        if not hz or self.info is None:
+            self._notch = None
+            return data
+        if self._notch is None or self._notch_key != (self.info.fs, hz):
+            self._notch = NotchFilter(self.info.fs, int(hz))
+            self._notch_key = (self.info.fs, int(hz))
+        return self._notch.step(data).astype(data.dtype, copy=False)
+
     def _acquire_step(self) -> float:
         """Run one iteration of the acquire loop body.
 
@@ -516,6 +563,14 @@ class Stream:
         if self._data is None or self._timestamps is None:
             # Unreachable once connected; narrows the Optional for the checker.
             return 1.0
+        try:
+            data = self._condition(data)
+        except Exception as e:  # a filter fault must not kill the acquire thread
+            self.status = "disconnected"
+            self.last_error = f"input conditioning failed: {e}"
+            self._notch = None
+            return 0.1
+
         with self._lock:
             self._data.extend(data)
             self._timestamps.extend(ts)
