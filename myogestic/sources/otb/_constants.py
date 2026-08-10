@@ -57,6 +57,121 @@ def muovi_channel_names(geo: MuoviGeometry) -> list[str]:
     return names
 
 
+# Sessantaquattro ----------------------------------------------------------
+
+SESSANTAQUATTRO_PORT = 45454
+# Gain-8 LSB in mV at 16-bit (286.1 nV), per TCP Communication Protocol bit 5-4.
+SESSANTAQUATTRO_CONV_FACTOR_MV = 0.0002861
+# The IMU quaternion is transmitted as int16 scaled by 2**14.
+SESSANTAQUATTRO_QUATERNION_SCALE = 16384.0
+SESSANTAQUATTRO_BIO_BY_NCH = {0: 8, 1: 16, 2: 32, 3: 64}
+SESSANTAQUATTRO_FS_BY_MODE = {0: 500.0, 1: 1000.0, 2: 2000.0, 3: 4000.0}
+# MODE=011 (accelerometer) quadruples the rate and pins the channel count.
+SESSANTAQUATTRO_ACCEL_FS_BY_MODE = {0: 2000.0, 1: 4000.0, 2: 8000.0, 3: 16000.0}
+SESSANTAQUATTRO_MODE_CODE = {
+    "monopolar": 0b000,
+    "bipolar": 0b001,
+    "differential": 0b010,
+    "accelerometer": 0b011,
+    "impedance_advanced": 0b101,
+    "impedance": 0b110,
+    "test": 0b111,
+}
+# Candidate accessory-block widths, narrowest first. Docs say 4 for every NCH
+# value; a Sessantaquattro+ sends 8 (2 AUX + quaternion + buffer/trigger +
+# counter). Probed from the ramp counter, not trusted.
+SESSANTAQUATTRO_ACCESSORY_CANDIDATES = (4, 6, 8)
+
+
+@dataclass(frozen=True)
+class SessantaquattroGeometry:
+    n_total: int          # channels per sample-instant on the wire
+    n_bio: int            # biosignal channels (first n_bio rows)
+    n_accessory: int      # trailing non-bioelectrical channels
+    fs: float
+    bytes_per_sample: int  # 2 (16-bit) or 3 (24-bit)
+
+
+def sessantaquattro_geometry(
+    *, nch_mode: int, fs_mode: int, mode: str, n_accessory: int, high_res: bool
+) -> SessantaquattroGeometry:
+    """Channel/rate/width geometry for one (NCH, FSAMP, MODE) combination."""
+    if mode == "accelerometer":
+        # "Only 8 channels ... are acquired and transferred (even if NCH has a
+        # different value) with increased sampling frequency."
+        n_bio = 8
+        fs = SESSANTAQUATTRO_ACCEL_FS_BY_MODE[fs_mode]
+    else:
+        n_bio = SESSANTAQUATTRO_BIO_BY_NCH[nch_mode]
+        if mode == "bipolar":  # only MODE=001 halves; differential does not
+            n_bio //= 2
+        fs = SESSANTAQUATTRO_FS_BY_MODE[fs_mode]
+    return SessantaquattroGeometry(
+        n_total=n_bio + n_accessory,
+        n_bio=n_bio,
+        n_accessory=n_accessory,
+        fs=fs,
+        bytes_per_sample=3 if high_res else 2,
+    )
+
+
+def sessantaquattro_config_word(
+    *,
+    nch_mode: int,
+    fs_mode: int,
+    mode: str = "monopolar",
+    high_res: bool = False,
+    hpf: bool = True,
+    gain: int = 0,
+    trig: int = 0,
+    rec: bool = False,
+    go: bool,
+) -> int:
+    """Build the 16-bit configuration word (sent big-endian, CONTROL BYTE 0 first).
+
+    CONTROL BYTE 0 = ``GETSET | FSAMP<1:0> | NCH<1:0> | MODE<2:0>``,
+    CONTROL BYTE 1 = ``HRES | HPF | GAIN<1:0> | TRIG<1:0> | REC | GO``.
+    ``go=False`` stops the transfer **and the device closes the socket** — verified
+    on an SE004: sending it on a freshly accepted connection makes the device hang
+    up without streaming a byte. It is therefore the stop command only, never a
+    "apply settings" preamble.
+    """
+    return (
+        (0 << 15)  # GETSET = 0 -> SET
+        | ((fs_mode & 0x3) << 13)
+        | ((nch_mode & 0x3) << 11)
+        | (SESSANTAQUATTRO_MODE_CODE[mode] << 8)
+        | (int(high_res) << 7)
+        | (int(hpf) << 6)
+        | ((gain & 0x3) << 4)
+        | ((trig & 0x3) << 2)
+        | (int(rec) << 1)
+        | int(go)
+    )
+
+
+# GETSET=1, INFO=000: device replies with 13 bytes, the first two being the
+# control bytes currently in force.
+SESSANTAQUATTRO_GET_SETTINGS_WORD = 1 << 15
+SESSANTAQUATTRO_SETTINGS_NBYTES = 13
+
+
+def sessantaquattro_channel_names(geo: SessantaquattroGeometry) -> list[str]:
+    """Per-channel labels: bio, then the accessory block ending in the counter.
+
+    The 8-channel block on a Sessantaquattro+ is ``aux0, aux1`` then the Muovi
+    accessory layout (quaternion, buffer/trigger, counter). Narrower blocks drop
+    the leading AUX channels. Quaternion component order follows Muovi's
+    ``w, x, y, z`` -- unverified against this device.
+    """
+    names = [f"bio{i}" for i in range(geo.n_bio)]
+    tail = ["imu_w", "imu_x", "imu_y", "imu_z", "buffer_trigger", "counter"]
+    tail = tail[-geo.n_accessory:] if geo.n_accessory < len(tail) else tail
+    n_aux = geo.n_accessory - len(tail)
+    names += [f"aux{i}" for i in range(n_aux)] + tail
+    return names
+
+
 # Quattrocento -------------------------------------------------------------
 
 QUATTRO_IP = "169.254.1.10"

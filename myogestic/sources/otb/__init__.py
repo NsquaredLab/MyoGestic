@@ -2,5 +2,6 @@
 
 from myogestic.sources.otb.muovi import MuoviSource
 from myogestic.sources.otb.quattrocento import QuattrocentoSource
+from myogestic.sources.otb.sessantaquattro import SessantaquattroSource
 
-__all__ = ["MuoviSource", "QuattrocentoSource"]
+__all__ = ["MuoviSource", "QuattrocentoSource", "SessantaquattroSource"]
