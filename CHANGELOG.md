@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-08-10
+
+### Added
+
+- `Stream(notch_hz=)` notches mains out of the acquired signal, so the model's windows and
+  the recording carry the same conditioning. The signal viewer's Notch changed only what
+  was drawn; mains sat in every feature vector with a control on screen that looked like it
+  had removed it. Conditioning happens at the one point in the acquire loop where the ring
+  buffer and the session take the same array, so there is no second code path to drift.
+  Measured on a synthetic 50 Hz hum, a live window goes from 24.6% of its power at 50 Hz to
+  0.0037%, while `notch_hz=60` leaves it alone.
+
+  It has to be a streaming filter over chunks. Predict windows are the trailing
+  `window_ms` taken many times a second and overlap almost entirely; filtering each on its
+  own leaves 24x more mains (13.1% of window power against 0.54%) and moves window RMS by
+  16%.
+- `myogestic.conditioning` holds `apply_mains_notch` and `NotchFilter`, moved out of
+  `widgets/signals/transforms.py` because core cannot import from `widgets`. The old import
+  path still works — `transforms` re-exports both. Their documented equality, that any
+  chunking of `NotchFilter.step` matches `apply_mains_notch` over the concatenation, is
+  what lets an offline reader and the live path produce identical samples.
+- Recordings say how they were conditioned, in `extras["conditioning"]`. A filtered take
+  holds filtered samples and the raw is not recoverable, so nothing in the arrays reveals
+  it; `examples/start_here/myocontrol.py` gains a SIGNAL panel and refuses to train on a
+  session whose notch disagrees with the switch. Fitting on unfiltered takes and predicting
+  through a notch changes the model's input distribution with every read-out still healthy.
+
+### Fixed
+
+- A fault in stream conditioning surfaces in `status`/`last_error` and leaves the acquire
+  loop alive. Raising on that thread killed it outright while every read-out still said
+  "connected" — the stream simply stopped delivering, with nothing to point at.
+
+### Changed
+
+- Comment density cut across `examples/`, to the level of `force_ramps.py`: the start_here
+  protocols and every file under `synthetic/` and `panels/`. Comments and docstrings only,
+  verified by comparing docstring-stripped ASTs against the previous commit for each file.
+
 ## [2.6.0] - 2026-08-09
 
 ### Added
