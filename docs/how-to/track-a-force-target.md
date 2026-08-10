@@ -62,19 +62,25 @@ block — but only if you ask for it. Every OTB entry in the picker has an
 | Device | Picker row | What gets appended | Where the force lands |
 |---|---|---|---|
 | Muovi, Muovi+ | `IMU + counters` | 6: quaternion `w x y z`, buffer/trigger, sample counter | **nowhere** — no analogue input |
+| Sessantaquattro+ | `AUX + IMU + counters` | 8: `aux0`, `aux1`, then the Muovi block | `aux0` / `aux1`, first two of the block |
 | Quattrocento | `AUX IN + accessory` | 16 AUX IN, then 8 accessory | any of the 16 back-panel AUX IN |
 
-One exception worth knowing before you order a transducer. A **Muovi** has no
-analogue input at all — its accessory block is IMU and counters, which is why the
-row is named for what is in it rather than "AUX".
+Two exceptions worth knowing before you order a transducer. A **Muovi** has no
+analogue input at all —
+its accessory block is IMU and counters, which is why the row is named for what is
+in it rather than "AUX". A plain **Sessantaquattro** reports a 4- or 6-wide
+accessory block with no AUX channels in it; the `aux0`/`aux1` pair is the `+`
+only. The accessory width is probed from the ramp counter rather than configured,
+so this is something you find out by connecting, not by picking a setting.
 
 **Do not count channel indices.** The panel's *Channel* dropdown lists the
-stream's own channel names, so you pick `aux0` by name. The index behind it moves
-with the channel count and the detection mode. `channel=` in the constructor is
-only where the dropdown opens.
+stream's own channel names, so you pick `aux0` by name. The index behind it moves:
+on a Sessantaquattro+ it is 64 at 64 channels monopolar but 32 in `Bipolar`, which
+halves the bio block. `channel=` in the constructor is only where the dropdown
+opens.
 
 Turning `include_aux` on has one cost worth knowing: the appended channels are
-raw, unscaled counts on a Muovi, sitting in the same stream as
+raw, unscaled counts on Muovi and Sessantaquattro, sitting in the same stream as
 bio channels scaled to millivolts. A shared plot range across both is useless.
 That is why it is off by default, and why the signal viewer is worth pointing at
 the bio channels while the force lives in this panel.
@@ -102,8 +108,8 @@ Both captures read the same thing the live trace does: the mean of the last
 sample off a load cell is noise with a force in it.
 
 Units never come up. `Calibration` is a two-point map in whatever the channel
-happens to carry, so it works identically on raw counts and on Quattrocento
-volts — you do not need the transducer's datasheet to run the task,
+happens to carry, so it works identically on Sessantaquattro counts and on
+Quattrocento volts — you do not need the transducer's datasheet to run the task,
 only to report newtons afterwards.
 
 **Start stays disabled until both exist**, and says so on hover. Recapture Zero

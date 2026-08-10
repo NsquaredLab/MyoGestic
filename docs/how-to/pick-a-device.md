@@ -25,7 +25,7 @@ def ui(ctx):
 ```
 
 `DEFAULT_DEVICES` covers the OT Bioelettronica family — Muovi, Muovi+,
-Quattrocento — plus any LSL outlet on the network, plus a
+Sessantaquattro(+), Quattrocento — plus any LSL outlet on the network, plus a
 synthetic test signal for when you have no hardware to hand. Each amplifier
 still needs its physical setup first: the **ⓘ** button beside the dropdown opens
 the numbered procedure — which button to hold, which network to join — and
@@ -34,6 +34,10 @@ the numbered procedure — which button to hold, which network to join — and
 The dot in the panel header is the connection state — grey until you connect,
 green once samples are arriving, red if the attempt failed. Hover it for the
 reason. The line under the button repeats it in words.
+
+One thing the labels cannot tell you: on a Sessantaquattro, **`Bipolar` halves
+the channel count**, so picking `64` and `Bipolar` gives you 32. The status
+line shows the real number once connected.
 
 ## Try it without hardware
 
