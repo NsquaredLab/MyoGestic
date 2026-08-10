@@ -1,6 +1,8 @@
 # Start here — complete protocols
 
 Whole applications, ready to run a real session with. Open one of these first.
+Never run anything before? [WINDOWS.md](WINDOWS.md) walks from an empty
+Windows machine to a recorded force-ramps session, no programming assumed.
 
 ```bash
 uv run python examples/start_here/force_ramps.py
