@@ -148,6 +148,7 @@ def test_shipped_device_labels_are_unique():
     ("prefix", "constant"),
     [
         ("Quattrocento", C.QUATTRO_BIO_BY_MODE),
+        ("Sessantaquattro", C.SESSANTAQUATTRO_BIO_BY_NCH),
     ],
 )
 def test_channel_labels_match_the_geometry_they_select(prefix, constant):

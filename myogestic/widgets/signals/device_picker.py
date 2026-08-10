@@ -24,7 +24,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.sources.lsl import LSLSource
-from myogestic.sources.otb import MuoviSource, QuattrocentoSource
+from myogestic.sources.otb import MuoviSource, QuattrocentoSource, SessantaquattroSource
 from myogestic.sources.synthetic import SyntheticSource
 from myogestic.widgets.common import (
     DANGER,
@@ -175,6 +175,13 @@ _MUOVI_STEPS = (
     "Join its MVxxx-ID network from this PC.",
     "Press Connect.",
 )
+_SESSANTAQUATTRO_HINT = "This PC is the server on port 45454; the device dials in."
+_SESSANTAQUATTRO_STEPS = (
+    'Join the device\'s Wi-Fi access point — or set this PC\'s IP as "Server IP address" '
+    "on the device's own web page.",
+    "Power the device on and wait for it to reach the network.",
+    "Press Connect.",
+)
 _QUATTROCENTO_HINT = "The amplifier is the server at 169.254.1.10; this PC connects to it."
 _QUATTROCENTO_STEPS = (
     "Connect the amplifier to this PC over Ethernet.",
@@ -189,9 +196,14 @@ _DETECTION = {"Monopolar": "monopolar", "Differential": "differential", "Bipolar
 #: range. Turning this on is how a force transducer wired to an AUX input becomes
 #: reachable at all.
 _MUOVI_AUX = DeviceOption("include_aux", "IMU + counters", {"Off": False, "On": True})
+_SESSANTAQUATTRO_AUX = DeviceOption(
+    "include_aux", "AUX + IMU + counters", {"Off": False, "On": True}
+)
 _QUATTROCENTO_AUX = DeviceOption("include_aux", "AUX IN + accessory", {"Off": False, "On": True})
 
-#: The OT Bioelettronica family.
+#: The OT Bioelettronica family. One Sessantaquattro entry covers both it and
+#: the ``+``: the accessory-channel count is probed from the ramp counter, not
+#: configured, so the two are the same to set up.
 OTB_DEVICES: tuple[DeviceSpec, ...] = (
     DeviceSpec(
         "Muovi — 32 ch",
@@ -206,6 +218,18 @@ OTB_DEVICES: tuple[DeviceSpec, ...] = (
         (_MUOVI_SIGNAL, _MUOVI_AUX),
         hint=_MUOVI_HINT,
         steps=_MUOVI_STEPS,
+    ),
+    DeviceSpec(
+        "Sessantaquattro / +",
+        SessantaquattroSource,
+        (
+            DeviceOption("nch_mode", "Channels", {"8": 0, "16": 1, "32": 2, "64": 3}),
+            DeviceOption("fs_mode", "Sample rate", {"500": 0, "1000": 1, "2000": 2, "4000": 3}),
+            DeviceOption("mode", "Detection", _DETECTION),
+            _SESSANTAQUATTRO_AUX,
+        ),
+        hint=_SESSANTAQUATTRO_HINT,
+        steps=_SESSANTAQUATTRO_STEPS,
     ),
     DeviceSpec(
         "Quattrocento",
