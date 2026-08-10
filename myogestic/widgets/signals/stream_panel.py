@@ -29,6 +29,32 @@ _BAD = DANGER
 # first frame each stream is seen disconnected. The scan button refreshes later.
 _auto_scanned: set[str] = set()
 
+# Streams with a connect attempt in flight. Accepting a device that dials in can
+# block for the source's whole timeout, so the button has to say it is working.
+_connecting: set[str] = set()
+
+
+def _connect(name: str, stream: Stream, ctx: Context) -> None:
+    """Reconnect off-thread, logging start and outcome."""
+    _connecting.add(name)
+    ctx.log(f"{name}: connecting…")
+
+    def run() -> None:
+        try:
+            ok = stream.reconnect()
+            if ok:
+                info = stream.info
+                detail = f"{info.fs:.0f} Hz · {info.n_channels} ch" if info else ""
+                ctx.log(f"{name}: connected {detail}")
+            else:
+                ctx.log(f"{name}: connect failed — {stream.last_error}")
+        except Exception as exc:  # a source may raise rather than return False
+            ctx.log(f"{name}: connect failed — {exc}")
+        finally:
+            _connecting.discard(name)
+
+    _threading.Thread(target=run, daemon=True).start()
+
 
 class StreamPanel:
     """Per-stream status panel — one row per stream with status + reconnect.
@@ -65,10 +91,10 @@ class StreamPanel:
             return
 
         for name, stream in ctx.streams.items():
-            _stream_row(name, stream, selectable=self._selectable)
+            _stream_row(name, stream, selectable=self._selectable, ctx=ctx)
 
 
-def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
+def _stream_row(name: str, stream: object, *, selectable: bool, ctx: Context) -> None:
     from myogestic.stream import Stream
 
     if not isinstance(stream, Stream):
@@ -80,33 +106,32 @@ def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
     has_discover = hasattr(stream._source, "discover")
     scan = _scans.setdefault(name, _ScanState())
 
-    # --- Top line: dot + name + source + right-aligned icon actions --------
+    # --- Top line: dot + name + source + action ----------------------------
     imgui.text_colored(_OK if connected else _BAD, fa.ICON_FA_CIRCLE)
     imgui.same_line()
     imgui.text(name)
     imgui.same_line()
     imgui.text_colored(muted(), f"({src_label})")
 
-    # Push the action buttons to the right edge of the available content.
-    btns_w = 60.0 if has_discover and selectable else 28.0
-    avail = imgui.get_content_region_avail().x
-    if avail > btns_w + 12:
-        imgui.same_line(0, avail - btns_w)
+    # One action: a labelled Connect while detached, the retry glyph once attached.
+    busy = name in _connecting
+    if busy:
+        label = "Connecting…"
+    elif connected:
+        label = fa.ICON_FA_ARROWS_ROTATE
     else:
-        imgui.same_line()
+        label = f"{fa.ICON_FA_PLUG} Connect"
 
-    if scan.busy:
+    imgui.same_line()
+
+    if busy or scan.busy:
         imgui.begin_disabled()
-    if imgui.small_button(f"{fa.ICON_FA_ARROWS_ROTATE}##sp_rec_{name}"):
-        _threading.Thread(target=stream.reconnect, daemon=True).start()
-    if scan.busy:
+    if imgui.small_button(f"{label}##sp_conn_{name}"):
+        _connect(name, stream, ctx)
+    if busy or scan.busy:
         imgui.end_disabled()
     if imgui.is_item_hovered():
-        imgui.set_tooltip(
-            "Connect to this stream's target.\n"
-            "Nothing attaches on its own — not on open, and not after a source goes\n"
-            "away — so a stream from an earlier run is never picked up behind you."
-        )
+        imgui.set_tooltip("Attach this stream to its source. Nothing attaches on its own.")
 
     if has_discover and selectable:
         imgui.same_line()
@@ -130,16 +155,7 @@ def _stream_row(name: str, stream: object, *, selectable: bool) -> None:
             f"{info.fs:.0f} Hz · {info.n_channels} ch · window {stream._window:.2f}s · {age_text}",
         )
     else:
-        if stream.last_error:
-            imgui.text_colored(muted(), stream.last_error)
-        else:
-            # Not "waiting for source". Nothing is waiting: a stream attaches when
-            # somebody attaches it, so a line promising it would happen on its own
-            # described the retry loop this used to have and left a red dot looking
-            # like a fault when it is a question. Name the button that answers it.
-            imgui.text_colored(
-                muted(), f"disconnected — {fa.ICON_FA_ARROWS_ROTATE} connects it"
-            )
+        imgui.text_colored(muted(), stream.last_error or "disconnected")
 
         # Auto-kick a scan on first disconnect so buttons appear without a click.
         if has_discover and selectable and name not in _auto_scanned:
