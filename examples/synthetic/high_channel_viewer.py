@@ -1,15 +1,12 @@
 """Watch a synthetic 256-channel EMG stream in the live signal viewer.
 
-A minimal viewer-only app to eyeball the plot at a high channel count. Useful for feeling
-the M4 acquisition-path fix: with the fix, the acquire thread never runs the whole-buffer
-all-channel M4, so the socket read is not starved at 256 channels and the stream keeps up.
+A viewer-only app to eyeball the plot at a high channel count: since the M4
+acquisition-path fix the acquire thread no longer runs the whole-buffer all-channel M4,
+so the socket read is not starved at 256 channels and the stream keeps up.
 
 Run:
     uv run python examples/synthetic/high_channel_viewer.py
 then click "Start" on the "EMG Generator 256ch" entry in the launcher panel.
-
-To feel the before/after, run this same script on `feat/otb-device-sources` (M4 on the
-acquire thread) versus the perf branch and compare how well the stream keeps up.
 """
 
 import sys
@@ -39,11 +36,8 @@ PROCESSES = [
             str(N_CHANNELS),
             "--fs",
             str(FS),
-            # No `--control`: this app only watches. It never publishes `EMG_Control`, and
-            # a generator told to listen for a stream nobody publishes used to re-resolve
-            # every tick — 0.1 s of a 15.6 ms budget, so it ran at 15% rate and this
-            # viewer drew the few samples that arrived. The generator no longer punishes
-            # that, but asking for a stream you do not provide is still asking for nothing.
+            # No `--control`: this app only watches, so nothing here publishes
+            # `EMG_Control` for the generator to find.
         ],
     ),
 ]

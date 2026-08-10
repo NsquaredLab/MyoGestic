@@ -1,11 +1,9 @@
 """Regression demo: same Rest/Fist workflow as ``emg_regression.py``, RaulNet model.
 
-Identical experiment to :file:`emg_regression.py` — fake 8-channel EMG +
-VHI control hand driven via gRPC, recording while toggling Rest / Fist,
-regressing the 5-DOF kinematics target — but the model is RaulNet V17
-(a PyTorch Lightning CNN from :mod:`myoverse.models.raul_net`) instead of
-CatBoost. Use this to compare a neural-net regressor against the
-tree-based one on the same data.
+Same experiment as :file:`emg_regression.py` — fake 8-channel EMG, VHI control hand over
+gRPC, recording while toggling Rest / Fist, regressing the 5-DOF kinematics target — but
+the model is RaulNet V17, a PyTorch Lightning CNN from :mod:`myoverse.models.raul_net`,
+instead of CatBoost.
 
 The control space is declared in :file:`examples/controls/regression_raulnet.toml` — your
 aliases on the left, VHI's addresses on the right — and resolves against a *running* VHI,
@@ -14,18 +12,14 @@ so nothing here hard-codes what a control means.
 Run with:
     uv run --extra examples --extra grpc python examples/synthetic/emg_regression_raulnet.py
 
-Workflow (mirrors examples/synthetic/emg_regression.py):
+Workflow:
     1. Launch EMG Generator + VHI Hand
-    2. Click Rest or Fist → MyoGestic drives the VHI control hand over
-       gRPC and snaps it to the end pose
-    3. Click Record → VHI's local keyboard is gated off for the session;
-       the buttons above are the sole movement source → Stop Rec
+    2. Click Rest or Fist → MyoGestic drives the VHI control hand over gRPC
+    3. Click Record → VHI's local keyboard is gated off for the session; the buttons
+       above are the sole movement source → Stop Rec
     4. Repeat for several recordings (RaulNet wants more data than CatBoost)
-    5. Tick the sessions → Train (CNN, ~50 epochs)
+    5. Tick the sessions → Train
     6. Predict → VHI predicted hand mirrors the control hand
-
-Requirements:
-    uv sync --extra examples --extra grpc
 """
 
 from __future__ import annotations
@@ -64,9 +58,6 @@ from myogestic.widgets import (
 )
 
 # ── Stream / window math ──────────────────────────────────────────────
-# Same 8-channel 2048 Hz synthetic EMG the other examples use, with a
-# 200 ms analysis window. RaulNet's sliding-RMS feature runs an RMS_WINDOW_MS
-# window at an RMS_STRIDE_MS step, shortening it to (8, INPUT_LENGTH) for the CNN.
 
 STREAM_NAME = "TestEMG1"
 N_CHANNELS = 8
@@ -87,12 +78,10 @@ if RMS_WINDOW_SAMPLES >= N_WINDOW_SAMPLES:
     )
 
 # ── The model's own geometry, checked here rather than inside torch ───
-# RaulNetV17's encoder opens with a strided "event search" conv and then a second
-# conv whose kernel is **18 wide, hard-coded in the model**. So the first conv's
-# output has to be at least that long, and the arithmetic is not obvious from any
-# one constant: EVENT_SEARCH_STRIDE=8 turned this example's 29 feature samples into
-# 4, and the failure surfaced as a torch shape error six frames into a Lightning
-# stack — after training had started and the windows had been cut.
+# RaulNetV17's second encoder conv has a kernel 18 wide, hard-coded in the model, so the
+# event-search conv's output has to be at least that long: EVENT_SEARCH_STRIDE=8 collapsed
+# this example's 29 feature samples to 4, and surfaced only as a torch shape error deep in
+# a Lightning stack, after training had started and the windows had been cut.
 EVENT_SEARCH_KERNEL = 31
 EVENT_SEARCH_STRIDE = 1
 _MIN_ENCODER_WIDTH = 18  # RaulNetV17's second conv kernel; not ours to change
@@ -108,7 +97,7 @@ if _encoder_out < _MIN_ENCODER_WIDTH:
         "Lower EVENT_SEARCH_STRIDE, shorten RMS_STRIDE_MS, or lengthen WINDOW_MS."
     )
 
-# Training budget. Steps, not epochs — see the DataLoader and the Trainer below.
+# Training budget. What trains a network is steps, not epochs.
 BATCH_SIZE = 8
 MAX_EPOCHS = 300
 MAX_STEPS = 4000
@@ -120,9 +109,8 @@ CTRL_VALUES = [0.0, 1.0]
 def sliding_rms(emg: np.ndarray) -> np.ndarray:
     """Per-channel sliding RMS, ``(n_channels, INPUT_LENGTH)`` always.
 
-    Left-pads with zeros when the input was shorter than the RMS kernel
-    or shorter than ``INPUT_LENGTH`` — keeps the model's input shape
-    stable even on the first frames where the ring buffer isn't full yet.
+    Left-pads with zeros when the input is shorter than the RMS kernel, so the shape
+    stays stable on the first frames, before the ring buffer has filled.
     """
     n_ch, n = emg.shape
     if n < RMS_WINDOW_SAMPLES:
@@ -155,14 +143,11 @@ def load_raulnet(path: str) -> L.LightningModule:
 ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
-# The recording aid (session gate, trajectory playback) and the control client.
 recording_aid = vhi.recording_client()
 vhi_control = vhi.control_client()
 
-# Which control each of the network's five outputs drives. The aliases on the left are
-# ours and must match regression_raulnet.toml; the names on the right are what
-# `split_pose` names the channels of a recorded VHI_Control frame, i.e. the training
-# target. There is no wrist on that wire at all — channel 0 is thumb flexion.
+# The aliases on the left are ours and must match regression_raulnet.toml; the names on
+# the right are what `split_pose` calls the channels of a recorded VHI_Control frame.
 DOF_TARGETS: dict[str, str] = {
     "thumb": "thumb.flexion",
     "index": "index.flexion",
@@ -178,8 +163,6 @@ CONTROL_FILE = Path(__file__).resolve().parent.parent / "controls" / "regression
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
 
-# Output-side smoothing, applied by the control bus to the control vector.
-# Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
 PROCESSES = [
@@ -199,10 +182,8 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
-    # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
-    # Hand share one launcher panel. `launchable` rather than `launcher` because an
-    # unlaunchable target must not stop this app from opening — a running one needs no
-    # button, and the reason is logged either way.
+    # `launchable`, never `launcher`: a VHI that cannot be launched must not stop this app
+    # from opening, and one already running needs no button.
     *vhi.launchable(),
 ]
 
@@ -220,11 +201,8 @@ pipeline = Pipeline(app, predict_hz=20)
 pipeline.save_model = save_raulnet
 pipeline.load_model = load_raulnet
 
-# The bus is built lazily, by `link.ensure()`. Every semantic the map needs — whether an
-# address takes a number or a held state, its range, its states — is VHI's to declare, and
-# VHI does not exist yet: this app launches it from its own ProcessLauncher. No hand and no
-# stream is named here either: the target looks this file's addresses up in VHI's manifest
-# and publishes one stream per address it drives, named for that address.
+# Lazy: the bus is built by `link.ensure()`, because every semantic the map needs — range,
+# states, number vs held state — is VHI's to declare, and this app launches VHI itself.
 link = ControlLink(
     CONTROL_MAP,
     [RemoteTarget(client=vhi_control, interface=vhi)],
@@ -243,10 +221,8 @@ def extract(windows) -> np.ndarray:
 class _TrainLogCallback(L.Callback):
     """Pipe Lightning's per-epoch loss into ``pipeline.train_log``.
 
-    Lightning's default progress bar is disabled for this app (it spams
-    stdout); the in-UI log is the only place the user sees training
-    progress, so without this callback the MODEL panel stays static
-    until the whole 50-epoch fit finishes.
+    Lightning's progress bar is disabled for this app, so without this callback the
+    MODEL panel stays static until the whole fit finishes.
     """
 
     def __init__(self, log_list: list[str]) -> None:
@@ -265,10 +241,8 @@ class _TrainLogCallback(L.Callback):
 def train(data: TrainingData) -> L.LightningModule:
     """Fit RaulNetV17 on EMG-feature → VHI-control kinematics windows.
 
-    Mirrors ``emg_regression.py``: sessions with a ``vhi_control`` stream
-    use ``iter_aligned_windows`` for the real kinematics target; sessions
-    without it fall back to synthetic class-derived targets (Fist→all 1s,
-    Rest→all 0s).
+    Sessions with a ``vhi_control`` stream use the recorded kinematics as target;
+    sessions without it fall back to class-derived ones (Fist→all 1s, Rest→all 0s).
     """
     log = pipeline.train_log
     log.clear()
@@ -292,9 +266,8 @@ def train(data: TrainingData) -> L.LightningModule:
         n_alignment_samples=10,
     ):
         X_list.append(sliding_rms(emg_window))
-        # A recorded pose is already control-standard, so this only names the training
-        # target is in exactly the space `predict` commands. A signed negation, not
-        # the old abs() — which folded extension into flexion of equal magnitude.
+        # A recorded pose is already control-standard: the training target lands in
+        # exactly the space `predict` commands, signed, no abs().
         pose = split_pose(aligned["vhi_control"])
         y_list.append(np.array([pose[DOF_TARGETS[n]] for n in DOF_NAMES], dtype=np.float64))
     if kin_paths:
@@ -330,12 +303,8 @@ def train(data: TrainingData) -> L.LightningModule:
     X_tensor = torch.from_numpy(X).unsqueeze(1)
     y_tensor = torch.from_numpy(y)
     dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
-    # What trains a network is optimizer steps, and this batch size used to be larger
-    # than the whole demo training set: 37 windows in one batch, one batch per epoch,
-    # 50 epochs — fifty updates at 1e-4, which is a network barely off its
-    # initialisation. It lost to CatBoost because it had not been fitted, not because
-    # it is worse. Eight keeps several steps per epoch on a set this small, and stays
-    # a sane batch when there is more data.
+    # Small on purpose: a batch bigger than the whole demo set (37 windows) gave one step
+    # per epoch — 50 updates at 1e-4, which lost to CatBoost unfitted, not outclassed.
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
@@ -364,29 +333,20 @@ def train(data: TrainingData) -> L.LightningModule:
 
     torch.set_float32_matmul_precision("medium")
     Path("data/logs").mkdir(parents=True, exist_ok=True)
-    # precision="32-true": RaulNet's TorchScript-compiled backward graph
-    # has hard-coded dtype checks that don't tolerate ANY mixed-precision
-    # autocast — both fp16-mixed and bf16-mixed trip the same
-    # "mat1 and mat2 different dtype" assertion. Full fp32 sidesteps it.
-    # On Apple Silicon (MPS) the loss-of-bf16 throughput is small; on CUDA
-    # bump to fp16-mixed if you've patched RaulNet's traced ops.
+    # precision="32-true": RaulNet's TorchScript backward graph has hard-coded dtype
+    # checks; fp16-mixed and bf16-mixed both trip "mat1 and mat2 different dtype".
     trainer = L.Trainer(
         accelerator="auto",
         devices=1,
         precision="32-true",
         max_epochs=MAX_EPOCHS,
-        # A ceiling in *steps*, because epochs are not the unit that trains anything:
-        # the same `max_epochs` is fifty updates on this demo set and tens of thousands
-        # on a real one. Whichever limit comes first wins.
+        # Whichever limit comes first wins: `max_epochs` is 50 updates on this demo set
+        # and tens of thousands on a real one.
         max_steps=MAX_STEPS,
-        # log_every_n_steps=1 so callback_metrics is populated even when
-        # an epoch is a single batch (small training-set demo case).
+        # So callback_metrics is populated even when an epoch is a single batch.
         log_every_n_steps=1,
-        # No StochasticWeightAveraging. It began at `swa_epoch_start=0.5` — epoch 25 of
-        # 50 — and averaged the weights of the last 25 updates, which is a technique for
-        # the tail of a long run being asked to smooth a model that had not converged.
-        # It froze an undertrained network. Worth restoring once a run is long enough
-        # for the average to be over something.
+        # No StochasticWeightAveraging: at swa_epoch_start=0.5 it averaged the last 25
+        # updates of an unconverged net and froze it. Restore once runs are long enough.
         callbacks=[
             ModelCheckpoint(
                 monitor="train/loss",
@@ -434,9 +394,8 @@ grid = Grid(
 
 
 def _on_gesture(i: int) -> None:
-    # A discrete held state through the same bus the continuous DOFs use. The
-    # control hand snaps to the pose and holds it, so VHI_Control settles to a static
-    # kinematic value the regressor can map back from EMG amplitude.
+    # A held state through the same bus the continuous DOFs use: the control hand snaps
+    # and holds, so VHI_Control settles to a static value the regressor can map back to.
     bus = link.ensure()
     ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
     if bus is not None:

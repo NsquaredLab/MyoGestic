@@ -22,10 +22,8 @@ from myogestic.widgets import ControlMapEditor
 
 FINGERS = ("thumb", "index", "middle", "ring", "little")
 
-#: What a VHI build reports, mirrored: one address per control, each carried on a stream
-#: named after it and one channel wide. Two aliases pointing at one *address* is the
-#: collision the editor refuses — there is no second spelling of a control to collapse
-#: first, because a target advertises exactly one.
+#: What a VHI build reports, mirrored: one address per control, one channel each. Two
+#: aliases on one address is the collision the editor refuses.
 MANIFEST = [
     *(
         Capability(

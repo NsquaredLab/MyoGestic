@@ -43,24 +43,17 @@ ctrl_outlet = control_outlet()
 # --8<-- [start:poses]
 vhi = virtual_hand()
 
-# What this app controls, declared in a file: the left side is *ours*, the right side is
-# VHI's. Parsing needs no VHI; resolving does, so that waits until one is up (`link.ensure`).
+# The left side is ours, the right side is VHI's. Parsing needs no VHI; resolving does.
 CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification.toml"
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
 
-# Classification reaches the hand the *same way regression does*. The classifier gives an
-# activation, not a pose: both aliases below declare a `threshold_fraction` in the file,
-# so a probability is gated to exactly 0 or 1 and from there is an ordinary control value —
-# fanned out and weighted like a regressor's. `fist` reaches all five digits and
-# `thumb_spread` abducts the thumb, so a whole-hand pose is these two numbers rather than
-# a channel vector, and VHI receives continuous per-control values either way.
+# Both aliases declare a `threshold_fraction` in the file, so a probability is gated to
+# 0 or 1 there and reaches the hand as an ordinary control value — same path as regression.
 FIST_ALIASES = ("fist", "thumb_spread")
 
 # --8<-- [end:poses]
 
-# Output-side smoothing applied to the hand pose vector before pushing
-# to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
 # --8<-- [start:filter]
 output_filter = PostProcessor(hz=32)
 # --8<-- [end:filter]
@@ -68,9 +61,7 @@ output_filter = PostProcessor(hz=32)
 vhi_control = vhi.control_client()
 
 
-# Reference RMS / MAV / WL / VAR / ZC live in myogestic.recipes.features; mix
-# with your own callables here — feature engineering is user code, this is
-# the seam where you'd add custom ones.
+# Any callable of your own goes in this dict too — features are user code.
 # --8<-- [start:features]
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
@@ -109,16 +100,13 @@ app.streams(Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buf
 pipeline = Pipeline(app)
 # --8<-- [end:setup]
 
-# The link and its target own the wire. VHI's continuous inlet takes control values, and
-# `RemoteTarget` negotiates the space and refuses a VHI it cannot fully drive rather than
-# guessing. Nothing is resolved here: the aliases above mean nothing until VHI has said
-# what its addresses do, and this script launches VHI itself. `link.ensure()` binds on
-# the first click that finds VHI up, and `link.bus` is None until then.
+# Nothing is resolved here — this script launches VHI itself. `link.ensure()` binds on the
+# first click that finds VHI up; `link.bus` is None until then, and `RemoteTarget` refuses
+# a VHI it cannot fully drive rather than guessing.
 link = ControlLink(
     CONTROL_MAP,
     # No hand and no stream is named: the target looks this file's addresses up in VHI's
-    # manifest and publishes one stream per address it drives, each named for that
-    # address and one channel wide.
+    # manifest and publishes one one-channel stream per address it drives.
     [RemoteTarget(client=vhi_control, interface=vhi)],
     ctx=app.ctx,
     smoothing=output_filter,
@@ -139,12 +127,10 @@ def extract(windows: dict[str, np.ndarray]) -> np.ndarray:
 # --8<-- [start:train]
 @pipeline.train
 def train(data: TrainingData):
-    """Train CatBoost classifier on numpy features from selected sessions.
+    """Train a CatBoost classifier on numpy features from selected sessions.
 
-    Each labeled trial is chopped into fixed-size windows (0.2s) so the
-    feature vectors all share a shape - all features here reduce a
-    window to one scalar per channel, so total feature dim is
-    ``n_active_features * n_channels``.
+    Every feature here reduces a window to one scalar per channel, so the feature
+    dimension is ``n_active_features * n_channels``.
     """
     if data.is_empty:
         raise ValueError("No sessions selected. Load some and tick the checkboxes.")
@@ -198,20 +184,15 @@ def train(data: TrainingData):
 def predict(model, features):
     """Classify → gate to an activation → smooth → push to VHI.
 
-    Three separate things happen to the number, in this order, and each is worth
-    telling apart. `threshold_fraction` decides *whether* the hand is closed, giving
-    a 0 or a 1. The fan-out weights decide *how much of that* each digit gets. The
-    filter then decides *how fast* the change is allowed to look. Class probabilities
-    themselves flow through untouched, for the UI.
+    The probabilities themselves flow through untouched, for the UI.
     """
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
     # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this callback has a
     # deadline.
     if link.bus is None:
-        return {"class": class_idx, "proba": proba}  # unresolved; nothing to command
-    # The probability of "Fist", pushed as-is. The bus gates it before anything else
-    # sees it, so VHI is never handed a bare 0.73 standing in for a finger position.
+        return {"class": class_idx, "proba": proba}
+    # Pushed raw: the bus gates it, so VHI is never handed a bare 0.73 as a finger position.
     activation = float(proba[CLASSES.index("Fist")])
     hand = link.bus.push(dict.fromkeys(FIST_ALIASES, activation))
     return {"class": class_idx, "proba": proba, "hand": hand}
@@ -220,13 +201,7 @@ def predict(model, features):
 # --8<-- [end:predict]
 
 
-# Branding cell is FIXED-pixel in both axes so it stays sized to the
-# wordmark regardless of window dimensions:
-#   * col 0 → Px(300) wide
-#   * row 0 → Px(300 / 1.48) ≈ Px(203) tall (matches the wordmark aspect)
-# Everything else uses Fr (CSS-grid "fraction unit") to share the leftover
-# space: cols 1+2 split the remaining width equally, rows 1-7 split the
-# remaining height equally.
+# The branding cell is Px in both axes so it stays sized to the wordmark, not the window.
 # --8<-- [start:layout]
 LOGO_CELL_W = 300
 WORDMARK_ASPECT = 800 / 540
@@ -268,10 +243,7 @@ def demo_ui(ctx):
         viewer.ui(ctx)
 
     with grid[0, 0]:
-        # No size cap — let the wordmark grow to the cell. The widget
-        # fits-in-rect (preserving aspect), so the image always renders
-        # at the largest aspect-preserving box that fits the current
-        # cell dimensions and centres itself.
+        # No size cap: the widget fits-in-rect, preserving aspect, and centres itself.
         logo.ui()
 
     with grid[1, 0]:

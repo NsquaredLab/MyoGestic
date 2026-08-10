@@ -1,17 +1,13 @@
-"""Pop-out windows demo: same 32-ch multi-model experiment as
-``emg_32ch_multi_model.py``, but each block is registered with
-``app.popout(...)`` so the user can tear panels off into their own floating
-ImGui windows — and, with multi-viewport enabled, into real OS windows.
+"""Pop-out windows demo: the 32-ch multi-model experiment from
+``emg_32ch_multi_model.py``, with every block registered via ``app.popout(...)``
+so panels tear off into floating ImGui windows — real OS windows with
+multi-viewport on.
+
+Drag a panel's tab outside the main window to float it; the layout restores from
+``.imgui_state/EMG_32ch_Popout.ini`` on the next launch.
 
 Run with:
     uv run python examples/synthetic/emg_popout_layout.py
-
-Workflow:
-    1. Launch generator + VHI as before.
-    2. Drag any panel's tab outside the main window — it floats into its
-       own native OS window.
-    3. Quit and re-launch — the layout restores from
-       ``.imgui_state/EMG_32ch_Popout.ini``.
 
 Experimental - see the README "Status" note for macOS caveats.
 """
@@ -132,10 +128,9 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
-    # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
-    # Hand share one launcher panel. `launchable` rather than `launcher` because an
-    # unlaunchable target must not stop this app from opening — a running one needs no
-    # button, and the reason is logged either way.
+    # A [(name, argv)] list, splatted so the generator and VHI share one launcher panel.
+    # `launchable`, never `launcher`: a VHI that cannot be launched must not stop this app
+    # from opening.
     *vhi.launchable(),
 ]
 
@@ -147,12 +142,8 @@ pipeline = Pipeline(app)
 pipeline.save_model = save_pickle
 pipeline.load_model = load_pickle
 
-# The link and its target own the wire. VHI's continuous inlet takes control values, and
-# `RemoteTarget` negotiates the space and refuses a VHI it cannot fully drive rather than
-# guessing. Nothing resolves until `link.ensure()` finds VHI up: the map says nothing
-# about kinds or ranges until VHI has declared them. No hand and no stream is named here
-# either — the target looks this file's addresses up in VHI's manifest and publishes one
-# stream per address it drives, named for that address.
+# Nothing resolves until `link.ensure()` finds VHI up: the map declares no kinds or ranges,
+# so the target reads them from VHI's manifest and refuses a VHI it cannot fully drive.
 link = ControlLink(
     CONTROL_MAP,
     [RemoteTarget(client=vhi_control, interface=vhi)],

@@ -1,11 +1,9 @@
 """Classification demo: fake EMG → numpy features → CatBoost → VHI two ways.
 
-A normal MyoGestic classification example — it streams the classified hand to VHI's
-predicted hand over LSL, on whichever streams the manifest says carry the addresses
-the control file names — that ALSO
-showcases the gRPC control plane: on each predicted-class *change* it sends a
-discrete ``SetMovement`` command to VHI's control hand. Same classification,
-output both ways — the continuous LSL stream and the discrete gRPC command.
+One classification, output twice: `fist` streams continuously to VHI's predicted hand over
+LSL, and on each predicted-class *change* `gesture` sends a discrete ``SetMovement`` to
+VHI's control hand over gRPC. Where each one lands is declared in
+../controls/classification_grpc.toml, not here.
 
 Run with:
     uv run --extra examples --extra grpc python examples/synthetic/emg_classification_grpc.py
@@ -19,10 +17,6 @@ Workflow:
     4. Select sessions → Train → Predict → the predicted hand follows the
        classification (LSL), and each class *change* also commands the control
        hand (gRPC)
-
-Where the two outputs *go* is declared in ../controls/classification_grpc.toml, not
-here: this example names its outputs `fist` and `gesture`, and that file maps them onto
-the control addresses VHI declares it exports.
 """
 
 import pathlib
@@ -57,37 +51,28 @@ from myogestic.widgets import (
 ctrl_outlet = control_outlet()
 
 vhi = virtual_hand()
-# The recording aid (session gate) and the control client.
 recording_aid = vhi.recording_client()
 vhi_control = vhi.control_client()
 
-# Where this example's two outputs go. The left side of that file is ours (`fist` and
-# `gesture`), the right side is VHI's — read it, it is commented. Parsing is all that
-# happens here: what an address *means* is VHI's to declare, so nothing is resolved
-# until it answers (see `link` below).
+# The left side is ours (`fist` and `gesture`), the right side is VHI's. Parsing needs no
+# VHI; resolving does.
 CONTROL_FILE = (
     pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification_grpc.toml"
 )
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
 
-# Output-side smoothing applied to the hand pose vector before pushing
-# to VHI. Live-tunable via the PostProcessor widget rendered in the UI.
 output_filter = PostProcessor(hz=32)
 
-# CLASSES double as the states of the discrete `gesture` output, and those states are
-# VHI's movement names — so they are sent verbatim and must be movements this VHI
-# offers (see MovementDefinitions.cs). "Rest" and "Fist" both are; the fake generator
-# only produces two amplitude levels, so two classes is also what it can cleanly drive.
+# These double as the states of the discrete `gesture` output, sent verbatim, so each must
+# be a movement this VHI offers (see MovementDefinitions.cs). The fake generator has only
+# two amplitude levels, so two classes is also all it can cleanly drive.
 CLASSES = ["Rest", "Fist"]
-# Per-class value for both the generator's amplitude and the `fist` output: 0 is an
-# open hand, 1 fully closed. One scalar — the control file fans it out to six controls.
+# Amplitude for the generator and value for `fist`; the control file fans it out to six.
 CTRL_VALUES = [0.0, 1.0]
 
 
-# Reference RMS / MAV / WL / VAR live in myogestic.recipes.features; mix
-# with your own callables here — feature engineering is user code, this is
-# the seam where you'd add custom ones.
+# Any callable of your own goes in this dict too — features are user code.
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var},
     default=["RMS", "MAV"],
@@ -110,10 +95,8 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
-    # vhi.launchable() returns a [(name, argv)] entry; splat it so EMG Generator and VHI
-    # Hand share one launcher panel. `launchable` rather than `launcher` because an
-    # unlaunchable target must not stop this app from opening — a running one needs no
-    # button, and the reason is logged either way.
+    # `launchable`, never `launcher`: a VHI that cannot be launched must not stop this app
+    # from opening, and one already running needs no button.
     *vhi.launchable(),
 ]
 
@@ -167,12 +150,9 @@ def train(data: TrainingData):
     return clf
 
 
-# Resolved by `link.ensure()` rather than here: the control file says *where* each
-# output goes, and VHI says what those addresses accept — so there is nothing to resolve,
-# and no way to know which of VHI's streams this map needs, until VHI is running, which
-# this app launches from its own UI. No hand and no stream is named here either: the
-# target looks this file's addresses up in VHI's manifest and publishes one stream per
-# address it drives, named for that address.
+# Nothing is resolved here — this app launches VHI from its own UI. `link.ensure()` binds
+# once VHI is up; until then `link.bus` is None. No hand and no stream is named either: the
+# target looks this file's addresses up in VHI's manifest, one stream per address it drives.
 link = ControlLink(
     CONTROL_MAP,
     [RemoteTarget(client=vhi_control, interface=vhi)],
@@ -190,24 +170,18 @@ def predict(model, features):
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
     if link.bus is None:
-        # Nothing resolved yet, so nothing to command. `link.ensure()` here is not an
-        # option: it blocks on an RPC and this runs on the predict thread.
+        # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this runs on the
+        # predict thread.
         return {"class": class_idx, "proba": proba}
 
-    # One frame carries both outputs: `fist` streams to the predicted hand, and the
-    # gesture reaches the control hand only once it has settled. The bus applies the
-    # debounce the control file declares, so there is no trigger to drive here.
+    # One frame carries both outputs. The bus applies the debounce the control file
+    # declares, so the gesture reaches the control hand only once it has settled.
     values = link.bus.push({"fist": CTRL_VALUES[class_idx], "gesture": CLASSES[class_idx]})
 
     return {"class": class_idx, "proba": proba, "hand": values}
 
 
-# Branding cell is FIXED-pixel in both axes so it stays sized to the
-# wordmark regardless of window dimensions:
-#   * col 0 → Px(300) wide
-#   * row 0 → Px(300 / 1.48) ≈ Px(203) tall (matches the wordmark aspect)
-# Everything else uses Fr to share leftover space: cols 1+2 split width
-# equally, rows 1-8 split height equally.
+# The branding cell is Px in both axes so it stays sized to the wordmark, not the window.
 LOGO_CELL_W = 300
 WORDMARK_ASPECT = 800 / 540
 grid = Grid(
@@ -248,10 +222,8 @@ def _on_stop() -> None:
     recording_aid.set_recording_session(False)
 
 
-# VhiMovementPanel owns its own state cache and the throttled background
-# get_state() refresh, so the @app.ui body stays free of plumbing.
-# Clicks go through the `gesture` output, not straight at the target, so they pass
-# through the same debounce and rebase it — see `_select_gesture`.
+# Clicks route through the `gesture` output, not straight at the target, so they pass the
+# same debounce and rebase it — see `_select_gesture`.
 vhi_panel = VhiMovementPanel(recording_aid, _select_gesture)
 
 viewer = SignalViewer("emg")
@@ -274,10 +246,7 @@ def demo_ui(ctx):
         viewer.ui(ctx)
 
     with grid[0, 0]:
-        # No size cap — let the wordmark grow to the cell. The widget
-        # fits-in-rect (preserving aspect), so the image always renders
-        # at the largest aspect-preserving box that fits the current
-        # cell dimensions and centres itself.
+        # No size cap: the widget fits-in-rect, preserving aspect, and centres itself.
         logo.ui()
 
     with grid[1, 0]:
@@ -314,9 +283,7 @@ def main() -> None:
         recording_aid.set_recording_session(False)
         recording_aid.stop()
         vhi_control.stop()
-        # Built at import time, before any UI callback runs, so a run that never opens
-        # the window still needs it released here. The pose stream is not listed: the
-        # target builds it, so `link.stop()` above is what releases it.
+        # The pose stream is not listed: the target builds it, so `link.stop()` frees it.
         ctrl_outlet = None  # a raw StreamOutlet has no .stop(); dropping it releases it
 
 

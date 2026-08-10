@@ -14,9 +14,8 @@ from __future__ import annotations
 from myogestic.controls import Capability, ControlBus, ControlSet, load_control_map, resolve
 
 # ── 1. Name your controls ─────────────────────────────────────────────────────────────
-# Two or more dotted, lowercase segments. The first segment is your namespace, so these
-# cannot collide with `vhi.*` or `keyboard.*` in the same map. Name a *direction*, so `+1`
-# has a meaning: `grip.close`, not `grip.motor`.
+# Two or more dotted, lowercase segments; the first is your namespace, so these cannot
+# collide with `vhi.*` in the same map. Name a *direction*: `grip.close`, not `grip.motor`.
 ADDRESSES = ("mydevice.grip", "mydevice.wrist.pronation")
 
 
