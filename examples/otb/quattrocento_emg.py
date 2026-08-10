@@ -27,7 +27,7 @@ def main() -> None:
     for _ in range(5):
         time.sleep(1.0)
         data, ts = stream.get_window()
-        if data is not None:
+        if len(ts):
             print(f"window: {data.shape} (channels-first), last ts={ts[-1]:.3f}")
     stream.stop()
 
