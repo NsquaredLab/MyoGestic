@@ -1,23 +1,15 @@
 """Control-hand demo: sliders → the *operator's* hand, over its own stream.
 
 Every other VHI example drives `vhi.prediction.*` — the model's hand. This one drives
-`vhi.control.pose.*`, the hand an operator poses by hand to set up a session or to show
-a subject what to do. Two hands, two namespaces, one handshake.
-
-The distinction is not cosmetic: an address is only ever a name, so `…index` on the wrong
-namespace moves the *other* hand and nothing anywhere reports an error. Nothing in this
-file keeps them apart, though — the target reads the map's addresses out of VHI's
-manifest and publishes a stream named for each one. Point the same file at
-`vhi.prediction.*` instead and this app drives the other hand, unchanged. VHI
-follows whichever streams are present and publishing — nothing here has to ask for that.
+`vhi.control.pose.*`, the hand an operator poses to set up a session or to show a subject
+what to do. An address is only ever a name: `…index` on the wrong namespace moves the
+*other* hand and nothing reports an error. Point `controls/control_hand.toml` at
+`vhi.prediction.*` and this file drives that hand instead, unchanged.
 
 Run with:
     uv run --extra grpc python examples/synthetic/vhi_control_hand.py
 
-Workflow:
-    1. Launch "VHI Hand" → VHI appears
-    2. Click "Connect" → the mapping resolves against what VHI says it exports
-    3. Drag the sliders → the control hand follows
+Launch "VHI Hand", press Connect, then drag the sliders.
 """
 
 import pathlib
@@ -50,10 +42,7 @@ vhi_control = vhi.control_client()
 
 app = App("VHI control hand")
 
-# The map is the whole point: every address in it belongs to the control hand, so that
-# is the hand this ends up driving. The file names no hand and neither does this — the
-# target looks the addresses up in the manifest and publishes a stream named for each
-# one. `link.bus` stays None until VHI can say what it exports.
+# `link.bus` stays None until VHI answers with what it exports.
 link = ControlLink(
     CONTROL_MAP,
     [RemoteTarget(client=vhi_control, interface=vhi)],

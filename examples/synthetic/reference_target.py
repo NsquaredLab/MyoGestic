@@ -20,20 +20,11 @@ from mne_lsl.lsl import StreamInlet, resolve_streams
 from myogestic.remote._proto import remote_control_pb2 as pb2
 from myogestic.remote._proto import remote_control_pb2_grpc as pb2_grpc
 
-#: What this target exports. The address is yours to name; its first segment is the
-#: namespace, so `vhi.*` here means a map written for a Virtual Hand drives this too.
-#:
-#: **One stream per address, named after the address, one channel wide.** That is the
-#: whole transport, and it is not one option among several: there is no width to declare,
-#: no positional layout for the two ends to agree on, and nothing in the manifest that
-#: describes a wire. Each address is applied the moment its sample arrives rather than
-#: when a whole pose does — one nobody drives just keeps its last value. A client reads
-#: the address and publishes under exactly that name.
-#:
-#: `lo=-1.0, hi=1.0` is the range; the sign is a separate, settled convention this
-#: project does not let a target redefine: `+1` is always the direction the address
-#: name denotes, so `vhi.prediction.index` at `+1` is a flexed index, and a fist across
-#: the nine addresses of a VHI-shaped hand is `[1, -1, 1, 1, 1, 1, 0, 0, 0]`.
+#: What this target exports. The first segment is the namespace, so `vhi.*` means a map
+#: written for a Virtual Hand drives this too. **One stream per address, named after the
+#: address, one channel wide** — each applied as its sample arrives, and one nobody
+#: drives keeps its last value. `+1` is always the direction the address name denotes, a
+#: convention a target does not redefine: a fist is `[1, -1, 1, 1, 1, 1, 0, 0, 0]`.
 ADDRESSES = [
     "vhi.prediction.thumb.flexion",
     "vhi.prediction.thumb.abduction",
@@ -48,8 +39,6 @@ class ReferenceTarget(pb2_grpc.RemoteControlServicer):
     """A remote target in eighty lines. Holds the last value it was sent, per address."""
 
     def __init__(self, port: int = 50051) -> None:
-        #: The whole driven state, by address rather than by channel. Nothing waits for
-        #: a full pose here, because nothing on the wire delivers one.
         self.pose = dict.fromkeys(ADDRESSES, 0.0)
         self._port = port
         self._server: grpc.Server | None = None
@@ -60,15 +49,9 @@ class ReferenceTarget(pb2_grpc.RemoteControlServicer):
     def GetControlManifest(self, request, context):
         """What this target exports. The only thing a client must be able to ask.
 
-        The address is load-bearing twice over: it is what a map points at, and it is
-        the name of the one-channel LSL stream both `_read` and the client use. There is
-        no separate transport field to keep in step with it, which is the point — there
-        is nothing here that can disagree with anything.
-
-        `vocabulary_version` is the compatibility gate, and it is not decoration either:
-        a client refuses a target reporting less than the vocabulary it speaks, by
-        name, at bind. Report ``"2"`` — one stream per DOF — or a current MyoGestic
-        refuses this target instead of driving it.
+        `vocabulary_version` is the compatibility gate: a client refuses a target
+        reporting less than the vocabulary it speaks. Report ``"2"`` — one stream per
+        DOF — or a current MyoGestic refuses this target instead of driving it.
         """
         manifest = pb2.ControlManifest(target_name="reference", vocabulary_version="2")
         for address in ADDRESSES:
@@ -102,20 +85,12 @@ class ReferenceTarget(pb2_grpc.RemoteControlServicer):
         """Read every stream and apply each value as it arrives.
 
         **One thread, not one per stream.** `resolve_streams` is a multicast sweep of the
-        whole network; several running at once cost far more than they buy, and one sweep
-        already answers for every stream still missing an inlet.
-
-        One channel per stream, so there is nothing to unpack: `chunk[-1][0]` is the
-        whole sample. A stream that turns up wider than that is not this contract and a
-        target should say so rather than read element zero of something unexpected.
+        whole network; one sweep already answers for every stream still missing an inlet.
         """
         inlets: dict[str, StreamInlet] = {}
         while not self._stop.is_set():
-            # Resolving is inside the try too: an outlet can vanish between the resolve
-            # and the open, and `open_stream` raises when it does. Outside, that ordinary
-            # race would kill this thread while the gRPC server kept answering the
-            # manifest — a client would bind successfully against a target that never
-            # reads another sample, which is the one failure this project refuses to ship.
+            # Resolve inside the try: an outlet vanishing mid-open raises, and outside it
+            # that race kills this thread while gRPC still answers the manifest.
             try:
                 missing = [a for a in ADDRESSES if a not in inlets]
                 if missing:
@@ -125,13 +100,8 @@ class ReferenceTarget(pb2_grpc.RemoteControlServicer):
                         if info is None:
                             continue
                         if info.n_channels != 1:
-                            # Refused, not tolerated. An inlet is found by its address's
-                            # *stream name*, so a wide stream can only ever reach the one
-                            # address it is named for — it cannot corrupt the others. What
-                            # reading element zero of it would do is quieter and no better:
-                            # element zero of somebody's nine-channel pose frame is a
-                            # different DOF's value entirely, and this address would track
-                            # it all session — plausible, in range, and completely wrong.
+                            # Refused, not read: element zero of somebody's pose frame is a
+                            # different DOF, and this address would track it all session.
                             print(
                                 f"reference target: {address} is published "
                                 f"{info.n_channels} channels wide, and this contract is "
@@ -148,17 +118,13 @@ class ReferenceTarget(pb2_grpc.RemoteControlServicer):
             except Exception as exc:
                 print(f"reference target: lost an inlet ({type(exc).__name__}: {exc}), re-resolving")
                 for inlet in inlets.values():
-                    # Suppressed: closing a *broken* inlet is exactly the case that raises,
-                    # and a raise here would kill the thread this handler exists to keep
-                    # alive. There is nothing left to do about it either way.
+                    # Closing a *broken* inlet is exactly the case that raises, and a raise
+                    # here would kill the thread this handler exists to keep alive.
                     with suppress(Exception):
                         inlet.close_stream()
-                # All of them, not just the one that failed: re-resolving a healthy stream
-                # costs one sweep, and telling which inlet raised costs a try per inlet
-                # per tick.
+                # All of them: telling which inlet raised costs a try per inlet per tick.
                 inlets.clear()
-                # `resolve_streams` can raise too, and with no inlet to lose that is a
-                # tight loop printing once per iteration. Back off before retrying.
+                # `resolve_streams` raises too, and with no inlet to lose that is a tight loop.
                 self._stop.wait(1.0)
 
 
