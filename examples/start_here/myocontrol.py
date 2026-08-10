@@ -21,7 +21,7 @@ from myogestic.ml.widgets import PipelinePanel
 from myogestic.recipes.estimators import catboost_classifier, catboost_regressor
 from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.remote import RemoteTarget
-from myogestic.session import iter_labeled_windows
+from myogestic.session import iter_labeled_windows, open_session_store
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     DEFAULT_DEVICES,
@@ -57,14 +57,18 @@ PREDICT_HZ = 32
 CLASSES = ["Rest", "Fist"]
 MODES = ["Classification", "Regression"]
 
-#: What each class *is*, as control values. Classification is regression that emits a
-#: constant: the model picks a row, and that row is pushed exactly as a regressor's own
-#: numbers are. Nothing downstream can tell the two apart, which is why one control map
-#: serves both. Adding a class means adding a row here — `predict` does not change.
+#: What each class *is*, as a control value. Add a class by adding a row; `predict`
+#: does not change.
 POSES: dict[str, float] = {"Rest": 0.0, "Fist": 1.0}
-# A class with no pose would silently push an all-rest frame and look like a model that
-# never fires. Caught here, at import, rather than on the subject.
+# A class with no pose would push all-rest and look like a model that never fires.
 assert set(POSES) == set(CLASSES), f"POSES and CLASSES disagree: {set(POSES) ^ set(CLASSES)}"
+
+#: Notch on *acquisition* — reaches the model and the recording, unlike the viewer's
+#: Notch, which only changes what is drawn.
+NOTCH_CHOICES = ["Off", "50 Hz", "60 Hz"]
+NOTCH_HZ = [0, 50, 60]
+#: A dict so the UI callback writes it without `global`.
+notch = {"index": 0}
 
 vhi = virtual_hand()
 
@@ -114,6 +118,19 @@ def train(data: TrainingData) -> tuple[str, Any]:
         raise ValueError("No sessions selected. Scan folder, then tick some.")
     if features.n_active == 0:
         raise ValueError("No features ticked in the FEATURES panel (RMS+MAV is the default).")
+
+    # Filtered samples are indistinguishable from raw in the arrays, so a take recorded
+    # under a different notch than the switch now shows is refused by name.
+    want = NOTCH_HZ[notch["index"]]
+    for path in data.paths:
+        with open_session_store(path) as sess:
+            was = int((sess.extras.get("conditioning", {}).get("emg") or {}).get("notch_hz", 0))
+        if was != want:
+            raise ValueError(
+                f"{pathlib.Path(path).name} was recorded with notch={was or 'off'} but "
+                f"SIGNAL is set to {want or 'off'}. Match the setting to the take, or "
+                f"untick it — the model cannot be fitted on one and run on the other."
+            )
 
     all_x: list[np.ndarray] = []
     all_y: list[int] = []
@@ -173,20 +190,15 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
         value = POSES[CLASSES[class_idx]]
         out: dict[str, Any] = {"class": class_idx, "proba": proba}
     else:
-        # Clamped, and the clamp is what gets pushed. The regressor is fitted on {0, 1}
-        # so it can never *intend* a negative, but it extrapolates below zero on noisy
-        # EMG — and the alias resolves to a signed [-1, 1], so a raw -0.35 would drive the
-        # fingers into extension while the read-out beside it said "Rest, 100 %".
+        # Clamped because the alias is signed [-1, 1]: an extrapolated -0.35 would
+        # extend the fingers while the read-out said "Rest, 100 %".
         value = min(max(float(est.predict(feats.reshape(1, -1))[0]), 0.0), 1.0)
         out = {"class": int(value >= 0.5), "proba": [1.0 - value, value]}
 
     bus = link.bus
     if bus is not None:
-        # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this runs on
-        # the predict thread. `None` is the normal state until Connect — VHI is optional.
-        #
-        # The control hand rides along: `push` completes the frame from every declared
-        # alias, so leaving it out would command it to rest on every tick.
+        # `link.bus`, never `ensure()`: that blocks on an RPC and this is the predict
+        # thread. `control` must be included or `push` completes it to rest every tick.
         out["controls"] = bus.push({"prediction": value, "control": held_control})
     return out
 
@@ -209,19 +221,15 @@ viewer = SignalViewer("emg", show_connect=False, selectable=True, show_title=Tru
 # `launchable`, never `launcher`: a VHI that cannot be launched must not stop this app
 # from opening, and one already running needs no button.
 processes = ProcessLauncher(vhi.launchable())
-# Pressing Launch is the intent; a second Connect press would be ceremony. But VHI takes
-# seconds to boot and `ensure()` blocks on an RPC, so binding on the click would stall the
-# frame and fail anyway. The connector retries in the background instead — rate-limited,
-# single-flight, safe to poll every frame.
+# VHI takes seconds to boot and `ensure()` blocks, so this retries in the background —
+# rate-limited and single-flight, safe to poll every frame.
 binder = ControlLinkConnector(link)
 sessions = SessionManager("sessions", class_names=CLASSES)
 panel = PipelinePanel(pipeline)
 prediction = PredictionLabel(pipeline, CLASSES, show_probability=True)
 
 
-#: What drives each alias of the control map *in this app*. The map says where a value
-#: goes; only the app knows what sends one, and a panel listing three bare identifiers
-#: leaves the operator to guess which of them the model is actually moving.
+#: What drives each alias here. The map says where a value goes, not what sends one.
 ALIAS_ROLES = {
     "prediction": "the model, every predict tick",
     "control": "the Rest / Fist buttons",
@@ -296,6 +304,15 @@ def model_ui() -> None:
         imgui.text_colored(WARNING, f"driving: {model[0].lower()} — Train to switch")
     else:
         imgui.text_disabled(f"driving: {model[0].lower()}")
+    imgui.spacing()
+
+    # Beside FEATURES: the same kind of decision, what the model is fed.
+    panel_header("SIGNAL")
+    notch["index"] = segmented("notch", NOTCH_CHOICES, notch["index"])
+    stream = app.ctx.streams.get("emg")
+    if stream is not None:
+        stream.notch_hz = NOTCH_HZ[notch["index"]]
+    imgui.text_disabled("mains notch on the recorded and modelled signal")
     imgui.spacing()
 
     features.ui()
@@ -384,18 +401,8 @@ def myocontrol_ui(ctx):
     with grid[4:6, 2]:
         pipeline.training_data = sessions.ui()
 
-    # Stream it, do not fire it once. VHI's control hand follows a pose only while its
-    # streams are *live* — `ControlPoseStaleAfterSeconds` is 5 s — and on the falling edge
-    # it calls `StopToRest()` and hands the rig back to its own movement animation. So one
-    # push closes the hand and five seconds of silence opens it again.
-    #
-    # Not the same thing as the outlet repeating its last value, which it does forever at
-    # ~29 Hz. That keeps a value on the wire; VHI's liveness check is on the *arrival* of
-    # samples. (There is no interpolation to feed: `SetStandardValue` snaps. Only the
-    # *predicted* hand has optional Slerp smoothing.)
-    #
-    # While predicting, the predict loop is already that producer at PREDICT_HZ. The
-    # guard keeps the two from driving one set of outlets at two different rates.
+    # Stream it, do not fire it once: VHI holds a pose only while samples keep arriving
+    # (5 s, then `StopToRest()`). While predicting the predict loop is already doing that.
     bus = link.bus
     if bus is not None and ctx.state != "predicting":
         bus.push({"control": held_control, "prediction": 0.0})
