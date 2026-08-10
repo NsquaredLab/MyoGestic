@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `SessantaquattroSource` streams a Sessantaquattro or Sessantaquattro+ over TCP, and the
+  `DevicePicker` offers it alongside the Muovi and the Quattrocento. The device dials in, so
+  MyoGestic listens on 45454 and the amplifier connects to us — the opposite of the
+  Quattrocento, where we are the client.
+
+  Two behaviours are measured against a Sessantaquattro+ at 72 channels rather than read off
+  the protocol table. Start is a single config word with `GO=1`: sending `GO=0` first, as a
+  preamble to stop anything in flight, makes the device hang up and deliver nothing (`GO=1`
+  alone gives 233.8 kB/s, `GO=0` then `GO=1` gives 0 bytes, with or without a gap). And the
+  accessory block width is probed from the live stream before `StreamInfo` is returned, not
+  derived from the detection mode — declaring the widest candidate up front fails as
+  `shape=(208, 68); expected (_, 72)` on a device whose block is narrower.
+
+### Fixed
+
+- `StreamPanel`'s reconnect runs off the UI thread. Accepting a connection from a device that
+  dials in blocks for the source's whole accept timeout, which on the UI thread is a dead
+  window for that long with nothing to say the click registered.
+
 ## [2.6.1] - 2026-08-10
 
 ### Added
