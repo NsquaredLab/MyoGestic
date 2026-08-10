@@ -1,30 +1,24 @@
 """Pong: pick a device, follow the cursor, train, then play with your wrist.
 
-One signed number in ``[-1, +1]`` moves the paddle. That is the whole protocol, and it
-is the point: a rally rewards *graded* contraction where a trapezoid only rewards
-tracking and a gesture classifier rewards nothing continuous at all.
+One signed number in ``[-1, +1]`` moves the paddle: a rally rewards *graded* contraction
+where a trapezoid only rewards tracking.
 
-There are two ways to record the training set and the Model tab starts either.
-**Follow the cursor** runs a `Pursuit` block: a ghost paddle wanders the court and the
-subject chases it, with the cursor recorded beside the EMG on the `target` stream. The
-Down / Rest / Up buttons cue the older three-class protocol. Prefer the cursor — three
-cued classes are three distinct target values, so a tree ensemble fitted on them is a
-three-class model whatever it is called, dead below about 30% effort and *non-monotonic*
-in it. Densely covered levels cut the CatBoost error at intermediate efforts 14x. Note
-what the measurement actually says: the active ingredient is the **number of distinct
-target levels**, not pursuit as such — a cued staircase of eleven holds scores at least
-as well, and a linear model gains nothing either way, because least squares already
-draws a straight line through three points. What a followed cursor buys over a staircase
-is human: told "go to 0.6" a subject has no idea what 0.6 feels like, while a cursor
-gives continuous visual error feedback, so the intermediate levels are reachable at all.
+Two ways to record the training set, both started from the Model tab. **Follow the
+cursor** runs a `Pursuit` block — a ghost paddle wanders the court, the subject chases it,
+and the cursor is recorded beside the EMG on the `target` stream. The Down / Rest / Up
+buttons cue the older three-class protocol.
 
-The Virtual Hand is a **mirror**, not a target. The paddle follows a plain float that
-reaches it whether or not VHI ever answers; when the Hand tab is bound, the same float
-also goes to the wrist. Nothing here needs a hand to be playable.
+Prefer the cursor. Three cued classes are three distinct target values, so a tree ensemble
+fitted on them is a three-class model whatever it is called; dense levels cut CatBoost's
+error at intermediate efforts 14x. The measured active ingredient is the *number of
+distinct levels*, not pursuit — a cued staircase of eleven holds does as well, and a
+linear model gains nothing either way. What the cursor buys is human: told "go to 0.6" a
+subject has no idea what 0.6 feels like.
 
-The far paddle is played by the app, at a speed the Model tab sets. A wall returns
-everything, so a rally against one only ever ends in the subject's own miss and the
-score never says they are winning.
+The Virtual Hand is a **mirror**, not a target: the paddle follows a float that reaches it
+whether or not VHI answers. The far paddle is played by the app, at a speed the Model tab
+sets; a wall would return everything, so a rally against one only ends in the subject's
+own miss.
 
 Run with:
     uv run --extra examples --extra grpc python examples/start_here/pong.py
@@ -86,19 +80,13 @@ PREDICT_HZ = 32
 #: Three cued classes on one signed axis. Down is a real ``-1``, not a second one-way
 #: channel: a wrist is the canonical bidirectional DOF and the paddle needs both halves.
 CLASSES = ["Down", "Rest", "Up"]
-# Proportional is the default because the baseline is *wrong* in a way no read-out shows:
-# on real data the CatBoost regressor is non-monotonic in effort — scaling every channel
-# 1.0 -> 1.3 -> 1.6 moved its Up prediction 1.000 -> 0.882 -> 0.723, having learned
-# "louder = Down" because Down happened to be recorded harder. `directional_decoder`
-# estimates effort and direction apart, so a gain can change the magnitude but never the
-# sign. The other two stay as baselines worth feeling.
+# Proportional is the default because on real data the CatBoost regressor is
+# non-monotonic in effort: scaling every channel 1.0 -> 1.6 moved its Up prediction
+# 1.000 -> 0.723. The other two stay as baselines worth feeling.
 MODES = ["Proportional", "Regression", "Classification"]
 
-#: How the command reaches the paddle, in `PongTask`'s own words, lower-cased for it.
-#: Velocity first because that is the widget's default and because it is the mode a
-#: three-level decoder is still playable in: the command is a *speed*, so integrating
-#: even a coarse output reaches every height, where under position the paddle can only
-#: ever be in as many places as the model has outputs.
+#: How the command reaches the paddle. Velocity first: integrating even a coarse output
+#: reaches every height, where position gives as many places as the model has outputs.
 CONTROLS = ["Velocity", "Position"]
 
 #: The stream the followed cursor is recorded on, and the one `train` looks for to tell
@@ -110,10 +98,8 @@ TARGET_STREAM = "target"
 #: together. Defaults are a 58 s block: 5 s rest, 24 hops of 2 s, 5 s recover.
 PURSUIT = Pursuit()
 
-#: Opponent difficulty, as a factor on `ball_speed`: the far paddle's top tracking speed
-#: is this many court-`y` per second. Fair is a rally the subject wins with graded control
-#: and loses by overshooting, which is the drill; Hard covers more court than the ball
-#: crosses in the time it has, so only a clean early read gets it past.
+#: Opponent top tracking speed, in court-`y` per second. Fair is won by graded control
+#: and lost by overshooting; Hard needs a clean early read.
 OPPONENTS = {"Easy": 0.4, "Fair": 0.6, "Hard": 1.0}
 LEVELS = list(OPPONENTS)
 
@@ -175,11 +161,9 @@ features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
     default=["RMS", "MAV"],
 )
-#: How each feature answers a gain ``g`` on the signal: RMS/MAV/WL scale by ``g``, VAR by
-#: ``g**2``, ZC not at all. `directional_decoder` divides each row by its own sum, so the
-#: gain only cancels if *every* ticked column moves by the same factor. A mix silently
-#: costs Proportional mode the one guarantee it is here for, so `train` refuses instead.
-#: The other two modes normalise nothing and take the whole palette.
+#: How each feature answers a gain ``g``: RMS/MAV/WL by ``g``, VAR by ``g**2``, ZC not at
+#: all. The gain only cancels if every ticked column moves alike, so `train` refuses a mix
+#: in Proportional mode.
 _GAIN_DEGREE = {"RMS": 1, "MAV": 1, "WL": 1, "VAR": 2, "ZC": 0}
 
 
@@ -307,11 +291,8 @@ def train(data: TrainingData) -> tuple[str, Any]:
         raise ValueError(f"Need ≥2 distinct target levels, got {len(np.unique(y))}.")
 
     if mode == "Classification":
-        # A class names a pose, so the pose table read backwards is the label: nearest
-        # `POSES` row to the target the subject was actually given. It is the same
-        # lookup `predict` uses for the read-out, which is what keeps the floor honest
-        # — this mode can only ever put the paddle in as many places as there are rows,
-        # and a pursuit block quantised down to three of them shows exactly that.
+        # Nearest `POSES` row to the target given — the same lookup `predict` uses, so a
+        # pursuit block quantised to three of them shows this mode's floor honestly.
         est = catboost_classifier(iterations=100)
         est.fit(x, np.argmin(np.abs(POSE_VALUES[None, :] - y[:, None]), axis=1))
     else:
@@ -365,12 +346,9 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
         # the regressor too, so a class flip slides the paddle instead of teleporting it.
         value = _smooth(POSES[CLASSES[class_idx]])
     else:
-        # Proportional and Regression share this branch, deliberately: both emit one
-        # signed number from `.predict`, so a second branch could only let them drift.
-        # Clamped to the *signed* range, and the clamp is what gets pushed. A regressor
-        # fitted on {-1, 0, +1} extrapolates past both ends on noisy EMG, and the paddle
-        # would sit against a wall while the read-out beside it still said "Up". The
-        # decoder clips to the same range itself, so the clamp is a no-op for it.
+        # Proportional and Regression share this branch: both emit one signed number, so
+        # a second branch could only drift. Clamped because a regressor fitted on
+        # {-1, 0, +1} extrapolates past both ends on noisy EMG.
         value = _smooth(min(max(float(est.predict(feats.reshape(1, -1))[0]), -1.0), 1.0))
         # From the *smoothed* value, so the read-out names where the paddle actually is.
         class_idx = int(np.argmin(np.abs(POSE_VALUES - value)))
@@ -425,10 +403,8 @@ pong = _new_game()
 # `launchable`, never `launcher`: a VHI that cannot be launched must not stop this app
 # from opening, and one already running needs no button.
 processes = ProcessLauncher(vhi.launchable())
-# Pressing Launch is the intent; a second Connect press would be ceremony. But VHI takes
-# seconds to boot and `ensure()` blocks on an RPC, so binding on the click would stall the
-# frame and fail anyway. The connector retries in the background instead — rate-limited,
-# single-flight, safe to poll every frame.
+# VHI takes seconds to boot and `ensure()` blocks, so this retries in the background —
+# rate-limited and single-flight, safe to poll every frame.
 binder = ControlLinkConnector(link)
 sessions = SessionManager("sessions", class_names=CLASSES)
 panel = PipelinePanel(pipeline)
@@ -539,11 +515,8 @@ def _effort(ctx) -> float | None:
     rest = float(np.median(rest_totals)) if rest_totals else total
     above = max(total - rest, 0.0)
 
-    # The floor is what makes this usable rather than maddening. Without it `peak` is set
-    # by whichever resting sample happened to land highest, so the gauge reads near full
-    # on noise and swings 0..1 through the whole rest phase — measured at 0.815 two
-    # seconds in. Only an excursion clear of the resting spread is allowed to define the
-    # scale, and until one arrives the gauge honestly reads nothing.
+    # Without this floor `peak` is set by the loudest *resting* sample and the gauge
+    # reads near full on noise — measured 0.815 two seconds into a block nobody moved in.
     spread = float(np.std(rest_totals)) if len(rest_totals) > 2 else 0.0
     if above > max(4.0 * spread, 1e-9) and above > _EFFORT["peak"]:
         _EFFORT["peak"] = above
@@ -741,10 +714,8 @@ def hand_ui() -> None:
 
 @app.ui
 def pong_ui(ctx):
-    # `TargetSource` ends its own block, on the acquire thread, the moment the last
-    # sample of the path has been emitted — a widget only ticks while it is drawn, so a
-    # block left in a background tab would otherwise run past its end. All that is left
-    # here is closing the recording that press opened.
+    # `TargetSource` ends its own block on the acquire thread, so a block left in a
+    # background tab cannot overrun. This just closes the recording that press opened.
     if block["recording"] and not target.running:
         _end_block()
 
@@ -790,10 +761,8 @@ def pong_ui(ctx):
     with grid[4:6, 2]:
         pipeline.training_data = sessions.ui()
 
-    # Stream it, do not fire it once: VHI follows a pose only while samples keep
-    # *arriving* (`ControlPoseStaleAfterSeconds` is 5 s, then `StopToRest()`), and the
-    # outlet repeating its last value forever does not count. While predicting the predict
-    # loop is already that producer, hence the guard.
+    # Stream it, do not fire it once: VHI holds a pose only while samples keep arriving
+    # (5 s, then `StopToRest()`). While predicting the predict loop is already doing that.
     bus = link.bus
     if bus is not None and ctx.state != "predicting":
         bus.push({"paddle": held_cue})
