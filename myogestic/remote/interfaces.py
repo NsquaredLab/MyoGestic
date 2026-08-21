@@ -77,6 +77,15 @@ class InterfaceSpec:
         reads a marker only that target leaves behind. ``None`` means there is
         nothing on disk to check, which is the honest default for a target MyoGestic
         did not install.
+    min_target_version
+        Oldest build of this target known to behave, checked against the
+        ``target_version`` a *running* target reports in its manifest — so it covers
+        what `version_gate` cannot: a build launched by hand, unpacked without a
+        marker, or run from source. A build reporting an older version is refused on
+        the same path as a vocabulary mismatch; one reporting nothing (builds
+        predating the field, third-party targets) is warned about once and driven
+        anyway. ``None`` means no opinion, the honest default for a target whose
+        release history this spec does not know.
 
     Examples
     --------
@@ -102,6 +111,7 @@ class InterfaceSpec:
     install_root: Path | None = None
     install_hint: str = ""
     version_gate: Callable[[], None] | None = None
+    min_target_version: str | None = None
 
     def stream_outlet(self, name: str, *, n_channels: int | None = None) -> LSLOutlet:
         """Construct an LSLOutlet publishing the target's stream called `name`.

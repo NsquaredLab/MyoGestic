@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The control manifest carries a `target_version` — the serving build's own release
+  version — and `InterfaceSpec` grew `min_target_version`, enforced at every
+  capabilities fetch. This is the runtime half of the version gate: the install-time
+  marker check never sees a build launched by double-click, unpacked by hand, or run
+  from source, but the manifest is the one channel every launch path answers on. A
+  build reporting an older version is refused on the same path as a vocabulary
+  mismatch; one reporting nothing (every build before VHI v2.1.0) is warned about
+  once and driven anyway. Motivated by a hand that froze mid-session: VHI v1.0.0
+  speaks the current vocabulary, so every existing gate passed, but its `SetMovement`
+  falls behind under bursty gesture edges and drops them — a frozen hand with a
+  perfectly healthy protocol.
+- `tools/muovi_probe_sim.py`, a fake Muovi / Muovi+ probe that dials into
+  `MuoviSource` at the real device cadence, so any unmodified example runs without
+  hardware. `--self-check` verifies its own pacing; `--rate-scale` simulates crystal
+  drift; a `BACKPRESSURE` line prints when the app stops draining the socket.
+
 ## [2.6.2] - 2026-08-10
 
 ### Added

@@ -1458,3 +1458,61 @@ class TestTheControlQueueCannotGrowForever:
         assert left[-1] is None, "the sentinel must be last, or the worker never exits"
         assert len(left) == 2, f"the sentinel sat behind {len(left) - 1} stale frames"
         assert left[0].discrete["gesture"] == "Rest", "teardown dropped the rest frame"
+
+
+# --- build-version floor: the runtime half of the version gate ----------------
+#
+# `InterfaceSpec.version_gate` reads a disk marker, so a build launched by hand,
+# unpacked without a marker, or run from source is invisible to it. The manifest is
+# the one channel every launch path answers on, so `min_target_version` is enforced
+# at the capabilities fetch — the choke point `connect_controls` and `negotiate`
+# both go through. These pin who is refused, who is warned, and who passes.
+
+
+def _versioned(reported: str, floor: str | None) -> RemoteTarget:
+    """A target whose client reports `reported`, against an interface trusting `floor`."""
+    interface = FakeInterface()
+    interface.min_target_version = floor
+    interface.name = "Fake Hand"
+    interface.install_hint = " Reinstall it."
+    client = _client()
+    client.target_version = reported
+    return RemoteTarget(client=client, interface=interface)
+
+
+def test_a_build_older_than_the_floor_is_refused_by_name():
+    target = _versioned("2.0.0", "v2.1.0")
+    with pytest.raises(ValueError, match=r"Fake Hand reports build 2\.0\.0.*Reinstall it"):
+        target.capabilities()
+
+
+def test_a_build_at_the_floor_passes_without_comment(caplog):
+    import logging
+
+    target = _versioned("v2.1.0", "v2.1.0")
+    with caplog.at_level(logging.WARNING, logger="myogestic.remote.target"):
+        assert target.capabilities() is not None
+    assert not caplog.records
+
+
+def test_an_unversioned_build_is_warned_about_once_and_still_driven(caplog):
+    import logging
+
+    target = _versioned("", "v2.1.0")
+    with caplog.at_level(logging.WARNING, logger="myogestic.remote.target"):
+        assert target.capabilities() is not None
+        assert target.capabilities() is not None  # the warning must not repeat per fetch
+    warned = [r for r in caplog.records if "did not report a build version" in r.getMessage()]
+    assert len(warned) == 1
+    assert "Fake Hand" in warned[0].getMessage()
+
+
+def test_a_branch_build_is_not_ours_to_judge():
+    """A non-release version ("dev") is treated like an absent one: warned, not refused."""
+    target = _versioned("dev", "v2.1.0")
+    assert target.capabilities() is not None
+
+
+def test_no_floor_means_no_opinion_even_about_an_ancient_build():
+    target = _versioned("0.0.1", None)
+    assert target.capabilities() is not None

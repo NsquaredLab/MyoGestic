@@ -101,6 +101,10 @@ class RemoteClient:
         self._dropped = 0
         self._seen_errors: set[tuple[str, str]] = set()
         self.connected = False
+        #: The build version the target's manifest last reported; "" until it answers,
+        #: and "" for a build predating the field. Read by `RemoteTarget`, which knows
+        #: (through its InterfaceSpec) whether a floor applies — this client does not.
+        self.target_version = ""
 
         self._running = True
         self._thread = threading.Thread(target=self._send_loop, name="RemoteClient", daemon=True)
@@ -189,6 +193,8 @@ class RemoteClient:
             return None
         self.connected = True
         self._seen_errors.clear()
+        # Recorded before the vocabulary gate, so even a refused target's build is known.
+        self.target_version = manifest.target_version
         reported = manifest.vocabulary_version
         if _vocabulary(reported) < _MIN_VOCABULARY:
             raise ValueError(

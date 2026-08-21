@@ -43,14 +43,16 @@ class ControlCapability(_message.Message):
     def __init__(self, address: _Optional[str] = ..., kind: _Optional[_Union[Kind, str]] = ..., lo: _Optional[float] = ..., hi: _Optional[float] = ..., rest: _Optional[float] = ..., states: _Optional[_Iterable[str]] = ..., rest_state: _Optional[str] = ..., description: _Optional[str] = ..., activation_threshold: _Optional[float] = ...) -> None: ...
 
 class ControlManifest(_message.Message):
-    __slots__ = ("target_name", "vocabulary_version", "capabilities")
+    __slots__ = ("target_name", "vocabulary_version", "capabilities", "target_version")
     TARGET_NAME_FIELD_NUMBER: _ClassVar[int]
     VOCABULARY_VERSION_FIELD_NUMBER: _ClassVar[int]
     CAPABILITIES_FIELD_NUMBER: _ClassVar[int]
+    TARGET_VERSION_FIELD_NUMBER: _ClassVar[int]
     target_name: str
     vocabulary_version: str
     capabilities: _containers.RepeatedCompositeFieldContainer[ControlCapability]
-    def __init__(self, target_name: _Optional[str] = ..., vocabulary_version: _Optional[str] = ..., capabilities: _Optional[_Iterable[_Union[ControlCapability, _Mapping]]] = ...) -> None: ...
+    target_version: str
+    def __init__(self, target_name: _Optional[str] = ..., vocabulary_version: _Optional[str] = ..., capabilities: _Optional[_Iterable[_Union[ControlCapability, _Mapping]]] = ..., target_version: _Optional[str] = ...) -> None: ...
 
 class SetPresentationRequest(_message.Message):
     __slots__ = ("blend", "blend_speed")

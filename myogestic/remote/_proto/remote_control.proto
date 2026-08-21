@@ -142,6 +142,17 @@ message ControlManifest {
   // Every control this build exports. A client validates its configuration against
   // this list and reports an unknown address by name — with these as the alternatives.
   repeated ControlCapability capabilities = 3;
+
+  // The serving build's own release version — "2.1.0", the numeric part of its release
+  // tag. Mostly informational, with one narrow use: a client that knows a *specific*
+  // target's history may refuse builds older than a floor it trusts — a build whose
+  // protocol is current but whose behaviour is known-bad (the case that motivated the
+  // field: a VHI whose SetMovement fell behind and dropped edges, freezing the hand
+  // while every version gate passed). Compared as a dotted integer tuple. Empty — every
+  // build predating the field — is never refused on its own, only noted, because absence
+  // cannot distinguish an old build from a third-party target that does not version
+  // itself. The load-bearing compatibility check is vocabulary_version, not this.
+  string target_version = 4;
 }
 
 // How the target blends between the values it is given.
