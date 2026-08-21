@@ -295,6 +295,13 @@ def virtual_hand(
         install_root=install_root,
         install_hint=_INSTALL_HINT,
         version_gate=partial(_refuse_an_incompatible_install, install_root),
+        # Enforced against the manifest of the *running* VHI, so it also covers what
+        # `version_gate` cannot: a build launched by double-click, unpacked without a
+        # marker, or run from source. v2.1.0 is the first build that reports its
+        # version; anything older answers with nothing and is warned about, not
+        # refused — v2.0.0 is silent and fine, v1.0.0 is silent and drops gesture
+        # edges under load (the frozen-hand bug this floor exists for).
+        min_target_version="v2.1.0",
     )
 
 
