@@ -349,19 +349,32 @@ class Session:
         *,
         channel_names: Sequence[str] | None = None,
         fs: float = 1.0,
+        dtype: Any = np.float32,
     ) -> None:
         """Append one timestamped row to an event stream, declaring it on first use.
 
-        ``values`` is flattened to ``float32``; its width is fixed by the first call, and a
-        later row of another width raises ``ValueError`` so a producer whose shape changed
-        learns it once instead of writing a ragged array. ``fs`` is the *nominal* rate the
-        declaration carries, so `ReplaySource` can pace the stream; the rows are irregular
-        and ``meta.json`` lists the stream under ``event_streams`` to say so.
+        ``values`` is flattened and cast to ``dtype``; its width is fixed by the first
+        call, and a later row of another width raises ``ValueError`` so a producer
+        whose shape changed learns it once instead of writing a ragged array. ``fs``
+        is the *nominal* rate the declaration carries, so `ReplaySource` can pace the
+        stream; the rows are irregular and ``meta.json`` lists the stream under
+        ``event_streams`` to say so.
 
         Rows are buffered and written in batches (`EVENT_CHUNK_ROWS`, `EVENT_FLUSH_SECONDS`).
         After `freeze` a row is dropped with a debug log, like a late `append`.
+
+        Parameters
+        ----------
+        dtype
+            Dtype for this stream, fixed by whichever call declares ``name`` first — a
+            later call's ``dtype`` is ignored and its row is coerced to the dtype
+            already on file, so a caller cannot change it after the fact. Default
+            ``float32``, right for signals and features. Pass ``float64`` for a value
+            that is itself a clock — an LSL timestamp, ``local_clock()`` — float32 has
+            about 7 significant digits, so a seconds-since-boot reading loses
+            millisecond precision after roughly a day of uptime.
         """
-        row = np.asarray(values, dtype=np.float32).ravel()
+        row = np.asarray(values, dtype=dtype).ravel()
         if row.size == 0:
             raise ValueError(f"{name!r}: an event row needs at least one value")
         with self._event_lock:
@@ -379,13 +392,17 @@ class Session:
                     StreamInfo(
                         n_channels=int(row.size),
                         fs=float(fs),
-                        dtype=np.dtype(np.float32),
+                        dtype=np.dtype(dtype),
                         channel_names=list(channel_names) if channel_names else None,
                     ),
                     chunk_rows=EVENT_CHUNK_ROWS,
                 )
                 self._event_streams.append(name)
                 buf = self._event_buffers[name] = _EventBuffer()
+            else:
+                # Already declared: the stream's dtype won, not this call's — coerce
+                # rather than let a later, differently-typed caller silently drift it.
+                row = row.astype(self._streams_info[name].dtype, copy=False)
             width = self._streams_info[name].n_channels
             if row.size != width:
                 raise ValueError(f"{name!r} rows are {width} wide, got {row.size}")

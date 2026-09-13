@@ -127,14 +127,19 @@ def append_event(
     *,
     channel_names: Sequence[str] | None = None,
     fs: float = 1.0,
+    dtype: Any = np.float32,
 ) -> None:
     """Append one timestamped row to an event stream, declaring it on first use.
 
-    `values` is flattened to float32; its width is fixed by the first call and a
+    `values` is flattened and cast to `dtype`; its width is fixed by the first call and a
     later row of a different width raises ValueError. Rows are dropped silently
     once finalisation has begun, like `append`.
     """
 ```
+
+`pipeline.tick` (§3) is declared with `dtype=np.float64`: `local_clock()` is seconds since
+boot, and float32's ~7 significant digits quantise it to tens of milliseconds after a day
+of uptime — the size of the latency the column exists to measure.
 
 - Storage is the same per-stream pair as any stream: `<name>.zarr` `(n_rows, width)` and
   `<name>_timestamps.zarr`, so `open_session_store`, `ReplaySource` and every existing

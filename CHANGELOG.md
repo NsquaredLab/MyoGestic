@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `predicting` — and `ctx.recording` says whether a take is open, independent of
   `ctx.state`. A take from `idle` still shows the `recording` state; a take under
   `predicting` leaves the state alone and adds a `REC` pill beside it.
-- **Event streams.** `Session.append_event(name, values, timestamp, channel_names=, fs=)`
+- **Event streams.** `Session.append_event(name, values, timestamp, channel_names=, fs=, dtype=)`
   declares a per-tick zarr stream on first use and appends one float32 row, buffered and
   written 1024 rows or one second at a time (a single-row zarr append rewrites its chunk:
   1.46 ms each on zarr 3.2.1, 0.04 ms per row batched). `Session.freeze()` flushes and

@@ -349,12 +349,13 @@ class Pipeline:
         if "*" in self._skipped:
             return
         try:
+            from mne_lsl.lsl import local_clock
+
+            tick = local_clock()
             fs = self.predict_hz if self.predict_hz > 0 else 1.0
             self._record(ctx, session, "features", features, latest, fs)
             self._record(ctx, session, "prediction", result, latest, fs)
-            from mne_lsl.lsl import local_clock
-
-            session.append_event("pipeline.tick", [local_clock()], latest, fs=fs)
+            session.append_event("pipeline.tick", [tick], latest, fs=fs, dtype=np.float64)
         except Exception as e:  # noqa: BLE001 - recording must never stop the predict loop
             self._skip(ctx, "*", f"recording stopped for this take: {e!r}")
 

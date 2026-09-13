@@ -86,6 +86,8 @@ A sampled stream has a clock; an event stream has one row per *thing that happen
 
 Rows are buffered in memory and written 1024 at a time or once a second, whichever comes first, because a single-row zarr append rewrites the partial chunk (about 1.5 ms each on zarr 3.2). `Session.freeze()` flushes every buffer and closes the session to new rows and new streams; `App.stop_recording` calls it before anything is written.
 
+Rows are float32 by default; a value that is itself a clock — an LSL timestamp, `local_clock()` — loses milliseconds at float32 after a day of uptime, so pass `dtype=np.float64` for it (the pipeline does for `pipeline.tick`) or record an offset instead.
+
 With a take open, two producers write event streams for you:
 
 | Stream | Written by | One row per | Timestamp |
