@@ -109,3 +109,45 @@ def test_event_streams_survive_pack_and_replay():
         data, ts = source.read()  # first read hands over the initial chunk immediately
         source.disconnect()
         assert info.fs == 32.0 and data.shape[1] == 2 and len(ts) > 0
+
+
+def test_flush_failure_drops_the_buffer_instead_of_raising(caplog):
+    """A failed flush logs once, marks the buffer dead, drops rows, and does not propagate."""
+    caplog.set_level("WARNING")
+    with tempfile.TemporaryDirectory() as tmp:
+        s = _session(tmp)
+        # Declare stream x
+        s.append_event("x", [1.0], 0.0)
+        buf_x = s._event_buffers["x"]
+
+        # Monkeypatch zarr append to fail on any call
+        def failing_append(data):
+            raise OSError("disk full")
+
+        s.stores["x"].append = failing_append
+        s.ts_stores["x"].append = failing_append
+
+        # Fill the buffer to trigger a flush (at EVENT_CHUNK_ROWS rows total)
+        for i in range(_core.EVENT_CHUNK_ROWS):
+            s.append_event("x", [float(i)], float(i))
+
+        # Flush failed: buffer should be marked dead and emptied
+        assert buf_x.dead, "buffer should be marked dead after flush failure"
+        assert len(buf_x.rows) == 0, "rows should be cleared after flush failure"
+        assert s.stores["x"].shape == (0, 1), "no data should be written"
+
+        # Later appends to x are silent no-ops
+        s.append_event("x", [99.0], 99.0)
+        assert len(buf_x.rows) == 0, "dead buffer should remain empty"
+
+        # A second stream in the same session still works
+        for i in range(5):
+            s.append_event("y", [float(i)], float(i))
+        s.freeze()
+        assert s.stores["y"].shape == (5, 1), "second stream should flush successfully"
+
+        # Exactly one warning logged for the failed stream x
+        warnings = [
+            rec for rec in caplog.records if "event stream 'x': flush failed" in rec.message
+        ]
+        assert len(warnings) == 1, f"expected 1 warning for stream x, got {len(warnings)}"
