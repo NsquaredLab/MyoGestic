@@ -40,3 +40,31 @@ def test_state_colors_default_entries():
 
     assert AppState.IDLE in STATE_COLORS
     assert AppState.RECORDING in STATE_COLORS
+
+
+from myogestic.core import Context
+from myogestic.widgets.panels.recording import _transport
+
+
+def test_transport_offers_record_from_idle_and_stop_while_recording():
+    ctx = Context()
+    assert _transport(ctx) == "record"
+    ctx.recording = True
+    ctx.state = "recording"
+    assert _transport(ctx) == "stop"
+
+
+def test_transport_offers_nothing_from_an_unregistered_state():
+    # Only "training" is safe to assert on: any earlier test module that built a
+    # Pipeline has registered "predicting" in the process-global set for good.
+    ctx = Context()
+    ctx.state = "training"
+    assert _transport(ctx) == ""
+
+
+def test_transport_offers_record_from_a_registered_state(recordable_predicting):
+    ctx = Context()
+    ctx.state = "predicting"
+    assert _transport(ctx) == "record"
+    ctx.recording = True
+    assert _transport(ctx) == "stop"  # state still predicting, take open

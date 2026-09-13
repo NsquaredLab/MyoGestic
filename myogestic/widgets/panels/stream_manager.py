@@ -102,7 +102,7 @@ class StreamManager:
             imgui.pop_id()
 
     def _body(self, ctx: Context) -> None:
-        recording = getattr(ctx, "state", "") == "recording"
+        recording = bool(getattr(ctx, "recording", False))
         if self._show_header:
             panel_header("Streams", fa.ICON_FA_LAYER_GROUP)
 
