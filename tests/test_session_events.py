@@ -38,6 +38,25 @@ def test_first_row_declares_the_stream_and_stays_buffered():
         assert s.ts_stores["prediction.pose"].dtype == np.float64
 
 
+def test_dtype_is_fixed_by_the_declaring_call():
+    """`dtype=` on the first call to a name sets the stream's dtype for good; a value
+    that is itself a clock needs float64, or it quantises the way ``pipeline.tick``
+    used to before this was added — see C1.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        s = _session(tmp)
+        s.append_event("clock", [123456.789012], 0.0, dtype=np.float64)
+        s.freeze()
+        assert np.array(s.stores["clock"]).tolist() == [[123456.789012]]
+        assert s.stream_info("clock").dtype == np.float64
+
+        s2 = _session(tmp)
+        s2.append_event("x", [1.0], 0.0)  # declares float32 (the default)
+        s2.append_event("x", [2.0], 1.0, dtype=np.float64)  # ignored: already declared
+        assert s2.stream_info("x").dtype == np.float32
+        assert s2.stores["x"].dtype == np.float32
+
+
 def test_a_row_of_another_width_is_refused():
     with tempfile.TemporaryDirectory() as tmp:
         s = _session(tmp)

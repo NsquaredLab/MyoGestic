@@ -117,14 +117,16 @@ def test_each_tick_lands_in_the_session_with_the_window_timestamp(tmp_path):
         pose = np.array(s.stores["prediction.pose"])
         t = np.array(s.ts_stores["prediction.pose"])
         tick = np.array(s.stores["pipeline.tick"])
+        tick_dtype = s.stores["pipeline.tick"].dtype
     assert pose.shape == (2, 3) and pose[0].tolist() == [0.5, -0.5, 0.0]
     assert t[-1] <= float(ts[-1]) and t[-1] > 1000.0  # stamped with a window sample time
     # pipeline.tick is liblsl's local_clock(): seconds since boot, unrelated to the fake data
     # clock, so compare it with itself and with the clock now, not with `t`.
     from mne_lsl.lsl import local_clock
 
+    assert tick_dtype == np.float64  # float32 would quantise the latency it exists to measure
     assert tick.shape == (2, 1) and np.isfinite(tick).all()
-    assert tick[1, 0] >= tick[0, 0] and abs(local_clock() - tick[-1, 0]) < 5.0
+    assert tick[1, 0] >= tick[0, 0] and abs(local_clock() - tick[-1, 0]) < 1.0
 
 
 def test_skips_are_logged_once_per_session(tmp_path):
