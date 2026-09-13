@@ -61,6 +61,7 @@ class _EventBuffer:
     rows: list[np.ndarray] = field(default_factory=list)
     times: list[float] = field(default_factory=list)
     since: float | None = None  # time.monotonic() of the oldest buffered row
+    dead: bool = False  # set by _flush_locked on IO failure; append_event returns early if true
 
 
 def _robust_rmtree(path: Path, *, retries: int = 5, delay_s: float = 0.1) -> None:
@@ -388,6 +389,9 @@ class Session:
             width = self._streams_info[name].n_channels
             if row.size != width:
                 raise ValueError(f"{name!r} rows are {width} wide, got {row.size}")
+            if buf.dead:
+                log.debug("dropping event row for dead stream %r", name)
+                return
             now = time.monotonic()
             buf.rows.append(row)
             buf.times.append(float(timestamp))
@@ -397,14 +401,27 @@ class Session:
                 self._flush_locked(name, buf)
 
     def _flush_locked(self, name: str, buf: _EventBuffer) -> None:
-        """Write a buffer as one batch. Caller holds ``_event_lock``."""
+        """Write a buffer as one batch. Caller holds ``_event_lock``.
+
+        On IO failure, logs once at warning level, marks the buffer dead so later
+        append_event calls drop silently, and clears the buffer to avoid retries.
+        """
         if not buf.rows:
             return
-        self.stores[name].append(np.stack(buf.rows))
-        self.ts_stores[name].append(np.asarray(buf.times, dtype=np.float64))
-        buf.rows.clear()
-        buf.times.clear()
-        buf.since = None
+        try:
+            self.stores[name].append(np.stack(buf.rows))
+            self.ts_stores[name].append(np.asarray(buf.times, dtype=np.float64))
+        except Exception as exc:
+            log.warning(
+                "event stream %r: flush failed, dropping its rows for the rest of this session: %r",
+                name,
+                exc,
+            )
+            buf.dead = True
+        finally:
+            buf.rows.clear()
+            buf.times.clear()
+            buf.since = None
 
     def freeze(self) -> None:
         """Close the session to new rows and flush every event buffer. Idempotent.
@@ -412,6 +429,9 @@ class Session:
         `App.stop_recording` calls this right after detaching the streams and before any
         finalize hook or ``meta.json`` is written, so nothing can declare a stream that the
         metadata does not list. `pack_to_zip` and `discard` call it as well.
+
+        Flushes every buffer even if one fails; per-buffer failures are logged at
+        warning level, and the buffer is marked dead to prevent retries.
         """
         with self._event_lock:
             if self._finalising:
