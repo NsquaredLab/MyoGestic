@@ -87,19 +87,19 @@ stateDiagram-v2
     idle --> training: pipeline.start_training()
     training --> idle: train() returns
     idle --> predicting: pipeline.start_predicting()
-    predicting --> idle: pipeline.stop_predicting()
+    recording --> predicting: pipeline.start_predicting()\n(ctx.recording stays True)
+    predicting --> idle: pipeline.stop_predicting()\nwhen no take is open
+    predicting --> recording: pipeline.stop_predicting()\nwhen a take is open
 
-    note right of training
-        Training and predicting are
-        mutually exclusive - clicking
-        Train while predicting is on
-        stops predict first.
+    note right of predicting
+        app.start_recording() here sets
+        ctx.recording and leaves the state
+        alone. The pipeline writes its
+        tick into the session.
     end note
 ```
 
-Only one state at a time. **Training pauses prediction** (and vice versa) - there's no parallel GPU contention juggling. When the user clicks Train while predict is running, predict stops first; when training completes, the user clicks Predict again to resume.
-
-The user-facing UI layer (`PipelinePanel`, `TrainButton`, `PredictButton`) handles transitions; user code rarely calls `start_training()` / `stop_predicting()` directly.
+`ctx.state` is the pipeline's state while it is busy (`training`, `predicting`); otherwise `recording` if a take is open, else `idle`. **Training pauses prediction** and needs `idle` — a take must be stopped first. Recording is a flag beside the state (`ctx.recording`), not a fourth exclusive state: press Record while predicting and the raw streams, the pipeline's input and output, and the delivered control frames all land in one session. See [Recording → Event streams](recording.md#event-streams).
 
 ## Stale-tick guard
 
