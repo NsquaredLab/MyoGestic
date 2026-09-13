@@ -3,6 +3,17 @@
 import pytest
 
 from myogestic.controls import Continuous, ControlSet, Discrete
+from myogestic.core import RECORDABLE_STATES
+
+
+@pytest.fixture
+def recordable_predicting():
+    """Register 'predicting' the way myogestic.ml does, and undo it afterwards."""
+    before = set(RECORDABLE_STATES)
+    RECORDABLE_STATES.add("predicting")
+    yield
+    RECORDABLE_STATES.clear()
+    RECORDABLE_STATES.update(before)
 
 
 @pytest.fixture
@@ -61,7 +72,6 @@ def implot_frame(imgui_frame):
     finally:
         implot3d.destroy_context()
         implot.destroy_context()
-
 
 
 def build_controls(spec: dict) -> ControlSet:
