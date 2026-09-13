@@ -86,8 +86,10 @@ class PipelineState(StrEnum):
 
     The core app only knows about ``"idle"`` and ``"recording"``;
     attaching a [`Pipeline`][] (via ``Pipeline(app)``) adds two more
-    states for the ML lifecycle. Mutually exclusive with each other and
-    with the core states.
+    states for the ML lifecycle. Mutually exclusive with each other. A
+    recording is a flag beside the state (``ctx.recording``), so a take
+    can run under ``predicting``; ``stop_predicting`` returns to
+    ``recording`` while one is open.
 
     The enum is a ``StrEnum`` so it compares cleanly against the raw
     string written to ``app.ctx.state`` by the transition methods.
@@ -268,7 +270,8 @@ class Pipeline:
         ctx = self.app.ctx
         if ctx.state not in ("idle", AppState.RECORDING):
             ctx.status_message = (
-                f"Cannot start predicting: state is {ctx.state!r}, expected 'idle' or 'recording'."
+                f"Cannot start predicting: state is {str(ctx.state)!r}, expected 'idle' or "
+                "'recording'."
             )
             return
         if self.model is None:
@@ -286,7 +289,7 @@ class Pipeline:
         ctx = self.app.ctx
         if ctx.state != PipelineState.PREDICTING:
             ctx.status_message = (
-                f"Cannot stop predicting: state is {ctx.state!r}, expected 'predicting'."
+                f"Cannot stop predicting: state is {str(ctx.state)!r}, expected 'predicting'."
             )
             return
         ctx.state = AppState.RECORDING if ctx.recording else "idle"
@@ -394,7 +397,9 @@ class Pipeline:
         model = self.model
         if model is not None:
             info["model_type"] = type(model).__qualname__
-            if self.save_model is None:
+            if session is not self._recorded_session:
+                info["model_note"] = "pipeline did not predict during this take"
+            elif self.save_model is None:
                 info["model_note"] = "not saved: pipeline.save_model is unset"
             else:
                 path = session.path / "model.joblib"

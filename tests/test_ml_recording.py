@@ -195,3 +195,24 @@ def test_stop_predicting_returns_to_recording_when_a_take_is_open(tmp_path):
         assert app.ctx.state == "idle"
     finally:
         stream.stop()
+
+
+def test_model_is_not_saved_for_a_take_the_pipeline_never_wrote_into(tmp_path):
+    """An idle calibration take (predict thread never ticked into it) should not carry a
+    pickled model, even though a model is loaded — the model belongs beside the take that
+    actually produced its predictions.
+    """
+    app = App("ml-rec-idle")
+    pipeline = Pipeline(app)
+    pipeline.save_model = save_pickle
+    pipeline.model = _Model()
+    app.start_recording(str(tmp_path))
+    assert app.ctx.state == "recording"  # never set to predicting: the pipeline never ticked
+    app.stop_recording(wait=True)
+    with zipfile.ZipFile(_zip(tmp_path)) as zf:
+        meta = json.loads(zf.read("meta.json"))
+        names = set(zf.namelist())
+    assert "model.joblib" not in names
+    info = meta["extras"]["pipeline"]
+    assert info["model"] is None
+    assert "did not predict" in info["model_note"]

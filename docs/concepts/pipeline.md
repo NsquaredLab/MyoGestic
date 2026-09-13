@@ -99,7 +99,7 @@ stateDiagram-v2
     end note
 ```
 
-`ctx.state` is the pipeline's state while it is busy (`training`, `predicting`); otherwise `recording` if a take is open, else `idle`. **Training pauses prediction** and needs `idle` — a take must be stopped first. Recording is a flag beside the state (`ctx.recording`), not a fourth exclusive state: press Record while predicting and the raw streams, the pipeline's input and output, and the delivered control frames all land in one session. See [Recording → Event streams](recording.md#event-streams).
+`ctx.state` is the pipeline's state while it is busy (`training`, `predicting`); otherwise `recording` if a take is open, else `idle`. **Training needs `idle`**: stop predicting, and stop any open take, before Train; the button refuses otherwise. Recording is a flag beside the state (`ctx.recording`), not a fourth exclusive state: press Record while predicting and the raw streams, the pipeline's input and output, and the delivered control frames all land in one session. See [Recording → Event streams](recording.md#event-streams).
 
 ## Stale-tick guard
 

@@ -161,8 +161,8 @@ class Context:
         not started for you — see `App.bridges`.
     state
         The recording state machine: ``"idle"`` or ``"recording"``. Extensions
-        add their own states (``myogestic.ml`` adds ``"training"``). Check it
-        rather than tracking recording yourself.
+        add their own states (``myogestic.ml`` adds ``"training"``). Whether a
+        take is open is `recording`, not this.
     session
         The `Session` of the current or most recent take. Set by `App.start_recording`
         and kept after `stop_recording` so the signal viewer can go on drawing that
@@ -436,9 +436,9 @@ class App:
             self.ctx.status_message = "Cannot start recording: already recording."
             return
         if self.ctx.state not in RECORDABLE_STATES:
-            allowed = ", ".join(repr(s) for s in sorted(RECORDABLE_STATES))
+            allowed = ", ".join(repr(str(s)) for s in sorted(RECORDABLE_STATES))
             self.ctx.status_message = (
-                f"Cannot start recording: state is {self.ctx.state!r}, expected {allowed}."
+                f"Cannot start recording: state is {str(self.ctx.state)!r}, expected {allowed}."
             )
             return
         # A stream with info=None has no zarr schema and would fail on append.
@@ -480,7 +480,7 @@ class App:
         """
         if not self.ctx.recording:
             self.ctx.status_message = (
-                f"Cannot stop recording: state is {self.ctx.state!r}, no recording is open."
+                f"Cannot stop recording: state is {str(self.ctx.state)!r}, no recording is open."
             )
             return
         self.ctx.recording = False
@@ -550,15 +550,16 @@ class App:
 
         The counterpart to [`stop_recording`][myogestic.App.stop_recording] for a
         take the operator threw away — a false start, a bad trial. Detaches every
-        stream, removes the session folder, and returns to ``"idle"``. Nothing is
-        written to ``meta.json`` and no archive is produced, so a discarded
-        recording leaves no trace to clean up later.
+        stream, removes the session folder, and returns the state to ``"idle"`` when
+        the take was started from idle (a take under ``"predicting"`` leaves the state
+        alone). Nothing is written to ``meta.json`` and no archive is produced, so a
+        discarded recording leaves no trace to clean up later.
 
         Refuses if no recording is open.
         """
         if not self.ctx.recording:
             self.ctx.status_message = (
-                f"Cannot discard recording: state is {self.ctx.state!r}, no recording is open."
+                f"Cannot discard recording: state is {str(self.ctx.state)!r}, no recording is open."
             )
             return
         self.ctx.recording = False

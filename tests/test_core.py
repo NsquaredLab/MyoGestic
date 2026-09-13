@@ -299,6 +299,8 @@ def test_start_recording_is_refused_outside_recordable_states(tmp_path):
     assert app.ctx.recording is False
     assert "Cannot start recording" in app.ctx.status_message
     assert not list(tmp_path.iterdir())
+    # Plain state names, not enum reprs (StrEnum's repr is "<AppState.IDLE: 'idle'>").
+    assert "'idle'" in app.ctx.status_message and "<" not in app.ctx.status_message
 
 
 def test_finalize_hooks_run_after_freeze_and_before_meta(tmp_path):
