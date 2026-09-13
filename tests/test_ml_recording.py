@@ -73,6 +73,10 @@ class _Model:
     report = {"decoder": "test"}
 
 
+def _raise_disk_full(model, path):
+    raise OSError("disk full")
+
+
 def test_a_pipeline_registers_predicting_as_recordable():
     Pipeline(App("reg"))
     assert PipelineState.PREDICTING in RECORDABLE_STATES
@@ -137,6 +141,22 @@ def test_skips_are_logged_once_per_session(tmp_path):
     with zipfile.ZipFile(_zip(tmp_path)) as zf:
         info = json.loads(zf.read("meta.json"))["extras"]["pipeline"]
     assert info["model"] is None and "save_model" in info["model_note"]
+
+
+def test_a_failing_model_save_still_records_the_pipeline_extras(tmp_path):
+    app, pipeline, stream = _running_app(tmp_path, save_model=_raise_disk_full)
+    try:
+        app.start_recording(str(tmp_path))
+        pipeline._predict_step(app)
+        app.stop_recording(wait=True)
+    finally:
+        stream.stop()
+    with zipfile.ZipFile(_zip(tmp_path)) as zf:
+        info = json.loads(zf.read("meta.json"))["extras"]["pipeline"]
+    assert info["model"] is None
+    assert "disk full" in info["model_note"]
+    assert "prediction.pose" in info["event_streams"]
+    assert not any("Finalize hook failed" in line for line in app.ctx.logs)
 
 
 def test_a_width_change_skips_that_stream_and_keeps_predicting(tmp_path):
