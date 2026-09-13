@@ -177,7 +177,7 @@ _MUOVI_STEPS = (
 )
 _SESSANTAQUATTRO_HINT = "This PC is the server on port 45454; the device dials in."
 _SESSANTAQUATTRO_STEPS = (
-    'Join the device\'s Wi-Fi access point — or set this PC\'s IP as "Server IP address" '
+    "Join the device's Wi-Fi access point — or set this PC's IP as \"Server IP address\" "
     "on the device's own web page.",
     "Power the device on and wait for it to reach the network.",
     "Press Connect.",
@@ -858,7 +858,7 @@ class DevicePicker:
             imgui.set_item_tooltip("Stop waiting for the device.")
             return
 
-        recording = getattr(ctx, "state", "") == "recording"
+        recording = bool(getattr(ctx, "recording", False))
         reason = ""
         if recording:
             # `reconnect` does not detach the session, so the acquire loop would
@@ -945,9 +945,7 @@ class DevicePicker:
 
         kwargs = _chosen_kwargs(dev, self._choices[self._selected])
         target = (
-            self._targets[self._target_selected].get("name")
-            if dev.scan and self._targets
-            else None
+            self._targets[self._target_selected].get("name") if dev.scan and self._targets else None
         )
         index = self._selected
         # Held, not re-resolved: the operator can switch the panel to another

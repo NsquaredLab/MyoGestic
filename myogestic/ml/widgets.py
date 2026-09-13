@@ -54,7 +54,7 @@ def _render_train_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)
 def _render_predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> None:
     state = pipeline.app.ctx.state
     can_start = (
-        state == "idle"
+        state in ("idle", "recording")
         and pipeline.model is not None
         and pipeline.on_extract is not None
         and pipeline.on_predict is not None
@@ -72,7 +72,7 @@ def _render_predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 
         # Say *why* Predict is unavailable — a disabled control with no reason
         # is a dead end.
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            if state != "idle":
+            if state not in ("idle", "recording"):
                 why = "Busy — wait until the current action finishes."
             elif pipeline.model is None:
                 why = "No model yet — train or load a model first."
@@ -192,7 +192,7 @@ class TrainButton:
 class PredictButton:
     """Predict/Stop toggle reflecting the pipeline's predict state.
 
-    Enabled to start only when the state is ``idle``, a model is loaded, and
+    Enabled to start only when the state is ``idle`` or ``recording``, a model is loaded, and
     both the extract and predict callbacks are wired; shows a Stop button
     while predicting and is disabled otherwise.
 

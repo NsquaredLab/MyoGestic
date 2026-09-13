@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.core import AppState
+from myogestic.core import RECORDABLE_STATES, AppState
 from myogestic.widgets.common import (
     DANGER,
     IDLE,
@@ -60,9 +60,7 @@ def _status_pill(label: str, color: imgui.ImVec4) -> None:
     imgui.dummy(size)
     p0, p1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
     draw = imgui.get_window_draw_list()
-    draw.add_rect_filled(
-        p0, p1, imgui.get_color_u32(PILL_BG), size.y * 0.5
-    )
+    draw.add_rect_filled(p0, p1, imgui.get_color_u32(PILL_BG), size.y * 0.5)
     y = (p0.y + p1.y) * 0.5
     draw.add_rect_filled(
         imgui.ImVec2(p0.x + pad_x - 1, y - 3),
@@ -86,6 +84,18 @@ STATE_COLORS: dict[str, imgui.ImVec4] = {
     # (Populated by myogestic.ml.widgets on import.)
 }
 _DEFAULT_COLOR = IDLE
+
+
+def _transport(ctx: Context) -> str:
+    """Which transport button applies.
+
+    ``"stop"`` while a take is open, ``"record"`` when one may start in this
+    state, ``""`` when neither does (``training``, or a state no extension
+    registered in `RECORDABLE_STATES`).
+    """
+    if getattr(ctx, "recording", False):
+        return "stop"
+    return "record" if ctx.state in RECORDABLE_STATES else ""
 
 
 def _safe_label_index(current: int, n_classes: int) -> int:
@@ -180,7 +190,7 @@ class RecordButton:
         """
         imgui.push_id(self._widget_id)
         try:
-            recording = ctx.state == AppState.RECORDING
+            recording = bool(getattr(ctx, "recording", False))
             self._sync(recording)
             tone, detail = self._state(recording)
 
@@ -219,6 +229,10 @@ class RecordButton:
         """
         for stream in ctx.streams.values():
             stream.detach_session()
+        # End the event streams at the click as well: the pipeline keeps ticking during the
+        # naming dialog, and those rows are not part of the take either.
+        if ctx.session is not None:
+            ctx.session.freeze()
         self._captured = time.monotonic() - self._started if self._started else 0.0
         self._started = None
         self._naming = True
@@ -265,10 +279,16 @@ class RecordButton:
         if recording:
             if imgui.button(f"{fa.ICON_FA_STOP}  Stop", full):
                 self._stop(ctx)
-        elif imgui.button(f"{fa.ICON_FA_CIRCLE_DOT}  Record", full):
-            self._name = ""
-            self._started = time.monotonic()
-            self._on_record()
+        elif _transport(ctx) == "record":
+            if imgui.button(f"{fa.ICON_FA_CIRCLE_DOT}  Record", full):
+                self._name = ""
+                self._started = time.monotonic()
+                self._on_record()
+        else:
+            imgui.begin_disabled()
+            imgui.button(f"{fa.ICON_FA_CIRCLE_DOT}  Record", full)
+            imgui.end_disabled()
+            imgui.set_item_tooltip("Busy — wait until the current action finishes.")
 
     def _dialog(self, ctx: Context) -> None:
         """The naming modal. Deliberately has no way out but Save or Discard.
@@ -298,9 +318,7 @@ class RecordButton:
             )
             if changed:
                 self._name = typed[:_NAME_MAX]
-            imgui.text_colored(
-                muted(), "Optional — the timestamp always identifies the session."
-            )
+            imgui.text_colored(muted(), "Optional — the timestamp always identifies the session.")
             imgui.spacing()
 
             if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save", imgui.ImVec2(120, 0)):
@@ -316,7 +334,6 @@ class RecordButton:
                     imgui.close_current_popup()
         finally:
             imgui.end_popup()
-
 
 
 class RecordingControls:
@@ -420,6 +437,8 @@ def _render_recording_controls(
         ctx.class_names = list(class_names)
 
     panel_header("RECORDING", fa.ICON_FA_CIRCLE_DOT)
+    recording = bool(getattr(ctx, "recording", False))
+    transport = _transport(ctx)
 
     if class_names:
         imgui.text("Gesture:")
@@ -449,11 +468,7 @@ def _render_recording_controls(
                         ctx.current_label = i
                         if on_gesture is not None:
                             on_gesture(i)
-                        if (
-                            ctx.state == AppState.RECORDING
-                            and ctx.session is not None
-                            and 0 <= i < n_classes
-                        ):
+                        if recording and ctx.session is not None and 0 <= i < n_classes:
                             ctx.session.add_label(i)
                 finally:
                     if selected:
@@ -461,7 +476,7 @@ def _render_recording_controls(
             imgui.spacing()
 
         # Record / Stop
-        if ctx.state == AppState.IDLE:
+        if transport == "record":
             if imgui.button(
                 f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
             ):
@@ -469,7 +484,7 @@ def _render_recording_controls(
                 # Auto-add the current label at the start of the recording.
                 if ctx.session is not None and class_names and 0 <= ctx.current_label < n_classes:
                     ctx.session.add_label(ctx.current_label)
-        elif ctx.state == AppState.RECORDING and imgui.button(
+        elif transport == "stop" and imgui.button(
             f"{fa.ICON_FA_STOP}  Stop##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
         ):
             on_stop()
@@ -480,11 +495,15 @@ def _render_recording_controls(
     imgui.spacing()
     color = STATE_COLORS.get(ctx.state, _DEFAULT_COLOR)
     _status_pill(ctx.state.upper(), color)
+    if recording and ctx.state != AppState.RECORDING:
+        # A take under another state: say so beside the state, in recording's colour.
+        imgui.same_line()
+        _status_pill("REC", STATE_COLORS[AppState.RECORDING])
     imgui.same_line()
     message = ctx.status_message or "Ready"
     if message.startswith("Saved"):
         message = f"{fa.ICON_FA_FLOPPY_DISK}  {message}"
-    if ctx.state == AppState.RECORDING:
+    if recording:
         n_labels = len(ctx.session.label_track) if ctx.session else 0
         active_name = (
             class_names[ctx.current_label]
