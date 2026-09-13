@@ -288,7 +288,8 @@ class RecordButton:
             imgui.begin_disabled()
             imgui.button(f"{fa.ICON_FA_CIRCLE_DOT}  Record", full)
             imgui.end_disabled()
-            imgui.set_item_tooltip("Busy — wait until the current action finishes.")
+            if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+                imgui.set_item_tooltip("Busy — wait until the current action finishes.")
 
     def _dialog(self, ctx: Context) -> None:
         """The naming modal. Deliberately has no way out but Save or Discard.
