@@ -397,8 +397,11 @@ class Pipeline:
                 info["model_note"] = "not saved: pipeline.save_model is unset"
             else:
                 path = session.path / "model.joblib"
-                self.save_model(model, str(path))
-                info["model"] = path.name
+                try:
+                    self.save_model(model, str(path))
+                    info["model"] = path.name
+                except Exception as e:  # noqa: BLE001 - a failed save is recorded, never fatal
+                    info["model_note"] = f"not saved: {e!r}"
             report = getattr(model, "report", None)
             if isinstance(report, Mapping):
                 try:
