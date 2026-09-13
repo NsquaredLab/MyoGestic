@@ -1,20 +1,25 @@
 """Core tests — only idle ↔ recording. ML pipeline tests live in test_ml.py."""
 
+import json
 import shutil
 import threading
 import time
+import zipfile
+from pathlib import Path
 
 import numpy as np
-from mne_lsl.lsl import StreamInfo, StreamOutlet, local_clock
+import pytest
+from mne_lsl.lsl import StreamInfo as LSLStreamInfo
+from mne_lsl.lsl import StreamOutlet, local_clock
 
 from myogestic.core import App, can_transition
 from myogestic.sources.lsl import LSLSource
-from myogestic.stream import Stream
+from myogestic.stream import Stream, StreamInfo
 
 
 def start_synthetic_stream(name="CoreTestEMG", n_channels=8, fs=256):
     """Start a fake LSL stream in a background thread. Returns stop function."""
-    info = StreamInfo(name, "EMG", n_channels, fs, "float32", "")
+    info = LSLStreamInfo(name, "EMG", n_channels, fs, "float32", "")
     outlet = StreamOutlet(info)
     running = [True]
 
@@ -50,7 +55,7 @@ def test_recording_transitions():
     app = App("TestApp")
     app.streams(stream)
 
-    stream.reconnect()   # the loop never attaches on its own
+    stream.reconnect()  # the loop never attaches on its own
     stream.start()
     time.sleep(1.0)
 
@@ -235,3 +240,110 @@ def test_the_glfw_stderr_filter_starts_no_thread_in_the_browser(monkeypatch):
 
     with _collapse_glfw_monitor_spam():
         pass  # must enter and exit cleanly
+
+
+# --- recording as a flag beside the state ------------------------------------------
+
+
+class _FakeSource:
+    def connect(self) -> StreamInfo:
+        return StreamInfo(n_channels=4, fs=100.0)
+
+    def read(self):
+        return None, None
+
+    def disconnect(self) -> None:
+        pass
+
+
+def _connected_app() -> tuple[App, Stream]:
+    app = App("flag-test")
+    stream = Stream("emg", source=_FakeSource(), window_ms=100)
+    app.streams(stream)
+    assert stream.reconnect()
+    return app, stream
+
+
+def _only_zip(folder: Path) -> Path:
+    zips = list(folder.glob("*.session.zip"))
+    assert len(zips) == 1, zips
+    return zips[0]
+
+
+def test_recording_while_predicting_leaves_the_state_alone(tmp_path, recordable_predicting):
+    app, stream = _connected_app()
+    app.ctx.state = "predicting"
+    app.start_recording(str(tmp_path))
+    assert app.ctx.recording is True
+    assert app.ctx.state == "predicting"
+    assert stream._session is app.ctx.session
+    app.stop_recording(wait=True)
+    assert app.ctx.recording is False
+    assert app.ctx.state == "predicting"
+    assert stream._session is None
+    assert _only_zip(tmp_path).exists()
+
+
+def test_recording_from_idle_still_shows_the_recording_state(tmp_path):
+    app, _ = _connected_app()
+    app.start_recording(str(tmp_path))
+    assert (app.ctx.recording, app.ctx.state) == (True, "recording")
+    app.stop_recording(wait=True)
+    assert (app.ctx.recording, app.ctx.state) == (False, "idle")
+
+
+def test_start_recording_is_refused_outside_recordable_states(tmp_path):
+    app, _ = _connected_app()
+    app.ctx.state = "training"
+    app.start_recording(str(tmp_path))
+    assert app.ctx.recording is False
+    assert "Cannot start recording" in app.ctx.status_message
+    assert not list(tmp_path.iterdir())
+
+
+def test_finalize_hooks_run_after_freeze_and_before_meta(tmp_path):
+    app, _ = _connected_app()
+    seen = {}
+
+    def hook(session):
+        seen["event_streams"] = session.event_streams
+        session.extras["hook"] = "ran"
+        session.append_event("late", [1.0], 0.0)  # must be dropped: the session is frozen
+
+    app.finalize_hooks.append(hook)
+    app.start_recording(str(tmp_path))
+    app.ctx.session.append_event("prediction.x", [1.0], 0.0)
+    app.stop_recording(wait=True)
+    with zipfile.ZipFile(_only_zip(tmp_path)) as zf:
+        meta = json.loads(zf.read("meta.json"))
+        names = zf.namelist()
+    assert seen["event_streams"] == ("prediction.x",)
+    assert meta["extras"]["hook"] == "ran"
+    assert "late" not in meta["streams"] and not any(n.startswith("late.zarr") for n in names)
+
+
+def test_a_failing_finalize_hook_does_not_lose_the_take(tmp_path):
+    app, _ = _connected_app()
+    app.finalize_hooks.append(lambda session: 1 / 0)
+    app.start_recording(str(tmp_path))
+    app.stop_recording(wait=True)
+    assert _only_zip(tmp_path).exists()
+    assert any("Finalize hook failed" in line for line in app.ctx.logs)
+
+
+def test_discard_while_predicting_runs_no_hook(tmp_path, recordable_predicting):
+    app, _ = _connected_app()
+    app.finalize_hooks.append(lambda session: pytest.fail("hook ran on discard"))
+    app.ctx.state = "predicting"
+    app.start_recording(str(tmp_path))
+    app.discard_recording()
+    assert (app.ctx.recording, app.ctx.state, app.ctx.session) == (False, "predicting", None)
+    assert not list(tmp_path.iterdir())
+
+
+def test_cleanup_finalises_an_open_take(tmp_path):
+    app, _ = _connected_app()
+    app.start_recording(str(tmp_path))
+    app._cleanup()
+    assert app.ctx.recording is False
+    assert _only_zip(tmp_path).exists()
