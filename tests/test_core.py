@@ -347,3 +347,28 @@ def test_cleanup_finalises_an_open_take(tmp_path):
     app._cleanup()
     assert app.ctx.recording is False
     assert _only_zip(tmp_path).exists()
+
+
+def test_add_stream_is_refused_while_a_take_is_open_under_predicting(
+    tmp_path, recordable_predicting
+):
+    app, _ = _connected_app()
+    app.ctx.state = "predicting"
+    app.start_recording(str(tmp_path))
+    assert app.add_stream(Stream("imu", source=_FakeSource(), window_ms=100)) is False
+    assert "Cannot add a stream while recording" in app.ctx.status_message
+    assert "imu" not in app.ctx.streams
+    app.stop_recording(wait=True)
+    assert app.add_stream(Stream("imu", source=_FakeSource(), window_ms=100)) is True
+
+
+def test_remove_stream_is_refused_while_a_take_is_open_under_predicting(
+    tmp_path, recordable_predicting
+):
+    app, _ = _connected_app()
+    app.ctx.state = "predicting"
+    app.start_recording(str(tmp_path))
+    assert app.remove_stream("emg") is False
+    assert "emg" in app.ctx.streams
+    app.stop_recording(wait=True)
+    assert app.remove_stream("emg") is True

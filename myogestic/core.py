@@ -326,7 +326,7 @@ class App:
             ``False`` if the stream was refused, with the reason in
             ``ctx.status_message``.
         """
-        if self.ctx.state == AppState.RECORDING:
+        if self.ctx.recording:
             self.ctx.status_message = "Cannot add a stream while recording"
             return False
         if stream.name in self.ctx.streams:
@@ -355,7 +355,7 @@ class App:
         bool
             ``False`` if the stream was refused or was not registered.
         """
-        if self.ctx.state == AppState.RECORDING:
+        if self.ctx.recording:
             self.ctx.status_message = "Cannot remove a stream while recording"
             return False
         stream = self.ctx.streams.pop(name, None)
