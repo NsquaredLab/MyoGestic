@@ -1,7 +1,8 @@
 # Design: record while predicting — the session carries the model's input and output
 
-**Status:** draft. Revised after advisor review (write-path cost, freeze ordering, exit
-handling, replay claim, nominal rates). Codex review pending. Not implemented.
+**Status:** draft, plan written (`docs/superpowers/plans/2026-09-13-record-while-predicting.md`).
+Revised after advisor review (write-path cost, freeze ordering, exit handling, replay claim,
+nominal rates). Codex review pending. Not implemented.
 
 ## Context / problem
 
@@ -125,6 +126,7 @@ def append_event(
     timestamp: float,
     *,
     channel_names: Sequence[str] | None = None,
+    fs: float = 1.0,
 ) -> None:
     """Append one timestamped row to an event stream, declaring it on first use.
 
@@ -144,9 +146,11 @@ def append_event(
   ~470 ms of every second on the predict thread, whose whole budget is 31 ms per tick. So
   `append_event` appends to a per-stream Python list and flushes it to zarr when the list
   reaches `chunk_rows` (1024) or when its oldest row is more than one second old, checked
-  on each call — no timer thread. `freeze()` (below) flushes everything. The bounded cost
-  is one second of event rows lost on a hard crash; the raw streams are unaffected, they
-  keep appending as today.
+  on each call — no timer thread. `freeze()` (below) flushes everything. The check runs
+  when *that* stream receives a row, so a stream that goes quiet mid-take reaches disk at
+  `freeze()`, not within a second. The bounded cost is therefore, per active stream, one
+  second of event rows lost on a hard crash; the raw streams are unaffected, they keep
+  appending as today.
 - Chunks are `(1024, width)` rather than `int(fs)` rows (`init_stream` gains a `chunk_rows`
   keyword; the default for sampled streams is unchanged).
 - `StreamInfo.fs` is a **nominal** rate, not zero: `predict_hz` for the pipeline's streams
@@ -250,7 +254,11 @@ message says "finalizing…" from the moment Stop is pressed, as it does now.
 `Pipeline.__init__` registers `_on_finalize(session)`:
 
 - If `self.model is not None` and `self.save_model` is set: `save_model(model,
-  session.path / "model.joblib")`. With the default `save_pickle` this also writes the
+  session.path / "model.joblib")`. This pickles on the finalize thread while the predict
+  thread may still be calling the model; every model in this repo is read-only in
+  `predict`, so the snapshot is consistent. A model that mutates state in `predict` would
+  be pickled mid-update — acceptable for a provenance copy, and noted here so nobody
+  relies on it for more. With the default `save_pickle` this also writes the
   `model.joblib.controls.json` sidecar into the folder.
 - `session.extras["pipeline"] = {"model": "model.joblib" | None, "model_type":
   qualname, "predict_hz": …, "event_streams": […], "skipped": {name: reason}, "report":
@@ -262,7 +270,8 @@ message says "finalizing…" from the moment Stop is pressed, as it does now.
 `App.run`'s cleanup stops streams and runs the cleanup hooks; it never looks at the session.
 An app closed mid-take today leaves a folder with zarr arrays and no `meta.json`, which
 `open_session_store` cannot read. The bracelet demo registered its own cleanup hook for
-exactly this. Once recording is a first-class run mode, core owns it: `_do_cleanup` calls
+exactly this. Once recording is a first-class run mode, core owns it: the `_do_cleanup`
+closure in `run()` becomes an `App._cleanup()` method (so a test can drive it) and calls
 `stop_recording()` when `ctx.recording`, **after** the cleanup hooks (so the pipeline's
 `_cleanup` has already stopped the predict thread, and no tick appends during the flush)
 and **before** `stream.stop()`. `stop_recording` gains a keyword-only `wait: bool = False`;
@@ -271,7 +280,8 @@ because a daemon would be killed at interpreter exit with the archive half writt
 
 ### 6. Widgets
 
-Fourteen lines in three widgets read the state where they mean the flag:
+Fourteen lines in three widgets read the state where they mean the flag, and one ML button
+gates on it:
 
 - `RecordingControls` (`widgets/panels/recording.py`): `recording = ctx.recording`; the
   Record button shows when `not ctx.recording and ctx.state in RECORDABLE_STATES`; Stop
@@ -286,6 +296,10 @@ Fourteen lines in three widgets read the state where they mean the flag:
   `getattr(ctx, "state", "") == "recording"`; they switch to `getattr(ctx, "recording",
   False)`, which also covers the new case. Reconnecting under a live recording would
   detach the session mid-take either way.
+- The ML `PredictButton` starts from `recording` as well as `idle`, since the transition
+  table allows it; its "Busy" tooltip follows.
+- `RecordButton` draws a disabled Record with a "Busy" tooltip in a state that is neither
+  recordable nor recording (`training`), instead of nothing.
 
 ### 7. Replay
 
