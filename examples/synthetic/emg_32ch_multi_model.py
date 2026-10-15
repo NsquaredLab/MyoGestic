@@ -35,7 +35,7 @@ from imgui_bundle import imgui
 from imgui_bundle import portable_file_dialogs as pfd
 from myoverse.transforms import MAV, RMS, WaveformLength
 
-from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic import App, Fr, Grid, Layout, Px, Stream, TrainingData
 from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
@@ -152,7 +152,7 @@ PROCESSES = [
     *vhi.launchable(),
 ]
 
-app = App("EMG 32ch Multi-Model", ui_scale=0.85)
+app = App("EMG 32ch Multi-Model")
 app.streams(Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 # Wire generic save/load so save_model_button / load_model_button work, and
@@ -407,11 +407,38 @@ def predict(model, features):
 
 LOGO_CELL_W = 300
 WORDMARK_ASPECT = 800 / 540
-grid = Grid(
-    7,
-    3,
-    row_height=[Px(LOGO_CELL_W / WORDMARK_ASPECT), *[Fr(1)] * 6],
-    col_width=[Px(LOGO_CELL_W), Fr(1), Fr(1)],
+
+# Two arrangements of the same named panels; the window width picks one (see
+# docs/concepts/grid-layout.md, "Named areas and reflow"). Narrow puts panels that
+# belong to one phase of the session — setup, training — in a shared cell as tabs,
+# so none of them is squeezed into a cell too small for it.
+layout = Layout(
+    # Panels with a natural height (recording, the prediction) get `Px`, which follows
+    # the UI scale, so they never scroll; the training-phase panels share one cell.
+    wide=Grid.areas(
+        """
+        logo                     signal   signal
+        processes                signal   signal
+        recording                signal   signal
+        sessions | model | filter  signal   signal
+        sessions | model | filter  streams  log
+        prediction               streams  log
+        """,
+        row_height=[Px(110), Px(90), Px(250), Fr(1), Fr(1), Px(100)],
+        col_width=[Px(LOGO_CELL_W), Fr(1), Fr(1)],
+    ),
+    narrow=Grid.areas(
+        """
+        logo
+        signal
+        processes | streams | log
+        recording
+        sessions | model | filter
+        prediction
+        """,
+        row_height=[Px(90), Fr(3), Fr(1.4), Px(200), Fr(2), Px(100)],
+    ),
+    breakpoint=Px(1000),
 )
 
 
@@ -442,34 +469,34 @@ prediction = PredictionLabel(pipeline, CLASSES)
 
 @app.ui
 def demo_ui(ctx):
-    with grid[0:5, 1:3]:
+    with layout["signal"]:
         viewer.ui(ctx)
 
-    with grid[5:7, 1:2]:
+    with layout["streams"]:
         streams.ui(ctx)
 
-    with grid[5:7, 2:3]:
+    with layout["log"]:
         log.ui(ctx)
 
-    with grid[0, 0]:
+    with layout["logo"]:
         logo.ui()
 
-    with grid[1, 0]:
+    with layout["processes"]:
         processes.ui()
 
-    with grid[2, 0]:
+    with layout["recording"]:
         recording.ui(ctx)
 
-    with grid[3, 0]:
+    with layout["sessions"]:
         pipeline.training_data = sessions.ui()
 
-    with grid[4, 0]:
+    with layout["model"]:
         model_panel()
 
-    with grid[5, 0]:
+    with layout["filter"]:
         output_filter.ui()
 
-    with grid[6, 0]:
+    with layout["prediction"]:
         prediction.ui()
 
 

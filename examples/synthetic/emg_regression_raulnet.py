@@ -187,7 +187,7 @@ PROCESSES = [
     *vhi.launchable(),
 ]
 
-app = App("EMG Regression — RaulNet", ui_scale=0.85)
+app = App("EMG Regression — RaulNet")
 app.streams(
     Stream("emg", source=LSLSource(STREAM_NAME), window_ms=WINDOW_MS, buffer_ms=60000),
     Stream(

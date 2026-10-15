@@ -49,7 +49,14 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import DANGER, SUCCESS, panel_header, pop_selected, push_selected
+from myogestic.widgets.common import (
+    DANGER,
+    SUCCESS,
+    panel_header,
+    pop_selected,
+    push_selected,
+    ui_px,
+)
 
 if TYPE_CHECKING:
     from myogestic.remote._recording import RecordingClient
@@ -243,7 +250,7 @@ def vhi_movement_palette(
     # As many columns as fit the current panel width (at least one).
     avail = imgui.get_content_region_avail().x
     spacing = imgui.get_style().item_spacing.x
-    n_cols = max(1, int((avail + spacing) // (_BTN_W + spacing)))
+    n_cols = max(1, int((avail + spacing) // (ui_px(_BTN_W) + spacing)))
 
     imgui.begin_disabled(not connected)
     for i, name in enumerate(movements):
@@ -252,7 +259,7 @@ def vhi_movement_palette(
         is_current = name == current_movement
         if is_current:
             push_selected()
-        if imgui.button(f"{name}##vhi_mv_{i}", imgui.ImVec2(_BTN_W, _BTN_H)):
+        if imgui.button(f"{name}##vhi_mv_{i}", imgui.ImVec2(ui_px(_BTN_W), ui_px(_BTN_H))):
             on_movement(name)
         if is_current:
             pop_selected()

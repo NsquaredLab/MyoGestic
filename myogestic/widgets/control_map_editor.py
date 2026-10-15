@@ -55,6 +55,7 @@ from myogestic.widgets.common import (
     panel_header,
     pop_selected,
     push_selected,
+    ui_px,
 )
 
 if TYPE_CHECKING:
@@ -220,7 +221,7 @@ def address_tree(capabilities: Sequence[Capability]) -> dict[str, Any]:
 
 def _label_w(label: str) -> float:
     """How much room a widget's trailing label needs, including its spacing."""
-    return imgui.calc_text_size(label).x + _GAP
+    return imgui.calc_text_size(label).x + ui_px(_GAP)
 
 
 class ControlMapEditor:
@@ -856,14 +857,14 @@ class ControlMapEditor:
         for index, (label, handler, disabled, gap) in enumerate(
             (
                 (f"{fa.ICON_FA_ARROWS_ROTATE}  Connect", None, False, 0.0),
-                (f"{fa.ICON_FA_FLOPPY_DISK}  Save", None, not can_save, _GROUP_GAP),
+                (f"{fa.ICON_FA_FLOPPY_DISK}  Save", None, not can_save, ui_px(_GROUP_GAP)),
                 # Same content, so the same validity rule: an editor that refused Save and
                 # allowed Save As would write the broken file to a different name.
                 ("Save as...", None, not can_save or self._save_as is not None, 0.0),
                 ("Reload", self.load, False, 0.0),
             )
         ):
-            if index and self._room_for(imgui.calc_text_size(label).x + 24.0 + gap):
+            if index and self._room_for(imgui.calc_text_size(label).x + ui_px(24.0) + gap):
                 imgui.same_line(0.0, imgui.get_style().item_spacing.x + gap)
             imgui.begin_disabled(disabled)
             if imgui.button(label):
@@ -982,7 +983,7 @@ class ControlMapEditor:
         imgui.pop_style_color()
         if imgui.button("Reload from disk"):
             changed = self.take_disk_version()
-        if self._room_for(imgui.calc_text_size("Keep my edits").x + 24.0):
+        if self._room_for(imgui.calc_text_size("Keep my edits").x + ui_px(24.0)):
             imgui.same_line()
         if imgui.button("Keep my edits"):
             self.keep_mine()
@@ -1011,13 +1012,13 @@ class ControlMapEditor:
         saved = False
         if imgui.button("Apply to fields"):
             self.apply_raw(self._raw)
-        if self._room_for(_label_w("Apply and save") + 24.0):
+        if self._room_for(_label_w("Apply and save") + ui_px(24.0)):
             imgui.same_line()
         # `save()` refuses on its own if the applied text still has problems, so the
         # button is one call rather than a check-then-act.
         if imgui.button("Apply and save") and self.apply_raw(self._raw):
             saved = self.save()
-        if self._room_for(_label_w("Revert text") + 24.0):
+        if self._room_for(_label_w("Revert text") + ui_px(24.0)):
             imgui.same_line()
         if imgui.button("Revert text"):
             self._raw = self.raw_text()
@@ -1193,14 +1194,14 @@ class ControlMapEditor:
         """One control: its name, its targets, its gates."""
         imgui.push_id(f"dof{index}")
         avail = imgui.get_content_region_avail().x
-        stacked = avail < _STACK_BELOW
+        stacked = avail < ui_px(_STACK_BELOW)
 
         remove = f"{fa.ICON_FA_TRASH}  Remove control"
         label_column(
             "Name",
             _ROW_LABELS,
-            reserve=0.0 if stacked else _label_w(remove) + 24.0,
-            max_width=_NAME_MAX_W,
+            reserve=0.0 if stacked else _label_w(remove) + ui_px(24.0),
+            max_width=ui_px(_NAME_MAX_W),
         )
         changed, alias = imgui.input_text("##name", entry["alias"])
         if changed:
@@ -1278,7 +1279,7 @@ class ControlMapEditor:
         Returns whether this target should be removed.
         """
         avail = imgui.get_content_region_avail().x
-        stacked = avail < _STACK_BELOW
+        stacked = avail < ui_px(_STACK_BELOW)
         # A label is drawn *after* its widget and is not part of `set_next_item_width`, so
         # every label on the row has to be reserved too. Forgetting them is what left this
         # overflowing by a constant ~80 px at every width once the widgets themselves fit.
@@ -1288,17 +1289,17 @@ class ControlMapEditor:
             0.0
             if stacked
             else (
-                _WEIGHT_W
+                ui_px(_WEIGHT_W)
                 + _label_w("Weight")
                 + _label_w(_WEIGHT_READOUT)
-                + (_label_w(fa.ICON_FA_XMARK) + 24.0 + _GAP if drop else 0.0)
-                + _GAP * 2
+                + (_label_w(fa.ICON_FA_XMARK) + ui_px(24.0) + ui_px(_GAP) if drop else 0.0)
+                + ui_px(_GAP) * 2
             )
         )
         self._picker(
             pair,
             width=label_column(
-                "Target", _ROW_LABELS, reserve=reserved, max_width=_PICKER_MAX_W
+                "Target", _ROW_LABELS, reserve=reserved, max_width=ui_px(_PICKER_MAX_W)
             ),
         )
 
@@ -1307,7 +1308,7 @@ class ControlMapEditor:
         imgui.align_text_to_frame_padding()
         imgui.text("Weight")
         imgui.same_line()
-        imgui.set_next_item_width(_WEIGHT_W)
+        imgui.set_next_item_width(ui_px(_WEIGHT_W))
         # The value is drawn after the track rather than inside it: a number centred in a
         # wide flat frame is what an input field looks like, which is why this row read as
         # three text boxes.
@@ -1407,15 +1408,15 @@ class ControlMapEditor:
         # "fill the available width" — which in a popup that has not been sized yet is
         # unbounded, so the search field grew the popup to the whole display. Constrain
         # the popup and give the field a real width instead.
-        popup_w = max(width, _PICKER_MAX_W)
+        popup_w = max(width, ui_px(_PICKER_MAX_W))
         imgui.set_next_window_size_constraints(
-            imgui.ImVec2(width, 0.0), imgui.ImVec2(popup_w, 320.0)
+            imgui.ImVec2(width, 0.0), imgui.ImVec2(popup_w, ui_px(320.0))
         )
         key = imgui.get_id("##control")  # unique per row: `_entry_ui` pushed the row's id
         opened = imgui.begin_combo("##control", label)
         just_opened = self._note_open(key, opened)
         if opened:
-            imgui.set_next_item_width(popup_w - 24.0)
+            imgui.set_next_item_width(popup_w - ui_px(24.0))
             if just_opened:
                 # Click, then type. The list is long enough that searching is the normal way
                 # to use it, so the search box is where the keyboard should already be.

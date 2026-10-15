@@ -8,7 +8,7 @@ import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui, implot
 
-from myogestic.widgets.common import PALETTE, ensure_implot_style, muted
+from myogestic.widgets.common import PALETTE, ensure_implot_style, muted, ui_px
 from myogestic.widgets.signals._state import minmax_grid_all_shared_x, resolve_decimation_target
 
 if TYPE_CHECKING:
@@ -38,7 +38,7 @@ def resolve_plot_height(requested: float, *, show_controls: bool) -> float:
     if requested > 0:
         return requested
     footer_h = imgui.get_text_line_height_with_spacing() if show_controls else 0.0
-    return max(imgui.get_content_region_avail().y - footer_h, _MIN_PLOT_H)
+    return max(imgui.get_content_region_avail().y - footer_h, ui_px(_MIN_PLOT_H))
 
 
 def render_plot(

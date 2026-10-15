@@ -23,7 +23,7 @@ from myogestic.widgets import (
 
 WINDOW_MS = 200
 
-app = App("MyoGestic — force ramps", ui_scale=0.85)
+app = App("MyoGestic — force ramps")
 
 emg = Stream("emg", source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS)
 

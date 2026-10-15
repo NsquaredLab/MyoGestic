@@ -38,6 +38,7 @@ from myogestic.widgets.common import (
     panel_header,
     pop_selected,
     push_selected,
+    ui_px,
 )
 
 if TYPE_CHECKING:
@@ -54,7 +55,7 @@ _PILL_PAD_Y = 4.0  # internal vertical padding inside the pill
 
 
 def _status_pill(label: str, color: imgui.ImVec4) -> None:
-    pad_x, pad_y = 10.0, _PILL_PAD_Y
+    pad_x, pad_y = 10.0, ui_px(_PILL_PAD_Y)
     text = imgui.calc_text_size(label)
     size = imgui.ImVec2(text.x + pad_x * 2 + 12, text.y + pad_y * 2)
     imgui.dummy(size)
@@ -303,7 +304,7 @@ class RecordButton:
             )
             imgui.spacing()
 
-            if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save", imgui.ImVec2(120, 0)):
+            if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save", imgui.ImVec2(ui_px(120), 0)):
                 self._save(ctx)
                 imgui.close_current_popup()
             if self._on_discard is not None:
@@ -437,14 +438,14 @@ def _render_recording_controls(
             spacing = imgui.get_style().item_spacing.x
             right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
             for i, name in enumerate(class_names):
-                if i > 0 and imgui.get_item_rect_max().x + spacing + _LABEL_BTN_W <= right:
+                if i > 0 and imgui.get_item_rect_max().x + spacing + ui_px(_LABEL_BTN_W) <= right:
                     imgui.same_line()
                 selected = ctx.current_label == i
                 if selected:
                     push_selected()
                 try:
                     if imgui.button(
-                        f"{name}##rec_gesture{i}", imgui.ImVec2(_LABEL_BTN_W, _LABEL_BTN_H)
+                        f"{name}##rec_gesture{i}", imgui.ImVec2(ui_px(_LABEL_BTN_W), ui_px(_LABEL_BTN_H))
                     ):
                         ctx.current_label = i
                         if on_gesture is not None:
@@ -463,14 +464,14 @@ def _render_recording_controls(
         # Record / Stop
         if ctx.state == AppState.IDLE:
             if imgui.button(
-                f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
+                f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(ui_px(_RECORD_BTN_W), 0)
             ):
                 on_record()
                 # Auto-add the current label at the start of the recording.
                 if ctx.session is not None and class_names and 0 <= ctx.current_label < n_classes:
                     ctx.session.add_label(ctx.current_label)
         elif ctx.state == AppState.RECORDING and imgui.button(
-            f"{fa.ICON_FA_STOP}  Stop##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
+            f"{fa.ICON_FA_STOP}  Stop##rec_btn", imgui.ImVec2(ui_px(_RECORD_BTN_W), 0)
         ):
             on_stop()
     finally:
@@ -495,5 +496,5 @@ def _render_recording_controls(
     # Nudge the text down by the pad to share a baseline with the taller pill.
     # Don't restore the cursor afterwards — moving the cursor without submitting
     # an item next breaks imgui's window-growth assertion in end_child.
-    imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + _PILL_PAD_Y)
+    imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + ui_px(_PILL_PAD_Y))
     imgui.text(message)

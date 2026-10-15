@@ -26,6 +26,8 @@
 
 ::: myogestic.Grid
 
+::: myogestic.Layout
+
 ::: myogestic.Px
 
 ::: myogestic.Fr

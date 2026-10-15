@@ -57,7 +57,7 @@ def render_log(
     imgui.push_style_color(imgui.Col_.text, CONSOLE_TEXT)
     font = mono_font()
     if font is not None:
-        imgui.push_font(font, imgui.get_font_size())
+        imgui.push_font(font, imgui.get_style().font_size_base)
     imgui.input_text_multiline(
         f"##{widget_id}_log",
         text,

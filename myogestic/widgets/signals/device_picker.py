@@ -36,6 +36,7 @@ from myogestic.widgets.common import (
     muted,
     panel_header,
     segmented,
+    ui_px,
 )
 
 # Same subpackage, and the age read is subtle enough (it takes the stream lock,
@@ -705,7 +706,7 @@ class DevicePicker:
             imgui.text_colored(muted(), dev.label.upper())
             imgui.separator()
             if dev.hint:
-                imgui.push_text_wrap_pos(imgui.get_cursor_pos_x() + _HINT_WRAP)
+                imgui.push_text_wrap_pos(imgui.get_cursor_pos_x() + ui_px(_HINT_WRAP))
                 imgui.text_unformatted(dev.hint)
                 imgui.pop_text_wrap_pos()
             if dev.hint and dev.steps:
@@ -722,7 +723,7 @@ class DevicePicker:
                 imgui.text_colored(muted(), f"{number}.")
                 imgui.same_line()
                 imgui.set_cursor_pos_x(left + gutter)
-                imgui.push_text_wrap_pos(left + gutter + _HINT_WRAP)
+                imgui.push_text_wrap_pos(left + gutter + ui_px(_HINT_WRAP))
                 imgui.text_unformatted(step)
                 imgui.pop_text_wrap_pos()
                 imgui.spacing()

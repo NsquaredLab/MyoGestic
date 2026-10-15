@@ -238,10 +238,12 @@ class App:
         registered via ``app.popout(...)`` become tearable DockableWindows. macOS
         Retina viewport sizing of detached windows can be wrong on the first draw.
     ui_scale
-        Global UI zoom factor - scales the font and imgui's style metrics (padding,
-        spacing, rounding). ``None`` uses ``$MYOGESTIC_UI_SCALE`` then ``1.0``; the
-        env var overrides an explicit value. Clamped to ``[0.5, 2.0]``. No effect
-        when ``theme=False``.
+        Fixed UI zoom factor - scales the font, imgui's style metrics (padding,
+        spacing, rounding) and every `Px` track. ``None`` (the default) scales
+        automatically: the OS display scale times how big the window is, updated
+        live as the window is resized or moved to another monitor.
+        ``$MYOGESTIC_UI_SCALE`` overrides both. Clamped to ``[0.5, 2.0]``. No
+        effect when ``theme=False``.
 
     Examples
     --------
@@ -703,9 +705,10 @@ class App:
         runner_params.ini_filename = f".imgui_state/{self.name.replace(' ', '_')}.ini"
 
         if self._theme_enabled:
-            from myogestic._theme import apply_theme, load_fonts, set_ui_scale
+            from myogestic._theme import apply_theme, load_fonts, reset_live_scale, set_ui_scale
 
-            set_ui_scale(self._ui_scale)  # consumed by load_fonts / apply_theme below
+            set_ui_scale(self._ui_scale)  # None = automatic, see myogestic/_scale.py
+            reset_live_scale()
             runner_params.callbacks.default_icon_font = hello_imgui.DefaultIconFont.font_awesome6
             runner_params.callbacks.load_additional_fonts = load_fonts
             runner_params.callbacks.setup_imgui_style = apply_theme
@@ -774,6 +777,14 @@ class App:
                 io.config_flags |= imgui.ConfigFlags_.viewports_enable.value
 
             runner_params.callbacks.setup_imgui_style = _setup_with_docking
+
+        if self._theme_enabled:
+            # Last, so it re-runs the *whole* style chain (theme, viewport, docking)
+            # whenever the scale moves — see apply_live_scale.
+            from myogestic._theme import apply_live_scale
+
+            full_style = runner_params.callbacks.setup_imgui_style
+            runner_params.callbacks.pre_new_frame = lambda: apply_live_scale(full_style)
 
         global _active_app
         _active_app = self

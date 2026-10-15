@@ -23,7 +23,7 @@ from collections import deque
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import DANGER, IDLE, SUCCESS, WARNING, panel_header
+from myogestic.widgets.common import DANGER, IDLE, SUCCESS, WARNING, panel_header, ui_px
 from myogestic.widgets.panels.log_box import (
     render_log,
     render_log_buttons,
@@ -326,7 +326,7 @@ def _render_process_launcher(
     cluster_w = launch_w + pop_w + auto_w + 2 * sp  # Launch + popout
     # ponytail: below ~cluster_w the icon cluster itself would clip; a third
     # row would fix it but no real cell is that narrow.
-    inline = imgui.get_content_region_avail().x >= _MIN_COMBO_W + sp + cluster_w
+    inline = imgui.get_content_region_avail().x >= ui_px(_MIN_COMBO_W) + sp + cluster_w
     imgui.push_item_width(-(cluster_w + sp) if inline else -1.0)
     changed, new_idx = imgui.combo(f"##{widget_id}_select", _selected[widget_id], names)
     if changed:

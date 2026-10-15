@@ -103,7 +103,7 @@ PROCESSES = [
 
 vhi_control = vhi.control_client()
 
-app = App("EMG Regression", ui_scale=0.85)
+app = App("EMG Regression")
 app.streams(
     Stream("emg", source=LSLSource("TestEMG1"), window_ms=1000, buffer_ms=60000),
     Stream(

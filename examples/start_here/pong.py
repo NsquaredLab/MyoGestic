@@ -125,7 +125,7 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 output_filter = PostProcessor(hz=PREDICT_HZ)
 vhi_control = vhi.control_client()
 
-app = App("MyoGestic — pong", ui_scale=0.85)
+app = App("MyoGestic — pong")
 # The cursor is a *recorded signal*, not a start time plus a copy of the parameters:
 # it lands in the session on the same clock as the EMG, aligned by construction. It is
 # deliberately not connected here — see `_start_block`, which is the press that does it.
