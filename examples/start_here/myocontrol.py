@@ -81,7 +81,7 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 output_filter = PostProcessor(hz=PREDICT_HZ)
 vhi_control = vhi.control_client()
 
-app = App("MyoGestic — myocontrol", ui_scale=0.85)
+app = App("MyoGestic — myocontrol")
 app.streams(Stream("emg", source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS))
 pipeline = Pipeline(app, predict_hz=PREDICT_HZ)
 link = ControlLink(

@@ -733,8 +733,10 @@ class TestThePlaygroundPicksALayoutForTheWidth:
             / "synthetic"
             / "control_map_studio.py"
         ).read_text(encoding="utf-8")
-        assert "WIDE = Grid(" in source
-        assert "NARROW = Grid(" in source
+        assert "layout = Layout(" in source
+        assert "wide=Grid.areas(" in source
+        assert "narrow=Grid.areas(" in source
+        assert "breakpoint=Px(STACK_BELOW)" in source
         # The whole point: the wide layout gives the editor the slack, so the control
         # column is Px and the editor column is Fr.
         assert "col_width=[Px(CONTROLS_W), Fr(1)]" in source

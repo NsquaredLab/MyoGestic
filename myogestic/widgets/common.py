@@ -9,6 +9,7 @@ import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui, implot
 
+from myogestic._scale import current_scale
 from myogestic._theme import mono_font
 
 # 10 distinct colors for class labels (Category10-like)
@@ -47,6 +48,16 @@ CONSOLE_BG = imgui.ImVec4(0.075, 0.078, 0.086, 1.0)
 CONSOLE_TEXT = imgui.ImVec4(0.88, 0.89, 0.91, 1.0)
 PILL_BG = imgui.ImVec4(0.14, 0.17, 0.21, 1.0)
 ON_PILL_TEXT = imgui.ImVec4(0.93, 0.95, 0.98, 1.0)
+
+
+def ui_px(n: float) -> float:
+    """``n`` pixels at UI scale 1.0, in pixels now.
+
+    For a size a widget fixes itself — a button width, a wrap width, a minimum
+    height. Without it the text inside grows with the UI scale and the box around
+    it does not, so the label overflows on a 4K monitor.
+    """
+    return n * current_scale()
 
 
 def primary() -> imgui.ImVec4:
@@ -311,7 +322,7 @@ def mono_text(text: str, color: imgui.ImVec4 | None = None) -> None:
     """
     font = mono_font()
     if font is not None:
-        imgui.push_font(font, imgui.get_font_size())
+        imgui.push_font(font, imgui.get_style().font_size_base)
     if color is None:
         imgui.text_unformatted(text)
     else:

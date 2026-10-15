@@ -136,7 +136,7 @@ PROCESSES = [
 
 # docking=True enables ImGui multi-viewport so each app.popout(...) panel
 # becomes a tearable / dockable window.
-app = App("EMG 32ch Popout", ui_scale=0.85, docking=True)
+app = App("EMG 32ch Popout", docking=True)
 app.streams(Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 pipeline.save_model = save_pickle

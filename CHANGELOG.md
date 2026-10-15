@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Automatic UI scale.** With no `App(ui_scale=...)` the scale is now the OS display scale
+  times how big the window is compared with 1280 × 800 (nudged by ×0.85–×1.3), recomputed
+  every frame — resizing the window or dragging it to another monitor rescales fonts,
+  padding and spacing live. `App(ui_scale=...)` and `$MYOGESTIC_UI_SCALE` still fix it.
+- **`Grid.areas(...)` and `Layout`.** Draw an arrangement as text with named panels
+  (`a | b` shares one cell as tabs) and give `Layout` a wide and a narrow one plus a
+  breakpoint: the window width picks the arrangement each frame, panels keep their state
+  across the switch because they are keyed by name, and a hidden tab's body still runs so
+  its return value stays current. `control_map_studio` and `emg_32ch_multi_model` use it.
+- `ui_px(n)` in `widgets/common.py` for sizes a widget fixes itself.
+
+### Changed
+
+- `Px(n)` and the grid gutter are pixels at UI scale 1.0 and follow the scale, so fixed
+  side panels keep their proportion to the text in them.
+- Examples no longer hardcode `ui_scale=0.85`; the automatic scale replaces it.
+- Fonts load at their base size and are scaled through `style.font_scale_main`, so ImGui
+  1.92 re-rasterises them at the drawn size instead of the app reloading them.
+
 ## [2.6.2] - 2026-08-10
 
 ### Added

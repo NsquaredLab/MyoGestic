@@ -39,7 +39,7 @@ import tomllib
 from imgui_bundle import imgui
 from imgui_bundle import portable_file_dialogs as pfd
 
-from myogestic import App, Fr, Grid, Px
+from myogestic import App, Fr, Grid, Layout, Px
 from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.keyboard import KeyboardTarget
 from myogestic.remote import RemoteTarget
@@ -114,26 +114,37 @@ LOGO_CELL_W = 260
 WORDMARK_ASPECT = 800 / 540
 LOGO_H = Px(LOGO_CELL_W / WORDMARK_ASPECT)
 
-# Two layouts, picked per frame from the window's actual width: a Grid's column count and
+# Two arrangements, picked per frame from the window's width: a Grid's column count and
 # proportions are fixed at construction, and a 50/50 split is wrong at both ends — at 700 px
 # each half is too narrow for the editor's rows, at 2000 px the sliders get a thousand pixels
 # they have no use for. `Px` for the control column so every pixel gained goes to the editor.
+# Both numbers are pixels at UI scale 1.0, so the switch happens at the same size relative
+# to the text on every screen.
 STACK_BELOW = 900.0
 CONTROLS_W = 420.0
 
-WIDE = Grid(
-    3,
-    2,
-    row_height=[LOGO_H, Px(90), Fr(1)],
-    col_width=[Px(CONTROLS_W), Fr(1)],
-)
-NARROW = Grid(
-    4,
-    1,
+layout = Layout(
+    wide=Grid.areas(
+        """
+        logo       editor
+        processes  editor
+        drive      editor
+        """,
+        row_height=[LOGO_H, Px(90), Fr(1)],
+        col_width=[Px(CONTROLS_W), Fr(1)],
+    ),
     # A shorter wordmark here, and `Fr(2)` for the editor: the slider panel above it is empty
     # until Connect, and an even split left the editor cut off mid-row.
-    row_height=[Px(90), Px(90), Fr(1), Fr(2)],
-    col_width=[Fr(1)],
+    narrow=Grid.areas(
+        """
+        logo
+        processes
+        drive
+        editor
+        """,
+        row_height=[Px(90), Px(90), Fr(1), Fr(2)],
+    ),
+    breakpoint=Px(STACK_BELOW),
 )
 
 
@@ -307,17 +318,13 @@ def _rebuild_if_the_manifest_changed() -> None:
 @app.ui
 def studio_ui(ctx):
     """Sliders and the editor: side by side when there is room, stacked when not."""
-    wide = imgui.get_content_region_avail().x >= STACK_BELOW
-    grid = WIDE if wide else NARROW
-    editor_cell = grid[0:3, 1] if wide else grid[3, 0]
-
-    with grid[0, 0]:
+    with layout["logo"]:
         logo.ui()
 
-    with grid[1, 0]:
+    with layout["processes"]:
         processes.ui()
 
-    with grid[2, 0]:
+    with layout["drive"]:
         panel_header("DRIVE THE MAP")
         if imgui.button("Connect / Reload"):
             _connect()
@@ -340,7 +347,7 @@ def studio_ui(ctx):
             _keyboard_ui()
         _waiting_ui()
 
-    with editor_cell:
+    with layout["editor"]:
         _tabs_ui()
         # The editor writes the file the sliders were built from, so a save rebuilds them.
         if editor().ui():

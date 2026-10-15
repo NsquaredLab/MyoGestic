@@ -49,7 +49,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic.outputs.filters import OneEuroFilter, VectorFilter, make_filter
-from myogestic.widgets.common import panel_header
+from myogestic.widgets.common import panel_header, ui_px
 
 Scalar = float | int
 
@@ -401,7 +401,7 @@ class FilterProcessor:
         # otherwise stacked above it — see `_MIN_SLIDER_W`.
         gap = imgui.get_style().item_spacing.x * 3.0
         label_w = max(imgui.calc_text_size(p.label).x for p in spec.params) + gap
-        stacked = imgui.get_content_region_avail().x - label_w < _MIN_SLIDER_W
+        stacked = imgui.get_content_region_avail().x - label_w < ui_px(_MIN_SLIDER_W)
         for p in spec.params:
             v = values[p.key]
             if stacked:

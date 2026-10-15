@@ -28,7 +28,7 @@ CLASSES = ["Rest", "Contract"]
 # device's ramp counter, so this is the same for a Sessantaquattro and a +.
 source = SessantaquattroSource(nch_mode=3, fs_mode=2, mode="monopolar")
 
-app = App("Sessantaquattro — live view and recording", ui_scale=0.85)
+app = App("Sessantaquattro — live view and recording")
 app.streams(
     Stream("emg", source=source, window_ms=WINDOW_MS, buffer_ms=60000)
 )

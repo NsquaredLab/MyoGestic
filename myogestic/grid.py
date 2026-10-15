@@ -2,7 +2,8 @@
 
 Track sizes use CSS-Grid-style units that mean the same thing on both axes:
 
-* [`Px(n)`][Px] — exactly ``n`` pixels (fixed-size track).
+* [`Px(n)`][Px] — ``n`` pixels at UI scale 1.0 (fixed-size track; follows the
+  scale, so a ``Px(300)`` sidebar keeps its proportion to the text).
 * [`Fr(n)`][Fr] — ``n`` shares of the *remaining* space after the
   Px tracks are subtracted (proportional track).
 
@@ -37,16 +38,22 @@ Examples
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 
 from imgui_bundle import imgui
 
-#: Gap between adjacent cells, in pixels. The panels themselves carry a border
-#: and `window_padding`, so this only has to separate two cards — but at 6 px
-#: they read as one slab with lines drawn on it rather than as separate panels.
-#: Unlike the theme's padding this is not touched by `scale_all_sizes`, so it
-#: stays constant across `ui_scale`.
+from myogestic._scale import current_scale
+
+#: Gap between adjacent cells, in pixels at UI scale 1.0. The panels themselves
+#: carry a border and `window_padding`, so this only has to separate two cards —
+#: but at 6 px they read as one slab with lines drawn on it rather than as
+#: separate panels. Scaled with everything else, see `_gutter`.
 GUTTER: float = 12
+
+
+def _gutter() -> float:
+    return GUTTER * current_scale()
 
 
 def _validate_value(value: object, kind: str) -> float:
@@ -68,7 +75,11 @@ def _validate_value(value: object, kind: str) -> float:
 
 @dataclass(frozen=True, slots=True)
 class Px:
-    """Fixed pixel size. ``Px(300)`` means "exactly 300 px wide/tall".
+    """Fixed size. ``Px(300)`` means "300 px at UI scale 1.0".
+
+    The track follows the live UI scale (see ``App(ui_scale=...)``), so a fixed
+    sidebar grows and shrinks with the text it holds instead of drifting out of
+    proportion between a laptop and a 4K monitor.
 
     Examples
     --------
@@ -135,17 +146,56 @@ def _coerce(spec: object, axis: str, index: int) -> Track:
     )
 
 
-def _resolve_tracks(tracks: list[Track], avail: float) -> list[float]:
+def _resolve_tracks(tracks: list[Track], avail: float, scale: float = 1.0) -> list[float]:
     """Resolve a list of Px/Fr tracks to pixel sizes for ``avail`` total space.
 
-    Px tracks keep their declared value. Fr tracks share whatever remains
-    (clamped at zero — Px overflow is preserved, never auto-shrunk).
+    Px tracks keep their declared value times ``scale``. Fr tracks share whatever
+    remains (clamped at zero — Px overflow is preserved, never auto-shrunk).
     """
-    fixed_total = sum(t.value for t in tracks if isinstance(t, Px))
+    fixed_total = sum(t.value * scale for t in tracks if isinstance(t, Px))
     fr_total = sum(t.value for t in tracks if isinstance(t, Fr))
     fr_avail = max(0.0, avail - fixed_total)
     fr_scale = (fr_avail / fr_total) if fr_total > 0 else 0.0
-    return [t.value if isinstance(t, Px) else t.value * fr_scale for t in tracks]
+    return [t.value * scale if isinstance(t, Px) else t.value * fr_scale for t in tracks]
+
+
+#: One rectangle of the template: (row_start, row_end, col_start, col_end).
+_Rect = tuple[int, int, int, int]
+
+
+def _parse_areas(template: str) -> tuple[int, int, dict[str, _Rect]]:
+    """Parse a `Grid.areas` template into its size and one rectangle per token.
+
+    A token is a panel name, ``a|b|c`` (panels sharing a cell as tabs), or ``.``
+    (empty). Each token must cover a rectangle.
+    """
+    lines = [ln for ln in template.splitlines() if ln.strip()]
+    if not lines:
+        raise ValueError("Grid.areas(): the template is empty — write one line per row")
+    rows = [re.sub(r"\s*\|\s*", "|", ln).split() for ln in lines]
+    cols = len(rows[0])
+    for r, row in enumerate(rows):
+        if len(row) != cols:
+            raise ValueError(
+                f"Grid.areas(): row {r} has {len(row)} cells but row 0 has {cols} — "
+                f"every row needs the same number of cells (use '.' for an empty one)"
+            )
+    cells: dict[str, list[tuple[int, int]]] = {}
+    for r, row in enumerate(rows):
+        for c, token in enumerate(row):
+            if token != ".":
+                cells.setdefault(token, []).append((r, c))
+    rects: dict[str, _Rect] = {}
+    for token, where in cells.items():
+        r0, r1 = min(r for r, _ in where), max(r for r, _ in where) + 1
+        c0, c1 = min(c for _, c in where), max(c for _, c in where) + 1
+        if len(where) != (r1 - r0) * (c1 - c0):
+            raise ValueError(
+                f"Grid.areas(): {token!r} is not a rectangle — it spans rows {r0}-{r1 - 1} "
+                f"and columns {c0}-{c1 - 1}, so every cell in that block must say {token!r}"
+            )
+        rects[token] = (r0, r1, c0, c1)
+    return len(rows), cols, rects
 
 
 class Grid:
@@ -200,6 +250,84 @@ class Grid:
         self._col_tracks: list[Track] = self._normalize(col_width, cols, "col_width")
         self._scaled_heights: list[float] = [0.0] * rows
         self._last_frame: int = -1
+        # Named areas (see `Grid.areas`): panel name -> rectangle, and for panels
+        # sharing a cell as tabs, panel name -> its group's members.
+        self._areas: dict[str, _Rect] = {}
+        self._groups: dict[str, tuple[str, ...]] = {}
+        self._selected: dict[tuple[str, ...], str] = {}  # group -> selected tab
+        self._tab_frame: dict[tuple[str, ...], int] = {}  # group -> frame its tabs drew
+
+    @classmethod
+    def areas(
+        cls,
+        template: str,
+        *,
+        row_height: list[Track] | None = None,
+        col_width: list[Track] | None = None,
+    ) -> Grid:
+        """A grid whose cells are named, drawn as text. Place panels with `area`.
+
+        One line per row, one word per cell. A name repeated across a rectangle
+        spans it; ``.`` leaves a cell empty; ``a | b | c`` puts panels that are
+        never needed at the same time in one cell, as tabs. Naming panels instead
+        of indexing ``[row, col]`` is what lets a `Layout` move them between
+        arrangements without losing their state.
+
+        Parameters
+        ----------
+        template
+            The arrangement, one line per row.
+        row_height
+            Per-row track specs; default all ``Fr(1)``.
+        col_width
+            Per-column track specs; default all ``Fr(1)``.
+
+        Raises
+        ------
+        ValueError
+            if rows differ in length, a name does not cover a rectangle, a panel
+            is placed twice, or a track list has the wrong length.
+
+        Examples
+        --------
+        >>> from myogestic import Fr, Grid, Px
+        >>> grid = Grid.areas('''
+        ...     logo               signal
+        ...     record             signal
+        ...     sessions | train   signal
+        ... ''', col_width=[Px(260), Fr(1)])
+        >>> (grid.rows, grid.cols)
+        (3, 2)
+        >>> sorted(grid.panel_names)
+        ['logo', 'record', 'sessions', 'signal', 'train']
+        """
+        rows, cols, rects = _parse_areas(template)
+        grid = cls(rows, cols, row_height=row_height, col_width=col_width)
+        for token, rect in rects.items():
+            members = tuple(token.split("|"))
+            if any(not m for m in members):
+                raise ValueError(f"Grid.areas(): {token!r} has an empty tab — write 'a | b'")
+            for m in members:
+                if m in grid._areas:
+                    raise ValueError(
+                        f"Grid.areas(): panel {m!r} is placed twice — give each panel one cell"
+                    )
+                grid._areas[m] = rect
+                if len(members) > 1:
+                    grid._groups[m] = members
+        return grid
+
+    @property
+    def panel_names(self) -> frozenset[str]:
+        """Every panel name placed by `Grid.areas`, tabbed ones included."""
+        return frozenset(self._areas)
+
+    def area(self, name: str) -> _AreaCell:
+        """The cell for the panel called ``name`` — use as ``with grid.area("record"):``."""
+        if name not in self._areas:
+            known = ", ".join(sorted(self._areas)) or "none — build it with Grid.areas(...)"
+            raise KeyError(f"no area named {name!r}; this grid has: {known}")
+        return _AreaCell(self, name)
 
     @staticmethod
     def _normalize(specs: list[Track] | None, expected_len: int, axis: str) -> list[Track]:
@@ -217,33 +345,45 @@ class Grid:
         self._last_frame = current_frame
         # Use window height minus padding, not content_region_avail
         # (which changes as child windows are drawn)
-        padding = imgui.get_style().window_padding.y * 2 + max(self.rows - 1, 0) * GUTTER
+        padding = imgui.get_style().window_padding.y * 2 + max(self.rows - 1, 0) * _gutter()
         avail_h = imgui.get_window_height() - padding
-        self._scaled_heights = _resolve_tracks(self._row_tracks, avail_h)
+        self._scaled_heights = _resolve_tracks(self._row_tracks, avail_h, current_scale())
 
     def _row_y(self, row: int) -> float:
         """Y offset for the top of the given row."""
-        return sum(self._scaled_heights[r] for r in range(row)) + row * GUTTER
+        return sum(self._scaled_heights[r] for r in range(row)) + row * _gutter()
 
     def _row_span_h(self, row_start: int, row_end: int) -> float:
         return (
             sum(self._scaled_heights[r] for r in range(row_start, row_end))
-            + max(row_end - row_start - 1, 0) * GUTTER
+            + max(row_end - row_start - 1, 0) * _gutter()
         )
 
     def _scaled_col_widths(self, avail_w: float) -> list[float]:
-        return _resolve_tracks(self._col_tracks, avail_w)
+        return _resolve_tracks(self._col_tracks, avail_w, current_scale())
 
     def _col_x(self, col: int, avail_w: float) -> float:
         scaled = self._scaled_col_widths(avail_w)
-        return sum(scaled[c] for c in range(col)) + col * GUTTER
+        return sum(scaled[c] for c in range(col)) + col * _gutter()
 
     def _col_span_w(self, col_start: int, col_end: int, avail_w: float) -> float:
         scaled = self._scaled_col_widths(avail_w)
         return (
             sum(scaled[c] for c in range(col_start, col_end))
-            + max(col_end - col_start - 1, 0) * GUTTER
+            + max(col_end - col_start - 1, 0) * _gutter()
         )
+
+    def _place(self, rect: _Rect) -> tuple[imgui.ImVec2, imgui.ImVec2]:
+        """Cursor position and size of a cell, in the current window."""
+        self._init_frame()
+        row_start, row_end, col_start, col_end = rect
+        pad = imgui.get_style().window_padding
+        avail_w = imgui.get_window_width() - pad.x * 2 - max(self.cols - 1, 0) * _gutter()
+        pos = imgui.ImVec2(self._col_x(col_start, avail_w) + pad.x, self._row_y(row_start) + pad.y)
+        size = imgui.ImVec2(
+            self._col_span_w(col_start, col_end, avail_w), self._row_span_h(row_start, row_end)
+        )
+        return pos, size
 
     def __getitem__(self, key: tuple) -> _Cell:
         row, col = key
@@ -280,25 +420,15 @@ class _Cell:
         self._col_end = col_end
 
     def __enter__(self) -> _Cell:
-        g = self._grid
-        g._init_frame()
-
-        avail_w = (
-            imgui.get_window_width()
-            - imgui.get_style().window_padding.x * 2
-            - max(g.cols - 1, 0) * GUTTER
+        pos, size = self._grid._place(
+            (self._row_start, self._row_end, self._col_start, self._col_end)
         )
-        h = g._row_span_h(self._row_start, self._row_end)
-        w = g._col_span_w(self._col_start, self._col_end, avail_w)
-        x = g._col_x(self._col_start, avail_w) + imgui.get_style().window_padding.x
-        y = g._row_y(self._row_start) + imgui.get_style().window_padding.y
-
-        imgui.set_cursor_pos(imgui.ImVec2(x, y))
+        imgui.set_cursor_pos(pos)
         # Cell background inherits Col_.child_bg from the active theme
         # rather than hardcoded here — keeps light/dark themes consistent.
         imgui.begin_child(
             f"##grid_{self._row_start}_{self._row_end}_{self._col_start}_{self._col_end}",
-            imgui.ImVec2(w, h),
+            size,
             child_flags=imgui.ChildFlags_.borders,
         )
         return self
@@ -307,4 +437,150 @@ class _Cell:
         imgui.end_child()
 
 
-__all__ = ["Fr", "GUTTER", "Grid", "Px", "Track"]
+def _tab_label(name: str) -> str:
+    return name.replace("_", " ").capitalize()
+
+
+class _AreaCell:
+    """Context manager for a named area.
+
+    Its child id is the panel name, so the panel keeps its scroll position and
+    widget state when a `Layout` moves it.
+
+    A panel sharing its cell as a tab draws only while its tab is selected. When
+    it is not, its body still runs — so a ``sessions.ui()`` return value keeps
+    flowing — inside a child placed outside the window, which ImGui clips whole:
+    every widget in it returns early, so it costs next to nothing.
+    """
+
+    def __init__(self, grid: Grid, name: str):
+        self._grid = grid
+        self._name = name
+        self._ends = 0
+
+    def __enter__(self) -> _AreaCell:
+        g, name = self._grid, self._name
+        pos, size = g._place(g._areas[name])
+        group = g._groups.get(name)
+        imgui.set_cursor_pos(pos)
+        if group is None:
+            imgui.begin_child(f"##area_{name}", size, child_flags=imgui.ChildFlags_.borders)
+            self._ends = 1
+            return self
+
+        # Shared cell: one bordered child per group, entered again by each member.
+        # A child begun twice in a frame appends, so the second member continues
+        # right under the tab bar the first one drew.
+        key = "|".join(group)
+        imgui.begin_child(f"##group_{key}", size, child_flags=imgui.ChildFlags_.borders)
+        frame = imgui.get_frame_count()
+        if g._tab_frame.get(group) != frame:
+            g._tab_frame[group] = frame
+            if imgui.begin_tab_bar(f"##tabs_{key}"):
+                for member in group:
+                    selected, _ = imgui.begin_tab_item(f"{_tab_label(member)}###{member}")
+                    if selected:
+                        g._selected[group] = member
+                        imgui.end_tab_item()
+                imgui.end_tab_bar()
+        if g._selected.get(group, group[0]) == name:
+            imgui.begin_child(f"##area_{name}", imgui.ImVec2(0, 0))
+            self._ends = 2
+            return self
+
+        # Hidden tab: leave the group's child, then open this panel's child outside
+        # the visible window so ImGui clips it whole.
+        imgui.end_child()
+        imgui.set_cursor_pos(imgui.ImVec2(-size.x - 10_000, -size.y - 10_000))
+        imgui.begin_child(f"##area_{name}", size)
+        self._ends = 1
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        for _ in range(self._ends):
+            imgui.end_child()
+
+
+class Layout:
+    """Two arrangements of the same named panels, picked by window width.
+
+    Above ``breakpoint`` the panels go where ``wide`` puts them; below it, where
+    ``narrow`` does — typically one column, with panels used in different phases
+    (record, train, predict) sharing a cell as tabs. The breakpoint is in pixels
+    at UI scale 1.0, so it switches at the same size *relative to the text* on a
+    laptop and on a 4K monitor. ``@app.ui`` code places panels by name and never
+    changes between arrangements.
+
+    Parameters
+    ----------
+    wide
+        Arrangement for windows at least ``breakpoint`` wide (from `Grid.areas`).
+    narrow
+        Arrangement for narrower windows (from `Grid.areas`).
+    breakpoint
+        Window width, at scale 1.0, where the two swap.
+
+    Raises
+    ------
+    ValueError
+        if either grid has no named areas, or they do not place the same panels.
+
+    Examples
+    --------
+    >>> from myogestic import Fr, Grid, Layout, Px
+    >>> layout = Layout(
+    ...     wide=Grid.areas('''
+    ...         record  signal
+    ...         train   signal
+    ...     ''', col_width=[Px(260), Fr(1)]),
+    ...     narrow=Grid.areas('''
+    ...         signal
+    ...         record | train
+    ...     '''),
+    ...     breakpoint=Px(1100),
+    ... )
+    >>> sorted(layout.panel_names)
+    ['record', 'signal', 'train']
+    """
+
+    def __init__(self, *, wide: Grid, narrow: Grid, breakpoint: Px):
+        if not isinstance(breakpoint, Px):
+            raise TypeError(f"breakpoint={breakpoint!r}: must be Px(...), e.g. Px(1100)")
+        for label, grid in (("wide", wide), ("narrow", narrow)):
+            if not isinstance(grid, Grid) or not grid.panel_names:
+                raise ValueError(f"Layout({label}=...): build it with Grid.areas(...) so panels have names")
+        only_wide = wide.panel_names - narrow.panel_names
+        only_narrow = narrow.panel_names - wide.panel_names
+        if only_wide or only_narrow:
+            raise ValueError(
+                "Layout(): both arrangements must place the same panels — "
+                f"only in wide: {sorted(only_wide)}, only in narrow: {sorted(only_narrow)}"
+            )
+        self._wide = wide
+        self._narrow = narrow
+        self._breakpoint = breakpoint
+        self._frame = -1
+        self._active = wide
+
+    @property
+    def panel_names(self) -> frozenset[str]:
+        """Every panel the layout places."""
+        return self._wide.panel_names
+
+    def _choose(self, logical_width: float) -> Grid:
+        return self._wide if logical_width >= self._breakpoint.value else self._narrow
+
+    def _pick(self) -> Grid:
+        frame = imgui.get_frame_count()
+        if frame != self._frame:
+            self._frame = frame
+            width = imgui.get_window_width() - imgui.get_style().window_padding.x * 2
+            self._active = self._choose(width / current_scale())
+        return self._active
+
+    def __getitem__(self, name: str) -> _AreaCell:
+        """The cell for ``name`` in this frame's arrangement: ``with layout["record"]:``."""
+        return self._pick().area(name)
+
+
+__all__ = ["Fr", "GUTTER", "Grid", "Layout", "Px", "Track"]

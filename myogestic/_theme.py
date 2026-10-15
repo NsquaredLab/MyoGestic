@@ -6,6 +6,9 @@ import subprocess
 
 from imgui_bundle import hello_imgui, imgui
 
+from myogestic import _scale
+from myogestic._scale import set_ui_scale  # noqa: F401  (re-exported for App)
+
 _FONT: imgui.ImFont | None = None
 _DISPLAY_FONT: imgui.ImFont | None = None  # Instrument Serif — hero/display text
 _MONO_FONT: imgui.ImFont | None = None  # IBM Plex Mono — console / logs
@@ -31,43 +34,6 @@ def _is_mac_dark() -> bool:
     except OSError:
         return False
     return result.stdout.strip() == "Dark"
-
-
-# Programmatic UI-scale override, set by App(ui_scale=...). See set_ui_scale.
-_UI_SCALE_OVERRIDE: float | None = None
-
-
-def set_ui_scale(scale: float | None) -> None:
-    """Set the global UI scale programmatically — used by ``App(ui_scale=...)``.
-
-    Call before the GUI loop starts. ``None`` clears the override (falls back
-    to ``$MYOGESTIC_UI_SCALE`` then ``1.0``). ``$MYOGESTIC_UI_SCALE``, when set,
-    still takes precedence.
-    """
-    global _UI_SCALE_OVERRIDE
-    _UI_SCALE_OVERRIDE = scale
-
-
-def _clamp_scale(scale: float) -> float:
-    """Keep the UI scale in a sane range so a typo can't make the UI unusable."""
-    return min(2.0, max(0.5, scale))
-
-
-def _ui_scale() -> float:
-    """Resolve the global UI scale: ``$MYOGESTIC_UI_SCALE`` > ``App(ui_scale=)`` > ``1.0``.
-
-    Scales both the font size (``load_fonts``) and imgui's style metrics —
-    padding, spacing, rounding (``apply_theme`` → ``scale_all_sizes``).
-    """
-    raw = os.environ.get("MYOGESTIC_UI_SCALE", "").strip()
-    if raw:
-        try:
-            return _clamp_scale(float(raw))
-        except ValueError:
-            pass
-    if _UI_SCALE_OVERRIDE is not None:
-        return _clamp_scale(_UI_SCALE_OVERRIDE)
-    return 1.0
 
 
 def apply_theme() -> None:
@@ -197,11 +163,8 @@ def apply_theme() -> None:
     for key, value in colors.items():
         style.set_color_(key, value)
 
-    # Applied last so it scales the custom metrics set above; the font is scaled
-    # in load_fonts().
-    scale = _ui_scale()
-    if scale != 1.0:
-        style.scale_all_sizes(scale)
+    # Unscaled on purpose: `apply_live_scale` scales metrics and fonts every time
+    # the scale changes, after the whole style chain has run.
 
 
 _SYS_FONTS = {
@@ -211,32 +174,39 @@ _SYS_FONTS = {
 }
 
 
+def _unscaled_params() -> hello_imgui.FontLoadingParams:
+    params = hello_imgui.FontLoadingParams()
+    params.adjust_size_to_dpi = False
+    return params
+
+
 def load_fonts() -> None:
     global _FONT, _DISPLAY_FONT, _MONO_FONT
     if _FONT is not None:
         return
 
     sys_font = _SYS_FONTS.get(platform.system())
-    size = 14.0 * _ui_scale()
+    # Unscaled sizes, and no DPI adjustment from hello_imgui: `apply_live_scale`
+    # sets `style.font_scale_main`, which already carries the OS display scale.
+    # ImGui 1.92 rasterises glyphs at the size they are drawn, so this stays crisp.
+    size = 14.0
 
+    params = _unscaled_params()
     if sys_font and os.path.exists(sys_font):
-        params = hello_imgui.FontLoadingParams()
         params.inside_assets = False
         _FONT = hello_imgui.load_font(sys_font, size, params)
-        # Merge Font Awesome 6 glyphs onto the system font
-        fa_params = hello_imgui.FontLoadingParams()
-        fa_params.merge_to_last_font = True
-        hello_imgui.load_font("fonts/Font_Awesome_6_Free-Solid-900.otf", size, fa_params)
     else:
-        _FONT = hello_imgui.load_font_ttf_with_font_awesome_icons(
-            "fonts/Roboto/Roboto-Regular.ttf", size
-        )
+        _FONT = hello_imgui.load_font("fonts/Roboto/Roboto-Regular.ttf", size, params)
+    # Merge Font Awesome 6 glyphs onto the body font
+    fa_params = _unscaled_params()
+    fa_params.merge_to_last_font = True
+    hello_imgui.load_font("fonts/Font_Awesome_6_Free-Solid-900.otf", size, fa_params)
 
     # Instrument Serif (OFL) — display face for hero text. Best-effort: a missing
     # asset just falls back to the body font.
     try:
         _DISPLAY_FONT = hello_imgui.load_font(
-            "fonts/InstrumentSerif-Regular.ttf", 28.0 * _ui_scale(), hello_imgui.FontLoadingParams()
+            "fonts/InstrumentSerif-Regular.ttf", 28.0, _unscaled_params()
         )
     except Exception:  # noqa: BLE001
         _DISPLAY_FONT = None
@@ -244,7 +214,7 @@ def load_fonts() -> None:
     # IBM Plex Mono (OFL) — console face for log views. Same best-effort load.
     try:
         _MONO_FONT = hello_imgui.load_font(
-            "fonts/IBMPlexMono-Regular.ttf", 13.0 * _ui_scale(), hello_imgui.FontLoadingParams()
+            "fonts/IBMPlexMono-Regular.ttf", 13.0, _unscaled_params()
         )
     except Exception:  # noqa: BLE001
         _MONO_FONT = None
@@ -260,3 +230,61 @@ def display_font() -> imgui.ImFont | None:
 def mono_font() -> imgui.ImFont | None:
     """IBM Plex Mono face for console / log text (``None`` if unavailable)."""
     return _MONO_FONT
+
+
+#: The scale the style was last built at, so a frame with an unchanged scale does
+#: nothing. `None` until the first frame.
+_styled_at: float | None = None
+
+
+_BORDER_SIZES = tuple(
+    name for name in dir(imgui.Style) if name.endswith("border_size") and not name.startswith("_")
+)
+
+
+def _os_scale() -> float:
+    """The display scale picked in the OS, as a multiple of 96 DPI.
+
+    The main viewport's `dpi_scale`: 1.5 for Windows at 150 %, where ImGui works in
+    physical pixels. On a Retina Mac it is 1.0 — ImGui works in points there and
+    the 2x lives only in the framebuffer, so it must not be counted again (measured:
+    dpi_scale 1.0, framebuffer_scale 2.0 on macOS 26).
+    """
+    return max(0.5, imgui.get_main_viewport().dpi_scale or 1.0)
+
+
+def apply_live_scale(setup_style) -> None:
+    """Recompute the UI scale and restyle if it moved. Runs before every frame.
+
+    Parameters
+    ----------
+    setup_style
+        The app's full style chain (theme, viewport and docking tweaks). Re-run
+        from scratch on a change because `scale_all_sizes` multiplies — applying
+        it twice to the same style would compound.
+    """
+    global _styled_at
+    os_scale = _os_scale()
+    size = imgui.get_io().display_size
+    scale = _scale.update(os_scale, size.x / os_scale, size.y / os_scale)
+    if scale == _styled_at:
+        return
+    _styled_at = scale
+    setup_style()
+    style = imgui.get_style()
+    if scale != 1.0:
+        # Borders are hairlines, not sizes: `scale_all_sizes` truncates them, so a
+        # 1 px border at 0.85 becomes 0 — and a bordered child without its border
+        # also loses its padding, leaving content flush against the cell edge.
+        borders = {name: getattr(style, name) for name in _BORDER_SIZES}
+        style.scale_all_sizes(scale)
+        for name, value in borders.items():
+            setattr(style, name, value)
+    style.font_scale_main = scale
+
+
+def reset_live_scale() -> None:
+    """Forget the styled-at scale — a second `App` in the same process restyles."""
+    global _styled_at
+    _styled_at = None
+    _scale.reset()

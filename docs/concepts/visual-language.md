@@ -17,9 +17,11 @@ Reach for the helper; don't re-derive the styling inline.
 | Console, logs, anything columnar | IBM Plex Mono | `mono_font()` |
 | Everything else | the theme's UI face | — |
 
-Size comes from the global scale, which resolves
-`$MYOGESTIC_UI_SCALE` → `App(ui_scale=…)` → `1.0` (`set_ui_scale`). A control sized in
-`imgui.get_frame_height()` units follows the user's display; one sized in raw pixels ignores it.
+Size comes from the global scale, which resolves `$MYOGESTIC_UI_SCALE` →
+`App(ui_scale=…)` → automatic (OS display scale × window fit, live; see
+[Grid layout](grid-layout.md#ui-scale)). A control sized in `imgui.get_frame_height()` units
+follows it; a size a widget fixes in pixels must go through `ui_px(n)` from
+`widgets/common.py`, or its label overflows the box on a large screen.
 
 ## Colour
 

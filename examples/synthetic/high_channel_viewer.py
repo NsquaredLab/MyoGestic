@@ -42,7 +42,7 @@ PROCESSES = [
     ),
 ]
 
-app = App("High-channel viewer", ui_scale=0.85)
+app = App("High-channel viewer")
 app.streams(
     Stream("emg", source=LSLSource("TestEMG256"), window_ms=1000, buffer_ms=60000),
 )

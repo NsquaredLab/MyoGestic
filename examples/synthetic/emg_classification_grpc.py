@@ -103,7 +103,7 @@ PROCESSES = [
 WINDOW_MS = 200
 HOP_MS = 100
 
-app = App("EMG Classification (gRPC)", ui_scale=0.85)
+app = App("EMG Classification (gRPC)")
 app.streams(Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 

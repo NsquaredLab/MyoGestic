@@ -112,7 +112,7 @@ class TemplateInspector:
         """
         from imgui_bundle import imgui
 
-        from myogestic.widgets.common import panel_header
+        from myogestic.widgets.common import panel_header, ui_px
 
         widget_id = self._widget_id
         title = self._title
@@ -172,7 +172,7 @@ class TemplateInspector:
                     _SELECTED[widget_id] = selected
                 imgui.table_next_column()
                 if row.energy is not None:
-                    imgui.progress_bar(min(row.energy / e_max, 1.0), imgui.ImVec2(70, 0), "")
+                    imgui.progress_bar(min(row.energy / e_max, 1.0), imgui.ImVec2(ui_px(70), 0), "")
                 else:
                     imgui.text_disabled("—")
                 imgui.table_next_column()

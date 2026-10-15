@@ -4,7 +4,7 @@ The most-used public symbols, signatures only — hand-maintained and not exhaus
 
 ## Core
 
-[`App`][myogestic.App] · [`Stream`][myogestic.Stream] · [`Context`][myogestic.Context] · [`StreamInfo`][myogestic.StreamInfo] · [`Grid`][myogestic.Grid] · [`TrainingData`][myogestic.TrainingData]
+[`App`][myogestic.App] · [`Stream`][myogestic.Stream] · [`Context`][myogestic.Context] · [`StreamInfo`][myogestic.StreamInfo] · [`Grid`][myogestic.Grid] · [`Layout`][myogestic.Layout] · [`TrainingData`][myogestic.TrainingData]
 
 <!--docs:skip-->
 ```python
@@ -31,6 +31,10 @@ Context                                            # flat dataclass
   .status_message: str
 
 Grid(rows, cols)                                   # @app.ui layout helper
+Grid.areas(template, row_height=None, col_width=None)   # named cells; "a | b" = tabs
+  .area(name)                                      # with grid.area("record"):
+Layout(wide=Grid, narrow=Grid, breakpoint=Px(1100))
+  [name]                                           # with layout["record"]:
 StreamInfo(n_channels, fs, dtype=float32, channel_names=None)
 TrainingData(paths=[], class_names=[], classes=set())
   .is_empty

@@ -34,6 +34,7 @@ from myogestic.widgets.common import (
     muted,
     panel_header,
     primary,
+    ui_px,
 )
 
 #: How much of the ball's speed the paddle offset can put sideways. Below 1.0 by
@@ -401,7 +402,7 @@ class PongTask:
         # A non-positive height is the "fill the cell" sentinel and has to survive the
         # floor, which only guards a caller who asked for a specific tiny court.
         self._court_height = (
-            court_height if court_height <= 0.0 else max(court_height, _MIN_COURT_H)
+            court_height if court_height <= 0.0 else max(court_height, ui_px(_MIN_COURT_H))
         )
         self._widget_id = widget_id
         self._opponent = opponent
@@ -641,7 +642,7 @@ class PongTask:
         height = (
             self._court_height
             if self._court_height > 0.0
-            else max(avail.y - footer, _MIN_COURT_H)
+            else max(avail.y - footer, ui_px(_MIN_COURT_H))
         )
         size = imgui.ImVec2(max(avail.x, 1.0), height)
         # An invisible button rather than a `dummy`: both reserve the rect, but `dummy`
