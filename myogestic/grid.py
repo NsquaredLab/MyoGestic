@@ -444,8 +444,10 @@ def _tab_label(name: str) -> str:
 class _AreaCell:
     """Context manager for a named area.
 
-    Its child id is the panel name, so the panel keeps its scroll position and
-    widget state when a `Layout` moves it.
+    Its child id is the panel name, not its position, so a panel with a cell of
+    its own in both of a `Layout`'s arrangements keeps its scroll position when
+    the layout switches. (A tabbed panel's child lives inside its group's cell —
+    a different parent window — so moving into or out of a group resets it.)
 
     A panel sharing its cell as a tab draws only while its tab is selected. When
     it is not, its body still runs — so a ``sessions.ui()`` return value keeps

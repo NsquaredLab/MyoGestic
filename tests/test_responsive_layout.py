@@ -341,3 +341,42 @@ def test_borders_survive_a_scale_below_one(_styled):
     _scale.set_ui_scale(0.85)
     _styled.apply_live_scale(_styled.apply_theme)
     assert imgui.get_style().child_border_size == pytest.approx(1.0)
+
+
+def test_a_later_tab_draws_under_the_tab_bar_when_selected(imgui_frame, monkeypatch):
+    """With the second tab selected, the first member enters the shared cell on the
+    hidden path and the second re-enters it — its body must land under the tab bar,
+    exactly where the first tab's body sits when that one is selected."""
+    from imgui_bundle import imgui
+
+    def bodies():
+        layout = _layout(5000)
+        seen = {}
+
+        def draw():
+            with layout["signal"]:
+                pass
+            for name in ("record", "train"):
+                with layout[name]:
+                    imgui.button(f"btn {name}")
+                    seen[name] = (imgui.get_window_pos().y, imgui.is_item_visible())
+
+        for _ in range(3):
+            imgui_frame(draw)
+        return seen
+
+    first = bodies()
+
+    real = imgui.begin_tab_item
+
+    def select_train(label, p_open=None, flags=0):
+        if label.startswith("Train"):
+            flags |= imgui.TabItemFlags_.set_selected
+        return real(label, p_open, flags)
+
+    monkeypatch.setattr(imgui, "begin_tab_item", select_train)
+    second = bodies()
+
+    assert first["record"][1] and not first["train"][1]
+    assert second["train"][1] and not second["record"][1]
+    assert second["train"][0] == pytest.approx(first["record"][0])

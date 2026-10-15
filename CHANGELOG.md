@@ -15,9 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   padding and spacing live. `App(ui_scale=...)` and `$MYOGESTIC_UI_SCALE` still fix it.
 - **`Grid.areas(...)` and `Layout`.** Draw an arrangement as text with named panels
   (`a | b` shares one cell as tabs) and give `Layout` a wide and a narrow one plus a
-  breakpoint: the window width picks the arrangement each frame, panels keep their state
-  across the switch because they are keyed by name, and a hidden tab's body still runs so
-  its return value stays current. `control_map_studio` and `emg_32ch_multi_model` use it.
+  breakpoint: the window width picks the arrangement each frame. Panels are keyed by name,
+  so one with a cell of its own in both arrangements keeps its scroll position across the
+  switch, and a hidden tab's body still runs so its return value stays current. `control_map_studio` and `emg_32ch_multi_model` use it.
 - `ui_px(n)` in `widgets/common.py` for sizes a widget fixes itself.
 
 ### Changed
