@@ -137,8 +137,11 @@ What this buys, and what it guarantees:
 
 * **No panel scrolls inside itself because the window got narrow** — below the
   breakpoint the panels move instead of shrinking.
-* **A panel keeps its state across the switch.** Its child window is keyed by
-  its name, not its position, so scroll position and widget state survive.
+* **Widget state survives the switch.** Your widgets are the same Python
+  objects in both arrangements. A panel's child window is keyed by its name,
+  not its position, so a panel with a cell of its own in both arrangements
+  also keeps its scroll position; one that moves into or out of a tab group
+  starts scrolled to the top.
 * **A hidden tab still runs.** Its body executes every frame inside a clipped
   window, so widgets draw nothing but return values keep flowing —
   `pipeline.training_data = sessions.ui()` stays current while the Train tab is
