@@ -12,11 +12,14 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from myogestic._platform import _register_assets_folder, _try_set_macos_dock_icon
 from myogestic.session import Session
 from myogestic.stream import Stream
+
+if TYPE_CHECKING:
+    from myogestic.widgets.panels.notifications import Notification
 
 #: GLFW's Cocoa backend logs this once or twice *per frame* (~90 lines a second), burying
 #: everything the application prints.
@@ -174,6 +177,9 @@ class Context:
     logs
         The app-event lines `LogPanel` renders. Append via [`log`][], which
         timestamps and bounds them.
+    notifications
+        Corner toasts drawn by the `App`. Append via [`notify`][], which also
+        mirrors each event to the log; the UI prunes expired or dismissed toasts.
 
     Examples
     --------
@@ -193,6 +199,30 @@ class Context:
     current_label: int = -1
     status_message: str = ""
     logs: list[str] = field(default_factory=list)
+    notifications: list[Notification] = field(default_factory=list)
+
+    def notify(self, title: str, detail: str = "", kind: str = "info") -> None:
+        """Show a corner toast and mirror it to the app log, from any thread.
+
+        Parameters
+        ----------
+        title
+            Short description of the event.
+        detail
+            Optional supporting text, such as a saved archive's name.
+        kind
+            ``"success"`` or ``"info"`` (6 seconds), ``"warning"`` (10 seconds),
+            or ``"danger"`` (until dismissed). Hovering pauses expiry.
+
+        Raises
+        ------
+        ValueError
+            If ``kind`` is not one of the four supported notification kinds.
+        """
+        from myogestic.widgets.panels.notifications import Notification
+
+        self.notifications.append(Notification(title, detail, kind, time.monotonic()))
+        self.log(f"{title} — {detail}" if detail else title)
 
     def log(self, message: str, max_lines: int = 500) -> None:
         """Append a one-line app event for the `log_panel` widget.
@@ -483,7 +513,7 @@ class App:
                 try:
                     zip_path = session.pack_to_zip()
                     self.ctx.status_message = f"Saved {n} labels"
-                    self.ctx.log(f"Session saved → {zip_path}")
+                    self.ctx.notify("Recording saved", zip_path.name, "success")
                     from myogestic.widgets.training.session_manager import (
                         add_recorded_session,
                     )
@@ -493,7 +523,7 @@ class App:
                 except Exception as e:
                     log.exception("pack_to_zip failed: %s", e)
                     self.ctx.status_message = f"Pack failed: {e} - folder kept"
-                    self.ctx.log(f"Pack failed: {e} - folder kept at {session.path}")
+                    self.ctx.notify("Recording not packed", f"{e} — folder kept", "danger")
                     # Fall back: register the folder so user doesn't lose it
                     try:
                         from myogestic.widgets.training.session_manager import (
@@ -665,16 +695,19 @@ class App:
         # loop (Stream acquisition, Output sending, Pipeline predict) - no threads, no
         # asyncio. On desktop those are daemon threads and the tick is a no-op.
         from myogestic._browser import IS_BROWSER, tick_all
+        from myogestic.widgets.panels.notifications import render_notifications
 
         if IS_BROWSER:
 
             def gui_callback() -> None:
                 tick_all()
                 ui_fn(self.ctx)
+                render_notifications(self.ctx)
         else:
 
             def gui_callback() -> None:
                 ui_fn(self.ctx)
+                render_notifications(self.ctx)
 
         runner_params = hello_imgui.RunnerParams()
         runner_params.fps_idling.enable_idling = False
