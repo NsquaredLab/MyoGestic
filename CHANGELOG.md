@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Optional participant-labelled model auto-save, training completion and failure notifications, and a session picker that clears its selection when the participant changes.
 - `StepBar` workflow navigation, `primary_button` for forward actions, and more readable muted text on the light theme.
 - `ctx.notify(...)` mirrors events to the log and an automatic corner toast overlay, including recording save and pack-failure feedback.
 - Participant-labelled session folders and metadata, a shared `labelled_path` helper, and an opt-in `App(require_participant=True)` Record gate.
