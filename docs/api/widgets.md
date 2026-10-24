@@ -34,6 +34,19 @@ Widget classes you construct once and render with `.ui(...)` from inside `@app.u
 
 ## Recording and sessions
 
+::: myogestic.widgets.ParticipantPanel
+
+The header chip opens a participant selector with an editable ID, optional first and
+family names, and a preview of the labelled recording and model paths. Returning names
+match without regard to case or accents. **Start session** selects the ID; recording
+still starts through the recording controls. The chip is disabled during recording,
+training and prediction.
+
+Names stay in widget memory and the local `~/myogestic/participant-key.csv` key file;
+only the safe ID reaches `ctx.participant` and saved data. Keep a custom `key_file`
+outside the sessions directory. See the standalone
+[`participant_panel.py` example](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/panels/participant_panel.py).
+
 ::: myogestic.widgets.RecordingControls
 
 ![recording_controls](../images/widgets/recording_controls.png){ loading=lazy }
