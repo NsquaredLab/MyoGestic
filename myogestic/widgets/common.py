@@ -64,6 +64,40 @@ def ui_px(n: float) -> float:
     return n * current_scale()
 
 
+def status_pill(label: str, color: imgui.ImVec4) -> None:
+    """Draw a labelled status badge with a semantic colour indicator.
+
+    Parameters
+    ----------
+    label : str
+        Visible state label, such as ``"IDLE"`` or ``"CONNECTED"``.
+    color : imgui.ImVec4
+        Indicator colour, normally a semantic token such as ``SUCCESS`` or
+        ``IDLE``. The badge background and text use the shared pill tokens.
+    """
+    pad_x, pad_y = 10.0, ui_px(4.0)
+    text = imgui.calc_text_size(label)
+    size = imgui.ImVec2(text.x + pad_x * 2 + 12, text.y + pad_y * 2)
+    imgui.dummy(size)
+    p0, p1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    draw = imgui.get_window_draw_list()
+    draw.add_rect_filled(
+        p0, p1, imgui.get_color_u32(PILL_BG), size.y * 0.5
+    )
+    y = (p0.y + p1.y) * 0.5
+    draw.add_rect_filled(
+        imgui.ImVec2(p0.x + pad_x - 1, y - 3),
+        imgui.ImVec2(p0.x + pad_x + 5, y + 3),
+        imgui.get_color_u32(color),
+        3.0,
+    )
+    draw.add_text(
+        imgui.ImVec2(p0.x + pad_x + 10, p0.y + pad_y),
+        imgui.get_color_u32(ON_PILL_TEXT),
+        label,
+    )
+
+
 def primary() -> imgui.ImVec4:
     """The theme's main text colour — resolved per call, so it follows light/dark.
 
