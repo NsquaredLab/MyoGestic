@@ -36,6 +36,8 @@ from myogestic.widgets import (
     SessionManager,
     SignalViewer,
     StepBar,
+    StreamManager,
+    status_pill,
 )
 from myogestic.widgets.common import (
     DANGER,
@@ -52,8 +54,6 @@ from myogestic.widgets.common import (
     segmented,
     ui_px,
 )
-from myogestic.widgets.panels.recording import _status_pill
-from myogestic.widgets.training._session_state import get_state as session_state
 
 # The live Stream window is also the training window — a model fitted on 200 ms of
 # signal is fed 200 ms at predict time or it sees a distribution it never met.
@@ -256,6 +256,15 @@ participant = ParticipantPanel()
 
 # No `exclude`: every stream here is a device stream.
 device = DevicePicker("emg", selectable=True)
+# Add a second amplifier while the app runs. The panel names the stream; the app owns
+# its geometry.
+streams = StreamManager(
+    on_add=lambda name: app.add_stream(
+        Stream(name, source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS)
+    ),
+    on_remove=app.remove_stream,
+    show_header=False,
+)
 log = LogPanel(title="Activity log")
 # The Source panel owns connecting, so the viewer offers no button of its own.
 viewer = SignalViewer("emg", show_connect=False, selectable=True, show_title=True)
@@ -389,6 +398,9 @@ def connect_ui(ctx: Context) -> None:
     """Connect step: choose acquisition and launch or bind the Virtual Hand."""
     device.ui(ctx)
     imgui.spacing()
+    panel_header("STREAMS")
+    streams.ui(ctx)
+    imgui.spacing()
     panel_header("MAINS NOTCH")
     imgui.begin_disabled(ctx.state != "idle")
     notch["index"] = segmented("notch", NOTCH_CHOICES, notch["index"])
@@ -485,11 +497,12 @@ def hand_ui() -> None:
 
 
 def _step_done(ctx: Context) -> list[bool]:
-    """Completion reflects the participant's takes, even when none are selected."""
+    """Completion reflects the participant's files, even when none are selected."""
     stream = ctx.streams.get("emg")
     return [
-        stream is not None and stream._connected,
-        bool(session_state(sessions._widget_id).sessions),
+        stream is not None and stream.status == "connected" and stream.info is not None,
+        bool(ctx.participant)
+        and any(pathlib.Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
         pipeline.model is not None,
         ctx.state == "predicting",
     ]
@@ -498,10 +511,9 @@ def _step_done(ctx: Context) -> list[bool]:
 def status_ui(ctx: Context) -> None:
     """Show acquisition, participant storage and the most recent saved model."""
     stream = ctx.streams.get("emg")
-    if stream is not None and stream._connected and stream.info is not None:
+    if stream is not None and stream.status == "connected" and stream.info is not None:
         info = stream.info
-        device_name = type(stream._source).__name__.removesuffix("Source")
-        source = f"{device_name} · {info.n_channels} ch / {info.fs:g} Hz"
+        source = f"{stream.name} · {info.n_channels} ch / {info.fs:g} Hz"
     else:
         source = "Device: disconnected"
     folder = pathlib.Path("sessions") / ctx.participant
@@ -528,7 +540,7 @@ def myocontrol_ui(ctx: Context) -> None:
         participant.ui(ctx)
     with layout["state"]:
         tone = {"recording": DANGER, "training": WARNING, "predicting": INFO}.get(ctx.state, IDLE)
-        _status_pill(ctx.state.upper(), tone)
+        status_pill(ctx.state.upper(), tone)
     # Refresh the participant's selection before Train can read it this frame.
     with layout["sessions"]:
         pipeline.training_data = sessions.ui(participant=ctx.participant)

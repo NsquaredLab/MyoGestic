@@ -5,6 +5,7 @@ else here is a smoke check; that one pins a design decision that a plausible-loo
 one-line edit would undo, and it fails loudly when it does.
 """
 
+import ast
 import inspect
 import runpy
 from pathlib import Path
@@ -50,6 +51,58 @@ def test_myocontrol_autosaves_models(app_module):
 
 def test_myocontrol_steps(app_module):
     assert app_module["steps"].steps == ["Connect", "Record", "Train", "Drive"]
+
+
+def test_myocontrol_uses_no_private_imports():
+    tree = ast.parse(_APP.read_text())
+    private = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            private.extend(name.name for name in node.names if name.name.startswith("_"))
+        elif isinstance(node, ast.Attribute) and node.attr.startswith("_"):
+            private.append(node.attr)
+    assert private == []
+
+
+def test_connect_step_offers_stream_manager(app_module, monkeypatch, imgui_frame):
+    from myogestic.widgets import StreamManager
+
+    streams = app_module["streams"]
+    assert isinstance(streams, StreamManager)
+    drawn = []
+    render = streams.ui
+
+    def draw(ctx):
+        render(ctx)
+        drawn.append(ctx)
+
+    monkeypatch.setattr(streams, "ui", draw)
+    ctx = app_module["app"].ctx
+    imgui_frame(lambda: app_module["connect_ui"](ctx))
+    assert drawn == [ctx]
+
+
+def test_record_step_done_reads_disk(app_module, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    ctx = app_module["app"].ctx
+    done = app_module["_step_done"]
+    assert not done(ctx)[1]
+    ctx.participant = "P-014"
+    assert not done(ctx)[1]
+    folder = tmp_path / "sessions" / "P-014"
+    folder.mkdir(parents=True)
+    (folder / "unrelated.txt").touch()
+    assert not done(ctx)[1]
+    take = folder / "P-014_2026-10-24_15-12-03"
+    take.mkdir()
+    assert done(ctx)[1]
+    take.rmdir()
+    take.with_suffix(".session.zip").touch()
+    assert done(ctx)[1]
+    ctx.participant = "P-015"
+    assert not done(ctx)[1]
+    ctx.participant = ""
+    assert not done(ctx)[1]
 
 
 @pytest.mark.parametrize("size", [(1440, 900), (900, 1100)], ids=["wide", "narrow"])
@@ -117,13 +170,13 @@ def test_myocontrol_header_fits_the_theme_padding(app_module, monkeypatch, implo
 
     monkeypatch.setattr(imgui, "text_colored", text)
     ui_globals = app_module["myocontrol_ui"].__globals__
-    status_pill = ui_globals["_status_pill"]
+    status_pill = ui_globals["status_pill"]
 
     def pill(label, color):
         status_pill(label, color)
         remember()
 
-    monkeypatch.setitem(ui_globals, "_status_pill", pill)
+    monkeypatch.setitem(ui_globals, "status_pill", pill)
     steps = app_module["steps"]
     step_ui = steps.ui
 
@@ -177,10 +230,13 @@ def test_myocontrol_warns_when_fitted_inputs_change(app_module, monkeypatch, img
     assert warning in messages
 
 
-def test_myocontrol_switches_session_selection_before_train(app_module, monkeypatch, implot_frame):
+def test_myocontrol_switches_session_selection_before_train(
+    app_module, monkeypatch, implot_frame, tmp_path,
+):
     from myogestic import TrainingData
     from myogestic.widgets.training import _session_state
 
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_session_state, "_states", {})
     ctx = app_module["app"].ctx
     ctx.participant = "P-014"
