@@ -1,6 +1,6 @@
 """Myocontrol: pick a device, record labelled trials, train, drive the Virtual Hand.
 
-Classification or regression — the switch in the Model tab chooses what the *next*
+Classification or regression — the switch in the Train step chooses what the *next*
 Train builds, and the mode is bound into the model it returns.
 
 Run with:
@@ -14,10 +14,10 @@ from typing import Any
 import numpy as np
 from imgui_bundle import imgui
 
-from myogestic import App, Fr, Grid, Stream, TrainingData
+from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
+from myogestic._theme import display_font
 from myogestic.controls import ControlBus, ControlLink, ControlLinkConnector, load_control_map
-from myogestic.ml import Pipeline
-from myogestic.ml.widgets import PipelinePanel
+from myogestic.ml import Pipeline, save_pickle
 from myogestic.recipes.estimators import catboost_classifier, catboost_regressor
 from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.remote import RemoteTarget
@@ -28,22 +28,32 @@ from myogestic.widgets import (
     DevicePicker,
     FeatureSelector,
     LogPanel,
+    ParticipantPanel,
     PostProcessor,
     PredictionLabel,
     ProcessLauncher,
     RecordingControls,
     SessionManager,
     SignalViewer,
-    StreamManager,
+    StepBar,
 )
 from myogestic.widgets.common import (
+    DANGER,
+    IDLE,
+    INFO,
     SUCCESS,
     WARNING,
     mono_text,
     muted,
     panel_header,
+    pop_selected,
+    primary_button,
+    push_selected,
     segmented,
+    ui_px,
 )
+from myogestic.widgets.panels.recording import _status_pill
+from myogestic.widgets.training._session_state import get_state as session_state
 
 # The live Stream window is also the training window — a model fitted on 200 ms of
 # signal is fed 200 ms at predict time or it sees a distribution it never met.
@@ -81,9 +91,11 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 output_filter = PostProcessor(hz=PREDICT_HZ)
 vhi_control = vhi.control_client()
 
-app = App("MyoGestic — myocontrol")
+app = App("MyoGestic — myocontrol", require_participant=True)
 app.streams(Stream("emg", source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS))
 pipeline = Pipeline(app, predict_hz=PREDICT_HZ)
+pipeline.save_model = save_pickle
+pipeline.autosave_dir = "sessions"
 link = ControlLink(
     CONTROL_MAP,
     [RemoteTarget(client=vhi_control, interface=vhi)],
@@ -100,6 +112,12 @@ features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
     default=["RMS", "MAV"],
 )
+training_inputs: dict[str, tuple | None] = {"requested": None, "fitted": None}
+
+
+def _input_fingerprint() -> tuple[str, tuple[str, ...], int]:
+    """The mode and signal inputs chosen for the next fit."""
+    return MODES[training_mode["index"]], tuple(features.active_names), NOTCH_HZ[notch["index"]]
 
 
 @pipeline.extract
@@ -114,6 +132,8 @@ def extract(windows: dict[str, np.ndarray]) -> np.ndarray | None:
 @pipeline.train
 def train(data: TrainingData) -> tuple[str, Any]:
     """Fit the mode the switch currently shows, and return it with the estimator."""
+    fingerprint = training_inputs["requested"] or _input_fingerprint()
+    training_inputs["requested"] = None
     if data.is_empty:
         raise ValueError("No sessions selected. Scan folder, then tick some.")
     if features.n_active == 0:
@@ -128,7 +148,7 @@ def train(data: TrainingData) -> tuple[str, Any]:
         if was != want:
             raise ValueError(
                 f"{pathlib.Path(path).name} was recorded with notch={was or 'off'} but "
-                f"SIGNAL is set to {want or 'off'}. Match the setting to the take, or "
+                f"Connect is set to {want or 'off'}. Match the setting to the take, or "
                 f"untick it — the model cannot be fitted on one and run on the other."
             )
 
@@ -168,6 +188,7 @@ def train(data: TrainingData) -> tuple[str, Any]:
         closed = np.array([POSES[CLASSES[i]] for i in y], dtype=np.float32)
         est.fit(x, closed)
     print(f"[train] {mode.lower()} on {len(all_x)} windows from {len(data.paths)} sessions")
+    training_inputs["fitted"] = fingerprint
     return mode, est
 
 
@@ -203,19 +224,39 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
     return out
 
 
-grid = Grid(6, 3, row_height=[Fr(1)] * 6, col_width=[Fr(1), Fr(1), Fr(1)])
+layout = Layout(
+    wide=Grid.areas(
+        """
+        title    steps    participant state
+        signal   signal   step        step
+        signal   signal   sessions    sessions
+        log      log      sessions    sessions
+        status   status   status      status
+        """,
+        row_height=[Px(88), Fr(3), Fr(1), Fr(1), Px(56)],
+        col_width=[Px(180), Fr(1), Px(240), Px(160)],
+    ),
+    narrow=Grid.areas(
+        """
+        title    participant state
+        steps    steps       steps
+        signal   signal      signal
+        step     step        step
+        sessions sessions    sessions
+        log      log         log
+        status   status      status
+        """,
+        row_height=[Px(88), Px(64), Fr(2), Fr(3), Fr(1.5), Fr(1), Px(76)],
+        col_width=[Fr(1), Fr(1), Px(160)],
+    ),
+    breakpoint=Px(1100),
+)
+steps = StepBar(["Connect", "Record", "Train", "Drive"], widget_id="myocontrol_steps")
+participant = ParticipantPanel()
 
 # No `exclude`: every stream here is a device stream.
 device = DevicePicker("emg", selectable=True)
-# Add a second amplifier while the app runs. The panel names the stream; the app owns
-# its geometry.
-streams = StreamManager(
-    on_add=lambda name: app.add_stream(
-        Stream(name, source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS)
-    ),
-    on_remove=app.remove_stream,
-)
-log = LogPanel()
+log = LogPanel(title="Activity log")
 # The Source panel owns connecting, so the viewer offers no button of its own.
 viewer = SignalViewer("emg", show_connect=False, selectable=True, show_title=True)
 # `launchable`, never `launcher`: a VHI that cannot be launched must not stop this app
@@ -225,8 +266,8 @@ processes = ProcessLauncher(vhi.launchable())
 # rate-limited and single-flight, safe to poll every frame.
 binder = ControlLinkConnector(link)
 sessions = SessionManager("sessions", class_names=CLASSES)
-panel = PipelinePanel(pipeline)
 prediction = PredictionLabel(pipeline, CLASSES, show_probability=True)
+hand_connection: dict[str, ControlBus | None] = {"announced": None}
 
 
 #: What drives each alias here. The map says where a value goes, not what sends one.
@@ -237,6 +278,13 @@ ALIAS_ROLES = {
 #: A map that declares an alias nothing here pushes would show a control in this panel
 #: that never moves, so the fallback should never be reached — it is a warning, not a row.
 UNDRIVEN = "declared but never sent — wrong map?"
+
+
+def _announce_binding(bus: ControlBus | None) -> None:
+    """Announce each new connection once, including a background bind."""
+    if bus is not None and hand_connection["announced"] is not bus:
+        app.ctx.notify("Virtual Hand connected", "Start predicting drives it.", "info")
+    hand_connection["announced"] = bus
 
 
 def _bind() -> ControlBus | None:
@@ -252,7 +300,8 @@ def _bind() -> ControlBus | None:
         app.ctx.log(f"Control map does not fit this VHI: {exc}")
         return None
     if bus is None:
-        app.ctx.log("VHI is not answering — launch it from the Hand tab, or press Bind now.")
+        app.ctx.log("VHI is not answering — launch it in Connect, or press Bind now.")
+    _announce_binding(bus)
     return bus
 
 
@@ -266,7 +315,7 @@ def _on_control(index: int) -> None:
 
     It does bind, though. A UI handler is where that is affordable — `predict` must never
     call it — and binding on first press is what lets the buttons work without visiting
-    the Hand tab.
+    the Connect step.
     """
     global held_control
     held_control = POSES[CLASSES[index]]
@@ -294,31 +343,100 @@ def _pushed() -> str:
 
 
 def model_ui() -> None:
-    """Model tab: what the next Train builds, and what the current model is doing."""
+    """Train step: choose the model inputs and fit the selected takes."""
+    busy = app.ctx.state != "idle"
+    imgui.begin_disabled(busy)
     panel_header("MODE")
     training_mode["index"] = segmented("mode", MODES, training_mode["index"])
-    model = pipeline.model
-    if model is None:
-        imgui.text_disabled("no model yet — Train binds the mode into it")
-    elif model[0] != MODES[training_mode["index"]]:
-        imgui.text_colored(WARNING, f"driving: {model[0].lower()} — Train to switch")
-    else:
-        imgui.text_disabled(f"driving: {model[0].lower()}")
     imgui.spacing()
+    features.ui()
+    imgui.end_disabled()
 
-    # Beside FEATURES: the same kind of decision, what the model is fed.
-    panel_header("SIGNAL")
-    notch["index"] = segmented("notch", NOTCH_CHOICES, notch["index"])
+    imgui.spacing()
+    panel_header("INPUT")
     stream = app.ctx.streams.get("emg")
+    channels = str(stream.info.n_channels) if stream is not None and stream.info else "—"
+    mode = MODES[training_mode["index"]]
+    estimator = "classifier" if mode == "Classification" else "regressor"
+    imgui.text_wrapped(
+        f"Window {WINDOW_MS} ms · Notch {NOTCH_CHOICES[notch['index']]} · "
+        f"Channels {channels} · CatBoost {estimator}"
+    )
+    if pipeline.model is not None and training_inputs["fitted"] != _input_fingerprint():
+        imgui.push_style_color(imgui.Col_.text, WARNING)
+        imgui.text_wrapped("Features changed — retrain to apply them.")
+        imgui.pop_style_color()
+    imgui.spacing()
+    data = pipeline.training_data
+    can_train = not busy and data is not None and not data.is_empty and features.n_active > 0
+    imgui.begin_disabled(not can_train)
+    clicked = primary_button(f"Train {estimator}")
+    imgui.end_disabled()
+    if clicked and can_train:
+        training_inputs["requested"] = _input_fingerprint()
+        pipeline.start_training()
+    if not can_train and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+        if busy:
+            reason = "Busy — wait until the current action finishes."
+        elif features.n_active == 0:
+            reason = "Select at least one feature."
+        else:
+            reason = "Record a take or select session files below first."
+        imgui.set_tooltip(reason)
+
+
+def connect_ui(ctx: Context) -> None:
+    """Connect step: choose acquisition and launch or bind the Virtual Hand."""
+    device.ui(ctx)
+    imgui.spacing()
+    panel_header("MAINS NOTCH")
+    imgui.begin_disabled(ctx.state != "idle")
+    notch["index"] = segmented("notch", NOTCH_CHOICES, notch["index"])
+    imgui.end_disabled()
+    stream = ctx.streams.get("emg")
     if stream is not None:
         stream.notch_hz = NOTCH_HZ[notch["index"]]
-    imgui.text_disabled("mains notch on the recorded and modelled signal")
+    imgui.text_wrapped("Conditions both recordings and the model input.")
     imgui.spacing()
+    hand_ui()
 
-    features.ui()
-    panel.ui()
-    output_filter.ui()
+
+def drive_ui() -> None:
+    """Drive step: start prediction, tune smoothing and inspect sent controls."""
     prediction.ui()
+    state = app.ctx.state
+    predicting = state == "predicting"
+    can_start = (
+        state == "idle"
+        and pipeline.model is not None
+        and pipeline.on_extract is not None
+        and pipeline.on_predict is not None
+    )
+    enabled = can_start or predicting
+    imgui.begin_disabled(not enabled)
+    # The pre-click value guards both sides, including the frame Stop is clicked.
+    if predicting:
+        push_selected()
+    clicked = primary_button("Stop predicting" if predicting else "Start predicting")
+    if predicting:
+        pop_selected()
+    imgui.end_disabled()
+    if clicked and enabled:
+        if predicting:
+            pipeline.stop_predicting()
+        else:
+            pipeline.start_predicting()
+    if not enabled and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+        if state != "idle":
+            reason = "Busy — wait until the current action finishes."
+        elif pipeline.model is None:
+            reason = "No model yet — train or load a model first."
+        else:
+            reason = "Prediction needs @pipeline.extract and @pipeline.predict wired."
+        imgui.set_tooltip(reason)
+    imgui.spacing()
+    output_filter.ui()
+    imgui.spacing()
     # A read-out, not a progress bar: `fist` resolves to [-1, 1] and a bar would clamp
     # the negative half away without saying so.
     panel_header("PUSHED")
@@ -326,7 +444,7 @@ def model_ui() -> None:
 
 
 def hand_ui() -> None:
-    """Hand tab: launch VHI, and bind to it once it answers.
+    """Launch VHI in Connect, and bind to it once it answers.
 
     Launching is the only press. This still keeps "nothing attaches on its own" — the
     binding follows an act the operator performed, it just does not make them perform a
@@ -340,7 +458,7 @@ def hand_ui() -> None:
     panel_header("CONTROL MAP", status=SUCCESS if bound else None)
     for alias, binding in CONTROL_MAP.bindings.items():
         mono_text(alias)
-        imgui.indent(14)
+        imgui.indent(ui_px(14))
         targets = binding.targets
         where = (
             f"{len(targets)} controls"
@@ -349,9 +467,10 @@ def hand_ui() -> None:
             else targets[0].address.split(".", 1)[-1]
         )
         imgui.text_colored(muted(), f"{where} · {ALIAS_ROLES.get(alias, UNDRIVEN)}")
-        imgui.unindent(14)
+        imgui.unindent(ui_px(14))
     imgui.spacing()
     if bound:
+        _announce_binding(link.bus)
         imgui.text_disabled("Bound — Predict drives the hand.")
         return
     if processes.running(vhi.name):
@@ -362,48 +481,80 @@ def hand_ui() -> None:
         return
     if imgui.button("Bind now") and _bind() is None:
         app.ctx.log("VHI did not answer. Launch it above, or start it before the app.")
-    imgui.same_line()
-    imgui.text_disabled("Launch VHI above, or bind to one already running.")
+    imgui.text_wrapped("Launch VHI above, or bind to one already running.")
+
+
+def _step_done(ctx: Context) -> list[bool]:
+    """Completion reflects the participant's takes, even when none are selected."""
+    stream = ctx.streams.get("emg")
+    return [
+        stream is not None and stream._connected,
+        bool(session_state(sessions._widget_id).sessions),
+        pipeline.model is not None,
+        ctx.state == "predicting",
+    ]
+
+
+def status_ui(ctx: Context) -> None:
+    """Show acquisition, participant storage and the most recent saved model."""
+    stream = ctx.streams.get("emg")
+    if stream is not None and stream._connected and stream.info is not None:
+        info = stream.info
+        device_name = type(stream._source).__name__.removesuffix("Source")
+        source = f"{device_name} · {info.n_channels} ch / {info.fs:g} Hz"
+    else:
+        source = "Device: disconnected"
+    folder = pathlib.Path("sessions") / ctx.participant
+    if pipeline.model is None:
+        model = "Model: none"
+    elif pipeline.last_saved_model:
+        model = f"Model: {pathlib.Path(pipeline.last_saved_model).name}"
+    else:
+        model = "Model: fitted (not saved)"
+    imgui.push_style_color(imgui.Col_.text, muted())
+    imgui.text_wrapped(f"{source}  ·  {ctx.participant or 'No participant'}  ·  {folder}  ·  {model}")
+    imgui.pop_style_color()
 
 
 @app.ui
-def myocontrol_ui(ctx):
-    with grid[0:5, 0:2]:
-        if imgui.begin_tab_bar("signal_cell"):
-            selected, _ = imgui.begin_tab_item("Signal")
-            if selected:
-                viewer.ui(ctx)
-                imgui.end_tab_item()
-            selected, _ = imgui.begin_tab_item("Model")
-            if selected:
-                model_ui()
-                imgui.end_tab_item()
-            imgui.end_tab_bar()
-    with grid[5, 0:2]:
+def myocontrol_ui(ctx: Context) -> None:
+    """A visible workflow with persistent signal, activity and session files."""
+    with layout["title"]:
+        imgui.push_font(display_font(), ui_px(28))
+        imgui.text_unformatted("MyoGestic")
+        imgui.pop_font()
+        imgui.text_colored(muted(), "Myocontrol")
+    with layout["participant"]:
+        participant.ui(ctx)
+    with layout["state"]:
+        tone = {"recording": DANGER, "training": WARNING, "predicting": INFO}.get(ctx.state, IDLE)
+        _status_pill(ctx.state.upper(), tone)
+    # Refresh the participant's selection before Train can read it this frame.
+    with layout["sessions"]:
+        pipeline.training_data = sessions.ui(participant=ctx.participant)
+    with layout["steps"]:
+        active = steps.ui(done=_step_done(ctx))
+    with layout["signal"]:
+        viewer.ui(ctx)
+    with layout["log"]:
         log.ui(ctx)
-    with grid[0:3, 2]:
-        if imgui.begin_tab_bar("source_cell"):
-            selected, _ = imgui.begin_tab_item("Source")
-            if selected:
-                device.ui(ctx)
-                imgui.end_tab_item()
-            selected, _ = imgui.begin_tab_item("Streams")
-            if selected:
-                streams.ui(ctx)
-                imgui.end_tab_item()
-            selected, _ = imgui.begin_tab_item("Hand")
-            if selected:
-                hand_ui()
-                imgui.end_tab_item()
-            imgui.end_tab_bar()
-    with grid[3, 2]:
-        recording.ui(ctx)
-    with grid[4:6, 2]:
-        pipeline.training_data = sessions.ui()
+    with layout["step"]:
+        panel_header(steps.steps[active])
+        if active == 0:
+            connect_ui(ctx)
+        elif active == 1:
+            recording.ui(ctx)
+        elif active == 2:
+            model_ui()
+        else:
+            drive_ui()
+    with layout["status"]:
+        status_ui(ctx)
 
     # Stream it, do not fire it once: VHI holds a pose only while samples keep arriving
     # (5 s, then `StopToRest()`). While predicting the predict loop is already doing that.
     bus = link.bus
+    _announce_binding(bus)
     if bus is not None and ctx.state != "predicting":
         bus.push({"control": held_control, "prediction": 0.0})
 

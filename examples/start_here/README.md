@@ -14,6 +14,8 @@ uv run --extra examples --extra grpc python examples/start_here/pong.py
 speak to the Virtual Hand. `force_ramps.py` needs neither, and `pong.py` plays
 with no Virtual Hand at all — the wrist there only mirrors the paddle.
 
+In `myocontrol.py`, set a participant ID, then follow Connect → Record → Train → Drive; recordings and trained models are saved under `sessions/<ID>/`.
+
 The rest of `examples/` answers "how do I do X": [`panels/`](../panels) stands
 up one widget at a time, and [`synthetic/`](../synthetic) and
 [`otb/`](../otb) each demonstrate one technique against one kind of signal.
