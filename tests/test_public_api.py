@@ -51,3 +51,11 @@ def test_filter_chain_helper_is_public():
     from myogestic.outputs import chain
 
     assert callable(chain)
+
+
+def test_labelled_path_is_public():
+    """Sessions and model saves share the public participant path helper."""
+    from myogestic.session import __all__, labelled_path
+
+    assert "labelled_path" in __all__
+    assert callable(labelled_path)

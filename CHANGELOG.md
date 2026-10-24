@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `StepBar` workflow navigation, `primary_button` for forward actions, and more readable muted text on the light theme.
 - `ctx.notify(...)` mirrors events to the log and an automatic corner toast overlay, including recording save and pack-failure feedback.
+- Participant-labelled session folders and metadata, a shared `labelled_path` helper, and an opt-in `App(require_participant=True)` Record gate.
 - **Automatic UI scale.** With no `App(ui_scale=...)` the scale is now the OS display scale
   times how big the window is compared with 1280 × 800 (nudged by ×0.85–×1.3), recomputed
   every frame — resizing the window or dragging it to another monitor rescales fonts,
