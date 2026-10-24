@@ -7,6 +7,7 @@ one-line edit would undo, and it fails loudly when it does.
 
 import ast
 import inspect
+import json
 import runpy
 from pathlib import Path
 
@@ -51,6 +52,191 @@ def test_myocontrol_autosaves_models(app_module):
 
 def test_myocontrol_steps(app_module):
     assert app_module["steps"].steps == ["Connect", "Record", "Train", "Drive"]
+
+
+def test_header_is_one_bare_area(app_module):
+    from myogestic import Px
+
+    layout = app_module["layout"]
+    assert not {"title", "steps", "participant", "state"} & layout.panel_names
+    for grid in (layout._wide, layout._narrow):
+        assert "header" in grid._bare
+        assert grid._areas["header"] == (0, 1, 0, grid.cols)
+        assert grid._row_tracks[0] == Px(52)
+
+
+def test_status_is_one_bare_area(app_module):
+    from myogestic import Px
+
+    layout = app_module["layout"]
+    for grid in (layout._wide, layout._narrow):
+        assert "status" in grid._bare
+        assert grid._areas["status"] == (grid.rows - 1, grid.rows, 0, grid.cols)
+        assert grid._row_tracks[-1] == Px(26)
+
+
+def test_record_locked_without_participant(app_module, monkeypatch, imgui_frame):
+    from imgui_bundle import imgui
+
+    render = app_module.get("record_ui")
+    assert callable(render), "Record needs a participant-aware panel"
+    ctx = app_module["app"].ctx
+    opened, controls, messages = [], [], []
+    monkeypatch.setattr(app_module["participant"], "open", lambda: opened.append(True))
+    monkeypatch.setattr(app_module["recording"], "ui", controls.append)
+    text = imgui.text_unformatted
+
+    def remember(label):
+        messages.append(label)
+        text(label)
+
+    monkeypatch.setattr(imgui, "text_unformatted", remember)
+    button = render.__globals__["primary_button"]
+
+    def click(label):
+        button(label)
+        return label == "Set participant"
+
+    monkeypatch.setitem(render.__globals__, "primary_button", click)
+    imgui_frame(lambda: render(ctx))
+    assert opened == [True]
+    assert controls == []
+    assert "Set a participant to record" in messages
+
+
+def test_recorded_block_reads_disk(app_module, tmp_path, monkeypatch, imgui_frame):
+    from imgui_bundle import imgui
+
+    from myogestic.session import recorded_time
+
+    render = app_module.get("record_ui")
+    assert callable(render), "Record needs a recorded-time summary"
+    monkeypatch.chdir(tmp_path)
+    ctx = app_module["app"].ctx
+    ctx.participant = "P-014"
+    take = tmp_path / "sessions" / ctx.participant / "take"
+    take.mkdir(parents=True)
+    meta = take / "meta.json"
+    meta.write_text(json.dumps({"duration_s": 74.0, "class_seconds": {"Rest": 60, "Fist": 14}}))
+    reads, messages, bars = [], [], []
+    read = recorded_time
+    text, colored, bar = imgui.text_unformatted, imgui.text_colored, imgui.progress_bar
+
+    def read_disk(folder):
+        reads.append(Path(folder))
+        return read(folder)
+
+    def remember(label):
+        messages.append(label)
+        text(label)
+
+    def remember_colored(color, label):
+        messages.append(label)
+        colored(color, label)
+
+    def remember_bar(fraction, size, overlay):
+        bars.append(fraction)
+        bar(fraction, size, overlay)
+
+    monkeypatch.setitem(render.__globals__, "recorded_time", read_disk)
+    monkeypatch.setattr(imgui, "text_unformatted", remember)
+    monkeypatch.setattr(imgui, "text_colored", remember_colored)
+    monkeypatch.setattr(imgui, "progress_bar", remember_bar)
+    imgui_frame(lambda: render(ctx))
+    assert reads == [Path("sessions/P-014")]
+    assert {"1 takes · 1:14", "Rest", "Fist", "1:00", "0:14"} <= set(messages)
+    assert len(bars) == 2
+    imgui_frame(lambda: render(ctx))
+    assert len(reads) == 1, "Do not rescan disk every frame"
+
+    ctx.state = "recording"
+    imgui_frame(lambda: render(ctx))
+    meta.write_text(json.dumps({"duration_s": 90.0, "class_seconds": {"Rest": 60, "Fist": 30}}))
+    ctx.state = "idle"
+    messages.clear()
+    imgui_frame(lambda: render(ctx))
+    assert len(reads) == 2
+    assert "1 takes · 1:30" in messages
+    ctx.participant = "P-015"
+    messages.clear()
+    imgui_frame(lambda: render(ctx))
+    assert reads[-1] == Path("sessions/P-015")
+    assert "Nothing yet. Each gesture's recorded time shows here as you go." in messages
+
+
+def test_empty_recorded_block_keeps_whole_guidance(app_module, monkeypatch, imgui_frame):
+    from imgui_bundle import imgui
+
+    from myogestic.session import RecordedTime
+
+    messages, bounds = [], []
+    text = imgui.text_colored
+    ctx = app_module["app"].ctx
+    ctx.participant = "P-014"
+
+    def remember(color, label):
+        text(color, label)
+        if label.startswith("Nothing yet."):
+            messages.append(label)
+            hi = imgui.get_item_rect_max()
+            origin, size = imgui.get_window_pos(), imgui.get_window_size()
+            bounds.append((hi.x <= origin.x + size.x, hi.y <= origin.y + size.y))
+
+    def draw():
+        imgui.begin_child("side-panel", imgui.ImVec2(400, 300))
+        app_module["_recorded_block"](ctx, RecordedTime(0, 0.0, {}))
+        imgui.end_child()
+
+    monkeypatch.setattr(imgui, "text_colored", remember)
+    imgui_frame(draw)
+    assert messages == ["Nothing yet. Each gesture's recorded time shows here as you go."]
+    assert all(x and y for x, y in bounds)
+
+
+@pytest.mark.parametrize(
+    ("panel", "reason"),
+    [
+        ("model_ui", "Record a take or select session files below first."),
+        ("drive_ui", "No model yet — train or load a model first."),
+    ],
+)
+def test_disabled_forward_action_explains_why(app_module, monkeypatch, imgui_frame, panel, reason):
+    from imgui_bundle import imgui
+
+    messages = []
+    text = imgui.text_colored
+
+    def remember(color, label):
+        messages.append(label)
+        text(color, label)
+
+    monkeypatch.setattr(imgui, "text_colored", remember)
+    imgui_frame(app_module[panel])
+    assert reason in messages
+
+
+def test_status_stays_one_line_with_a_long_model_name(app_module, monkeypatch, imgui_frame):
+    from imgui_bundle import imgui
+
+    ctx = app_module["app"].ctx
+    ctx.participant = "P-014"
+    app_module["pipeline"].model = object()
+    app_module["pipeline"].last_saved_model = "sessions/P-014/" + "a_very_long_name_" * 20 + ".joblib"
+    items = []
+    text = imgui.text_colored
+
+    def remember(color, label):
+        text(color, label)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        right = imgui.get_window_pos().x + imgui.get_window_size().x - imgui.get_style().window_padding.x
+        items.append((label, lo.y, hi.x <= right + 1))
+
+    monkeypatch.setattr(imgui, "text_colored", remember)
+    imgui_frame(lambda: app_module["status_ui"](ctx))
+    assert len(items) == 3
+    assert len({y for _, y, _ in items}) == 1
+    assert all(fits for _, _, fits in items)
+    assert items[-1][0].startswith("Model: ") and items[-1][0].endswith("…")
 
 
 def test_myocontrol_uses_no_private_imports():
@@ -194,6 +380,61 @@ def test_myocontrol_header_fits_the_theme_padding(app_module, monkeypatch, implo
 
     implot_frame(draw)
     assert bounds and all(x and y for x, y in bounds)
+
+
+def test_header_controls_share_a_row_after_resizing(app_module, monkeypatch, implot_frame):
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    ctx = app_module["app"].ctx
+    ctx.participant = "P-014"
+    items = []
+    bounds = []
+    button = imgui.button
+    pill = app_module["status_pill"]
+
+    def remember():
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        origin, size = imgui.get_window_pos(), imgui.get_window_size()
+        items.append((lo.x, hi.x, (lo.y + hi.y) / 2))
+        bounds.append((hi.x <= origin.x + size.x, hi.y <= origin.y + size.y))
+
+    def tracked_button(label, *args):
+        result = button(label, *args)
+        if "###step" in label or label.endswith("###chip"):
+            remember()
+        return result
+
+    def tracked_pill(label, color):
+        pill(label, color)
+        if label == "IDLE":
+            remember()
+
+    monkeypatch.setattr(imgui, "button", tracked_button)
+    monkeypatch.setitem(app_module["header_ui"].__globals__, "status_pill", tracked_pill)
+    for scale, width in [(1.0, 900), (1.3, 1440), (0.85, 900)]:
+        monkeypatch.setattr(_scale, "_current", scale)
+        _theme.apply_theme()
+        imgui.get_style().scale_all_sizes(scale)
+        imgui.get_style().font_scale_main = scale
+        items.clear()
+        bounds.clear()
+        imgui.get_io().display_size = imgui.ImVec2(width, 1100)
+
+        def draw(width=width):
+            imgui.set_next_window_size(imgui.ImVec2(width, 1100))
+            imgui.begin("scaled-workflow")
+            app_module["myocontrol_ui"](ctx)
+            imgui.end()
+
+        implot_frame(draw)
+        assert len(items) == 6
+        assert all(x and y for x, y in bounds)
+        # Connectors and buttons round their baseline separately at fractional scales.
+        assert max(y for _, _, y in items) - min(y for _, _, y in items) <= 2 * scale, (scale, items)
+        assert all(left[1] <= right[0] for left, right in zip(items, items[1:], strict=False))
 
 
 def test_myocontrol_drive_toggle_balances_selected_style(app_module, monkeypatch, imgui_frame):
