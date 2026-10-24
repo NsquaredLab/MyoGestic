@@ -12,16 +12,17 @@ import tomllib
 from typing import Any
 
 import numpy as np
+from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
-from myogestic._theme import display_font
+from myogestic._theme import display_font, mono_font
 from myogestic.controls import ControlBus, ControlLink, ControlLinkConnector, load_control_map
 from myogestic.ml import Pipeline, save_pickle
 from myogestic.recipes.estimators import catboost_classifier, catboost_regressor
 from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.remote import RemoteTarget
-from myogestic.session import iter_labeled_windows, open_session_store
+from myogestic.session import RecordedTime, iter_labeled_windows, open_session_store, recorded_time
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     DEFAULT_DEVICES,
@@ -43,8 +44,10 @@ from myogestic.widgets.common import (
     DANGER,
     IDLE,
     INFO,
+    PALETTE,
     SUCCESS,
     WARNING,
+    hairline,
     mono_text,
     muted,
     panel_header,
@@ -227,32 +230,35 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
 layout = Layout(
     wide=Grid.areas(
         """
-        title    steps    participant state
-        signal   signal   step        step
-        signal   signal   sessions    sessions
-        log      log      sessions    sessions
-        status   status   status      status
+        header   header
+        signal   step
+        signal   sessions
+        log      sessions
+        status   status
         """,
-        row_height=[Px(88), Fr(3), Fr(1), Fr(1), Px(56)],
-        col_width=[Px(180), Fr(1), Px(240), Px(160)],
+        row_height=[Px(52), Fr(3), Fr(1), Px(110), Px(26)],
+        col_width=[Fr(1), Px(400)],
+        bare=("header", "status"),
     ),
     narrow=Grid.areas(
         """
-        title    participant state
-        steps    steps       steps
-        signal   signal      signal
-        step     step        step
-        sessions sessions    sessions
-        log      log         log
-        status   status      status
+        header
+        signal
+        step
+        sessions
+        log
+        status
         """,
-        row_height=[Px(88), Px(64), Fr(2), Fr(3), Fr(1.5), Fr(1), Px(76)],
-        col_width=[Fr(1), Fr(1), Px(160)],
+        row_height=[Px(52), Fr(2), Fr(3), Fr(1.5), Px(110), Px(26)],
+        bare=("header", "status"),
     ),
     breakpoint=Px(1100),
 )
 steps = StepBar(["Connect", "Record", "Train", "Drive"], widget_id="myocontrol_steps")
 participant = ParticipantPanel()
+# These are view caches, not another source of recording state.
+recorded: dict[str, Any] = {"participant": None, "state": "idle", "time": RecordedTime(0, 0.0, {})}
+header_widths: dict[str, float] = {}
 
 # No `exclude`: every stream here is a device stream.
 device = DevicePicker("emg", selectable=True)
@@ -351,6 +357,133 @@ def _pushed() -> str:
     )
 
 
+def _ellipsize(text: str, width: float) -> str:
+    """Fit one line to its available space with an ellipsis when needed."""
+    if imgui.calc_text_size(text).x <= width:
+        return text
+    while text and imgui.calc_text_size(text + "…").x > width:
+        text = text[:-1]
+    return text + "…" if width >= imgui.calc_text_size("…").x else ""
+
+
+def _muted_line(text: str) -> None:
+    """Keep supporting copy on one line without losing the full explanation."""
+    imgui.text_colored(muted(), _ellipsize(text, imgui.get_content_region_avail().x))
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(text)
+
+
+def _disabled_reason(reason: str) -> None:
+    """Explain a disabled action both on hover and in the panel itself."""
+    if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+        imgui.set_tooltip(reason)
+    imgui.text_colored(WARNING, fa.ICON_FA_CIRCLE_INFO)
+    imgui.same_line()
+    _muted_line(reason)
+
+
+def _duration(seconds: float) -> str:
+    """Format the recorded sample-clock duration in minutes and seconds."""
+    minutes, seconds = divmod(int(seconds), 60)
+    return f"{minutes}:{seconds:02d}"
+
+
+def _refresh_recorded(ctx: Context) -> RecordedTime:
+    """Read disk on participant changes and when a recording returns to idle."""
+    if ctx.participant != recorded["participant"] or (
+        recorded["state"] == "recording" and ctx.state == "idle"
+    ):
+        recorded["time"] = (
+            recorded_time(pathlib.Path("sessions", ctx.participant))
+            if ctx.participant else RecordedTime(0, 0.0, {})
+        )
+        recorded["participant"] = ctx.participant
+    recorded["state"] = ctx.state
+    return recorded["time"]
+
+
+def _recorded_block(ctx: Context, totals: RecordedTime) -> None:
+    """Show a participant's takes and comparable gesture durations."""
+    rows = list(dict.fromkeys([*CLASSES, *totals.per_class]))
+    style = imgui.get_style()
+    empty = "Nothing yet. Each gesture's recorded time shows here as you go."
+    wrap_width = max(ui_px(1), imgui.get_content_region_avail().x - 2 * style.window_padding.x)
+    height = (
+        2 * style.window_padding.y + imgui.get_text_line_height_with_spacing()
+        + style.item_spacing.y
+        + (len(rows) * imgui.get_frame_height_with_spacing() if totals.takes else
+           imgui.calc_text_size(empty, wrap_width=wrap_width).y)
+    )
+    imgui.push_style_color(imgui.Col_.child_bg, style.color_(imgui.Col_.popup_bg))
+    imgui.begin_child("recorded-time", imgui.ImVec2(0, height),
+                      imgui.ChildFlags_.always_use_window_padding)
+    summary = f"{totals.takes} takes · {_duration(totals.total_s)}"
+    summary_w = imgui.calc_text_size(summary).x
+    panel_header(f"Recorded for {ctx.participant}", reserve=summary_w + style.item_spacing.x)
+    imgui.same_line()
+    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
+        0.0, imgui.get_content_region_avail().x - summary_w
+    ))
+    imgui.text_colored(muted(), summary)
+    if not totals.takes:
+        imgui.push_text_wrap_pos(0.0)
+        imgui.text_colored(muted(), empty)
+        imgui.pop_text_wrap_pos()
+    else:
+        name_w = max(imgui.calc_text_size(name).x for name in rows)
+        value_w = imgui.calc_text_size(_duration(max(totals.per_class.values(), default=0))).x
+        maximum = max(totals.per_class.values(), default=0.0)
+        for index, name in enumerate(rows):
+            seconds = totals.per_class.get(name, 0.0)
+            left = imgui.get_cursor_pos_x()
+            imgui.align_text_to_frame_padding()
+            imgui.text_unformatted(name)
+            imgui.same_line()
+            imgui.set_cursor_pos_x(left + name_w + style.item_spacing.x)
+            width = max(ui_px(1), imgui.get_content_region_avail().x - value_w - style.item_spacing.x)
+            color = PALETTE[index % len(PALETTE)]
+            imgui.push_style_color(imgui.Col_.plot_histogram, imgui.ImVec4(*color, 1.0))
+            imgui.progress_bar(seconds / maximum if maximum else 0.0,
+                               imgui.ImVec2(width, imgui.get_frame_height()), "")
+            imgui.pop_style_color()
+            imgui.same_line()
+            imgui.text_colored(muted(), _duration(seconds))
+    imgui.end_child()
+    imgui.pop_style_color()
+
+
+def record_ui(ctx: Context) -> None:
+    """Record labelled gestures, or open participant setup before recording."""
+    _refresh_recorded(ctx)
+    if not ctx.participant:
+        left, top = imgui.get_cursor_pos()
+        width, height = imgui.get_content_region_avail()
+        line = imgui.get_text_line_height_with_spacing()
+        imgui.set_cursor_pos_y(top + max(0.0, (height - 3 * line - imgui.get_frame_height()) / 2))
+        for text, color in (
+            (fa.ICON_FA_LOCK, WARNING),
+            ("Set a participant to record", None),
+            ("Recordings are saved under the participant ID.", muted()),
+        ):
+            text = _ellipsize(text, width)
+            imgui.set_cursor_pos_x(left + max(0.0, (width - imgui.calc_text_size(text).x) / 2))
+            if color is None:
+                imgui.text_unformatted(text)
+            else:
+                imgui.text_colored(color, text)
+        button_w = imgui.calc_text_size("Set participant").x + 2 * imgui.get_style().frame_padding.x
+        imgui.set_cursor_pos_x(left + max(0.0, (width - button_w) / 2))
+        if primary_button("Set participant"):
+            participant.open()
+        return
+    recording.ui(ctx)
+    # Stop can change the state during this very frame.
+    _recorded_block(ctx, _refresh_recorded(ctx))
+    _muted_line(
+        "Pick the gesture the hand shows, press Record, switch gestures as the participant moves, then Stop."
+    )
+
+
 def model_ui() -> None:
     """Train step: choose the model inputs and fit the selected takes."""
     busy = app.ctx.state != "idle"
@@ -384,14 +517,14 @@ def model_ui() -> None:
     if clicked and can_train:
         training_inputs["requested"] = _input_fingerprint()
         pipeline.start_training()
-    if not can_train and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+    if not can_train:
         if busy:
             reason = "Busy — wait until the current action finishes."
         elif features.n_active == 0:
             reason = "Select at least one feature."
         else:
             reason = "Record a take or select session files below first."
-        imgui.set_tooltip(reason)
+        _disabled_reason(reason)
 
 
 def connect_ui(ctx: Context) -> None:
@@ -438,14 +571,14 @@ def drive_ui() -> None:
             pipeline.stop_predicting()
         else:
             pipeline.start_predicting()
-    if not enabled and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+    if not enabled:
         if state != "idle":
             reason = "Busy — wait until the current action finishes."
         elif pipeline.model is None:
             reason = "No model yet — train or load a model first."
         else:
             reason = "Prediction needs @pipeline.extract and @pipeline.predict wired."
-        imgui.set_tooltip(reason)
+        _disabled_reason(reason)
     imgui.spacing()
     output_filter.ui()
     imgui.spacing()
@@ -508,14 +641,93 @@ def _step_done(ctx: Context) -> list[bool]:
     ]
 
 
+def _edge_rule(*, bottom: bool) -> None:
+    """Separate the bare header and footer from the body with a theme hairline."""
+    origin, size = imgui.get_window_pos(), imgui.get_window_size()
+    y = origin.y + size.y - ui_px(1) if bottom else origin.y
+    imgui.get_window_draw_list().add_line(
+        imgui.ImVec2(origin.x, y), imgui.ImVec2(origin.x + size.x, y),
+        imgui.get_color_u32(hairline()), thickness=ui_px(1),
+    )
+
+
+def header_ui(ctx: Context) -> int:
+    """Keep the brand, navigation and participant on one centred header row."""
+    _edge_rule(bottom=True)
+    style = imgui.get_style()
+    top = imgui.get_cursor_pos_y()
+    height = imgui.get_content_region_avail().y
+    center = top + height / 2
+    imgui.set_cursor_pos_y(center - ui_px(22) / 2)
+    imgui.push_font(display_font(), ui_px(22))
+    imgui.text_unformatted("MyoGestic")
+    imgui.pop_font()
+    imgui.same_line()
+    imgui.set_cursor_pos_y(center - imgui.get_text_line_height() / 2)
+    imgui.text_colored(muted(), "Myocontrol")
+    imgui.same_line()
+    left = imgui.get_cursor_pos_x()
+    available = imgui.get_content_region_avail().x
+    right = left + available
+    done = _step_done(ctx)
+
+    # The pill owns its padding; retain its measured width instead of copying it.
+    state = ctx.state.upper()
+    pill_w = header_widths.get(state, imgui.calc_text_size(state).x + ui_px(40))
+    font = mono_font() if ctx.participant else None
+    if font is not None:
+        imgui.push_font(font, style.font_size_base)
+    chip_w = imgui.calc_text_size(ctx.participant or "Set participant").x + 2 * style.frame_padding.x
+    if font is not None:
+        imgui.pop_font()
+    # Compact padding leaves room for all four steps on the narrow arrangement too.
+    padding = imgui.ImVec2(ui_px(4), style.frame_padding.y)
+    nav_w = sum(
+        imgui.calc_text_size(f"{fa.ICON_FA_CHECK if complete else i + 1}  {label}").x + 2 * padding.x
+        for i, (label, complete) in enumerate(zip(steps.steps, done, strict=True))
+    ) + (len(steps.steps) - 1) * ui_px(32)
+    gap = style.item_spacing.x
+    participant_w = max(chip_w, min(
+        header_widths.get("participant", chip_w), available - nav_w - pill_w - 3 * gap
+    ))
+    right_w = participant_w + gap + pill_w
+    imgui.set_cursor_pos(imgui.ImVec2(
+        left + max(0.0, (available - right_w - nav_w - gap) / 2),
+        center - imgui.get_frame_height() / 2,
+    ))
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, padding)
+    active = steps.ui(done)
+    imgui.pop_style_var()
+    imgui.same_line()
+    available = imgui.get_content_region_avail().x
+    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0.0, available - right_w))
+    imgui.set_cursor_pos_y(center - imgui.get_frame_height() / 2)
+    # Long local names yield to the state badge, while the chip stays clickable.
+    clip = imgui.get_cursor_screen_pos()
+    imgui.push_clip_rect(clip, imgui.ImVec2(clip.x + participant_w, clip.y + height), True)
+    imgui.begin_group()
+    participant.ui(ctx)
+    imgui.end_group()
+    header_widths["participant"] = imgui.get_item_rect_size().x
+    imgui.pop_clip_rect()
+    imgui.same_line()
+    pill_h = imgui.get_text_line_height() + ui_px(8)
+    imgui.set_cursor_pos(imgui.ImVec2(right - pill_w, center - pill_h / 2))
+    tone = {"recording": DANGER, "training": WARNING, "predicting": INFO}.get(ctx.state, IDLE)
+    status_pill(state, tone)
+    header_widths[state] = imgui.get_item_rect_size().x
+    return active
+
+
 def status_ui(ctx: Context) -> None:
     """Show acquisition, participant storage and the most recent saved model."""
     stream = ctx.streams.get("emg")
-    if stream is not None and stream.status == "connected" and stream.info is not None:
+    connected = stream is not None and stream.status == "connected" and stream.info is not None
+    if connected:
         info = stream.info
         source = f"{stream.name} · {info.n_channels} ch / {info.fs:g} Hz"
     else:
-        source = "Device: disconnected"
+        source = "emg · disconnected"
     folder = pathlib.Path("sessions") / ctx.participant
     if pipeline.model is None:
         model = "Model: none"
@@ -523,29 +735,38 @@ def status_ui(ctx: Context) -> None:
         model = f"Model: {pathlib.Path(pipeline.last_saved_model).name}"
     else:
         model = "Model: fitted (not saved)"
-    imgui.push_style_color(imgui.Col_.text, muted())
-    imgui.text_wrapped(f"{source}  ·  {ctx.participant or 'No participant'}  ·  {folder}  ·  {model}")
-    imgui.pop_style_color()
+    _edge_rule(bottom=False)
+    imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + max(
+        0.0, (imgui.get_content_region_avail().y - imgui.get_text_line_height()) / 2
+    ))
+    imgui.text_colored(SUCCESS if connected else IDLE, fa.ICON_FA_CIRCLE)
+    imgui.same_line()
+    available = imgui.get_content_region_avail().x
+    right = imgui.get_cursor_pos_x() + available
+    model_w = min(imgui.calc_text_size(model).x, available * 0.4)
+    text = f"{source} · {ctx.participant or 'No participant'} · {folder}"
+    imgui.text_colored(muted(), _ellipsize(text, available - model_w - imgui.get_style().item_spacing.x))
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(text)
+    imgui.same_line()
+    imgui.set_cursor_pos_x(right - model_w)
+    _muted_line(model)
 
 
 @app.ui
 def myocontrol_ui(ctx: Context) -> None:
     """A visible workflow with persistent signal, activity and session files."""
-    with layout["title"]:
-        imgui.push_font(display_font(), ui_px(28))
-        imgui.text_unformatted("MyoGestic")
-        imgui.pop_font()
-        imgui.text_colored(muted(), "Myocontrol")
-    with layout["participant"]:
-        participant.ui(ctx)
-    with layout["state"]:
-        tone = {"recording": DANGER, "training": WARNING, "predicting": INFO}.get(ctx.state, IDLE)
-        status_pill(ctx.state.upper(), tone)
+    # One compact vertical inset keeps the grid's geometry consistent across cells
+    # and leaves a full button-height line inside the 52 px header.
+    padding = imgui.get_style().window_padding
+    imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))
+    with layout["header"]:
+        active = header_ui(ctx)
+    # Observe recording transitions even while a different workflow step is open.
+    _refresh_recorded(ctx)
     # Refresh the participant's selection before Train can read it this frame.
     with layout["sessions"]:
         pipeline.training_data = sessions.ui(participant=ctx.participant)
-    with layout["steps"]:
-        active = steps.ui(done=_step_done(ctx))
     with layout["signal"]:
         viewer.ui(ctx)
     with layout["log"]:
@@ -555,13 +776,14 @@ def myocontrol_ui(ctx: Context) -> None:
         if active == 0:
             connect_ui(ctx)
         elif active == 1:
-            recording.ui(ctx)
+            record_ui(ctx)
         elif active == 2:
             model_ui()
         else:
             drive_ui()
     with layout["status"]:
         status_ui(ctx)
+    imgui.pop_style_var()
 
     # Stream it, do not fire it once: VHI holds a pose only while samples keep arriving
     # (5 s, then `StopToRest()`). While predicting the predict loop is already doing that.
