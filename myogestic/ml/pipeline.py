@@ -43,6 +43,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from myogestic.contracts import TrainingData
+from myogestic.session import labelled_path
 
 if TYPE_CHECKING:
     from myogestic.core import App
@@ -101,6 +102,16 @@ class Pipeline:
         Maximum predict-loop tick rate. Set to 0 or negative to remove
         the cap (run at full speed).
 
+    Attributes
+    ----------
+    autosave_dir : str or None
+        Save each successfully trained model here when ``save_model`` is set.
+        The path uses the participant ID and timestamp. ``None`` disables
+        automatic saving (the default).
+    last_saved_model : str or None
+        Path of the most recent successful auto-save, or ``None`` before one
+        succeeds. A save failure leaves the trained model usable in memory.
+
     Examples
     --------
     >>> from myogestic import App
@@ -124,6 +135,8 @@ class Pipeline:
         # `myogestic.ml.save_pickle` / `load_pickle` are the default.
         self.save_model: Callable | None = None
         self.load_model: Callable | None = None
+        self.autosave_dir: str | None = None
+        self.last_saved_model: str | None = None
         # Set this from inside `@app.ui` to publish what the user picked
         # in `session_manager(...)` to `@pipeline.train`.
         self.training_data: TrainingData | None = None
@@ -155,7 +168,8 @@ class Pipeline:
         must return any object — it's stored on ``pipeline.model`` and
         forwarded to every subsequent ``predict()`` call. If
         ``pipeline.save_model`` is set, the **Save Model** button calls
-        it as ``save_model(pipeline.model, path)``.
+        it as ``save_model(pipeline.model, path)``. Setting ``autosave_dir``
+        also calls it automatically after successful training.
         """
         self.on_train = fn
         return fn
@@ -180,7 +194,10 @@ class Pipeline:
         No-op (sets ``ctx.status_message``) unless the state is ``idle``,
         a train callback is registered, and non-empty
         `training_data` is set. Flips the state to ``training`` for
-        the duration and stores the returned object on `model`.
+        the duration and stores the returned object on `model`. When
+        ``autosave_dir`` and ``save_model`` are set, save under the participant
+        label and publish the path as ``last_saved_model``. Completion and
+        failures notify the user; a failed save keeps the trained model.
         """
         ctx = self.app.ctx
         if ctx.state != "idle":
@@ -201,19 +218,34 @@ class Pipeline:
         ctx.status_message = "Training..."
         ctx.log("Training started")
         on_train = self.on_train
+        participant = ctx.participant
 
         def _worker() -> None:
+            started = time.perf_counter()
             try:
                 self.model = on_train(data)
                 ctx.status_message = "Training complete"
                 self.train_log.append("Training complete")
-                ctx.log("Training complete")
+                detail = f"in {time.perf_counter() - started:.1f} s"
+                if self.autosave_dir is not None and self.save_model is not None:
+                    try:
+                        path = labelled_path(self.autosave_dir, participant, "model.joblib")
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        self.save_model(self.model, str(path))
+                    except Exception as e:
+                        ctx.status_message = f"Training complete; model save failed: {e}"
+                        self.train_log.append(f"Model save failed: {e}")
+                        ctx.notify("Model not saved", str(e), "danger")
+                    else:
+                        self.last_saved_model = str(path)
+                        detail = path.name
+                ctx.notify("Training finished", detail, "success")
             except Exception as e:
                 tb = traceback.format_exc()
                 ctx.status_message = f"Training failed: {e}"
                 self.train_log.append(f"FAILED: {e}")
                 self.train_log.append(tb)
-                ctx.log(f"Training failed: {e}")
+                ctx.notify("Training failed", str(e), "danger")
             finally:
                 ctx.state = "idle"
 

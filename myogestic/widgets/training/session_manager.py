@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 from imgui_bundle import portable_file_dialogs as pfd
 
 from myogestic.contracts import TrainingData
+from myogestic.session._core import _slug
 from myogestic.widgets.common import (
     PALETTE,
     muted,
@@ -75,11 +78,34 @@ class SessionManager:
         self._class_names = class_names
         self._widget_id = f"{title}_{base_path}"
 
-    def ui(self) -> TrainingData:
-        """Render the picker and return the current training selection."""
+    def ui(self, participant: str | None = None) -> TrainingData:
+        """Render the picker and return the current training selection.
+
+        Parameters
+        ----------
+        participant
+            Participant ID whose subfolder to scan, using the same safe slug
+            as recordings. ``None`` or an empty ID scans the base folder.
+            Changing the participant clears the session list and class filters.
+
+        Returns
+        -------
+        TrainingData
+            Selected session paths and active classes for training.
+        """
         widget_id = self._widget_id
         class_names = self._class_names
         state = get_state(widget_id)
+        participant = _slug(participant) if participant is not None else None
+        if participant != state.participant:
+            state.sessions.clear()
+            state.deactivated_classes.clear()
+            state.last_load_msg = ""
+            # A file picker opened for the previous participant must not refill
+            # the newly cleared list when it completes.
+            state.folder_dialog = None
+            state.participant = participant
+        scan_path = str(Path(self._base_path) / participant) if participant else self._base_path
 
         # Deliberately empty until asked. This used to scan `base_path` on first
         # render, so opening an app presented every session anyone had ever recorded
@@ -88,7 +114,7 @@ class SessionManager:
         # and a list that arrives on its own is a decision nobody made. `Scan folder`
         # is the same scan, one click away, and says what it found.
         panel_header(self._title, fa.ICON_FA_FOLDER_OPEN)
-        render_summary_and_buttons(widget_id, self._base_path, state)
+        render_summary_and_buttons(widget_id, scan_path, state)
         poll_file_dialog(state)
 
         classes_in_pool, active_classes = class_pool_and_active(state)
