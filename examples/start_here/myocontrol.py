@@ -343,6 +343,7 @@ recording = RecordingControls(
     on_record=app.start_recording,
     on_stop=app.stop_recording,
     on_gesture=_on_control,
+    show_header=False,
 )
 
 
@@ -756,8 +757,8 @@ def status_ui(ctx: Context) -> None:
 @app.ui
 def myocontrol_ui(ctx: Context) -> None:
     """A visible workflow with persistent signal, activity and session files."""
-    # One compact vertical inset keeps the grid's geometry consistent across cells
-    # and leaves a full button-height line inside the 52 px header.
+    # Compact child padding leaves a full button-height line inside the 52 px
+    # header; Grid keeps the parent's content bounds captured by Begin.
     padding = imgui.get_style().window_padding
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))
     with layout["header"]:
