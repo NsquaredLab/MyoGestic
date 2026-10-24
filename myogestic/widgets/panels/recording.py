@@ -104,6 +104,18 @@ def _elapsed_str(seconds: float) -> str:
     return f"{minutes}:{secs:02d}"
 
 
+def _record_button(ctx: Context, label: str, size: imgui.ImVec2) -> bool:
+    """Render Record with a reason when the participant gate disables it."""
+    if not getattr(ctx, "require_participant", False) or getattr(ctx, "participant", ""):
+        return imgui.button(label, size)
+    imgui.begin_disabled()
+    imgui.button(label, size)
+    imgui.end_disabled()
+    if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+        imgui.set_tooltip("Set a participant ID before recording.")
+    return False
+
+
 class RecordButton:
     """One button that records, and asks what to call the take when it stops.
 
@@ -266,7 +278,7 @@ class RecordButton:
         if recording:
             if imgui.button(f"{fa.ICON_FA_STOP}  Stop", full):
                 self._stop(ctx)
-        elif imgui.button(f"{fa.ICON_FA_CIRCLE_DOT}  Record", full):
+        elif _record_button(ctx, f"{fa.ICON_FA_CIRCLE_DOT}  Record", full):
             self._name = ""
             self._started = time.monotonic()
             self._on_record()
@@ -463,8 +475,8 @@ def _render_recording_controls(
 
         # Record / Stop
         if ctx.state == AppState.IDLE:
-            if imgui.button(
-                f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(ui_px(_RECORD_BTN_W), 0)
+            if _record_button(
+                ctx, f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(ui_px(_RECORD_BTN_W), 0)
             ):
                 on_record()
                 # Auto-add the current label at the start of the recording.

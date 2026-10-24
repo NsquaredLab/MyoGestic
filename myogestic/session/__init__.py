@@ -4,7 +4,7 @@ The implementation is split across small private modules so this file stays
 easy to scan while preserving the original import path.
 """
 
-from myogestic.session._core import LabelEvent, Recording, Session
+from myogestic.session._core import LabelEvent, Recording, Session, labelled_path
 from myogestic.session._io import open_session_store
 from myogestic.session._windows import (
     SessionSplit,
@@ -19,6 +19,7 @@ __all__ = [
     "Recording",
     "Session",
     "SessionSplit",
+    "labelled_path",
     "open_session_store",
     "iter_labeled_windows",
     "iter_aligned_windows",
