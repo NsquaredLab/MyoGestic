@@ -13,6 +13,7 @@ from myogestic.widgets.panels.log_panel import LogPanel
 from myogestic.widgets.panels.popout import popout_panel
 from myogestic.widgets.panels.process_launcher import ProcessLauncher
 from myogestic.widgets.panels.recording import RecordButton, RecordingControls
+from myogestic.widgets.panels.step_bar import StepBar
 from myogestic.widgets.panels.stream_manager import StreamManager
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "ProcessLauncher",
     "RecordButton",
     "RecordingControls",
+    "StepBar",
     "StreamManager",
     "popout_panel",
 ]

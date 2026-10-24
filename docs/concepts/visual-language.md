@@ -51,7 +51,12 @@ truncation, and the panel stops matching its neighbours.
 | --- | --- | --- |
 | Translucent accent tint + 2 px accent underline | `push_selected()` / `pop_selected()` | "this is on" |
 | Raised chip among flat segments | `segmented()` | one-of-N choice, all options visible |
+| Blue fill with white text | `primary_button()` | the one forward action in a step |
 | Colour flash decaying over ~0.18 s | `flash_color()` | "this value just updated" |
+
+`primary_button` uses `PRIMARY_FILL` (`#0062CC`) and `ON_PRIMARY_TEXT` (white), fixed
+in both themes for readable action labels. Hover and press gently lighten the fill.
+Use it for the one forward action (Train, Start predicting, Start session).
 
 The selected cue is deliberately a *tint*, not a solid fill: it should read as selection, not as a
 button caught mid-press. **Any control with a sticky on/off state uses it**: the channel grid's

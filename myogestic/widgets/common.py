@@ -49,6 +49,10 @@ CONSOLE_TEXT = imgui.ImVec4(0.88, 0.89, 0.91, 1.0)
 PILL_BG = imgui.ImVec4(0.14, 0.17, 0.21, 1.0)
 ON_PILL_TEXT = imgui.ImVec4(0.93, 0.95, 0.98, 1.0)
 
+# Forward actions keep readable white text on the same blue in both themes.
+PRIMARY_FILL = imgui.ImVec4(0 / 255, 98 / 255, 204 / 255, 1.0)
+ON_PRIMARY_TEXT = imgui.ImVec4(1.0, 1.0, 1.0, 1.0)
+
 
 def ui_px(n: float) -> float:
     """``n`` pixels at UI scale 1.0, in pixels now.
@@ -171,6 +175,37 @@ def pop_selected() -> None:
     imgui.get_window_draw_list().add_rect_filled(
         imgui.ImVec2(p0.x + 3.0, y), imgui.ImVec2(p1.x - 3.0, p1.y), imgui.get_color_u32(_ACCENT), 1.0
     )
+
+
+def primary_button(label: str, size: tuple[float, float] = (0, 0)) -> bool:
+    """Draw the primary forward action with white text on a blue fill.
+
+    Parameters
+    ----------
+    label : str
+        Button text, optionally including an ImGui ID suffix.
+    size : tuple[float, float], optional
+        ImGui button size, by default ``(0, 0)`` to fit the label. Pass fixed
+        pixel dimensions through ``ui_px`` before calling.
+
+    Returns
+    -------
+    bool
+        Whether the button was clicked this frame.
+    """
+    imgui.push_style_color(imgui.Col_.text, ON_PRIMARY_TEXT)
+    imgui.push_style_color(imgui.Col_.button, PRIMARY_FILL)
+    for slot, amount in ((imgui.Col_.button_hovered, 0.06), (imgui.Col_.button_active, 0.10)):
+        imgui.push_style_color(slot, imgui.ImVec4(
+            PRIMARY_FILL.x + (1.0 - PRIMARY_FILL.x) * amount,
+            PRIMARY_FILL.y + (1.0 - PRIMARY_FILL.y) * amount,
+            PRIMARY_FILL.z + (1.0 - PRIMARY_FILL.z) * amount,
+            PRIMARY_FILL.w,
+        ))
+    try:
+        return imgui.button(label, imgui.ImVec2(*size))
+    finally:
+        imgui.pop_style_color(4)
 
 
 def destructive_button(label: str, *, tooltip: str = "") -> bool:
