@@ -89,14 +89,18 @@ The status line changes to **ready**. Until both captures are done, the
 
 ## 7. Record a block
 
-1. In the right-hand column, press **Record**.
-2. On the Force tab, press **Start**. A target line rises, holds, and falls —
+1. At the top of the right-hand column, click **Set participant**, enter or
+   keep a participant ID (for example, **P-014**), then press **Start session**.
+   Record stays greyed out until a participant is set.
+2. In the right-hand column, press **Record**.
+3. On the Force tab, press **Start**. A target line rises, holds, and falls —
    push on the transducer so that your trace follows it. The block ends by
    itself when the target comes back down to zero.
-3. Press **Stop** on the recorder, then **Save**.
+4. Press **Stop** on the recorder, then **Save**.
 
 The session appears in the panel at the bottom right, and the data is saved
-in a `sessions` folder inside `MyoGestic-main`.
+in `sessions/<ID>/` inside `MyoGestic-main`, with the participant ID in each
+recording's filename.
 
 ## No amplifier to hand?
 

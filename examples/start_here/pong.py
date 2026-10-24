@@ -52,6 +52,7 @@ from myogestic.widgets import (
     DevicePicker,
     FeatureSelector,
     LogPanel,
+    ParticipantPanel,
     PongTask,
     PostProcessor,
     PredictionLabel,
@@ -125,7 +126,7 @@ with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
 output_filter = PostProcessor(hz=PREDICT_HZ)
 vhi_control = vhi.control_client()
 
-app = App("MyoGestic — pong")
+app = App("MyoGestic — pong", require_participant=True)
 # The cursor is a *recorded signal*, not a start time plus a copy of the parameters:
 # it lands in the session on the same clock as the EMG, aligned by construction. It is
 # deliberately not connected here — see `_start_block`, which is the press that does it.
@@ -377,6 +378,7 @@ streams = StreamManager(
     on_remove=app.remove_stream,
 )
 log = LogPanel()
+participant = ParticipantPanel()
 # The Source panel owns connecting, so the viewer offers no button of its own.
 viewer = SignalViewer("emg", show_connect=False, selectable=True, show_title=True)
 
@@ -574,6 +576,8 @@ def _start_block() -> None:
         return
     if app.ctx.state == "idle":
         app.start_recording()
+        if app.ctx.state != "recording":
+            return
         block["recording"] = True
     target.start()
 
@@ -742,6 +746,8 @@ def pong_ui(ctx):
     with grid[5, 0:2]:
         log.ui(ctx)
     with grid[0:3, 2]:
+        participant.ui(ctx)
+        imgui.spacing()
         if imgui.begin_tab_bar("source_cell"):
             selected, _ = imgui.begin_tab_item("Source")
             if selected:
@@ -759,7 +765,7 @@ def pong_ui(ctx):
     with grid[3, 2]:
         recording.ui(ctx)
     with grid[4:6, 2]:
-        pipeline.training_data = sessions.ui()
+        pipeline.training_data = sessions.ui(participant=ctx.participant)
 
     # Stream it, do not fire it once: VHI holds a pose only while samples keep arriving
     # (5 s, then `StopToRest()`). While predicting the predict loop is already doing that.
