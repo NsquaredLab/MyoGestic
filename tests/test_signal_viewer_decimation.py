@@ -863,14 +863,8 @@ def test_unscoped_resolve_enabled_is_unchanged():
     assert resolve_enabled(ViewerState(), "emg", 320) == set(range(16))
 
 
-def test_the_control_rows_leave_the_id_stack_balanced(implot_frame):
-    """The two control rows are ImGui tables; an unclosed one corrupts the frame.
-
-    `begin_table` pushes an ID that only `end_table` pops, and the failure
-    surfaces far from the cause — as ``Missing PopID()`` at whatever
-    ``end_child`` the viewer happens to sit inside. Render it in a child window
-    so that assert fires here instead of in somebody's app.
-    """
+def test_the_toolbar_leaves_the_id_stack_balanced(implot_frame):
+    """Render the toolbar inside a child to catch unbalanced ImGui scopes."""
     from imgui_bundle import imgui
 
     from myogestic import Stream
@@ -991,13 +985,12 @@ def test_show_title_false_reclaims_the_header_row_rather_than_blanking_it(implot
     assert freed >= imgui.get_frame_height() * 0.5, f"only {freed:.1f}px freed"
 
 
-def _header_frame(implot_frame, monkeypatch, names, *, widget_id, click="", frames=1):
+def _header_frame(implot_frame, monkeypatch, names, *, widget_id, select_index=None, frames=1):
     """Render ``frames`` frames of a selectable viewer over ``names``.
 
     Returns ``(viewer_state, button_labels_from_the_last_frame)``. The header's
-    buttons are stubbed rather than clicked through the input queue — the ids are
-    this widget's own, so the stub reports exactly which controls were drawn, and
-    ``click`` presses the one whose id ends with it.
+    items are tracked through the real rendering calls, with an optional stream
+    selection returned by the combo to exercise switching and pause reset.
 
     Parameters
     ----------
@@ -1022,11 +1015,23 @@ def _header_frame(implot_frame, monkeypatch, names, *, widget_id, click="", fram
 
     drawn: list[str] = []
 
+    real_button = imgui.small_button
+    real_combo = imgui.combo
+
     def small_button(label, *args, **kwargs):
         drawn.append(label)
-        return bool(click) and label.endswith(click)
+        return real_button(label, *args, **kwargs)
+
+    def combo(label, current, options):
+        result = real_combo(label, current, options)
+        if label.endswith("_sel"):
+            drawn.append(label)
+            if select_index is not None:
+                return True, select_index
+        return result
 
     monkeypatch.setattr(imgui, "small_button", small_button)
+    monkeypatch.setattr(imgui, "combo", combo)
     for _ in range(frames):
         drawn.clear()
         implot_frame(lambda: viewer.ui(ctx))
@@ -1041,40 +1046,28 @@ def _header_frame(implot_frame, monkeypatch, names, *, widget_id, click="", fram
         window_s=5.0,
         stream_name=names[0],
     )
-    return v, drawn
+    return v, drawn.copy()
 
 
-def test_the_stream_arrows_appear_only_when_there_is_another_stream_to_reach(
+def test_the_stream_picker_appears_only_when_there_is_another_stream_to_reach(
     implot_frame, monkeypatch
 ):
-    """One stream must draw no arrows — every shipped example has exactly one.
-
-    A pair of arrows that cycles back to the stream you are already on is a
-    control that does nothing, in every single-stream app in the repo. They earn
-    their place only once `ctx.streams` holds somewhere to go.
-    """
+    """A picker earns its header space only when another stream exists."""
     _, alone = _header_frame(implot_frame, monkeypatch, ["emg"], widget_id="thdr_alone")
     _, pair = _header_frame(implot_frame, monkeypatch, ["emg", "target"], widget_id="thdr_pair")
 
-    assert not [b for b in alone if "_stream" in b], f"dead arrows drawn: {alone}"
-    assert len(alone) == 1, f"the chrome toggle is the whole header: {alone}"
-    assert [b for b in pair if b.endswith("_prev_stream")], pair
-    assert [b for b in pair if b.endswith("_next_stream")], pair
-    assert len(pair) == 3, f"arrows must be added to the toggle, not replace it: {pair}"
+    assert not [b for b in alone if b.endswith("_sel")], alone
+    assert len(alone) == 1, f"the chrome toggle is the whole detached header: {alone}"
+    assert [b for b in pair if b.endswith("_sel")], pair
+    assert [b for b in pair if b.endswith("_chrome")], pair
+    assert len(pair) == 2, f"the picker must accompany the toggle: {pair}"
 
 
-def test_next_steps_to_the_following_stream_and_wraps_round(implot_frame, monkeypatch):
-    """Two buttons have to reach every stream, so the last one leads back to the first.
-
-    The freeze goes with the switch: a paused viewer that changed stream would
-    keep showing the *old* stream's frozen samples under the new stream's title
-    until somebody happened to press Resume.
-    """
-    import numpy as np
-
+def test_stream_picker_selects_another_stream_and_can_return(implot_frame, monkeypatch):
+    """Changing streams clears the old stream's paused samples in either direction."""
     names = ["emg", "target"]
     v, _ = _header_frame(
-        implot_frame, monkeypatch, names, widget_id="thdr_next", click="_next_stream"
+        implot_frame, monkeypatch, names, widget_id="thdr_next", select_index=1
     )
     assert v.selected_stream == "target"
 
@@ -1082,20 +1075,17 @@ def test_next_steps_to_the_following_stream_and_wraps_round(implot_frame, monkey
     v.frozen_data = np.zeros((4, 4))
     v.frozen_ts = np.zeros(4)
     v, _ = _header_frame(
-        implot_frame, monkeypatch, names, widget_id="thdr_next", click="_next_stream"
+        implot_frame, monkeypatch, names, widget_id="thdr_next", select_index=0
     )
-    assert v.selected_stream == "emg", "the last stream must wrap back to the first"
+    assert v.selected_stream == "emg"
     assert not v.paused and v.frozen_data is None and v.frozen_ts is None
 
 
-def test_prev_steps_backwards_from_the_first_stream_to_the_last(implot_frame, monkeypatch):
-    """Backwards from the first entry is the last one, not a clamp at zero."""
+def test_stream_picker_can_reach_the_last_stream(implot_frame, monkeypatch):
+    """A viewer with several streams can select the final entry directly."""
     v, _ = _header_frame(
-        implot_frame,
-        monkeypatch,
-        ["emg", "target", "aux"],
-        widget_id="thdr_prev",
-        click="_prev_stream",
+        implot_frame, monkeypatch, ["emg", "target", "aux"],
+        widget_id="thdr_prev", select_index=2,
     )
     assert v.selected_stream == "aux"
 
@@ -1175,6 +1165,7 @@ def test_one_to_one_drops_itself_when_the_window_grows_past_its_budget(implot_fr
     ctx = Context()
     stream = Stream("emg", source=SyntheticSource(n_channels=8, fs=2000.0), window_ms=500)
     assert stream.reconnect()
+    stream._acquire_step()
     ctx.streams["emg"] = stream
     enabled = set(range(8))
 
@@ -1230,9 +1221,8 @@ def test_clicking_one_to_one_leaves_the_style_stack_balanced(implot_frame, start
     try:
         def inner() -> None:
             imgui.begin_child("cell", imgui.ImVec2(900, 400))
-            _controls.render_controls(
-                ctx, "emg", "emg", stream, v, False, enabled=set(range(8)), scope=[]
-            )
+            imgui.open_popup("emg_display_popup")
+            _controls.render_display_popup("emg", stream, v, None, set(range(8)), False)
             imgui.end_child()
 
         implot_frame(inner)  # an unbalanced push or pop raises here
