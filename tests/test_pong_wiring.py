@@ -38,7 +38,8 @@ from myogestic.session import Session
 from myogestic.sources.target import PHASE_CODES
 from myogestic.stream import StreamInfo
 from myogestic.tracking import Pursuit
-from myogestic.widgets import PongTask
+from myogestic.widgets import ParticipantPanel, PongTask
+from myogestic.widgets.training._session_state import SessionWidgetState, _states
 
 _APP = Path(__file__).resolve().parent.parent / "examples" / "start_here" / "pong.py"
 
@@ -51,6 +52,72 @@ def app_module(monkeypatch):
     monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
     monkeypatch.syspath_prepend(str(_APP.parent))
     return runpy.run_path(str(_APP), run_name="__main__")
+
+
+def test_pong_requires_participant(app_module):
+    assert app_module["app"].ctx.require_participant is True
+
+
+def test_pong_constructs_participant_panel(app_module):
+    assert isinstance(app_module["participant"], ParticipantPanel)
+
+
+@pytest.mark.parametrize("participant_id", ["", "P-014"])
+def test_pong_renders_participant(app_module, implot_frame, monkeypatch, tmp_path, participant_id):
+    """The participant selector is visible on the first frame, before Record."""
+    app = app_module["app"]
+    app.ctx.participant = participant_id
+    rendered = []
+    original_ui = ParticipantPanel.ui
+
+    def draw_participant(self, ctx):
+        self._key_file = tmp_path / "participant-key.csv"
+        rendered.append(ctx)
+        original_ui(self, ctx)
+
+    monkeypatch.setattr(ParticipantPanel, "ui", draw_participant)
+    implot_frame(lambda: app._ui_fn(app.ctx))
+
+    assert rendered == [app.ctx]
+
+
+def test_pong_sessions_follow_participant(app_module, implot_frame, monkeypatch, tmp_path):
+    """Scan finds labelled takes, and another participant cannot train on the last take."""
+    monkeypatch.chdir(tmp_path)
+    app = app_module["app"]
+    state = SessionWidgetState()
+    monkeypatch.setitem(_states, app_module["sessions"]._widget_id, state)
+    paths = []
+    for participant_id in ("P-014", "P-015"):
+        take = Session(participant=participant_id)
+        take.save_meta("pong")
+        paths.append(str(take.pack_to_zip().resolve()))
+
+    scan = False
+    button = imgui.button
+
+    def click_scan(label, *args, **kwargs):
+        clicked = button(label, *args, **kwargs)
+        return (scan and label.startswith("Scan folder##")) or clicked
+
+    monkeypatch.setattr(imgui, "button", click_scan)
+    app.ctx.participant = "P-014"
+    scan = True
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert [row["path"] for row in state.sessions] == paths[:1]
+    state.sessions[0]["selected"] = True
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert app_module["pipeline"].training_data.paths == paths[:1]
+
+    app.ctx.participant = "P-015"
+    scan = False
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert state.sessions == []
+    assert app_module["pipeline"].training_data.paths == []
+
+    scan = True
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert [row["path"] for row in state.sessions] == paths[1:]
 
 
 class OnlyPredictProba:
@@ -805,6 +872,24 @@ def test_a_pursuit_session_fits_the_real_decoder_end_to_end(app_module, monkeypa
 
 
 # --- the block press, the ghost, and the control switch -----------------------
+def test_the_block_does_not_run_without_participant(app_module, monkeypatch, tmp_path):
+    """A refused recording must not leave the subject following an unrecorded cursor."""
+    monkeypatch.chdir(tmp_path)
+    app = app_module["app"]
+    app.ctx.require_participant = True
+    try:
+        app_module["_start_block"]()
+
+        assert not app_module["target"].running
+        assert not app_module["block"]["recording"]
+        assert app.ctx.session is None
+        assert not (tmp_path / "sessions").exists()
+        assert [note.title for note in app.ctx.notifications] == ["Recording refused"]
+    finally:
+        app_module["target"].stop()
+        app_module["target_stream"].disconnect()
+
+
 def test_the_block_connects_the_cursor_before_it_opens_the_take(app_module, monkeypatch):
     """One press does all three, and the order is the part that is easy to get wrong.
 
@@ -819,9 +904,12 @@ def test_the_block_connects_the_cursor_before_it_opens_the_take(app_module, monk
         "reconnect",
         lambda self, *a, **k: (order.append(f"connect:{self.name}"), True)[1],
     )
-    monkeypatch.setattr(
-        myogestic.core.App, "start_recording", lambda self, *a, **k: order.append("record")
-    )
+    def record(self):
+        order.append("record")
+        self.ctx.state = "recording"
+
+    app_module["app"].ctx.participant = "P-014"
+    monkeypatch.setattr(myogestic.core.App, "start_recording", record)
     monkeypatch.setattr(myogestic.core.App, "stop_recording", lambda self: order.append("stop"))
 
     app_module["_start_block"]()

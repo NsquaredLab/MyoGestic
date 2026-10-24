@@ -14,6 +14,7 @@ from myogestic.widgets import (
     DevicePicker,
     DeviceSpec,
     LogPanel,
+    ParticipantPanel,
     RecordButton,
     SessionManager,
     SignalViewer,
@@ -23,7 +24,7 @@ from myogestic.widgets import (
 
 WINDOW_MS = 200
 
-app = App("MyoGestic — force ramps")
+app = App("MyoGestic — force ramps", require_participant=True)
 
 emg = Stream("emg", source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS)
 
@@ -72,6 +73,7 @@ streams = StreamManager(
     on_remove=app.remove_stream,
 )
 log = LogPanel()
+participant = ParticipantPanel()
 # The Source panel owns connecting, so the viewer offers no button of its own —
 # two controls named Connect doing different things is the confusion to avoid.
 # The title stays on because it carries the ‹ › arrows and names the stream
@@ -105,6 +107,8 @@ def devices_ui(ctx):
     with grid[5, 0:2]:
         log.ui(ctx)
     with grid[0:3, 2]:
+        participant.ui(ctx)
+        imgui.spacing()
         if imgui.begin_tab_bar("source_cell"):
             selected, _ = imgui.begin_tab_item("Source")
             if selected:
@@ -118,7 +122,7 @@ def devices_ui(ctx):
     with grid[3, 2]:
         recording.ui(ctx)
     with grid[4:6, 2]:
-        sessions.ui()
+        sessions.ui(participant=ctx.participant)
 
 
 def main() -> None:
