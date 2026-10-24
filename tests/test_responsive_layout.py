@@ -199,6 +199,73 @@ def test_the_breakpoint_splits_wide_from_narrow():
 # ------------------------------------------------------------------ drawn for real
 
 
+@pytest.mark.parametrize("breakpoint", [Px(500), Px(900)])
+def test_bare_area_has_no_border(imgui_frame, monkeypatch, breakpoint):
+    from imgui_bundle import imgui
+
+    layout = Layout(
+        wide=Grid.areas("header body", bare=iter(["header"])),
+        narrow=Grid.areas("header\nbody", bare=["header"]),
+        breakpoint=breakpoint,
+    )
+    begin_child = imgui.begin_child
+    flags, padding = {}, {}
+
+    def capture(name, size, child_flags=0, window_flags=0):
+        flags[name] = (child_flags, window_flags)
+        return begin_child(name, size, child_flags, window_flags)
+
+    monkeypatch.setattr(imgui, "begin_child", capture)
+
+    def draw():
+        for name in ("header", "body"):
+            with layout[name]:
+                padding[name] = tuple(imgui.get_cursor_pos())
+                imgui.text_unformatted(name)
+
+    imgui_frame(draw)
+    bare_child, bare_window = flags["##area_header"]
+    normal_child, normal_window = flags["##area_body"]
+    assert not bare_child & imgui.ChildFlags_.borders
+    assert bare_window & imgui.WindowFlags_.no_background
+    assert normal_child & imgui.ChildFlags_.borders
+    assert not normal_window & imgui.WindowFlags_.no_background
+    assert padding["header"] == padding["body"]
+    assert padding["header"] == tuple(imgui.get_style().window_padding)
+
+
+def test_bare_area_clips(imgui_frame):
+    from imgui_bundle import imgui
+
+    grid = Grid.areas("header body", col_width=[Px(160), Fr(1)], bare=["header"])
+    seen = {}
+
+    def draw():
+        with grid.area("header"):
+            pos, size = imgui.get_window_pos(), imgui.get_window_size()
+            draw_list = imgui.get_window_draw_list()
+            lo, hi = draw_list.get_clip_rect_min(), draw_list.get_clip_rect_max()
+            seen["clip"] = (tuple(lo), tuple(hi), tuple(pos), tuple(size))
+            imgui.button("Inside")
+            seen["inside"] = imgui.is_item_visible()
+            imgui.set_cursor_pos(imgui.ImVec2(size.x + 20, 20))
+            imgui.button("Outside this cell, inside the parent")
+            seen["outside"] = imgui.is_item_visible()
+
+    for _ in range(2):
+        imgui_frame(draw)
+    lo, hi, pos, size = seen["clip"]
+    assert pos[0] <= lo[0] < hi[0] <= pos[0] + size[0]
+    assert pos[1] <= lo[1] < hi[1] <= pos[1] + size[1]
+    assert seen["inside"] is True
+    assert seen["outside"] is False
+
+
+def test_bare_rejects_unknown_area():
+    with pytest.raises(ValueError, match="footer.*missing"):
+        Grid.areas("header body", bare=["header", "missing", "footer"])
+
+
 def _probe_window():
     from imgui_bundle import imgui
 

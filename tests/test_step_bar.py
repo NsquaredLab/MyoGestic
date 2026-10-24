@@ -84,6 +84,40 @@ def test_step_bar_rejects_mismatched_done():
         StepBar(["A", "B"]).ui([False])
 
 
+def test_step_connectors_render(imgui_frame, monkeypatch):
+    from myogestic.widgets import StepBar
+    from myogestic.widgets.common import SUCCESS, hairline, ui_px
+
+    bar = StepBar(["Connect", "Record", "Train"], widget_id="connectors")
+    lines, buttons = [], []
+    add_line, button = imgui.ImDrawList.add_line, imgui.button
+
+    def capture_line(draw_list, start, end, color, thickness=1.0):
+        lines.append((tuple(start), tuple(end), color, thickness))
+        return add_line(draw_list, start, end, color, thickness=thickness)
+
+    def capture_button(*args, **kwargs):
+        result = button(*args, **kwargs)
+        buttons.append((tuple(imgui.get_item_rect_min()), tuple(imgui.get_item_rect_max())))
+        return result
+
+    monkeypatch.setattr(imgui.ImDrawList, "add_line", capture_line)
+    monkeypatch.setattr(imgui, "button", capture_button)
+    imgui_frame(lambda: bar.ui([True, False, True]))
+
+    assert len(lines) == 2
+    for index, (start, end, _color, thickness) in enumerate(lines):
+        assert end[0] - start[0] == pytest.approx(ui_px(24))
+        assert start[1] == pytest.approx(end[1])
+        assert start[1] == pytest.approx((buttons[index][0][1] + buttons[index][1][1]) / 2)
+        assert buttons[index][1][0] <= start[0] < end[0] <= buttons[index + 1][0][0]
+        assert thickness == pytest.approx(ui_px(1))
+    complete = imgui.color_convert_u32_to_float4(lines[0][2])
+    assert tuple(complete)[:3] == pytest.approx(tuple(SUCCESS)[:3], abs=1 / 255)
+    assert 0 < complete.w < SUCCESS.w
+    assert lines[1][2] == imgui.get_color_u32(hairline())
+
+
 @pytest.mark.parametrize("dark", [False, True])
 def test_primary_button_renders(imgui_frame, monkeypatch, dark):
     from myogestic.widgets.common import primary_button

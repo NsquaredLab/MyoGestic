@@ -156,6 +156,29 @@ Both arrangements must place the same panels; `Layout(...)` raises at
 construction, naming the ones that differ. A plain `Grid` indexed by
 `[row, col]` keeps working and never reflows.
 
+### Bare areas
+
+Pass area names in `bare` for a header or status strip without a border or
+background. Each area remains a child window with the same padding and clipping,
+and `Layout` preserves each arrangement's bare areas. Unknown names raise a
+`ValueError` when the grid is constructed.
+
+<!--docs:run-->
+```python
+from myogestic import Fr, Grid, Px
+
+grid = Grid.areas(
+    """
+    header
+    signal
+    status
+    """,
+    row_height=[Px(52), Fr(1), Px(26)],
+    bare=("header", "status"),
+)
+assert grid.panel_names == {"header", "signal", "status"}
+```
+
 ## Patterns that come up a lot
 
 **A logo strip across the top:**

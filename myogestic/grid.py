@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from imgui_bundle import imgui
@@ -253,6 +254,7 @@ class Grid:
         # Named areas (see `Grid.areas`): panel name -> rectangle, and for panels
         # sharing a cell as tabs, panel name -> its group's members.
         self._areas: dict[str, _Rect] = {}
+        self._bare: frozenset[str] = frozenset()
         self._groups: dict[str, tuple[str, ...]] = {}
         self._selected: dict[tuple[str, ...], str] = {}  # group -> selected tab
         self._tab_frame: dict[tuple[str, ...], int] = {}  # group -> frame its tabs drew
@@ -264,6 +266,7 @@ class Grid:
         *,
         row_height: list[Track] | None = None,
         col_width: list[Track] | None = None,
+        bare: Iterable[str] = (),
     ) -> Grid:
         """A grid whose cells are named, drawn as text. Place panels with `area`.
 
@@ -281,12 +284,16 @@ class Grid:
             Per-row track specs; default all ``Fr(1)``.
         col_width
             Per-column track specs; default all ``Fr(1)``.
+        bare
+            Area names to draw without a border or background. Their child
+            windows retain the same padding and content clipping.
 
         Raises
         ------
         ValueError
             if rows differ in length, a name does not cover a rectangle, a panel
-            is placed twice, or a track list has the wrong length.
+            is placed twice, a track list has the wrong length, or ``bare``
+            contains an unknown area name.
 
         Examples
         --------
@@ -315,6 +322,13 @@ class Grid:
                 grid._areas[m] = rect
                 if len(members) > 1:
                     grid._groups[m] = members
+        grid._bare = frozenset(bare)
+        unknown = grid._bare - grid.panel_names
+        if unknown:
+            raise ValueError(
+                f"Grid.areas(): unknown bare areas: {', '.join(sorted(unknown))} — "
+                "use names placed in the template"
+            )
         return grid
 
     @property
@@ -464,9 +478,17 @@ class _AreaCell:
         g, name = self._grid, self._name
         pos, size = g._place(g._areas[name])
         group = g._groups.get(name)
+        bare = name in g._bare
+        window_flags = imgui.WindowFlags_.no_background if bare else 0
         imgui.set_cursor_pos(pos)
         if group is None:
-            imgui.begin_child(f"##area_{name}", size, child_flags=imgui.ChildFlags_.borders)
+            imgui.begin_child(
+                f"##area_{name}", size,
+                child_flags=(
+                    imgui.ChildFlags_.always_use_window_padding if bare else imgui.ChildFlags_.borders
+                ),
+                window_flags=window_flags,
+            )
             self._ends = 1
             return self
 
@@ -474,7 +496,14 @@ class _AreaCell:
         # A child begun twice in a frame appends, so the second member continues
         # right under the tab bar the first one drew.
         key = "|".join(group)
-        imgui.begin_child(f"##group_{key}", size, child_flags=imgui.ChildFlags_.borders)
+        group_bare = g._selected.get(group, group[0]) in g._bare
+        imgui.begin_child(
+            f"##group_{key}", size,
+            child_flags=(
+                imgui.ChildFlags_.always_use_window_padding if group_bare else imgui.ChildFlags_.borders
+            ),
+            window_flags=imgui.WindowFlags_.no_background if group_bare else 0,
+        )
         frame = imgui.get_frame_count()
         if g._tab_frame.get(group) != frame:
             g._tab_frame[group] = frame
@@ -486,7 +515,7 @@ class _AreaCell:
                         imgui.end_tab_item()
                 imgui.end_tab_bar()
         if g._selected.get(group, group[0]) == name:
-            imgui.begin_child(f"##area_{name}", imgui.ImVec2(0, 0))
+            imgui.begin_child(f"##area_{name}", imgui.ImVec2(0, 0), window_flags=window_flags)
             self._ends = 2
             return self
 
@@ -494,7 +523,7 @@ class _AreaCell:
         # the visible window so ImGui clips it whole.
         imgui.end_child()
         imgui.set_cursor_pos(imgui.ImVec2(-size.x - 10_000, -size.y - 10_000))
-        imgui.begin_child(f"##area_{name}", size)
+        imgui.begin_child(f"##area_{name}", size, window_flags=window_flags)
         self._ends = 1
         return self
 
