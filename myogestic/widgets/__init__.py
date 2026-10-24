@@ -1,6 +1,6 @@
 """Reusable ImGui widgets for building MyoGestic ``@app.ui`` functions."""
 
-from myogestic.widgets.common import panel_header
+from myogestic.widgets.common import panel_header, primary_button
 from myogestic.widgets.control_map_editor import ControlMapEditor
 from myogestic.widgets.panels import (
     BUILTIN_FILTERS,
@@ -14,6 +14,7 @@ from myogestic.widgets.panels import (
     ProcessLauncher,
     RecordButton,
     RecordingControls,
+    StepBar,
     StreamManager,
     popout_panel,
 )
@@ -78,6 +79,7 @@ __all__ = [
     "Scatter2D",
     "Scatter3D",
     "SessionManager",
+    "StepBar",
     "StreamManager",
     "SignalViewer",
     "StreamPanel",
@@ -91,6 +93,7 @@ __all__ = [
     "VhiStateSnapshot",
     "panel_header",
     "popout_panel",
+    "primary_button",
     "request_vhi_state_refresh",
     "vhi_movement_palette",
 ]

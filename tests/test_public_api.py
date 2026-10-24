@@ -25,14 +25,25 @@ def test_widget_helpers_are_public():
         RecordingControls,
         SessionManager,
         SignalViewer,
+        StepBar,
         panel_header,
+        primary_button,
     )
 
     assert callable(panel_header)
+    assert callable(primary_button)
     # Widgets are classes constructed once, then rendered with `.ui(...)`.
-    for widget_cls in (PostProcessor, RecordingControls, SessionManager, SignalViewer):
+    for widget_cls in (PostProcessor, RecordingControls, SessionManager, SignalViewer, StepBar):
         assert isinstance(widget_cls, type)
         assert hasattr(widget_cls, "ui")
+
+
+def test_step_bar_panel_export():
+    """StepBar is available beside the other panels and in the widget facade."""
+    from myogestic.widgets import StepBar
+    from myogestic.widgets.panels import StepBar as PanelStepBar
+
+    assert StepBar is PanelStepBar
 
 
 def test_filter_chain_helper_is_public():

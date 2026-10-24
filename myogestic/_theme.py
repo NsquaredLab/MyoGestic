@@ -89,7 +89,7 @@ def apply_theme() -> None:
         accent = _rgba(0, 122, 255)
         accent_hi = _rgba(64, 156, 255)
         text = _rgba(0, 0, 0)
-        text_dim = _rgba(60, 60, 67, 153)
+        text_dim = _rgba(60, 60, 67, 199)
         window_bg = _rgba(243, 244, 246)  # canvas
         child_bg = _rgba(255, 255, 255)  # cards sit above the canvas
         raised = _rgba(255, 255, 255)
