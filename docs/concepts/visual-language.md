@@ -127,6 +127,8 @@ repeating it, and gains a second copy to keep in step.
 
 ## Plots
 
+`SignalViewer` keeps transport, View and Scale on its title row; Channels and Display popups hold the detailed controls, leaving only sample rate and frame rate below the plot.
+
 Call `ensure_implot_style()` at the top of any plot widget. Plots then read as part of the app:
 no chart border (the surface tone frames them), a transparent plot background so the card shows
 through, and a faint grid.
