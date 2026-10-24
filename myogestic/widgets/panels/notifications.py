@@ -125,7 +125,8 @@ def render_notifications(ctx: Context) -> None:
     )
     imgui.push_style_color(imgui.Col_.window_bg, imgui.get_style().color_(imgui.Col_.popup_bg))
     imgui.push_style_color(imgui.Col_.border, hairline())
-    imgui.push_style_var(imgui.StyleVar_.window_border_size, ui_px(1))
+    # A hairline stays one pixel: ui_px(1) rounds to no border at all below scale 1.0.
+    imgui.push_style_var(imgui.StyleVar_.window_border_size, 1.0)
     expanded, _ = imgui.begin(f"##notifications-{id(ctx)}", flags=flags)
     if expanded:
         now = time.monotonic()

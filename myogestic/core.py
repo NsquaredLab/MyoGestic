@@ -466,7 +466,7 @@ class App:
             return
         if self.ctx.require_participant and not self.ctx.participant:
             self.ctx.status_message = "Set a participant ID before recording."
-            self.ctx.log(self.ctx.status_message)
+            self.ctx.notify("Recording refused", "Set a participant ID first.", "warning")
             return
         # A stream with info=None has no zarr schema and would fail on append.
         self.ctx.state = AppState.RECORDING
