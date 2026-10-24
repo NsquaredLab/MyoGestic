@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
+from myogestic.session._core import _slug
+
 
 @dataclass
 class SessionWidgetState:
@@ -14,6 +16,7 @@ class SessionWidgetState:
     folder_dialog: object | None = None
     last_load_msg: str = ""
     deactivated_classes: set[int] = field(default_factory=set)
+    participant: str | None = None
 
 
 _states: dict[str, SessionWidgetState] = {}
@@ -63,6 +66,7 @@ def _session_row(path: Path) -> dict | None:
             "name": path.name,
             # What the operator called this take, when they named it on Stop.
             "session_name": str(meta.get("name") or ""),
+            "participant": _slug(str(meta.get("participant") or "")),
             "date_str": _date_str(meta, path),
             "streams_str": _streams_str(streams_meta),
             "n_labels": len(labels),
@@ -116,6 +120,10 @@ def add_recorded_session(path: str, base_path: str = "sessions", title: str = "S
         return
     for row in scan_sessions(str(Path(path).parent)):
         if row["path"] == path:
+            # Packing runs in the background and may finish after the operator
+            # has switched participant and cleared the previous training set.
+            if state.participant is not None and row["participant"] != state.participant:
+                return
             row["selected"] = True
             state.sessions.insert(0, row)
             break
