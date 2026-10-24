@@ -1,6 +1,6 @@
 """Reusable ImGui widgets for building MyoGestic ``@app.ui`` functions."""
 
-from myogestic.widgets.common import panel_header, primary_button
+from myogestic.widgets.common import panel_header, primary_button, status_pill
 from myogestic.widgets.control_map_editor import ControlMapEditor
 from myogestic.widgets.panels import (
     BUILTIN_FILTERS,
@@ -96,6 +96,7 @@ __all__ = [
     "panel_header",
     "popout_panel",
     "primary_button",
+    "status_pill",
     "request_vhi_state_refresh",
     "vhi_movement_palette",
 ]

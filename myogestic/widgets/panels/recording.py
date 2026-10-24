@@ -30,14 +30,13 @@ from myogestic.core import AppState
 from myogestic.widgets.common import (
     DANGER,
     IDLE,
-    ON_PILL_TEXT,
-    PILL_BG,
     destructive_button,
     mono_text,
     muted,
     panel_header,
     pop_selected,
     push_selected,
+    status_pill,
     ui_px,
 )
 
@@ -52,30 +51,6 @@ _LABEL_BTN_H = 30
 
 
 _PILL_PAD_Y = 4.0  # internal vertical padding inside the pill
-
-
-def _status_pill(label: str, color: imgui.ImVec4) -> None:
-    pad_x, pad_y = 10.0, ui_px(_PILL_PAD_Y)
-    text = imgui.calc_text_size(label)
-    size = imgui.ImVec2(text.x + pad_x * 2 + 12, text.y + pad_y * 2)
-    imgui.dummy(size)
-    p0, p1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-    draw = imgui.get_window_draw_list()
-    draw.add_rect_filled(
-        p0, p1, imgui.get_color_u32(PILL_BG), size.y * 0.5
-    )
-    y = (p0.y + p1.y) * 0.5
-    draw.add_rect_filled(
-        imgui.ImVec2(p0.x + pad_x - 1, y - 3),
-        imgui.ImVec2(p0.x + pad_x + 5, y + 3),
-        imgui.get_color_u32(color),
-        3.0,
-    )
-    draw.add_text(
-        imgui.ImVec2(p0.x + pad_x + 10, p0.y + pad_y),
-        imgui.get_color_u32(ON_PILL_TEXT),
-        label,
-    )
 
 
 STATE_COLORS: dict[str, imgui.ImVec4] = {
@@ -492,7 +467,7 @@ def _render_recording_controls(
     # Status line — state pill + status message + (when recording) the snap hint.
     imgui.spacing()
     color = STATE_COLORS.get(ctx.state, _DEFAULT_COLOR)
-    _status_pill(ctx.state.upper(), color)
+    status_pill(ctx.state.upper(), color)
     imgui.same_line()
     message = ctx.status_message or "Ready"
     if message.startswith("Saved"):
