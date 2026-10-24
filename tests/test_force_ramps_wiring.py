@@ -9,8 +9,12 @@ import runpy
 from pathlib import Path
 
 import pytest
+from imgui_bundle import imgui
 
 import myogestic.core
+from myogestic.session import Session
+from myogestic.widgets import ParticipantPanel
+from myogestic.widgets.training._session_state import SessionWidgetState, _states
 
 _APP = Path(__file__).resolve().parent.parent / "examples" / "start_here" / "force_ramps.py"
 
@@ -20,6 +24,71 @@ def app_module(monkeypatch):
     monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
     monkeypatch.syspath_prepend(str(_APP.parent))
     return runpy.run_path(str(_APP), run_name="__main__")
+
+
+def test_force_ramps_requires_participant(app_module):
+    assert app_module["app"].ctx.require_participant is True
+
+
+def test_force_ramps_constructs_participant_panel(app_module):
+    assert isinstance(app_module["participant"], ParticipantPanel)
+
+
+@pytest.mark.parametrize("participant_id", ["", "P-014"])
+def test_force_ramps_renders_participant(
+    app_module, implot_frame, monkeypatch, tmp_path, participant_id
+):
+    """The participant selector is visible on the first frame, before Record."""
+    app = app_module["app"]
+    app.ctx.participant = participant_id
+    rendered = []
+    original_ui = ParticipantPanel.ui
+
+    def draw_participant(self, ctx):
+        self._key_file = tmp_path / "participant-key.csv"
+        rendered.append(ctx)
+        original_ui(self, ctx)
+
+    monkeypatch.setattr(ParticipantPanel, "ui", draw_participant)
+    implot_frame(lambda: app._ui_fn(app.ctx))
+
+    assert rendered == [app.ctx]
+
+
+def test_force_ramps_sessions_follow_participant(app_module, implot_frame, monkeypatch, tmp_path):
+    """Scan finds labelled takes, and switching participants clears the old selection."""
+    monkeypatch.chdir(tmp_path)
+    app = app_module["app"]
+    state = SessionWidgetState()
+    monkeypatch.setitem(_states, app_module["sessions"]._widget_id, state)
+    paths = []
+    for participant_id in ("P-014", "P-015"):
+        take = Session(participant=participant_id)
+        take.save_meta("force ramps")
+        paths.append(str(take.pack_to_zip().resolve()))
+
+    scan = False
+    button = imgui.button
+
+    def click_scan(label, *args, **kwargs):
+        clicked = button(label, *args, **kwargs)
+        return (scan and label.startswith("Scan folder##")) or clicked
+
+    monkeypatch.setattr(imgui, "button", click_scan)
+    app.ctx.participant = "P-014"
+    scan = True
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert [row["path"] for row in state.sessions] == paths[:1]
+    state.sessions[0]["selected"] = True
+
+    app.ctx.participant = "P-015"
+    scan = False
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert state.sessions == []
+
+    scan = True
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert [row["path"] for row in state.sessions] == paths[1:]
 
 
 def test_nothing_but_the_target_attaches_itself(app_module):
