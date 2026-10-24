@@ -116,8 +116,9 @@ class SessionManager:
         # Unfiltered callers retain the explicit Scan workflow; a participant
         # scopes discovery without silently selecting any earlier takes.
         panel_header(self._title, fa.ICON_FA_FOLDER_OPEN)
-        render_summary_and_buttons(widget_id, scan_path, state)
         poll_file_dialog(state)
+        if not participant or state.sessions:
+            render_summary_and_buttons(widget_id, scan_path, state)
 
         classes_in_pool, active_classes = class_pool_and_active(state)
         render_class_buttons(

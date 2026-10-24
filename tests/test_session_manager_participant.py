@@ -3,6 +3,7 @@
 import json
 import zipfile
 
+import pytest
 from imgui_bundle import imgui
 
 from myogestic.widgets import SessionManager
@@ -202,6 +203,42 @@ def test_empty_participant_offers_file_picker(tmp_path, imgui_frame, monkeypatch
     assert "No takes for P-014 yet." in messages
     assert "Takes you record appear here, already ticked for training." in messages
     assert get_state(f"Sessions_{tmp_path}").folder_dialog is dialog
+
+
+@pytest.mark.parametrize("participant", ["P-014", None, ""])
+@pytest.mark.parametrize("has_takes", [False, True])
+def test_participant_summary_only_with_takes(
+    tmp_path, imgui_frame, monkeypatch, participant, has_takes,
+):
+    manager = SessionManager(str(tmp_path))
+    if has_takes:
+        _take(tmp_path, participant or "", "existing")
+        if not participant:
+            _render(manager, participant, imgui_frame, monkeypatch, scan=True)
+    labels, messages = [], []
+    button, small_button, text = imgui.button, imgui.small_button, imgui.text
+
+    def track_button(label, *args):
+        labels.append(label.split("##")[0])
+        return button(label, *args)
+
+    def track_small_button(label):
+        labels.append(label.split("##")[0])
+        return small_button(label)
+
+    def track_text(label):
+        messages.append(label)
+        text(label)
+
+    monkeypatch.setattr(imgui, "button", track_button)
+    monkeypatch.setattr(imgui, "small_button", track_small_button)
+    monkeypatch.setattr(imgui, "text", track_text)
+    imgui_frame(lambda: manager.ui(participant=participant))
+    summary_visible = not participant or has_takes
+    assert any("selected" in message for message in messages) == summary_visible
+    assert ("Scan folder" in labels) == summary_visible
+    assert ("Load Files..." in labels) == summary_visible
+    assert ("Load files from elsewhere…" in labels) == (bool(participant) and not has_takes)
 
 
 def test_session_row_shows_recorded_seconds(tmp_path, imgui_frame, monkeypatch):

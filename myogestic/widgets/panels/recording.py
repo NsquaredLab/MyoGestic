@@ -331,6 +331,9 @@ class RecordingControls:
     on_gesture
         Optional ``(class_index) -> None`` for side effects on a label-button
         click — cueing a subject, switching a fake-signal generator.
+    show_header
+        Render the standard panel header, by default True. Set False when the
+        containing panel already provides a title.
 
     Examples
     --------
@@ -350,11 +353,13 @@ class RecordingControls:
         on_record: Callable[[], None],
         on_stop: Callable[[], None],
         on_gesture: Callable[[int], None] | None = None,
+        show_header: bool = True,
     ) -> None:
         self._class_names = class_names
         self._on_record = on_record
         self._on_stop = on_stop
         self._on_gesture = on_gesture
+        self._show_header = show_header
 
     def ui(self, ctx: Context) -> None:
         """Render the recording controls. Call once per frame inside ``@app.ui``."""
@@ -364,6 +369,7 @@ class RecordingControls:
             on_record=self._on_record,
             on_stop=self._on_stop,
             on_gesture=self._on_gesture,
+            show_header=self._show_header,
         )
 
 
@@ -374,6 +380,7 @@ def _render_recording_controls(
     on_record: Callable[[], None],
     on_stop: Callable[[], None],
     on_gesture: Callable[[int], None] | None = None,
+    show_header: bool = True,
 ) -> None:
     """Record/Stop + per-class label buttons + state pill.
 
@@ -397,6 +404,8 @@ def _render_recording_controls(
     on_gesture
         Optional `(class_index) -> None` for side effects on
         label-button click (e.g. switching a fake-signal generator).
+    show_header
+        Render the standard panel header.
     """
     n_classes = len(class_names) if class_names else 0
     # CLASSES can be swapped between runs; a leftover index would corrupt labels.
@@ -406,7 +415,8 @@ def _render_recording_controls(
         # meta.json without the App knowing about CLASSES.
         ctx.class_names = list(class_names)
 
-    panel_header("RECORDING", fa.ICON_FA_CIRCLE_DOT)
+    if show_header:
+        panel_header("RECORDING", fa.ICON_FA_CIRCLE_DOT)
 
     if class_names:
         imgui.text("Gesture:")

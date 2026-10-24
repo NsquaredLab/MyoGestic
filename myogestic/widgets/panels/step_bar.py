@@ -12,9 +12,10 @@ __all__ = ["StepBar"]
 _active_steps: dict[str, int] = {}
 
 
-def _connector(done: bool) -> None:
+def _connector(done: bool, top: float) -> None:
     """Join consecutive steps, carrying the completion cue from the left."""
     imgui.same_line(0.0, ui_px(4))
+    imgui.set_cursor_pos_y(top)
     imgui.dummy(imgui.ImVec2(ui_px(24), imgui.get_frame_height()))
     lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
     color = imgui.ImVec4(SUCCESS.x, SUCCESS.y, SUCCESS.z, SUCCESS.w * 0.45) if done else hairline()
@@ -23,6 +24,7 @@ def _connector(done: bool) -> None:
         imgui.ImVec2(lo.x, y), imgui.ImVec2(hi.x, y), imgui.get_color_u32(color), thickness=ui_px(1)
     )
     imgui.same_line(0.0, ui_px(4))
+    imgui.set_cursor_pos_y(top)
 
 
 def _step_button(index: int, label: str, done: bool) -> bool:
@@ -107,10 +109,14 @@ class StepBar:
         if len(done) != len(self.steps):
             raise ValueError("Pass one done flag per step: len(done) must equal len(steps).")
         imgui.push_id(self._widget_id)
+        # A caller may centre us beside taller text on an existing line.
+        # same_line restores that line's top, so connectors explicitly retain
+        # the first step's top for every item in the navigation row.
+        top = imgui.get_cursor_pos_y()
         try:
             for index, (label, complete) in enumerate(zip(self.steps, done, strict=True)):
                 if index:
-                    _connector(done[index - 1])
+                    _connector(done[index - 1], top)
                 selected = index == self.active
                 if selected:
                     push_selected()

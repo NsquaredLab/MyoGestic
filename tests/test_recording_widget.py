@@ -6,6 +6,19 @@ Tests the pure-logic helpers — full widget rendering needs ImGui context.
 from myogestic.widgets.panels.recording import _safe_label_index
 
 
+def test_recording_controls_optional_header(imgui_frame, monkeypatch):
+    from myogestic.core import Context
+    from myogestic.widgets.panels import recording
+
+    headers = []
+    monkeypatch.setattr(recording, "panel_header", lambda title, *a: headers.append(title))
+    for options, expected in [({}, ["RECORDING"]), ({"show_header": False}, [])]:
+        headers.clear()
+        controls = recording.RecordingControls(on_record=lambda: None, on_stop=lambda: None, **options)
+        imgui_frame(lambda controls=controls: controls.ui(Context()))
+        assert headers == expected
+
+
 def test_safe_label_index_in_range():
     assert _safe_label_index(0, 3) == 0
     assert _safe_label_index(2, 3) == 2

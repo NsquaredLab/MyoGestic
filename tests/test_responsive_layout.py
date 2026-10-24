@@ -199,6 +199,47 @@ def test_the_breakpoint_splits_wide_from_narrow():
 # ------------------------------------------------------------------ drawn for real
 
 
+@pytest.mark.parametrize("title_bar", [False, True])
+def test_grid_uses_parent_content_region_when_child_padding_changes(imgui_frame, title_bar):
+    from imgui_bundle import imgui
+
+    grid = Grid.areas("header header\nleft right\nstatus status",
+                      row_height=[Px(52), Fr(1), Px(26)], bare=("header", "status"))
+    scroll = []
+
+    def draw():
+        imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(18, 16))
+        imgui.set_next_window_size(imgui.ImVec2(640, 440))
+        imgui.begin("parent-padding", flags=0 if title_bar else imgui.WindowFlags_.no_title_bar)
+        imgui.pop_style_var()
+        origin = imgui.get_cursor_start_pos()
+        cursor, avail = imgui.get_cursor_pos(), imgui.get_content_region_avail()
+        end = imgui.ImVec2(cursor.x + avail.x, cursor.y + avail.y)
+        expected = {name: grid._place(rect) for name, rect in grid._areas.items()}
+        imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(6, 4))
+        try:
+            for name in ("right", "header", "left", "status"):
+                pos, size = grid._place(grid._areas[name])
+                assert tuple(pos) == pytest.approx(tuple(expected[name][0]))
+                assert tuple(size) == pytest.approx(tuple(expected[name][1]))
+                assert pos.x >= origin.x and pos.y >= origin.y
+                assert pos.x + size.x <= end.x and pos.y + size.y <= end.y
+                with grid.area(name):
+                    imgui.text_unformatted(name)
+            pos, size = grid._place(grid._areas["status"])
+            assert pos.x == origin.x
+            assert pos.x + size.x == pytest.approx(end.x)
+            assert pos.y + size.y == pytest.approx(end.y)
+            scroll.append(imgui.get_scroll_max_y())
+        finally:
+            imgui.pop_style_var()
+            imgui.end()
+
+    imgui_frame(draw)
+    imgui_frame(draw)
+    assert scroll[-1] == 0
+
+
 @pytest.mark.parametrize("breakpoint", [Px(500), Px(900)])
 def test_bare_area_has_no_border(imgui_frame, monkeypatch, breakpoint):
     from imgui_bundle import imgui
