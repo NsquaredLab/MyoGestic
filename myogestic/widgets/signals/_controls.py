@@ -36,10 +36,12 @@ if TYPE_CHECKING:
 
 
 def _slider_label(text: str) -> None:
-    """Label a full-width slider on its left."""
+    """Put a muted label in the Display popup's shared control column."""
+    left = imgui.get_cursor_pos_x()
     imgui.align_text_to_frame_padding()
-    imgui.text(text)
+    imgui.text_colored(muted(), text)
     imgui.same_line()
+    imgui.set_cursor_pos_x(left + ui_px(80))
     imgui.set_next_item_width(-1)
 
 
@@ -120,6 +122,8 @@ def render_controls(
         pause, view_width = icon, ui_px(90)
     if show_title:
         reserve = source_width + sp if source_in_title else (width + sp if inline else 0.0)
+        if inline or source_in_title:
+            imgui.align_text_to_frame_padding()
         panel_header(title or f"SIGNAL · {active_stream}", fa.ICON_FA_CHART_LINE, reserve=reserve)
         if inline or source_in_title:
             imgui.same_line()
@@ -246,9 +250,7 @@ def render_display_popup(
         "Ignore shorter transients when fitting the y-scale.\n"
         "0 = plain min/max; keep this below your shortest real contraction."
     )
-    imgui.align_text_to_frame_padding()
-    imgui.text("Lanes")
-    imgui.same_line()
+    _slider_label("Lanes")
     v.per_channel_scale = bool(segmented(
         f"{stream_name}_lanes", ["Shared", "Per channel"], int(v.per_channel_scale)
     ))
@@ -268,9 +270,7 @@ def render_display_popup(
             _, v.y_max = imgui.input_float(f"max##{stream_name}_ymax", v.y_max, 0, 0, "%.2f")
 
     panel_header("Display filter")
-    imgui.align_text_to_frame_padding()
-    imgui.text("Notch")
-    imgui.same_line()
+    _slider_label("Notch")
     notch = [0, 50, 60]
     idx = notch.index(v.mains_notch) if v.mains_notch in notch else 0
     v.mains_notch = notch[segmented(f"{stream_name}_notch", ["Off", "50 Hz", "60 Hz"], idx)]
@@ -282,7 +282,7 @@ def render_display_popup(
     if v.display_filter == "rms_env":
         _render_rms_sliders(stream_name, v, fs)
 
-    panel_header("Footer")
+    panel_header("Diagnostics")
     if frame is not None:
         font = mono_font()
         if font is not None:
