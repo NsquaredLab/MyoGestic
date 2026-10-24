@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `SignalViewer` uses a one-row toolbar with Channels and Display popups, and a compact sample-rate and frame-rate footer.
 - `Px(n)` and the grid gutter are pixels at UI scale 1.0 and follow the scale, so fixed
   side panels keep their proportion to the text in them.
 - Examples no longer hardcode `ui_scale=0.85`; the automatic scale replaces it.
