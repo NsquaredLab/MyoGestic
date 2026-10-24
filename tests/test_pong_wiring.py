@@ -112,7 +112,9 @@ def test_pong_sessions_follow_participant(app_module, implot_frame, monkeypatch,
     app.ctx.participant = "P-015"
     scan = False
     implot_frame(lambda: app._ui_fn(app.ctx))
-    assert state.sessions == []
+    assert [row["path"] for row in state.sessions] == paths[1:]
+    assert all(row["participant"] == "P-015" for row in state.sessions)
+    assert not any(row["selected"] for row in state.sessions)
     assert app_module["pipeline"].training_data.paths == []
 
     scan = True

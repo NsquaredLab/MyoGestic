@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
-import zipfile
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
-from myogestic.session._core import _slug
+from myogestic.session._core import _read_session_metadata, _slug
 
 
 @dataclass
@@ -30,7 +28,7 @@ def scan_sessions(base_path: str) -> list[dict]:
     """Find all session folders and .zip archives that contain a meta.json."""
     base = Path(base_path)
     sessions = []
-    if not base.exists():
+    if not base.is_dir():
         return sessions
     for d in sorted(base.iterdir(), reverse=True):
         row = _session_row(d)
@@ -41,22 +39,10 @@ def scan_sessions(base_path: str) -> list[dict]:
 
 def _session_row(path: Path) -> dict | None:
     try:
-        if path.is_dir() and (path / "meta.json").exists():
-            meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
-            labels_file = path / "labels.json"
-            labels = json.loads(labels_file.read_text(encoding="utf-8")) if labels_file.exists() else []
-        elif path.is_file() and path.name.endswith(".zip"):
-            # Any .zip with a meta.json inside is a session (matches the
-            # "Load Files..." dialog filter + tooltip); recordings write
-            # .session.zip, but a hand-renamed .zip must load too.
-            with zipfile.ZipFile(path) as zf:
-                names = set(zf.namelist())
-                if "meta.json" not in names:
-                    return None
-                meta = json.loads(zf.read("meta.json"))
-                labels = json.loads(zf.read("labels.json")) if "labels.json" in names else []
-        else:
+        entry = _read_session_metadata(path)
+        if entry is None:
             return None
+        meta, labels = entry
 
         streams_meta = meta.get("streams", {})
         return {
@@ -73,6 +59,8 @@ def _session_row(path: Path) -> dict | None:
             "label_counts": _label_counts(labels),
             "streams": list(streams_meta.keys()),
             "class_names": list(meta.get("class_names") or []),
+            "duration_s": float(meta.get("duration_s", 0.0)),
+            "class_seconds": dict(meta.get("class_seconds") or {}),
             "selected": False,
         }
     except Exception:
@@ -116,17 +104,35 @@ def add_recorded_session(path: str, base_path: str = "sessions", title: str = "S
     widget_id = f"{title}_{base_path}"
     state = get_state(widget_id)
     path = str(Path(path).resolve())  # match the resolved paths stored on rows
-    if any(s["path"] == path for s in state.sessions):
+    if state.participant is None and any(s["path"] == path for s in state.sessions):
         return
-    for row in scan_sessions(str(Path(path).parent)):
-        if row["path"] == path:
-            # Packing runs in the background and may finish after the operator
-            # has switched participant and cleared the previous training set.
-            if state.participant is not None and row["participant"] != state.participant:
-                return
-            row["selected"] = True
-            state.sessions.insert(0, row)
-            break
+    found = scan_sessions(str(Path(path).parent))
+    recorded = next((row for row in found if row["path"] == path), None)
+    if recorded is None:
+        return
+    # Packing can finish after the operator has switched participant.
+    if state.participant is not None and recorded["participant"] != state.participant:
+        return
+    if state.participant:
+        # A scan can see the folder while packing is still running. Drop that
+        # vanished row once its archive arrives, retaining picks from elsewhere.
+        parent = Path(path).parent
+        found_paths = {row["path"] for row in found}
+        state.sessions[:] = [
+            row for row in state.sessions
+            if Path(row["path"]).parent != parent or row["path"] in found_paths
+        ]
+    existing = {row["path"]: row for row in state.sessions}
+    if path in existing:
+        existing[path]["selected"] = True
+    else:
+        recorded["selected"] = True
+        state.sessions.insert(0, recorded)
+    if state.participant:
+        # Refresh after each take without changing any existing selections.
+        state.sessions.extend(
+            row for row in found if row["path"] != path and row["path"] not in existing
+        )
 
 
 def load_session_files(state: SessionWidgetState, paths: list[str]) -> None:
