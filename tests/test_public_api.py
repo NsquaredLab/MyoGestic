@@ -87,3 +87,12 @@ def test_labelled_path_is_public():
 
     assert "labelled_path" in __all__
     assert callable(labelled_path)
+
+
+def test_recorded_time_is_public():
+    """Recorded-time summaries are exposed beside the session API."""
+    from myogestic.session import RecordedTime, __all__, recorded_time
+
+    assert {"RecordedTime", "recorded_time"} <= set(__all__)
+    assert callable(recorded_time)
+    assert RecordedTime(0, 0.0, {}).takes == 0
