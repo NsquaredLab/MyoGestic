@@ -21,6 +21,7 @@ def test_widget_helpers_are_public():
     """The common widgets live in `myogestic.widgets` — every example imports
     them, so they must be reachable without diving into private modules."""
     from myogestic.widgets import (
+        ParticipantPanel,
         PostProcessor,
         RecordingControls,
         SessionManager,
@@ -33,7 +34,14 @@ def test_widget_helpers_are_public():
     assert callable(panel_header)
     assert callable(primary_button)
     # Widgets are classes constructed once, then rendered with `.ui(...)`.
-    for widget_cls in (PostProcessor, RecordingControls, SessionManager, SignalViewer, StepBar):
+    for widget_cls in (
+        ParticipantPanel,
+        PostProcessor,
+        RecordingControls,
+        SessionManager,
+        SignalViewer,
+        StepBar,
+    ):
         assert isinstance(widget_cls, type)
         assert hasattr(widget_cls, "ui")
 
@@ -44,6 +52,14 @@ def test_step_bar_panel_export():
     from myogestic.widgets.panels import StepBar as PanelStepBar
 
     assert StepBar is PanelStepBar
+
+
+def test_participant_panel_export():
+    """ParticipantPanel is exported through both widget entry points."""
+    from myogestic.widgets import ParticipantPanel
+    from myogestic.widgets.panels import ParticipantPanel as PanelParticipantPanel
+
+    assert ParticipantPanel is PanelParticipantPanel
 
 
 def test_filter_chain_helper_is_public():
