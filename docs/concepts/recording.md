@@ -50,6 +50,30 @@ sessions/
 
 Both are loadable via [`open_session_store(path)`][myogestic.session.open_session_store] - readers don't need to know which they got.
 
+## Notifications
+
+`App` draws corner toasts automatically after your UI. Call `ctx.notify(title, detail="",
+kind="info")` from the UI or a worker thread; each toast also becomes a timestamped
+`ctx.log` line.
+
+<!--docs:run-->
+```python
+from myogestic import Context
+
+ctx = Context()
+ctx.notify("Recording saved", "a.session.zip", "success")
+assert ctx.logs[-1].endswith("Recording saved — a.session.zip")
+```
+
+`success` and `info` last 6 seconds, `warning` lasts 10 seconds, and `danger` stays until
+dismissed. Hovering the overlay pauses expiry. At most the newest three toasts appear;
+older events remain in the log. Click a toast's **×** to dismiss it. An unknown `kind`
+raises `ValueError`.
+
+Stopping a recording reports **Recording saved** with the archive's filename after packing
+succeeds. If packing fails, **Recording not packed** shows the error and confirms that
+the session folder was kept.
+
 ## Labels
 
 `LabelEvent` is a tiny dataclass:
