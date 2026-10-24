@@ -57,6 +57,18 @@ def _gutter() -> float:
     return GUTTER * current_scale()
 
 
+def _content_rect() -> tuple[imgui.ImVec2, imgui.ImVec2]:
+    """Read the parent's content bounds independently of child-padding styles."""
+    origin = imgui.get_cursor_start_pos()
+    cursor, available = imgui.get_cursor_pos(), imgui.get_content_region_avail()
+    # Begin captures padding and decorations for the parent. The live style may
+    # already specify different padding for our children, so use its real bounds.
+    # Cursor + remaining space is stable even after another cell was submitted.
+    return origin, imgui.ImVec2(
+        cursor.x + available.x - origin.x, cursor.y + available.y - origin.y,
+    )
+
+
 def _validate_value(value: object, kind: str) -> float:
     """Coerce a Px/Fr constructor arg to a non-negative finite float.
 
@@ -357,10 +369,8 @@ class Grid:
         if current_frame == self._last_frame:
             return
         self._last_frame = current_frame
-        # Use window height minus padding, not content_region_avail
-        # (which changes as child windows are drawn)
-        padding = imgui.get_style().window_padding.y * 2 + max(self.rows - 1, 0) * _gutter()
-        avail_h = imgui.get_window_height() - padding
+        _, content = _content_rect()
+        avail_h = content.y - max(self.rows - 1, 0) * _gutter()
         self._scaled_heights = _resolve_tracks(self._row_tracks, avail_h, current_scale())
 
     def _row_y(self, row: int) -> float:
@@ -391,12 +401,19 @@ class Grid:
         """Cursor position and size of a cell, in the current window."""
         self._init_frame()
         row_start, row_end, col_start, col_end = rect
-        pad = imgui.get_style().window_padding
-        avail_w = imgui.get_window_width() - pad.x * 2 - max(self.cols - 1, 0) * _gutter()
-        pos = imgui.ImVec2(self._col_x(col_start, avail_w) + pad.x, self._row_y(row_start) + pad.y)
+        origin, content = _content_rect()
+        avail_w = content.x - max(self.cols - 1, 0) * _gutter()
+        pos = imgui.ImVec2(
+            self._col_x(col_start, avail_w) + origin.x, self._row_y(row_start) + origin.y,
+        )
         size = imgui.ImVec2(
             self._col_span_w(col_start, col_end, avail_w), self._row_span_h(row_start, row_end)
         )
+        # ImGui truncates child sizes to pixels. Round shared boundaries first,
+        # so an odd Fr remainder belongs to a cell rather than an extra gutter.
+        right, bottom = math.floor(pos.x + size.x), math.floor(pos.y + size.y)
+        pos = imgui.ImVec2(math.floor(pos.x), math.floor(pos.y))
+        size = imgui.ImVec2(right - pos.x, bottom - pos.y)
         return pos, size
 
     def __getitem__(self, key: tuple) -> _Cell:
@@ -605,8 +622,8 @@ class Layout:
         frame = imgui.get_frame_count()
         if frame != self._frame:
             self._frame = frame
-            width = imgui.get_window_width() - imgui.get_style().window_padding.x * 2
-            self._active = self._choose(width / current_scale())
+            _, content = _content_rect()
+            self._active = self._choose(content.x / current_scale())
         return self._active
 
     def __getitem__(self, name: str) -> _AreaCell:

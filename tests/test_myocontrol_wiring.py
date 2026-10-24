@@ -75,6 +75,42 @@ def test_status_is_one_bare_area(app_module):
         assert grid._row_tracks[-1] == Px(26)
 
 
+@pytest.mark.parametrize("width", [1280, 900])
+def test_myocontrol_root_has_no_vertical_scroll(app_module, monkeypatch, implot_frame, width):
+    from imgui_bundle import imgui
+
+    from myogestic import _theme
+
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: True)
+    _theme.apply_theme()
+    imgui.get_io().display_size = imgui.ImVec2(width, 828)
+    scroll = []
+
+    def draw():
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(width, 828))
+        imgui.begin("myocontrol-root", flags=imgui.WindowFlags_.no_title_bar)
+        app_module["myocontrol_ui"](app_module["app"].ctx)
+        scroll.append(imgui.get_scroll_max_y())
+        imgui.end()
+
+    implot_frame(draw)
+    # ImGui computes scroll limits on Begin from the preceding frame's content.
+    implot_frame(draw)
+    assert scroll[-1] == 0
+
+
+def test_myocontrol_record_has_one_header(app_module, monkeypatch, imgui_frame):
+    from myogestic.widgets.panels import recording
+
+    headers = []
+    monkeypatch.setattr(recording, "panel_header", lambda title, *a, **k: headers.append(title))
+    ctx = app_module["app"].ctx
+    ctx.participant = "P-014"
+    imgui_frame(lambda: app_module["record_ui"](ctx))
+    assert headers == []
+
+
 def test_record_locked_without_participant(app_module, monkeypatch, imgui_frame):
     from imgui_bundle import imgui
 

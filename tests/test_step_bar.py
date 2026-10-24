@@ -118,6 +118,36 @@ def test_step_connectors_render(imgui_frame, monkeypatch):
     assert lines[1][2] == imgui.get_color_u32(hairline())
 
 
+@pytest.mark.parametrize("done", [[False] * 4, [True, False, True, False], [True] * 4])
+def test_step_buttons_share_top_edge(imgui_frame, monkeypatch, done):
+    from myogestic.widgets import StepBar
+
+    _theme.apply_theme()
+    bar = StepBar(["Connect", "Record", "Train", "Drive"], widget_id=f"aligned:{done}")
+    tops = []
+    button = imgui.button
+
+    def track(label, *args, **kwargs):
+        clicked = button(label, *args, **kwargs)
+        tops.append(imgui.get_item_rect_min().y)
+        return clicked
+
+    monkeypatch.setattr(imgui, "button", track)
+
+    def draw():
+        # Like the app header: larger brand text precedes the navigation.
+        imgui.push_font(None, 22)
+        imgui.text_unformatted("MyoGestic")
+        imgui.pop_font()
+        imgui.same_line()
+        imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - 2)
+        bar.ui(done)
+
+    imgui_frame(draw)
+    assert len(tops) == 4
+    assert tops == [tops[0]] * 4
+
+
 @pytest.mark.parametrize("dark", [False, True])
 def test_primary_button_renders(imgui_frame, monkeypatch, dark):
     from myogestic.widgets.common import primary_button

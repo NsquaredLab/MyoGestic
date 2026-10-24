@@ -109,6 +109,42 @@ def test_header_is_one_row(imgui_frame, toolbar):
     assert any(label.endswith("_display") for label in toolbar.items)
 
 
+def test_header_title_has_frame_padding(toolbar, monkeypatch):
+    title_tops = []
+    text = imgui.text
+
+    def track(label):
+        text(label)
+        if "SIGNAL" in label:
+            title_tops.append(imgui.get_item_rect_min().y)
+
+    monkeypatch.setattr(imgui, "text", track)
+    toolbar.frame()
+    pause = next(rect for label, rect in toolbar.items.items() if label.endswith("toolbar_pause"))
+    assert title_tops == [pause[1] + imgui.get_style().frame_padding.y]
+
+
+def test_display_popup_controls_share_label_column(toolbar, monkeypatch):
+    headers = []
+    header = _controls.panel_header
+
+    def track(title, *args, **kwargs):
+        headers.append(title)
+        header(title, *args, **kwargs)
+
+    monkeypatch.setattr(_controls, "panel_header", track)
+    toolbar.frame("toolbar_display")
+    toolbar.frame()
+    controls = ["win", "detail", "gain", "transient", "lanes_seg0", "notch_seg0"]
+    lefts = [
+        next(rect[0] for label, rect in toolbar.items.items() if label.endswith(f"toolbar_{control}"))
+        for control in controls
+    ]
+    assert lefts == [lefts[0]] * len(controls)
+    assert "Diagnostics" in headers
+    assert "Footer" not in headers
+
+
 def test_display_popup_opens(imgui_frame, toolbar, monkeypatch):
     """Display opens a scoped popup and is selected on the following frame."""
     selected = []
