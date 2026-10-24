@@ -194,6 +194,63 @@ def test_returning_participant_is_not_duplicated(tmp_path):
     assert len(_rows(tmp_path / "key.csv")) == 1
 
 
+@pytest.mark.parametrize("first,family", [("John", "Doe"), ("Jane", "Roe"), ("", "Doe")])
+def test_existing_id_with_other_names_is_refused(tmp_path, first, family):
+    key = tmp_path / "key.csv"
+    _api()._append(key, "P-014", "Jane", "Doe")
+    before = key.read_bytes()
+    panel, ctx = _panel(tmp_path, "conflicting-id"), Context(participant="P-003")
+
+    assert panel._start(ctx, " P/014 ", first, family) is False
+
+    assert ctx.participant == "P-003"
+    assert key.read_bytes() == before
+    assert panel._state.error == "P-014 already belongs to another participant in the key file."
+    assert ctx.logs == []
+
+
+def test_known_name_with_other_id_is_refused(tmp_path):
+    key = tmp_path / "key.csv"
+    _api()._append(key, "P-007", "Jörg", "Müller")
+    before = key.read_bytes()
+    panel, ctx = _panel(tmp_path, "conflicting-name"), Context(participant="P-003")
+
+    assert panel._start(ctx, "P-014", " jorg ", "MULLER") is False
+
+    assert ctx.participant == "P-003"
+    assert key.read_bytes() == before
+    assert panel._state.error == "This name is already P-007 in the key file."
+    assert ctx.logs == []
+
+
+def test_existing_id_without_names_resumes(tmp_path):
+    key = tmp_path / "key.csv"
+    _api()._append(key, "P-014", "Jane", "Doe")
+    before = key.read_bytes()
+    panel, ctx = _panel(tmp_path, "resume-id"), Context(participant="P-003")
+
+    assert panel._start(ctx, "P-014", "", "") is True
+
+    assert ctx.participant == "P-014"
+    assert key.read_bytes() == before
+    assert panel._state.error == ""
+
+
+@pytest.mark.parametrize("first,family", [("Jörg", "Müller"), (" jorg ", "MULLER")])
+def test_same_id_and_names_is_idempotent(tmp_path, first, family):
+    key = tmp_path / "key.csv"
+    _api()._append(key, "P-007", "Jörg", "Müller")
+    before = key.read_bytes()
+    panel, ctx = _panel(tmp_path, "same-person"), Context(participant="P-003")
+
+    assert panel._start(ctx, "P-007", first, family) is True
+
+    assert ctx.participant == "P-007"
+    assert key.read_bytes() == before
+    assert len(_rows(key)) == 1
+    assert panel._state.error == ""
+
+
 def test_modal_uses_returning_id_and_shared_preview(tmp_path, imgui_frame, monkeypatch):
     api = _api()
     api._append(tmp_path / "key.csv", "P-007", "Jörg", "Müller")
