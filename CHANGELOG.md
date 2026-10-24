@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `force_ramps` and `pong` require a participant ID before recording and keep their session lists scoped to that participant.
+- Public `status_pill` helper for consistent state badges in application headers and recording controls.
 - Optional participant-labelled model auto-save, training completion and failure notifications, and a session picker that clears its selection when the participant changes.
 - `ParticipantPanel` selects a safe participant ID, previews labelled files, and recognises returning names through a separate local pseudonymisation key file.
 - `StepBar` workflow navigation, `primary_button` for forward actions, and more readable muted text on the light theme.

@@ -29,10 +29,12 @@ def test_widget_helpers_are_public():
         StepBar,
         panel_header,
         primary_button,
+        status_pill,
     )
 
     assert callable(panel_header)
     assert callable(primary_button)
+    assert callable(status_pill)
     # Widgets are classes constructed once, then rendered with `.ui(...)`.
     for widget_cls in (
         ParticipantPanel,
@@ -52,6 +54,16 @@ def test_step_bar_panel_export():
     from myogestic.widgets.panels import StepBar as PanelStepBar
 
     assert StepBar is PanelStepBar
+
+
+def test_status_pill_renders(imgui_frame):
+    from myogestic.widgets import __all__, status_pill
+    from myogestic.widgets.common import SUCCESS
+    from myogestic.widgets.common import status_pill as common_status_pill
+
+    assert "status_pill" in __all__
+    assert status_pill is common_status_pill
+    imgui_frame(lambda: status_pill("CONNECTED", SUCCESS))
 
 
 def test_participant_panel_export():

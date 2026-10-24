@@ -5,6 +5,7 @@ else here is a smoke check; that one pins a design decision that a plausible-loo
 one-line edit would undo, and it fails loudly when it does.
 """
 
+import ast
 import inspect
 import runpy
 from pathlib import Path
@@ -35,6 +36,224 @@ class OnlyPredictProba:
 
     def predict_proba(self, x):
         return np.array([[0.1, 0.9]])
+
+
+def test_myocontrol_requires_participant(app_module):
+    assert app_module["app"].ctx.require_participant is True
+
+
+def test_myocontrol_autosaves_models(app_module):
+    from myogestic.ml import save_pickle
+
+    assert app_module["pipeline"].autosave_dir == "sessions"
+    assert app_module["pipeline"].save_model is save_pickle
+
+
+def test_myocontrol_steps(app_module):
+    assert app_module["steps"].steps == ["Connect", "Record", "Train", "Drive"]
+
+
+def test_myocontrol_uses_no_private_imports():
+    tree = ast.parse(_APP.read_text())
+    private = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            private.extend(name.name for name in node.names if name.name.startswith("_"))
+        elif isinstance(node, ast.Attribute) and node.attr.startswith("_"):
+            private.append(node.attr)
+    assert private == []
+
+
+def test_connect_step_offers_stream_manager(app_module, monkeypatch, imgui_frame):
+    from myogestic.widgets import StreamManager
+
+    streams = app_module["streams"]
+    assert isinstance(streams, StreamManager)
+    drawn = []
+    render = streams.ui
+
+    def draw(ctx):
+        render(ctx)
+        drawn.append(ctx)
+
+    monkeypatch.setattr(streams, "ui", draw)
+    ctx = app_module["app"].ctx
+    imgui_frame(lambda: app_module["connect_ui"](ctx))
+    assert drawn == [ctx]
+
+
+def test_record_step_done_reads_disk(app_module, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    ctx = app_module["app"].ctx
+    done = app_module["_step_done"]
+    assert not done(ctx)[1]
+    ctx.participant = "P-014"
+    assert not done(ctx)[1]
+    folder = tmp_path / "sessions" / "P-014"
+    folder.mkdir(parents=True)
+    (folder / "unrelated.txt").touch()
+    assert not done(ctx)[1]
+    take = folder / "P-014_2026-10-24_15-12-03"
+    take.mkdir()
+    assert done(ctx)[1]
+    take.rmdir()
+    take.with_suffix(".session.zip").touch()
+    assert done(ctx)[1]
+    ctx.participant = "P-015"
+    assert not done(ctx)[1]
+    ctx.participant = ""
+    assert not done(ctx)[1]
+
+
+@pytest.mark.parametrize("size", [(1440, 900), (900, 1100)], ids=["wide", "narrow"])
+def test_myocontrol_renders_each_step(app_module, imgui_frame, size):
+    from imgui_bundle import imgui, implot
+
+    def draw():
+        imgui.set_window_size(imgui.ImVec2(*size))
+        app_module["myocontrol_ui"](app_module["app"].ctx)
+
+    implot.create_context()
+    try:
+        for index in range(4):
+            app_module["steps"].active = index
+            imgui_frame(draw)
+    finally:
+        implot.destroy_context()
+
+
+def test_myocontrol_binding_notifies_once(app_module, monkeypatch):
+    bus = object()
+
+    def ensure(link):
+        link._bus = bus
+        return bus
+
+    monkeypatch.setattr(ControlLink, "ensure", ensure)
+    try:
+        app_module["_bind"]()
+        app_module["_bind"]()
+        notices = app_module["app"].ctx.notifications
+        assert [(n.title, n.detail, n.kind) for n in notices] == [
+            ("Virtual Hand connected", "Start predicting drives it.", "info")
+        ]
+    finally:
+        app_module["link"]._bus = None
+
+
+@pytest.mark.parametrize("size", [(1140, 800), (1280, 800), (900, 1100)])
+def test_myocontrol_header_fits_the_theme_padding(app_module, monkeypatch, implot_frame, size):
+    from imgui_bundle import imgui
+
+    from myogestic import _theme
+
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    bounds = []
+
+    def remember():
+        maximum = imgui.get_item_rect_max()
+        pos = imgui.get_window_pos()
+        extent = imgui.get_window_size()
+        padding = imgui.get_style().window_padding
+        bounds.append((
+            maximum.x <= pos.x + extent.x - padding.x,
+            maximum.y <= pos.y + extent.y - padding.y,
+        ))
+
+    text_colored = imgui.text_colored
+
+    def text(color, label):
+        text_colored(color, label)
+        if label == "Myocontrol":
+            remember()
+
+    monkeypatch.setattr(imgui, "text_colored", text)
+    ui_globals = app_module["myocontrol_ui"].__globals__
+    status_pill = ui_globals["status_pill"]
+
+    def pill(label, color):
+        status_pill(label, color)
+        remember()
+
+    monkeypatch.setitem(ui_globals, "status_pill", pill)
+    steps = app_module["steps"]
+    step_ui = steps.ui
+
+    def navigation(done):
+        active = step_ui(done)
+        remember()
+        return active
+
+    monkeypatch.setattr(steps, "ui", navigation)
+
+    def draw():
+        imgui.set_window_size(imgui.ImVec2(*size))
+        app_module["app"].ctx.state = "predicting"
+        app_module["myocontrol_ui"](app_module["app"].ctx)
+
+    implot_frame(draw)
+    assert bounds and all(x and y for x, y in bounds)
+
+
+def test_myocontrol_drive_toggle_balances_selected_style(app_module, monkeypatch, imgui_frame):
+    pipeline = app_module["pipeline"]
+    pipeline.model = ("Classification", OnlyPredictProba())
+    monkeypatch.setitem(app_module["drive_ui"].__globals__, "primary_button", lambda label: True)
+    imgui_frame(app_module["drive_ui"])
+    assert app_module["app"].ctx.state == "predicting"
+    imgui_frame(app_module["drive_ui"])
+    assert app_module["app"].ctx.state == "idle"
+
+
+@pytest.mark.parametrize("changed", ["mode", "features", "notch"])
+def test_myocontrol_warns_when_fitted_inputs_change(app_module, monkeypatch, imgui_frame, changed):
+    from imgui_bundle import imgui
+
+    pipeline = app_module["pipeline"]
+    pipeline.model = ("Classification", OnlyPredictProba())
+    app_module["training_inputs"]["fitted"] = ("Classification", ("RMS", "MAV"), 0)
+    messages = []
+    monkeypatch.setattr(imgui, "text_wrapped", messages.append)
+    imgui_frame(app_module["model_ui"])
+    warning = "Features changed — retrain to apply them."
+    assert warning not in messages
+
+    if changed == "mode":
+        app_module["training_mode"]["index"] = 1
+    elif changed == "features":
+        app_module["features"].set_active("WL", True)
+    else:
+        app_module["notch"]["index"] = 1
+    messages.clear()
+    imgui_frame(app_module["model_ui"])
+    assert warning in messages
+
+
+def test_myocontrol_switches_session_selection_before_train(
+    app_module, monkeypatch, implot_frame, tmp_path,
+):
+    from myogestic import TrainingData
+    from myogestic.widgets.training import _session_state
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_session_state, "_states", {})
+    ctx = app_module["app"].ctx
+    ctx.participant = "P-014"
+    app_module["steps"].active = 2
+    state = _session_state.get_state(app_module["sessions"]._widget_id)
+    state.participant = "P-013"
+    state.sessions = [{"path": "sessions/P-013/old.session.zip", "selected": True}]
+    app_module["pipeline"].training_data = TrainingData(paths=[state.sessions[0]["path"]])
+    selections_at_train = []
+    ui_globals = app_module["myocontrol_ui"].__globals__
+    monkeypatch.setitem(
+        ui_globals, "model_ui",
+        lambda: selections_at_train.append(app_module["pipeline"].training_data.paths),
+    )
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    assert selections_at_train == [[]]
+    assert not app_module["_step_done"](ctx)[1]
 
 
 def test_nothing_attaches_itself(monkeypatch):
