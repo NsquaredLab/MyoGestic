@@ -59,6 +59,16 @@ def test_force_ramps_sessions_follow_participant(app_module, implot_frame, monke
     """Scan finds labelled takes, and switching participants clears the old selection."""
     monkeypatch.chdir(tmp_path)
     app = app_module["app"]
+    selections = []
+    manager = app_module["sessions"]
+    original_ui = manager.ui
+
+    def capture_selection(*args, **kwargs):
+        data = original_ui(*args, **kwargs)
+        selections.append(data)
+        return data
+
+    monkeypatch.setattr(manager, "ui", capture_selection)
     state = SessionWidgetState()
     monkeypatch.setitem(_states, app_module["sessions"]._widget_id, state)
     paths = []
@@ -84,7 +94,10 @@ def test_force_ramps_sessions_follow_participant(app_module, implot_frame, monke
     app.ctx.participant = "P-015"
     scan = False
     implot_frame(lambda: app._ui_fn(app.ctx))
-    assert state.sessions == []
+    assert [row["path"] for row in state.sessions] == paths[1:]
+    assert all(row["participant"] == "P-015" for row in state.sessions)
+    assert not any(row["selected"] for row in state.sessions)
+    assert selections[-1].paths == []
 
     scan = True
     implot_frame(lambda: app._ui_fn(app.ctx))

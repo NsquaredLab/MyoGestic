@@ -12,11 +12,14 @@ from myogestic.contracts import TrainingData
 from myogestic.session._core import _slug
 from myogestic.widgets.common import (
     PALETTE,
+    mono_font,
+    mono_text,
     muted,
     panel_header,
     pop_selected,
     primary,
     push_selected,
+    ui_px,
 )
 from myogestic.widgets.training._session_state import (
     SessionWidgetState,
@@ -48,8 +51,8 @@ class SessionManager:
     ----------
     base_path
         Folder scanned for ``.session.zip`` archives and session folders. Not
-        read until you press **Scan folder** — opening an app does not present
-        every session anyone ever recorded.
+        read until you press **Scan folder**, unless ``ui(participant=...)``
+        scopes the list to a participant whose takes appear automatically.
     title
         Panel header text. Also part of the widget's ImGui id scope, so two
         managers over the same folder need different titles to keep separate
@@ -85,8 +88,9 @@ class SessionManager:
         ----------
         participant
             Participant ID whose subfolder to scan, using the same safe slug
-            as recordings. ``None`` or an empty ID scans the base folder.
-            Changing the participant clears the session list and class filters.
+            as recordings. A nonempty ID lists its takes automatically, unticked
+            except newly recorded takes. Changing it clears the training selection
+            and class filters. ``None`` or an empty ID leaves scanning manual.
 
         Returns
         -------
@@ -97,6 +101,7 @@ class SessionManager:
         class_names = self._class_names
         state = get_state(widget_id)
         participant = _slug(participant) if participant is not None else None
+        scan_path = str(Path(self._base_path) / participant) if participant else self._base_path
         if participant != state.participant:
             state.sessions.clear()
             state.deactivated_classes.clear()
@@ -105,14 +110,11 @@ class SessionManager:
             # the newly cleared list when it completes.
             state.folder_dialog = None
             state.participant = participant
-        scan_path = str(Path(self._base_path) / participant) if participant else self._base_path
+            if participant:
+                state.sessions.extend(scan_sessions(scan_path))
 
-        # Deliberately empty until asked. This used to scan `base_path` on first
-        # render, so opening an app presented every session anyone had ever recorded
-        # there — 328 of them on the machine this was reported from, none of them
-        # chosen, above a Train button. What a training set contains is a decision,
-        # and a list that arrives on its own is a decision nobody made. `Scan folder`
-        # is the same scan, one click away, and says what it found.
+        # Unfiltered callers retain the explicit Scan workflow; a participant
+        # scopes discovery without silently selecting any earlier takes.
         panel_header(self._title, fa.ICON_FA_FOLDER_OPEN)
         render_summary_and_buttons(widget_id, scan_path, state)
         poll_file_dialog(state)
@@ -122,6 +124,8 @@ class SessionManager:
             widget_id, state.deactivated_classes, classes_in_pool, active_classes, class_names
         )
         render_session_rows(widget_id, state.sessions, class_names)
+        if participant and not state.sessions:
+            _render_empty_participant(widget_id, scan_path, state)
 
         return TrainingData(
             paths=[s["path"] for s in state.sessions if s["selected"]],
@@ -165,8 +169,7 @@ def render_summary_and_buttons(widget_id: str, base_path: str, state: SessionWid
     if imgui.is_item_hovered():
         imgui.set_tooltip(
             f"List every session already in {base_path}.\n"
-            "Nothing is loaded until you ask — sessions from earlier runs are not\n"
-            "part of this one unless you say so."
+            "Earlier takes stay unticked until you choose them for training."
         )
 
     if not sessions:
@@ -186,6 +189,30 @@ def poll_file_dialog(state: SessionWidgetState) -> None:
     result = dialog.result()  # type: ignore
     state.folder_dialog = None
     load_session_files(state, result or [])
+
+
+def _render_empty_participant(
+    widget_id: str, base_path: str, state: SessionWidgetState,
+) -> None:
+    """Centre the empty participant's guidance and existing file-picker action."""
+    left = imgui.get_cursor_pos_x()
+    width = imgui.get_content_region_avail().x
+    height = imgui.get_text_line_height_with_spacing() * 3
+    gap = max(0.0, (imgui.get_content_region_avail().y - height) / 2)
+    imgui.dummy(imgui.ImVec2(0, gap))
+    for line in (
+        f"No takes for {state.participant} yet.",
+        "Takes you record appear here, already ticked for training.",
+    ):
+        imgui.set_cursor_pos_x(left + max(0.0, (width - imgui.calc_text_size(line).x) / 2))
+        imgui.text_colored(muted(), line)
+    label = "Load files from elsewhere…"
+    button_width = imgui.calc_text_size(label).x + imgui.get_style().frame_padding.x * 2
+    imgui.set_cursor_pos_x(left + max(0.0, (width - button_width) / 2))
+    if imgui.small_button(f"{label}##{widget_id}_empty"):
+        state.folder_dialog = pfd.open_file(
+            "Select session files", base_path, ["Session zip", "*.zip"], pfd.opt.multiselect,
+        )
 
 
 def render_class_buttons(
@@ -232,13 +259,62 @@ def render_session_rows(
         # only part guaranteed unique.
         stamp = row.get("date_str", row["name"])
         given = row.get("session_name", "")
-        imgui.text_colored(
-            primary(),
-            f"{given}  ·  {stamp}  ·  {row.get('streams_str', '')}"
-            if given
-            else f"{stamp}  ·  {row.get('streams_str', '')}",
+        label = f"{given}  ·  {stamp}" if given else stamp
+        duration = _elapsed_str(row.get("duration_s", 0.0))
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, imgui.get_style().font_size_base)
+        try:
+            right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+            duration_width = imgui.calc_text_size(duration).x
+            label_width = imgui.get_content_region_avail().x - duration_width - ui_px(12)
+            if imgui.calc_text_size(label).x > label_width:
+                while label and imgui.calc_text_size(label + "…").x > label_width:
+                    label = label[:-1]
+                label = label + "…" if label else ""
+            mono_text(label, primary())
+            imgui.same_line()
+            imgui.set_cursor_pos_x(max(imgui.get_cursor_pos_x(), right - duration_width))
+            mono_text(duration, muted())
+        finally:
+            if font is not None:
+                imgui.pop_font()
+        if row.get("class_seconds"):
+            _render_class_seconds(row, class_names)
+        else:
+            render_label_counts(row, class_names)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(f"{row['name']}\n{row.get('streams_str', '')}")
+
+
+def _elapsed_str(seconds: float) -> str:
+    """Format seconds as the stopwatch duration shown beside a take."""
+    minutes, secs = divmod(max(0, int(seconds)), 60)
+    return f"{minutes}:{secs:02d}"
+
+
+def _render_class_seconds(row: dict, class_names: list[str] | None) -> None:
+    """Draw a wrapping row of categorical, theme-readable duration chips."""
+    names = row.get("class_names") or class_names or list(row["class_seconds"])
+    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+    pad = imgui.ImVec2(ui_px(7), ui_px(3))
+    for i, (name, seconds) in enumerate(row["class_seconds"].items()):
+        label = f"{name} {_elapsed_str(seconds)}"
+        text_size = imgui.calc_text_size(label)
+        size = imgui.ImVec2(text_size.x + pad.x * 2, text_size.y + pad.y * 2)
+        if i and imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + size.x <= right:
+            imgui.same_line()
+        imgui.dummy(size)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        ci = names.index(name) if name in names else i
+        color = PALETTE[ci % len(PALETTE)]
+        draw = imgui.get_window_draw_list()
+        draw.add_rect_filled(
+            lo, hi, imgui.get_color_u32(imgui.ImVec4(color[0], color[1], color[2], 0.16)), ui_px(4),
         )
-        render_label_counts(row, class_names)
+        draw.add_text(
+            imgui.ImVec2(lo.x + pad.x, lo.y + pad.y), imgui.get_color_u32(imgui.Col_.text), label,
+        )
 
 
 def render_label_counts(row: dict, class_names: list[str] | None) -> None:

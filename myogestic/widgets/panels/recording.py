@@ -45,9 +45,8 @@ if TYPE_CHECKING:
 
 
 # Layout — local constants so users can read but not override.
-_RECORD_BTN_W = 118
-_LABEL_BTN_W = 100
-_LABEL_BTN_H = 30
+_CONTROL_BTN_H = 44
+_LABEL_BTN_MIN_W = 110
 
 
 _PILL_PAD_Y = 4.0  # internal vertical padding inside the pill
@@ -415,24 +414,23 @@ def _render_recording_controls(
     # try/finally: an exception from on_record / on_stop / on_gesture must not
     # leave the ImGui style stack unbalanced — that trips an IM_ASSERT on the
     # next end_child further up the call chain.
-    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(12, 8))
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(ui_px(12), ui_px(8)))
     try:
         if class_names:
-            # Wrap the label buttons onto the next row instead of letting a
-            # wide class list run them off the right edge.
-            # (get_window_content_region_max isn't in this binding, so derive
-            # the row's right edge from the cursor + available width.)
+            # Equal columns fill each row; wider panels can show more gestures.
             spacing = imgui.get_style().item_spacing.x
-            right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+            available = imgui.get_content_region_avail().x
+            columns = max(1, min(n_classes, int((available + spacing) / (ui_px(_LABEL_BTN_MIN_W) + spacing))))
+            width = max(1.0, (available - spacing * (columns - 1)) / columns)
             for i, name in enumerate(class_names):
-                if i > 0 and imgui.get_item_rect_max().x + spacing + ui_px(_LABEL_BTN_W) <= right:
+                if i % columns:
                     imgui.same_line()
                 selected = ctx.current_label == i
                 if selected:
                     push_selected()
                 try:
                     if imgui.button(
-                        f"{name}##rec_gesture{i}", imgui.ImVec2(ui_px(_LABEL_BTN_W), ui_px(_LABEL_BTN_H))
+                        f"{name}##rec_gesture{i}", imgui.ImVec2(width, ui_px(_CONTROL_BTN_H))
                     ):
                         ctx.current_label = i
                         if on_gesture is not None:
@@ -451,14 +449,16 @@ def _render_recording_controls(
         # Record / Stop
         if ctx.state == AppState.IDLE:
             if _record_button(
-                ctx, f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(ui_px(_RECORD_BTN_W), 0)
+                ctx, f"{fa.ICON_FA_CIRCLE}  Record##rec_btn",
+                imgui.ImVec2(imgui.get_content_region_avail().x, ui_px(_CONTROL_BTN_H)),
             ):
                 on_record()
                 # Auto-add the current label at the start of the recording.
                 if ctx.session is not None and class_names and 0 <= ctx.current_label < n_classes:
                     ctx.session.add_label(ctx.current_label)
         elif ctx.state == AppState.RECORDING and imgui.button(
-            f"{fa.ICON_FA_STOP}  Stop##rec_btn", imgui.ImVec2(ui_px(_RECORD_BTN_W), 0)
+            f"{fa.ICON_FA_STOP}  Stop##rec_btn",
+            imgui.ImVec2(imgui.get_content_region_avail().x, ui_px(_CONTROL_BTN_H)),
         ):
             on_stop()
     finally:
