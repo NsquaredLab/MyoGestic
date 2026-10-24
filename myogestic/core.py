@@ -162,6 +162,11 @@ class Context:
     session
         The `Session` being written while ``state == "recording"``, else
         ``None``. Set its ``name`` before `App.stop_recording` to label the take.
+    participant
+        Pseudonymised ID used to label new recordings; empty when none is set.
+    require_participant
+        Refuse recording until a participant ID is set. Recording widgets
+        mirror this opt-in gate with a disabled Record button.
     class_names
         Names for the label class indices, mirrored here by the recording
         widgets so `App.stop_recording` can persist them in ``meta.json``.
@@ -200,6 +205,8 @@ class Context:
     status_message: str = ""
     logs: list[str] = field(default_factory=list)
     notifications: list[Notification] = field(default_factory=list)
+    participant: str = ""
+    require_participant: bool = False
 
     def notify(self, title: str, detail: str = "", kind: str = "info") -> None:
         """Show a corner toast and mirror it to the app log, from any thread.
@@ -274,6 +281,9 @@ class App:
         live as the window is resized or moved to another monitor.
         ``$MYOGESTIC_UI_SCALE`` overrides both. Clamped to ``[0.5, 2.0]``. No
         effect when ``theme=False``.
+    require_participant
+        Require ``ctx.participant`` before recording. Defaults to ``False``
+        so apps without participant labels keep their existing behaviour.
 
     Examples
     --------
@@ -286,10 +296,16 @@ class App:
     """
 
     def __init__(
-        self, name: str, theme: bool = True, docking: bool = False, ui_scale: float | None = None
+        self,
+        name: str,
+        theme: bool = True,
+        docking: bool = False,
+        ui_scale: float | None = None,
+        require_participant: bool = False,
     ):
         self.name = name
         self.ctx = Context()
+        self.ctx.require_participant = require_participant
         self._ui_fn: Callable[[Context], None] | None = None
         self._theme_enabled = theme
         self._ui_scale = ui_scale
@@ -448,9 +464,13 @@ class App:
                 f"Cannot start recording: state is {self.ctx.state!r}, expected 'idle'."
             )
             return
+        if self.ctx.require_participant and not self.ctx.participant:
+            self.ctx.status_message = "Set a participant ID before recording."
+            self.ctx.log(self.ctx.status_message)
+            return
         # A stream with info=None has no zarr schema and would fail on append.
         self.ctx.state = AppState.RECORDING
-        self.ctx.session = Session(base_path=base_path)
+        self.ctx.session = Session(base_path=base_path, participant=self.ctx.participant)
         n_ready = 0
         for name, stream in self.ctx.streams.items():
             if stream.info is None:

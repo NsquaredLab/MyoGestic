@@ -202,6 +202,48 @@ def _slug(name: str) -> str:
     return "-".join(filter(None, kept.split("-")))[:_SLUG_MAX].strip("-_")
 
 
+def labelled_path(base_path: str | Path, participant: str = "", suffix: str = "") -> Path:
+    """Build a timestamped path, optionally nested and labelled by participant.
+
+    Parameters
+    ----------
+    base_path
+        Parent directory for recordings or saved models.
+    participant
+        Pseudonymised ID, reduced to a safe single path segment. An empty
+        slug keeps the timestamp directly under ``base_path``.
+    suffix
+        Optional filename suffix, appended after an underscore, such as
+        ``"model.joblib"``.
+
+    Returns
+    -------
+    pathlib.Path
+        ``base/ID/ID_timestamp[_suffix]`` or ``base/timestamp[_suffix]``.
+        No directories are created and no name is reserved. `Session` adds
+        its collision guard when it creates the recording folder.
+    """
+    participant = _slug(participant)
+    timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+    parent = Path(base_path)
+    if participant:
+        parent /= participant
+        timestamp = f"{participant}_{timestamp}"
+    if suffix:
+        timestamp = f"{timestamp}_{suffix}"
+    return parent / timestamp
+
+
+def _unique_stem(parent: Path, stem: str) -> str:
+    """Find a stem unused by a recording folder or any of its named archives."""
+    candidate = stem
+    ordinal = 2
+    while (parent / candidate).exists() or any(parent.glob(f"{candidate}*.session.zip")):
+        candidate = f"{stem}-{ordinal}"
+        ordinal += 1
+    return candidate
+
+
 class Session:
     """One recording session on disk: per-stream Zarr arrays + a label track.
 
@@ -230,6 +272,10 @@ class Session:
     base_path
         Parent directory; the session creates a timestamp-named subdirectory
         inside. Default ``"sessions"`` (created if missing).
+    participant
+        Pseudonymised ID. A safe slug labels the folder and ``meta.json`` and
+        nests the recording under ``base_path/ID``. Empty by default, keeping
+        the legacy timestamp and random suffix directly under ``base_path``.
 
     Examples
     --------
@@ -238,14 +284,30 @@ class Session:
     >>> session.add_label(0, timestamp=123.0)
     """
 
-    def __init__(self, base_path: str = "sessions"):
-        ts = time.strftime("%Y-%m-%d_%H-%M-%S")
-        # Random suffix so two sessions started within the same wall-clock second
-        # never share a folder: pack_to_zip() runs on a daemon thread and
-        # shutil.rmtree()s its own folder, so a shared name lets the old session's
-        # pack thread wipe the new recording (and collide on the .session.zip path).
-        self.path = Path(base_path) / f"{ts}_{uuid.uuid4().hex[:8]}"
-        self.path.mkdir(parents=True, exist_ok=True)
+    def __init__(self, base_path: str = "sessions", participant: str = "") -> None:
+        #: Pseudonymised ID only; personal names belong in the local key file.
+        self.participant: str = _slug(participant)
+        if self.participant:
+            labelled = labelled_path(base_path, self.participant)
+            parent = labelled.parent
+            parent.mkdir(parents=True, exist_ok=True)
+            # Archives keep a stem reserved after packing removes its folder.
+            # Exclusive mkdir handles two recorders choosing the same free stem.
+            while True:
+                self.path = parent / _unique_stem(parent, labelled.name)
+                try:
+                    self.path.mkdir(exist_ok=False)
+                except FileExistsError:
+                    continue
+                break
+        else:
+            ts = time.strftime("%Y-%m-%d_%H-%M-%S")
+            # Random suffix so two sessions started within the same wall-clock second
+            # never share a folder: pack_to_zip() runs on a daemon thread and
+            # shutil.rmtree()s its own folder, so a shared name lets the old session's
+            # pack thread wipe the new recording (and collide on the .session.zip path).
+            self.path = Path(base_path) / f"{ts}_{uuid.uuid4().hex[:8]}"
+            self.path.mkdir(parents=True, exist_ok=True)
         #: Free-form facts a widget contributed about this recording, merged into
         #: ``meta.json`` under ``"extras"``. For anything the raw arrays cannot
         #: express on their own — a force calibration is the motivating case: the
@@ -360,6 +422,8 @@ class Session:
         }
         if self.name:
             meta["name"] = self.name
+        if self.participant:
+            meta["participant"] = self.participant
         if self.extras:
             meta["extras"] = dict(self.extras)
         if class_names is not None:
