@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Myocontrol's Connect → Record → Train → Drive workflow combines a slim header, participant-labelled recording and model saves, recorded gesture-time bars, visible action guidance, and a one-line status bar.
 - Bare grid areas, step completion connectors, and a calmer participant dialog with an `open()` request and ID-only session log.
 - Recorded time per gesture and public `recorded_time` summaries, participant session lists that fill automatically with duration chips, and full-width recording controls with responsive gesture buttons.
 - `force_ramps` and `pong` require a participant ID before recording and keep their session lists scoped to that participant.
