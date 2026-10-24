@@ -188,6 +188,8 @@ def test_require_participant_refuses_without_id(tmp_path):
     assert list(tmp_path.iterdir()) == []
     assert app.ctx.status_message == "Set a participant ID before recording."
     assert any("participant ID" in line for line in app.ctx.logs)
+    refused = app.ctx.notifications[-1]
+    assert (refused.title, refused.kind) == ("Recording refused", "warning")
 
     app.ctx.participant = "P-014"
     app.start_recording(str(tmp_path))
