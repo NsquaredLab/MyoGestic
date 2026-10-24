@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Bare grid areas, step completion connectors, and a calmer participant dialog with an `open()` request and ID-only session log.
+- Recorded time per gesture and public `recorded_time` summaries, participant session lists that fill automatically with duration chips, and full-width recording controls with responsive gesture buttons.
 - `force_ramps` and `pong` require a participant ID before recording and keep their session lists scoped to that participant.
 - Public `status_pill` helper for consistent state badges in application headers and recording controls.
 - Optional participant-labelled model auto-save, training completion and failure notifications, and a session picker that clears its selection when the participant changes.

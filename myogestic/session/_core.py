@@ -244,6 +244,78 @@ def _unique_stem(parent: Path, stem: str) -> str:
     return candidate
 
 
+@dataclass(frozen=True)
+class RecordedTime:
+    """Recorded durations across the takes directly in one folder.
+
+    Attributes
+    ----------
+    takes
+        Number of session folders and archives, including legacy takes.
+    total_s
+        Sum of sample-clock durations in seconds; legacy takes contribute zero.
+    per_class
+        Recorded seconds for each gesture name, summed across takes.
+    """
+
+    takes: int
+    total_s: float
+    per_class: dict[str, float]
+
+
+def _read_session_metadata(path: Path) -> tuple[dict, list] | None:
+    """Read a folder or zip's metadata and labels without opening its arrays."""
+    try:
+        if path.is_dir() and (path / "meta.json").exists():
+            meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
+            labels_file = path / "labels.json"
+            labels = json.loads(labels_file.read_text(encoding="utf-8")) if labels_file.exists() else []
+        elif path.is_file() and path.name.endswith(".zip"):
+            # Renamed archives remain discoverable by the picker and totals.
+            with zipfile.ZipFile(path) as archive:
+                names = set(archive.namelist())
+                if "meta.json" not in names:
+                    return None
+                meta = json.loads(archive.read("meta.json"))
+                labels = json.loads(archive.read("labels.json")) if "labels.json" in names else []
+        else:
+            return None
+        return (meta, labels) if isinstance(meta, dict) and isinstance(labels, list) else None
+    except (OSError, ValueError, zipfile.BadZipFile):
+        return None
+
+
+def recorded_time(folder: str | Path) -> RecordedTime:
+    """Sum recorded time for the session folders and archives directly in a folder.
+
+    Parameters
+    ----------
+    folder
+        Directory to inspect without recursion. A missing directory is empty.
+
+    Returns
+    -------
+    RecordedTime
+        Take count, total seconds, and seconds per gesture. Sessions without
+        duration metadata count as takes with zero seconds.
+    """
+    base = Path(folder)
+    takes, total_s = 0, 0.0
+    per_class: dict[str, float] = {}
+    if not base.is_dir():
+        return RecordedTime(takes, total_s, per_class)
+    for path in base.iterdir():
+        entry = _read_session_metadata(path)
+        if entry is None:
+            continue
+        meta, _ = entry
+        takes += 1
+        total_s += float(meta.get("duration_s", 0.0))
+        for name, seconds in meta.get("class_seconds", {}).items():
+            per_class[name] = per_class.get(name, 0.0) + float(seconds)
+    return RecordedTime(takes, total_s, per_class)
+
+
 class Session:
     """One recording session on disk: per-stream Zarr arrays + a label track.
 
@@ -420,6 +492,29 @@ class Session:
                 for name, info in self._streams_info.items()
             },
         }
+        # Use the same clock as add_label, and only the first nonempty stream:
+        # multiple streams describe the same take, not extra recorded time.
+        first, last = 0.0, 0.0
+        for timestamps in self.ts_stores.values():
+            if timestamps.shape[0]:
+                first, last = float(timestamps[0]), float(timestamps[-1])
+                break
+        meta["duration_s"] = max(0.0, last - first)
+        if class_names and self.label_track:
+            seconds: dict[str, float] = {}
+            for i, event in enumerate(self.label_track):
+                if not 0 <= event.class_index < len(class_names):
+                    continue
+                # Existing callers can supply an integer-valued numeric label.
+                index = int(event.class_index)
+                if index != event.class_index:
+                    continue
+                end = self.label_track[i + 1].timestamp if i + 1 < len(self.label_track) else last
+                elapsed = max(0.0, min(last, end) - max(first, event.timestamp))
+                if elapsed:
+                    name = class_names[index]
+                    seconds[name] = seconds.get(name, 0.0) + elapsed
+            meta["class_seconds"] = seconds
         if self.name:
             meta["name"] = self.name
         if self.participant:
