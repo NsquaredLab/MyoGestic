@@ -147,8 +147,21 @@ class ParticipantPanel:
             return False
         state = self._state
         try:
-            if (first or family) and _lookup(self._key_file, first, family) is None:
-                _append(self._key_file, pid, first, family)
+            if first or family:
+                existing_id = _lookup(self._key_file, first, family)
+                if existing_id is not None and existing_id != pid:
+                    state.error = f"This name is already {existing_id} in the key file."
+                    return False
+                names = (_fold(first), _fold(family))
+                if any(
+                    row["id"] == pid
+                    and (_fold(row["first_name"]), _fold(row["family_name"])) != names
+                    for row in _rows(self._key_file)
+                ):
+                    state.error = f"{pid} already belongs to another participant in the key file."
+                    return False
+                if existing_id is None:
+                    _append(self._key_file, pid, first, family)
         except (OSError, UnicodeError, csv.Error):
             state.error = "Could not save the key file. Check its location and write permissions."
             return False
