@@ -9,13 +9,23 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic._theme import mono_font
 from myogestic.core import Context
 from myogestic.session import labelled_path
 from myogestic.session._core import _slug
-from myogestic.widgets.common import DANGER, WARNING, muted, panel_header, primary_button, ui_px
+from myogestic.widgets.common import (
+    CONSOLE_BG,
+    CONSOLE_TEXT,
+    DANGER,
+    WARNING,
+    muted,
+    panel_header,
+    primary_button,
+    ui_px,
+)
 
 __all__ = ["ParticipantPanel"]
 
@@ -101,6 +111,7 @@ class _ParticipantState:
     active_pid: str | None = None
     local_name: str = ""
     error: str = ""
+    open_requested: bool = False
 
 
 _states: dict[str, _ParticipantState] = {}
@@ -140,6 +151,14 @@ class ParticipantPanel:
     def _state(self) -> _ParticipantState:
         return _states.setdefault(self._widget_id, _ParticipantState())
 
+    def open(self) -> None:
+        """Request the participant modal on the next call to ``ui(ctx)``.
+
+        The request is discarded if the context is not idle on that frame.
+        It is safe to call this method outside an ImGui frame.
+        """
+        self._state.open_requested = True
+
     def _start(self, ctx: Context, pid: str, first: str, family: str) -> bool:
         """Commit only the ID to context, after any local name has been saved."""
         pid, first, family = _slug(pid), first.strip(), family.strip()
@@ -168,6 +187,7 @@ class ParticipantPanel:
         ctx.participant = state.active_pid = pid
         state.local_name = " ".join(filter(None, (first, family)))
         state.error = ""
+        ctx.log(f"Participant {pid} · saving to sessions/{pid}/")
         return True
 
     def ui(self, ctx: Context) -> None:
@@ -207,7 +227,9 @@ class ParticipantPanel:
                 imgui.set_tooltip(
                     "Finish recording, training or predicting before changing participant."
                 )
-            if clicked and not busy:
+            requested = state.open_requested or clicked
+            state.open_requested = False
+            if requested and not busy:
                 state.pid = _next_id(self._key_file)
                 state.first = state.family = state.error = ""
                 imgui.open_popup("participant-modal")
@@ -235,12 +257,14 @@ class ParticipantPanel:
                 imgui.close_current_popup()
                 return
             panel_header("Participant")
-            imgui.set_next_item_width(ui_px(320))
-            _, state.pid = imgui.input_text("Participant ID", state.pid)
-            imgui.set_next_item_width(ui_px(320))
-            first_changed, state.first = imgui.input_text("First name", state.first)
-            imgui.set_next_item_width(ui_px(320))
-            family_changed, state.family = imgui.input_text("Family name", state.family)
+            _, state.pid = _input_row("Participant ID", state.pid)
+            imgui.separator()
+            first_changed, state.first = _input_row("First name", state.first)
+            family_changed, state.family = _input_row("Family name", state.family)
+            imgui.text_colored(
+                muted(),
+                f"{fa.ICON_FA_LOCK}  Stays on this computer, in the key file. Never in a recording.",
+            )
             returning = None
             if state.first.strip() and state.family.strip():
                 returning = _lookup(self._key_file, state.first, state.family)
@@ -249,19 +273,64 @@ class ParticipantPanel:
                     state.pid = returning
                 imgui.text_colored(muted(), "Returning participant")
             pid = _slug(state.pid)
-            path = labelled_path("sessions", pid)
             imgui.spacing()
-            imgui.text_colored(muted(), f"Folder: {path.parent.as_posix()}/")
-            imgui.text_colored(muted(), f"Recording: {path.as_posix()}.session.zip")
-            imgui.text_colored(muted(), f"Model: {path.as_posix()}_model.joblib")
+            _preview(pid)
             if state.error:
                 imgui.text_colored(DANGER, state.error)
+            style = imgui.get_style()
+            buttons_width = (
+                imgui.calc_text_size("Cancel").x + imgui.calc_text_size("Start session").x
+                + 4 * style.frame_padding.x + style.item_spacing.x
+            )
+            imgui.set_cursor_pos_x(
+                imgui.get_cursor_pos_x() + max(0, imgui.get_content_region_avail().x - buttons_width)
+            )
+            if imgui.button("Cancel"):
+                imgui.close_current_popup()
+            imgui.same_line()
             imgui.begin_disabled(not pid)
             if primary_button("Start session") and self._start(ctx, pid, state.first, state.family):
                 imgui.close_current_popup()
             imgui.end_disabled()
-            imgui.same_line()
-            if imgui.button("Cancel"):
-                imgui.close_current_popup()
         finally:
             imgui.end_popup()
+
+
+def _input_row(label: str, value: str) -> tuple[bool, str]:
+    """Place a muted label left of a hidden-label input in a fixed column."""
+    left = imgui.get_cursor_pos_x()
+    imgui.align_text_to_frame_padding()
+    imgui.text_colored(muted(), label)
+    imgui.same_line()
+    imgui.set_cursor_pos_x(left + ui_px(120))
+    imgui.set_next_item_width(ui_px(320))
+    return imgui.input_text(f"##{label}", value)
+
+
+def _preview(pid: str) -> None:
+    """Show the shared recording paths in a readable monospace console block."""
+    path = labelled_path("sessions", pid)
+    lines = (
+        f"Folder: {path.parent.as_posix()}/",
+        f"Recording: {path.as_posix()}.session.zip",
+        f"Model: {path.as_posix()}_model.joblib",
+    )
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, imgui.get_style().font_size_base)
+    imgui.push_style_color(imgui.Col_.child_bg, CONSOLE_BG)
+    width = max(imgui.calc_text_size(line).x for line in lines)
+    padding = imgui.get_style().window_padding
+    height = imgui.get_text_line_height_with_spacing() * len(lines) - imgui.get_style().item_spacing.y
+    imgui.begin_child(
+        "##preview", imgui.ImVec2(width + 2 * padding.x, height + 2 * padding.y),
+        child_flags=imgui.ChildFlags_.always_use_window_padding,
+    )
+    try:
+        for line in lines:
+            imgui.text_colored(CONSOLE_TEXT, line)
+    finally:
+        imgui.end_child()
+        imgui.pop_style_color()
+        if font is not None:
+            imgui.pop_font()

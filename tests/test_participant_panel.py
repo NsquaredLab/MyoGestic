@@ -171,6 +171,76 @@ def test_panel_renders(tmp_path, imgui_frame):
     assert not (tmp_path / "key.csv").exists()
 
 
+def test_open_requests_modal(tmp_path, imgui_frame, monkeypatch):
+    panel, ctx = _panel(tmp_path, "request-modal"), Context()
+    positions = _buttons(monkeypatch)
+    panel.open()  # Request outside a frame; opening waits for ui(ctx).
+    panel = _panel(tmp_path, "request-modal")  # Requests follow widget identity.
+    imgui_frame(lambda: panel.ui(ctx))
+    assert "Start session" in positions
+    assert "Cancel" in positions
+    assert panel._state.pid == "P-001"
+    assert ctx.participant == ""
+    assert not (tmp_path / "key.csv").exists()
+
+
+@pytest.mark.parametrize("state", ["recording", "training", "predicting"])
+def test_open_ignored_while_busy(tmp_path, imgui_frame, monkeypatch, state):
+    panel, ctx = _panel(tmp_path, f"request-busy:{state}"), Context(state=state)
+    positions = _buttons(monkeypatch)
+    panel.open()
+    imgui_frame(lambda: panel.ui(ctx))
+    assert "Start session" not in positions
+    ctx.state = "idle"
+    imgui_frame(lambda: panel.ui(ctx))
+    assert "Start session" not in positions
+
+
+def test_start_logs_id_only(tmp_path):
+    panel, ctx = _panel(tmp_path, "log-id"), Context()
+    assert panel._start(ctx, " P/014 ", "Jane", "Doe") is True
+    assert len(ctx.logs) == 1
+    assert ctx.logs[-1].endswith("Participant P-014 · saving to sessions/P-014/")
+    assert all("Jane" not in line and "Doe" not in line for line in ctx.logs)
+
+
+def test_dialog_labels_left(tmp_path, imgui_frame, monkeypatch):
+    from myogestic.widgets.common import muted, ui_px
+
+    panel, ctx = _panel(tmp_path, "labels-left"), Context()
+    positions = _buttons(monkeypatch)
+    labels, inputs = {}, {}
+    text_colored, input_text = imgui.text_colored, imgui.input_text
+
+    def capture_label(color, text):
+        text_colored(color, text)
+        labels[text] = (tuple(imgui.get_item_rect_min()), tuple(color))
+
+    def capture_input(label, value, *args, **kwargs):
+        result = input_text(label, value, *args, **kwargs)
+        inputs[label] = tuple(imgui.get_item_rect_min())
+        return result
+
+    monkeypatch.setattr(imgui, "text_colored", capture_label)
+    monkeypatch.setattr(imgui, "input_text", capture_input)
+
+    def draw():
+        panel.ui(ctx)
+
+    imgui_frame(draw)
+    imgui_frame(draw)
+    _click(imgui_frame, draw, positions["Set participant"])
+    imgui_frame(draw)
+    for label in ("Participant ID", "First name", "Family name"):
+        assert f"##{label}" in inputs
+        origin, color = labels[label]
+        assert color == tuple(muted())
+        assert inputs[f"##{label}"][0] - origin[0] == pytest.approx(ui_px(120))
+        assert origin[1] >= inputs[f"##{label}"][1]
+    assert any("Stays on this computer, in the key file. Never in a recording." in text for text in labels)
+    assert positions["Cancel"][0] < positions["Start session"][0]
+
+
 @pytest.mark.parametrize("typed", [" p/014 ", "../x", "Jörg"])
 def test_start_uses_the_shared_slug(tmp_path, typed):
     panel, ctx = _panel(tmp_path, f"slug:{typed}"), Context()
@@ -262,8 +332,8 @@ def test_modal_uses_returning_id_and_shared_preview(tmp_path, imgui_frame, monke
     def type_names(label, value, *args, **kwargs):
         changed, typed = input_text(label, value, *args, **kwargs)
         inputs[label] = value
-        if label in ("First name", "Family name"):
-            return True, "jorg" if label == "First name" else "MULLER"
+        if label in ("##First name", "##Family name"):
+            return True, "jorg" if label == "##First name" else "MULLER"
         return changed, typed
 
     def capture_text(color, value):
@@ -280,7 +350,7 @@ def test_modal_uses_returning_id_and_shared_preview(tmp_path, imgui_frame, monke
     imgui_frame(draw)
     _click(imgui_frame, draw, positions["Set participant"])
     imgui_frame(draw)
-    assert inputs["Participant ID"] == "P-007"
+    assert inputs["##Participant ID"] == "P-007"
     assert "Returning participant" in text
     assert any("sessions/P-007/P-007_" in line for line in text)
     _click(imgui_frame, draw, positions["Start session"])
@@ -314,7 +384,7 @@ def test_modal_refuses_a_slug_empty_id(tmp_path, imgui_frame, monkeypatch):
 
     def type_empty(label, value, *args, **kwargs):
         changed, typed = input_text(label, value, *args, **kwargs)
-        return (True, " ... / ") if label == "Participant ID" else (changed, typed)
+        return (True, " ... / ") if label == "##Participant ID" else (changed, typed)
 
     monkeypatch.setattr(imgui, "input_text", type_empty)
 
@@ -339,7 +409,7 @@ def test_popup_state_is_per_widget_id(tmp_path, imgui_frame, monkeypatch):
 
     def type_id(label, value, *args, **kwargs):
         changed, typed = input_text(label, value, *args, **kwargs)
-        if label == "Participant ID":
+        if label == "##Participant ID":
             edits.append(value)
             return True, "P-020"
         return changed, typed
