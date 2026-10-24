@@ -5,11 +5,24 @@ from __future__ import annotations
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import SUCCESS, pop_selected, push_selected, ui_px
+from myogestic.widgets.common import SUCCESS, hairline, pop_selected, push_selected, ui_px
 
 __all__ = ["StepBar"]
 
 _active_steps: dict[str, int] = {}
+
+
+def _connector(done: bool) -> None:
+    """Join consecutive steps, carrying the completion cue from the left."""
+    imgui.same_line(0.0, ui_px(4))
+    imgui.dummy(imgui.ImVec2(ui_px(24), imgui.get_frame_height()))
+    lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    color = imgui.ImVec4(SUCCESS.x, SUCCESS.y, SUCCESS.z, SUCCESS.w * 0.45) if done else hairline()
+    y = (lo.y + hi.y) / 2
+    imgui.get_window_draw_list().add_line(
+        imgui.ImVec2(lo.x, y), imgui.ImVec2(hi.x, y), imgui.get_color_u32(color), thickness=ui_px(1)
+    )
+    imgui.same_line(0.0, ui_px(4))
 
 
 def _step_button(index: int, label: str, done: bool) -> bool:
@@ -97,7 +110,7 @@ class StepBar:
         try:
             for index, (label, complete) in enumerate(zip(self.steps, done, strict=True)):
                 if index:
-                    imgui.same_line(0.0, ui_px(4))
+                    _connector(done[index - 1])
                 selected = index == self.active
                 if selected:
                     push_selected()
