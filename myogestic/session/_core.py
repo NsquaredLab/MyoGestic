@@ -500,8 +500,8 @@ class Session:
                 first, last = float(timestamps[0]), float(timestamps[-1])
                 break
         meta["duration_s"] = max(0.0, last - first)
+        seconds: dict[str, float] = {}
         if class_names and self.label_track:
-            seconds: dict[str, float] = {}
             for i, event in enumerate(self.label_track):
                 if not 0 <= event.class_index < len(class_names):
                     continue
@@ -515,6 +515,8 @@ class Session:
                     name = class_names[index]
                     seconds[name] = seconds.get(name, 0.0) + elapsed
             meta["class_seconds"] = seconds
+        # Reuse the recorded-time keys, ordered by class index rather than event order.
+        self._recorded_classes = sorted(seconds, key=class_names.index) if class_names else []
         if self.name:
             meta["name"] = self.name
         if self.participant:
@@ -547,7 +549,15 @@ class Session:
         self.ts_stores.clear()
         gc.collect()
 
-        stem = f"{self.path.name}_{slug}" if (slug := _slug(self.name)) else self.path.name
+        label_slugs = [
+            slug for name in getattr(self, "_recorded_classes", []) if (slug := _slug(name))
+        ]
+        labels = "+".join(label_slugs)
+        if len(labels) > _SLUG_MAX:
+            labels = f"{len(label_slugs)}-classes"
+        stem = f"{self.path.name}_{labels}" if labels else self.path.name
+        if slug := _slug(self.name):
+            stem = f"{stem}_{slug}"
         zip_path = self.path.with_name(stem + ".session.zip")
         tmp_path = zip_path.with_suffix(zip_path.suffix + ".tmp")
         if tmp_path.exists():
