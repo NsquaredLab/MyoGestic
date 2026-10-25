@@ -93,6 +93,11 @@ A key is an ordinary two-state control, so the threshold, the debounce and the f
 the same machinery the hand uses — see [Keyboard](../api/keyboard.md). Key sending starts
 **disarmed**, because a resolved map types into whatever window has focus.
 
+The editor shows each control as a card with its name, probability toggle, weighted targets,
+and activation sliders. Its header offers Reload, Save as, and a TOML toggle; TOML appears beside
+the cards when there is room and below them in narrow panels. The single **Save** action applies
+pending TOML edits before writing, and a disk conflict asks which version to keep.
+
 The editor is a widget, so it works in your own app too:
 
 ```python
