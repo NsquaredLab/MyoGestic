@@ -7,20 +7,97 @@ from pathlib import Path
 import pytest
 
 from myogestic.remote import InterfaceSpec
+from myogestic.vhi import interfaces as vhi_interfaces
 from myogestic.vhi import virtual_hand
 
 
-def test_virtual_hand_default_paths(monkeypatch):
-    """With env unset, virtual_hand resolves install_root to the repo-relative
-    tools/MyoGestic-VHI directory (in a git checkout)."""
+@pytest.fixture
+def install_roots(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    # A worktree has a .git file rather than a directory.
+    (repo / ".git").write_text("gitdir: /unused/worktree")
+    user_data = tmp_path / "user_data"
+    monkeypatch.setattr(vhi_interfaces, "__file__", str(repo / "myogestic" / "vhi" / "interfaces.py"))
+    monkeypatch.setattr(vhi_interfaces, "_user_data_root", lambda: user_data)
+    monkeypatch.setattr(vhi_interfaces.platform, "system", lambda: "Darwin")
     monkeypatch.delenv("GODOT_BIN", raising=False)
     monkeypatch.delenv("VHI_PATH", raising=False)
     monkeypatch.delenv("VHI_LAUNCH_MODE", raising=False)
+    return repo / "tools" / "MyoGestic-VHI", user_data / "vhi"
+
+
+def _install_at(root, kind):
+    marker = root / ("project.godot" if kind == "godot" else "VHI.app/Contents/MacOS/Virtual Hand Interface")
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("")
+    return marker
+
+
+def test_virtual_hand_default_paths(install_roots):
+    """An empty checkout keeps its original install destination as the default."""
+    checkout, _ = install_roots
     spec = virtual_hand()
-    # The documented default: <repo>/tools/MyoGestic-VHI in a git checkout.
-    assert spec.install_root is not None
-    assert spec.install_root.parts[-1] == "MyoGestic-VHI"
-    assert spec.install_root.parts[-2] == "tools"
+    assert spec.install_root == checkout
+    assert spec.launchable() == []
+
+
+@pytest.mark.parametrize("git_kind", ["file", "directory"])
+@pytest.mark.parametrize("kind", ["binary", "godot"])
+@pytest.mark.parametrize("local_install", [False, True])
+def test_virtual_hand_finds_existing_install(install_roots, git_kind, kind, local_install):
+    checkout, user = install_roots
+    if git_kind == "directory":
+        git = checkout.parents[1] / ".git"
+        git.unlink()
+        git.mkdir()
+    # An empty install directory alone must not hide the per-user installation.
+    checkout.mkdir(parents=True)
+    marker = _install_at(user, kind)
+    expected = user
+    if local_install:
+        marker = _install_at(checkout, kind)
+        expected = checkout
+    spec = virtual_hand(godot_bin="/test/godot" if kind == "godot" else None)
+    assert spec.install_root == expected
+    argv = ["/test/godot", "--path", str(expected)] if kind == "godot" else [str(marker)]
+    assert spec.launchable() == [(spec.name, argv)]
+
+
+@pytest.mark.parametrize("outside_checkout", ["no_git", "read_only"])
+def test_virtual_hand_outside_writable_checkout_uses_user_data(install_roots, monkeypatch, outside_checkout):
+    checkout, user = install_roots
+    _install_at(checkout, "binary")
+    if outside_checkout == "no_git":
+        (checkout.parents[1] / ".git").unlink()
+    else:
+        monkeypatch.setattr(vhi_interfaces.os, "access", lambda *args: False)
+    assert virtual_hand().install_root == user
+
+
+@pytest.mark.parametrize("override", ["environment", "argument"])
+def test_virtual_hand_path_override_wins_even_when_missing(install_roots, tmp_path, monkeypatch, override):
+    checkout, user = install_roots
+    _install_at(checkout, "binary")
+    _install_at(user, "binary")
+    missing = tmp_path / "explicit_vhi"
+    if override == "environment":
+        monkeypatch.setenv("VHI_PATH", str(missing))
+        spec = virtual_hand()
+    else:
+        monkeypatch.setenv("VHI_PATH", str(user))
+        spec = virtual_hand(vhi_path=str(missing))
+    assert spec.install_root == missing
+    assert spec.launchable() == []
+
+
+def test_installer_destination_stays_in_checkout_with_per_user_install(install_roots):
+    from myogestic.tools.install_vhi import _default_dest
+
+    checkout, user = install_roots
+    _install_at(user, "binary")
+    assert virtual_hand().install_root == user
+    assert _default_dest() == checkout
 
 
 def test_virtual_hand_env_overrides(tmp_path, monkeypatch):
