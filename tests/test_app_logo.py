@@ -141,7 +141,7 @@ def test_header_is_left_aligned_and_stays_in_one_row(
             dividers.append((tuple(start), tuple(end), color, thickness))
         return add_line(draw_list, start, end, color, thickness=thickness)
 
-    pill = workflow["status_pill"]
+    pill = workflow["header"].ui.__func__.__globals__["status_pill"]
 
     def track_pill(label, color):
         pill(label, color)
@@ -150,7 +150,7 @@ def test_header_is_left_aligned_and_stays_in_one_row(
     monkeypatch.setattr(imgui, "button", track_button)
     monkeypatch.setattr(imgui, "text_colored", track_text)
     monkeypatch.setattr(imgui.ImDrawList, "add_line", track_line)
-    monkeypatch.setitem(workflow["header_ui"].__globals__, "status_pill", track_pill)
+    monkeypatch.setitem(workflow["header"].ui.__func__.__globals__, "status_pill", track_pill)
     ctx = workflow["app"].ctx
     ctx.participant = "P-014"
 
@@ -160,7 +160,7 @@ def test_header_is_left_aligned_and_stays_in_one_row(
         imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(ui_px(12), ui_px(4)))
         imgui.begin("brand-header", flags=imgui.WindowFlags_.no_title_bar)
         right_edges.append(imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x)
-        workflow["header_ui"](ctx)
+        workflow["header"].ui(ctx, workflow["_step_done"](ctx))
         imgui.end()
         imgui.pop_style_var()
 
@@ -193,14 +193,14 @@ def test_header_is_left_aligned_and_stays_in_one_row(
 def test_header_pill_stays_inside_on_the_first_frame_after_scaling(
     imgui_frame, monkeypatch, logo_image, workflow,
 ):
-    pill = workflow["status_pill"]
+    pill = workflow["header"].ui.__func__.__globals__["status_pill"]
     right_edges, pill_edges = [], []
 
     def track_pill(label, color):
         pill(label, color)
         pill_edges.append(imgui.get_item_rect_max().x)
 
-    monkeypatch.setitem(workflow["header_ui"].__globals__, "status_pill", track_pill)
+    monkeypatch.setitem(workflow["header"].ui.__func__.__globals__, "status_pill", track_pill)
 
     def draw():
         imgui.set_next_window_pos(imgui.ImVec2(0, 0))
@@ -208,7 +208,7 @@ def test_header_pill_stays_inside_on_the_first_frame_after_scaling(
         imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(ui_px(12), ui_px(4)))
         imgui.begin("resizing-header", flags=imgui.WindowFlags_.no_title_bar)
         right_edges.append(imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x)
-        workflow["header_ui"](workflow["app"].ctx)
+        workflow["header"].ui(workflow["app"].ctx)
         imgui.end()
         imgui.pop_style_var()
 

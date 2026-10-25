@@ -29,11 +29,12 @@ def _connector(done: bool, top: float) -> None:
 
 def _step_button(index: int, label: str, done: bool) -> bool:
     """Draw one button, colouring only the completion check when present."""
+    suffix = f"  {label}" if label else ""
     if not done:
-        return imgui.button(f"{index + 1}  {label}###step{index}")
+        return imgui.button(f"{index + 1}{suffix}###step{index}")
 
     padding = imgui.get_style().frame_padding
-    content = f"{fa.ICON_FA_CHECK}  {label}"
+    content = f"{fa.ICON_FA_CHECK}{suffix}"
     size = imgui.ImVec2(
         imgui.calc_text_size(content).x + 2 * padding.x, imgui.get_frame_height()
     )
@@ -45,8 +46,9 @@ def _step_button(index: int, label: str, done: bool) -> bool:
     origin = imgui.get_item_rect_min()
     imgui.set_cursor_screen_pos(imgui.ImVec2(origin.x + padding.x, origin.y + padding.y))
     imgui.text_colored(SUCCESS, fa.ICON_FA_CHECK)
-    imgui.same_line(0.0, imgui.calc_text_size("  ").x)
-    imgui.text_unformatted(label)
+    if label:
+        imgui.same_line(0.0, imgui.calc_text_size("  ").x)
+        imgui.text_unformatted(label)
     imgui.end_group()
     return clicked
 
@@ -87,7 +89,7 @@ class StepBar:
             raise ValueError("Set active to an index within steps.")
         _active_steps[self._widget_id] = index
 
-    def ui(self, done: list[bool]) -> int:
+    def ui(self, done: list[bool], *, compact: bool = False) -> int:
         """Draw the steps and return the selected index.
 
         Parameters
@@ -95,6 +97,9 @@ class StepBar:
         done : list[bool]
             One completion flag per step. Completed steps show a green check;
             every step remains clickable regardless of these flags.
+        compact : bool, optional
+            Label only the active step; inactive steps show their number or
+            checkmark with the full label on hover. By default False.
 
         Returns
         -------
@@ -120,10 +125,12 @@ class StepBar:
                 selected = index == self.active
                 if selected:
                     push_selected()
-                if _step_button(index, label, complete):
+                if _step_button(index, "" if compact and not selected else label, complete):
                     self.active = index
                 if selected:
                     pop_selected()
+                if compact and not selected and imgui.is_item_hovered():
+                    imgui.set_tooltip(label)
         finally:
             imgui.pop_id()
         return self.active

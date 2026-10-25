@@ -101,6 +101,16 @@ def status_pill(label: str, color: imgui.ImVec4) -> None:
     )
 
 
+def edge_rule(*, bottom: bool) -> None:
+    """Separate a bare header or footer from the body with a theme hairline."""
+    origin, size = imgui.get_window_pos(), imgui.get_window_size()
+    y = origin.y + size.y - ui_px(1) if bottom else origin.y
+    imgui.get_window_draw_list().add_line(
+        imgui.ImVec2(origin.x, y), imgui.ImVec2(origin.x + size.x, y),
+        imgui.get_color_u32(hairline()), thickness=ui_px(1),
+    )
+
+
 def primary() -> imgui.ImVec4:
     """The theme's main text colour — resolved per call, so it follows light/dark.
 
