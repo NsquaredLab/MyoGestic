@@ -14,8 +14,8 @@ Run with:
 
 import numpy as np
 
-from myogestic import App
-from myogestic.widgets import TrialPreview
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, TrialPreview
 
 FS = 2000.0
 _t = np.arange(0, 1.0, 1 / FS)
@@ -26,6 +26,8 @@ DATA = np.stack(
 ).astype(np.float32)
 
 app = App("panel: trial_preview")
+header = AppHeader("TrialPreview", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 preview = TrialPreview(
     widget_id="trial",
@@ -37,7 +39,10 @@ preview = TrialPreview(
 
 @app.ui
 def ui(ctx):
-    preview.ui(DATA, FS)
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        preview.ui(DATA, FS)
 
 
 def main() -> None:

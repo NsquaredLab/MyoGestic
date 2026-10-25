@@ -9,11 +9,13 @@ Run with:
     uv run python examples/panels/raw_signal_viewer.py
 """
 
-from myogestic import App, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.sources import SyntheticSource
-from myogestic.widgets import RawSignalViewer
+from myogestic.widgets import AppHeader, RawSignalViewer
 
 app = App("panel: raw_signal_viewer")
+header = AppHeader("RawSignalViewer", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 # Nothing attaches a stream on its own — see `Stream.reconnect`. This source is
 # synthetic and in-process, so there is no other producer to pick up by mistake,
 # and no operator to press the button: the script attaches its own.
@@ -26,7 +28,10 @@ viewer = RawSignalViewer("emg")
 
 @app.ui
 def ui(ctx):
-    viewer.ui(ctx)
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        viewer.ui(ctx)
 
 
 def main() -> None:

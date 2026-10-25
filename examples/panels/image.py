@@ -10,17 +10,22 @@ Run with:
     uv run python examples/panels/image.py
 """
 
-from myogestic import App
-from myogestic.widgets import Image
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, Image
 
 app = App("panel: image")
+header = AppHeader("Image", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 img = Image("app_settings/icon.png", max_size=256)
 
 
 @app.ui
 def ui(ctx):
-    img.ui()
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        img.ui()
 
 
 def main() -> None:

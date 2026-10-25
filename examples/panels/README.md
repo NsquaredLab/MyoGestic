@@ -1,8 +1,8 @@
 # Panel examples — one widget at a time
 
 The runnable counterpart to the [widget gallery](../../docs/widget-gallery.md):
-one standalone script per public widget, each standing up **that widget
-alone** with dummy data so you can see and interact with it at full
+one standalone script per public widget, each showing **that widget**
+below the shared application header, with dummy data so you can interact at full
 functionality — no hardware, no full app.
 
 ```bash
@@ -10,15 +10,19 @@ uv run python examples/panels/signal_viewer.py
 ```
 
 Each script is self-contained: a module docstring, a minimal `App`, inline
-dummy data, one `@app.ui` panel, `app.run()`. The stream-backed ones feed on
+dummy data, one `@app.ui` callback, `app.run()`. Every demo opens with an
+`AppHeader` in a bare `Px(52)` Grid row, followed by its own body layout. The
+header names the widget; recording, training and prediction demos keep the state
+pill, while viewers and tools use `show_state=False`. The stream-backed ones feed on
 `myogestic.sources.SyntheticSource` — a paced fake amplifier that ships with
 the package, so an example is also a working recipe.
 
 The widgets use the 2.0 kit directly: one header per card, state rows in words,
 selection chips, and Settings popovers. Demo-only inputs sit in their own cards
 when they accompany a widget. Pong's captioned inputs stack in narrow cells;
-StepBar keeps its navigation in a full-width header cell, with completion controls
-in the card below.
+StepBar keeps its navigation in a full-width card beneath the app header, with
+completion controls in the card below. The AppLogo demo still shows the fit-to-cell
+wordmark in its body; the header uses the inline logo like every other demo.
 
 | Script | Widget | Shows |
 |--------|--------|-------|

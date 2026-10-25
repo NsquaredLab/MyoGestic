@@ -17,13 +17,15 @@ Run with:
 
 import tempfile
 
-from myogestic import App, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.sources import SyntheticSource
-from myogestic.widgets import RecordButton, SessionManager
+from myogestic.widgets import AppHeader, RecordButton, SessionManager
 
 REC_DIR = tempfile.mkdtemp(prefix="panel_record_button_")
 
 app = App("panel: record_button")
+header = AppHeader("RecordButton", show_state=True)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 # Nothing attaches a stream on its own — see `Stream.reconnect`. This source is
 # synthetic and in-process, so the script attaches its own.
 stream = Stream("emg", source=SyntheticSource(n_channels=8), window_ms=250)
@@ -42,8 +44,11 @@ sessions = SessionManager(REC_DIR, title="Saved takes")
 
 @app.ui
 def ui(ctx):
-    recorder.ui(ctx)
-    sessions.ui()
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        recorder.ui(ctx)
+        sessions.ui()
 
 
 def main() -> None:
