@@ -44,7 +44,9 @@ The "comfortable" column is the regime where models start performing within a fe
 
 ## Verifying before you train
 
-The `TemplateInspector` and `TrialPreview` widgets show the trials extracted from your selected sessions. Look at:
+The `TemplateInspector` and `TrialPreview` widgets show the trials extracted from your selected sessions. The inspector reports how many templates are kept, with gesture-count chips to filter the list. Toggle a row's **Kept** / **Out** chip to include or exclude it from training; **All** and **None** apply to every template, including hidden rows. Click a source to preview its trial. Filtering keeps that preview selected until you select another source or remove its row.
+
+Each row shows a gesture tag, source, energy bar and trial number. Gesture colours default to the categorical palette; custom `label_colors` tint the tags while their text follows the active theme. `TrialPreview` shows the selected window in seconds above the traces, with a translucent band marking the region of interest. Look at:
 
 - **Counts**: at least 5 trials of each class for classification; more if your hardware is noisy.
 - **Per-trial preview pop-out**: each trial should show a clean activation onset followed by sustained activity. If a "trial" lands on a flat baseline, your labelling went wrong (usually because the recording started with the user already gripping).
