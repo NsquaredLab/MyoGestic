@@ -151,6 +151,22 @@ Without `opponent` the far wall simply returns the ball, and the score is hits a
 
 ## Branding
 
+::: myogestic.widgets.AppHeader
+
+Place `AppHeader` in a bare `Px(52)` Grid row. It draws the line logo, muted
+title and state pill, with optional `StepBar` navigation and a `ParticipantPanel`
+chip. Call `header.ui(ctx, done)` inside the cell; no style pushes are needed.
+Without steps, `done` is optional and the return value is `None`. Long titles
+ellipsize and reveal their full text on hover. With steps, the title yields
+first, then step padding tightens; the participant chip yields to the state pill.
+At smaller widths only the active step retains its label, and the others show
+their number or checkmark with the full label on hover.
+
+Grid caps vertical padding in short bare rows so a control fits inside the row.
+See the standalone
+[`app_header.py` example](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/panels/app_header.py)
+for headers with and without workflow steps.
+
 ::: myogestic.widgets.Image
 
 ::: myogestic.widgets.AppLogo

@@ -620,7 +620,7 @@ def test_myocontrol_header_fits_the_theme_padding(app_module, monkeypatch, implo
         padding = imgui.get_style().window_padding
         bounds.append((
             maximum.x <= pos.x + extent.x - padding.x,
-            maximum.y <= pos.y + extent.y - padding.y,
+            maximum.y <= pos.y + extent.y - imgui.get_cursor_start_pos().y,
         ))
 
     text_colored = imgui.text_colored
@@ -631,7 +631,7 @@ def test_myocontrol_header_fits_the_theme_padding(app_module, monkeypatch, implo
             remember()
 
     monkeypatch.setattr(imgui, "text_colored", text)
-    ui_globals = app_module["myocontrol_ui"].__globals__
+    ui_globals = app_module["header"].ui.__func__.__globals__
     status_pill = ui_globals["status_pill"]
 
     def pill(label, color):
@@ -642,8 +642,8 @@ def test_myocontrol_header_fits_the_theme_padding(app_module, monkeypatch, implo
     steps = app_module["steps"]
     step_ui = steps.ui
 
-    def navigation(done):
-        active = step_ui(done)
+    def navigation(done, **kwargs):
+        active = step_ui(done, **kwargs)
         remember()
         return active
 
@@ -669,7 +669,7 @@ def test_header_controls_share_a_row_after_resizing(app_module, monkeypatch, imp
     items = []
     bounds = []
     button = imgui.button
-    pill = app_module["status_pill"]
+    pill = app_module["header"].ui.__func__.__globals__["status_pill"]
 
     def remember():
         lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
@@ -689,7 +689,7 @@ def test_header_controls_share_a_row_after_resizing(app_module, monkeypatch, imp
             remember()
 
     monkeypatch.setattr(imgui, "button", tracked_button)
-    monkeypatch.setitem(app_module["header_ui"].__globals__, "status_pill", tracked_pill)
+    monkeypatch.setitem(app_module["header"].ui.__func__.__globals__, "status_pill", tracked_pill)
     for scale, width in [(1.0, 900), (1.3, 1440), (0.85, 900)]:
         monkeypatch.setattr(_scale, "_current", scale)
         _theme.apply_theme()
@@ -1364,7 +1364,7 @@ def test_train_card_fits_step_cell(app_module, implot_frame, monkeypatch, scale,
     imgui.get_style().font_scale_main = scale
     size = (1280 * scale, 828 * scale)
     imgui.get_io().display_size = imgui.ImVec2(*size)
-    monkeypatch.setitem(app_module["myocontrol_ui"].__globals__, "header_ui", lambda ctx: 2)
+    monkeypatch.setattr(app_module["header"], "ui", lambda ctx, done: 2)
     render = app_module["model_ui"]
     measurements = []
 
