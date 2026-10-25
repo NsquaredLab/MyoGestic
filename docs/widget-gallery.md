@@ -54,7 +54,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![session_manager](images/widgets/session_manager.png){ .widget-thumb loading=lazy }
 
-    Browses recorded sessions (folders or `.session.zip`), lets the user tick which to include, and returns a [`TrainingData`][myogestic.TrainingData] for `@pipeline.train`. Per-row class buttons select active classes.
+    One line per take, grouped by day with only the newest group open. The list scrolls beneath a fixed header, selection summary, and gesture chips; **All** / **None** change every take, and gesture chips include or exclude classes from training. Files loaded from outside the scanned folder appear under **Loaded**. Returns [`TrainingData`][myogestic.TrainingData] for `@pipeline.train`; `selection()` exposes selected/total counts and included gesture seconds for a Train card.
 
 </div>
 

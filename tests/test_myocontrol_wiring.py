@@ -232,7 +232,7 @@ def test_empty_recorded_block_keeps_whole_guidance(app_module, monkeypatch, imgu
 @pytest.mark.parametrize(
     ("panel", "reason"),
     [
-        ("model_ui", "Record a take or select session files below first."),
+        ("model_ui", "Record a take or select takes below first."),
         ("drive_ui", "No model yet — train or load a model first."),
     ],
 )
@@ -1082,3 +1082,119 @@ def test_connect_card_fits_real_step_layout(app_module, monkeypatch, implot_fram
     implot_frame(draw)
     implot_frame(draw)
     assert all(cursor <= height and scroll == 0 for cursor, height, scroll in measurements), measurements
+
+
+def test_train_card_uses_selection_and_names_missing_gesture(app_module, imgui_frame, monkeypatch):
+    from types import SimpleNamespace
+
+    from myogestic import TrainingData
+
+    render = app_module["model_ui"]
+    globals_ = render.__globals__
+    summary = SimpleNamespace(n_selected=2, n_total=3, class_seconds={"Rest": 18.})
+    monkeypatch.setattr(app_module["sessions"], "selection", lambda: summary, raising=False)
+    app_module["pipeline"].training_data = TrainingData(paths=["one", "two"], classes={0})
+    reasons, actions, text = [], [], []
+    monkeypatch.setitem(globals_, "_disabled_reason", reasons.append)
+    real_mono = globals_["mono_text"]
+
+    def mono(value, color=None):
+        text.append(value)
+        real_mono(value, color)
+
+    monkeypatch.setitem(globals_, "mono_text", mono)
+    monkeypatch.setitem(globals_, "primary_button", lambda label, size=(0, 0): actions.append((label, size)) or True)
+    monkeypatch.setattr(app_module["pipeline"], "start_training", lambda: pytest.fail("missing Fist must disable training"))
+    imgui_frame(render)
+    assert any("Fist" in reason for reason in reasons)
+    assert actions[-1][0] == "Train classifier" and actions[-1][1][0] < 0
+    assert "0:18" in text
+
+
+def test_train_card_starts_fit_and_shows_saved_model(app_module, imgui_frame, monkeypatch):
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    from myogestic import TrainingData
+
+    render = app_module["model_ui"]
+    globals_ = render.__globals__
+    summary = SimpleNamespace(n_selected=2, n_total=2, class_seconds={"Rest": 18., "Fist": 22.})
+    monkeypatch.setattr(app_module["sessions"], "selection", lambda: summary, raising=False)
+    pipeline = app_module["pipeline"]
+    pipeline.training_data = TrainingData(paths=["one", "two"], classes={0, 1})
+    pipeline.model = object()
+    pipeline.last_saved_model = "/sessions/P-014/classifier.pkl"
+    app_module["training_inputs"]["fitted"] = app_module["_input_fingerprint"]()
+    starts, labels = [], []
+    monkeypatch.setattr(pipeline, "start_training", lambda: starts.append(True))
+    monkeypatch.setitem(globals_, "primary_button", lambda *args, **kwargs: True)
+    real_text = imgui.text_unformatted
+
+    def text(value, *args):
+        labels.append(value)
+        real_text(value, *args)
+
+    monkeypatch.setattr(imgui, "text_unformatted", text)
+    imgui_frame(render)
+    assert starts == [True]
+    assert app_module["training_inputs"]["requested"] == app_module["_input_fingerprint"]()
+    assert any("classifier.pkl" in label for label in labels)
+
+
+@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("fitted", [False, True])
+def test_train_card_fits_step_cell(app_module, implot_frame, monkeypatch, scale, fitted):
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    from myogestic import TrainingData, _scale, _theme
+
+    if fitted:
+        summary = SimpleNamespace(n_selected=12, n_total=38, class_seconds={"Rest": 180., "Fist": 220.})
+        monkeypatch.setattr(app_module["sessions"], "selection", lambda: summary)
+        monkeypatch.setattr(app_module["sessions"], "ui", lambda **kwargs: TrainingData(paths=["take"], classes={0, 1}))
+        app_module["pipeline"].model = object()
+        app_module["pipeline"].last_saved_model = "/sessions/P-014/classifier.pkl"
+        # A fitted model plus changed features keeps the warning and saved row visible.
+    font_path = Path(myogestic.core.__file__).parent / "assets/fonts/IBMPlexMono-Regular.ttf"
+    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 13.)
+    monkeypatch.setattr(_theme, "_MONO_FONT", font)
+    mono_bounds = []
+    mono = app_module["model_ui"].__globals__["mono_text"]
+
+    def measured_mono(text, color=None):
+        mono(text, color)
+        mono_bounds.append((text, imgui.get_item_rect_max().x,
+                            imgui.get_window_pos().x + imgui.get_window_size().x - imgui.get_style().window_padding.x))
+
+    monkeypatch.setitem(app_module["model_ui"].__globals__, "mono_text", measured_mono)
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    size = (1280 * scale, 828 * scale)
+    imgui.get_io().display_size = imgui.ImVec2(*size)
+    monkeypatch.setitem(app_module["myocontrol_ui"].__globals__, "header_ui", lambda ctx: 2)
+    render = app_module["model_ui"]
+    measurements = []
+
+    def tracked():
+        render()
+        measurements.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y, imgui.get_scroll_max_y()))
+
+    monkeypatch.setitem(app_module["myocontrol_ui"].__globals__, "model_ui", tracked)
+
+    def draw():
+        imgui.set_next_window_size(imgui.ImVec2(*size))
+        imgui.begin("train-workflow")
+        app_module["myocontrol_ui"](app_module["app"].ctx)
+        imgui.end()
+
+    implot_frame(draw)
+    implot_frame(draw)
+    assert all(cursor <= height and scroll == 0 for cursor, height, scroll in measurements), measurements
+    assert all(right <= edge + 1 for _, right, edge in mono_bounds), mono_bounds

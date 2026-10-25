@@ -35,7 +35,25 @@ def ui(ctx):
 
 The `on_gesture` callback is yours; the label is added by `RecordingControls` itself before calling it. You don't need to call `ctx.session.add_label()` manually.
 
-`SessionManager` lists every folder/archive under `base_path`, lets the user tick which to include in training, and returns a [`TrainingData`][myogestic.TrainingData] instance ready for `@pipeline.train`.
+`SessionManager` lists folders and archives under `base_path` when you press its rescan icon.
+Passing `ui(participant="P-014")` scans that participant's subfolder automatically. Each take
+occupies one line, grouped by its recorded day (Today, Yesterday, or a date); only the newest
+group starts open. A take's gesture names, time, and duration stay on that line, with its file
+name, optional take name, and streams in the tooltip. The list alone scrolls, leaving the
+header, selected count, and gesture chips visible.
+
+Use **All** / **None** to select or clear every take, including collapsed days. Gesture chips
+show totals across all listed takes; toggling one excludes that class from training and mutes
+its chips in the take rows. Exclusions survive **None** followed by **All**, and reset when you
+change participants or clear the list. The load icon adds files from elsewhere under **Loaded**;
+the broom clears the list while leaving files on disk.
+
+`ui()` returns a [`TrainingData`][myogestic.TrainingData] instance ready for `@pipeline.train`.
+`selection()` reads the same selection without rendering or scanning: `n_selected`, `n_total`,
+and `class_seconds` (selected takes and included gestures only). Older recordings without
+per-gesture duration metadata contribute zero seconds for their labels. Myocontrol's Train
+card uses this summary for its gesture bars and total, explains missing gestures before a fit,
+and shows the saved model's filename after training.
 
 ## Recording cycles
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
@@ -53,6 +54,7 @@ def _session_row(path: Path) -> dict | None:
             # What the operator called this take, when they named it on Stop.
             "session_name": str(meta.get("name") or ""),
             "participant": _slug(str(meta.get("participant") or "")),
+            "created": _created(meta.get("created")),
             "date_str": _date_str(meta, path),
             "streams_str": _streams_str(streams_meta),
             "n_labels": len(labels),
@@ -174,5 +176,96 @@ def class_pool_and_active(state: SessionWidgetState) -> tuple[set[int], set[int]
                 if ci >= 0:
                     classes_in_pool.add(ci)
 
-    state.deactivated_classes &= classes_in_pool
     return classes_in_pool, classes_in_pool - state.deactivated_classes
+
+
+@dataclass(frozen=True)
+class SelectionSummary:
+    """A snapshot of selected takes and included gesture durations.
+
+    Attributes
+    ----------
+    n_selected : int
+        Number of checked takes, including takes with no labels.
+    n_total : int
+        Number of takes in the list, including files loaded from elsewhere.
+    class_seconds : dict[str, float]
+        Seconds per included gesture in checked takes. Older takes without
+        duration metadata contribute zero seconds for their recorded labels.
+    """
+
+    n_selected: int
+    n_total: int
+    class_seconds: dict[str, float]
+
+
+def row_gestures(row: dict, class_names: list[str] | None) -> list[tuple[int | None, str, float]]:
+    """Resolve recorded names without inventing an index for an unknown name."""
+    names = row.get("class_names") or class_names or []
+    seconds = row.get("class_seconds", {})
+    gestures = []
+    for key in row.get("label_counts", {}):
+        ci = int(key)
+        if ci >= 0:
+            name = names[ci] if ci < len(names) else f"c{ci}"
+            # Duration metadata is authoritative about which named gestures occurred.
+            if not seconds or name in seconds:
+                gestures.append((ci, name, float(seconds.get(name, 0.0))))
+    present = {name for _, name, _ in gestures}
+    for name, elapsed in seconds.items():
+        if name not in present:
+            gestures.append((names.index(name) if name in names else None, name, float(elapsed)))
+    return gestures
+
+
+def selection_summary(state: SessionWidgetState, class_names: list[str] | None) -> SelectionSummary:
+    """Read the same selected rows and class exclusions used for training."""
+    seconds: dict[str, float] = defaultdict(float)
+    selected = [row for row in state.sessions if row["selected"]]
+    for row in selected:
+        for ci, name, elapsed in row_gestures(row, class_names):
+            if ci not in state.deactivated_classes:
+                seconds[name] += elapsed
+    return SelectionSummary(len(selected), len(state.sessions), dict(seconds))
+
+
+@dataclass
+class SessionGroup:
+    key: str
+    label: str
+    rows: list[dict]
+    default_open: bool = False
+
+
+def _created(value: object) -> datetime | None:
+    try:
+        stamp = datetime.fromisoformat(str(value))
+        return stamp.astimezone().replace(tzinfo=None) if stamp.tzinfo else stamp
+    except ValueError:
+        return None
+
+
+def group_sessions(
+    sessions: list[dict], base_path: str, *, today: date | None = None,
+) -> list[SessionGroup]:
+    """Group local takes by recorded day, then files loaded from elsewhere."""
+    today = today or date.today()
+    base = Path(base_path).resolve()
+    groups: dict[str, SessionGroup] = {}
+    for row in sorted(sessions, key=lambda r: r.get("created") or datetime.min, reverse=True):
+        created = row.get("created")
+        if Path(row["path"]).parent != base:
+            key, label = "loaded", "Loaded"
+        elif created is None:
+            key, label = "undated", "Undated"
+        else:
+            day = created.date()
+            key = day.isoformat()
+            label = ("Today" if day == today else "Yesterday" if day == today - timedelta(days=1)
+                     else day.strftime("%b %d"))
+        groups.setdefault(key, SessionGroup(key, label, [])).rows.append(row)
+    ordered = [g for k, g in groups.items() if k not in {"loaded", "undated"}]
+    ordered.extend(groups[k] for k in ("undated", "loaded") if k in groups)
+    if ordered:
+        ordered[0].default_open = True
+    return ordered
