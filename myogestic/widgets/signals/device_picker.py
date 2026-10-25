@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
+from myogestic._theme import mono_font
 from myogestic.sources.lsl import LSLSource
 from myogestic.sources.otb import MuoviSource, QuattrocentoSource, SessantaquattroSource
 from myogestic.sources.synthetic import SyntheticSource
@@ -30,12 +31,17 @@ from myogestic.widgets.common import (
     DANGER,
     IDLE,
     SUCCESS,
+    destructive_button,
     format_age,
     label_column,
     mono_text,
     muted,
     panel_header,
+    pop_selected,
+    primary_button,
+    push_selected,
     segmented,
+    tinted_row,
     ui_px,
 )
 
@@ -442,11 +448,16 @@ class DevicePicker:
         `Grid` cell is a single child window — so two of these in one cell
         share every slider, popup and plot until they are told apart.
     selectable
-        Add a **Stream** row naming which stream this panel configures, chosen
-        from ``ctx.streams``. For an app where streams come and go at runtime —
-        one picker follows whichever you are setting up, instead of one panel
-        per stream. Off by default: with a single declared stream the row is a
-        dropdown of one.
+        Show sorted stream chips from ``ctx.streams``, each with a status dot.
+        Clicking a chip changes only which stream this panel configures.
+    on_add
+        Optional callback receiving a cleaned stream name. With ``selectable``,
+        adds a trailing plus chip and inline name field. Build a `Stream` and
+        pass it to `App.add_stream`; the app owns its geometry.
+    on_remove
+        Optional callback receiving the selected stream's name; pass
+        `App.remove_stream`. The last offered stream cannot be removed.
+        Adding and removing are disabled during a recording.
     exclude
         Stream names this panel must not offer. For a stream whose source
         belongs to another widget — a `TrackingTask`'s target, a replay — where
@@ -455,9 +466,9 @@ class DevicePicker:
         name. A frozen set, so streams added at runtime are offered unless they
         are named here.
     show_header
-        Render the standard ``panel_header``. Turning it off also removes the
-        status dot, so the panel loses its state cue — leave it on unless the
-        surrounding layout already says which device this is.
+        Render the standard ``panel_header``. Turn it off when the surrounding
+        layout already names the card; chips and the action area still carry
+        the selected stream's state.
 
     Examples
     --------
@@ -473,6 +484,8 @@ class DevicePicker:
         devices: Sequence[DeviceSpec] = DEFAULT_DEVICES,
         show_header: bool = True,
         selectable: bool = False,
+        on_add: Callable[[str], object] | None = None,
+        on_remove: Callable[[str], object] | None = None,
         exclude: Iterable[str] = (),
         widget_id: str | None = None,
     ) -> None:
@@ -481,6 +494,10 @@ class DevicePicker:
         self._devices = tuple(devices)
         self._show_header = show_header
         self._selectable = selectable
+        self._on_add = on_add
+        self._on_remove = on_remove
+        self._adding = False
+        self._typed = ""
         self._excluded = frozenset(exclude)
         self._scanning = False
         # One entry per stream this panel has been pointed at. Every field on
@@ -584,16 +601,22 @@ class DevicePicker:
         """
         imgui.push_id(self._widget_id)
         try:
+            if self._selectable:
+                names = sorted(n for n in ctx.streams if n not in self._excluded)
+                if names and self._stream_name not in names:
+                    self._select_stream(names[0])
             stream = ctx.streams.get(self._stream_name)
             tone, detail = self._state(stream)
 
             if self._show_header:
-                # No tooltip on the dot. Colour alone is not a readable answer, so
-                # the state has to live somewhere else — but this panel already
-                # prints it in words below the buttons, and a tooltip repeating that
-                # is a second copy to keep in step for no gain. Panels with no
-                # visible read-out (`process_launcher`) do still carry one.
+                # Detached state has no separate status row; keep its explanation
+                # on the header while live geometry stays in the action area.
                 panel_header("Source", fa.ICON_FA_MICROCHIP, status=tone)
+                imgui.set_item_tooltip(detail)
+
+            if self._selectable:
+                self._stream_row(ctx)
+                stream = ctx.streams.get(self._stream_name)
 
             if stream is None:
                 imgui.text_colored(muted(), f"(no stream named {self._stream_name!r})")
@@ -602,17 +625,9 @@ class DevicePicker:
                 imgui.text_colored(muted(), "(no devices configured)")
                 return
 
-            if self._selectable:
-                self._stream_row(ctx)
-                stream = ctx.streams.get(self._stream_name)
-                if stream is None:
-                    imgui.text_colored(muted(), "(no stream selected)")
-                    return
-
             self._selected = min(self._selected, len(self._devices) - 1)
             dev = self._devices[self._selected]
-            # One column width for every row, so the fields line up as a block
-            # rather than reading as four unrelated controls.
+            # Live sliders retain a shared label column below the compact card.
             among = _row_labels(dev)
 
             style = imgui.get_style()
@@ -623,7 +638,7 @@ class DevicePicker:
                 if dev.hint or dev.steps
                 else 0.0
             )
-            label_column("Device", among, reserve=info_w)
+            imgui.set_next_item_width(max(1.0, imgui.get_content_region_avail().x - info_w))
             changed, idx = imgui.combo(
                 "##dp_device", self._selected, [d.label for d in self._devices]
             )
@@ -652,22 +667,129 @@ class DevicePicker:
 
             imgui.spacing()
             self._connect_ui(ctx, stream, dev)
-            mono_text(detail, DANGER if tone is DANGER else muted())
             self._live_ui(stream, dev, among)
         finally:
             imgui.pop_id()
 
     def _stream_row(self, ctx: Context) -> None:
-        """Which stream this panel configures."""
+        """Stream chips, with inline add and selected-stream removal."""
         names = sorted(n for n in ctx.streams if n not in self._excluded)
-        label_column("Stream", ("Stream", "Device"))
-        if not names:
-            imgui.text_colored(muted(), "(none)")
-            return
-        current = names.index(self._stream_name) if self._stream_name in names else -1
-        changed, idx = imgui.combo("##dp_stream", current, names)
-        if changed and 0 <= idx < len(names):
-            self._select_stream(names[idx])
+        recording = getattr(ctx, "state", "") == "recording"
+        style = imgui.get_style()
+        left = imgui.get_cursor_pos_x()
+        right = left + imgui.get_content_region_avail().x
+        remove = None
+        for index, name in enumerate(names):
+            stream = ctx.streams[name]
+            tone = (SUCCESS if stream.status == "connected" and stream.info is not None
+                    else DANGER if stream.last_error else IDLE)
+            selected = name == self._stream_name
+            removable = selected and self._on_remove is not None and len(names) > 1
+            remove_w = (imgui.calc_text_size(fa.ICON_FA_XMARK).x + 2 * style.frame_padding.x
+                        + style.item_spacing.x) if removable else 0.0
+            font = mono_font()
+            if font is not None:
+                imgui.push_font(font, style.font_size_base)
+            shown = name
+            dot_w = imgui.get_font_size() + style.item_spacing.x
+            limit = max(1.0, right - left - remove_w)
+            while shown and imgui.calc_text_size(shown + "…").x + dot_w + 2 * style.frame_padding.x > limit:
+                shown = shown[:-1]
+            if shown != name:
+                shown += "…"
+            width = min(limit, imgui.calc_text_size(shown).x + dot_w + 2 * style.frame_padding.x)
+            if index:
+                imgui.same_line()
+                if imgui.get_cursor_pos_x() + width + remove_w > right:
+                    imgui.new_line()
+            imgui.push_style_var(imgui.StyleVar_.frame_rounding, imgui.get_frame_height() * 0.5)
+            if selected:
+                push_selected()
+            clicked = imgui.button(f"##dp_stream_{name}", imgui.ImVec2(width, 0))
+            if selected:
+                pop_selected()
+            origin = imgui.get_item_rect_min()
+            draw = imgui.get_window_draw_list()
+            draw.add_text(imgui.ImVec2(origin.x + style.frame_padding.x + dot_w,
+                                      origin.y + style.frame_padding.y),
+                          imgui.get_color_u32(imgui.Col_.text), shown)
+            if font is not None:
+                imgui.pop_font()
+            draw.add_text(imgui.ImVec2(origin.x + style.frame_padding.x,
+                                      origin.y + style.frame_padding.y),
+                          imgui.get_color_u32(tone), fa.ICON_FA_CIRCLE)
+            imgui.set_item_tooltip(f"{name}: {stream.last_error or stream.status}")
+            if clicked:
+                self._select_stream(name)
+            if removable:
+                imgui.same_line()
+                imgui.begin_disabled(recording)
+                if destructive_button(f"{fa.ICON_FA_XMARK}##dp_remove_{name}") and not recording:
+                    remove = name
+                imgui.end_disabled()
+                self._action_tooltip(
+                    "Stop the recording before removing a stream." if recording else "",
+                    f"Remove stream {name!r}.",
+                )
+            imgui.pop_style_var()
+        if remove is not None:
+            self._on_remove(remove)
+            remaining = sorted(n for n in ctx.streams if n not in self._excluded)
+            if remaining and self._stream_name not in remaining:
+                self._select_stream(remaining[0])
+        if self._on_add is not None:
+            if names:
+                imgui.same_line()
+                plus_w = imgui.calc_text_size(fa.ICON_FA_PLUS).x + 2 * style.frame_padding.x
+                if imgui.get_cursor_pos_x() + plus_w > right:
+                    imgui.new_line()
+            imgui.begin_disabled(recording)
+            if imgui.button(f"{fa.ICON_FA_PLUS}##dp_add_open") and not recording:
+                self._adding = True
+            imgui.end_disabled()
+            self._action_tooltip("Stop the recording before adding a stream." if recording else "",
+                                 "Add a stream.")
+            if self._adding:
+                self._add_row(ctx, recording=recording)
+
+    def _add_row(self, ctx: Context, *, recording: bool) -> None:
+        """Collect a name using StreamManager's cleaning and callback contract."""
+        # Local to avoid the panels/signals package initialization cycle.
+        from myogestic.widgets.panels.stream_manager import _NAME_MAX, _clean_name
+
+        style = imgui.get_style()
+        reserve = (imgui.calc_text_size("Add").x + imgui.calc_text_size(fa.ICON_FA_XMARK).x
+                   + 4 * style.frame_padding.x + 2 * style.item_spacing.x)
+        imgui.set_next_item_width(max(1.0, imgui.get_content_region_avail().x - reserve))
+        imgui.begin_disabled(recording)
+        changed, typed = imgui.input_text_with_hint("##dp_new", "e.g. force", self._typed)
+        if changed:
+            self._typed = typed[:_NAME_MAX]
+        imgui.end_disabled()
+        cleaned = _clean_name(self._typed)
+        if recording:
+            reason = "Stop the recording before adding a stream."
+        elif not cleaned:
+            reason = "Type a name first."
+        elif cleaned in ctx.streams:
+            reason = f"A stream named {cleaned!r} already exists."
+        else:
+            reason = ""
+        imgui.same_line()
+        imgui.begin_disabled(bool(reason))
+        if imgui.button("Add##dp_add") and not reason:
+            self._on_add(cleaned)
+            self._typed = ""
+            self._adding = False
+            if cleaned in ctx.streams:
+                self._select_stream(cleaned)
+        imgui.end_disabled()
+        self._action_tooltip(reason, f"Add a stream named {cleaned!r}.")
+        imgui.same_line()
+        if imgui.button(f"{fa.ICON_FA_XMARK}##dp_add_cancel"):
+            self._adding = False
+            self._typed = ""
+        imgui.set_item_tooltip("Cancel adding a stream.")
 
     def _select_stream(self, name: str) -> None:
         """Point the panel at another stream. Changes nothing but which one is shown.
@@ -732,53 +854,67 @@ class DevicePicker:
 
     # --- configuration ------------------------------------------------------
     def _option_ui(self, dev: DeviceSpec, among: Sequence[str]) -> None:
-        """One labelled row per option — segmented where it fits, else a combo."""
-        choices = self._choices[self._selected]
-        for opt in dev.options:
-            labels = list(opt.choices)
-            if not labels:
-                continue
-            current = min(max(choices.get(opt.kwarg, 0), 0), len(labels) - 1)
-            width = label_column(opt.label, among)
-            if _fits_segmented(labels, width):
-                choices[opt.kwarg] = segmented(f"dp_{opt.kwarg}", labels, current)
-            else:
-                changed, idx = imgui.combo(f"##dp_opt_{opt.kwarg}", current, labels)
-                if changed:
-                    choices[opt.kwarg] = idx
+        """Captioned controls in two columns, stacking when a combo cannot fit."""
+        options = [opt for opt in dev.options if opt.choices]
+        if not options:
+            return
+        style = imgui.get_style()
+        width = imgui.get_content_region_avail().x
+        cell = (width - style.item_spacing.x) * 0.5
+        minimum = max(
+            max(imgui.calc_text_size(label).x for label in opt.choices)
+            + imgui.get_frame_height() + 2 * style.frame_padding.x
+            for opt in options
+        )
+        columns = 2 if len(options) > 1 and cell >= max(ui_px(90), minimum) else 1
+        flags = imgui.TableFlags_.sizing_stretch_same | imgui.TableFlags_.no_pad_outer_x
+        if not imgui.begin_table("dp_options", columns, flags):
+            return
+        try:
+            choices = self._choices[self._selected]
+            for opt in options:
+                imgui.table_next_column()
+                imgui.align_text_to_frame_padding()
+                imgui.text_colored(muted(), opt.label)
+                labels = list(opt.choices)
+                current = min(max(choices.get(opt.kwarg, 0), 0), len(labels) - 1)
+                available = imgui.get_content_region_avail().x
+                imgui.set_next_item_width(available)
+                if _fits_segmented(labels, available):
+                    choices[opt.kwarg] = segmented(f"dp_{opt.kwarg}", labels, current)
+                else:
+                    changed, idx = imgui.combo(f"##dp_opt_{opt.kwarg}", current, labels)
+                    if changed:
+                        choices[opt.kwarg] = idx
+        finally:
+            imgui.end_table()
 
     def _scan_ui(self, dev: DeviceSpec, among: Sequence[str]) -> None:
-        """A labelled target row fed by ``discover()``, with a rescan button."""
-        # Auto-scan once per selection, so the list is already there without
-        # the user knowing to press Scan first.
+        """An Outlet caption above the target combo and its rescan action."""
         if self._scanned_for != self._selected and not self._scanning:
             self._start_scan(dev)
-
+        imgui.text_colored(muted(), "Outlet")
         style = imgui.get_style()
-        rescan_w = (
-            imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x
-            + style.frame_padding.x * 2.0
-            + style.item_spacing.x
-        )
-        label_column("Stream", among, reserve=rescan_w)
-
-        if self._scanning:
-            imgui.text_colored(muted(), "scanning…")
-            return
-
-        if not self._targets:
-            imgui.text_colored(muted(), "nothing found" if self._scanned_for is not None else "—")
-        else:
-            labels = [f"{t.get('name', '?')} ({t.get('info', '')})" for t in self._targets]
+        rescan_w = imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x + style.frame_padding.x * 2
+        right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+        imgui.set_next_item_width(max(1.0, imgui.get_content_region_avail().x - rescan_w - style.item_spacing.x))
+        labels = [f"{t.get('name', '?')} ({t.get('info', '')})" for t in self._targets]
+        if labels and not self._scanning:
             self._target_selected = min(self._target_selected, len(labels) - 1)
             changed, idx = imgui.combo("##dp_target", self._target_selected, labels)
             if changed:
                 self._target_selected = idx
-
+        else:
+            imgui.begin_disabled()
+            imgui.combo("##dp_target", 0, ["scanning…" if self._scanning else "nothing found"])
+            imgui.end_disabled()
         imgui.same_line()
+        imgui.set_cursor_pos_x(right - rescan_w)
+        imgui.begin_disabled(self._scanning)
         if imgui.button(f"{fa.ICON_FA_ARROWS_ROTATE}##dp_scan"):
             self._start_scan(dev)
-        imgui.set_item_tooltip("Rescan for outlets")
+        imgui.end_disabled()
+        self._action_tooltip("Scanning for outlets…" if self._scanning else "", "Rescan for outlets")
 
     def _start_scan(self, dev: DeviceSpec) -> None:
         """Run ``discover()`` off-thread on a throwaway source.
@@ -843,59 +979,70 @@ class DevicePicker:
 
     # --- connect ------------------------------------------------------------
     def _connect_ui(self, ctx: Context, stream: Stream, dev: DeviceSpec) -> None:
-        """Full-width primary action, disabled with the reason in its tooltip.
-
-        While a connect is in flight the button becomes **Abort** rather than a
-        greyed-out "Connecting…". An OTB source waits ``accept_timeout`` — 30 s
-        by default — for a device to dial in, and a device that was never
-        switched on never will. Without a way out the panel is dead for half a
-        minute and the operator cannot even pick a different device.
-        """
-        full = imgui.ImVec2(-1, 0)
+        """One compact action area for detached, connecting and connected states."""
+        style = imgui.get_style()
         if self._connecting:
-            # `STOP` already means "halt what is running" on the record button.
-            if imgui.button(f"{fa.ICON_FA_STOP}  Abort##dp_abort", full):
+            right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(IDLE, fa.ICON_FA_CIRCLE)
+            imgui.same_line()
+            mono_text(self._state(stream)[1], muted())
+            imgui.same_line()
+            abort_w = imgui.calc_text_size("Abort").x + 2 * style.frame_padding.x
+            imgui.set_cursor_pos_x(right - abort_w)
+            if imgui.button("Abort##dp_abort"):
                 self._abort(ctx, stream)
             imgui.set_item_tooltip("Stop waiting for the device.")
             return
 
         recording = getattr(ctx, "state", "") == "recording"
-        reason = ""
-        if recording:
-            # `reconnect` does not detach the session, so the acquire loop would
-            # keep appending to the same zarr key at a new channel width.
-            reason = "Stop the recording before changing device."
-        elif dev.scan and not self._targets:
-            reason = "No target to connect to yet."
-
-        # The glyph shows what clicking will do: plug in, or re-fetch live state.
+        reason = "Stop the recording before changing device." if recording else ""
+        connect_reason = reason or ("No target to connect to yet." if dev.scan and not self._targets else "")
         attached = stream.status == "connected" and stream.info is not None
-        blocked = bool(reason)
-        if blocked:
-            imgui.begin_disabled()
-
         if attached:
-            # Two actions, so the row splits. Reconnect leads: re-reading a
-            # device that has gone quiet is the common one, and detaching is
-            # something you do at the end of a session.
-            style = imgui.get_style()
-            half = (imgui.get_content_region_avail().x - style.item_spacing.x) * 0.5
-            if imgui.button(
-                f"{fa.ICON_FA_ARROWS_ROTATE}  Reconnect##dp_connect", imgui.ImVec2(half, 0)
-            ):
-                self._connect(ctx, stream, dev)
-            self._action_tooltip(reason, "Build this device again and re-attach the stream.")
-            imgui.same_line()
-            if imgui.button(f"{fa.ICON_FA_PLUG_CIRCLE_XMARK}  Disconnect##dp_disconnect", full):
-                self._disconnect(ctx, stream)
-            self._action_tooltip(reason, "Close the device and leave the stream detached.")
+            with tinted_row(SUCCESS) as width:
+                right = imgui.get_cursor_pos_x() + width
+                reconnect_w = imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x + 2 * style.frame_padding.x
+                disconnect_w = imgui.calc_text_size(fa.ICON_FA_PLUG_CIRCLE_XMARK).x + 2 * style.frame_padding.x
+                actions_x = right - reconnect_w - disconnect_w - style.item_spacing.x
+                imgui.align_text_to_frame_padding()
+                imgui.text_colored(SUCCESS, fa.ICON_FA_CIRCLE)
+                imgui.same_line()
+                detail = self._state(stream)[1]
+                font = mono_font()
+                if font is not None:
+                    imgui.push_font(font, style.font_size_base)
+                available = max(0.0, actions_x - imgui.get_cursor_pos_x() - style.item_spacing.x)
+                shown = detail
+                while shown and imgui.calc_text_size(shown + "…").x > available:
+                    shown = shown[:-1]
+                if shown != detail:
+                    shown = shown + "…" if available >= imgui.calc_text_size("…").x else ""
+                mono_text(shown)
+                if font is not None:
+                    imgui.pop_font()
+                imgui.set_item_tooltip(detail)
+                imgui.same_line()
+                imgui.set_cursor_pos_x(actions_x)
+                imgui.begin_disabled(bool(connect_reason))
+                if imgui.button(f"{fa.ICON_FA_ARROWS_ROTATE}##dp_connect") and not connect_reason:
+                    self._connect(ctx, stream, dev)
+                imgui.end_disabled()
+                self._action_tooltip(connect_reason, "Reconnect: build this device again and re-attach the stream.")
+                imgui.same_line()
+                imgui.begin_disabled(bool(reason))
+                if imgui.button(f"{fa.ICON_FA_PLUG_CIRCLE_XMARK}##dp_disconnect") and not reason:
+                    self._disconnect(ctx, stream)
+                imgui.end_disabled()
+                self._action_tooltip(reason, "Disconnect: close the device and leave the stream detached.")
         else:
-            if imgui.button(f"{fa.ICON_FA_PLUG}  Connect##dp_connect", full):
+            imgui.begin_disabled(bool(connect_reason))
+            if primary_button(f"{fa.ICON_FA_PLUG}  Connect##dp_connect", (-1, 0)) and not connect_reason:
                 self._connect(ctx, stream, dev)
-            self._action_tooltip(reason, "Build this device and attach the stream to it.")
-
-        if blocked:
             imgui.end_disabled()
+            self._action_tooltip(connect_reason, "Build this device and attach the stream to it.")
+            if stream.last_error:
+                mono_text(stream.last_error, DANGER)
 
     @staticmethod
     def _action_tooltip(reason: str, otherwise: str) -> None:

@@ -37,7 +37,6 @@ from myogestic.widgets import (
     SessionManager,
     SignalViewer,
     StepBar,
-    StreamManager,
     status_pill,
 )
 from myogestic.widgets.common import (
@@ -55,6 +54,7 @@ from myogestic.widgets.common import (
     primary_button,
     push_selected,
     segmented,
+    tinted_row,
     ui_px,
 )
 
@@ -260,26 +260,25 @@ participant = ParticipantPanel()
 recorded: dict[str, Any] = {"participant": None, "state": "idle", "time": RecordedTime(0, 0.0, {})}
 header_widths: dict[str, float] = {}
 
-# No `exclude`: every stream here is a device stream.
-device = DevicePicker("emg", selectable=True)
-# Add a second amplifier while the app runs. The panel names the stream; the app owns
-# its geometry.
-streams = StreamManager(
+# Every stream here is a device stream; the app owns its acquisition geometry.
+device = DevicePicker(
+    "emg", selectable=True, show_header=False,
     on_add=lambda name: app.add_stream(
         Stream(name, source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS)
     ),
     on_remove=app.remove_stream,
-    show_header=False,
 )
 log = LogPanel(title="Activity log")
 # The Source panel owns connecting, so the viewer offers no button of its own.
 viewer = SignalViewer("emg", show_connect=False, selectable=True, show_title=True)
 # `launchable`, never `launcher`: a VHI that cannot be launched must not stop this app
 # from opening, and one already running needs no button.
-processes = ProcessLauncher(vhi.launchable())
+hand_processes = vhi.launchable()
+processes = ProcessLauncher(hand_processes)
 # VHI takes seconds to boot and `ensure()` blocks, so this retries in the background —
 # rate-limited and single-flight, safe to poll every frame.
 binder = ControlLinkConnector(link)
+hand_attempt = {"phase": "idle"}
 sessions = SessionManager("sessions", class_names=CLASSES)
 prediction = PredictionLabel(pipeline, CLASSES, show_probability=True)
 hand_connection: dict[str, ControlBus | None] = {"announced": None}
@@ -532,17 +531,25 @@ def connect_ui(ctx: Context) -> None:
     """Connect step: choose acquisition and launch or bind the Virtual Hand."""
     device.ui(ctx)
     imgui.spacing()
-    panel_header("STREAMS")
-    streams.ui(ctx)
-    imgui.spacing()
-    panel_header("MAINS NOTCH")
+    imgui.align_text_to_frame_padding()
+    imgui.text("Mains notch")
+    imgui.set_item_tooltip("Filters the recording and the model input.")
+    imgui.same_line()
     imgui.begin_disabled(ctx.state != "idle")
+    # Segments size to their labels; equal padding gives them the rest of the row.
+    style = imgui.get_style()
+    room = imgui.get_content_region_avail().x
+    labels_width = sum(imgui.calc_text_size(label).x for label in NOTCH_CHOICES)
+    padding = max(0.0, (room - labels_width - 2 * (len(NOTCH_CHOICES) - 1)) / (2 * len(NOTCH_CHOICES)))
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(padding, style.frame_padding.y))
     notch["index"] = segmented("notch", NOTCH_CHOICES, notch["index"])
+    imgui.pop_style_var()
     imgui.end_disabled()
+    if ctx.state != "idle" and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+        imgui.set_tooltip("Return to idle before changing the mains notch.")
     stream = ctx.streams.get("emg")
     if stream is not None:
         stream.notch_hz = NOTCH_HZ[notch["index"]]
-    imgui.text_wrapped("Conditions both recordings and the model input.")
     imgui.spacing()
     hand_ui()
 
@@ -590,44 +597,100 @@ def drive_ui() -> None:
 
 
 def hand_ui() -> None:
-    """Launch VHI in Connect, and bind to it once it answers.
+    """Connect to an existing hand first, then launch one only if none answered.
 
-    Launching is the only press. This still keeps "nothing attaches on its own" — the
-    binding follows an act the operator performed, it just does not make them perform a
-    second one to confirm the first. A VHI already running when the app opened was
-    started outside this panel, so `ProcessLauncher.running` cannot see it; **Bind now**
-    is there for that case.
+    The operator's Connect arms the background binder. Stop cancels the attempt;
+    a replacement connector waits for late cleanup before it can bind again.
     """
-    processes.ui()
-    imgui.spacing()
+    global binder
     bound = link.bus is not None
-    panel_header("CONTROL MAP", status=SUCCESS if bound else None)
-    for alias, binding in CONTROL_MAP.bindings.items():
-        mono_text(alias)
-        imgui.indent(ui_px(14))
-        targets = binding.targets
-        where = (
-            f"{len(targets)} controls"
-            if len(targets) > 1
-            # The leading `vhi.` is the same on every row; the tail is what differs.
-            else targets[0].address.split(".", 1)[-1]
-        )
-        imgui.text_colored(muted(), f"{where} · {ALIAS_ROLES.get(alias, UNDRIVEN)}")
-        imgui.unindent(ui_px(14))
-    imgui.spacing()
-    if bound:
-        _announce_binding(link.bus)
-        imgui.text_disabled("Bound — Predict drives the hand.")
-        return
-    if processes.running(vhi.name):
-        # Launched from this panel: retry until its manifest answers. `poll` never blocks
-        # and never raises, so a VHI that never comes up costs one attempt every 2 s.
+    running = processes.running(vhi.name)
+    phase = hand_attempt["phase"]
+    if phase == "stopping" and binder.finished:
+        binder = ControlLinkConnector(link)
+        phase = "stopped" if running else "idle"
+        bound = link.bus is not None
+    if phase == "idle" and running and not bound:
+        phase = "launched"
+    if phase == "checking" and binder.finished:
+        # Re-read after completion: the worker may have bound since this frame began.
+        bound = link.bus is not None
+        if not bound:
+            if binder.last_error is not None:
+                # A responding but incompatible target must not spawn another.
+                phase = "failed"
+            elif running:
+                phase = "launched"
+            elif hand_processes:
+                processes.launch(vhi.name)
+                running = True
+                phase = "launched"
+            else:
+                phase = "failed"
+    if phase == "launched" and not bound and not binder.busy:
         binder.poll()
-        imgui.text_disabled(binder.status or "Launched — binding as soon as VHI answers…")
-        return
-    if imgui.button("Bind now") and _bind() is None:
-        app.ctx.log("VHI did not answer. Launch it above, or start it before the app.")
-    imgui.text_wrapped("Launch VHI above, or bind to one already running.")
+    if bound and phase != "stopping":
+        phase = "bound"
+    hand_attempt["phase"] = phase
+    if bound and phase != "stopping":
+        _announce_binding(link.bus)
+        tone, detail = SUCCESS, "bound · prediction and control → hand"
+    elif phase == "stopping":
+        tone, detail = WARNING, "stopping…"
+    elif phase in ("checking", "launched"):
+        tone, detail = WARNING, binder.status or "launched · binding as soon as it answers…"
+    elif phase == "failed":
+        tone = DANGER
+        detail = binder.status if binder.last_error is not None else "no Virtual Hand answered"
+    else:
+        tone, detail = IDLE, "not running"
+    if running or phase in ("checking", "launched", "stopping"):
+        action = "Stop"
+    elif bound:
+        action = ""
+    else:
+        action = "Retry" if phase == "failed" else "Connect"
+    mapping = "\n".join(
+        f"{alias} → {', '.join(target.address for target in binding.targets)} · {ALIAS_ROLES.get(alias, UNDRIVEN)}"
+        for alias, binding in CONTROL_MAP.bindings.items()
+    )
+    style = imgui.get_style()
+    with tinted_row() as width:
+        right = imgui.get_cursor_pos_x() + width
+        action_w = imgui.calc_text_size(action).x + 2 * style.frame_padding.x if action else 0.0
+        imgui.align_text_to_frame_padding()
+        imgui.text_colored(tone, fa.ICON_FA_CIRCLE)
+        imgui.same_line()
+        imgui.text("Virtual Hand")
+        imgui.same_line()
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, style.font_size_base)
+        available = max(0.0, right - action_w - style.item_spacing.x - imgui.get_cursor_pos_x())
+        mono_text(_ellipsize(detail, available), muted())
+        if font is not None:
+            imgui.pop_font()
+        imgui.set_item_tooltip(f"{detail}\n\n{mapping}")
+        if action:
+            imgui.same_line()
+            imgui.set_cursor_pos_x(right - action_w)
+            imgui.begin_disabled(phase == "stopping")
+            if imgui.button(action) and phase != "stopping":
+                if action == "Stop":
+                    binder.stop(timeout_s=0.0)
+                    if running:
+                        processes.stop(vhi.name)
+                    hand_attempt["phase"] = "stopping"
+                else:
+                    binder.poll(force=True)
+                    hand_attempt["phase"] = "checking"
+            imgui.end_disabled()
+            if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+                imgui.set_tooltip(
+                    "Wait for the connection attempt to stop." if phase == "stopping"
+                    else "Stop connecting and close the hand launched here." if action == "Stop"
+                    else "Bind to a running Virtual Hand, or launch one if none answers."
+                )
 
 
 def _step_done(ctx: Context) -> list[bool]:
@@ -773,7 +836,10 @@ def myocontrol_ui(ctx: Context) -> None:
     with layout["log"]:
         log.ui(ctx)
     with layout["step"]:
-        panel_header(steps.steps[active])
+        stream = ctx.streams.get("emg")
+        tone = (SUCCESS if stream is not None and stream.status == "connected" and stream.info is not None
+                else DANGER if stream is not None and stream.last_error else IDLE)
+        panel_header(steps.steps[active], status=tone if active == 0 else None)
         if active == 0:
             connect_ui(ctx)
         elif active == 1:

@@ -286,22 +286,76 @@ def test_myocontrol_uses_no_private_imports():
     assert private == []
 
 
-def test_connect_step_offers_stream_manager(app_module, monkeypatch, imgui_frame):
-    from myogestic.widgets import StreamManager
-
-    streams = app_module["streams"]
-    assert isinstance(streams, StreamManager)
+def test_connect_step_uses_one_picker_for_stream_management(app_module, monkeypatch, imgui_frame):
+    picker = app_module["device"]
+    assert picker._selectable and not picker._show_header
+    assert picker._on_add is not None
+    assert picker._on_remove == app_module["app"].remove_stream
+    assert "streams" not in app_module
     drawn = []
-    render = streams.ui
-
-    def draw(ctx):
-        render(ctx)
-        drawn.append(ctx)
-
-    monkeypatch.setattr(streams, "ui", draw)
+    monkeypatch.setattr(picker, "ui", drawn.append)
     ctx = app_module["app"].ctx
     imgui_frame(lambda: app_module["connect_ui"](ctx))
     assert drawn == [ctx]
+
+
+def test_connect_fits_default_step_cell(app_module, monkeypatch, imgui_frame):
+    from imgui_bundle import imgui
+
+    from myogestic import _theme
+
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    heights = []
+
+    def draw():
+        imgui.begin_child("connect-card", imgui.ImVec2(400, 400))
+        top = imgui.get_cursor_pos_y()
+        app_module["panel_header"]("Connect")
+        app_module["connect_ui"](app_module["app"].ctx)
+        heights.append(imgui.get_cursor_pos_y() - top)
+        imgui.end_child()
+
+    imgui_frame(draw)
+    assert heights[0] <= 400 - 2 * imgui.get_style().window_padding.y
+
+
+@pytest.mark.parametrize("running,bound,launchable,expected", [
+    (False, False, True, ["Connect"]),
+    (False, False, False, ["Connect"]),
+    (False, True, True, []),
+    (True, False, True, ["Stop"]),
+    (True, True, True, ["Stop"]),
+])
+def test_hand_actions_fit_one_row(app_module, monkeypatch, imgui_frame, running, bound, launchable, expected):
+    from imgui_bundle import imgui
+
+    monkeypatch.setattr(type(app_module["processes"]), "running", lambda *args: running)
+    monkeypatch.setitem(app_module["hand_ui"].__globals__, "hand_processes", [("hand", ["hand"])] if launchable else [])
+    monkeypatch.setattr(type(app_module["binder"]), "poll", lambda self: None)
+    if bound:
+        app_module["link"]._bus = object()
+    actions = []
+    button = imgui.button
+
+    def tracked(label, *args):
+        actions.append(label.split("##")[0])
+        return button(label, *args)
+
+    monkeypatch.setattr(imgui, "button", tracked)
+    heights = []
+
+    def draw():
+        top = imgui.get_cursor_pos_y()
+        app_module["hand_ui"]()
+        heights.append(imgui.get_cursor_pos_y() - top)
+
+    try:
+        imgui_frame(draw)
+        assert actions == expected
+        assert heights[0] <= imgui.get_frame_height() + app_module["ui_px"](8) + imgui.get_style().item_spacing.y
+    finally:
+        app_module["link"]._bus = None
 
 
 def test_record_step_done_reads_disk(app_module, tmp_path, monkeypatch):
@@ -807,3 +861,159 @@ def test_train_refuses_a_take_conditioned_differently_from_the_switch(app_module
     with pytest.raises(ValueError) as excinfo:
         train(TrainingData(paths=[filtered], classes=set()))
     assert "recorded with notch" not in str(excinfo.value), str(excinfo.value)
+
+
+def test_hand_connect_checks_before_launch_and_stop_cancels(app_module, monkeypatch, imgui_frame):
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    state = SimpleNamespace(busy=False, finished=False, last_error=None, status="", polls=0, stops=0)
+
+    def poll(*, force=False):
+        state.polls += 1
+        state.busy = True
+        state.finished = False
+        return True
+
+    def stop(*, timeout_s):
+        assert timeout_s == 0.0
+        state.stops += 1
+
+    state.poll, state.stop = poll, stop
+    globals_ = app_module["hand_ui"].__globals__
+    monkeypatch.setitem(globals_, "binder", state)
+    monkeypatch.setitem(globals_, "hand_processes", [("hand", ["hand"])])
+    running = {"value": False}
+    launched, stopped = [], []
+
+    def launch(name):
+        launched.append(name)
+        running["value"] = True
+
+    monkeypatch.setattr(app_module["processes"], "launch", launch)
+    monkeypatch.setattr(app_module["processes"], "stop", stopped.append)
+    monkeypatch.setattr(app_module["processes"], "running", lambda name: running["value"])
+    click = {"label": None}
+    button = imgui.button
+
+    def pressed(label, *args):
+        button(label, *args)
+        return label == click["label"]
+
+    monkeypatch.setattr(imgui, "button", pressed)
+    render = app_module["hand_ui"]
+    imgui_frame(render)
+    assert state.polls == 0 and launched == []
+    click["label"] = "Connect"
+    imgui_frame(render)
+    assert state.polls == 1 and launched == []
+    click["label"] = None
+    imgui_frame(render)
+    assert state.polls == 1 and launched == []
+    state.busy, state.finished = False, True
+    imgui_frame(render)
+    assert launched == [app_module["vhi"].name]
+    assert state.polls == 2
+    click["label"] = "Stop"
+    imgui_frame(render)
+    assert stopped == [app_module["vhi"].name] and state.stops == 1
+    click["label"] = None
+    imgui_frame(render)
+    assert state.polls == 2 and len(launched) == 1
+
+
+@pytest.mark.parametrize("result", ["external", "missing", "incompatible"])
+def test_hand_bind_outcome_never_launches_a_second_target(app_module, monkeypatch, imgui_frame, result):
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    state = SimpleNamespace(busy=False, finished=True, last_error=None, status="")
+    state.poll = lambda **kwargs: True
+    globals_ = app_module["hand_ui"].__globals__
+    monkeypatch.setitem(globals_, "binder", state)
+    monkeypatch.setitem(globals_, "hand_processes", [] if result == "missing" else [("hand", ["hand"])])
+    monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
+    monkeypatch.setattr(app_module["processes"], "launch", lambda name: pytest.fail("duplicate launch"))
+    button = imgui.button
+    click = {"label": "Connect"}
+    actions = []
+
+    def pressed(label, *args):
+        actions.append(label)
+        button(label, *args)
+        return label == click["label"]
+
+    monkeypatch.setattr(imgui, "button", pressed)
+    imgui_frame(app_module["hand_ui"])
+    click["label"] = None
+    actions.clear()
+    if result == "external":
+        app_module["link"]._bus = object()
+    elif result == "incompatible":
+        state.last_error = ValueError("wrong map")
+        state.status = "control connection failed: wrong map"
+    try:
+        imgui_frame(app_module["hand_ui"])
+        assert actions == ([] if result == "external" else ["Retry"])
+    finally:
+        app_module["link"]._bus = None
+
+
+def test_hand_rechecks_bus_after_observing_attempt_completion(app_module, monkeypatch, imgui_frame):
+    """The worker can bind between the initial bus read and its completion read."""
+    class JustFinished:
+        busy = False
+        last_error = None
+        status = "controls connected"
+
+        @property
+        def finished(self):
+            app_module["link"]._bus = object()
+            return True
+
+    globals_ = app_module["hand_ui"].__globals__
+    monkeypatch.setitem(globals_, "binder", JustFinished())
+    monkeypatch.setitem(globals_, "hand_processes", [("hand", ["hand"])])
+    app_module["hand_attempt"]["phase"] = "checking"
+    monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
+    monkeypatch.setattr(app_module["processes"], "launch", lambda name: pytest.fail("launched beside the bound hand"))
+    try:
+        imgui_frame(app_module["hand_ui"])
+    finally:
+        app_module["link"]._bus = None
+
+
+@pytest.mark.parametrize("scale,size", [(1.0, (1280, 828)), (1.0, (900, 1100)), (2.0, (2560, 1656))])
+def test_connect_card_fits_real_step_layout(app_module, monkeypatch, implot_frame, scale, size):
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    imgui.get_io().display_size = imgui.ImVec2(*size)
+    render = app_module["connect_ui"]
+    measurements = []
+
+    def tracked(ctx):
+        render(ctx)
+        cursor = imgui.get_cursor_pos_y()
+        height = imgui.get_window_size().y
+        measurements.append((cursor, height, imgui.get_scroll_max_y()))
+
+    monkeypatch.setitem(app_module["myocontrol_ui"].__globals__, "connect_ui", tracked)
+
+    def draw():
+        imgui.set_next_window_size(imgui.ImVec2(*size))
+        imgui.begin("connect-workflow")
+        app_module["myocontrol_ui"](app_module["app"].ctx)
+        imgui.end()
+
+    implot_frame(draw)
+    implot_frame(draw)
+    assert all(cursor <= height and scroll == 0 for cursor, height, scroll in measurements), measurements
