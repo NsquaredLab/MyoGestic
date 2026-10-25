@@ -116,6 +116,23 @@ To see it with no target at all:
 
 ## The examples
 
+### `electrode_grids.py` - compare electrode arrays
+
+One in-process 256-channel stream split into four 64-channel electrode arrays,
+each in its own `SignalViewer` below the app header. The 2 × 2 tiles start on one
+manual amplitude range, so a quieter array stays visibly quieter. No hardware or
+external generator is needed.
+
+```bash
+uv run python examples/synthetic/electrode_grids.py
+```
+
+**What to tweak:** `Y_RANGE` for the common amplitude scale, `WINDOW_S` for the
+time window, and `initial_channels` for each tile's opening selection. A unique
+`widget_id` keeps selections independent; `channel_scope` keeps All, None,
+Invert and the spatial selection grid inside that tile's array. Expand a tile's
+controls to edit channels, and keep the same manual range when comparing arrays.
+
 ### `my_device.py` - drive your own hardware
 
 A complete in-process target with three lines left for you: name your controls, drive your
