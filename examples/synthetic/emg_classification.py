@@ -8,6 +8,7 @@ Workflow:
     2. Set a participant, then click Rest/Fist to switch signal + set label
     3. Record Rest trial → Record Fist trial
     4. Select sessions → Train → Predict → VHI hand moves
+    5. Use Simulated EMG on any step to try Rest/Fist while predicting
 """
 
 import pathlib
@@ -28,7 +29,6 @@ from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.remote import RemoteTarget
 from myogestic.session import iter_labeled_windows
 from myogestic.sources import LSLSource
-from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     AppHeader,
@@ -41,6 +41,7 @@ from myogestic.widgets import (
     RecordingControls,
     SessionManager,
     SignalViewer,
+    SimulatorControls,
     StatusBar,
     StepBar,
 )
@@ -56,8 +57,6 @@ from myogestic.widgets.common import (
     tinted_row,
     ui_px,
 )
-
-ctrl_outlet = control_outlet()
 
 # --8<-- [start:poses]
 vhi = virtual_hand()
@@ -227,10 +226,11 @@ layout = Layout(
         header   header
         signal   step
         signal   sessions
+        simulator sessions
         log      sessions
         status   status
         """,
-        row_height=[Px(52), Fr(3), Fr(1), Px(110), Px(26)],
+        row_height=[Px(52), Fr(3), Fr(1), Px(76), Px(110), Px(26)],
         col_width=[Fr(1), Px(400)],
         bare=("header", "status"),
     ),
@@ -238,12 +238,13 @@ layout = Layout(
         """
         header
         signal
+        simulator
         step
         sessions
         log
         status
         """,
-        row_height=[Px(52), Fr(2), Fr(3), Fr(1.5), Px(110), Px(26)],
+        row_height=[Px(52), Fr(2), Px(76), Fr(3), Fr(1.5), Px(110), Px(26)],
         bare=("header", "status"),
     ),
     breakpoint=Px(1100),
@@ -256,16 +257,20 @@ status = StatusBar("emg", pipeline=pipeline)
 
 def _on_gesture(i: int) -> None:
     link.ensure()
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
+    simulator.set(CTRL_VALUES[i])
 
 
 def _on_record() -> None:
     link.ensure()
+    # A simulator preview may differ from the gesture selected for this take.
+    if 0 <= app.ctx.current_label < len(CTRL_VALUES):
+        simulator.set(CTRL_VALUES[app.ctx.current_label])
     app.start_recording()
 
 
-# The Connect step owns acquisition; the signal stays visible on every step.
+# The Connect step owns acquisition; signal and simulator stay visible on every step.
 viewer = SignalViewer("emg", show_connect=False)
+simulator = SimulatorControls([("Rest", 0.0), ("Fist", 1.0)])
 processes = ProcessLauncher(PROCESSES)
 recording = RecordingControls(
     CLASSES,
@@ -411,6 +416,8 @@ def demo_ui(ctx: Context) -> None:
             predict_ui()
     with layout["signal"]:
         viewer.ui(ctx)
+    with layout["simulator"]:
+        simulator.ui(ctx)
     with layout["log"]:
         log.ui(ctx)
     imgui.pop_style_var()

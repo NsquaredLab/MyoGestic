@@ -36,6 +36,7 @@ from myogestic.widgets.signals import (
     SignalViewer,
     StreamPanel,
 )
+from myogestic.widgets.signals.simulator_controls import SimulatorControls
 from myogestic.widgets.tracking import TrackingTask
 from myogestic.widgets.training import (
     FeatureSelector,
@@ -88,6 +89,7 @@ __all__ = [
     "StatusBar",
     "StreamManager",
     "SignalViewer",
+    "SimulatorControls",
     "StreamPanel",
     "TemplateInspector",
     "TemplateInspectorRow",
