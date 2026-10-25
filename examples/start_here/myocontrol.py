@@ -16,7 +16,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
-from myogestic._theme import display_font, mono_font
+from myogestic._theme import mono_font
 from myogestic.controls import ControlBus, ControlLink, ControlLinkConnector, load_control_map
 from myogestic.ml import Pipeline, save_pickle
 from myogestic.recipes.estimators import catboost_classifier, catboost_regressor
@@ -26,6 +26,7 @@ from myogestic.session import RecordedTime, iter_labeled_windows, open_session_s
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     DEFAULT_DEVICES,
+    AppLogo,
     DevicePicker,
     FeatureSelector,
     LogPanel,
@@ -653,26 +654,25 @@ def _edge_rule(*, bottom: bool) -> None:
 
 
 def header_ui(ctx: Context) -> int:
-    """Keep the brand, navigation and participant on one centred header row."""
+    """Lead with the brand and steps; keep the participant and state at the right."""
     _edge_rule(bottom=True)
     style = imgui.get_style()
     top = imgui.get_cursor_pos_y()
     height = imgui.get_content_region_avail().y
     center = top + height / 2
-    imgui.set_cursor_pos_y(center - ui_px(22) / 2)
-    imgui.push_font(display_font(), ui_px(22))
-    imgui.text_unformatted("MyoGestic")
-    imgui.pop_font()
-    imgui.same_line()
-    imgui.set_cursor_pos_y(center - imgui.get_text_line_height() / 2)
-    imgui.text_colored(muted(), "Myocontrol")
-    imgui.same_line()
+    imgui.set_cursor_pos_y(center - ui_px(26) / 2)
+    AppLogo(variant="line", height=ui_px(26)).ui()
+    imgui.same_line(0.0, ui_px(14))
     left = imgui.get_cursor_pos_x()
     available = imgui.get_content_region_avail().x
     right = left + available
     done = _step_done(ctx)
 
     # The pill owns its padding; retain its measured width instead of copying it.
+    # A live scale change invalidates measurements from the preceding frame.
+    if header_widths.get("font_size") != imgui.get_font_size():
+        header_widths.clear()
+        header_widths["font_size"] = imgui.get_font_size()
     state = ctx.state.upper()
     pill_w = header_widths.get(state, imgui.calc_text_size(state).x + ui_px(40))
     font = mono_font() if ctx.participant else None
@@ -681,20 +681,42 @@ def header_ui(ctx: Context) -> int:
     chip_w = imgui.calc_text_size(ctx.participant or "Set participant").x + 2 * style.frame_padding.x
     if font is not None:
         imgui.pop_font()
-    # Compact padding leaves room for all four steps on the narrow arrangement too.
-    padding = imgui.ImVec2(ui_px(4), style.frame_padding.y)
-    nav_w = sum(
-        imgui.calc_text_size(f"{fa.ICON_FA_CHECK if complete else i + 1}  {label}").x + 2 * padding.x
+    padding = imgui.ImVec2(style.frame_padding.x, style.frame_padding.y)
+    labels_w = sum(
+        imgui.calc_text_size(f"{fa.ICON_FA_CHECK if complete else i + 1}  {label}").x
         for i, (label, complete) in enumerate(zip(steps.steps, done, strict=True))
     ) + (len(steps.steps) - 1) * ui_px(32)
+    nav_w = labels_w + len(steps.steps) * 2 * padding.x
     gap = style.item_spacing.x
+    title_w = 2 * gap + ui_px(1) + imgui.calc_text_size("Myocontrol").x
+    # Drop the secondary title before compressing the navigation buttons.
+    show_title = (
+        imgui.get_window_size().x >= ui_px(1100)
+        and available >= title_w + nav_w + chip_w + pill_w + 2 * gap
+    )
+    if show_title:
+        imgui.set_cursor_pos_x(left - ui_px(14) + gap)
+        imgui.set_cursor_pos_y(center - ui_px(20) / 2)
+        imgui.dummy(imgui.ImVec2(ui_px(1), ui_px(20)))
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        imgui.get_window_draw_list().add_line(
+            lo, imgui.ImVec2(lo.x, hi.y), imgui.get_color_u32(hairline()), thickness=ui_px(1),
+        )
+        imgui.same_line(0.0, gap)
+        imgui.set_cursor_pos_y(center - imgui.get_text_line_height() / 2)
+        imgui.text_colored(muted(), "Myocontrol")
+        imgui.same_line(0.0, ui_px(14))
+        left = imgui.get_cursor_pos_x()
+        available = imgui.get_content_region_avail().x
+    if available < nav_w + chip_w + pill_w + 2 * gap:
+        padding.x = ui_px(4)
+        nav_w = labels_w + len(steps.steps) * 2 * padding.x
     participant_w = max(chip_w, min(
-        header_widths.get("participant", chip_w), available - nav_w - pill_w - 3 * gap
+        header_widths.get("participant", chip_w), available - nav_w - pill_w - 2 * gap
     ))
     right_w = participant_w + gap + pill_w
     imgui.set_cursor_pos(imgui.ImVec2(
-        left + max(0.0, (available - right_w - nav_w - gap) / 2),
-        center - imgui.get_frame_height() / 2,
+        left, center - imgui.get_frame_height() / 2,
     ))
     imgui.push_style_var(imgui.StyleVar_.frame_padding, padding)
     active = steps.ui(done)
