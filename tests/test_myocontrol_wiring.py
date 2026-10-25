@@ -522,13 +522,13 @@ def test_hand_actions_fit_one_row(app_module, monkeypatch, imgui_frame, running,
     if bound:
         app_module["link"]._bus = object()
     actions = []
-    button = imgui.button
+    button = imgui.small_button
 
     def tracked(label, *args):
         actions.append(label.split("##")[0])
         return button(label, *args)
 
-    monkeypatch.setattr(imgui, "button", tracked)
+    monkeypatch.setattr(imgui, "small_button", tracked)
     heights = []
 
     def draw():
@@ -1081,13 +1081,13 @@ def test_hand_connect_checks_before_launch_and_stop_cancels(app_module, monkeypa
     monkeypatch.setattr(app_module["processes"], "stop", stopped.append)
     monkeypatch.setattr(app_module["processes"], "running", lambda name: running["value"])
     click = {"label": None}
-    button = imgui.button
+    button = imgui.small_button
 
     def pressed(label, *args):
         button(label, *args)
         return label == click["label"]
 
-    monkeypatch.setattr(imgui, "button", pressed)
+    monkeypatch.setattr(imgui, "small_button", pressed)
     render = app_module["hand_ui"]
     imgui_frame(render)
     assert state.polls == 0 and launched == []
@@ -1123,7 +1123,7 @@ def test_hand_bind_outcome_never_launches_a_second_target(app_module, monkeypatc
     monkeypatch.setitem(globals_, "hand_processes", [] if missing_install else [("hand", ["hand"])])
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
     monkeypatch.setattr(app_module["processes"], "launch", lambda name: pytest.fail("duplicate launch"))
-    button = imgui.button
+    button = imgui.small_button
     click = {"label": "Connect"}
     actions = []
 
@@ -1132,7 +1132,7 @@ def test_hand_bind_outcome_never_launches_a_second_target(app_module, monkeypatc
         button(label, *args)
         return label == click["label"]
 
-    monkeypatch.setattr(imgui, "button", pressed)
+    monkeypatch.setattr(imgui, "small_button", pressed)
     imgui_frame(app_module["hand_ui"])
     click["label"] = None
     actions.clear()
@@ -1184,14 +1184,14 @@ def test_hand_missing_install_explains_idle_and_failed_connect(app_module, monke
     monkeypatch.setitem(globals_, "_ellipsize", detail)
     monkeypatch.setattr(imgui, "text_colored", colored)
     monkeypatch.setattr(imgui, "set_item_tooltip", tooltips.append)
-    button = imgui.button
+    button = imgui.small_button
     click = {"label": None}
 
     def pressed(label, *args):
         button(label, *args)
         return label == click["label"]
 
-    monkeypatch.setattr(imgui, "button", pressed)
+    monkeypatch.setattr(imgui, "small_button", pressed)
     hint = app_module["vhi"].install_hint.strip()
 
     def assert_status(expected, tone):

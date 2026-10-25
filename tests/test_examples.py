@@ -195,3 +195,102 @@ def test_every_example_outside_otb_is_in_the_list():
         + "\n\nAdd the folder to EXAMPLES above, or exclude it deliberately the way "
         "`otb/` is — with the reason written down."
     )
+
+
+@pytest.mark.parametrize("name", ["force_ramps", "pong"])
+def test_start_here_picker_owns_device_streams(name, monkeypatch, implot_frame):
+    """Adding an amplifier stays beside Source and cannot replace the target."""
+    from imgui_bundle import imgui
+
+    monkeypatch.setattr(myogestic.core.App, "run", lambda self: None)
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "start_here" / f"{name}.py"))
+    app, picker = namespace["app"], namespace["device"]
+    assert picker._on_add is not None and picker._on_remove is not None
+    assert "target" in picker._excluded
+    target = app.ctx.streams["target"]
+    picker._on_add("second")
+    assert app.ctx.streams["second"]._window == namespace["WINDOW_MS"] / 1000
+    picker._on_remove("second")
+    assert "second" not in app.ctx.streams and app.ctx.streams["target"] is target
+    tabs = []
+    begin_tab = imgui.begin_tab_item
+
+    def track_tab(label, *args, **kwargs):
+        tabs.append(label)
+        return begin_tab(label, *args, **kwargs)
+
+    monkeypatch.setattr(imgui, "begin_tab_item", track_tab)
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert "Streams" not in tabs
+    assert tabs == (["Signal", "Force"] if name == "force_ramps" else
+                    ["Pong", "Signal", "Model", "Source", "Hand"])
+
+
+@pytest.mark.parametrize("name", ["force_ramps", "pong", "myocontrol"])
+def test_start_here_source_card_fits_narrow_light_cell(name, monkeypatch, implot_frame):
+    """The source card remains readable at scale two with no device attached."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "start_here" / f"{name}.py"))
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    overflow = []
+
+    def draw():
+        imgui.begin_child("source-probe", imgui.ImVec2(320, 1000),
+                          window_flags=imgui.WindowFlags_.horizontal_scrollbar)
+        namespace["device"].ui(namespace["app"].ctx)
+        overflow.append(imgui.get_scroll_max_x())
+        imgui.end_child()
+
+    for _ in range(4):
+        implot_frame(draw)
+    assert overflow[-1] == 0, overflow
+
+
+@pytest.mark.parametrize("name", ["force_ramps", "pong"])
+@pytest.mark.parametrize("participant", ["", "P-014"])
+def test_start_here_recording_fits_default_grid(name, participant, monkeypatch, implot_frame):
+    """Recording's explanation and gesture buttons must fit the actual grid row."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "start_here" / f"{name}.py"))
+    app = namespace["app"]
+    app.ctx.participant = participant
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    imgui.get_io().display_size = imgui.ImVec2(2560, 1656)
+    recording = namespace["recording"]
+    render = type(recording).ui
+    measurements = []
+
+    def measured(self, ctx):
+        render(self, ctx)
+        measurements.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y,
+                             imgui.get_scroll_max_y()))
+
+    monkeypatch.setattr(type(recording), "ui", measured)
+
+    def draw():
+        imgui.set_next_window_size(imgui.ImVec2(2560, 1656))
+        imgui.begin("start-here-grid")
+        app._ui_fn(app.ctx)
+        imgui.end()
+
+    for _ in range(4):
+        implot_frame(draw)
+    cursor, height, scroll = measurements[-1]
+    assert cursor <= height and scroll == 0, measurements

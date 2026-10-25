@@ -6,7 +6,7 @@ Run with:
 
 from imgui_bundle import imgui
 
-from myogestic import App, Fr, Grid, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.sources import SyntheticForceSource, TargetSource
 from myogestic.widgets import (
     DEFAULT_DEVICES,
@@ -18,7 +18,6 @@ from myogestic.widgets import (
     RecordButton,
     SessionManager,
     SignalViewer,
-    StreamManager,
     TrackingTask,
 )
 
@@ -37,7 +36,9 @@ app.streams(emg, force_stream, target_stream)
 # array per *attached* stream, so a target going live at Start misses the take.
 target_stream.reconnect()
 
-grid = Grid(6, 3, row_height=[Fr(1)] * 6, col_width=[Fr(1), Fr(1), Fr(1)])
+# Recording needs room for its visible participant explanation at scale 2.
+grid = Grid(6, 3, row_height=[Fr(1), Fr(1), Fr(1), Px(160), Fr(1), Fr(1)],
+            col_width=[Fr(1), Fr(1), Fr(1)])
 
 # A fake load cell beside the real amplifiers, so the Force tab works with
 # nothing plugged in. You are the subject: drag Effort to follow the target.
@@ -63,10 +64,7 @@ device = DevicePicker(
     selectable=True,
     # Not a device stream — connecting one here would replace the task's output.
     exclude=("target",),
-)
-# Add a second amplifier while the app runs. The panel names the stream; the
-# app owns its geometry.
-streams = StreamManager(
+    # The picker names additional amplifiers; the app owns their geometry.
     on_add=lambda name: app.add_stream(
         Stream(name, source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS)
     ),
@@ -109,16 +107,7 @@ def devices_ui(ctx):
     with grid[0:3, 2]:
         participant.ui(ctx)
         imgui.spacing()
-        if imgui.begin_tab_bar("source_cell"):
-            selected, _ = imgui.begin_tab_item("Source")
-            if selected:
-                device.ui(ctx)
-                imgui.end_tab_item()
-            selected, _ = imgui.begin_tab_item("Streams")
-            if selected:
-                streams.ui(ctx)
-                imgui.end_tab_item()
-            imgui.end_tab_bar()
+        device.ui(ctx)
     with grid[3, 2]:
         recording.ui(ctx)
     with grid[4:6, 2]:
