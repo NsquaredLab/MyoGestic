@@ -10,7 +10,7 @@ Run with:
 from imgui_bundle import imgui
 
 from myogestic import App, Context, Fr, Grid, Px
-from myogestic.widgets import StepBar, panel_header
+from myogestic.widgets import AppHeader, StepBar, panel_header
 from myogestic.widgets.common import (
     IDLE,
     SUCCESS,
@@ -19,20 +19,24 @@ from myogestic.widgets.common import (
     pop_selected,
     push_selected,
     tinted_row,
+    ui_px,
 )
 
 app = App("panel: StepBar")
+header = AppHeader("StepBar", show_state=False)
 steps = StepBar(["Connect", "Record", "Train", "Drive"], widget_id="step_bar_demo")
 done = [True, False, False, False]
-layout = Grid.areas("workflow\nselection", row_height=[Px(90), Fr(1)])
+layout = Grid.areas("header\nworkflow\nselection", row_height=[Px(52), Px(90), Fr(1)], bare=("header",))
 
 
 @app.ui
 def ui(ctx: Context) -> None:
-    """Keep the navigation across the header and its demo state in a card."""
+    """Keep the navigation and its demo state in separate cards below the header."""
+    with layout.area("header"):
+        header.ui(ctx)
     with layout.area("workflow"):
         panel_header("Workflow")
-        active = steps.ui(done)
+        active = steps.ui(done, compact=imgui.get_content_region_avail().x < ui_px(460))
     with layout.area("selection"):
         panel_header("Selected step")
         mono_text(steps.steps[active])

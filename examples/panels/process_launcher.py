@@ -13,8 +13,8 @@ Run with:
 
 import sys
 
-from myogestic import App
-from myogestic.widgets import ProcessLauncher
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, ProcessLauncher
 
 PROCESSES = [
     ("EMG Generator", [sys.executable, "-c", "import time; time.sleep(60)"]),
@@ -22,13 +22,18 @@ PROCESSES = [
 ]
 
 app = App("panel: process_launcher")
+header = AppHeader("ProcessLauncher", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 launcher = ProcessLauncher(PROCESSES)
 
 
 @app.ui
 def ui(ctx):
-    launcher.ui()
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        launcher.ui()
 
 
 def main() -> None:

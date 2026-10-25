@@ -11,8 +11,8 @@ Run with:
 
 import numpy as np
 
-from myogestic import App
-from myogestic.widgets import FeatureSelector
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, FeatureSelector
 
 selector = FeatureSelector(
     {
@@ -26,11 +26,16 @@ selector = FeatureSelector(
 )
 
 app = App("panel: FeatureSelector")
+header = AppHeader("FeatureSelector", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 
 @app.ui
 def ui(ctx):
-    selector.ui()
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        selector.ui()
 
 
 def main() -> None:
