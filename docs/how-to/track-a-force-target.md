@@ -112,8 +112,12 @@ happens to carry, so it works identically on Sessantaquattro counts and on
 Quattrocento volts — you do not need the transducer's datasheet to run the task,
 only to report newtons afterwards.
 
-**Start stays disabled until both exist**, and says so on hover. Recapture Zero
-whenever the subject repositions; the transducer's offset moves with the grip.
+The calibration row says **Capture zero, then MVC** until both captures exist.
+**Zero** and **MVC** sit beside that instruction; during MVC capture the same row
+shows the remaining seconds, then the two captured values. **Start stays disabled
+until both exist** and a force reading is available, and explains why on hover.
+Recapture Zero between blocks whenever the subject repositions; the transducer's
+offset moves with the grip. Setup controls are dimmed and locked while a block runs.
 
 ## Give the force its own stream
 
@@ -188,8 +192,11 @@ asking for nothing and effort is the only thing driving the channel.
 
 ## Shape the trapezoid
 
-Every segment is a row in the panel and a field on `Trapezoid`, in the order they
-happen:
+The target row shows a small trapezoid and its durations, level and repetition
+count, such as `2·3·5·3·2 s · 40 % · 5 reps`. Its settings icon opens the five
+durations, **Level**, **Reps** and **Look ahead**. Captions sit above their controls
+in two columns, falling back to one in narrow cells. The segment fields on
+`Trapezoid` are ordered as they happen:
 
 | Field | Default | What it is |
 |---|---|---|
@@ -201,40 +208,26 @@ happen:
 | `level_pct` | 30.0 | Plateau height, in percent of MVC. |
 | `reps` | 1 | How many times the shape repeats back to back. |
 
-Beside those rows the panel draws the block they add up to, every repetition of it,
-captioned with how long it runs — `3 x 28.0 s = 84.0 s`. Seven fields are a shape
-nobody can see, and the total is arithmetic nobody does before pressing Start on a
-subject. It is drawn from the same corners the plot uses, so the preview cannot
-disagree with what eventually runs.
-
-Ticks under the drawing divide it into the five segments and name them, so **Ramp
-down** is a piece of a shape rather than a word above a number. Put the pointer on a
-row and that segment lights up in every repetition, with its own value spelled out
-above the drawing; put the pointer on the drawing instead and it names the segment
-under it. Either direction answers the same question — *which part of this is the
-hold?*
-
-A segment too narrow to hold its name loses the label rather than overlapping its
-neighbour, so at several repetitions the drawing quietly goes back to being the
-block overview. The lit segment is still named above it, which is the case where you
-are asking.
-
-Height is not to scale — the plateau reaches the top whatever the level is. What the
-drawing is for is the part no field states, the arrangement in *time*; **Level** says
-the height, and a second copy of that number here would be one more thing to keep in
-step.
+The sketch previews one repetition using the same corners as the plot. Its height
+is normalised so the time proportions stay legible at small sizes; **Level** states
+the plateau height. A mono summary below the plot gives the whole block's duration,
+for example `3 x 28.0 s = 84.0 s`. Long row readouts ellipsize in narrow cells; hover
+to read the full text.
 
 ## What the subject sees
 
-The plot frames **one repetition at a time**, not the whole block — that is what
-the sketch up in the Target section is for. Five reps on one axis leaves none of
+The plot frames **one repetition at a time**. Five reps on one axis leaves none of
 them readable, and the thing you are watching is the gap between two lines. The
-trace starts over on each rep and the status line counts them: `rep 2/5`.
+trace starts over on each rep. The running row counts repetitions and names the
+phase, such as `Rep 2 of 5 · hold`, above the force and signed error,
+`61 % MVC · error +3 %`. Error is measured force minus the current target.
+**Stop** stays beside this readout; the setup above it is dimmed and locked.
+The **Target** and **Force** legend chips toggle visibility without discarding data.
 
 Your force is drawn left to right up to the moment; the target is drawn only as
 far as **Look ahead** seconds past it. That is deliberate. A block whose ending
 is visible from the first frame is a shape to memorise rather than one to follow,
-which is not what the task measures. Set it to zero to reveal nothing at all, or
+which is not what the task measures. Set it to zero to reveal no future target, or
 to a full repetition to show the whole trajectory in advance.
 
 Look ahead is a *display* setting, not part of the trajectory — it changes what
@@ -248,7 +241,8 @@ is one continuous recording and only the plot reframes.
 rejected: `hold_s=0` is a legal triangle, `rest_s=0` starts the ramp immediately.
 `Trapezoid` is frozen and validates on construction, and the panel's rows clamp to
 what it accepts, so dragging a field can change the shape but never raise.
-`duration` is one repetition, `total_duration` the whole block.
+`duration` is one repetition, `total_duration` the whole block. If every duration
+is zero, Start asks you to set at least one above zero before running.
 
 The block **ends by itself** at `total_duration` — the same event as pressing
 Stop, and the trace stays on the plot for review either way.
