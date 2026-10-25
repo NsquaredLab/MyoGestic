@@ -162,12 +162,18 @@ uv run python examples/synthetic/servo_hand.py
 
 ### `emg_classification.py` - start here
 
-The simplest end-to-end loop: 8-channel synthetic EMG → MyoVerse RMS+MAV
-features → CatBoost binary classifier → smoothed control values to the VHI
-predicted hand over LSL, on whichever streams its manifest says carry the
-addresses the control file names. No discrete gRPC commands. This is
+The simplest end-to-end loop: 8-channel synthetic EMG → NumPy RMS+MAV
+features → CatBoost binary classifier. It runs fully without the Virtual Hand;
+Connect shows the hand as **Not running** until you choose to connect it. This is
 the reference first read, and its line-by-line companion is the
 [EMG classification tutorial](emg-classification.md).
+
+The optional hand uses two outputs in `classification_grpc.toml`: `fist` streams a
+smoothed pose to the predicted hand over LSL, while `gesture` sends each settled
+class change to the control hand over gRPC (`debounce_s = 0.1`). The compact
+Virtual Hand row in Connect opens the movement palette; Predict shows the last
+values under **Sent to the hand**. Connecting the hand needs the `grpc` extra:
+`uv run --extra grpc python examples/synthetic/emg_classification.py`.
 
 ```bash
 uv run python examples/synthetic/emg_classification.py
@@ -176,23 +182,6 @@ uv run python examples/synthetic/emg_classification.py
 **What to tweak:** swap `rms`/`mav` from `myogestic.recipes.features`
 for your own feature, change `CLASSES`, replace CatBoost with any
 sklearn-shaped classifier.
-
-### `emg_classification_grpc.py` - add the gRPC control plane
-
-Same classifier, plus the `RemoteClient` gRPC plane: each predicted
-class change commands a **discrete DOF**, whose declared
-`debounce_s` gates the tick-to-tick argmax flicker, and a `VhiMovementPanel`
-in the UI lets the user click movements directly. Demonstrates the
-dual-plane idiom (continuous LSL pose + discrete gRPC events) on a single
-script.
-
-```bash
-uv run python examples/synthetic/emg_classification_grpc.py
-```
-
-**What to tweak:** wrap `bus.select` in a custom callback
-to layer a session-label snap; swap the commanded state from class
-name to `(class_name, intensity_bin)` for hysteresis on multiple fields.
 
 ### `emg_regression.py` - continuous-target regression
 
@@ -387,7 +376,7 @@ actually on.
 * **I have a device to drive** - `my_device.py`, a complete target with three lines left for
   you, then [Drive your own device](../how-to/add-a-target.md). `servo_hand.py` is the same
   shape carrying a real mechanism: six servos, a coupled thumb, a wire format.
-* **Want gRPC discrete control** - `emg_classification_grpc.py` next.
+* **Want gRPC discrete control** - connect the optional hand in `emg_classification.py`.
 * **Regression flow** -
   [EMG regression with VHI tutorial](emg-regression-with-vhi.md) →
   `emg_regression.py` → swap in `_raulnet` for the deep variant.

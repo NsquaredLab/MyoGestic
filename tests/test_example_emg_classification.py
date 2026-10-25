@@ -1,4 +1,4 @@
-"""The gRPC classification example keeps its two hand outputs in the session shell."""
+"""EMG classification runs alone and optionally drives both Virtual Hand outputs."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ _EXAMPLES_ROOT = Path(__file__).resolve().parent.parent / "examples"
 
 
 @pytest.fixture
-def grpc_app(monkeypatch, tmp_path):
+def classification_app(monkeypatch, tmp_path):
     """Wire the classification workflow without launching its external targets."""
     from types import SimpleNamespace
 
@@ -22,29 +22,32 @@ def grpc_app(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None))
     monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
-    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / "emg_classification_grpc.py"))
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / "emg_classification.py"))
+    namespace = namespace["demo_ui"].__globals__
+    assert namespace["_init_hand"]()
+    binder = namespace["binder"]
     streams = tuple(namespace["app"].ctx.streams.values())
     try:
         yield namespace
     finally:
-        namespace["binder"].stop()
+        binder.stop()
         namespace["vhi_control"].stop()
         namespace["recording_aid"].stop()
         for stream in streams:
             stream.stop()
 
 
-def test_grpc_uses_the_session_shell(grpc_app):
+def test_classification_uses_the_session_shell(classification_app):
     """One header and active step surround a persistent signal and sessions."""
     from myogestic import Fr, Px
     from myogestic.widgets import AppHeader, SimulatorControls, StatusBar
 
-    ns = grpc_app
+    ns = classification_app
     layout, header, steps = (ns[name] for name in ("layout", "header", "steps"))
-    assert isinstance(header, AppHeader) and header.title == "EMG classification · VHI hand"
+    assert isinstance(header, AppHeader) and header.title == "EMG classification"
     assert header.steps is steps and header.participant is ns["participant"]
     assert steps.steps == ["Connect", "Record", "Train", "Predict"]
-    assert steps._widget_id == "emg_classification_grpc_steps"
+    assert steps._widget_id == "emg_classification_steps"
     assert isinstance(ns["status"], StatusBar) and ns["status"].pipeline is ns["pipeline"]
     assert isinstance(ns["simulator"], SimulatorControls)
     assert "ctrl_outlet" not in ns
@@ -66,10 +69,10 @@ def test_grpc_uses_the_session_shell(grpc_app):
         assert grid._row_tracks[simulator[0]] == Px(76)
 
 
-def test_grpc_completion_tracks_the_participants_takes(grpc_app, monkeypatch, tmp_path):
+def test_classification_completion_tracks_the_participants_takes(classification_app, monkeypatch, tmp_path):
     from types import SimpleNamespace
 
-    ns = grpc_app
+    ns = classification_app
     ctx, done = ns["app"].ctx, ns["_step_done"]
     assert done(ctx) == [False] * 4
     ctx.participant = "P-014"
@@ -92,8 +95,8 @@ def test_grpc_completion_tracks_the_participants_takes(grpc_app, monkeypatch, tm
 @pytest.mark.parametrize("participant", ["", "P-014"])
 @pytest.mark.parametrize("trained", [False, True])
 @pytest.mark.parametrize("recording_active", [False, True])
-def test_grpc_shell_fits_light_theme(
-    grpc_app, monkeypatch, implot_frame, step, width, participant, trained, recording_active,
+def test_classification_shell_fits_light_theme(
+    classification_app, monkeypatch, implot_frame, step, width, participant, trained, recording_active,
 ):
     """Every active card fits the default window; narrow cards remain reachable."""
     import platform
@@ -106,7 +109,7 @@ def test_grpc_shell_fits_light_theme(
     from myogestic.widgets.signals import simulator_controls
     from myogestic.widgets.training import feature_selector
 
-    ns = grpc_app
+    ns = classification_app
     app = ns["app"]
     app.ctx.participant = participant
     ns["steps"].active = step
@@ -235,36 +238,39 @@ def test_grpc_shell_fits_light_theme(
     assert ns["layout"]._active is (ns["layout"]._wide if width == 2560 else ns["layout"]._narrow)
 
 
-def test_gesture_and_take_keep_the_generator_hand_and_recording_gate(grpc_app, monkeypatch):
+def test_gesture_and_take_keep_the_generator_hand_and_recording_gate(classification_app, monkeypatch):
     """Preview can change the signal; recording restores its selected label first."""
     from types import SimpleNamespace
 
-    ns = grpc_app
+    ns = classification_app
     calls = []
     bus = SimpleNamespace(select=lambda alias, state: calls.append((alias, state)))
-    monkeypatch.setattr(type(ns["link"]), "ensure", lambda self: calls.append("bind") or bus)
+    monkeypatch.setattr(type(ns["link"]), "ensure", lambda self: pytest.fail("callbacks must not probe the hand"))
+    ns["link"]._bus = bus
+    bus.stop = lambda: None
+    ns["recording_aid"].available = True
     monkeypatch.setattr(type(ns["simulator"]), "set", lambda self, value: calls.append(("signal", value)))
     monkeypatch.setattr(ns["app"], "start_recording", lambda: calls.append("record"))
     monkeypatch.setattr(ns["app"], "stop_recording", lambda: calls.append("stop"))
     monkeypatch.setattr(type(ns["recording_aid"]), "set_recording_session",
                         lambda self, active: calls.append(("gate", active)) or True)
     ns["_on_gesture"](1)
-    assert calls == [("signal", 1.0), "bind", ("gesture", "Fist")]
+    assert calls == [("signal", 1.0), ("gesture", "Fist")]
     calls.clear()
     ns["app"].ctx.current_label = 0
     ns["_on_record"]()
-    assert calls == ["bind", ("signal", 0.0), "record", ("gate", True)]
+    assert calls == [("signal", 0.0), "record", ("gate", True)]
     ns["_on_stop"]()
     assert calls[-2:] == ["stop", ("gate", False)]
 
 
-def test_prediction_still_pushes_the_two_outputs_without_binding(grpc_app, monkeypatch):
+def test_prediction_still_pushes_the_two_outputs_without_binding(classification_app, monkeypatch):
     """The continuous pose and discrete gesture share one frame without binding."""
     from types import SimpleNamespace
 
     import numpy as np
 
-    ns = grpc_app
+    ns = classification_app
     calls = []
     monkeypatch.setattr(type(ns["link"]), "ensure", lambda self: pytest.fail("predict must not bind"))
     ns["link"]._bus = SimpleNamespace(push=lambda values: calls.append(values) or values, stop=lambda: None)
@@ -283,11 +289,11 @@ def test_prediction_still_pushes_the_two_outputs_without_binding(grpc_app, monke
 
 @pytest.mark.parametrize("step", range(4))
 @pytest.mark.parametrize("state", ["idle", "recording", "predicting"])
-def test_simulator_is_available_on_each_step(grpc_app, monkeypatch, implot_frame, step, state):
+def test_simulator_is_available_on_each_step(classification_app, monkeypatch, implot_frame, step, state):
     """Manual simulator changes never relabel a take or bypass the hand callbacks."""
     from imgui_bundle import imgui
 
-    ns = grpc_app
+    ns = classification_app
     ns["steps"].active = step
     ns["app"].ctx.state = state
     ns["simulator"].set(0.0)
@@ -312,13 +318,13 @@ def test_simulator_is_available_on_each_step(grpc_app, monkeypatch, implot_frame
 
 
 @pytest.mark.parametrize("failure", [False, True])
-def test_hand_connect_checks_existing_service_before_launch(grpc_app, monkeypatch, implot_frame, failure):
+def test_hand_connect_checks_existing_service_before_launch(classification_app, monkeypatch, implot_frame, failure):
     """The compact row connects off-thread, launches if absent and reports errors."""
     from types import SimpleNamespace
 
     from imgui_bundle import imgui
 
-    ns = grpc_app
+    ns = classification_app
     calls = []
     binder = SimpleNamespace(busy=False, finished=False, last_error=None, status="Connecting…",
                              poll=lambda **kwargs: calls.append(("bind", kwargs)))
@@ -328,7 +334,7 @@ def test_hand_connect_checks_existing_service_before_launch(grpc_app, monkeypatc
 
     def click(label):
         result = original(label)
-        return label == "Connect" or result
+        return label == "Connect##virtual_hand" or result
 
     def launch(self, name):
         calls.append(("launch", name))
@@ -350,11 +356,11 @@ def test_hand_connect_checks_existing_service_before_launch(grpc_app, monkeypatc
         assert calls[2] == ("bind", {})
 
 
-def test_hand_movement_palette_remains_accessible(grpc_app, monkeypatch, implot_frame):
+def test_hand_movement_palette_remains_accessible(classification_app, monkeypatch, implot_frame):
     """The existing movement widget keeps its callback and its own popover card."""
     from imgui_bundle import imgui
 
-    ns = grpc_app
+    ns = classification_app
     calls = []
     original = imgui.small_button
 
@@ -370,7 +376,7 @@ def test_hand_movement_palette_remains_accessible(grpc_app, monkeypatch, implot_
 
 
 @pytest.mark.parametrize("width", [320, 800])
-def test_hand_connection_words_and_actions_do_not_overlap(grpc_app, monkeypatch, implot_frame, width):
+def test_hand_connection_words_and_actions_do_not_overlap(classification_app, monkeypatch, implot_frame, width):
     """The connection remains readable even in a small scale-two card."""
     from imgui_bundle import imgui
 
@@ -398,7 +404,7 @@ def test_hand_connection_words_and_actions_do_not_overlap(grpc_app, monkeypatch,
         imgui.set_next_window_pos(imgui.ImVec2(0, 0))
         imgui.set_next_window_size(imgui.ImVec2(width, 1200))
         imgui.begin("hand-width", flags=imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.horizontal_scrollbar)
-        grpc_app["hand_ui"]()
+        classification_app["hand_ui"]()
         assert imgui.get_scroll_max_x() == 0
         imgui.end()
 
@@ -413,3 +419,104 @@ def test_hand_connection_words_and_actions_do_not_overlap(grpc_app, monkeypatch,
             overlap_y = min(first[4], second[4]) - max(first[2], second[2])
             assert overlap_x <= 1 or overlap_y <= 1, (first, second)
 
+
+
+def test_hand_map_keeps_the_lsl_pose_and_debounced_grpc_gesture(classification_app):
+    """The combined app names both routes in the mapping it actually loads."""
+    ns = classification_app
+    bindings = ns["CONTROL_MAP"].bindings
+    assert ns["CONTROL_FILE"].name == "classification_grpc.toml"
+    assert set(bindings) == {"fist", "gesture"}
+    assert {ref.address for ref in bindings["fist"].targets} == {
+        "vhi.prediction.thumb.flexion", "vhi.prediction.thumb.abduction",
+        "vhi.prediction.index", "vhi.prediction.middle", "vhi.prediction.ring", "vhi.prediction.little",
+    }
+    assert [ref.address for ref in bindings["gesture"].targets] == ["vhi.control.gesture"]
+    assert bindings["gesture"].debounce_s == 0.1
+
+
+@pytest.mark.parametrize("step", range(4))
+def test_all_steps_run_without_loading_grpc(monkeypatch, tmp_path, implot_frame, step):
+    """No installation or service is required for the complete EMG workflow."""
+    from types import SimpleNamespace
+
+    import numpy as np
+    from imgui_bundle import imgui
+
+    from myogestic.remote import InterfaceSpec
+    from myogestic.tools import emg_generator
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(InterfaceSpec, "launcher", lambda self: (_ for _ in ()).throw(FileNotFoundError()))
+    calls = []
+
+    def missing_grpc(self):
+        calls.append("grpc")
+        raise ModuleNotFoundError("No module named 'grpc'", name="grpc")
+
+    monkeypatch.setattr(InterfaceSpec, "control_client", missing_grpc)
+    monkeypatch.setattr(InterfaceSpec, "recording_client", missing_grpc)
+    monkeypatch.setattr(emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None))
+    ns = runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / "emg_classification.py"))
+    ns = ns["demo_ui"].__globals__
+    streams = tuple(ns["app"].ctx.streams.values())
+    try:
+        ns["steps"].active = step
+        words = []
+        render = imgui.text_unformatted
+
+        def text(value):
+            words.append(value)
+            return render(value)
+
+        monkeypatch.setattr(imgui, "text_unformatted", text)
+        implot_frame(lambda: ns["demo_ui"](ns["app"].ctx))
+        assert not calls
+        if step == 0:
+            assert "Not running" in words
+        model = SimpleNamespace(predict_proba=lambda values: np.array([[0.1, 0.9]]))
+        assert ns["predict"](model, np.ones(2))["class"] == 1
+        assert "hand" not in ns["predict"](model, np.ones(2))
+        monkeypatch.setattr(ns["app"], "start_recording", lambda: calls.append("record"))
+        monkeypatch.setattr(ns["app"], "stop_recording", lambda: calls.append("stop"))
+        ns["app"].ctx.current_label = 1
+        ns["_on_gesture"](1)
+        ns["_on_record"]()
+        ns["_on_stop"]()
+        assert calls == ["record", "stop"]
+        assert not ns["_init_hand"]()
+        assert ns["link"] is ns["binder"] is None
+        assert "grpc extra" in ns["hand_attempt"]["error"]
+        implot_frame(ns["hand_ui"])
+        assert calls == ["record", "stop", "grpc"]
+    finally:
+        for stream in streams:
+            stream.stop()
+
+
+def test_default_entrypoint_imports_no_optional_grpc_package(tmp_path):
+    """A fresh Python process must wire and close on the default install."""
+    import subprocess
+    import sys
+
+    example = _EXAMPLES_ROOT / "synthetic" / "emg_classification.py"
+    script = """
+import builtins
+import runpy
+import sys
+original_import = builtins.__import__
+def without_grpc(name, *args, **kwargs):
+    if name == "grpc" or name.startswith(("grpc.", "google.protobuf")):
+        raise ModuleNotFoundError(name, name=name)
+    return original_import(name, *args, **kwargs)
+builtins.__import__ = without_grpc
+from myogestic import App
+App.run = lambda self: None
+ns = runpy.run_path(sys.argv[1], run_name="__main__")
+assert ns["link"] is None
+assert ns["header"].title == "EMG classification"
+assert "grpc" not in sys.modules
+"""
+    result = subprocess.run([sys.executable, "-c", script, str(example)], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
