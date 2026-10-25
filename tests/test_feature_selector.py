@@ -7,6 +7,18 @@ from imgui_bundle import imgui
 from myogestic.widgets import FeatureSelector
 
 
+@pytest.mark.parametrize("show_header", [True, False])
+def test_feature_header_can_be_owned_by_a_step(imgui_frame, monkeypatch, show_header):
+    import myogestic.widgets.training.feature_selector as module
+
+    headers = []
+    monkeypatch.setattr(module, "panel_header", headers.append)
+    selector = FeatureSelector({"RMS": lambda x: x}, show_header=show_header)
+    imgui_frame(selector.ui)
+    assert headers == (["Features"] if show_header else [])
+    assert selector.active_names == ["RMS"]
+
+
 def test_feature_chips_toggle_in_order_and_allow_empty_selection(imgui_frame, monkeypatch):
     selector = FeatureSelector({"RMS": lambda x: x, "MAV": lambda x: x * 2}, default=["RMS"])
     button = imgui.small_button
