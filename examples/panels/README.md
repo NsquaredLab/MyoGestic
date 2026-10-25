@@ -31,6 +31,8 @@ wordmark in its body; the header uses the inline logo like every other demo.
 | `stream_panel.py` | [`stream_panel`][sp] | Per-stream status + Scan → Connect flow (starts disconnected) |
 | `device_picker.py` | [`DevicePicker`][dp] | Device dropdown + per-device options → Connect (two synthetic devices, then the real OTB list) |
 | `stream_manager.py` | [`StreamManager`][sm2] | Add/remove streams at runtime, each row showing live rate, channels and sample age |
+| `status_bar.py` | [`StatusBar`][status] | Acquisition, participant and session folder in a bare `Px(26)` bottom row |
+| `simulator_controls.py` | [`SimulatorControls`][simulator] | Rest/Fist presets that steer the synthetic EMG generator |
 | `line_plot.py` | [`line_plot`][lp] | Static multi-channel line plot with legend and Auto / Shared amplitude range |
 | `heatmap.py` | [`heatmap`][hm] | Labelled 2-D heatmap (mock confusion matrix) |
 | `scatter2d.py` | [`scatter2d`][s2] | 2-D scatter, per-class colouring |
@@ -98,3 +100,5 @@ and the non-widget helpers `TemplateInspectorRow`, `request_vhi_state_refresh`,
 [participant]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.ParticipantPanel
 [steps]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.StepBar
 [controls]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.ControlMapEditor
+[status]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.StatusBar
+[simulator]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.SimulatorControls

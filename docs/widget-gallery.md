@@ -17,6 +17,8 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="gallery-nav" markdown>
 [Signal viewers](#signal-viewers)
+[Session shell](#session-shell)
+[Simulator controls](#simulator-controls)
 [Recording & sessions](#recording-and-sessions)
 [Process management](#process-management)
 [ML pipeline](#ml-pipeline)
@@ -37,6 +39,36 @@ uv run python tools/widget_screenshot.py --all
     ![signal_viewer](images/widgets/signal_viewer.png){ .widget-thumb loading=lazy }
 
     Renders a stream's ring buffer as a min/max envelope decimated for 60 fps. Per-channel toggles, a 50/60 Hz mains-hum notch, optional display filters (rectify, DC removal, RMS envelope), pause/rescale. Keyed by `stream_name`.
+
+</div>
+
+## Session shell
+
+<div class="grid cards" markdown>
+
+-   __[AppHeader][myogestic.widgets.AppHeader]__
+
+    ![AppHeader](images/widgets/AppHeader.png){ .widget-thumb loading=lazy }
+
+    Shared application header with the line logo, title and state pill. Session apps add four-step navigation and an optional participant chip. Place it in a bare `Px(52)` Grid row.
+
+-   __[StatusBar][myogestic.widgets.StatusBar]__
+
+    ![StatusBar](images/widgets/StatusBar.png){ .widget-thumb loading=lazy }
+
+    Acquisition details, participant and session folder, with an optional fitted or saved model readout. Long values ellipsize and show their full text on hover. Place it in a bare `Px(26)` bottom row.
+
+</div>
+
+## Simulator controls
+
+<div class="grid cards" markdown>
+
+-   __[SimulatorControls][myogestic.widgets.SimulatorControls]__
+
+    ![SimulatorControls](images/widgets/SimulatorControls.png){ .widget-thumb loading=lazy }
+
+    Persistent Rest/Fist presets that steer the synthetic EMG generator on every workflow step. During recording the gesture callback sets the signal, and manual controls lock with a visible explanation.
 
 </div>
 

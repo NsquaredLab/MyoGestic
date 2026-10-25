@@ -77,9 +77,10 @@ or against the synthetic one when you have none:
 - `pong.py` - chase a cursor with the paddle, train one signed `[-1, +1]`
   command, and play Pong with your wrist; the Virtual Hand only mirrors it
 
-Five runnable end-to-end demos live in
+Runnable end-to-end demos and copyable templates live in
 [`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic):
 
+- `my_session_app.py` - copy a session app; change classes, features, train and predict
 - `emg_classification.py` - the reference first read (CatBoost binary), with an optional
   Virtual Hand driven by continuous LSL pose and discrete gRPC movements
 - `emg_regression.py` - continuous 5-DoF regression
