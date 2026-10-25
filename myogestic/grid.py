@@ -298,7 +298,8 @@ class Grid:
             Per-column track specs; default all ``Fr(1)``.
         bare
             Area names to draw without a border or background. Their child
-            windows retain the same padding and content clipping.
+            windows retain content clipping; short standalone rows reduce
+            vertical padding enough to fit a control and its trailing spacing.
 
         Raises
         ------
@@ -499,6 +500,15 @@ class _AreaCell:
         window_flags = imgui.WindowFlags_.no_background if bare else 0
         imgui.set_cursor_pos(pos)
         if group is None:
+            if bare:
+                # A short bare row still needs room for a full control and its
+                # trailing spacing. BeginChild captures this padding, so a widget
+                # cannot fix it with a later style push inside the cell.
+                padding = imgui.get_style().window_padding
+                room = size.y - imgui.get_frame_height() - imgui.get_style().item_spacing.y
+                imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(
+                    padding.x, min(padding.y, max(0.0, room / 2)),
+                ))
             imgui.begin_child(
                 f"##area_{name}", size,
                 child_flags=(
@@ -506,6 +516,8 @@ class _AreaCell:
                 ),
                 window_flags=window_flags,
             )
+            if bare:
+                imgui.pop_style_var()
             self._ends = 1
             return self
 

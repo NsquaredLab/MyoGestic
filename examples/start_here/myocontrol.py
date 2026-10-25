@@ -27,7 +27,7 @@ from myogestic.session import RecordedTime, iter_labeled_windows, open_session_s
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     DEFAULT_DEVICES,
-    AppLogo,
+    AppHeader,
     DevicePicker,
     FeatureSelector,
     LogPanel,
@@ -39,16 +39,14 @@ from myogestic.widgets import (
     SessionManager,
     SignalViewer,
     StepBar,
-    status_pill,
 )
 from myogestic.widgets.common import (
     DANGER,
     IDLE,
-    INFO,
     PALETTE,
     SUCCESS,
     WARNING,
-    hairline,
+    edge_rule,
     mono_text,
     muted,
     panel_header,
@@ -260,9 +258,9 @@ layout = Layout(
 )
 steps = StepBar(["Connect", "Record", "Train", "Drive"], widget_id="myocontrol_steps")
 participant = ParticipantPanel()
+header = AppHeader("Myocontrol", steps=steps, participant=participant)
 # These are view caches, not another source of recording state.
 recorded: dict[str, Any] = {"participant": None, "state": "idle", "time": RecordedTime(0, 0.0, {})}
-header_widths: dict[str, float] = {}
 
 # Every stream here is a device stream; the app owns its acquisition geometry.
 device = DevicePicker(
@@ -854,105 +852,6 @@ def _step_done(ctx: Context) -> list[bool]:
     ]
 
 
-def _edge_rule(*, bottom: bool) -> None:
-    """Separate the bare header and footer from the body with a theme hairline."""
-    origin, size = imgui.get_window_pos(), imgui.get_window_size()
-    y = origin.y + size.y - ui_px(1) if bottom else origin.y
-    imgui.get_window_draw_list().add_line(
-        imgui.ImVec2(origin.x, y), imgui.ImVec2(origin.x + size.x, y),
-        imgui.get_color_u32(hairline()), thickness=ui_px(1),
-    )
-
-
-def header_ui(ctx: Context) -> int:
-    """Lead with the brand and steps; keep the participant and state at the right."""
-    _edge_rule(bottom=True)
-    style = imgui.get_style()
-    top = imgui.get_cursor_pos_y()
-    height = imgui.get_content_region_avail().y
-    center = top + height / 2
-    imgui.set_cursor_pos_y(center - ui_px(26) / 2)
-    AppLogo(variant="line", height=ui_px(26)).ui()
-    imgui.same_line(0.0, ui_px(14))
-    left = imgui.get_cursor_pos_x()
-    available = imgui.get_content_region_avail().x
-    right = left + available
-    done = _step_done(ctx)
-
-    # The pill owns its padding; retain its measured width instead of copying it.
-    # A live scale change invalidates measurements from the preceding frame.
-    if header_widths.get("font_size") != imgui.get_font_size():
-        header_widths.clear()
-        header_widths["font_size"] = imgui.get_font_size()
-    state = ctx.state.upper()
-    pill_w = header_widths.get(state, imgui.calc_text_size(state).x + ui_px(40))
-    font = mono_font() if ctx.participant else None
-    if font is not None:
-        imgui.push_font(font, style.font_size_base)
-    chip_w = imgui.calc_text_size(ctx.participant or "Set participant").x + 2 * style.frame_padding.x
-    if font is not None:
-        imgui.pop_font()
-    padding = imgui.ImVec2(style.frame_padding.x, style.frame_padding.y)
-    labels_w = sum(
-        imgui.calc_text_size(f"{fa.ICON_FA_CHECK if complete else i + 1}  {label}").x
-        for i, (label, complete) in enumerate(zip(steps.steps, done, strict=True))
-    ) + (len(steps.steps) - 1) * ui_px(32)
-    nav_w = labels_w + len(steps.steps) * 2 * padding.x
-    gap = style.item_spacing.x
-    title_w = 2 * gap + ui_px(1) + imgui.calc_text_size("Myocontrol").x
-    # Drop the secondary title before compressing the navigation buttons.
-    show_title = (
-        imgui.get_window_size().x >= ui_px(1100)
-        and available >= title_w + nav_w + chip_w + pill_w + 2 * gap
-    )
-    if show_title:
-        imgui.set_cursor_pos_x(left - ui_px(14) + gap)
-        imgui.set_cursor_pos_y(center - ui_px(20) / 2)
-        imgui.dummy(imgui.ImVec2(ui_px(1), ui_px(20)))
-        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        imgui.get_window_draw_list().add_line(
-            lo, imgui.ImVec2(lo.x, hi.y), imgui.get_color_u32(hairline()), thickness=ui_px(1),
-        )
-        imgui.same_line(0.0, gap)
-        imgui.set_cursor_pos_y(center - imgui.get_text_line_height() / 2)
-        imgui.text_colored(muted(), "Myocontrol")
-        imgui.same_line(0.0, ui_px(14))
-        left = imgui.get_cursor_pos_x()
-        available = imgui.get_content_region_avail().x
-    if available < nav_w + chip_w + pill_w + 2 * gap:
-        padding.x = ui_px(4)
-        nav_w = labels_w + len(steps.steps) * 2 * padding.x
-    participant_w = max(chip_w, min(
-        header_widths.get("participant", chip_w), available - nav_w - pill_w - 2 * gap
-    ))
-    right_w = participant_w + gap + pill_w
-    imgui.set_cursor_pos(imgui.ImVec2(
-        left, center - imgui.get_frame_height() / 2,
-    ))
-    imgui.push_style_var(imgui.StyleVar_.frame_padding, padding)
-    active = steps.ui(done)
-    imgui.pop_style_var()
-    imgui.same_line()
-    available = imgui.get_content_region_avail().x
-    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0.0, available - right_w))
-    imgui.set_cursor_pos_y(center - imgui.get_frame_height() / 2)
-    # Long local names yield to the state badge, while the chip stays clickable.
-    clip = imgui.get_cursor_screen_pos()
-    imgui.push_clip_rect(clip, imgui.ImVec2(clip.x + participant_w, clip.y + height), True)
-    imgui.begin_group()
-    participant.ui(ctx)
-    imgui.end_group()
-    header_widths["participant"] = imgui.get_item_rect_size().x
-    imgui.pop_clip_rect()
-    imgui.same_line()
-    pill_h = imgui.get_text_line_height() + ui_px(8)
-    imgui.set_cursor_pos(imgui.ImVec2(right - pill_w, center - pill_h / 2))
-    tone = {"recording": DANGER, "training": WARNING, "predicting": INFO}.get(ctx.state, IDLE)
-    status_pill(state, tone)
-    header_widths[state] = imgui.get_item_rect_size().x
-    return active
-
-
 def status_ui(ctx: Context) -> None:
     """Show acquisition, participant storage and the most recent saved model."""
     stream = ctx.streams.get("emg")
@@ -969,7 +868,7 @@ def status_ui(ctx: Context) -> None:
         model = f"Model: {pathlib.Path(pipeline.last_saved_model).name}"
     else:
         model = "Model: fitted (not saved)"
-    _edge_rule(bottom=False)
+    edge_rule(bottom=False)
     imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + max(
         0.0, (imgui.get_content_region_avail().y - imgui.get_text_line_height()) / 2
     ))
@@ -990,12 +889,11 @@ def status_ui(ctx: Context) -> None:
 @app.ui
 def myocontrol_ui(ctx: Context) -> None:
     """A visible workflow with persistent signal, activity and session files."""
-    # Compact child padding leaves a full button-height line inside the 52 px
-    # header; Grid keeps the parent's content bounds captured by Begin.
+    with layout["header"]:
+        active = header.ui(ctx, _step_done(ctx))
+    # Retain the compact body-card spacing of this workflow.
     padding = imgui.get_style().window_padding
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))
-    with layout["header"]:
-        active = header_ui(ctx)
     if active != 1 or not ctx.participant:
         recording.ui(ctx, visible=False)
     # Observe recording transitions even while a different workflow step is open.

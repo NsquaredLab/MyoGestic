@@ -19,6 +19,7 @@ from myogestic.widgets.panels import (
     StreamManager,
     popout_panel,
 )
+from myogestic.widgets.panels.app_header import AppHeader
 from myogestic.widgets.plots import Heatmap, LinePlot, Scatter2D, Scatter3D
 from myogestic.widgets.pong import PongTask
 from myogestic.widgets.signals import (
@@ -57,6 +58,7 @@ __all__ = [
     "LSL_DEVICE",
     "OTB_DEVICES",
     "SYNTHETIC_DEVICE",
+    "AppHeader",
     "AppLogo",
     "DeviceSpec",
     "DevicePicker",
