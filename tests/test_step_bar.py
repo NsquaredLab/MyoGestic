@@ -1,9 +1,10 @@
 """Step navigation and primary actions keep their state and ImGui stacks balanced."""
 
 import pytest
-from imgui_bundle import imgui
+from imgui_bundle import hello_imgui, imgui
+from imgui_bundle import icons_fontawesome_6 as fa
 
-from myogestic import _theme
+from myogestic import _scale, _theme
 
 
 def _colors():
@@ -82,6 +83,115 @@ def test_step_bar_rejects_mismatched_done():
 
     with pytest.raises(ValueError, match="done.*steps"):
         StepBar(["A", "B"]).ui([False])
+
+
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+@pytest.mark.parametrize("done", [[False] * 4, [True, True, True, False], [True] * 4])
+@pytest.mark.parametrize("active", range(4))
+def test_compact_active_label_fits_its_budget(imgui_frame, monkeypatch, scale, done, active):
+    from myogestic.widgets import StepBar
+
+    config = imgui.ImFontConfig()
+    config.merge_mode = True
+    imgui.get_io().fonts.add_font_from_file_ttf(
+        hello_imgui.asset_file_full_path("fonts/Font_Awesome_6_Free-Solid-900.otf"), 13, config,
+    )
+    monkeypatch.setattr(_scale, "_current", scale)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    steps = StepBar(["Connect", "Record", "Train", "Predict"], widget_id="budgeted-steps")
+    steps.active = active
+    tooltips, labels = [], []
+    monkeypatch.setattr(imgui, "is_item_hovered", lambda *args: True)
+    monkeypatch.setattr(imgui, "set_tooltip", tooltips.append)
+    button, text = imgui.button, imgui.text_unformatted
+
+    def track_button(label, *args, **kwargs):
+        labels.append(label.split("###")[0])
+        return button(label, *args, **kwargs)
+
+    def track_text(label):
+        labels.append(label)
+        return text(label)
+
+    monkeypatch.setattr(imgui, "button", track_button)
+    monkeypatch.setattr(imgui, "text_unformatted", track_text)
+
+    def draw():
+        marks = [fa.ICON_FA_CHECK if complete else str(i + 1) for i, complete in enumerate(done)]
+        width = (sum(imgui.calc_text_size(mark).x for mark in marks)
+                 + 8 * imgui.get_style().frame_padding.x
+                 + imgui.calc_text_size("  Co…").x)
+        imgui.begin_group()
+        assert steps.ui(done, compact=True, max_width=width) == active
+        imgui.end_group()
+        assert imgui.get_item_rect_size().x <= width
+
+    imgui_frame(draw)
+    assert any(label.endswith("…") for label in labels)
+    assert set(steps.steps) <= set(tooltips)
+
+
+@pytest.mark.parametrize("complete", [False, True])
+def test_compact_truncated_steps_remain_clickable(imgui_frame, monkeypatch, complete):
+    from myogestic.widgets import StepBar
+
+    bar = StepBar(["Connect", "Record", "Train", "Predict"], widget_id="compact-clicks")
+    positions = []
+    button = imgui.button
+
+    def track(*args, **kwargs):
+        clicked = button(*args, **kwargs)
+        positions.append(_item_center())
+        return clicked
+
+    monkeypatch.setattr(imgui, "button", track)
+
+    def draw():
+        positions.clear()
+        before = _colors()
+        imgui.begin_group()
+        bar.ui([complete] * 4, compact=True, max_width=100)
+        imgui.end_group()
+        assert imgui.get_item_rect_size().x <= 100
+        assert _colors() == before
+
+    imgui_frame(draw)
+    for index in [3, 1, 2, 0]:
+        _click(imgui_frame, draw, positions[index])
+        assert bar.active == index
+        # The next frame lays out the newly selected label before the next click.
+        imgui_frame(draw)
+
+
+def test_compact_connectors_yield_before_the_active_label(imgui_frame, monkeypatch):
+    from myogestic.widgets import StepBar
+    from myogestic.widgets.common import ui_px
+
+    bar = StepBar(["Connect", "Record", "Train", "Predict"], widget_id="compact-connectors")
+    labels, lines = [], []
+    button, add_line = imgui.button, imgui.ImDrawList.add_line
+
+    def track_button(label, *args, **kwargs):
+        labels.append(label)
+        return button(label, *args, **kwargs)
+
+    def track_line(draw_list, start, end, color, thickness=1.0):
+        if start.y == end.y:
+            lines.append(end.x - start.x)
+        return add_line(draw_list, start, end, color, thickness=thickness)
+
+    monkeypatch.setattr(imgui, "button", track_button)
+    monkeypatch.setattr(imgui.ImDrawList, "add_line", track_line)
+
+    def draw():
+        natural = bar._width([False] * 4, compact=True)
+        bar.ui([False] * 4, compact=True, max_width=natural - ui_px(30))
+
+    imgui_frame(draw)
+    assert "1  Connect###step0" in labels
+    assert lines == [ui_px(14)] * 3
 
 
 def test_step_connectors_render(imgui_frame, monkeypatch):

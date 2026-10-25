@@ -1,14 +1,32 @@
 """The shared header fits a bare Grid row, with independent widget identities."""
 
+import platform
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from imgui_bundle import hello_imgui, imgui
+from imgui_bundle import icons_fontawesome_6 as fa
 
 from myogestic import Context, Fr, Grid, Px, _scale, _theme
 from myogestic.widgets import AppHeader, ParticipantPanel, StepBar
 from myogestic.widgets.common import ui_px
 from myogestic.widgets.panels import app_header
+
+
+@pytest.fixture
+def real_fonts(imgui_frame):
+    """Measure the body font and merged check glyph used by the application."""
+    font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
+    if not font_path.is_file():
+        font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
+    atlas = imgui.get_io().fonts
+    imgui.get_io().font_default = atlas.add_font_from_file_ttf(str(font_path), 14)
+    config = imgui.ImFontConfig()
+    config.merge_mode = True
+    atlas.add_font_from_file_ttf(
+        hello_imgui.asset_file_full_path("fonts/Font_Awesome_6_Free-Solid-900.otf"), 14, config,
+    )
 
 
 @pytest.fixture
@@ -34,7 +52,7 @@ def probe(imgui_frame, monkeypatch, tmp_path):
         imgui.dummy(size)
         remember("logo")
 
-    button, text, pill = imgui.button, imgui.text_colored, app_header.status_pill
+    button, text, plain, pill = imgui.button, imgui.text_colored, imgui.text_unformatted, app_header.status_pill
 
     def track_button(label, *args, **kwargs):
         result = button(label, *args, **kwargs)
@@ -46,6 +64,10 @@ def probe(imgui_frame, monkeypatch, tmp_path):
         text(color, label)
         remember("text", label)
 
+    def track_plain(label):
+        plain(label)
+        remember("text", label)
+
     def track_pill(label, color):
         pill(label, color)
         remember("pill", label)
@@ -53,6 +75,7 @@ def probe(imgui_frame, monkeypatch, tmp_path):
     monkeypatch.setattr(imgui, "image", image)
     monkeypatch.setattr(imgui, "button", track_button)
     monkeypatch.setattr(imgui, "text_colored", track_text)
+    monkeypatch.setattr(imgui, "text_unformatted", track_plain)
     monkeypatch.setattr(app_header, "status_pill", track_pill)
     grid = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
     ctx = Context(participant="P-014")
@@ -63,12 +86,12 @@ def probe(imgui_frame, monkeypatch, tmp_path):
         _theme.apply_theme()
         imgui.get_style().scale_all_sizes(scale)
         imgui.get_style().font_scale_main = scale
-        imgui.get_io().display_size = imgui.ImVec2(ui_px(width + 100), ui_px(300))
+        imgui.get_io().display_size = imgui.ImVec2(width + 100, 1656)
         bounds, scroll, result = [], [], []
 
         def draw():
             imgui.set_next_window_pos(imgui.ImVec2(0, 0))
-            imgui.set_next_window_size(imgui.ImVec2(ui_px(width), ui_px(250)))
+            imgui.set_next_window_size(imgui.ImVec2(width, 1656))
             imgui.begin("header-probe", flags=imgui.WindowFlags_.no_title_bar)
             with grid.area("header"):
                 origin, size = imgui.get_window_pos(), imgui.get_window_size()
@@ -77,12 +100,42 @@ def probe(imgui_frame, monkeypatch, tmp_path):
                 scroll[:] = [imgui.get_scroll_max_x(), imgui.get_scroll_max_y()]
             imgui.end()
 
+        frames = []
         for _ in range(4):
             records.clear()
             imgui_frame(draw)
-        return SimpleNamespace(items=list(records), bounds=bounds, scroll=scroll, active=result[0])
+            frames.append(list(records))
+        return SimpleNamespace(items=list(records), frames=frames, bounds=bounds, scroll=scroll, active=result[0])
 
     return SimpleNamespace(render=render, participant=participant, ctx=ctx)
+
+
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+@pytest.mark.parametrize("width", [640, 720, 1100, 1800])
+@pytest.mark.parametrize("done", [[False] * 4, [True, True, True, False], [True] * 4])
+@pytest.mark.parametrize("active", range(4))
+@pytest.mark.parametrize("state", ["idle", "predicting"])
+def test_physical_window_contains_every_header_item(real_fonts, probe, scale, width, done, active, state):
+    probe.ctx.state = state
+    steps = StepBar(["Connect", "Record", "Train", "Predict"], widget_id="physical-header")
+    steps.active = active
+    view = probe.render(AppHeader("Myocontrol", steps=steps, participant=probe.participant),
+                        width, scale, done)
+    assert view.active == active
+    assert view.scroll == [0, 0]
+    for items in view.frames:
+        pill, = [item for item in items if item.kind == "pill"]
+        assert pill.hi[0] == pytest.approx(view.bounds[1][0] - ui_px(18), abs=1)
+        assert len([item for item in items if item.kind == "step"]) == 4
+        for item in items:
+            # Only the participant lives in an intentionally clipped child.
+            # Navigation must fit its actual item bounds, without relying on clipping.
+            right = min(item.hi[0], item.clip_hi[0]) if item.kind == "participant" else item.hi[0]
+            assert right <= view.bounds[1][0], (item.kind, item.label, item.hi, view.bounds)
+            if item.kind != "pill":
+                assert right <= pill.lo[0], (item.kind, item.label, item.hi, pill.lo)
+    # A missing icon would use the fallback glyph and hide the completion-width bug.
+    assert imgui.calc_text_size(fa.ICON_FA_CHECK).x > imgui.calc_text_size("1").x
 
 
 @pytest.mark.parametrize("scale", [1.0, 2.0])
@@ -103,7 +156,9 @@ def test_bare_header_fits_and_reserves_the_state(probe, scale, width, with_steps
     assert view.scroll == [0, 0]
     logo, = [item for item in view.items if item.kind == "logo"]
     pill, = [item for item in view.items if item.kind == "pill"]
-    assert logo.hi[1] - logo.lo[1] == pytest.approx(ui_px(26))
+    assert 0 < logo.hi[1] - logo.lo[1] <= ui_px(26)
+    if width >= 1100 or not with_steps:
+        assert logo.hi[1] - logo.lo[1] == pytest.approx(ui_px(26))
     assert pill.hi[0] == pytest.approx(view.bounds[1][0] - ui_px(18), abs=1)
     visible = []
     for item in view.items:
@@ -123,17 +178,40 @@ def test_bare_header_fits_and_reserves_the_state(probe, scale, width, with_steps
     assert max(centers) - min(centers) <= 2 * scale
 
 
-def test_title_yields_before_step_padding(probe):
-    header = AppHeader("Myocontrol", steps=StepBar(["Connect", "Record", "Train", "Drive"]),
+def test_participant_then_title_yield_before_step_padding(probe):
+    title = "Myocontrol " * 6
+    header = AppHeader(title, steps=StepBar(["Connect", "Record", "Train", "Drive"]),
                        participant=probe.participant)
     wide = probe.render(header, 1800)
-    middle = probe.render(header, 1000)
+    yielding_participant = probe.render(header, 1200)
+    middle = probe.render(header, 1100)
     narrow = probe.render(header, 640)
-    assert any(item.label == "Myocontrol" for item in wide.items)
-    assert not any(item.label == "Myocontrol" for item in middle.items)
+    assert any(item.label == title for item in wide.items)
+    assert any(item.kind == "participant" for item in wide.items)
+    assert any(item.label == title for item in yielding_participant.items)
+    chip, = [item for item in yielding_participant.items if item.kind == "participant"]
+    assert chip.hi[0] > chip.clip_hi[0]
+    assert not any(item.label == title for item in middle.items)
     assert {item.padding for item in wide.items if item.kind == "step"} == {10}
     assert {item.padding for item in middle.items if item.kind == "step"} == {10}
     assert {item.padding for item in narrow.items if item.kind == "step"} == {4}
+
+
+@pytest.mark.parametrize("active", range(4))
+@pytest.mark.parametrize("done", [[False] * 4, [True] * 4])
+def test_narrow_active_label_ellipsizes_with_full_label_on_hover(real_fonts, probe, monkeypatch, active, done):
+    steps = StepBar(["Connect", "Record", "Train", "Predict"], widget_id="ellipsis-header")
+    steps.active = active
+    probe.ctx.state = "predicting"
+    tooltips = []
+    monkeypatch.setattr(imgui, "is_item_hovered", lambda *args: True)
+    monkeypatch.setattr(imgui, "set_tooltip", tooltips.append)
+    view = probe.render(AppHeader("Session", steps=steps), 640, 2, done)
+    labels = [item.label.split("###")[0] for item in view.items if item.kind in {"text", "step"}]
+    assert any(label.endswith("…") for label in labels)
+    assert set(steps.steps) <= set(tooltips)
+    logo, = [item for item in view.items if item.kind == "logo"]
+    assert 0 < logo.hi[1] - logo.lo[1] < ui_px(26)
 
 
 def test_title_without_steps_ellipsizes_and_exposes_full_text(probe, monkeypatch):
