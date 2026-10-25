@@ -144,7 +144,8 @@ Construct once (setup scope), then call `.ui(...)` each frame in `@app.ui`. Full
 SignalViewer(stream_name, selectable=False, scale_mode="auto",
              y_range=(-1, 1), show_diagnostics=False, show_markers=False)
   .ui(ctx)
-RawSignalViewer(stream_name)                        # every visible sample, bounded copy
+RawSignalViewer(stream_name, widget_id=None, show_title=True)
+                                                   # Window selector; Channels chip popup
   .ui(ctx)
 RecordingControls(class_names, *, on_record, on_stop, on_gesture=None)
   .ui(ctx)
@@ -152,10 +153,12 @@ SessionManager(base_path, title="Sessions", class_names=None)
   .ui() -> TrainingData(paths, class_names, classes)
 ProcessLauncher(processes)
   .ui()
-Scatter2D(label) / Scatter3D(label)
+Scatter2D(label, show_title=True) / Scatter3D(label, show_title=True)
   .ui(points, labels=None, class_names=None)
-Heatmap(label, label_fmt="%.1f") / LinePlot(label)
-  .ui(data)                                         # LinePlot: .ui(data, channel_names=None)
+Heatmap(label, label_fmt="%.1f", show_title=True)
+  .ui(data, vrange=None)                            # shared colour range; scale strip
+LinePlot(label, y_range=None, show_title=True)
+  .ui(data, channel_names=None)                     # Auto / Shared when y_range is given
 panel_header(title, icon=None)
 output_filter = PostProcessor(hz=50)
 output_filter.ui()
@@ -165,6 +168,13 @@ TemplateInspector(widget_id)
 TrialPreview(widget_id=widget_id)
   .ui(data, fs)
 ```
+
+Plot widgets use panel headers and UI-scaled sizes; `show_title=False` hides the header
+title. Line and scatter plots show PALETTE-dot legend chips below the plot. Pass the
+same `y_range=(low, high)` to line plots that should be compared; they start in Shared
+mode. Raw viewers request only the visible samples and show sample rate, selected
+channels, points per channel and FPS in a mono footer. Give raw viewers distinct
+`widget_id` values to keep their windows and channel selections independent on one stream.
 
 ## ML widgets
 

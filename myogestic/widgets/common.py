@@ -667,3 +667,141 @@ def stream_chip(
     imgui.end_disabled()
     imgui.pop_style_var()
     return clicked and not locked, remove and not recording and not locked
+
+
+def ensure_implot3d_style() -> None:
+    """Apply theme-aware plot surfaces and a faint grid to the current 3D context.
+
+    Resolve colours each frame so changing theme or recreating the plotting
+    context cannot leave a stale dark background behind.
+    """
+    from imgui_bundle import implot3d
+
+    style = implot3d.get_style()
+    clear = imgui.ImVec4(0.0, 0.0, 0.0, 0.0)
+    for slot in (implot3d.Col_.frame_bg, implot3d.Col_.plot_bg, implot3d.Col_.plot_border):
+        style.set_color(slot, clear)
+    style.set_color(implot3d.Col_.axis_grid, hairline(0.5))
+    style.set_color(implot3d.Col_.axis_text, muted())
+    style.set_color(implot3d.Col_.axis_tick, hairline())
+    style.set_color(implot3d.Col_.inlay_text, primary())
+
+
+def plot_size(size: tuple[float, float], *, footer: float = 0.0) -> imgui.ImVec2:
+    """Scale explicit plot pixels, preserving fill width and reserving a fill footer.
+
+    Positive heights describe the plot alone. Nonpositive heights fill the
+    available space after the legend or footer, with negative values retaining
+    their ImGui-style bottom inset.
+    """
+    width, height = size
+    return imgui.ImVec2(
+        ui_px(width) if width > 0 else width,
+        ui_px(height)
+        if height > 0
+        else max(ui_px(40), imgui.get_content_region_avail().y + height - footer),
+    )
+
+
+def fit_text(text: str, width: float) -> str:
+    """Ellipsize a single line to ``width`` in the current font."""
+    if imgui.calc_text_size(text).x <= width:
+        return text
+    return _truncate_to_width(text, width - imgui.calc_text_size(_ELLIPSIS).x) + _ELLIPSIS
+
+
+def plot_empty(title: str, hint: str, size: tuple[float, float]) -> None:
+    """Centre an actionable empty state in the plot's allotted space."""
+    height = plot_size(size).y
+    left, top = imgui.get_cursor_pos_x(), imgui.get_cursor_pos_y()
+    width = imgui.get_content_region_avail().x
+    row = imgui.get_text_line_height_with_spacing()
+    imgui.set_cursor_pos_y(top + max(0.0, (height - 2 * row) * 0.5))
+    for text in (title, hint):
+        clipped = fit_text(text, width)
+        imgui.set_cursor_pos_x(left + max(0.0, (width - imgui.calc_text_size(clipped).x) * 0.5))
+        imgui.text_colored(muted(), clipped)
+        if clipped != text:
+            imgui.set_item_tooltip(text)
+    imgui.set_cursor_pos_y(max(imgui.get_cursor_pos_y(), top + height))
+    imgui.set_cursor_pos_x(left)
+    imgui.dummy(imgui.ImVec2(0, 0))
+
+
+def plot_legend(
+    series: Sequence[tuple[int, str]],
+    *,
+    selected: set[int] | None = None,
+    measure_only: bool = False,
+) -> float:
+    """Draw wrapping PALETTE-dot chips, or measure their height before a fill plot.
+
+    Parameters
+    ----------
+    series
+        Stable categorical indices and their visible names. Long names are
+        ellipsized with the complete value available in a tooltip.
+    selected
+        If supplied, turn the chips into channel toggles and update this set
+        on clicks. The selected cue is a theme tint, never a PALETTE fill.
+    measure_only
+        Measure using the same font and row layout without drawing any items.
+
+    Returns
+    -------
+    float
+        Occupied height, including the trailing item spacing.
+    """
+    if not series:
+        return 0.0
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, imgui.get_style().font_size_base)
+    try:
+        style = imgui.get_style()
+        width = max(1.0, imgui.get_content_region_avail().x)
+        dot = ui_px(6)
+        inset = style.frame_padding.x
+        prefix = dot + ui_px(6)
+        height = imgui.get_frame_height()
+        used, rows = 0.0, 1
+        for index, name in series:
+            chip_width = min(width, imgui.calc_text_size(name).x + prefix + 2 * inset)
+            wrap = used > 0 and used + style.item_spacing.x + chip_width > width
+            if wrap:
+                rows += 1
+                used = 0.0
+            if not measure_only:
+                if used > 0:
+                    imgui.same_line()
+                on = selected is not None and index in selected
+                if on:
+                    push_selected()
+                clicked = imgui.button(f"##series{index}", imgui.ImVec2(chip_width, height))
+                if on:
+                    pop_selected()
+                if clicked and selected is not None:
+                    if on:
+                        selected.discard(index)
+                    else:
+                        selected.add(index)
+                p = imgui.get_item_rect_min()
+                draw = imgui.get_window_draw_list()
+                color = PALETTE[index % len(PALETTE)]
+                draw.add_circle_filled(
+                    imgui.ImVec2(p.x + inset + dot * 0.5, p.y + height * 0.5),
+                    dot * 0.5,
+                    imgui.get_color_u32(imgui.ImVec4(*map(float, color), 1.0)),
+                )
+                label = fit_text(name, max(0.0, chip_width - prefix - 2 * inset))
+                draw.add_text(
+                    imgui.ImVec2(p.x + inset + prefix, p.y + style.frame_padding.y),
+                    imgui.get_color_u32(primary()),
+                    label,
+                )
+                imgui.set_item_tooltip(name)
+            used += (style.item_spacing.x if used > 0 else 0.0) + chip_width
+        return rows * (height + style.item_spacing.y)
+    finally:
+        if font is not None:
+            imgui.pop_font()
