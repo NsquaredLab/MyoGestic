@@ -68,6 +68,8 @@ def ui_px(n: float) -> float:
 def status_pill(label: str, color: imgui.ImVec4) -> None:
     """Draw a labelled status badge with a semantic colour indicator.
 
+    Padding, indicator geometry and label offsets follow the live UI scale.
+
     Parameters
     ----------
     label : str
@@ -76,9 +78,9 @@ def status_pill(label: str, color: imgui.ImVec4) -> None:
         Indicator colour, normally a semantic token such as ``SUCCESS`` or
         ``IDLE``. The badge background and text use the shared pill tokens.
     """
-    pad_x, pad_y = 10.0, ui_px(4.0)
+    pad_x, pad_y = ui_px(10), ui_px(4)
     text = imgui.calc_text_size(label)
-    size = imgui.ImVec2(text.x + pad_x * 2 + 12, text.y + pad_y * 2)
+    size = imgui.ImVec2(text.x + pad_x * 2 + ui_px(12), text.y + pad_y * 2)
     imgui.dummy(size)
     p0, p1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
     draw = imgui.get_window_draw_list()
@@ -87,13 +89,13 @@ def status_pill(label: str, color: imgui.ImVec4) -> None:
     )
     y = (p0.y + p1.y) * 0.5
     draw.add_rect_filled(
-        imgui.ImVec2(p0.x + pad_x - 1, y - 3),
-        imgui.ImVec2(p0.x + pad_x + 5, y + 3),
+        imgui.ImVec2(p0.x + pad_x - ui_px(1), y - ui_px(3)),
+        imgui.ImVec2(p0.x + pad_x + ui_px(5), y + ui_px(3)),
         imgui.get_color_u32(color),
-        3.0,
+        ui_px(3),
     )
     draw.add_text(
-        imgui.ImVec2(p0.x + pad_x + 10, p0.y + pad_y),
+        imgui.ImVec2(p0.x + pad_x + ui_px(10), p0.y + pad_y),
         imgui.get_color_u32(ON_PILL_TEXT),
         label,
     )

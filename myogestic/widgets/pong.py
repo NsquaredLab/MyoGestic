@@ -26,14 +26,18 @@ from dataclasses import dataclass
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
+from myogestic._theme import mono_font
 from myogestic.widgets.common import (
     IDLE,
     SUCCESS,
+    _truncate_to_width,
     hairline,
     mono_text,
     muted,
     panel_header,
     primary,
+    primary_button,
+    tinted_row,
     ui_px,
 )
 
@@ -289,6 +293,10 @@ class PongTask:
     **Serve** is pressed, so a layout pass, a freshly opened tab and a subject still
     finding their range all draw a still field.
 
+    Serve is the full-width forward action. During a rally a green-tinted row
+    shows the mono paddle/ball detail beside Stop; the court score uses the mono
+    face too. Narrow rows shorten the detail with its full value on hover.
+
     The paddle follows the command even between rallies, which is how a subject finds
     the range of their own contraction before the ball is in play. A command that is
     not finite — a diverged model reads as ``NaN`` — leaves the paddle where it was
@@ -338,7 +346,7 @@ class PongTask:
         cap is the whole difficulty: **~0.6 is a fair rally, 1.0 and above is hard**.
         Must be positive.
     court_height
-        Court height in pixels, or ``0`` or less to take the height the cell has left
+        Court height in pixels at UI scale 1.0, or ``0`` or less to take the height the cell has left
         over once the Serve row is reserved — the contract `SignalViewer`'s plot height
         already uses. Either way it is floored at 80 px, below which the ball is
         smaller than the paddle is thick. The width is always whatever the cell gives.
@@ -402,7 +410,7 @@ class PongTask:
         # A non-positive height is the "fill the cell" sentinel and has to survive the
         # floor, which only guards a caller who asked for a specific tiny court.
         self._court_height = (
-            court_height if court_height <= 0.0 else max(court_height, ui_px(_MIN_COURT_H))
+            court_height if court_height <= 0.0 else max(court_height, _MIN_COURT_H)
         )
         self._widget_id = widget_id
         self._opponent = opponent
@@ -636,15 +644,17 @@ class PongTask:
         dl = imgui.get_window_draw_list()
         origin = imgui.get_cursor_screen_pos()
         avail = imgui.get_content_region_avail()
-        # The Serve/Stop button plus the status line under it. Measured rather than
-        # hardcoded so the reservation follows `ui_scale` with everything else.
-        footer = imgui.get_frame_height_with_spacing() + imgui.get_text_line_height_with_spacing()
+        footer = (
+            imgui.get_frame_height() + ui_px(8) + imgui.get_style().item_spacing.y
+            if self._ball is not None
+            else imgui.get_frame_height_with_spacing() + imgui.get_text_line_height_with_spacing()
+        )
         height = (
-            self._court_height
+            ui_px(self._court_height)
             if self._court_height > 0.0
             else max(avail.y - footer, ui_px(_MIN_COURT_H))
         )
-        size = imgui.ImVec2(max(avail.x, 1.0), height)
+        size = imgui.ImVec2(max(avail.x, ui_px(1)), height)
         # An invisible button rather than a `dummy`: both reserve the rect, but `dummy`
         # registers with id 0 and cannot answer `is_item_hovered`.
         imgui.invisible_button("##pong_court", size)
@@ -655,18 +665,19 @@ class PongTask:
 
         far = imgui.ImVec2(origin.x + size.x, origin.y + size.y)
         faint = imgui.get_color_u32(hairline())
-        dl.add_rect_filled(origin, far, imgui.get_color_u32(imgui.Col_.frame_bg), rounding=4.0)
-        dl.add_rect(origin, far, faint, rounding=4.0, thickness=1.0)
+        dl.add_rect_filled(origin, far, imgui.get_color_u32(imgui.Col_.frame_bg), rounding=ui_px(4))
+        dl.add_rect(origin, far, faint, rounding=ui_px(4), thickness=ui_px(1))
 
         # The dashed halfway line, which is what makes a rectangle read as a court.
         dashes = 9
         for i in range(0, dashes, 2):
             dl.add_line(
-                at(0.5, 1.0 - 2.0 * i / dashes), at(0.5, 1.0 - 2.0 * (i + 1) / dashes), faint
+                at(0.5, 1.0 - 2.0 * i / dashes), at(0.5, 1.0 - 2.0 * (i + 1) / dashes),
+                faint, thickness=ui_px(1),
             )
 
         frame = imgui.get_frame_height()
-        thick = max(frame * _PADDLE_EM, 3.0)
+        thick = max(frame * _PADDLE_EM, ui_px(3))
 
         if self._opponent is not None:
             # Muted, not primary: the accent belongs to the paddle the subject drives.
@@ -693,11 +704,11 @@ class PongTask:
             # (same rect, drawn first) vanishes under the fill exactly when the subject is
             # on target, and an absent reference must not look like a tracked one. The
             # right edge stays on the plane so the bracket cannot spill out of the court.
-            pad = max(3.0, thick * 0.4)
+            pad = max(ui_px(3), thick * 0.4)
             tone = imgui.get_color_u32(muted())
             # The level line is what you track: it crosses the whole court, so the error
             # reads as the gap between it and the bar.
-            dl.add_line(at(0.0, ghost), at(1.0, ghost), tone)
+            dl.add_line(at(0.0, ghost), at(1.0, ghost), tone, thickness=ui_px(1))
             crown = at(1.0, ghost + self._half)
             base = at(1.0, ghost - self._half)
             dl.add_rect(
@@ -705,15 +716,15 @@ class PongTask:
                 imgui.ImVec2(base.x, base.y + pad),
                 tone,
                 rounding=thick * 0.5,
-                thickness=1.5,
+                thickness=ui_px(1.5),
             )
 
         if effort is not None and math.isfinite(effort):
             # A magnitude meter, not a second paddle: it grows from the centre line, so
             # its height compares to the level line's without claiming a direction.
-            gx, w = 0.05, max(thick * 0.7, 4.0)
+            gx, w = 0.05, max(thick * 0.7, ui_px(4))
             floor_, ceil_ = at(gx, 0.0), at(gx, 1.0)
-            dl.add_line(floor_, ceil_, faint)
+            dl.add_line(floor_, ceil_, faint, thickness=ui_px(1))
             tip = at(gx, min(max(effort, 0.0), 1.0))
             dl.add_rect_filled(
                 imgui.ImVec2(tip.x - w * 0.5, tip.y),
@@ -729,6 +740,7 @@ class PongTask:
                     imgui.ImVec2(mark.x - w, mark.y),
                     imgui.ImVec2(mark.x + w, mark.y),
                     imgui.get_color_u32(muted()),
+                    thickness=ui_px(1),
                 )
 
         if self._ball is not None:
@@ -736,7 +748,7 @@ class PongTask:
             # stay legible against the court in either theme.
             dl.add_circle_filled(
                 at(self._ball.x, self._ball.y),
-                max(frame * _BALL_EM, 3.0),
+                max(frame * _BALL_EM, ui_px(3)),
                 imgui.get_color_u32(imgui.Col_.text),
             )
 
@@ -751,23 +763,53 @@ class PongTask:
             else (self._misses, self._opponent_misses)
         )
         one, two = str(left), str(right)
-        dl.add_text(
-            imgui.ImVec2(centre.x - gap - imgui.calc_text_size(one).x, centre.y + gap), tone, one
-        )
-        dl.add_text(imgui.ImVec2(centre.x + gap, centre.y + gap), tone, two)
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, imgui.get_style().font_size_base)
+        try:
+            dl.add_text(
+                imgui.ImVec2(centre.x - gap - imgui.calc_text_size(one).x, centre.y + gap), tone, one
+            )
+            dl.add_text(imgui.ImVec2(centre.x + gap, centre.y + gap), tone, two)
+        finally:
+            if font is not None:
+                imgui.pop_font()
 
     def _controls_ui(self, ghost: float | None) -> None:
         """Serve or stop, plus the state in words."""
-        full = imgui.ImVec2(-1, 0)
         if self._ball is None:
-            if imgui.button(f"{fa.ICON_FA_PLAY}  Serve##pong_serve", full):
+            if primary_button(f"{fa.ICON_FA_PLAY}  Serve##pong_serve", (-1, 0)):
                 self._restart()
             imgui.set_item_tooltip("Start a rally from the centre, from a fresh score.")
+            self._detail_ui(ghost, imgui.get_content_region_avail().x)
         else:
-            if imgui.button(f"{fa.ICON_FA_STOP}  Stop##pong_stop", full):
-                self._ball = None
-            imgui.set_item_tooltip("Take the ball off the court. The score stays up.")
-        mono_text(self._detail(ghost), muted())
+            with tinted_row(SUCCESS) as width:
+                left, top = imgui.get_cursor_pos()
+                stop_w = imgui.calc_text_size("Stop").x + 2 * imgui.get_style().frame_padding.x
+                imgui.align_text_to_frame_padding()
+                self._detail_ui(ghost, max(0.0, width - stop_w - ui_px(8)))
+                imgui.same_line()
+                imgui.set_cursor_pos(imgui.ImVec2(left + width - stop_w, top))
+                if imgui.button("Stop##pong_stop"):
+                    self._ball = None
+                imgui.set_item_tooltip("Take the ball off the court. The score stays up.")
+
+    def _detail_ui(self, ghost: float | None, width: float) -> None:
+        """Ellipsize the mono readout to leave the row's action reachable."""
+        detail = self._detail(ghost)
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, imgui.get_style().font_size_base)
+        try:
+            shown = detail
+            if imgui.calc_text_size(detail).x > width:
+                ellipsis = "…" if imgui.calc_text_size("…").x <= width else ""
+                shown = _truncate_to_width(detail, width - imgui.calc_text_size(ellipsis).x) + ellipsis
+            mono_text(shown, muted())
+        finally:
+            if font is not None:
+                imgui.pop_font()
+        imgui.set_item_tooltip(detail)
 
 
 __all__ = ["Ball", "PongTask"]

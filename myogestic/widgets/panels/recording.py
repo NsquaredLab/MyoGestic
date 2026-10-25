@@ -28,14 +28,20 @@ from typing import TYPE_CHECKING, Literal
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
+from myogestic._theme import mono_font
 from myogestic.core import AppState
+from myogestic.session._core import _SLUG_MAX, _slug
 from myogestic.widgets.common import (
     DANGER,
     IDLE,
+    ON_PRIMARY_TEXT,
+    _truncate_to_width,
     destructive_button,
     mono_text,
     muted,
     panel_header,
+    primary_button,
+    tinted_row,
     ui_px,
 )
 
@@ -163,8 +169,12 @@ _POPUP_ID = "Save recording##rec_save"
 _NAME_MAX = 64
 
 
-def _elapsed_str(seconds: float) -> str:
-    """``m:ss`` for a duration, the way a stopwatch reads."""
+def _elapsed_str(seconds: float, *, tenths: bool = False) -> str:
+    """``m:ss`` for a duration, with optional tenths for a live take."""
+    if tenths:
+        ticks = max(0, int(round(seconds * 10)))
+        minutes, ticks = divmod(ticks, 600)
+        return f"{minutes}:{ticks // 10:02d}.{ticks % 10}"
     minutes, secs = divmod(int(seconds), 60)
     return f"{minutes}:{secs:02d}"
 
@@ -193,6 +203,12 @@ class RecordButton:
     the dialog opens — so the seconds spent typing a name are never recorded.
     The name is written to the session's ``meta.json`` and into the archive
     filename, so it shows up in `SessionManager` and is findable on disk.
+
+    Idle shows a full-width red Record action. Capture shows a tinted Recording
+    row with a mono elapsed clock and Stop; naming shows the captured duration.
+    The dialog previews the file stem, with an optional name, Save and an
+    outlined Discard action. A required participant ID gates Record with a
+    visible explanation.
 
     Parameters
     ----------
@@ -247,11 +263,8 @@ class RecordButton:
     def ui(self, ctx: Context) -> None:
         """Render the recorder. Call once per frame inside ``@app.ui``.
 
-        Deliberately the same shape as `DevicePicker`: status dot in the header,
-        one full-width action, one muted detail line. Stacked in the same column
-        the two panels should read as one instrument, not two widgets that grew
-        up apart. The header icon is an archive rather than the usual record
-        circle — beside a status dot, a second circle reads as a second state.
+        A status dot in the header accompanies the capture or naming row. The
+        archive icon distinguishes the title from the recording state dot.
 
         Drawn inside an ImGui id scope named by ``widget_id``, so two recorders
         in one `Grid` cell do not share a button and a naming dialog.
@@ -260,17 +273,12 @@ class RecordButton:
         try:
             recording = ctx.state == AppState.RECORDING
             self._sync(recording)
-            tone, detail = self._state(recording)
+            tone, _ = self._state(recording)
 
             if self._show_header:
-                # No tooltip: the line below the button already says this, and the
-                # elapsed clock in it would need keeping in step in two places.
                 panel_header("RECORDING", fa.ICON_FA_BOX_ARCHIVE, status=tone)
 
             self._button(ctx, recording)
-            # Mono: the clock ticks while you watch it, and the UI face's digits are
-            # not tabular, so a proportional one shuffles the text as it counts.
-            mono_text(detail, muted())
             self._dialog(ctx)
         finally:
             imgui.pop_id()
@@ -297,7 +305,7 @@ class RecordButton:
         """
         for stream in ctx.streams.values():
             stream.detach_session()
-        self._captured = time.monotonic() - self._started if self._started else 0.0
+        self._captured = time.monotonic() - self._started if self._started is not None else 0.0
         self._started = None
         self._naming = True
 
@@ -324,29 +332,98 @@ class RecordButton:
     def _state(self, recording: bool) -> tuple[imgui.ImVec4, str]:
         """State tone and its one-line detail, matching `DevicePicker`'s status line."""
         if self._naming:
-            return IDLE, f"naming · {_elapsed_str(self._captured)}"
+            return IDLE, f"naming · {_elapsed_str(self._captured, tenths=True)} captured"
         if recording:
-            elapsed = time.monotonic() - self._started if self._started else 0.0
-            return DANGER, f"recording · {_elapsed_str(elapsed)}"
+            elapsed = time.monotonic() - self._started if self._started is not None else 0.0
+            return DANGER, f"{_elapsed_str(elapsed, tenths=True)} elapsed"
         return IDLE, "not recording"
 
     # --- rendering ----------------------------------------------------------
     def _button(self, ctx: Context, recording: bool) -> None:
-        """Record ↔ Stop, full width. The glyph shows what clicking will do."""
-        full = imgui.ImVec2(-1, 0)
+        """One forward action when idle; a state row while capturing or naming."""
+        _, detail = self._state(recording)
         if self._naming:
-            imgui.begin_disabled()
-            imgui.button(f"{fa.ICON_FA_STOP}  Stop", full)
-            imgui.end_disabled()
+            with tinted_row() as width:
+                imgui.align_text_to_frame_padding()
+                self._mono_detail(detail, width)
             return
 
+        height = max(ui_px(52), 2 * imgui.get_text_line_height() + ui_px(12))
         if recording:
-            if imgui.button(f"{fa.ICON_FA_STOP}  Stop", full):
-                self._stop(ctx)
-        elif _record_button(ctx, f"{fa.ICON_FA_CIRCLE_DOT}  Record", full):
-            self._name = ""
-            self._started = time.monotonic()
-            self._on_record()
+            with tinted_row(DANGER, height=height) as width:
+                left, top = imgui.get_cursor_pos()
+                stop_w = imgui.calc_text_size("Stop").x + 2 * imgui.get_style().frame_padding.x
+                text_w = max(0.0, width - stop_w - ui_px(8))
+                imgui.text_unformatted(_truncate_to_width("Recording", text_w))
+                imgui.set_cursor_pos_y(top + imgui.get_text_line_height() + ui_px(2))
+                self._mono_detail(detail, text_w)
+                imgui.same_line()
+                imgui.set_cursor_pos(imgui.ImVec2(
+                    left + width - stop_w,
+                    top + (height - ui_px(8) - imgui.get_frame_height()) / 2,
+                ))
+                if imgui.button("Stop"):
+                    self._stop(ctx)
+            return
+
+        for slot, color in ((imgui.Col_.button, DANGER), (imgui.Col_.button_hovered, DANGER),
+                            (imgui.Col_.button_active, DANGER), (imgui.Col_.text, ON_PRIMARY_TEXT)):
+            imgui.push_style_color(slot, color)
+        try:
+            if _record_button(ctx, f"{fa.ICON_FA_CIRCLE}  Record", imgui.ImVec2(-1, height)):
+                self._name = ""
+                self._started = time.monotonic()
+                self._on_record()
+        finally:
+            imgui.pop_style_color(4)
+        if getattr(ctx, "require_participant", False) and not getattr(ctx, "participant", ""):
+            imgui.push_style_color(imgui.Col_.text, muted())
+            imgui.text_wrapped("Set a participant first — recordings are saved under their ID.")
+            imgui.pop_style_color()
+
+    @staticmethod
+    def _mono_detail(text: str, width: float) -> None:
+        """Keep a readout on one line, with its full value available on hover."""
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, imgui.get_style().font_size_base)
+        try:
+            shown = text
+            if imgui.calc_text_size(text).x > width:
+                ellipsis = "…" if imgui.calc_text_size("…").x <= width else ""
+                shown = _truncate_to_width(text, width - imgui.calc_text_size(ellipsis).x) + ellipsis
+            mono_text(shown, muted())
+        finally:
+            if font is not None:
+                imgui.pop_font()
+        imgui.set_item_tooltip(text)
+
+    def _file_stem(self, ctx: Context) -> str:
+        """Preview the archive stem without writing metadata or changing the session."""
+        session = ctx.session
+        if session is None:
+            return ""
+        # Match save_meta's recorded-time labels; metadata is only written at Save.
+        first, last = 0.0, 0.0
+        for timestamps in session.ts_stores.values():
+            if timestamps.shape[0]:
+                first, last = float(timestamps[0]), float(timestamps[-1])
+                break
+        recorded = set()
+        for i, event in enumerate(session.label_track):
+            if not 0 <= event.class_index < len(ctx.class_names):
+                continue
+            index = int(event.class_index)
+            if index != event.class_index:
+                continue
+            end = session.label_track[i + 1].timestamp if i + 1 < len(session.label_track) else last
+            if min(last, end) > max(first, event.timestamp):
+                recorded.add(ctx.class_names[index])
+        slugs = [_slug(name) for name in sorted(recorded, key=ctx.class_names.index) if _slug(name)]
+        labels = "+".join(slugs)
+        if len(labels) > _SLUG_MAX:
+            labels = f"{len(slugs)}-classes"
+        return "_".join(part for part in (session.path.name, labels, _slug(self._name)) if part)
 
     def _dialog(self, ctx: Context) -> None:
         """The naming modal. Deliberately has no way out but Save or Discard.
@@ -363,12 +440,14 @@ class RecordButton:
         # cell in the grid.
         center = imgui.get_main_viewport().get_center()
         imgui.set_next_window_pos(center, imgui.Cond_.appearing, imgui.ImVec2(0.5, 0.5))
+        width = min(ui_px(360), imgui.get_main_viewport().work_size.x - ui_px(24))
+        imgui.set_next_window_size(imgui.ImVec2(width, 0))
         opened, _ = imgui.begin_popup_modal(_POPUP_ID, None, imgui.WindowFlags_.always_auto_resize)
         if not opened:
             return
         try:
-            imgui.text(f"Captured {_elapsed_str(self._captured)}.")
-            imgui.set_next_item_width(280)
+            imgui.text_unformatted("Name (optional)")
+            imgui.set_next_item_width(-1)
             if imgui.is_window_appearing():
                 imgui.set_keyboard_focus_here()
             changed, typed = imgui.input_text_with_hint(
@@ -376,20 +455,24 @@ class RecordButton:
             )
             if changed:
                 self._name = typed[:_NAME_MAX]
-            imgui.text_colored(
-                muted(), "Optional — the timestamp always identifies the session."
-            )
+            imgui.text_colored(muted(), "File stem")
+            self._mono_detail(self._file_stem(ctx), imgui.get_content_region_avail().x)
             imgui.spacing()
 
-            if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save", imgui.ImVec2(ui_px(120), 0)):
+            if primary_button(f"{fa.ICON_FA_FLOPPY_DISK}  Save", (-1, 0)):
                 self._save(ctx)
                 imgui.close_current_popup()
             if self._on_discard is not None:
-                imgui.same_line()
-                if destructive_button(
-                    f"{fa.ICON_FA_TRASH}  Discard",
-                    tooltip=f"Delete these {_elapsed_str(self._captured)} of data permanently",
-                ):
+                duration = _elapsed_str(self._captured, tenths=True)
+                imgui.push_style_var(imgui.StyleVar_.frame_border_size, ui_px(1))
+                try:
+                    discarded = destructive_button(
+                        f"{fa.ICON_FA_TRASH}  Discard {duration}",
+                        tooltip=f"Delete these {duration} of data permanently",
+                    )
+                finally:
+                    imgui.pop_style_var()
+                if discarded:
                     self._discard()
                     imgui.close_current_popup()
         finally:
