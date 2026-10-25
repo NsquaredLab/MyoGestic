@@ -4,12 +4,13 @@ Run with:
     uv run --extra examples --extra grpc python examples/synthetic/emg_regression.py
 
 Workflow:
-    1. Launch EMG Generator + VHI Hand
+    1. Connect: launch EMG Generator + VHI Hand, then connect their streams
     2. Click a gesture button → MyoGestic drives the VHI control hand over gRPC
     3. Click Record → VHI's local keyboard control is disabled for the session,
        so the gesture buttons are the sole movement source → Stop Rec
     4. Select sessions → Train (regression on kinematics)
     5. Predict → VHI predicted hand mirrors control hand
+    6. Use Simulated EMG on any step to try Rest/Fist while predicting
 
 The control space lives in `examples/controls/regression.toml` — our aliases on the left,
 VHI's addresses on the right. VHI declares what they accept, so nothing resolves until it runs.
@@ -21,12 +22,15 @@ import tomllib
 
 import numpy as np
 import torch
+from imgui_bundle import icons_fontawesome_6 as fa
+from imgui_bundle import imgui
 from myoverse.transforms import MAV, RMS, WaveformLength
 
-from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
+from myogestic._theme import mono_font
 from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
-from myogestic.ml.widgets import PipelinePanel
+from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import catboost_regressor
 from myogestic.remote import RemoteTarget
 from myogestic.session import (
@@ -35,21 +39,34 @@ from myogestic.session import (
     split_sessions_by_stream,
 )
 from myogestic.sources import LSLSource
-from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import virtual_hand
 from myogestic.vhi.pose import ADDRESS_CHANNELS, POSE_DOFS, split_pose
 from myogestic.widgets import (
-    AppLogo,
+    AppHeader,
     LogPanel,
+    ParticipantPanel,
     PostProcessor,
     ProcessLauncher,
     SessionManager,
     SignalViewer,
+    SimulatorControls,
+    StatusBar,
+    StepBar,
     StreamPanel,
+)
+from myogestic.widgets.common import (
+    DANGER,
+    IDLE,
+    SUCCESS,
+    fit_text,
+    mono_text,
+    muted,
+    panel_header,
+    tinted_row,
+    ui_px,
 )
 from myogestic.widgets.panels.recording import RecordingControls
 
-ctrl_outlet = control_outlet()
 CLASSES = ["Rest", "Fist"]
 CTRL_VALUES = [0.0, 1.0]
 
@@ -239,14 +256,39 @@ def predict(model, features):
 
 
 # --8<-- [start:grid]
-LOGO_CELL_W = 300
-WORDMARK_ASPECT = 800 / 540
-grid = Grid(
-    6,
-    3,
-    row_height=[Px(LOGO_CELL_W / WORDMARK_ASPECT), *[Fr(1)] * 5],
-    col_width=[Px(LOGO_CELL_W), Fr(1), Fr(1)],
+layout = Layout(
+    wide=Grid.areas(
+        """
+        header    header
+        signal    step
+        signal    sessions
+        simulator sessions
+        log       sessions
+        status    status
+        """,
+        row_height=[Px(52), Fr(3), Fr(1), Px(76), Px(110), Px(26)],
+        col_width=[Fr(1), Px(400)],
+        bare=("header", "status"),
+    ),
+    narrow=Grid.areas(
+        """
+        header
+        signal
+        simulator
+        step
+        sessions
+        log
+        status
+        """,
+        row_height=[Px(52), Fr(2), Px(76), Fr(3), Fr(1.5), Px(110), Px(26)],
+        bare=("header", "status"),
+    ),
+    breakpoint=Px(1100),
 )
+steps = StepBar(["Connect", "Record", "Train", "Predict"], widget_id="emg_regression_steps")
+participant = ParticipantPanel()
+header = AppHeader("EMG regression", steps=steps, participant=participant)
+status = StatusBar("emg", pipeline=pipeline)
 # --8<-- [end:grid]
 
 
@@ -256,7 +298,7 @@ def _on_gesture(i: int) -> None:
     # constant is what the regressor learns to map EMG amplitude back to. `bus.select`
     # skips the debounce and rebases the trigger so the next push does not re-fire it.
     bus = link.ensure()
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
+    simulator.set(CTRL_VALUES[i])
     if bus is not None:
         # `CLASSES` must name VHI's own movements; `select` returns False if one does not.
         bus.select("gesture", CLASSES[i])
@@ -268,6 +310,9 @@ def _on_record() -> None:
     # Gates VHI's local keyboard so the gesture buttons are the session's only movement
     # source. False means this VHI has no v2 aid — an ungated take picks up stray keys.
     link.ensure()
+    # A simulator preview may differ from the gesture selected for this take.
+    if 0 <= app.ctx.current_label < len(CTRL_VALUES):
+        simulator.set(CTRL_VALUES[app.ctx.current_label])
     app.start_recording()
     if not recording_aid.set_recording_session(True):
         app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
@@ -279,49 +324,156 @@ def _on_stop() -> None:
 # --8<-- [end:record]
 
 
-viewer = SignalViewer("emg", selectable=True)
-streams = StreamPanel()
-log = LogPanel()
-logo = AppLogo()
+# Connect owns both stream connections; the signal and simulator stay visible.
+viewer = SignalViewer("emg", selectable=True, show_connect=False)
+simulator = SimulatorControls([("Rest", 0.0), ("Fist", 1.0)])
+streams = StreamPanel(show_header=False)
+log = LogPanel(title="Activity log")
 processes = ProcessLauncher(PROCESSES)
 recording = RecordingControls(
     CLASSES,
     on_record=_on_record,
     on_stop=_on_stop,
     on_gesture=_on_gesture,
+    show_header=False,
 )
 sessions = SessionManager("sessions", class_names=CLASSES)
-panel = PipelinePanel(pipeline)
+train_button = TrainButton(pipeline, size=(-1, 0))
+training_log = TrainingLog(pipeline, height=100)
+predict_button = PredictButton(pipeline, size=(-1, 0))
+launch_errors: dict[str, str] = {}
+
+
+def connect_ui(ctx: Context) -> None:
+    """Launch the configured processes and connect EMG and optional kinematics."""
+    for name, _command in PROCESSES:
+        running = processes.running(name)
+        error = launch_errors.get(name, "")
+        tone = SUCCESS if running else DANGER if error else IDLE
+        style = imgui.get_style()
+        icon = fa.ICON_FA_STOP if running else fa.ICON_FA_PLAY
+        action_width = imgui.calc_text_size(icon).x + 2 * style.frame_padding.x
+        imgui.text_colored(muted(), fit_text(name, imgui.get_content_region_avail().x))
+        imgui.set_item_tooltip(name)
+        with tinted_row(tone) as width:
+            left = imgui.get_cursor_pos_x()
+            imgui.align_text_to_frame_padding()
+            detail = "Running" if running else "Launch failed" if error else "Not running"
+            imgui.text_unformatted(fit_text(detail, width - action_width - style.item_spacing.x))
+            imgui.set_item_tooltip(error or f"Launch {name}, then connect its stream below.")
+            imgui.same_line()
+            imgui.set_cursor_pos_x(left + width - action_width)
+            imgui.begin_disabled(ctx.state != "idle")
+            clicked = imgui.small_button(f"{icon}##launch_{name}")
+            imgui.end_disabled()
+            imgui.set_item_tooltip(f"Stop {name}" if running else f"Launch {name}")
+            if clicked:
+                if running:
+                    processes.stop(name)
+                else:
+                    try:
+                        processes.launch(name)
+                        launch_errors[name] = ""
+                    except Exception as exc:
+                        launch_errors[name] = str(exc)
+                        ctx.log(f"{name} launch failed: {exc}")
+    imgui.spacing()
+    imgui.text_colored(muted(), "Streams")
+    streams.ui(ctx)
+    imgui.push_style_color(imgui.Col_.text, muted())
+    imgui.text_wrapped("Return to idle before changing processes." if ctx.state != "idle" else
+                       "Launch the sources, then connect. VHI kinematics are optional; "
+                       "takes without them train from Rest/Fist labels.")
+    if ctx.state == "recording":
+        imgui.text_wrapped("Stop recording before changing connections.")
+    imgui.pop_style_color()
+
+
+def model_ui() -> None:
+    """Train the fixed MyoVerse features on selected takes and show the fit log."""
+    imgui.text_colored(muted(), "Features")
+    imgui.text_wrapped("RMS · MAV · WL (MyoVerse)")
+    imgui.spacing()
+    train_button.ui()
+    training_log.ui()
+
+
+def predict_ui() -> None:
+    """Tune smoothing and read the continuous controls sent to the hand."""
+    output_filter.ui()
+    imgui.spacing()
+    imgui.text_colored(muted(), "Sent to the hand")
+    outputs = pipeline.predictions.get("dof") or {}
+    if not outputs:
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.text_wrapped("No output yet — train a model, then start predicting.")
+        imgui.pop_style_color()
+    for alias in DOF_NAMES:
+        if alias not in outputs:
+            continue
+        value = f"{outputs[alias]:+.2f}"
+        style = imgui.get_style()
+        imgui.push_font(mono_font(), style.font_size_base)
+        value_width = imgui.calc_text_size(value).x
+        imgui.pop_font()
+        right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+        room = imgui.get_content_region_avail().x - value_width - style.item_spacing.x
+        imgui.text_unformatted(fit_text(alias, max(0.0, room)))
+        imgui.set_item_tooltip(alias)
+        imgui.same_line()
+        imgui.set_cursor_pos_x(right - value_width)
+        mono_text(value)
+    imgui.spacing()
+    predict_button.ui()
+
+
+def _step_done(ctx: Context) -> list[bool]:
+    """Completion follows EMG, participant takes, the model and live prediction."""
+    stream = ctx.streams.get("emg")
+    return [
+        stream is not None and stream.status == "connected" and stream.info is not None,
+        bool(ctx.participant)
+        and any(pathlib.Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        pipeline.model is not None,
+        ctx.state == "predicting",
+    ]
 
 
 @app.ui
-def demo_ui(ctx):
-    with grid[0:4, 1:3]:
+def demo_ui(ctx: Context) -> None:
+    """Keep signal, simulator, sessions and activity around the active step."""
+    done = _step_done(ctx)
+    with layout["header"]:
+        active = header.ui(ctx, done)
+    padding = imgui.get_style().window_padding
+    imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))
+    # Recording state advances once per frame, even with another step open.
+    if active != 1:
+        recording.ui(ctx, visible=False)
+    # Refresh the participant's selection before Train reads it this frame.
+    with layout["sessions"]:
+        pipeline.training_data = sessions.ui(participant=ctx.participant)
+    with layout["step"]:
+        stream = ctx.streams.get("emg")
+        tone = SUCCESS if done[0] else DANGER if stream is not None and stream.last_error else IDLE
+        panel_header(steps.steps[active], status=tone if active == 0 else None)
+        if active == 0:
+            connect_ui(ctx)
+        elif active == 1:
+            recording.ui(ctx)
+        elif active == 2:
+            model_ui()
+        else:
+            predict_ui()
+    with layout["signal"]:
         viewer.ui(ctx)
-
-    with grid[4:6, 1:2]:
-        streams.ui(ctx)
-
-    with grid[4:6, 2:3]:
+    with layout["simulator"]:
+        simulator.ui(ctx)
+    with layout["log"]:
         log.ui(ctx)
-
-    with grid[0, 0]:
-        logo.ui()
-
-    with grid[1, 0]:
-        processes.ui()
-
-    with grid[2, 0]:
-        recording.ui(ctx)
-
-    with grid[3, 0]:
-        pipeline.training_data = sessions.ui()
-
-    with grid[4, 0]:
-        panel.ui()
-
-    with grid[5, 0]:
-        output_filter.ui()
+    imgui.pop_style_var()
+    with layout["status"]:
+        status.ui(ctx)
 
 
 def main() -> None:
