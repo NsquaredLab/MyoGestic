@@ -92,3 +92,66 @@ def test_probability_values_align_with_class_labels(imgui_frame, monkeypatch):
     imgui_frame(PredictionLabel(pipeline, ["Rest", "Fist"], show_probability=True).ui)
     assert positions["Rest"] == positions["20%"]
     assert positions["Fist"] == positions["80%"]
+
+
+@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("state,model,reason", [
+    ("idle", None, "train or load a model"),
+    ("idle", object(), "ready to predict"),
+    ("predicting", object(), "waiting for first prediction"),
+])
+def test_idle_and_live_share_hero_size_and_centered_detail(
+    imgui_frame, monkeypatch, scale, state, model, reason,
+):
+    from pathlib import Path
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    style = imgui.get_style()
+    style.scale_all_sizes(scale)
+    style.font_scale_main = scale
+    fonts = Path(_theme.__file__).parent / "assets" / "fonts"
+    atlas = imgui.get_io().fonts
+    display = atlas.add_font_from_file_ttf(str(fonts / "InstrumentSerif-Regular.ttf"), 28)
+    mono = atlas.add_font_from_file_ttf(str(fonts / "IBMPlexMono-Regular.ttf"), 13)
+    monkeypatch.setattr(_theme, "_DISPLAY_FONT", display)
+    monkeypatch.setattr(_theme, "_MONO_FONT", mono)
+    pipeline = SimpleNamespace(predictions={}, model=model, predict_hz=20,
+                               app=SimpleNamespace(ctx=SimpleNamespace(state=state)))
+    label = PredictionLabel(pipeline, ["Rest", "Fist"])
+    text = imgui.text_colored
+    items, cards, base_sizes = {}, [], []
+
+    def capture(tone, value):
+        font, size = imgui.get_font(), imgui.get_font_size()
+        text(tone, value)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        items[value] = (font, size, (lo.y + hi.y) / 2, hi.x, right)
+
+    monkeypatch.setattr(imgui, "text_colored", capture)
+
+    def draw():
+        base_sizes.append(imgui.get_font_size())
+        label.ui()
+        cards.append(imgui.get_item_rect_size().y)
+
+    # Auto-sized children settle on the next frame.
+    for _ in range(3):
+        imgui_frame(draw)
+    idle_height = cards[-1]
+    pipeline.predictions = {"class": 1}
+    pipeline.app.ctx.state = "predicting"
+    for _ in range(3):
+        imgui_frame(draw)
+    assert cards[-1] == idle_height
+    for hero, detail in (("—", reason), ("Fist", "every 50 ms")):
+        assert items[hero][0] == display
+        assert items[hero][1] == pytest.approx(base_sizes[-1] * 2)
+        assert items[detail][0] == mono
+        assert items[detail][1] == pytest.approx(base_sizes[-1])
+        assert items[detail][2] == pytest.approx(items[hero][2], abs=1)
+        assert items[detail][3] == pytest.approx(items[detail][4], abs=1)

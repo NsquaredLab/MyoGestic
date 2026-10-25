@@ -54,7 +54,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![session_manager](images/widgets/session_manager.png){ .widget-thumb loading=lazy }
 
-    One line per take, grouped by day with only the newest group open. The list scrolls beneath a fixed header, selection summary, and gesture chips; **All** / **None** change every take, and gesture chips include or exclude classes from training. Files loaded from outside the scanned folder appear under **Loaded**. Returns [`TrainingData`][myogestic.TrainingData] for `@pipeline.train`; `selection()` exposes selected/total counts and included gesture seconds for a Train card.
+    One compact, clickable line per take (about 26 logical pixels), grouped by day with only the newest group open. The list scrolls beneath a fixed header, selection summary, and gesture chips; **All** / **None** change every take, and gesture chips include or exclude classes from training. Files loaded from outside the scanned folder appear under **Loaded**. Returns [`TrainingData`][myogestic.TrainingData] for `@pipeline.train`; `selection()` exposes selected/total counts and included gesture seconds for a Train card.
 
 </div>
 
@@ -126,7 +126,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![prediction_label](images/widgets/prediction_label.png){ .widget-thumb loading=lazy }
 
-    Surface card with the current classifier label in the display face and a muted mono prediction interval. Idle shows a dash and the reason. Reads `pipeline.predictions["class"]`; `show_probability=True` adds one thin bar per class in its palette colour, with a mono percentage on a shared 0–1 range.
+    Surface card with the current classifier label in the display face and a muted mono prediction interval, right-aligned and vertically centred beside it. Idle shows a dash at the same hero size and the reason in the same layout. Reads `pipeline.predictions["class"]`; `show_probability=True` adds one thin bar per class in its palette colour, with a mono percentage on a shared 0–1 range.
 
 </div>
 

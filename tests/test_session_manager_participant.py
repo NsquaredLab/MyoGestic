@@ -384,7 +384,7 @@ def test_many_takes_scroll_only_the_list_and_keep_rows_one_line(tmp_path, imgui_
     imgui.get_style().font_scale_main = scale
     imgui.get_io().display_size = imgui.ImVec2(1280 * scale, 828 * scale)
     end_child, checkbox = imgui.end_child, imgui.checkbox
-    scrolls, rows, line_heights = [], [], []
+    scrolls, rows = [], []
 
     def end():
         scrolls.append((imgui.get_window_size().y, imgui.get_scroll_max_y()))
@@ -392,7 +392,6 @@ def test_many_takes_scroll_only_the_list_and_keep_rows_one_line(tmp_path, imgui_
 
     def check(label, checked):
         rows.append(imgui.get_cursor_pos_y())
-        line_heights.append(imgui.get_frame_height_with_spacing())
         return checkbox(label, checked)
 
     monkeypatch.setattr(imgui, "end_child", end)
@@ -409,7 +408,7 @@ def test_many_takes_scroll_only_the_list_and_keep_rows_one_line(tmp_path, imgui_
     assert len(scrolls) == 2, "header, summary and chips must live outside the list child"
     assert scrolls[0][1] > 0 and scrolls[1][1] == 0, scrolls
     assert len(rows) == 14, "only the newest day starts expanded"
-    assert max(b - a for a, b in zip(rows, rows[1:], strict=False)) <= max(line_heights) + scale
+    assert max(b - a for a, b in zip(rows, rows[1:], strict=False)) <= 28 * scale
 
 
 def test_collapsed_day_stays_collapsed_when_selection_changes(tmp_path, imgui_frame, monkeypatch):
@@ -469,3 +468,73 @@ def test_row_chips_keep_raw_names_and_mute_excluded_gestures(tmp_path, imgui_fra
     assert any(name == "Unknown gesture" for name, _, _ in labels)
     assert any(name == "Fist" and color == muted_color for name, color, muted_color in labels)
     assert any(name == "Rest" and color != muted_color for name, color, muted_color in labels)
+
+
+@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("labelled", [False, True])
+def test_compact_take_row_alignment_and_clicks(tmp_path, imgui_frame, monkeypatch, scale, labelled):
+    from myogestic import _scale, _theme
+    from myogestic.widgets.common import ui_px
+    from myogestic.widgets.training import session_manager as module
+    from myogestic.widgets.training._session_state import scan_sessions
+
+    _dated_take(tmp_path, "", "one", "2026-10-25T08:00:00",
+                seconds={"Rest": 30.} if labelled else {}, labels=(0,) if labelled else ())
+    row = scan_sessions(str(tmp_path))[0]
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    style = imgui.get_style()
+    style.scale_all_sizes(scale)
+    style.font_scale_main = scale
+    imgui.get_io().display_size = imgui.ImVec2(1280 * scale, 828 * scale)
+    padding = tuple(style.frame_padding)
+    positions, heights = {}, []
+    checkbox, mono, dummy = imgui.checkbox, module.mono_text, imgui.dummy
+
+    def remember(key):
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        positions[key] = ((lo.x + hi.x) / 2, (lo.y + hi.y) / 2)
+
+    def check(label, value):
+        result = checkbox(label, value)
+        remember("checkbox")
+        return result
+
+    def text(value, color=None):
+        mono(value, color)
+        remember(value)
+
+    def chip(size):
+        dummy(size)
+        remember("chip")
+
+    monkeypatch.setattr(imgui, "checkbox", check)
+    monkeypatch.setattr(module, "mono_text", text)
+    monkeypatch.setattr(imgui, "dummy", chip)
+
+    def draw():
+        top = imgui.get_cursor_pos_y()
+        module._render_row("compact", row, set(), ["Rest", "Fist"])
+        heights.append(imgui.get_cursor_pos_y() - top)
+        assert tuple(style.frame_padding) == padding
+
+    for _ in range(2):
+        imgui_frame(draw)
+    assert max(heights) <= ui_px(28)
+    assert heights[-1] == pytest.approx(ui_px(26), abs=scale)
+    assert all(pos[1] == pytest.approx(positions["checkbox"][1], abs=1) for pos in positions.values())
+
+    def click(position):
+        io = imgui.get_io()
+        io.add_mouse_pos_event(*position)
+        imgui_frame(draw)
+        io.add_mouse_button_event(0, True)
+        imgui_frame(draw)
+        io.add_mouse_button_event(0, False)
+        imgui_frame(draw)
+
+    for target in ("checkbox", "checkbox", "08:00", "chip" if labelled else "0:30"):
+        selected = row["selected"]
+        click(positions[target])
+        assert row["selected"] is not selected, target

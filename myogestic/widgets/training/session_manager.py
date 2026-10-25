@@ -41,7 +41,8 @@ class SessionManager:
 
     Construct once with the base path / title / class names, then call
     [`ui`][] each frame. The widget has two training filters: selected
-    session files and included class indices. Only the newest day starts open;
+    session files and included class indices. Compact, clickable take rows are
+    about 26 logical pixels tall. Only the newest day starts open;
     the list scrolls while its header, summary and gesture chips stay visible.
     Files loaded outside the scanned folder appear under **Loaded**. Read
     ``selection()`` for selected-take counts and included gesture seconds.
@@ -285,9 +286,14 @@ def render_session_rows(
 def _render_row(
     widget_id: str, row: dict, excluded: set[int], class_names: list[str] | None,
 ) -> None:
+    # Two-pixel vertical padding keeps the checkbox and chips to 18 px with
+    # the 14 px body font; the theme's trailing 8 px gap makes a 26 px row.
+    imgui.push_style_var(imgui.StyleVar_.frame_padding,
+                         imgui.ImVec2(imgui.get_style().frame_padding.x, ui_px(2)))
     imgui.begin_group()
     right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
     _, row["selected"] = imgui.checkbox(f"##{widget_id}_{row['path']}", row["selected"])
+    checkbox_hovered = imgui.is_item_hovered()
     imgui.same_line()
     created = row.get("created")
     stamp = created.strftime("%H:%M") if created else "—"
@@ -328,6 +334,9 @@ def _render_row(
     imgui.set_cursor_pos_x(max(imgui.get_cursor_pos_x(), right - duration_width))
     mono_text(duration, muted())
     imgui.end_group()
+    imgui.pop_style_var()
+    if not checkbox_hovered and imgui.is_item_clicked():
+        row["selected"] = not row["selected"]
     name = row.get("session_name", "")
     imgui.set_item_tooltip(f"{name + chr(10) if name else ''}{row['name']}\n{row.get('streams_str', '')}")
 
