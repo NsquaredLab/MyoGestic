@@ -13,12 +13,14 @@ from myogestic._theme import display_font
 from myogestic.widgets.common import (
     DANGER,
     ON_PRIMARY_TEXT,
+    PALETTE,
     SUCCESS,
     WARNING,
     mono_text,
     muted,
     panel_header,
     pop_selected,
+    primary,
     push_selected,
     segmented,
     tinted_row,
@@ -114,22 +116,43 @@ def _gesture_tiles(ctx: Context, controls: RecordingControls) -> None:
     names = controls._class_names or []
     if not names:
         return
-    imgui.text("Gesture:")
-    spacing = imgui.get_style().item_spacing.x
+    imgui.text_colored(muted(), "Gesture")
+    style = imgui.get_style()
+    spacing = style.item_spacing.x
     available = imgui.get_content_region_avail().x
     columns = max(1, min(len(names), int((available + spacing) / (ui_px(110) + spacing))))
     width = max(1.0, (available - spacing * (columns - 1)) / columns)
+    height = ui_px(44)
+    dot, gap = ui_px(6), ui_px(6)
     locked = controls.take.timed and controls.take.phase in ("warmup", "recording")
+    current = controls._gesture_index(ctx)
     for i, name in enumerate(names):
         if i % columns:
             imgui.same_line()
-        selected = ctx.current_label == i
+        selected = current == i
         disabled = locked and not selected
         imgui.begin_disabled(disabled)
         if selected:
             push_selected()
         try:
-            if imgui.button(f"{name}##rec_gesture{i}", imgui.ImVec2(width, ui_px(44))) and not locked:
+            clicked = imgui.button(f"##rec_gesture{i}", imgui.ImVec2(width, height))
+            lo = imgui.get_item_rect_min()
+            label = _fit(name, max(0.0, width - dot - gap - 2 * style.frame_padding.x))
+            size = imgui.calc_text_size(label)
+            left = lo.x + (width - dot - gap - size.x) / 2
+            draw = imgui.get_window_draw_list()
+            color = PALETTE[i % len(PALETTE)]
+            draw.add_circle_filled(
+                imgui.ImVec2(left + dot / 2, lo.y + height / 2), dot / 2,
+                imgui.get_color_u32(imgui.ImVec4(*color, 1.0)),
+            )
+            draw.add_text(
+                imgui.ImVec2(left + dot + gap, lo.y + (height - size.y) / 2),
+                imgui.get_color_u32(primary()), label,
+            )
+            if label != name:
+                imgui.set_item_tooltip(name)
+            if clicked and not locked:
                 ctx.current_label = i
                 if ctx.state == "recording" and ctx.session is not None and not locked:
                     ctx.session.add_label(i)
@@ -140,6 +163,12 @@ def _gesture_tiles(ctx: Context, controls: RecordingControls) -> None:
             if selected:
                 pop_selected()
             imgui.end_disabled()
+    if locked:
+        caption = ("Cancel the warm-up to change gestures." if controls.take.phase == "warmup"
+                   else "Stop the recording to change gestures.")
+        imgui.push_text_wrap_pos(0.0)
+        imgui.text_colored(muted(), caption)
+        imgui.pop_text_wrap_pos()
 
 
 def _action(ctx: Context, controls: RecordingControls) -> None:
