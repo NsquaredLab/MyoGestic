@@ -293,6 +293,11 @@ court, against an opponent paddle that plays it back. A rally is the reason for 
 it rewards *graded* contraction, where a trapezoid only rewards tracking and a gesture
 classifier rewards nothing continuous at all.
 
+The full-width **Serve** action starts a rally. While the ball is in play, a green-tinted row
+shows the mono paddle and ball readout beside **Stop**; the score also uses the mono face.
+Narrow cells shorten the readout with its full detail available on hover, and the court's
+pixel dimensions follow the UI scale.
+
 Two ways to record the training set, and the Model tab starts either. **Follow the cursor**
 runs a [`Pursuit`][myogestic.tracking.Pursuit] block — a ghost paddle wanders the court, the
 subject chases it, and the cursor is recorded beside the EMG on the `target` stream. The
