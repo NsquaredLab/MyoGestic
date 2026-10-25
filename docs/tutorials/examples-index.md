@@ -130,6 +130,20 @@ uv run python examples/synthetic/my_device.py
 **What to tweak:** the three numbered lines. See
 [Drive your own device](../how-to/add-a-target.md).
 
+### `my_session_app.py` - copy your own session app
+
+A small Connect / Record / Train / Predict app with the shared header, persistent signal
+and simulator, sessions, activity log and status bar. It launches synthetic EMG and fits
+a NumPy nearest-centroid model, so it runs without hardware or an ML package.
+
+```bash
+uv run python examples/synthetic/my_session_app.py
+```
+
+**What to tweak:** the four numbered sections: gesture classes, features, training and
+prediction. Choose a participant in the header, record each gesture and select the takes
+before training. Add your device's output call in `predict` when you are ready.
+
 ### `servo_hand.py` - the same shape, with a real mechanism
 
 Six servos on a serial port. `hand.thumb` drives two of them on different transfer functions,
