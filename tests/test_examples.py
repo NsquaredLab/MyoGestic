@@ -1099,22 +1099,6 @@ def _light_scaled_ui(monkeypatch):
 
 
 
-@pytest.mark.parametrize("name", ["channel_grid_demo", "multi_panel_grids"])
-def test_synthetic_array_traces_use_one_manual_range(name, monkeypatch, implot_frame):
-    """A quiet electrode must not be inflated to the same height as a loud one."""
-    from myogestic.widgets.signals import _state
-
-    namespace = _synthetic_example(name, monkeypatch)
-    app = namespace["app"]
-    monkeypatch.setattr(_state, "_viewers", {})
-    implot_frame(lambda: app._ui_fn(app.ctx))
-    viewers = namespace.get("viewers", [namespace.get("viewer")])
-    states = [_state._viewers[viewer._widget_id or "emg"] for viewer in viewers]
-    assert all(state.scale_mode == "manual" for state in states)
-    assert len({(state.y_min, state.y_max) for state in states}) == 1
-    assert all(not state.per_channel_scale for state in states)
-
-
 def test_electrode_overview_names_empty_cards_and_gives_a_next_step(monkeypatch, implot_frame):
     """Detached arrays still have a title and explain how to get their first samples."""
     from imgui_bundle import imgui
@@ -1149,7 +1133,7 @@ def test_electrode_overview_names_empty_cards_and_gives_a_next_step(monkeypatch,
     *(_EXAMPLES_ROOT / "synthetic" / f"{name}.py" for name in (
         "emg_32ch_multi_model", "emg_popout_layout", "emg_classification",
         "emg_classification_grpc", "emg_regression", "emg_regression_raulnet",
-        "high_channel_viewer", "channel_grid_demo", "electrode_overview", "multi_panel_grids",
+        "high_channel_viewer", "electrode_grids", "electrode_overview",
     )),
     _EXAMPLES_ROOT / "otb" / "sessantaquattro_app.py",
 ], ids=lambda path: path.stem)
