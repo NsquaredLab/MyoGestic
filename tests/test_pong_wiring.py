@@ -74,7 +74,7 @@ def app_module(monkeypatch):
 def test_pong_uses_the_myocontrol_shell(app_module):
     """One header and step card share the responsive session-app layout."""
     from myogestic import Fr, Px
-    from myogestic.widgets import AppHeader
+    from myogestic.widgets import AppHeader, StatusBar
 
     layout = app_module["layout"]
     header, steps = app_module["header"], app_module["steps"]
@@ -82,18 +82,22 @@ def test_pong_uses_the_myocontrol_shell(app_module):
     assert header.steps is steps and header.participant is app_module["participant"]
     assert steps.steps == ["Connect", "Record", "Train", "Play"]
     assert steps._widget_id == "pong_steps"
-    assert layout.panel_names == {"header", "signal", "step", "sessions", "log"}
+    assert isinstance(app_module["status"], StatusBar)
+    assert app_module["status"].pipeline is app_module["pipeline"]
+    assert layout.panel_names == {"header", "signal", "step", "sessions", "log", "status"}
     assert layout._breakpoint == Px(1100)
     assert layout._wide._col_tracks == [Fr(1), Px(400)]
     assert layout._wide._areas == {
         "header": (0, 1, 0, 2), "signal": (1, 3, 0, 1),
         "step": (1, 2, 1, 2), "sessions": (2, 4, 1, 2), "log": (3, 4, 0, 1),
+        "status": (4, 5, 0, 2),
     }
-    assert layout._wide._row_tracks == [Px(52), Fr(3), Fr(1), Px(110)]
-    assert layout._narrow._row_tracks == [Px(52), Fr(2), Fr(3), Fr(1.5), Px(110)]
+    assert layout._wide._row_tracks == [Px(52), Fr(3), Fr(1), Px(110), Px(26)]
+    assert layout._narrow._row_tracks == [Px(52), Fr(2), Fr(3), Fr(1.5), Px(110), Px(26)]
     for grid in (layout._wide, layout._narrow):
-        assert grid._bare == {"header"}
+        assert grid._bare == {"header", "status"}
         assert grid._areas["header"] == (0, 1, 0, grid.cols)
+        assert grid._areas["status"] == (grid.rows - 1, grid.rows, 0, grid.cols)
     assert not app_module["device"]._show_header
     assert not app_module["recording"]._show_header
 

@@ -253,8 +253,11 @@ def test_header_is_one_bare_area(app_module):
 
 def test_status_is_one_bare_area(app_module):
     from myogestic import Px
+    from myogestic.widgets import StatusBar
 
     layout = app_module["layout"]
+    assert isinstance(app_module["status"], StatusBar)
+    assert app_module["status"].pipeline is app_module["pipeline"]
     for grid in (layout._wide, layout._narrow):
         assert "status" in grid._bare
         assert grid._areas["status"] == (grid.rows - 1, grid.rows, 0, grid.cols)
@@ -454,7 +457,7 @@ def test_status_stays_one_line_with_a_long_model_name(app_module, monkeypatch, i
         items.append((label, lo.y, hi.x <= right + 1))
 
     monkeypatch.setattr(imgui, "text_colored", remember)
-    imgui_frame(lambda: app_module["status_ui"](ctx))
+    imgui_frame(lambda: app_module["status"].ui(ctx))
     assert len(items) == 3
     assert len({y for _, y, _ in items}) == 1
     assert all(fits for _, _, fits in items)
