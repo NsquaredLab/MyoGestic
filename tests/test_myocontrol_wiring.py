@@ -43,8 +43,9 @@ def test_myocontrol_requires_participant(app_module):
     assert app_module["app"].ctx.require_participant is True
 
 
-def test_myocontrol_offers_timed_takes(app_module):
+def test_myocontrol_opens_timed_at_five_seconds_with_two_second_warmup(app_module):
     controls = app_module["recording"]
+    assert controls._timed is True
     assert controls._take_lengths == (3.0, 5.0, 10.0)
     assert controls._warmups == (0.0, 1.0, 2.0, 3.0)
     assert controls._take_lengths[controls._length_index] == 5.0

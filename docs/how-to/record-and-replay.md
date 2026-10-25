@@ -46,14 +46,23 @@ recording = RecordingControls(
     on_stop=app.stop_recording,
     take_lengths=(3.0, 5.0, 10.0),
     warmups=(0.0, 1.0, 2.0, 3.0),
+    timed=True,
+    take_length=5.0,
+    warmup=2.0,
 )
 ```
 
-The widget starts in **Start / stop** mode. Select **Timed** to show the take-length
-and warm-up choices; 5 s and 2 s are initially selected when offered, otherwise the
-first values are used. Empty `take_lengths` keeps start/stop only. Take lengths must
-be finite and positive; warm-ups must be finite and nonnegative, with at least one
-choice. Zero is **Off** and starts capture on the Record press.
+By default, the widget starts in **Start / stop** mode. Pass `timed=True` to open in
+**Timed**, which shows the take-length and warm-up choices. The keyword-only
+`take_length` and `warmup` arguments select the initial entries; each defaults to
+`None`, selecting the first value in `take_lengths` or `warmups`. An explicit value
+outside its sequence raises `ValueError` naming the allowed values. The example
+above opens in **Timed** at 5 s with a 2 s warm-up, as Myocontrol does.
+
+Empty `take_lengths` keeps start/stop only; `timed=True` without any take lengths
+raises `ValueError`. Take lengths must be finite and positive; warm-ups must be
+finite and nonnegative, with at least one choice. Zero is **Off** and starts capture
+on the Record press.
 
 Choose a gesture before starting a labelled timed take. Warm-up records nothing.
 **Cancel** returns to idle without creating a session.

@@ -419,11 +419,21 @@ class RecordingControls:
     show_header
         Render the standard panel header.
     take_lengths
-        Positive durations in seconds. Empty keeps start/stop only. When
-        offered, Timed initially selects 5 seconds if present, else the first.
+        Positive durations in seconds. Empty keeps start/stop only.
     warmups
-        Nonnegative countdown durations; zero means Off. Initially selects
-        2 seconds if present, else the first. Must contain at least one value.
+        Nonnegative countdown durations in seconds; zero means Off.
+        Must contain at least one value.
+    timed : bool, optional
+        Open in Timed mode instead of Start / stop. Defaults to ``False``.
+        ``True`` requires nonempty ``take_lengths`` or raises ``ValueError``.
+    take_length : float or None, optional
+        Initially selected entry of ``take_lengths``. ``None`` selects the
+        first entry when offered. A value outside the sequence raises
+        ``ValueError`` naming the allowed values.
+    warmup : float or None, optional
+        Initially selected entry of ``warmups``. ``None`` selects the first
+        entry. A value outside the sequence raises ``ValueError`` naming the
+        allowed values.
     """
 
     def __init__(
@@ -436,6 +446,9 @@ class RecordingControls:
         show_header: bool = True,
         take_lengths: Sequence[float] = (),
         warmups: Sequence[float] = (0.0,),
+        timed: bool = False,
+        take_length: float | None = None,
+        warmup: float | None = None,
     ) -> None:
         self._class_names = class_names
         self._on_record = on_record
@@ -448,9 +461,15 @@ class RecordingControls:
             raise ValueError("Give take_lengths finite, positive durations in seconds.")
         if not self._warmups or any(not math.isfinite(n) or n < 0 for n in self._warmups):
             raise ValueError("Give warmups finite, nonnegative durations; use (0.0,) for Off.")
-        self._length_index = self._take_lengths.index(5.0) if 5.0 in self._take_lengths else 0
-        self._warmup_index = self._warmups.index(2.0) if 2.0 in self._warmups else 0
-        self._timed = False
+        if timed and not self._take_lengths:
+            raise ValueError("Give take_lengths at least one duration when timed=True.")
+        if take_length is not None and take_length not in self._take_lengths:
+            raise ValueError(f"Choose take_length from take_lengths: {self._take_lengths}.")
+        if warmup is not None and warmup not in self._warmups:
+            raise ValueError(f"Choose warmup from warmups: {self._warmups}.")
+        self._length_index = self._take_lengths.index(take_length) if take_length is not None else 0
+        self._warmup_index = self._warmups.index(warmup) if warmup is not None else 0
+        self._timed = timed
         self._ctx: Context | None = None
         self._session = None
         self._participant = ""
