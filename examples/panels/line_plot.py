@@ -3,6 +3,8 @@
 A thin ImPlot wrapper for plotting ``(n_samples, n_channels)`` data with a
 legend. Unlike ``signal_viewer`` it draws whatever array you hand it — a
 recorded trial, a filter response, a feature trace — with no streaming.
+The explicit amplitude range opens the widget in Shared mode; choose Auto
+to fit the data instead. Reuse the same range when comparing other plots.
 
 Run with:
     uv run python examples/panels/line_plot.py
@@ -21,7 +23,7 @@ NAMES = ["2 Hz", "3 Hz", "5 Hz", "8 Hz"]
 
 app = App("panel: line_plot")
 
-plot = LinePlot("EMG channels")
+plot = LinePlot("EMG channels", y_range=(-1.2, 1.2))
 
 
 @app.ui

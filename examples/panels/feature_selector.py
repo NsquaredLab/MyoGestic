@@ -1,9 +1,9 @@
-"""``FeatureSelector`` in isolation — tick which features to extract.
+"""``FeatureSelector`` in isolation — choose which features to extract.
 
-Register a ``name → callable`` map; the widget renders one checkbox per
+Register a ``name → callable`` map; the widget renders one chip per
 feature and a live active-count. Calling the selector with an EMG window
 returns the *active* features stacked along the channel axis — wire that
-inside ``@pipeline.extract``. Here we only show the checkbox UI.
+inside ``@pipeline.extract``. Here we only show the selection UI.
 
 Run with:
     uv run python examples/panels/feature_selector.py
