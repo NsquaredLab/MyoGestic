@@ -223,6 +223,47 @@ class ProcessLauncher:
         """Render the launcher. Call once per frame inside ``@app.ui``."""
         _render_process_launcher(self._processes, self._widget_id, self._log_height)
 
+    def launch(self, name: str) -> None:
+        """Start a configured process, unless it is already running.
+
+        Parameters
+        ----------
+        name
+            The process name from the configured ``(name, argv)`` tuples.
+
+        Raises
+        ------
+        ValueError
+            If ``name`` is not configured for this launcher.
+        """
+        self._process_state(name).start()
+
+    def stop(self, name: str) -> None:
+        """Stop a process started by this launcher.
+
+        Parameters
+        ----------
+        name
+            The process name from the configured ``(name, argv)`` tuples.
+
+        Raises
+        ------
+        ValueError
+            If ``name`` is not configured for this launcher.
+        """
+        self._process_state(name).stop()
+
+    def _process_state(self, name: str) -> _ProcState:
+        """Resolve the same per-launcher state used by the UI and ``running``."""
+        for configured, command in self._processes:
+            if configured == name:
+                widget_id = self._widget_id or "_".join(n for n, _ in self._processes)
+                key = (widget_id, name)
+                if key not in _procs:
+                    _procs[key] = _ProcState(name, command)
+                return _procs[key]
+        raise ValueError(f"No process named {name!r}; use a configured process name.")
+
     def running(self, name: str) -> bool:
         """Whether the process called ``name`` is alive **because this panel started it**.
 
