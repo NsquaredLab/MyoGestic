@@ -145,6 +145,14 @@ Without `opponent` the far wall simply returns the ball, and the score is hits a
 
 ## Status and logs
 
+::: myogestic.widgets.StatusBar
+
+Place `StatusBar("emg")` in a bare `Px(26)` Grid row and call `status.ui(ctx)`.
+It shows the stream's connection and channel details, participant and session
+folder, with the full text on hover. Pass `sessions_dir` for a custom storage
+root and `pipeline` to add a right-aligned fitted or saved model readout.
+Long details ellipsize; no caller style pushes are needed.
+
 ::: myogestic.widgets.StreamPanel
 
 ::: myogestic.widgets.LogPanel
