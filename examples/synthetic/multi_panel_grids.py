@@ -3,7 +3,7 @@
 Where `channel_grid_demo.py` shows *one* viewer picking channels out of a
 multi-grid stream, this shows the other arrangement: a **panel per grid**. Five
 64-channel arrays (IN1-IN5) of a single 320-channel stream, each with its own
-`SignalViewer` in a `Grid(2, 3)` cell.
+`SignalViewer` in two rows of three cells below the app header.
 
 Two parameters make that work, and both matter:
 
@@ -32,9 +32,9 @@ import time
 
 import numpy as np
 
-from myogestic import App, Grid, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.stream import ChannelGrid, StreamInfo
-from myogestic.widgets import SignalViewer
+from myogestic.widgets import AppHeader, SignalViewer
 from myogestic.widgets.signals._channel_grid import auto_shape
 
 N_GRIDS = 5
@@ -121,13 +121,20 @@ viewers = [
     )
     for i in range(N_GRIDS)
 ]
-grid = Grid(2, LAYOUT_COLS)
+grid = Grid.areas(
+    "header header header\nIN1 IN2 IN3\nIN4 IN5 .",
+    row_height=[Px(52), Fr(1), Fr(1)],
+    bare=("header",),
+)
+header = AppHeader("Multi-panel grids", show_state=False)
 
 
 @app.ui
 def demo_ui(ctx):
+    with grid.area("header"):
+        header.ui(ctx)
     for i, viewer in enumerate(viewers):
-        with grid[divmod(i, LAYOUT_COLS)]:
+        with grid.area(f"IN{i + 1}"):
             viewer.ui(ctx)
 
 

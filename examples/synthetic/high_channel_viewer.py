@@ -14,6 +14,7 @@ import sys
 from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.sources import LSLSource
 from myogestic.widgets import (
+    AppHeader,
     LogPanel,
     ProcessLauncher,
     SignalViewer,
@@ -47,16 +48,23 @@ app.streams(
     Stream("emg", source=LSLSource("TestEMG256"), window_ms=1000, buffer_ms=60000),
 )
 
-grid = Grid(
-    5,
-    2,
-    # The launcher is two rows tall now — a header with a status dot and one row of
-    # controls — so a fifth of the window would leave it floating at the top of an empty
-    # cell. `Px(90)` is its natural height; the rest goes to the panels that have content.
-    row_height=[Px(90), Fr(1), Fr(1), Fr(1), Fr(1)],
+grid = Grid.areas(
+    """
+    header    header
+    processes signal
+    streams   signal
+    log       signal
+    .         signal
+    .         signal
+    """,
+    # Leave room for the process picker, failure details and Launch again at 2x;
+    # the rest goes to the panels that have content.
+    row_height=[Px(52), Px(180), Fr(1), Fr(1), Fr(1), Fr(1)],
     col_width=[Px(260), Fr(1)],
+    bare=("header",),
 )
 
+header = AppHeader("High-channel viewer", show_state=False)
 viewer = SignalViewer("emg", selectable=True)
 processes = ProcessLauncher(PROCESSES)
 streams = StreamPanel()
@@ -65,13 +73,15 @@ log = LogPanel()
 
 @app.ui
 def demo_ui(ctx):
-    with grid[0:5, 1]:
+    with grid.area("header"):
+        header.ui(ctx)
+    with grid.area("signal"):
         viewer.ui(ctx)
-    with grid[0, 0]:
+    with grid.area("processes"):
         processes.ui()
-    with grid[1, 0]:
+    with grid.area("streams"):
         streams.ui(ctx)
-    with grid[2, 0]:
+    with grid.area("log"):
         log.ui(ctx)
 
 
