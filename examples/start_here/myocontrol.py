@@ -7,6 +7,7 @@ Run with:
     uv run --extra examples --extra grpc python examples/start_here/myocontrol.py
 """
 
+import math
 import pathlib
 import tomllib
 from typing import Any
@@ -16,7 +17,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
-from myogestic._theme import mono_font
+from myogestic._theme import display_font, mono_font
 from myogestic.controls import ControlBus, ControlLink, ControlLinkConnector, load_control_map
 from myogestic.ml import Pipeline, save_pickle
 from myogestic.recipes.estimators import catboost_classifier, catboost_regressor
@@ -58,6 +59,7 @@ from myogestic.widgets.common import (
     tinted_row,
     ui_px,
 )
+from myogestic.widgets.panels.recording import TakeStatus
 
 # The live Stream window is also the training window — a model fitted on 200 ms of
 # signal is fed 200 ms at predict time or it sees a distribution it never met.
@@ -344,6 +346,8 @@ recording = RecordingControls(
     on_stop=app.stop_recording,
     on_gesture=_on_control,
     show_header=False,
+    take_lengths=(3.0, 5.0, 10.0),
+    warmups=(0.0, 1.0, 2.0, 3.0),
 )
 
 
@@ -483,8 +487,67 @@ def record_ui(ctx: Context) -> None:
     # Stop can change the state during this very frame.
     _recorded_block(ctx, _refresh_recorded(ctx))
     _muted_line(
-        "Pick the gesture the hand shows, press Record, switch gestures as the participant moves, then Stop."
+        "Timed captures one gesture. Start / stop lets you switch gestures."
     )
+
+
+def _take_overlay(take: TakeStatus) -> None:
+    """Draw the take's live countdown or recording chip over the signal cell."""
+    if take.phase not in ("warmup", "recording"):
+        return
+    origin, size = imgui.get_window_pos(), imgui.get_window_size()
+    pad = ui_px(12)
+    left, right = origin.x + pad, origin.x + size.x - pad
+    # The viewer's title row stays visible above the plot veil and REC chip.
+    top = origin.y + pad + imgui.get_frame_height_with_spacing()
+    bottom = origin.y + size.y - pad
+    draw = imgui.get_window_draw_list()
+    style = imgui.get_style()
+    draw.push_clip_rect(imgui.ImVec2(left, top), imgui.ImVec2(right, bottom), True)
+    try:
+        if take.phase == "warmup":
+            surface = style.color_(imgui.Col_.child_bg)
+            veil = imgui.ImVec4(surface.x, surface.y, surface.z, 0.90)
+            draw.add_rect_filled(imgui.ImVec2(left, top), imgui.ImVec2(right, bottom),
+                                 imgui.get_color_u32(veil), style.child_rounding)
+            center_x, center_y = (left + right) / 2, (top + bottom) / 2
+            title = "Get ready" + (f" · {take.gesture}" if take.gesture else "")
+            for text, font, font_size, y, tone in (
+                (title, None, ui_px(20), center_y - ui_px(72), WARNING),
+                (str(math.ceil(take.warmup_left_s)), display_font(), ui_px(64), center_y - ui_px(40), WARNING),
+                (f"recording starts in {take.warmup_left_s:.1f} s", mono_font(), ui_px(14), center_y + ui_px(38), muted()),
+            ):
+                imgui.push_font(font, font_size)
+                try:
+                    text = _ellipsize(text, right - left)
+                    draw.add_text(imgui.ImVec2(center_x - imgui.calc_text_size(text).x / 2, y),
+                                  imgui.get_color_u32(tone), text)
+                finally:
+                    imgui.pop_font()
+        else:
+            tenths = round(max(0, take.elapsed_s) * 10)
+            minutes, tenths = divmod(tenths, 600)
+            clock = f"{minutes}:{tenths // 10:02d}.{tenths % 10}"
+            text = f"REC {take.gesture or ''} · {clock}"
+            imgui.push_font(mono_font(), style.font_size_base)
+            try:
+                text = _ellipsize(text, right - left - 3 * pad)
+                width = imgui.calc_text_size(text).x + 3 * pad
+                height = imgui.get_text_line_height() + pad
+                x, y = right - width, top + ui_px(6)
+                draw.add_rect_filled(imgui.ImVec2(x, y), imgui.ImVec2(right, y + height),
+                                     imgui.get_color_u32(style.color_(imgui.Col_.popup_bg)), style.frame_rounding)
+                draw.add_circle_filled(imgui.ImVec2(x + pad, y + height / 2), ui_px(3), imgui.get_color_u32(DANGER))
+                draw.add_text(imgui.ImVec2(x + 2 * pad, y + pad / 2),
+                              imgui.get_color_u32(style.color_(imgui.Col_.text)), text)
+            finally:
+                imgui.pop_font()
+    finally:
+        draw.pop_clip_rect()
+    if take.phase == "recording" and take.timed:
+        fraction = min(1.0, take.elapsed_s / take.length_s)
+        draw.add_rect_filled(origin, imgui.ImVec2(origin.x + size.x * fraction, origin.y + ui_px(3)),
+                             imgui.get_color_u32(DANGER))
 
 
 def model_ui() -> None:
@@ -929,15 +992,13 @@ def myocontrol_ui(ctx: Context) -> None:
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))
     with layout["header"]:
         active = header_ui(ctx)
+    if active != 1 or not ctx.participant:
+        recording.ui(ctx, visible=False)
     # Observe recording transitions even while a different workflow step is open.
     _refresh_recorded(ctx)
     # Refresh the participant's selection before Train can read it this frame.
     with layout["sessions"]:
         pipeline.training_data = sessions.ui(participant=ctx.participant)
-    with layout["signal"]:
-        viewer.ui(ctx)
-    with layout["log"]:
-        log.ui(ctx)
     with layout["step"]:
         stream = ctx.streams.get("emg")
         tone = (SUCCESS if stream is not None and stream.status == "connected" and stream.info is not None
@@ -951,6 +1012,11 @@ def myocontrol_ui(ctx: Context) -> None:
             model_ui()
         else:
             drive_ui()
+    with layout["signal"]:
+        viewer.ui(ctx)
+        _take_overlay(recording.take)
+    with layout["log"]:
+        log.ui(ctx)
     with layout["status"]:
         status_ui(ctx)
     imgui.pop_style_var()

@@ -43,6 +43,112 @@ def test_myocontrol_requires_participant(app_module):
     assert app_module["app"].ctx.require_participant is True
 
 
+def test_myocontrol_offers_timed_takes(app_module):
+    controls = app_module["recording"]
+    assert controls._take_lengths == (3.0, 5.0, 10.0)
+    assert controls._warmups == (0.0, 1.0, 2.0, 3.0)
+    assert controls._take_lengths[controls._length_index] == 5.0
+    assert controls._warmups[controls._warmup_index] == 2.0
+
+
+@pytest.mark.parametrize("phase", ["idle", "warmup", "recording", "saved", "early", "manual"])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+@pytest.mark.parametrize("dark", [False, True])
+def test_timed_record_fits_real_step(app_module, monkeypatch, implot_frame, phase, scale, dark):
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: dark)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    size = imgui.ImVec2(1280 * scale, 828 * scale)
+    imgui.get_io().display_size = size
+    ctx, controls = app_module["app"].ctx, app_module["recording"]
+    ctx.participant, ctx.current_label = "P-014", 1
+    app_module["steps"].active = 1
+    now = [0.0]
+    controls._machine._clock = lambda: now[0]
+    controls._timed = phase != "manual"
+
+    def start():
+        ctx.state = "recording"
+        ctx.session = SimpleNamespace(add_label=lambda i: None)
+
+    controls._on_record = start
+    controls._machine._on_stop = lambda: setattr(ctx, "state", "idle")
+    if phase != "idle":
+        controls._start(ctx)
+        if phase != "warmup":
+            now[0] = 2.0
+            controls._sync(ctx)
+            now[0] = 3.4 if phase in ("recording", "early", "manual") else 7.0
+            controls._sync(ctx)
+            if phase == "early":
+                controls._machine.stop()
+    measurements, overlays = [], []
+    render = app_module["record_ui"]
+
+    def tracked(ctx):
+        render(ctx)
+        measurements.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y, imgui.get_scroll_max_y()))
+
+    monkeypatch.setitem(app_module["myocontrol_ui"].__globals__, "record_ui", tracked)
+    overlay = app_module["_take_overlay"]
+
+    def tracked_overlay(take):
+        overlays.append(take.phase)
+        overlay(take)
+
+    monkeypatch.setitem(app_module["myocontrol_ui"].__globals__, "_take_overlay", tracked_overlay)
+
+    def draw():
+        imgui.set_next_window_size(size)
+        imgui.begin("timed-workflow")
+        app_module["myocontrol_ui"](ctx)
+        imgui.end()
+
+    for _ in range(3):
+        implot_frame(draw)
+    cursor, height, scroll = measurements[-1]
+    assert cursor <= height and scroll == 0, measurements
+    assert overlays[-1] == controls.take.phase
+
+
+def test_timed_take_stops_when_another_step_is_open(app_module, monkeypatch, implot_frame):
+    from types import SimpleNamespace
+
+    controls, ctx = app_module["recording"], app_module["app"].ctx
+    ctx.participant, ctx.current_label = "P-014", 1
+    controls._timed = True
+    now, calls = [0.0], []
+    controls._machine._clock = lambda: now[0]
+
+    def start():
+        calls.append("record")
+        ctx.state = "recording"
+        ctx.session = SimpleNamespace(add_label=lambda i: None)
+
+    def stop():
+        calls.append("stop")
+        ctx.state = "idle"
+
+    controls._on_record = start
+    controls._machine._on_stop = stop
+    controls._start(ctx)
+    app_module["steps"].active = 3
+    now[0] = 2.0
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    now[0] = 7.0
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    assert calls == ["record", "stop"]
+    assert controls.take.phase == "saved"
+
+
 def test_myocontrol_autosaves_models(app_module):
     from myogestic.ml import save_pickle
 

@@ -35,6 +35,50 @@ def ui(ctx):
 
 The `on_gesture` callback is yours; the label is added by `RecordingControls` itself before calling it. You don't need to call `ctx.session.add_label()` manually.
 
+### Timed takes
+
+Offer fixed-length takes alongside the usual **Start / stop** mode:
+
+```python
+recording = RecordingControls(
+    CLASSES,
+    on_record=app.start_recording,
+    on_stop=app.stop_recording,
+    take_lengths=(3.0, 5.0, 10.0),
+    warmups=(0.0, 1.0, 2.0, 3.0),
+)
+```
+
+The widget starts in **Start / stop** mode. Select **Timed** to show the take-length
+and warm-up choices; 5 s and 2 s are initially selected when offered, otherwise the
+first values are used. Empty `take_lengths` keeps start/stop only. Take lengths must
+be finite and positive; warm-ups must be finite and nonnegative, with at least one
+choice. Zero is **Off** and starts capture on the Record press.
+
+Choose a gesture before starting a labelled timed take. Warm-up records nothing.
+**Cancel** returns to idle without creating a session.
+When capture begins, the chosen gesture is labelled once and the other tiles are
+disabled until the take ends. The action row shows elapsed / target time and a
+progress line. The first UI frame at or after the deadline calls `on_stop`, saving
+the take through the existing app callback. Timing resolution follows the frame
+rate; a delayed frame stops immediately when it resumes. **Stop early** also saves
+the captured data and marks the confirmation `(stopped early)`. The confirmation
+lasts two seconds. Start/stop mode shows elapsed time and permits gesture changes.
+
+`recording.take` is an immutable snapshot with `phase` (`idle`, `warmup`, `recording`,
+or `saved`), `timed`, `gesture`, `elapsed_s`, `length_s`, `warmup_left_s`, and
+`saved_text`. Read it after `ui()` to draw a signal overlay, as Myocontrol does.
+Call `recording.ui(ctx, visible=False)` on frames where another workflow step is
+open: this advances the timer without drawing controls. Call `ui()` once per frame.
+
+Participant changes or a recorded stream disconnecting cancel a countdown; during
+capture they stop and retain the data already collected, then return the widget
+to idle. An outside stop or a replacement session clears the widget's pending
+action without stopping another capture. Calling `app.stop_recording()` during
+warm-up cancels that countdown even though the app is still idle.
+
+### Saved sessions
+
 `SessionManager` lists folders and archives under `base_path` when you press its rescan icon.
 Passing `ui(participant="P-014")` scans that participant's subfolder automatically. Each take
 occupies one line, grouped by its recorded day (Today, Yesterday, or a date); only the newest
