@@ -35,6 +35,8 @@ TITLES = {
     "scatter3d": "Scatter3D",
     "session_manager": "SessionManager",
     "signal_viewer": "SignalViewer",
+    "simulator_controls": "SimulatorControls",
+    "status_bar": "StatusBar",
     "step_bar": "StepBar",
     "stream_manager": "StreamManager",
     "stream_panel": "StreamPanel",
