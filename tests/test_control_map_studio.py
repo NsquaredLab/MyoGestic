@@ -98,3 +98,132 @@ def test_connect_reports_a_refusing_target_instead_of_taking_the_window_down(
 
     assert "vocabulary 1" in studio.failure, studio.failure
     assert studio.bus is None
+
+
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+@pytest.mark.parametrize("armed,refusal", [(False, ""), (True, ""), (False, "Enable Accessibility access.")])
+def test_keyboard_card_uses_a_state_row_and_a_balanced_chip(
+    studio, imgui_frame, monkeypatch, scale, armed, refusal,
+):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+    from myogestic.widgets import common
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    actions, rows, toggles, buttons, selected = [], [], [], [], []
+    keys = SimpleNamespace(
+        claims={"walk"}, armed=armed, arm_refusal=refusal,
+        arm=lambda: actions.append("arm"), disarm=lambda: actions.append("disarm"),
+    )
+    monkeypatch.setattr(studio, "keys", keys)
+    monkeypatch.setattr(studio, "keyboard_error", "")
+    original_button, original_checkbox = imgui.button, imgui.checkbox
+    bounds = {}
+
+    @contextmanager
+    def row(tone=None, **kwargs):
+        rows.append(tone)
+        with common.tinted_row(tone, **kwargs) as width:
+            yield width
+
+    def button(label, *args):
+        original_button(label, *args)
+        buttons.append((label, imgui.get_item_rect_max().x))
+        return label.startswith("Send keys") and not refusal
+
+    def checkbox(*args):
+        toggles.append(args[0])
+        return original_checkbox(*args)
+
+    def push():
+        selected.append("push")
+        common.push_selected()
+
+    def pop():
+        selected.append("pop")
+        common.pop_selected()
+
+    monkeypatch.setattr(studio, "tinted_row", row, raising=False)
+    monkeypatch.setattr(studio, "push_selected", push, raising=False)
+    monkeypatch.setattr(studio, "pop_selected", pop, raising=False)
+    monkeypatch.setattr(imgui, "button", button)
+    monkeypatch.setattr(imgui, "checkbox", checkbox)
+
+    def draw():
+        imgui.begin_child("keyboard-card", imgui.ImVec2(320, 400))
+        bounds["right"] = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        studio._keyboard_ui()
+        imgui.end_child()
+
+    imgui_frame(draw)
+    assert not toggles, "persistent keyboard arming must be a selected chip"
+    assert rows == [common.DANGER if refusal else common.WARNING if armed else common.IDLE]
+    assert selected == (["push", "pop"] if armed else [])
+    assert actions == ([] if refusal else ["disarm" if armed else "arm"])
+    assert buttons and all(right <= bounds["right"] + 1 for _, right in buttons)
+
+
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+def test_map_fields_keep_labels_above_full_width_controls(studio, imgui_frame, monkeypatch, scale):
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    monkeypatch.setattr(studio, "bus", SimpleNamespace(push=lambda values: None))
+    monkeypatch.setattr(studio, "levels", {"a_rather_long_control_name": 0.25, "close": 0.5})
+    monkeypatch.setattr(studio, "states", {"operator_gesture": ("Rest", "Fist")})
+    labels, fields, values, bounds = [], [], [], {}
+    original_text, original_slider, original_combo = imgui.text_colored, imgui.slider_float, imgui.begin_combo
+
+    def text(color, label):
+        original_text(color, label)
+        labels.append((label, imgui.get_item_rect_min().y))
+
+    def slider(label, *args):
+        result = original_slider(label, *args)
+        fields.append((label, imgui.get_item_rect_min().y, imgui.get_item_rect_size().x))
+        return result
+
+    def combo(label, *args):
+        result = original_combo(label, *args)
+        fields.append((label, imgui.get_item_rect_min().y, imgui.get_item_rect_size().x))
+        return result
+
+    def mono(value, *args):
+        from myogestic.widgets.common import mono_text
+        values.append(value)
+        mono_text(value, *args)
+
+    monkeypatch.setattr(imgui, "text_colored", text)
+    monkeypatch.setattr(imgui, "slider_float", slider)
+    monkeypatch.setattr(imgui, "begin_combo", combo)
+    monkeypatch.setattr(studio, "mono_text", mono, raising=False)
+
+    def draw():
+        imgui.begin_child("map-fields", imgui.ImVec2(320, 400))
+        bounds["width"] = imgui.get_content_region_avail().x
+        studio._sliders_ui()
+        imgui.end_child()
+
+    imgui_frame(draw)
+    assert len(fields) == 3
+    assert all(label.startswith("##") for label, _, _ in fields), "captions belong above controls"
+    assert all(width >= bounds["width"] - 2 for _, _, width in fields)
+    assert all(any(y < field_y for _, y in labels) for _, field_y, _ in fields)
+    assert fields[0][1] < fields[1][1] < fields[2][1], "narrow fields must stack"
+    assert "0.250" in values and "0.500" in values
