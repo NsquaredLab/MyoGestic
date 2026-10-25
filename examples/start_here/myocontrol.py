@@ -348,6 +348,9 @@ recording = RecordingControls(
     show_header=False,
     take_lengths=(3.0, 5.0, 10.0),
     warmups=(0.0, 1.0, 2.0, 3.0),
+    timed=True,
+    take_length=5.0,
+    warmup=2.0,
 )
 
 

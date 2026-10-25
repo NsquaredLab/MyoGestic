@@ -31,10 +31,96 @@ def timed_controls():
     controls = recording.RecordingControls(
         ["Rest", "Fist"], on_record=start, on_stop=stop,
         take_lengths=(3.0, 5.0, 10.0), warmups=(0.0, 1.0, 2.0, 3.0),
+        timed=True, take_length=5.0, warmup=2.0,
     )
-    controls._timed = True
     controls._machine._clock = lambda: now[0]
     return controls, ctx, now, calls, labels
+
+
+@pytest.mark.parametrize("options", [{}, {"take_length": None, "warmup": None}])
+def test_initial_timing_defaults_to_first_choices_and_start_stop(options):
+    from myogestic.widgets import RecordingControls
+
+    controls = RecordingControls(
+        on_record=lambda: None, on_stop=lambda: None,
+        take_lengths=(3.0, 5.0, 10.0), warmups=(0.0, 1.0, 2.0, 3.0),
+        **options,
+    )
+    assert controls._timed is False
+    assert controls._take_lengths[controls._length_index] == 3.0
+    assert controls._warmups[controls._warmup_index] == 0.0
+
+
+def test_initial_timing_without_take_lengths_is_start_stop():
+    from myogestic.widgets import RecordingControls
+
+    controls = RecordingControls(on_record=lambda: None, on_stop=lambda: None)
+    assert controls._timed is False
+    assert controls._take_lengths == ()
+    assert controls._warmups[controls._warmup_index] == 0.0
+
+
+@pytest.mark.parametrize("take_length,warmup", [(10.0, 3.0), (3.0, 0.0), (5.0, 2.0)])
+def test_initial_timing_selects_explicit_choices(take_length, warmup):
+    from myogestic.widgets import RecordingControls
+
+    controls = RecordingControls(
+        on_record=lambda: None, on_stop=lambda: None,
+        take_lengths=(3.0, 5.0, 10.0), warmups=(0.0, 1.0, 2.0, 3.0),
+        take_length=take_length, warmup=warmup,
+    )
+    assert controls._timed is False
+    assert controls._take_lengths[controls._length_index] == take_length
+    assert controls._warmups[controls._warmup_index] == warmup
+
+
+def test_initial_timed_mode_renders_selected_choices(imgui_frame, monkeypatch):
+    from myogestic.core import Context
+    from myogestic.widgets import RecordingControls
+    from myogestic.widgets.panels import _recording_controls
+
+    controls = RecordingControls(
+        on_record=lambda: None, on_stop=lambda: None,
+        take_lengths=(3.0, 5.0, 10.0), warmups=(0.0, 1.0, 2.0, 3.0),
+        timed=True, take_length=10.0, warmup=3.0,
+    )
+    selections = {}
+    original = _recording_controls.segmented
+
+    def selected(key, options, index):
+        selections[key] = options[index]
+        return original(key, options, index)
+
+    monkeypatch.setattr(_recording_controls, "segmented", selected)
+    imgui_frame(lambda: controls.ui(Context()))
+    assert selections == {"take-mode": "Timed", "length": "10 s", "warmup": "3 s"}
+
+
+@pytest.mark.parametrize("options", [{"timed": True}, {"timed": True, "take_lengths": ()}])
+def test_initial_timed_mode_requires_take_lengths(options):
+    from myogestic.widgets import RecordingControls
+
+    with pytest.raises(ValueError, match="take_lengths"):
+        RecordingControls(on_record=lambda: None, on_stop=lambda: None, **options)
+
+
+@pytest.mark.parametrize("name,value,choices", [
+    ("take_length", 5.0, (3.0, 10.0)),
+    ("take_length", 5.0, ()),
+    ("take_length", float("nan"), (3.0, 10.0)),
+    ("warmup", 2.0, (0.0, 3.0)),
+    ("warmup", float("inf"), (0.0, 3.0)),
+])
+def test_invalid_initial_timing_names_allowed_choices(name, value, choices):
+    from myogestic.widgets import RecordingControls
+
+    sequence = "take_lengths" if name == "take_length" else "warmups"
+    with pytest.raises(ValueError, match=name) as exc:
+        RecordingControls(
+            on_record=lambda: None, on_stop=lambda: None,
+            **{name: value, sequence: choices},
+        )
+    assert str(choices) in str(exc.value)
 
 
 def test_timed_widget_labels_only_when_capture_begins(timed_controls, imgui_frame):
