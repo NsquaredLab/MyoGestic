@@ -15,8 +15,8 @@ Run with:
 
 from imgui_bundle import imgui
 
-from myogestic import App
-from myogestic.widgets import TemplateInspector, TemplateInspectorRow
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, TemplateInspector, TemplateInspectorRow
 from myogestic.widgets.common import mono_text, muted
 
 ROWS = [
@@ -28,16 +28,21 @@ ROWS = [
 ]
 
 app = App("panel: template_inspector")
+header = AppHeader("TemplateInspector", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 inspector = TemplateInspector("templates", title="Extracted templates")
 
 
 @app.ui
 def ui(ctx):
-    selected = inspector.ui(ROWS)
-    if selected is not None:
-        imgui.text_colored(muted(), "Selected row")
-        mono_text(selected)
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        selected = inspector.ui(ROWS)
+        if selected is not None:
+            imgui.text_colored(muted(), "Selected row")
+            mono_text(selected)
 
 
 def main() -> None:

@@ -15,14 +15,16 @@ Run with:
 
 import tempfile
 
-from myogestic import App, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.sources import SyntheticSource
-from myogestic.widgets import RecordingControls
+from myogestic.widgets import AppHeader, RecordingControls
 
 CLASSES = ["Rest", "Fist", "Open", "Pinch"]
 REC_DIR = tempfile.mkdtemp(prefix="panel_recording_")
 
 app = App("panel: recording_controls")
+header = AppHeader("RecordingControls", show_state=True)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 # Nothing attaches a stream on its own — see `Stream.reconnect`. This source is
 # synthetic and in-process, so there is no other producer to pick up by mistake,
 # and no operator to press the button: the script attaches its own.
@@ -45,7 +47,10 @@ controls = RecordingControls(
 
 @app.ui
 def ui(ctx):
-    controls.ui(ctx)
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        controls.ui(ctx)
 
 
 def main() -> None:

@@ -14,8 +14,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from myogestic import App
-from myogestic.widgets import SessionManager
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, SessionManager
 
 CLASSES = ["Rest", "Fist"]
 
@@ -43,14 +43,19 @@ for _name, _created, _labels in _SESSIONS:
         _zf.writestr("labels.json", json.dumps([{"class_index": ci} for ci in _labels]))
 
 app = App("panel: session_manager")
+header = AppHeader("SessionManager", show_state=True)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 manager = SessionManager(str(_tmp), class_names=CLASSES)
 
 
 @app.ui
 def ui(ctx):
-    # Returns TrainingData; a real app assigns it to pipeline.training_data.
-    manager.ui()
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        # Returns TrainingData; a real app assigns it to pipeline.training_data.
+        manager.ui()
 
 
 def main() -> None:
