@@ -549,6 +549,208 @@ def test_start_here_recording_fits_default_grid(name, participant, monkeypatch, 
 
 
 @pytest.fixture
+def classification_app(monkeypatch, tmp_path):
+    """Wire the classification workflow without launching its external targets."""
+    from types import SimpleNamespace
+
+    from myogestic.tools import emg_generator
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None))
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / "emg_classification.py"))
+    streams = tuple(namespace["app"].ctx.streams.values())
+    try:
+        yield namespace
+    finally:
+        namespace["link"].stop()
+        namespace["vhi_control"].stop()
+        for stream in streams:
+            stream.stop()
+
+
+def test_classification_uses_the_session_shell(classification_app):
+    """One header and active step surround a persistent signal and sessions."""
+    from myogestic import Fr, Px
+    from myogestic.widgets import AppHeader, StatusBar
+
+    ns = classification_app
+    layout, header, steps = (ns[name] for name in ("layout", "header", "steps"))
+    assert isinstance(header, AppHeader) and header.title == "EMG classification"
+    assert header.steps is steps and header.participant is ns["participant"]
+    assert steps.steps == ["Connect", "Record", "Train", "Predict"]
+    assert steps._widget_id == "emg_classification_steps"
+    assert isinstance(ns["status"], StatusBar) and ns["status"].pipeline is ns["pipeline"]
+    assert ns["app"].ctx.require_participant
+    assert not ns["recording"]._show_header and not ns["features"]._show_header
+    assert layout.panel_names == {"header", "signal", "step", "sessions", "log", "status"}
+    assert layout._breakpoint == Px(1100)
+    assert layout._wide._col_tracks == [Fr(1), Px(400)]
+    assert layout._wide._areas == {
+        "header": (0, 1, 0, 2), "signal": (1, 3, 0, 1),
+        "step": (1, 2, 1, 2), "sessions": (2, 4, 1, 2), "log": (3, 4, 0, 1),
+        "status": (4, 5, 0, 2),
+    }
+    for grid in (layout._wide, layout._narrow):
+        assert grid._bare == {"header", "status"}
+        assert grid._row_tracks[0] == Px(52) and grid._row_tracks[-1] == Px(26)
+
+
+def test_classification_completion_tracks_the_participants_takes(classification_app, monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    ns = classification_app
+    ctx, done = ns["app"].ctx, ns["_step_done"]
+    assert done(ctx) == [False] * 4
+    ctx.participant = "P-014"
+    monkeypatch.setitem(ctx.streams, "emg", SimpleNamespace(status="connected", info=object()))
+    folder = tmp_path / "sessions" / ctx.participant
+    folder.mkdir(parents=True)
+    (folder / "someone-else_take.session.zip").touch()
+    assert done(ctx) == [True, False, False, False]
+    (folder / "P-014_take.session.zip").touch()
+    ns["pipeline"].model = object()
+    ctx.state = "predicting"
+    assert done(ctx) == [True] * 4
+    ctx.streams["emg"].info = None
+    ctx.participant = "P-015"
+    assert done(ctx) == [False, False, True, True]
+
+
+@pytest.mark.parametrize("step", range(4))
+@pytest.mark.parametrize("width", [2560, 1800])
+@pytest.mark.parametrize("participant", ["", "P-014"])
+@pytest.mark.parametrize("trained", [False, True])
+def test_classification_shell_fits_light_theme(
+    classification_app, monkeypatch, implot_frame, step, width, participant, trained,
+):
+    """Every active card fits the default window; narrow cards remain reachable."""
+    import platform
+
+    from imgui_bundle import hello_imgui, imgui
+
+    from myogestic import _scale, _theme
+    from myogestic.ml import widgets as ml_widgets
+    from myogestic.widgets.panels import process_launcher, recording
+    from myogestic.widgets.training import feature_selector
+
+    ns = classification_app
+    app = ns["app"]
+    app.ctx.participant = participant
+    ns["steps"].active = step
+    if trained:
+        ns["pipeline"].model = object()
+        ns["pipeline"].train_log.append("Trained on 100 windows from 2 sessions.")
+        ns["pipeline"].predictions.update({"class": 1, "proba": [0.1, 0.9]})
+        app.ctx.state = "predicting" if step == 3 else "idle"
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    # The app uses a proportional body face. The fixture's monospace default
+    # makes ordinary session guidance 45% wider than the real control surface.
+    font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
+    if not font_path.is_file():
+        font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
+    imgui.get_io().font_default = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14)
+    font_dir = _EXAMPLES_ROOT.parent / "myogestic" / "assets" / "fonts"
+    for attr, filename, size in (("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
+                                 ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28)):
+        font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_dir / filename), size)
+        monkeypatch.setattr(_theme, attr, font)
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    imgui.get_io().display_size = imgui.ImVec2(width, 1656)
+    headers, views, cells, buttons = [], [], [], []
+    original_header = ns["panel_header"]
+
+    def header(title, *args, **kwargs):
+        headers.append(title)
+        return original_header(title, *args, **kwargs)
+
+    monkeypatch.setitem(app._ui_fn.__globals__, "panel_header", header)
+    for module in (ml_widgets, process_launcher, recording, feature_selector):
+        monkeypatch.setattr(module, "panel_header", header)
+    monkeypatch.setattr(imgui, "begin_tab_bar", lambda *a: pytest.fail("the shell has no tabs"))
+    original_button = imgui.button
+
+    def button(label, *args, **kwargs):
+        right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        result = original_button(label, *args, **kwargs)
+        buttons.append((label, imgui.get_item_rect_max().x - right))
+        return result
+
+    monkeypatch.setattr(imgui, "button", button)
+    render_connect = ns["connect_ui"]
+
+    def connect(ctx):
+        render_connect(ctx)
+        cells.append(("connect", imgui.get_cursor_pos_y(), imgui.get_window_size().y,
+                      imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+
+    monkeypatch.setitem(app._ui_fn.__globals__, "connect_ui", connect)
+    for name in ("viewer", "recording", "features", "train_button", "training_log",
+                 "prediction", "predict_button", "output_filter", "sessions", "log", "status"):
+        widget = ns[name]
+        render = type(widget).ui
+
+        def view(self, *args, name=name, render=render, **kwargs):
+            views.append((name, kwargs))
+            result = render(self, *args, **kwargs)
+            if kwargs.get("visible", True) and name != "status":
+                cells.append((name, imgui.get_cursor_pos_y(), imgui.get_window_size().y,
+                              imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+            return result
+
+        monkeypatch.setattr(type(widget), "ui", view)
+
+    def draw():
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(width, 1656))
+        imgui.begin("classification-shell", flags=imgui.WindowFlags_.no_title_bar)
+        app._ui_fn(app.ctx)
+        assert imgui.get_scroll_max_x() == imgui.get_scroll_max_y() == 0
+        imgui.end()
+
+    for _ in range(4):
+        headers.clear()
+        views.clear()
+        cells.clear()
+        buttons.clear()
+        implot_frame(draw)
+    assert headers == [ns["steps"].steps[step]]
+    expected = {"viewer", "recording", "sessions", "log", "status"}
+    expected |= {2: {"features", "train_button", "training_log"},
+                 3: {"prediction", "predict_button", "output_filter"}}.get(step, set())
+    assert {name for name, _ in views} == expected
+    record_calls = [kwargs for name, kwargs in views if name == "recording"]
+    assert len(record_calls) == 1
+    assert record_calls[0].get("visible", True) == (step == 1)
+    assert next(kwargs for name, kwargs in views if name == "sessions") == {"participant": participant}
+    assert all(overhang <= 1 for _, overhang in buttons), buttons
+    assert all(horizontal == 0 for _, _, _, horizontal, _ in cells), cells
+    if width == 2560:
+        assert all(cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
+                   for _, cursor, height, _, vertical in cells), cells
+    assert ns["layout"]._active is (ns["layout"]._wide if width == 2560 else ns["layout"]._narrow)
+
+
+def test_classification_recording_callbacks_keep_the_generator_and_hand_wiring(classification_app, monkeypatch):
+    """The new step only moves controls; the same callbacks label and capture."""
+    import numpy as np
+
+    ns = classification_app
+    calls = []
+    monkeypatch.setattr(type(ns["link"]), "ensure", lambda self: calls.append("bind"))
+    monkeypatch.setattr(ns["ctrl_outlet"], "push_sample", lambda value: calls.append(value))
+    monkeypatch.setattr(ns["app"], "start_recording", lambda: calls.append("record"))
+    ns["_on_gesture"](1)
+    assert calls[0] == "bind"
+    np.testing.assert_array_equal(calls[1], np.array([1.0], dtype=np.float32))
+    calls.clear()
+    ns["_on_record"]()
+    assert calls == ["bind", "record"]
+
+
+@pytest.fixture
 def force_app(monkeypatch, tmp_path):
     """Wire the force protocol without a runner, and release all its streams."""
     monkeypatch.chdir(tmp_path)
