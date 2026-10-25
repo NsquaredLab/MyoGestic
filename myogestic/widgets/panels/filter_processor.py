@@ -48,8 +48,17 @@ import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
+from myogestic._theme import mono_font
 from myogestic.outputs.filters import OneEuroFilter, VectorFilter, make_filter
-from myogestic.widgets.common import panel_header, ui_px
+from myogestic.widgets.common import (
+    mono_text,
+    muted,
+    panel_header,
+    panel_header_button,
+    pop_selected,
+    push_selected,
+    ui_px,
+)
 
 Scalar = float | int
 
@@ -184,7 +193,7 @@ BUILTIN_FILTERS: tuple[FilterSpec, ...] = (
             FilterParam("n_vectors", "window (samples)", 1, 30, 5, kind="int"),
             FilterParam("sigma", "sigma", 0.1, 10.0, 1.0, fmt="%.2f"),
         ),
-        description="Rolling temporal average. Steady, predictable lag.",
+        description="Window sets averaging length; sigma sets how broadly samples are weighted.",
         delay=_gaussian_delay,
     ),
     FilterSpec(
@@ -196,7 +205,7 @@ BUILTIN_FILTERS: tuple[FilterSpec, ...] = (
             FilterParam("beta", "beta", 0.0, 1.0, 0.02, fmt="%.3f", log=True),
             FilterParam("derivative_cutoff_hz", "d cutoff", 0.01, 10.0, 1.0, fmt="%.2f Hz"),
         ),
-        description="Adaptive low-pass. Fast moves cut through; slow moves smooth.",
+        description="Min cutoff smooths rest; beta follows fast moves; d cutoff smooths velocity.",
         reconfigure=_reconfigure_one_euro,
         delay=_one_euro_delay,
     ),
@@ -404,12 +413,14 @@ class FilterProcessor:
         stacked = imgui.get_content_region_avail().x - label_w < ui_px(_MIN_SLIDER_W)
         for p in spec.params:
             v = values[p.key]
+            left = imgui.get_cursor_pos_x()
             if stacked:
                 imgui.text(p.label)  # label above; slider full-width below
             else:
                 imgui.align_text_to_frame_padding()
                 imgui.text(p.label)
-                imgui.same_line(label_w)
+                imgui.same_line()
+                imgui.set_cursor_pos_x(left + label_w)
             imgui.push_item_width(-1)
             if p.kind == "int":
                 changed, nv = imgui.slider_int(f"##{p.key}", int(v), int(p.min), int(p.max))
@@ -439,6 +450,9 @@ class PostProcessor(FilterProcessor):
     widget_id
         ImGui id scope — give each instance a unique value if you render more
         than one.
+    compact
+        ``False`` keeps the full panel. ``True`` shows one Smoothing row with
+        the filter, latency and a settings popover for parameters and Reset.
 
     Examples
     --------
@@ -447,7 +461,10 @@ class PostProcessor(FilterProcessor):
     >>> processor.ui()
     """
 
-    def __init__(self, hz: float = 50.0, *, widget_id: str = "output_filter") -> None:
+    def __init__(
+        self, hz: float = 50.0, *, widget_id: str = "output_filter", compact: bool = False
+    ) -> None:
+        self._compact = compact
         super().__init__(
             BUILTIN_FILTERS,
             hz=hz,
@@ -455,6 +472,64 @@ class PostProcessor(FilterProcessor):
             title="POST-PROCESSING",
             widget_id=widget_id,
         )
+
+    def ui(self) -> None:
+        """Render the full panel or the compact Smoothing row and settings popover."""
+        super().ui()
+
+    def _render(self) -> None:
+        if not self._compact:
+            super()._render()
+            return
+        style = imgui.get_style()
+        gap = style.item_spacing.x
+        spec = self._by_key[self._selected]
+        imgui.push_font(mono_font(), style.font_size_base)
+        # Reserve every selectable delay so a combo change cannot push Settings
+        # out of the row on the very frame a longer value first appears.
+        delay_w = max(imgui.calc_text_size(
+            _format_delay(s.delay(self._hz, self._values[s.key])) if s.delay else "0 ms"
+        ).x for s in self._specs)
+        imgui.pop_font()
+        settings = f"{fa.ICON_FA_SLIDERS}##settings"
+        settings_w = imgui.calc_text_size(fa.ICON_FA_SLIDERS).x + 2 * style.frame_padding.x
+        imgui.align_text_to_frame_padding()
+        imgui.text_unformatted("Smoothing")
+        imgui.same_line()
+        imgui.push_item_width(max(ui_px(30), imgui.get_content_region_avail().x - delay_w - settings_w - 2 * gap))
+        names = [s.name for s in self._specs]
+        current = next(i for i, s in enumerate(self._specs) if s.key == self._selected)
+        changed, idx = imgui.combo("##filter_select", current, names)
+        imgui.pop_item_width()
+        if changed and self._specs[idx].key != self._selected:
+            self._select(self._specs[idx].key)
+        spec = self._by_key[self._selected]
+        delay = _format_delay(spec.delay(self._hz, self._values[self._selected])) if spec.delay else "0 ms"
+        imgui.same_line()
+        mono_text(delay, muted())
+        imgui.same_line()
+        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
+            0.0, imgui.get_content_region_avail().x - settings_w
+        ))
+        opened = imgui.is_popup_open("settings")
+        if opened:
+            push_selected()
+        clicked = imgui.small_button(settings)
+        if opened:
+            pop_selected()
+        imgui.set_item_tooltip("Smoothing settings")
+        if clicked:
+            imgui.open_popup("settings")
+        imgui.set_next_window_size(imgui.ImVec2(ui_px(340), 0))
+        if imgui.begin_popup("settings"):
+            if panel_header_button(spec.name, fa.ICON_FA_WAVE_SQUARE, fa.ICON_FA_ROTATE_LEFT,
+                                   tooltip="Clear smoothing history (e.g. on a new session)."):
+                self.reset()
+            self._render_params()
+            imgui.push_text_wrap_pos(0.0)
+            imgui.text_colored(muted(), spec.description)
+            imgui.pop_text_wrap_pos()
+            imgui.end_popup()
 
 
 __all__ = [

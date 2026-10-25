@@ -254,3 +254,91 @@ def test_reset_button_stays_visible_at_every_width(imgui_frame, monkeypatch):
 
     for w, reset_x, right, reset_w in results:
         assert reset_x + reset_w <= right + 1.0, f"Reset off-screen at {w}px"
+
+
+@pytest.mark.parametrize("key", ["one_euro", "gaussian", "identity"])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+def test_compact_row_and_popover_keep_all_filter_controls(imgui_frame, monkeypatch, key, scale):
+    from imgui_bundle import icons_fontawesome_6 as fa
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+    from myogestic.widgets.panels import filter_processor
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    imgui.get_io().display_size = imgui.ImVec2(1400, 1000)
+    p = PostProcessor(hz=32, compact=True)
+    p._select(key)
+    spec = next(s for s in BUILTIN_FILTERS if s.key == key)
+    texts, sliders, buttons, combos = [], [], [], []
+    text, colored = imgui.text_unformatted, imgui.text_colored
+
+    def plain(label):
+        texts.append(label)
+        text(label)
+
+    def color(tone, label):
+        texts.append(label)
+        colored(tone, label)
+
+    monkeypatch.setattr(imgui, "text_unformatted", plain)
+    monkeypatch.setattr(imgui, "text_colored", color)
+    real_combo, real_button = imgui.combo, imgui.small_button
+    click = {"value": False}
+    selected = []
+    push, pop = filter_processor.push_selected, filter_processor.pop_selected
+
+    def select():
+        selected.append("push")
+        push()
+
+    def unselect():
+        selected.append("pop")
+        pop()
+
+    monkeypatch.setattr(filter_processor, "push_selected", select)
+    monkeypatch.setattr(filter_processor, "pop_selected", unselect)
+
+    def combo(label, current, names):
+        combos.append(names)
+        return real_combo(label, current, names)
+
+    def button(label):
+        buttons.append(label)
+        real_button(label)
+        return click["value"] and label.startswith(fa.ICON_FA_SLIDERS)
+
+    for name in ("slider_float", "slider_int"):
+        real = getattr(imgui, name)
+
+        def slider(label, *args, real=real):
+            sliders.append(label)
+            right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+            result = real(label, *args)
+            assert imgui.get_item_rect_max().x <= right + 1
+            return result
+
+        monkeypatch.setattr(imgui, name, slider)
+    monkeypatch.setattr(imgui, "combo", combo)
+    monkeypatch.setattr(imgui, "small_button", button)
+    imgui_frame(p.ui)
+    assert combos == [[s.name for s in BUILTIN_FILTERS]]
+    assert "Smoothing" in texts
+    assert any(b.startswith(fa.ICON_FA_SLIDERS) for b in buttons)
+    assert sliders == []
+    assert selected == []
+    if key == "one_euro":
+        assert "159 ms" in texts
+    click["value"] = True
+    imgui_frame(p.ui)
+    click["value"] = False
+    sliders.clear()
+    imgui_frame(p.ui)
+    assert sliders == [f"##{param.key}" for param in spec.params]
+    assert any(b.startswith(fa.ICON_FA_ROTATE_LEFT) for b in buttons)
+    assert spec.description in texts
+    assert selected == ["push", "pop"]
