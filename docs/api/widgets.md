@@ -14,6 +14,8 @@ Widget classes you construct once and render with `.ui(...)` from inside `@app.u
 
 ::: myogestic.widgets.SimulatorControls
 
+![SimulatorControls](../images/widgets/SimulatorControls.png){ loading=lazy }
+
 Place `SimulatorControls([("Rest", 0.0), ("Fist", 1.0)])` in a compact Grid row
 under the signal and call `simulator.ui(ctx)` on every step. Preset chips publish
 the selected class value to the generator. The default control outlet is created
@@ -160,6 +162,8 @@ Without `opponent` the far wall simply returns the ball, and the score is hits a
 
 ::: myogestic.widgets.StatusBar
 
+![StatusBar](../images/widgets/StatusBar.png){ loading=lazy }
+
 Place `StatusBar("emg")` in a bare `Px(26)` Grid row and call `status.ui(ctx)`.
 It shows the stream's connection and channel details, participant and session
 folder, with the full text on hover. Pass `sessions_dir` for a custom storage
@@ -173,6 +177,8 @@ Long details ellipsize; no caller style pushes are needed.
 ## Branding
 
 ::: myogestic.widgets.AppHeader
+
+![AppHeader](../images/widgets/AppHeader.png){ loading=lazy }
 
 Place `AppHeader` in a bare `Px(52)` Grid row. It draws the line logo, muted
 title and state pill, with optional `StepBar` navigation and a `ParticipantPanel`
