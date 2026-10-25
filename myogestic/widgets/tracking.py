@@ -33,10 +33,9 @@ from myogestic.widgets.common import (
     mono_text,
     muted,
     panel_header,
-    pop_selected,
+    plot_legend,
     primary,
     primary_button,
-    push_selected,
     tinted_row,
     ui_px,
 )
@@ -802,18 +801,9 @@ class TrackingTask:
 
     def _legend_ui(self) -> None:
         """Toggle the two categorical traces without changing the captured data."""
-        for index, (label, attr) in enumerate((("Target", "_show_target"), ("Force", "_show_force"))):
-            if index:
-                imgui.same_line()
-            selected = getattr(self, attr)
-            if selected:
-                push_selected()
-            imgui.push_style_color(imgui.Col_.text, _series_color(index))
-            if imgui.small_button(f"{label}##tt_show_{label.lower()}"):
-                setattr(self, attr, not selected)
-            imgui.pop_style_color()
-            if selected:
-                pop_selected()
+        selected = {i for i, show in enumerate((self._show_target, self._show_force)) if show}
+        plot_legend([(0, "Target"), (1, "Force")], selected=selected)
+        self._show_target, self._show_force = 0 in selected, 1 in selected
 
     def _plot_ui(self, now: float) -> None:
         """Target and actual on one pair of axes — the only way to read the error.
