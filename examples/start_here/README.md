@@ -16,6 +16,14 @@ with no Virtual Hand at all — the wrist there only mirrors the paddle.
 
 In `myocontrol.py`, set a participant ID, then follow Connect → Record → Train → Drive; recordings and trained models are saved under `sessions/<ID>/`.
 
+The Source card includes stream chips and a **+** action for adding another amplifier;
+the generated target stays separate from device selection. In `force_ramps.py`, Source
+is always visible beside the Signal / Force views. In `pong.py`, the subject's Pong
+view opens first, with Signal and Model as the other full-cell views. Model groups
+the block action and court settings in one controls card, beside cards for features,
+training and output; these stack when space is narrow. Source / Hand share the right
+cell, and Hand explains how to connect the optional mirror when it is not running.
+
 The rest of `examples/` answers "how do I do X": [`panels/`](../panels) stands
 up one widget at a time, and [`synthetic/`](../synthetic) and
 [`otb/`](../otb) each demonstrate one technique against one kind of signal.
