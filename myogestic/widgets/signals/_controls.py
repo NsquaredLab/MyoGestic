@@ -50,6 +50,13 @@ def _button_width(label: str) -> float:
     return imgui.calc_text_size(label).x + imgui.get_style().frame_padding.x * 2
 
 
+def _toolbar_next(width: float) -> None:
+    """Keep the next control beside this one only when the whole control fits."""
+    imgui.same_line()
+    if imgui.get_content_region_avail().x < width:
+        imgui.new_line()
+
+
 def _popup_button(label: str, widget_id: str, popup_id: str) -> None:
     """Open a popup, retaining the selected cue while it is open."""
     selected = imgui.is_popup_open(popup_id)
@@ -161,16 +168,16 @@ def render_controls(
                 if avail > width:
                     imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + avail - width)
             _render_transport(stream_name, v, pause)
-            imgui.same_line()
+            _toolbar_next(view_width)
             _render_signal_group(stream_name, v, view_width)
-            imgui.same_line()
+            _toolbar_next(_button_width("Auto") + _button_width("Manual") + ui_px(2))
             _render_scale_group(stream_name, v)
-            imgui.same_line()
+            _toolbar_next(_button_width(channels))
             _popup_button(channels, f"{stream_name}_channels", f"{stream_name}_channels_popup")
-            imgui.same_line()
+            _toolbar_next(_button_width(display))
             _popup_button(display, f"{stream_name}_display", f"{stream_name}_display_popup")
             if show_title:
-                imgui.same_line()
+                _toolbar_next(_button_width(chrome))
     if show_title:
         selected = not v.show_controls
         if selected:
