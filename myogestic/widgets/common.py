@@ -568,3 +568,7 @@ def panel_header_button(title: str, icon: str | None, button_icon: str, *, toolt
     if tooltip and imgui.is_item_hovered():
         imgui.set_tooltip(tooltip)
     return clicked
+
+
+# Trial-region overlay: translucent blue keeps traces legible in both themes.
+TRIAL_BAND = imgui.ImVec4(INFO.x, INFO.y, INFO.z, 0.18)
