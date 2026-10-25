@@ -13,11 +13,13 @@ Run with:
     uv run python examples/panels/stream_panel.py
 """
 
-from myogestic import App, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.sources import SyntheticSource
-from myogestic.widgets import StreamPanel
+from myogestic.widgets import AppHeader, StreamPanel
 
 app = App("panel: stream_panel")
+header = AppHeader("StreamPanel", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 app.streams(
     Stream("emg", source=SyntheticSource(n_channels=8, require_target=True), window_ms=1000)
 )
@@ -27,7 +29,10 @@ panel = StreamPanel()
 
 @app.ui
 def ui(ctx):
-    panel.ui(ctx)
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        panel.ui(ctx)
 
 
 def main() -> None:

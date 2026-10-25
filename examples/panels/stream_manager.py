@@ -15,11 +15,13 @@ Run with:
     uv run python examples/panels/stream_manager.py
 """
 
-from myogestic import App, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.sources import SyntheticSource
-from myogestic.widgets import StreamManager
+from myogestic.widgets import AppHeader, StreamManager
 
 app = App("panel: stream_manager")
+header = AppHeader("StreamManager", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 
 def add(name: str) -> None:
@@ -39,7 +41,10 @@ manager = StreamManager(on_add=add, on_remove=app.remove_stream)
 
 @app.ui
 def ui(ctx):
-    manager.ui(ctx)
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        manager.ui(ctx)
 
 
 def main() -> None:
