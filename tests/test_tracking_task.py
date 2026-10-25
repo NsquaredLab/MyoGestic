@@ -569,7 +569,10 @@ def tracking_card(implot_frame, monkeypatch):
             )
             if not disabled and label in ui.changes:
                 return True, ui.changes.pop(label)
-            if not disabled and ui.click and label.endswith(ui.click):
+            clicked = ui.click == imgui.get_id(label) or (
+                isinstance(ui.click, str) and ui.click and label.endswith(ui.click)
+            )
+            if not disabled and clicked:
                 ui.click = ""
                 return True
             return result
@@ -646,8 +649,8 @@ def test_tracking_is_one_card_with_inline_calibration_and_a_primary_start(tracki
     assert ui.primary and ui.primary[0][1][0] < 0  # full available width
     assert "##tt_hold_s" not in ui.items
     assert "##tt_ahead" not in ui.items
-    assert "Target##tt_show_target" in ui.items
-    assert "Force##tt_show_force" in ui.items
+    assert "##series0" in ui.items
+    assert "##series1" in ui.items
 
 
 @pytest.mark.parametrize("width,side_by_side", [(600, True), (320, False)])
@@ -753,6 +756,21 @@ def test_tracking_controls_fit_narrow_light_cards_at_both_scales(
     assert all(left and right for _, left, right in ui.text_bounds), ui.text_bounds
 
 
+def test_legend_uses_shared_palette_dot_chips(tracking_card, monkeypatch):
+    from myogestic.widgets import common
+    from myogestic.widgets import tracking as module
+
+    calls = []
+
+    def legend(series, *, selected):
+        calls.append((series, selected.copy()))
+        return common.plot_legend(series, selected=selected)
+
+    monkeypatch.setattr(module, "plot_legend", legend, raising=False)
+    tracking_card.frame()
+    assert calls == [([(0, "Target"), (1, "Force")], {0, 1})]
+
+
 def test_legend_clicks_toggle_only_the_named_trace_and_balance_styles(tracking_card, monkeypatch):
     from imgui_bundle import implot
 
@@ -766,13 +784,21 @@ def test_legend_clicks_toggle_only_the_named_trace_and_balance_styles(tracking_c
 
     monkeypatch.setattr(implot, "plot_line", line)
     ui.task._trace_t, ui.task._trace_y = [0.0, 1.0], [0.0, 20.0]
-    ui.frame(click="##tt_show_target")
+    ui.frame(click="##series1")
+    assert ui.task._show_target and not ui.task._show_force
+    assert plotted == ["target##tt_target"]
+    plotted.clear()
+    ui.frame(click="##series1")
+    assert ui.task._show_target and ui.task._show_force
+    assert plotted == ["target##tt_target", "force##tt_force"]
+    plotted.clear()
+    ui.frame(click="##series0")
     assert not ui.task._show_target and ui.task._show_force
     assert plotted == ["force##tt_force"]
     plotted.clear()
-    ui.frame(click="##tt_show_force")
+    ui.frame(click="##series1")
     assert not ui.task._show_force and not plotted
-    ui.frame(click="##tt_show_target")
+    ui.frame(click="##series0")
     assert ui.task._show_target and plotted == ["target##tt_target"]
     assert ui.task._trace_y == [0.0, 20.0]
 
@@ -813,11 +839,11 @@ def test_settings_popup_and_legend_are_scoped_to_widget_identity(tracking_card, 
 
     def both(ctx):
         own_draw(ctx)
-        ids["left"] = ui.items["Target##tt_show_target"].identity
+        ids["left"] = ui.items["##series0"].identity
         assert "##tt_hold_s" in ui.items  # the first popup remains open
         ui.items.clear()
         other.ui(ctx)
-        ids["right"] = ui.items["Target##tt_show_target"].identity
+        ids["right"] = ui.items["##series0"].identity
         assert "##tt_hold_s" not in ui.items
         # Leave the second task's legend off without changing the first one.
         other._show_target = False
@@ -827,6 +853,35 @@ def test_settings_popup_and_legend_are_scoped_to_widget_identity(tracking_card, 
     monkeypatch.setattr(ui.task, "ui", both)
     ui.frame()
     assert ids["left"] != ids["right"]
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_two_tracking_legends_toggle_independently_in_one_window(tracking_card, monkeypatch, side):
+    ui = tracking_card
+    other = TrackingTask("force", widget_id="tracking:right")
+    monkeypatch.setattr(other, "_read", lambda stream: ui.value)
+    own_draw = ui.task.ui
+    ids = {}
+
+    def both(ctx):
+        own_draw(ctx)
+        ids["left"] = {i: ui.items[f"##series{i}"].identity for i in (0, 1)}
+        other.ui(ctx)
+        ids["right"] = {i: ui.items[f"##series{i}"].identity for i in (0, 1)}
+
+    monkeypatch.setattr(ui.task, "ui", both)
+    ui.frame()
+    assert set(ids["left"].values()).isdisjoint(ids["right"].values())
+    clicked, untouched = (ui.task, other) if side == "left" else (other, ui.task)
+    ui.frame(click=ids[side][1])
+    assert ui.click == ""
+    assert not clicked._show_force and untouched._show_force
+    assert clicked._show_target and untouched._show_target
+    ui.frame()
+    assert not clicked._show_force and untouched._show_force
+    ui.frame(click=ids[side][1])
+    assert ui.click == ""
+    assert clicked._show_force and untouched._show_force
 
 
 @pytest.mark.parametrize("level", [0.0, 40.0])
