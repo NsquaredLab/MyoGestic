@@ -26,13 +26,19 @@ from myogestic.widgets.common import (
     IDLE,
     PALETTE,
     SUCCESS,
+    WARNING,
     ensure_implot_style,
     hairline,
-    label_column,
+    mono_font,
     mono_text,
     muted,
     panel_header,
+    pop_selected,
     primary,
+    primary_button,
+    push_selected,
+    tinted_row,
+    ui_px,
 )
 
 if TYPE_CHECKING:
@@ -49,39 +55,14 @@ _SEGMENT_ROWS: tuple[tuple[str, str], ...] = (
     ("recover_s", "Recover"),
 )
 
-#: Every row label in the panel, so one column width serves all of them and the
-#: fields line up as a block rather than as eleven unrelated controls.
-_ROWS: tuple[str, ...] = (
-    "Stream",
-    "Channel",
-    "Zero",
-    "MVC",
-    *(label for _attr, label in _SEGMENT_ROWS),
-    "Level",
-    "Reps",
-    "Look ahead",
-)
-
 #: One rep is at most ten minutes; the drag rows clamp to it so a fat-fingered
 #: entry cannot produce a block nobody will sit through.
 _MAX_SEGMENT_S = 600.0
-#: Reps multiply every segment, and the target polyline is rebuilt each frame at six
-#: points per rep. A fat-fingered extra zero here is what actually hangs the app — the
-#: per-segment cap does not bound it, because this is the field that multiplies them.
+#: Preserve the block-length cap when Reps is edited in the settings popover.
 _MAX_REPS = 200
 #: A jump larger than this between consecutive trace samples means the panel was not
 #: being rendered — a hidden tab, a collapsed cell — not that the force did nothing.
 _TRACE_GAP_S = 0.5
-
-#: Cap on a field, in frame heights so it follows `ui_scale` instead of pinning to
-#: one display. A duration needs a few dozen pixels of drag travel; stretched across
-#: a wide panel the rows stop reading as one shape's parameters and become a stack of
-#: identical slabs. What the cap frees is where the sketch goes.
-_FIELD_EM = 7.0
-
-#: Below this the sketch is dropped rather than squashed — under about this width the
-#: ramps are shorter than the line is thick and the shape stops being legible.
-_SKETCH_MIN_EM = 4.0
 
 #: Finer than this the plot cannot show, and a long block at 240 fps would grow
 #: the trace without bound.
@@ -149,7 +130,7 @@ def _target_curve(trap: Trapezoid, upto: float | None = None) -> tuple[np.ndarra
 def _segment_spans(trap: Trapezoid) -> list[tuple[float, float]]:
     """Each segment's ``(start, end)`` inside one repetition, in `_SEGMENT_ROWS` order.
 
-    Read off `_rep_corners`, so a lit region cannot drift from the line above it.
+    Read off `_rep_corners`, so the sketch's hover label follows its actual geometry.
     """
     xs, _ = _rep_corners(trap)
     return list(zip(xs[:-1], xs[1:], strict=True))
@@ -162,119 +143,39 @@ def _block_note(trap: Trapezoid) -> str:
     return f"{trap.reps} x {trap.duration:.1f} s = {trap.total_duration:.1f} s"
 
 
-def _sketch(trap: Trapezoid, size: imgui.ImVec2, *, active: int | None = None) -> None:
-    """The whole block drawn beside the numbers that define it, and named.
-
-    Every repetition, where the plot frames one, so the two are complementary rather
-    than the same picture twice. Ticks under the baseline name the segments; a name is
-    dropped when its segment is too narrow to hold one. Drawn from `_rep_corners`, the
-    polyline the plot uses, so the preview cannot drift from what runs.
-
-    Height is normalised — this shows the arrangement in *time*, which no field states,
-    while Level already states the height. ``active`` is an index into `_SEGMENT_ROWS`
-    to light up; pointing at the drawing picks one too.
-    """
-    style = imgui.get_style()
-    dl = imgui.get_window_draw_list()
+def _sketch(trap: Trapezoid, size: imgui.ImVec2) -> None:
+    """Draw one exact repetition as a small preview in the target row."""
     origin = imgui.get_cursor_screen_pos()
-    # An invisible button rather than a `dummy`: both reserve the rect, but `dummy`
-    # registers with id 0 and does not reliably answer `is_item_hovered`, and pointing
-    # at the drawing is half of what names a segment.
     imgui.invisible_button("##tt_sketch", size)
-    hovering = imgui.is_item_hovered()
-
     xs, ys = _rep_corners(trap)
-    spans = _segment_spans(trap)
-    # A block of all-zero segments is legal, and it is what dragging a row to the floor
-    # produces on the way somewhere else; both mappings below would divide by zero.
-    one = xs[-1]
-    span = (one * trap.reps) or 1.0
-    peak = max(trap.level_pct, 1.0)
-    width = max(size.x, 1.0)
-
-    def at(t: float) -> float:
-        """Seconds into the block to a screen x."""
-        return origin.x + (t / span) * width
-
-    left, right = origin.x, origin.x + size.x
-    line_h = imgui.get_text_line_height()
-    pad = style.frame_padding.y
-
-    # Pointing at the drawing names a segment as well as hovering its row. Reduced into
-    # the first repetition: every repetition is the same five parameters, so lighting
-    # only the one under the pointer would claim they were separate.
-    if hovering and one > 0.0:
-        into = (((imgui.get_mouse_pos().x - left) / width) * span) % one
-        active = next((i for i, (a, b) in enumerate(spans) if a <= into < b), active)
-
-    labels: list[str | None] = []
-    for (a, b), (_attr, text) in zip(spans, _SEGMENT_ROWS, strict=True):
-        room = at(b) - at(a)
-        labels.append(text if imgui.calc_text_size(text).x + style.item_spacing.x <= room else None)
-    named = any(label is not None for label in labels)
-
-    note = _block_note(trap)
-    note_w = imgui.calc_text_size(note).x
-    # The caption gets its own band rather than being laid over the drawing: at more
-    # than one rep the top right corner is exactly where the last trapezoid's plateau
-    # is, and the two overlapped.
-    base = origin.y + size.y - pad - (line_h if named else 0.0)
-    top = origin.y + pad + line_h
-
+    pad = ui_px(3)
+    base = origin.y + size.y - pad
+    height = max(size.y - 2 * pad, 0.0)
+    points = [
+        imgui.ImVec2(
+            origin.x + x / max(trap.duration, 1e-9) * size.x,
+            base - y / max(trap.level_pct, 1.0) * height,
+        )
+        for x, y in zip(xs, ys, strict=True)
+    ]
+    dl = imgui.get_window_draw_list()
     accent = _series_color(0)
-    fill = imgui.get_color_u32(imgui.ImVec4(accent.x, accent.y, accent.z, 0.16))
-    lit = imgui.get_color_u32(imgui.ImVec4(accent.x, accent.y, accent.z, 0.38))
-    stroke = imgui.get_color_u32(accent)
-    faint = imgui.get_color_u32(hairline())
-
-    dl.add_line(imgui.ImVec2(left, base), imgui.ImVec2(right, base), faint)
-
-    for rep in range(trap.reps):
-        offset = rep * one
-        points = [
-            imgui.ImVec2(at(x + offset), base - (y / peak) * (base - top))
-            for x, y in zip(xs, ys, strict=True)
-        ]
-        # Concave, and de-duplicated: the flat rest and recover run along the
-        # baseline so a convex fill wedges across the shape, and a repeated corner
-        # (a zero-length segment) defeats the ear-clipper the same way. `points`
-        # keeps its repeats — `_light` indexes it, so segment i stays corner i.
-        # The ignores are the stub's invariance, not a real mismatch: it declares
-        # `List[ImVec2Like]`, and `list` is invariant, so a `list[ImVec2]` is rejected
-        # even though every element is an `ImVec2Like`. A `Sequence` in the stub would
-        # accept it; we do not own the stub.
-        dl.add_concave_poly_filled(_distinct(points), fill)  # type: ignore
-        if active is not None:
-            _light(dl, points, active, base, top, lit, faint)
-        # Keywords, not positions: `add_polyline`'s last two parameters swapped order
-        # between imgui_bundle 1.92.601 and 1.92.801, so a positional call is correct
-        # on one and a TypeError on the other. The names did not change.
-        dl.add_polyline(points, stroke, thickness=2.0, flags=0)  # type: ignore
-
-    if named:
-        for i, text in enumerate(labels):
-            dl.add_line(
-                imgui.ImVec2(at(spans[i][0]), base), imgui.ImVec2(at(spans[i][0]), base + pad), faint
-            )
-            if text is None:
-                continue
-            centre = (at(spans[i][0]) + at(spans[i][1])) * 0.5
-            tone = primary() if i == active else muted()
-            dl.add_text(
-                imgui.ImVec2(centre - imgui.calc_text_size(text).x * 0.5, base + pad),
-                imgui.get_color_u32(tone),
-                text,
-            )
-        dl.add_line(imgui.ImVec2(at(one), base), imgui.ImVec2(at(one), base + pad), faint)
-
-    read_w = 0.0
-    if active is not None:
-        attr, text = _SEGMENT_ROWS[active]
-        read = f"{text}  {getattr(trap, attr):.1f} s"
-        read_w = imgui.calc_text_size(read).x + style.item_spacing.x
-        dl.add_text(imgui.ImVec2(left, origin.y), imgui.get_color_u32(primary()), read)
-    if note_w + read_w <= size.x:
-        dl.add_text(imgui.ImVec2(right - note_w, origin.y), imgui.get_color_u32(muted()), note)
+    dl.add_line(
+        imgui.ImVec2(origin.x, base), imgui.ImVec2(origin.x + size.x, base),
+        imgui.get_color_u32(hairline()), thickness=ui_px(1),
+    )
+    polygon = _distinct(points)
+    area = trap.level_pct * (trap.hold_s + (trap.ramp_up_s + trap.ramp_down_s) / 2)
+    if len(polygon) >= 3 and area > 0:
+        fill = imgui.ImVec4(accent.x, accent.y, accent.z, 0.16)
+        dl.add_concave_poly_filled(polygon, imgui.get_color_u32(fill))  # type: ignore
+    dl.add_polyline(points, imgui.get_color_u32(accent), thickness=ui_px(1.5), flags=0)  # type: ignore
+    if imgui.is_item_hovered() and size.x > 0:
+        t = (imgui.get_mouse_pos().x - origin.x) / size.x * trap.duration
+        for (start, end), (attr, label) in zip(_segment_spans(trap), _SEGMENT_ROWS, strict=True):
+            if start <= t < end:
+                imgui.set_tooltip(f"{label} · {getattr(trap, attr):g} s")
+                break
 
 
 def _distinct(points: list[imgui.ImVec2]) -> list[imgui.ImVec2]:
@@ -284,30 +185,6 @@ def _distinct(points: list[imgui.ImVec2]) -> list[imgui.ImVec2]:
         if not kept or (point.x, point.y) != (kept[-1].x, kept[-1].y):
             kept.append(point)
     return kept
-
-
-def _light(
-    dl: imgui.ImDrawList,
-    points: list[imgui.ImVec2],
-    active: int,
-    base: float,
-    top: float,
-    lit: int,
-    faint: int,
-) -> None:
-    """Fill one segment of one repetition brighter, and rule its two edges.
-
-    Segment ``i`` spans corners ``i`` and ``i + 1``, read off the points already placed
-    so the highlight cannot land beside the segment it names. A zero-length one has no
-    area, and its two rules land on each other — the boundary it collapsed to.
-    """
-    start, end = points[active], points[active + 1]
-    if end.x > start.x:
-        dl.add_concave_poly_filled(
-            [imgui.ImVec2(start.x, base), start, end, imgui.ImVec2(end.x, base)], lit
-        )
-    for x in (start.x, end.x):
-        dl.add_line(imgui.ImVec2(x, base), imgui.ImVec2(x, top), faint)
 
 
 def _series_color(index: int) -> imgui.ImVec4:
@@ -322,14 +199,44 @@ def _action_tooltip(reason: str, otherwise: str) -> None:
         imgui.set_tooltip(reason or otherwise)
 
 
+def _tracking_text(text: str, width: float, *, mono: bool = False) -> None:
+    """Fit a tracking readout on one line and keep its full value in a tooltip."""
+    font = mono_font() if mono else None
+    if font is not None:
+        imgui.push_font(font, imgui.get_style().font_size_base)
+    shown = text
+    if imgui.calc_text_size(shown).x > width:
+        while shown and imgui.calc_text_size(shown + "…").x > width:
+            shown = shown[:-1]
+        shown = shown + "…" if imgui.calc_text_size("…").x <= width else ""
+    if mono:
+        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0.0, width - imgui.calc_text_size(shown).x))
+    if font is not None:
+        imgui.pop_font()
+    if mono:
+        mono_text(shown, primary())
+    else:
+        imgui.text_unformatted(shown)
+    if shown != text:
+        _action_tooltip("", text)
+
+
 class TrackingTask:
     """Force-tracking task: follow a trapezoidal target on an auxiliary channel.
 
-    Pick the stream and the channel the force transducer is on, capture a resting
-    `Calibration.zero` and a maximum `Calibration.mvc`, shape the `Trapezoid`, press
-    Start. The target and the subject's normalised force are then drawn on one pair of
+    Pick Stream and Channel, then capture a resting `Calibration.zero` and a maximum
+    `Calibration.mvc` in the calibration row. Its warning names the next step and its
+    countdown stays beside the capture buttons. The target row previews one repetition;
+    its settings icon opens the five durations, Level, Reps and Look ahead. Press Start.
+    The target and the subject's normalised force are then drawn on one pair of
     axes — x is task time in seconds, y is percent of MVC — because a following error is
-    only readable when both traces share a range.
+    only readable when both traces share a range. Target and Force chips toggle trace
+    visibility. A mono summary below the plot states the total block duration.
+
+    While running, setup is dimmed and locked. The status row shows the repetition,
+    phase, current force and signed error (force minus target), with Stop beside it.
+    Captions sit above controls in two columns, stacking in narrow cells; long row
+    readouts ellipsize and expose their full text on hover.
 
     The live force is the mean of the last `tail_ms` of the chosen channel, not one
     sample: a single raw sample from a load cell is noise with a force in it.
@@ -347,7 +254,7 @@ class TrackingTask:
     channel
         Channel index within that stream carrying the force signal.
     trapezoid
-        Initial target shape. Every segment stays editable in the panel; this is only
+        Initial target shape. Every segment is editable in the settings popover; this is only
         where it starts. Defaults to `Trapezoid`'s own defaults.
     target
         Optional `myogestic.sources.target.TargetSource` to drive, so the trajectory is
@@ -372,7 +279,7 @@ class TrackingTask:
         trajectory only as far as it is about to be: a block whose ending is
         visible from the start is one they can plan around instead of track.
     plot_height
-        Plot height in pixels.
+        Plot height in pixels at UI scale 1.0; follows the current UI scale.
 
     Examples
     --------
@@ -419,6 +326,8 @@ class TrackingTask:
         self._trace_rep = 0
         self._trace_t: list[float] = []
         self._trace_y: list[float] = []
+        self._show_target = True
+        self._show_force = True
 
     # --- logic (no imgui) ----------------------------------------------------
     @property
@@ -487,6 +396,8 @@ class TrackingTask:
             return "Pick a stream carrying the force channel."
         if self._mvc_until is not None:
             return "Wait for the MVC capture to finish."
+        if self._trap.duration <= 0:
+            return "Set at least one target duration above zero."
         if self._calibration is None:
             return "Capture Zero and MVC first — the target is a percentage of MVC."
         return ""
@@ -638,256 +549,271 @@ class TrackingTask:
         self._trace_y.append(cal.normalise(value))
 
     def _detail(self, now: float, value: float | None) -> str:
-        """The one status line under the buttons.
-
-        Parameters
-        ----------
-        now
-            A monotonic clock reading, in seconds.
-        value
-            The current raw force reading, or ``None`` if the stream had none.
-        """
-        if self._mvc_until is not None:
-            return f"MVC capture… {max(0.0, self._mvc_until - now):4.1f} s"
+        """Current normalised force and signed error, without substituting for lost data."""
+        if value is None:
+            return "No force reading · reconnect the stream"
         cal = self._calibration
         if cal is None:
-            return "not calibrated — capture Zero and MVC"
-        shown = f"{cal.normalise(value):5.1f}" if value is not None else "    —"
+            return "Capture zero, then MVC"
+        force = cal.normalise(value)
         if self._started is None:
-            return f"ready · now {shown} %MVC"
-        t = now - self._started
-        target = self._trap.value_at(t)
-        rep, rep_t = self._rep_at(t)
-        counter = f"rep {rep + 1}/{self._trap.reps} · " if self._trap.reps > 1 else ""
-        return (
-            f"{counter}{self._trap.phase_at(t):9} · {rep_t:5.1f} s · "
-            f"{shown} / {target:5.1f} %MVC"
-        )
+            return f"{force:.0f} % MVC"
+        target = self._trap.value_at(now - self._started)
+        return f"{force:.0f} % MVC · error {force - target:+.0f} %"
 
     # --- render --------------------------------------------------------------
     def ui(self, ctx: Context) -> None:
-        """Render the task. Call once per frame.
+        """Render one card, with setup rows, target settings and a shared-range plot.
 
-        Everything below is drawn inside an ImGui id scope named by
-        ``widget_id``. ImGui derives a control's identity from its label plus the
-        enclosing scope, and a `Grid` cell is one child window — so without this,
-        two of these panels in a single cell would share every control. Pushed
-        around the whole body rather than prefixed onto each label, because a
-        prefix has to be remembered at every site and this cannot be forgotten.
+        Call once per frame. Every control and popup is scoped by ``widget_id``;
+        source selection, calibration, target settings and legend choices belong
+        to this instance even when another task shows the same stream.
         """
         imgui.push_id(self._widget_id)
         try:
-            names = sorted(ctx.streams)
-            stream = ctx.streams.get(self._stream_name)
             now = time.monotonic()
+            signal = self._stream_name, self._channel
+            stream = ctx.streams.get(self._stream_name)
             value = self._read(stream)
             self._tick(now, value)
-
             running = self._started is not None
-            panel_header(
-                "Force tracking",
-                fa.ICON_FA_ARROW_TREND_UP,
-                status=SUCCESS if running else IDLE,
-            )
-            if not names:
-                imgui.text_colored(muted(), "(no streams registered)")
-                return
+            status = SUCCESS if running else IDLE
+            if not running and value is not None and (
+                self._calibration is None or self._mvc_until is not None
+            ):
+                status = WARNING
+            panel_header("Force tracking", fa.ICON_FA_ARROW_TREND_UP, status=status)
 
-            self._source_ui(names, stream)
-            self._calibration_ui(now, value)
-            self._trapezoid_ui()
+            imgui.begin_disabled(running)
+            try:
+                self._source_ui(ctx)
+                # A source edit invalidates the captures; the buttons must use the
+                # new channel's reading even on the frame the combo changes it.
+                if signal != (self._stream_name, self._channel):
+                    stream = ctx.streams.get(self._stream_name)
+                    value = self._read(stream)
+                self._calibration_ui(now, value)
+                self._trapezoid_ui()
+            finally:
+                imgui.end_disabled()
 
-            imgui.spacing()
-            self._run_ui(stream, running, getattr(ctx, "session", None))
-            mono_text(self._detail(now, value), muted())
-            self._view_ui()
+            self._run_ui(ctx, stream, now, value)
+            self._legend_ui()
             self._plot_ui(now)
+            _tracking_text(_block_note(self._trap), imgui.get_content_region_avail().x, mono=True)
         finally:
             imgui.pop_id()
 
-    def _source_ui(self, names: list[str], stream: Stream | None) -> None:
-        """What channel of what stream the force is on — both picked at runtime."""
-        imgui.separator_text("Source")
-        field = imgui.get_frame_height() * _FIELD_EM
-        label_column("Stream", _ROWS, max_width=field)
-        # -1 when the chosen stream is gone: the name is kept, not reset, so the panel
-        # reattaches by itself if the app registers it again.
-        current = names.index(self._stream_name) if self._stream_name in names else -1
-        changed, idx = imgui.combo("##tt_stream", current, names)
-        if changed and 0 <= idx < len(names):
-            self._stream_name = names[idx]
-            self._forget_calibration()
-
-        info = stream.info if stream is not None else None
-        n_channels = info.n_channels if info is not None else 0
-        label_column("Channel", _ROWS, max_width=field)
-        if n_channels <= 0:
-            imgui.text_colored(muted(), "not connected")
+    def _source_ui(self, ctx: Context) -> None:
+        """Place source captions above their controls, stacking in narrow cells."""
+        names = sorted(ctx.streams)
+        columns = 2 if imgui.get_content_region_avail().x >= ui_px(360) else 1
+        if not imgui.begin_table("##tt_source_fields", columns, imgui.TableFlags_.sizing_stretch_same):
             return
-        supplied = info.channel_names if info is not None else None
-        labels = [
-            supplied[i] if supplied is not None and i < len(supplied) else f"ch {i}"
-            for i in range(n_channels)
-        ]
-        changed, idx = imgui.combo("##tt_channel", self._resolve_channel(n_channels), labels)
-        if changed and 0 <= idx < n_channels:
-            self._channel = idx
-            self._forget_calibration()
+        try:
+            imgui.table_next_column()
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(muted(), "Stream")
+            imgui.set_next_item_width(-1)
+            current = names.index(self._stream_name) if self._stream_name in names else -1
+            imgui.begin_disabled(not names or self._mvc_until is not None)
+            changed, idx = imgui.combo("##tt_stream", current, names or ["Register a force stream"])
+            imgui.end_disabled()
+            if changed and 0 <= idx < len(names):
+                self._stream_name = names[idx]
+                self._forget_calibration()
+
+            imgui.table_next_column()
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(muted(), "Channel")
+            stream = ctx.streams.get(self._stream_name)
+            info = stream.info if stream is not None else None
+            n_channels = info.n_channels if info is not None else 0
+            supplied = info.channel_names if info is not None else None
+            labels = [
+                supplied[i] if supplied is not None and i < len(supplied) else f"ch {i}"
+                for i in range(n_channels)
+            ]
+            imgui.set_next_item_width(-1)
+            imgui.begin_disabled(n_channels <= 0 or self._mvc_until is not None)
+            changed, idx = imgui.combo(
+                "##tt_channel", self._resolve_channel(n_channels), labels or ["Connect the stream"],
+            )
+            imgui.end_disabled()
+            if changed and 0 <= idx < n_channels:
+                self._channel = idx
+                self._forget_calibration()
+        finally:
+            imgui.end_table()
 
     def _calibration_ui(self, now: float, value: float | None) -> None:
-        """The two captures that give a percentage its meaning, each with its value.
-
-        Locked while a block runs. Re-zeroing mid-block rescales only the points
-        drawn *after* the click, leaving one polyline stitched from two
-        normalisations with nothing marking the seam — a cliff the subject never
-        produced, in the trace the whole task exists to measure.
-        """
-        locked = self._started is not None
-        if locked:
-            imgui.begin_disabled()
-        try:
-            self._capture_rows(now, value)
-        finally:
-            if locked:
-                imgui.end_disabled()
-        if locked and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            imgui.set_tooltip("Stop the block first — recalibrating mid-block breaks the trace.")
-
-    def _capture_rows(self, now: float, value: float | None) -> None:
-        """The Zero and MVC capture rows themselves."""
-        imgui.separator_text("Calibration")
-        field = imgui.get_frame_height() * _FIELD_EM
-        width = label_column("Zero", _ROWS, max_width=field)
-        button = imgui.ImVec2(width, 0)
-        if imgui.button(f"{fa.ICON_FA_CROSSHAIRS}  Capture##tt_zero", button):
-            self._capture_zero(value)
-        imgui.set_item_tooltip("Take the resting reading, with the subject relaxed.")
-        imgui.same_line()
-        mono_text("—" if self._zero is None else f"{self._zero:+.4g}", muted())
-
-        label_column("MVC", _ROWS, max_width=field)
+        """Keep captures, their values and the MVC countdown in one utility row."""
         capturing = self._mvc_until is not None
+        warning = capturing or self._calibration is None
         if capturing:
-            imgui.begin_disabled()
-        if imgui.button(f"{fa.ICON_FA_HAND_FIST}  Capture##tt_mvc", button):
-            self._capture_mvc(now)
-        _action_tooltip(
-            "Capture in progress." if capturing else "",
-            f"Push as hard as possible for {self._mvc_capture_s:.0f} s; the peak is kept.",
-        )
-        if capturing:
+            note = f"MVC capture… {max(0.0, self._mvc_until - now):.1f} s"
+        elif self._calibration is None:
+            note = "Capture zero, then MVC"
+        else:
+            note = f"zero {self._zero:.2f} · MVC {self._mvc:.2f}"
+        style = imgui.get_style()
+        zero_w = imgui.calc_text_size("Zero").x + 2 * style.frame_padding.x
+        mvc_w = imgui.calc_text_size("MVC").x + 2 * style.frame_padding.x
+        actions = zero_w + mvc_w + style.item_spacing.x
+        with tinted_row(WARNING if warning else None) as width:
+            left = imgui.get_cursor_pos_x()
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(WARNING if warning else IDLE, fa.ICON_FA_CIRCLE)
+            imgui.same_line()
+            room = left + width - actions - style.item_spacing.x - imgui.get_cursor_pos_x()
+            _tracking_text(note, max(0.0, room), mono=not warning or capturing)
+            imgui.same_line()
+            imgui.set_cursor_pos_x(left + width - actions)
+            imgui.begin_disabled(value is None or capturing)
+            if imgui.button("Zero##tt_zero"):
+                self._capture_zero(value)
+            _action_tooltip(
+                "Wait for MVC to finish." if capturing else
+                "Connect the force stream first." if value is None else "",
+                "Capture the resting reading with the subject relaxed.",
+            )
+            imgui.same_line()
+            if imgui.button("MVC##tt_mvc"):
+                self._capture_mvc(now)
+            _action_tooltip(
+                "Capture in progress." if capturing else
+                "Connect the force stream first." if value is None else "",
+                f"Push as hard as possible for {self._mvc_capture_s:.0f} s; the peak is kept.",
+            )
             imgui.end_disabled()
-        imgui.same_line()
-        mono_text("—" if self._mvc is None else f"{self._mvc:+.4g}", muted())
 
     def _trapezoid_ui(self) -> None:
-        """Every segment of the target, plus its level and repetition count.
-
-        `Trapezoid` is frozen and validates on construction, so each row clamps to the
-        range that dataclass accepts — an edit can change the shape but never raise.
-        """
-        imgui.separator_text("Target")
-        self._shape_ui()
-
-        field = imgui.get_frame_height() * _FIELD_EM
-        # A slider, where the durations are drags: this one is a proportion with both
-        # ends meaningful, so the handle's position is itself the read-out. The
-        # durations have no natural maximum and a handle would imply one.
-        label_column("Level", _ROWS, max_width=field)
-        changed, level = imgui.slider_float(
-            "##tt_level",
-            self._trap.level_pct,
-            0.0,
-            100.0,
-            "%.0f %% MVC",
-            imgui.SliderFlags_.always_clamp,
-        )
-        if changed:
-            self._set_trap(replace(self._trap, level_pct=level))
-
-        label_column("Reps", _ROWS, max_width=field)
-        changed, reps = imgui.input_int("##tt_reps", self._trap.reps)
-        if changed:
-            self._set_trap(replace(self._trap, reps=min(max(reps, 1), _MAX_REPS)))
-
-    def _shape_ui(self) -> None:
-        """The five durations, with the shape they add up to drawn beside them.
-
-        Grouped so the sketch can be given the group's exact height and sit against
-        the rows it explains, rather than as a banner above them with no relation to
-        any particular one.
-        """
-        field = imgui.get_frame_height() * _FIELD_EM
-        # Which row the pointer is on, for the sketch to light up. Read as the rows are
-        # drawn and used in the same frame — the sketch comes after them — so there is
-        # no state to carry and the highlight cannot lag the pointer by a frame.
-        active: int | None = None
-        imgui.begin_group()
-        for index, (attr, label) in enumerate(_SEGMENT_ROWS):
-            label_column(label, _ROWS, max_width=field)
-            changed, seconds = imgui.drag_float(
-                f"##tt_{attr}",
-                getattr(self._trap, attr),
-                0.1,
-                0.0,
-                _MAX_SEGMENT_S,
-                "%.1f s",
-                imgui.SliderFlags_.always_clamp,
-            )
-            # `active` as well as hovered: a drag holds the row while the pointer runs
-            # far off it, and that is exactly when watching the segment resize matters.
-            if imgui.is_item_hovered() or imgui.is_item_active():
-                active = index
-            if changed:
-                self._set_trap(replace(self._trap, **{attr: seconds}))
-        imgui.end_group()
-
-        # Measured off the group rather than after `same_line`: past the call the
-        # cursor has already moved and the width read is the whole row, which is the
-        # bug that puts a right-hand item off the panel edge.
-        rows = imgui.get_item_rect_size()
-        spacing = imgui.get_style().item_spacing.x
-        room = imgui.get_content_region_avail().x - rows.x - spacing
-        if room >= imgui.get_frame_height() * _SKETCH_MIN_EM:
+        """Summarise the target, with its detailed settings behind a single icon."""
+        style = imgui.get_style()
+        popup_width = min(imgui.get_content_region_avail().x, ui_px(420))
+        durations = "·".join(f"{getattr(self._trap, attr):g}" for attr, _ in _SEGMENT_ROWS)
+        note = f"{durations} s · {self._trap.level_pct:g} % · {self._trap.reps} reps"
+        with tinted_row() as width:
+            left = imgui.get_cursor_pos_x()
+            button_w = imgui.get_frame_height()
+            sketch_w = min(ui_px(48), width * 0.18)
+            _sketch(self._trap, imgui.ImVec2(sketch_w, imgui.get_frame_height()))
             imgui.same_line()
-            _sketch(self._trap, imgui.ImVec2(room, rows.y), active=active)
+            imgui.align_text_to_frame_padding()
+            room = left + width - button_w - style.item_spacing.x - imgui.get_cursor_pos_x()
+            _tracking_text(note, max(0.0, room), mono=True)
+            imgui.same_line()
+            imgui.set_cursor_pos_x(left + width - button_w)
+            if imgui.button(f"{fa.ICON_FA_GEAR}##tt_settings", imgui.ImVec2(button_w, 0)):
+                imgui.open_popup("##tt_target_settings")
+            _action_tooltip("", "Target settings")
+        imgui.set_next_window_size(imgui.ImVec2(popup_width, 0))
+        if imgui.begin_popup("##tt_target_settings"):
+            try:
+                imgui.begin_disabled(self._started is not None)
+                self._settings_ui()
+                imgui.end_disabled()
+            finally:
+                imgui.end_popup()
 
-    def _view_ui(self) -> None:
-        """How much of the target the subject can see coming.
+    def _settings_ui(self) -> None:
+        """Edit the target and look-ahead in a responsive caption-above grid."""
+        columns = 2 if imgui.get_content_region_avail().x >= ui_px(360) else 1
+        if not imgui.begin_table("##tt_target_fields", columns, imgui.TableFlags_.sizing_stretch_same):
+            return
+        try:
+            for attr, label in _SEGMENT_ROWS:
+                imgui.table_next_column()
+                imgui.align_text_to_frame_padding()
+                imgui.text_colored(muted(), label)
+                imgui.set_next_item_width(-1)
+                changed, seconds = imgui.drag_float(
+                    f"##tt_{attr}", getattr(self._trap, attr), 0.1, 0.0, _MAX_SEGMENT_S,
+                    "%.1f s", imgui.SliderFlags_.always_clamp,
+                )
+                if changed:
+                    self._set_trap(replace(self._trap, **{attr: seconds}))
+            imgui.table_next_column()
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(muted(), "Level")
+            imgui.set_next_item_width(-1)
+            changed, level = imgui.slider_float(
+                "##tt_level", self._trap.level_pct, 0.0, 100.0,
+                "%.0f %% MVC", imgui.SliderFlags_.always_clamp,
+            )
+            if changed:
+                self._set_trap(replace(self._trap, level_pct=level))
+            imgui.table_next_column()
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(muted(), "Reps")
+            imgui.set_next_item_width(-1)
+            changed, reps = imgui.input_int("##tt_reps", self._trap.reps)
+            if changed:
+                self._set_trap(replace(self._trap, reps=min(max(reps, 1), _MAX_REPS)))
+            imgui.table_next_column()
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(muted(), "Look ahead")
+            imgui.set_next_item_width(-1)
+            changed, ahead = imgui.slider_float(
+                "##tt_ahead", self._look_ahead_s, 0.0, 15.0, "%.1f s", imgui.SliderFlags_.always_clamp,
+            )
+            if changed:
+                self._look_ahead_s = ahead
+            imgui.set_item_tooltip("How far past now the target is drawn; zero hides the future.")
+        finally:
+            imgui.end_table()
 
-        A display setting, not part of the trajectory — it changes what is on screen,
-        not what is being asked for, so it does not belong on `Trapezoid` and is not
-        recorded with the block. It sits with the plot it governs for the same reason.
-        """
-        label_column("Look ahead", _ROWS, max_width=imgui.get_frame_height() * _FIELD_EM)
-        changed, ahead = imgui.slider_float(
-            "##tt_ahead", self._look_ahead_s, 0.0, 15.0, "%.1f s", imgui.SliderFlags_.always_clamp
-        )
-        if changed:
-            self._look_ahead_s = ahead
-        imgui.set_item_tooltip(
-            "How far past now the target is drawn. Zero shows only what has already "
-            "happened; a full rep's worth shows the whole shape in advance."
-        )
-
-    def _run_ui(self, stream: Stream | None, running: bool, session: object | None) -> None:
-        """Full-width primary action, disabled with the reason in its tooltip."""
-        full = imgui.ImVec2(-1, 0)
-        if running:
-            if imgui.button(f"{fa.ICON_FA_STOP}  Stop##tt_stop", full):
-                self._stop()
-            imgui.set_item_tooltip("End the block. The trace stays on the plot.")
+    def _run_ui(self, ctx: Context, stream: Stream | None, now: float, value: float | None) -> None:
+        """Show one primary Start, or a running status, error and reachable Stop."""
+        if self._started is not None:
+            t = now - self._started
+            rep, _ = self._rep_at(t)
+            phase = self._trap.phase_at(t).replace("_", " ")
+            style = imgui.get_style()
+            stop_w = imgui.calc_text_size("Stop").x + 2 * style.frame_padding.x
+            height = 2 * imgui.get_text_line_height_with_spacing() + 2 * ui_px(4)
+            with tinted_row(SUCCESS, height=height) as width:
+                left, top = imgui.get_cursor_pos_x(), imgui.get_cursor_pos_y()
+                text_w = width - stop_w - style.item_spacing.x
+                _tracking_text(f"Rep {rep + 1} of {self._trap.reps} · {phase}", text_w)
+                _tracking_text(self._detail(now, value), text_w, mono=True)
+                imgui.same_line()
+                imgui.set_cursor_pos(imgui.ImVec2(
+                    left + width - stop_w, top + (height - 2 * ui_px(4) - imgui.get_frame_height()) / 2,
+                ))
+                if imgui.button("Stop##tt_stop"):
+                    self._stop()
+                imgui.set_item_tooltip("End the block. The trace stays on the plot.")
             return
 
         reason = self._start_reason(stream)
-        blocked = bool(reason)
-        if blocked:
-            imgui.begin_disabled()
-        if imgui.button(f"{fa.ICON_FA_PLAY}  Start##tt_start", full):
-            self._start(session)
+        if not ctx.streams:
+            reason = "Register a force stream to begin."
+        elif stream is not None and value is None:
+            reason = "Connect the force stream to begin."
+        if reason and (stream is None or value is None or self._trap.duration <= 0):
+            with tinted_row(IDLE if stream is None or value is None else WARNING) as width:
+                _tracking_text(reason, width)
+        imgui.begin_disabled(bool(reason))
+        if primary_button("Start##tt_start", (-1, 0)):
+            self._start(getattr(ctx, "session", None))
         _action_tooltip(reason, "Run the block from the top, discarding the last trace.")
-        if blocked:
-            imgui.end_disabled()
+        imgui.end_disabled()
+
+    def _legend_ui(self) -> None:
+        """Toggle the two categorical traces without changing the captured data."""
+        for index, (label, attr) in enumerate((("Target", "_show_target"), ("Force", "_show_force"))):
+            if index:
+                imgui.same_line()
+            selected = getattr(self, attr)
+            if selected:
+                push_selected()
+            imgui.push_style_color(imgui.Col_.text, _series_color(index))
+            if imgui.small_button(f"{label}##tt_show_{label.lower()}"):
+                setattr(self, attr, not selected)
+            imgui.pop_style_color()
+            if selected:
+                pop_selected()
 
     def _plot_ui(self, now: float) -> None:
         """Target and actual on one pair of axes — the only way to read the error.
@@ -908,8 +834,8 @@ class TrackingTask:
         y_hi = max(self._trap.level_pct * 1.4, 10.0)
         if not implot.begin_plot(
             "force tracking##tt_plot",
-            imgui.ImVec2(-1, self._plot_height),
-            flags=implot.Flags_.no_title,
+            imgui.ImVec2(-1, ui_px(self._plot_height)),
+            flags=implot.Flags_.no_title | implot.Flags_.no_legend,
         ):
             return
         try:
@@ -928,12 +854,13 @@ class TrackingTask:
             spec = implot.Spec()
             spec.line_color = _series_color(0)
             xs, ys = _target_curve(self._trap, upto)
-            implot.plot_line("target##tt_target", xs, ys, spec)
+            if self._show_target:
+                implot.plot_line("target##tt_target", xs, ys, spec)
 
-            if self._trace_t:
+            if self._show_force and self._trace_t:
                 spec = implot.Spec()
                 spec.line_color = _series_color(1)
-                spec.line_weight = 2.0
+                spec.line_weight = ui_px(2)
                 implot.plot_line(
                     "force##tt_force",
                     np.array(self._trace_t, dtype=np.float64),
