@@ -209,7 +209,7 @@ def test_ui_renders_when_too_narrow_for_inline_reset(imgui_frame):
     own line below — the whole panel must still render (Reset stays reachable)."""
     from imgui_bundle import imgui
 
-    p = PostProcessor(hz=32)
+    p = PostProcessor(hz=32, compact=False)
 
     def draw():
         imgui.begin_child("narrow", imgui.ImVec2(40.0, 220.0))
@@ -233,7 +233,7 @@ def test_reset_button_stays_visible_at_every_width(imgui_frame, monkeypatch):
         return real(label, *a, **k)
 
     monkeypatch.setattr(imgui, "small_button", spy)
-    p = PostProcessor(hz=32)
+    p = PostProcessor(hz=32, compact=False)
     results: list[tuple[int, float, float, float]] = []
 
     for w in (300, 250, 180, 130, 100, 45):
@@ -305,11 +305,16 @@ def test_compact_row_and_popover_keep_all_filter_controls(imgui_frame, monkeypat
 
     def combo(label, current, names):
         combos.append(names)
-        return real_combo(label, current, names)
+        right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        result = real_combo(label, current, names)
+        assert imgui.get_item_rect_max().x <= right + 1
+        return result
 
     def button(label):
         buttons.append(label)
+        right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
         real_button(label)
+        assert imgui.get_item_rect_max().x <= right + 1
         return click["value"] and label.startswith(fa.ICON_FA_SLIDERS)
 
     for name in ("slider_float", "slider_int"):
@@ -325,7 +330,12 @@ def test_compact_row_and_popover_keep_all_filter_controls(imgui_frame, monkeypat
         monkeypatch.setattr(imgui, name, slider)
     monkeypatch.setattr(imgui, "combo", combo)
     monkeypatch.setattr(imgui, "small_button", button)
-    imgui_frame(p.ui)
+    def draw():
+        imgui.begin_child("compact-narrow", imgui.ImVec2(320, 380))
+        p.ui()
+        imgui.end_child()
+
+    imgui_frame(draw)
     assert combos == [[s.name for s in BUILTIN_FILTERS]]
     assert "Smoothing" in texts
     assert any(b.startswith(fa.ICON_FA_SLIDERS) for b in buttons)
@@ -334,11 +344,78 @@ def test_compact_row_and_popover_keep_all_filter_controls(imgui_frame, monkeypat
     if key == "one_euro":
         assert "159 ms" in texts
     click["value"] = True
-    imgui_frame(p.ui)
+    imgui_frame(draw)
     click["value"] = False
     sliders.clear()
-    imgui_frame(p.ui)
+    imgui_frame(draw)
     assert sliders == [f"##{param.key}" for param in spec.params]
     assert any(b.startswith(fa.ICON_FA_ROTATE_LEFT) for b in buttons)
     assert spec.description in texts
     assert selected == ["push", "pop"]
+
+
+def test_post_processor_defaults_to_compact():
+    assert PostProcessor()._compact is True
+    assert PostProcessor(compact=False)._compact is False
+
+
+@pytest.mark.parametrize("factory", [FilterProcessor, lambda: PostProcessor(compact=False)])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+@pytest.mark.parametrize("width", [320, 620])
+def test_full_panel_has_captioned_sliders_and_mono_values(
+    imgui_frame, monkeypatch, factory, scale, width,
+):
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+    from myogestic.widgets.panels import filter_processor as module
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    processor = factory()
+    processor._select("gaussian")
+    captions, values, headers = {}, [], []
+    text = imgui.text_unformatted
+    mono, header = module.mono_text, module.panel_header_button
+
+    def caption(label):
+        captions[label] = imgui.get_cursor_screen_pos().y
+        text(label)
+
+    def value(label, *args):
+        values.append(label)
+        mono(label, *args)
+
+    def reset(*args, **kwargs):
+        headers.append(args)
+        return header(*args, **kwargs)
+
+    monkeypatch.setattr(imgui, "text_unformatted", caption)
+    monkeypatch.setattr(module, "mono_text", value)
+    monkeypatch.setattr(module, "panel_header_button", reset)
+    for name in ("slider_int", "slider_float"):
+        real = getattr(imgui, name)
+
+        def slider(label, *args, real=real):
+            param = next(p for p in processor._by_key["gaussian"].params if label == f"##{p.key}")
+            assert param.label in captions, "each slider needs its caption above it"
+            assert imgui.get_cursor_screen_pos().y > captions[param.label]
+            right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+            result = real(label, *args)
+            assert imgui.get_item_rect_max().x <= right + 1
+            return result
+
+        monkeypatch.setattr(imgui, name, slider)
+
+    def draw():
+        imgui.begin_child("parameters", imgui.ImVec2(width, 380))
+        processor.ui()
+        imgui.end_child()
+
+    imgui_frame(draw)
+    assert len(headers) == 1
+    assert "50 ms" in values
+    assert "5" in values and "1.00" in values
