@@ -568,3 +568,96 @@ def panel_header_button(title: str, icon: str | None, button_icon: str, *, toolt
     if tooltip and imgui.is_item_hovered():
         imgui.set_tooltip(tooltip)
     return clicked
+
+
+def stream_chip(
+    name: str,
+    tone: imgui.ImVec4,
+    *,
+    selected: bool,
+    prefix: str,
+    left: float,
+    right: float,
+    first: bool = False,
+    removable: bool = False,
+    recording: bool = False,
+    locked: bool = False,
+    detail: str = "",
+) -> tuple[bool, bool]:
+    """Draw a wrapping stream chip shared by DevicePicker and StreamManager.
+
+    Parameters
+    ----------
+    name, tone
+        Mono stream name and semantic state dot.
+    selected
+        Whether to draw the persistent selection cue.
+    prefix
+        ID prefix within the calling widget's ImGui scope.
+    left, right
+        Available row bounds in local window coordinates.
+    first
+        Start a row instead of trying to follow the previous chip.
+    removable
+        Offer a destructive remove action beside this chip.
+    recording
+        Disable removal and explain why on hover.
+    locked
+        Dim and disable selection as well as removal.
+    detail
+        Full state text for the chip's tooltip.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        Whether selection or removal was requested. Apply removal after the
+        caller finishes iterating its streams.
+    """
+    style = imgui.get_style()
+    remove_w = (imgui.calc_text_size(fa.ICON_FA_XMARK).x + 2 * style.frame_padding.x
+                + style.item_spacing.x) if removable else 0.0
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, style.font_size_base)
+    shown = name
+    dot_w = imgui.get_font_size() + style.item_spacing.x
+    limit = max(1.0, right - left - remove_w)
+    while shown and imgui.calc_text_size(shown + "…").x + dot_w + 2 * style.frame_padding.x > limit:
+        shown = shown[:-1]
+    if shown != name:
+        shown += "…"
+    width = min(limit, imgui.calc_text_size(shown).x + dot_w + 2 * style.frame_padding.x)
+    if not first:
+        imgui.same_line()
+        if imgui.get_cursor_pos_x() + width + remove_w > right:
+            imgui.new_line()
+    imgui.push_style_var(imgui.StyleVar_.frame_rounding, imgui.get_frame_height() * 0.5)
+    imgui.begin_disabled(locked)
+    if selected:
+        push_selected()
+    clicked = imgui.button(f"##{prefix}_stream_{name}", imgui.ImVec2(width, 0))
+    if selected:
+        pop_selected()
+    origin = imgui.get_item_rect_min()
+    draw = imgui.get_window_draw_list()
+    draw.add_text(imgui.ImVec2(origin.x + style.frame_padding.x + dot_w,
+                              origin.y + style.frame_padding.y),
+                  imgui.get_color_u32(imgui.Col_.text), shown)
+    if font is not None:
+        imgui.pop_font()
+    draw.add_text(imgui.ImVec2(origin.x + style.frame_padding.x,
+                              origin.y + style.frame_padding.y),
+                  imgui.get_color_u32(tone), fa.ICON_FA_CIRCLE)
+    imgui.set_item_tooltip(f"{name}: {detail}")
+    remove = False
+    if removable:
+        imgui.same_line()
+        imgui.begin_disabled(recording)
+        remove = destructive_button(f"{fa.ICON_FA_XMARK}##{prefix}_remove_{name}")
+        imgui.end_disabled()
+        if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+            imgui.set_tooltip("Stop the recording before removing a stream." if recording
+                              else f"Remove stream {name!r}.")
+    imgui.end_disabled()
+    imgui.pop_style_var()
+    return clicked and not locked, remove and not recording and not locked
