@@ -1,4 +1,4 @@
-"""Classification demo: fake EMG → numpy features → CatBoost → VHI hand.
+"""Classification demo: fake EMG → numpy features → CatBoost, with an optional hand.
 
 Run with:
     uv run python examples/synthetic/emg_classification.py
@@ -7,7 +7,8 @@ Workflow:
     1. Connect: launch "EMG Generator", then connect the EMG stream
     2. Set a participant, then click Rest/Fist to switch signal + set label
     3. Record Rest trial → Record Fist trial
-    4. Select sessions → Train → Predict → VHI hand moves
+    4. Select sessions → Train → Predict; optionally connect the Virtual Hand
+       for a continuous LSL pose and discrete gRPC movements
     5. Use Simulated EMG on any step to try Rest/Fist while predicting
 """
 
@@ -21,7 +22,8 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
-from myogestic.controls import ControlLink, load_control_map
+from myogestic._theme import mono_font
+from myogestic.controls import ControlLink, ControlLinkConnector, load_control_map
 from myogestic.ml import Pipeline
 from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import catboost_classifier
@@ -44,6 +46,7 @@ from myogestic.widgets import (
     SimulatorControls,
     StatusBar,
     StepBar,
+    VhiMovementPanel,
 )
 from myogestic.widgets.common import (
     DANGER,
@@ -51,6 +54,7 @@ from myogestic.widgets.common import (
     SUCCESS,
     WARNING,
     fit_text,
+    mono_text,
     muted,
     panel_header,
     primary_button,
@@ -61,14 +65,11 @@ from myogestic.widgets.common import (
 # --8<-- [start:poses]
 vhi = virtual_hand()
 
-# The left side is ours, the right side is VHI's. Parsing needs no VHI; resolving does.
-CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification.toml"
+# The left side is ours (`fist` and `gesture`), the right side is VHI's.
+# Parsing needs no VHI or gRPC; resolving waits for an explicit Connect.
+CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification_grpc.toml"
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
-
-# Both aliases declare a `threshold_fraction` in the file, so a probability is gated to
-# 0 or 1 there and reaches the hand as an ordinary control value — same path as regression.
-FIST_ALIASES = ("fist", "thumb_spread")
 
 # --8<-- [end:poses]
 
@@ -76,7 +77,12 @@ FIST_ALIASES = ("fist", "thumb_spread")
 output_filter = PostProcessor(hz=32, compact=True)
 # --8<-- [end:filter]
 
-vhi_control = vhi.control_client()
+# Construct the optional gRPC clients only when Connect is clicked.
+vhi_control = None
+recording_aid = None
+link = None
+binder = None
+vhi_panel = None
 
 
 # Any callable of your own goes in this dict too — features are user code.
@@ -87,6 +93,8 @@ features = FeatureSelector(
 )
 # --8<-- [end:features]
 
+# Missing VHI is a normal idle state, so never call the strict launcher here.
+hand_processes = vhi.launchable()
 PROCESSES = [
     (
         "EMG Generator",
@@ -104,6 +112,7 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
+    *hand_processes,
 ]
 
 CLASSES = ["Rest", "Fist"]
@@ -113,24 +122,10 @@ CTRL_VALUES = [0.0, 1.0]
 WINDOW_MS = 200
 HOP_MS = 100
 
-app = App("EMG Classification", require_participant=True)
+app = App("EMG classification", require_participant=True)
 app.streams(Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 # --8<-- [end:setup]
-
-# Nothing is resolved here. `link.ensure()` binds to an already running VHI on the
-# first click that finds VHI up; `link.bus` is None until then, and `RemoteTarget` refuses
-# a VHI it cannot fully drive rather than guessing.
-link = ControlLink(
-    CONTROL_MAP,
-    # No hand and no stream is named: the target looks this file's addresses up in VHI's
-    # manifest and publishes one one-channel stream per address it drives.
-    [RemoteTarget(client=vhi_control, interface=vhi)],
-    ctx=app.ctx,
-    smoothing=output_filter,
-    hz=32,
-)
-
 
 # --8<-- [start:extract]
 @pipeline.extract
@@ -200,20 +195,21 @@ def train(data: TrainingData):
 # --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
-    """Classify → gate to an activation → smooth → push to VHI.
-
-    The probabilities themselves flow through untouched, for the UI.
-    """
+    """Classify, then output it two ways: stream the hand pose to VHI's
+    predicted hand (LSL), and on each class *change* command the control
+    hand (gRPC)."""
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
-    # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this callback has a
-    # deadline.
-    if link.bus is None:
+    if link is None or link.bus is None:
+        # `link.bus`, never `link.ensure()`: binding blocks on an RPC and this runs on the
+        # predict thread.
         return {"class": class_idx, "proba": proba}
-    # Pushed raw: the bus gates it, so VHI is never handed a bare 0.73 as a finger position.
-    activation = float(proba[CLASSES.index("Fist")])
-    hand = link.bus.push(dict.fromkeys(FIST_ALIASES, activation))
-    return {"class": class_idx, "proba": proba, "hand": hand}
+
+    # One frame carries both outputs. The bus applies the debounce the control file
+    # declares, so the gesture reaches the control hand only once it has settled.
+    values = link.bus.push({"fist": CTRL_VALUES[class_idx], "gesture": CLASSES[class_idx]})
+
+    return {"class": class_idx, "proba": proba, "hand": values}
 
 
 # --8<-- [end:predict]
@@ -255,17 +251,34 @@ header = AppHeader("EMG classification", steps=steps, participant=participant)
 status = StatusBar("emg", pipeline=pipeline)
 
 
+def _select_gesture(state: str) -> None:
+    """Select a movement on the connected hand without probing an absent service."""
+    bus = link.bus if link is not None else None
+    if bus is not None:
+        # Immediate selection also rebases the discrete output's debounce trigger.
+        bus.select("gesture", state)
+
+
 def _on_gesture(i: int) -> None:
-    link.ensure()
     simulator.set(CTRL_VALUES[i])
+    _select_gesture(CLASSES[i])
 
 
 def _on_record() -> None:
-    link.ensure()
     # A simulator preview may differ from the gesture selected for this take.
     if 0 <= app.ctx.current_label < len(CTRL_VALUES):
         simulator.set(CTRL_VALUES[app.ctx.current_label])
     app.start_recording()
+    # No hand means no RPC or delay: acquisition is independent of this optional aid.
+    if (link is not None and link.bus is not None and recording_aid is not None
+            and not recording_aid.set_recording_session(True)):
+        app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
+
+
+def _on_stop() -> None:
+    app.stop_recording()
+    if recording_aid is not None and recording_aid.available:
+        recording_aid.set_recording_session(False)
 
 
 # The Connect step owns acquisition; signal and simulator stay visible on every step.
@@ -275,7 +288,7 @@ processes = ProcessLauncher(PROCESSES)
 recording = RecordingControls(
     CLASSES,
     on_record=_on_record,
-    on_stop=app.stop_recording,
+    on_stop=_on_stop,
     on_gesture=_on_gesture,
     show_header=False,
 )
@@ -286,6 +299,33 @@ predict_button = PredictButton(pipeline, size=(-1, 0))
 prediction = PredictionLabel(pipeline, CLASSES)
 log = LogPanel(title="Activity log")
 connection = {"busy": False, "launch_error": ""}
+hand_attempt = {"phase": "idle", "error": ""}
+
+
+def _init_hand() -> bool:
+    """Load optional gRPC support on demand; a lean install still runs every step."""
+    global vhi_control, recording_aid, link, binder, vhi_panel
+    if link is not None:
+        return True
+    try:
+        control = vhi.control_client()
+        aid = vhi.recording_client()
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"grpc", "google", "google.protobuf"}:
+            raise
+        hand_attempt.update(phase="failed", error="Install the grpc extra to connect the hand.")
+        return False
+    vhi_control, recording_aid = control, aid
+    link = ControlLink(
+        CONTROL_MAP,
+        [RemoteTarget(client=vhi_control, interface=vhi)],
+        ctx=app.ctx,
+        smoothing=output_filter,
+        hz=pipeline.predict_hz,
+    )
+    binder = ControlLinkConnector(link)
+    vhi_panel = VhiMovementPanel(recording_aid, _select_gesture)
+    return True
 
 
 def _connect() -> None:
@@ -357,6 +397,8 @@ def connect_ui(ctx: Context) -> None:
     imgui.text_wrapped("Return to idle before changing the generator or connection." if ctx.state != "idle"
                        else "Launch the generator, then connect to see the signal.")
     imgui.pop_style_color()
+    imgui.spacing()
+    hand_ui()
 
 
 def model_ui() -> None:
@@ -368,12 +410,179 @@ def model_ui() -> None:
     training_log.ui()
 
 
+def hand_ui() -> None:
+    """Connect to an existing hand first, then launch one only if none answered.
+
+    The operator's Connect arms the background binder. Stop cancels the attempt;
+    a replacement connector waits for late cleanup before it can bind again.
+    """
+    global binder
+    bound = link is not None and link.bus is not None
+    running = processes.running(vhi.name)
+    phase = hand_attempt["phase"]
+    if phase == "stopping" and binder.finished:
+        binder = ControlLinkConnector(link)
+        phase = "stopped" if running else "idle"
+        bound = link is not None and link.bus is not None
+    if phase == "idle" and running and not bound and _init_hand():
+        phase = "launched"
+    if phase == "checking" and binder.finished:
+        # Re-read after completion: the worker may have bound since this frame began.
+        bound = link is not None and link.bus is not None
+        if not bound:
+            if binder.last_error is not None:
+                # A responding but incompatible target must not spawn another.
+                phase = "failed"
+            elif running:
+                phase = "launched"
+            elif hand_processes:
+                try:
+                    processes.launch(vhi.name)
+                    running = True
+                    phase = "launched"
+                    hand_attempt["error"] = ""
+                except Exception as exc:
+                    hand_attempt["error"] = str(exc)
+                    app.ctx.log(f"Virtual Hand launch failed: {exc}")
+                    phase = "failed"
+            else:
+                phase = "failed"
+    if phase == "launched" and not bound and not binder.busy:
+        binder.poll()
+    if bound and phase != "stopping":
+        phase = "bound"
+    hand_attempt["phase"] = phase
+    if bound and phase != "stopping":
+        tone, detail = SUCCESS, "Connected · LSL + gRPC"
+    elif phase == "stopping":
+        tone, detail = WARNING, "stopping…"
+    elif phase in ("checking", "launched"):
+        tone, detail = WARNING, binder.status or "launched · binding as soon as it answers…"
+    elif phase == "failed" and binder is not None:
+        tone = DANGER
+        detail = hand_attempt["error"] or (binder.status if binder.last_error is not None
+                                           else "No Virtual Hand answered")
+        if not hand_processes and binder.last_error is None:
+            detail += " · not installed here"
+    elif phase == "failed":
+        tone, detail = WARNING, hand_attempt["error"]
+    else:
+        tone, detail = IDLE, "Not running"
+    if running or phase in ("checking", "launched", "stopping"):
+        action = "Stop"
+    elif bound:
+        action = ""
+    else:
+        action = "Retry" if phase == "failed" else "Connect"
+    mapping = "\n".join(
+        f"{alias} → {', '.join(target.address for target in binding.targets)}"
+        for alias, binding in CONTROL_MAP.bindings.items()
+    )
+    hint = f"{vhi.install_hint.strip()}\n\n" if not hand_processes else ""
+    style = imgui.get_style()
+    narrow = imgui.get_content_region_avail().x < ui_px(300)
+    height = 2 * imgui.get_frame_height() + style.item_spacing.y + ui_px(8) if narrow else None
+    with tinted_row(height=height) as width:
+        right = imgui.get_cursor_pos_x() + width
+        action_w = imgui.calc_text_size(action).x + 2 * style.frame_padding.x if action else 0.0
+        imgui.align_text_to_frame_padding()
+        imgui.text_colored(tone, fa.ICON_FA_CIRCLE)
+        imgui.same_line()
+        imgui.text_unformatted("Virtual Hand")
+        if narrow:
+            imgui.align_text_to_frame_padding()
+        else:
+            imgui.same_line()
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, style.font_size_base)
+        available = max(0.0, right - action_w - style.item_spacing.x - imgui.get_cursor_pos_x())
+        mono_text(fit_text(detail, available), muted())
+        if font is not None:
+            imgui.pop_font()
+        imgui.set_item_tooltip(f"{detail}\n\n{hint}{mapping}")
+        if action:
+            imgui.same_line()
+            imgui.set_cursor_pos_x(right - action_w)
+            imgui.begin_disabled(phase == "stopping")
+            if imgui.small_button(f"{action}##virtual_hand") and phase != "stopping":
+                if action == "Stop":
+                    binder.stop(timeout_s=0.0)
+                    if running:
+                        processes.stop(vhi.name)
+                    hand_attempt["phase"] = "stopping"
+                else:
+                    hand_attempt["error"] = ""
+                    if _init_hand():
+                        binder.poll(force=True)
+                        hand_attempt["phase"] = "checking"
+            imgui.end_disabled()
+            if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+                imgui.set_tooltip(
+                    "Wait for the connection attempt to stop." if phase == "stopping"
+                    else "Stop connecting and close the hand launched here." if action == "Stop"
+                    else "Bind to a running Virtual Hand, or launch one if none answers."
+                )
+
+
+    # Keep the complete movement palette available without nesting its card header.
+    label = fit_text(f"{fa.ICON_FA_HAND}  Hand movements…",
+                     imgui.get_content_region_avail().x - 2 * style.frame_padding.x)
+    if imgui.small_button(f"{label}##hand_movements"):
+        imgui.open_popup("hand_movements")
+    imgui.set_item_tooltip("Manually command the control hand through the gesture output.")
+    imgui.set_next_window_size(imgui.ImVec2(ui_px(360), ui_px(320)))
+    if imgui.begin_popup("hand_movements"):
+        if vhi_panel is not None:
+            vhi_panel.ui()
+        else:
+            imgui.text_wrapped("The hand is not running.")
+            imgui.text_colored(muted(), "Connect it to load its movements.")
+        imgui.end_popup()
+
+
+def _pushed() -> list[tuple[str, str, str]]:
+    """Return the two output routes and the values in the last delivered frame."""
+    values = pipeline.predictions.get("hand")
+    if not values:
+        return []
+    rows = []
+    for alias, value in values.items():
+        binding = CONTROL_MAP.bindings.get(alias)
+        targets = ", ".join(target.address for target in binding.targets) if binding else "unmapped"
+        label = "fist · predicted hand (LSL)" if alias == "fist" else "gesture · control hand (gRPC)"
+        rows.append((label, value if isinstance(value, str) else f"{value:+.2f}", targets))
+    return rows
+
+
 def predict_ui() -> None:
-    """Tune the output filter and inspect the live class while predicting."""
-    output_filter.ui()
-    imgui.spacing()
+    """Predict, smooth the continuous output and inspect both hand commands."""
     prediction.ui()
     predict_button.ui()
+    imgui.spacing()
+    output_filter.ui()
+    imgui.spacing()
+    imgui.text_colored(muted(), "Sent to the hand")
+    rows = _pushed()
+    if not rows:
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.text_wrapped("No commands sent yet. Connect the hand, then start predicting.")
+        imgui.pop_style_color()
+    style = imgui.get_style()
+    for label, value, targets in rows:
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, style.font_size_base)
+        value_width = imgui.calc_text_size(value).x
+        if font is not None:
+            imgui.pop_font()
+        right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+        room = imgui.get_content_region_avail().x - value_width - style.item_spacing.x
+        imgui.text_unformatted(fit_text(label, room))
+        imgui.set_item_tooltip(f"{label} → {targets}")
+        imgui.same_line()
+        imgui.set_cursor_pos_x(right - value_width)
+        mono_text(value)
 
 
 def _step_done(ctx: Context) -> list[bool]:
@@ -432,9 +641,14 @@ def main() -> None:
     try:
         app.run()
     finally:
-        # Rest the hand and make that frame land before the outlet's thread dies.
-        link.stop()
-        vhi_control.stop()
+        if binder is not None:
+            binder.stop()
+        if recording_aid is not None:
+            if recording_aid.available:
+                recording_aid.set_recording_session(False)
+            recording_aid.stop()
+        if vhi_control is not None:
+            vhi_control.stop()
 
 
 if __name__ == "__main__":
