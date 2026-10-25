@@ -13,31 +13,34 @@ Run with:
     uv run --extra examples --extra grpc python examples/synthetic/emg_regression_raulnet.py
 
 Workflow:
-    1. Launch EMG Generator + VHI Hand
-    2. Click Rest or Fist → MyoGestic drives the VHI control hand over gRPC
+    1. Connect: launch EMG Generator + VHI Hand, then connect the EMG stream
+    2. Set a participant, then Record: Rest or Fist drives the VHI control hand over gRPC
     3. Click Record → VHI's local keyboard is gated off for the session; the buttons
        above are the sole movement source → Stop Rec
     4. Repeat for several recordings (RaulNet wants more data than CatBoost)
-    5. Tick the sessions → Train
-    6. Predict → VHI predicted hand mirrors the control hand
+    5. Select participant sessions → Train; follow the epoch log
+    6. Predict → inspect the continuous output and try Simulated EMG on any step
 """
 
 from __future__ import annotations
 
 import sys
+import threading
 import tomllib
 from pathlib import Path
 
 import lightning as L
 import numpy as np
 import torch
+from imgui_bundle import icons_fontawesome_6 as fa
+from imgui_bundle import imgui
 from lightning.pytorch.callbacks import ModelCheckpoint
 from myoverse.models.raul_net.v17 import RaulNetV17
 
-from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
 from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline
-from myogestic.ml.widgets import PipelinePanel
+from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.remote import RemoteTarget
 from myogestic.session import (
     iter_aligned_windows,
@@ -45,16 +48,33 @@ from myogestic.session import (
     split_sessions_by_stream,
 )
 from myogestic.sources import LSLSource
-from myogestic.tools.emg_generator import control_outlet
 from myogestic.vhi import virtual_hand
 from myogestic.vhi.pose import split_pose
 from myogestic.widgets import (
-    AppLogo,
+    AppHeader,
+    LogPanel,
+    ParticipantPanel,
     PostProcessor,
     ProcessLauncher,
     RecordingControls,
     SessionManager,
     SignalViewer,
+    SimulatorControls,
+    StatusBar,
+    StepBar,
+)
+from myogestic.widgets.common import (
+    DANGER,
+    IDLE,
+    SUCCESS,
+    WARNING,
+    fit_text,
+    mono_text,
+    muted,
+    panel_header,
+    primary_button,
+    tinted_row,
+    ui_px,
 )
 
 # ── Stream / window math ──────────────────────────────────────────────
@@ -140,8 +160,6 @@ def load_raulnet(path: str) -> L.LightningModule:
     return model.to(device).eval().requires_grad_(False)
 
 
-ctrl_outlet = control_outlet()
-
 vhi = virtual_hand()
 recording_aid = vhi.recording_client()
 vhi_control = vhi.control_client()
@@ -187,7 +205,7 @@ PROCESSES = [
     *vhi.launchable(),
 ]
 
-app = App("EMG Regression — RaulNet")
+app = App("EMG Regression — RaulNet", require_participant=True)
 app.streams(
     Stream("emg", source=LSLSource(STREAM_NAME), window_ms=WINDOW_MS, buffer_ms=60000),
     Stream(
@@ -222,7 +240,7 @@ class _TrainLogCallback(L.Callback):
     """Pipe Lightning's per-epoch loss into ``pipeline.train_log``.
 
     Lightning's progress bar is disabled for this app, so without this callback the
-    MODEL panel stays static until the whole fit finishes.
+    Train step stays static until the whole fit finishes.
     """
 
     def __init__(self, log_list: list[str]) -> None:
@@ -383,21 +401,46 @@ def predict(model: L.LightningModule, features: np.ndarray) -> dict:
     return {"dof": bus.push(dict(zip(DOF_NAMES, out, strict=True)))}
 
 
-LOGO_CELL_W = 300
-WORDMARK_ASPECT = 800 / 540
-grid = Grid(
-    6,
-    3,
-    row_height=[Px(LOGO_CELL_W / WORDMARK_ASPECT), *[Fr(1)] * 5],
-    col_width=[Px(LOGO_CELL_W), Fr(1), Fr(1)],
+layout = Layout(
+    wide=Grid.areas(
+        """
+        header   header
+        signal   step
+        signal   sessions
+        simulator sessions
+        log      sessions
+        status   status
+        """,
+        row_height=[Px(52), Fr(3), Fr(1), Px(76), Px(110), Px(26)],
+        col_width=[Fr(1), Px(400)],
+        bare=("header", "status"),
+    ),
+    narrow=Grid.areas(
+        """
+        header
+        signal
+        simulator
+        step
+        sessions
+        log
+        status
+        """,
+        row_height=[Px(52), Fr(2), Px(76), Fr(5), Fr(1.5), Px(110), Px(26)],
+        bare=("header", "status"),
+    ),
+    breakpoint=Px(1100),
 )
+steps = StepBar(["Connect", "Record", "Train", "Predict"], widget_id="emg_regression_raulnet_steps")
+participant = ParticipantPanel()
+header = AppHeader("EMG regression · RaulNet", steps=steps, participant=participant)
+status = StatusBar("emg", pipeline=pipeline)
 
 
 def _on_gesture(i: int) -> None:
     # A held state through the same bus the continuous DOFs use: the control hand snaps
     # and holds, so VHI_Control settles to a static value the regressor can map back to.
     bus = link.ensure()
-    ctrl_outlet.push_sample(np.array([CTRL_VALUES[i]], dtype=np.float32))  # type: ignore
+    simulator.set(CTRL_VALUES[i])
     if bus is not None:
         # The states are VHI's own movement names, so "Fist" is not lowercased here.
         bus.select(GESTURE, CLASSES[i])
@@ -407,6 +450,9 @@ def _on_record() -> None:
     # The recording aid, not a control command: it gates VHI's local keyboard so the
     # gesture buttons are this session's only movement source.
     link.ensure()
+    # A simulator preview may differ from the gesture selected for this take.
+    if 0 <= app.ctx.current_label < len(CTRL_VALUES):
+        simulator.set(CTRL_VALUES[app.ctx.current_label])
     app.start_recording()
     if not recording_aid.set_recording_session(True):
         app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
@@ -417,41 +463,208 @@ def _on_stop() -> None:
     recording_aid.set_recording_session(False)
 
 
-viewer = SignalViewer("emg")
-logo = AppLogo()
+# Connect owns acquisition; the signal and simulator stay visible on every step.
+viewer = SignalViewer("emg", show_connect=False)
+simulator = SimulatorControls([("Rest", 0.0), ("Fist", 1.0)])
 processes = ProcessLauncher(PROCESSES)
 recording = RecordingControls(
     CLASSES,
     on_record=_on_record,
     on_stop=_on_stop,
     on_gesture=_on_gesture,
+    show_header=False,
 )
 sessions = SessionManager("sessions", class_names=CLASSES)
-panel = PipelinePanel(pipeline)
+train_button = TrainButton(pipeline, size=(-1, 0))
+training_log = TrainingLog(pipeline, height=0, widget_id="raulnet_training")
+predict_button = PredictButton(pipeline, size=(-1, 0))
+log = LogPanel(title="Activity log")
+connection = {"busy": False, "launch_errors": {}}
+
+
+def _connect() -> None:
+    """Resolve the synthetic EMG stream off the render thread."""
+    if connection["busy"]:
+        return
+    connection["busy"] = True
+
+    def connect() -> None:
+        try:
+            app.ctx.streams["emg"].reconnect()
+        finally:
+            connection["busy"] = False
+
+    threading.Thread(target=connect, daemon=True).start()
+
+
+def _process_ui(ctx: Context, name: str) -> None:
+    """Keep a process's launch action beside its state, within the Connect card."""
+    running = processes.running(name)
+    error = connection["launch_errors"].get(name, "")
+    tone = SUCCESS if running else DANGER if error else IDLE
+    icon = fa.ICON_FA_STOP if running else fa.ICON_FA_PLAY
+    style = imgui.get_style()
+    action_width = imgui.calc_text_size(icon).x + 2 * style.frame_padding.x
+    imgui.text_colored(muted(), fit_text(name, imgui.get_content_region_avail().x))
+    imgui.set_item_tooltip(name)
+    with tinted_row(tone) as width:
+        left = imgui.get_cursor_pos_x()
+        imgui.align_text_to_frame_padding()
+        detail = "Running" if running else "Launch failed" if error else "Not running"
+        imgui.text_unformatted(fit_text(detail, width - action_width - style.item_spacing.x))
+        imgui.set_item_tooltip(error or f"Launch {name} before connecting.")
+        imgui.same_line()
+        imgui.set_cursor_pos_x(left + width - action_width)
+        imgui.begin_disabled(ctx.state != "idle")
+        clicked = imgui.small_button(f"{icon}##launch_{name}")
+        imgui.end_disabled()
+        imgui.set_item_tooltip(f"Stop {name}" if running else f"Launch {name}")
+        if clicked:
+            if running:
+                processes.stop(name)
+            else:
+                try:
+                    processes.launch(name)
+                    connection["launch_errors"].pop(name, None)
+                except Exception as exc:
+                    connection["launch_errors"][name] = str(exc)
+                    ctx.log(f"{name} launch failed: {exc}")
+
+
+def connect_ui(ctx: Context) -> None:
+    """Launch the generator and hand, then connect the named EMG stream."""
+    for name, _command in PROCESSES:
+        _process_ui(ctx, name)
+    if not any(name == vhi.name for name, _command in PROCESSES):
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.text_wrapped("Start the Virtual Hand externally to record its motion and drive it.")
+        imgui.pop_style_color()
+    imgui.spacing()
+    caption = f"EMG stream · {STREAM_NAME}"
+    imgui.text_colored(muted(), fit_text(caption, imgui.get_content_region_avail().x))
+    imgui.set_item_tooltip(caption)
+    stream = ctx.streams["emg"]
+    connected = stream.status == "connected" and stream.info is not None
+    busy = connection["busy"]
+    tone = SUCCESS if connected else WARNING if busy else DANGER if stream.last_error else IDLE
+    with tinted_row(tone):
+        imgui.text_unformatted("Connected" if connected else "Connecting…" if busy else
+                               "Connection failed" if stream.last_error else "Not connected")
+    if stream.last_error and not busy and not connected:
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.text_wrapped(stream.last_error)
+        imgui.pop_style_color()
+    imgui.begin_disabled(ctx.state != "idle" or busy)
+    if primary_button("Reconnect" if connected else "Retry" if stream.last_error else "Connect",
+                      size=(-1, 0)):
+        _connect()
+    imgui.end_disabled()
+    imgui.push_style_color(imgui.Col_.text, muted())
+    imgui.text_wrapped("Return to idle before changing the generator or connection." if ctx.state != "idle"
+                       else "Launch the generator, then connect to see the signal.")
+    imgui.pop_style_color()
+
+
+def model_ui() -> None:
+    """Keep the training state and epoch log visible throughout the deep-model fit."""
+    ctx = app.ctx
+    training = ctx.state == "training"
+    failed = ctx.status_message.startswith("Training failed: ")
+    tone = WARNING if training else DANGER if failed else SUCCESS if pipeline.model is not None else IDLE
+    with tinted_row(tone):
+        imgui.text_unformatted("Training…" if training else "Training failed" if failed else
+                               "Trained" if pipeline.model is not None else "Not trained")
+    imgui.push_style_color(imgui.Col_.text, muted())
+    imgui.text_wrapped("RaulNet V17 · sliding RMS input. Training can take several minutes.")
+    if failed and not training:
+        imgui.text_wrapped(ctx.status_message.removeprefix("Training failed: "))
+    imgui.pop_style_color()
+    train_button.ui()
+    imgui.spacing()
+    imgui.text_colored(muted(), "Training log")
+    training_log.ui()
+    if not pipeline.train_log:
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.text_wrapped("Select recorded takes, then Train to follow epoch loss here.")
+        imgui.pop_style_color()
+
+
+def predict_ui() -> None:
+    """Show the continuous five-DOF output sent to the hand, with its smoothing."""
+    running = app.ctx.state == "predicting"
+    with tinted_row(SUCCESS if running else IDLE):
+        imgui.text_unformatted("Predicting" if running else "Not predicting")
+    output_filter.ui()
+    imgui.spacing()
+    imgui.text_colored(muted(), "Sent to the hand")
+    values = pipeline.predictions.get("dof", {})
+    if values:
+        for name in DOF_NAMES:
+            if name not in values:
+                continue
+            text = f"{values[name]:+.2f}"
+            # Reserve the numeric column so the name and signed value remain readable.
+            value_width = imgui.calc_text_size("−0.00").x + ui_px(16)
+            right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+            imgui.text_unformatted(fit_text(name, imgui.get_content_region_avail().x - value_width))
+            imgui.same_line()
+            imgui.set_cursor_pos_x(right - value_width)
+            mono_text(text)
+    else:
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.text_wrapped("No output yet. Train a model, connect the hand, then Predict.")
+        imgui.pop_style_color()
+    imgui.spacing()
+    predict_button.ui()
+
+
+def _step_done(ctx: Context) -> list[bool]:
+    """Completion follows connection, participant takes, model and prediction."""
+    stream = ctx.streams.get("emg")
+    return [
+        stream is not None and stream.status == "connected" and stream.info is not None,
+        bool(ctx.participant)
+        and any(Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        pipeline.model is not None,
+        ctx.state == "predicting",
+    ]
 
 
 @app.ui
-def demo_ui(ctx):
-    with grid[0:6, 1:3]:
+def demo_ui(ctx: Context) -> None:
+    """Keep the signal, simulator, sessions and activity around the active step."""
+    done = _step_done(ctx)
+    with layout["header"]:
+        active = header.ui(ctx, done)
+    padding = imgui.get_style().window_padding
+    imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))
+    # Recording state advances once per frame, even with another step open.
+    if active != 1:
+        recording.ui(ctx, visible=False)
+    # Refresh the participant's selection before Train reads it this frame.
+    with layout["sessions"]:
+        pipeline.training_data = sessions.ui(participant=ctx.participant)
+    with layout["step"]:
+        stream = ctx.streams.get("emg")
+        tone = SUCCESS if done[0] else DANGER if stream is not None and stream.last_error else IDLE
+        panel_header(steps.steps[active], status=tone if active == 0 else None)
+        if active == 0:
+            connect_ui(ctx)
+        elif active == 1:
+            recording.ui(ctx)
+        elif active == 2:
+            model_ui()
+        else:
+            predict_ui()
+    with layout["signal"]:
         viewer.ui(ctx)
-
-    with grid[0, 0]:
-        logo.ui()
-
-    with grid[1, 0]:
-        processes.ui()
-
-    with grid[2, 0]:
-        recording.ui(ctx)
-
-    with grid[3, 0]:
-        pipeline.training_data = sessions.ui()
-
-    with grid[4, 0]:
-        panel.ui()
-
-    with grid[5, 0]:
-        output_filter.ui()
+    with layout["simulator"]:
+        simulator.ui(ctx)
+    with layout["log"]:
+        log.ui(ctx)
+    imgui.pop_style_var()
+    with layout["status"]:
+        status.ui(ctx)
 
 
 def main() -> None:
