@@ -126,14 +126,21 @@ def _disconnected_ui(stream_name: str, stream: object, *, show_connect: bool = T
 
     style = imgui.get_style()
     avail = imgui.get_content_region_avail()
-    row = imgui.get_text_line_height_with_spacing()
-    block_h = row * 2 + (imgui.get_frame_height() + style.item_spacing.y * 2 if show_connect else 0.0)
+    title_size = imgui.calc_text_size(title, wrap_width=max(1.0, avail.x))
+    hint_size = imgui.calc_text_size(hint, wrap_width=max(1.0, avail.x))
+    block_h = title_size.y + hint_size.y + 2 * style.item_spacing.y
+    if show_connect:
+        block_h += imgui.get_frame_height() + style.item_spacing.y * 2
     imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + max((avail.y - block_h) * 0.5, 0.0))
 
-    _centered(avail.x, imgui.calc_text_size(title).x)
-    imgui.text_colored(tone, title)
-    _centered(avail.x, imgui.calc_text_size(hint).x)
-    imgui.text_colored(muted(), hint)
+    _centered(avail.x, title_size.x)
+    imgui.push_style_color(imgui.Col_.text, tone)
+    imgui.text_wrapped(title)
+    imgui.pop_style_color()
+    _centered(avail.x, hint_size.x)
+    imgui.push_style_color(imgui.Col_.text, muted())
+    imgui.text_wrapped(hint)
+    imgui.pop_style_color()
     imgui.spacing()
 
     if not show_connect:
