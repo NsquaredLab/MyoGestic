@@ -87,6 +87,9 @@ Six runnable end-to-end demos live in
 - `emg_32ch_multi_model.py` - selectable classifier + Save/Load
 - `emg_popout_layout.py` - the same flow in a dockable tear-off layout
 
+For electrode-array comparisons, `examples/synthetic/electrode_grids.py` splits a
+256-channel synthetic stream into four tiled viewers with a shared manual range.
+
 ## Documentation
 
 The full docs live as a [ProperDocs](https://properdocs.org/) site under
