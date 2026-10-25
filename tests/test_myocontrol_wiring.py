@@ -923,7 +923,7 @@ def test_hand_connect_checks_before_launch_and_stop_cancels(app_module, monkeypa
     assert state.polls == 2 and len(launched) == 1
 
 
-@pytest.mark.parametrize("result", ["external", "missing", "incompatible"])
+@pytest.mark.parametrize("result", ["external", "external_without_install", "missing", "incompatible"])
 def test_hand_bind_outcome_never_launches_a_second_target(app_module, monkeypatch, imgui_frame, result):
     from types import SimpleNamespace
 
@@ -933,7 +933,8 @@ def test_hand_bind_outcome_never_launches_a_second_target(app_module, monkeypatc
     state.poll = lambda **kwargs: True
     globals_ = app_module["hand_ui"].__globals__
     monkeypatch.setitem(globals_, "binder", state)
-    monkeypatch.setitem(globals_, "hand_processes", [] if result == "missing" else [("hand", ["hand"])])
+    missing_install = result in ("missing", "external_without_install")
+    monkeypatch.setitem(globals_, "hand_processes", [] if missing_install else [("hand", ["hand"])])
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
     monkeypatch.setattr(app_module["processes"], "launch", lambda name: pytest.fail("duplicate launch"))
     button = imgui.button
@@ -949,16 +950,80 @@ def test_hand_bind_outcome_never_launches_a_second_target(app_module, monkeypatc
     imgui_frame(app_module["hand_ui"])
     click["label"] = None
     actions.clear()
-    if result == "external":
+    external = result.startswith("external")
+    if external:
         app_module["link"]._bus = object()
     elif result == "incompatible":
         state.last_error = ValueError("wrong map")
         state.status = "control connection failed: wrong map"
     try:
         imgui_frame(app_module["hand_ui"])
-        assert actions == ([] if result == "external" else ["Retry"])
+        assert actions == ([] if external else ["Retry"])
     finally:
         app_module["link"]._bus = None
+
+
+def test_hand_missing_install_explains_idle_and_failed_connect(app_module, monkeypatch, imgui_frame):
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    state = SimpleNamespace(busy=False, finished=False, last_error=None, status="", polls=0)
+
+    def poll(*, force=False):
+        assert force
+        state.polls += 1
+        state.busy = True
+        return True
+
+    state.poll = poll
+    render = app_module["hand_ui"]
+    globals_ = render.__globals__
+    monkeypatch.setitem(globals_, "binder", state)
+    monkeypatch.setitem(globals_, "hand_processes", [])
+    monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
+    monkeypatch.setattr(app_module["processes"], "launch", lambda name: pytest.fail("nothing installed to launch"))
+    details, tones, tooltips = [], [], []
+    ellipsize, text_colored = globals_["_ellipsize"], imgui.text_colored
+
+    def detail(text, width):
+        details.append(text)
+        return ellipsize(text, width)
+
+    def colored(tone, text):
+        if text == globals_["fa"].ICON_FA_CIRCLE:
+            tones.append(tone)
+        text_colored(tone, text)
+
+    monkeypatch.setitem(globals_, "_ellipsize", detail)
+    monkeypatch.setattr(imgui, "text_colored", colored)
+    monkeypatch.setattr(imgui, "set_item_tooltip", tooltips.append)
+    button = imgui.button
+    click = {"label": None}
+
+    def pressed(label, *args):
+        button(label, *args)
+        return label == click["label"]
+
+    monkeypatch.setattr(imgui, "button", pressed)
+    hint = app_module["vhi"].install_hint.strip()
+
+    def assert_status(expected, tone):
+        assert details[-1] == expected
+        assert tones[-1] == tone
+        assert tooltips[-1].startswith(f"{expected}\n\n{hint}\n\n")
+        assert "prediction →" in tooltips[-1] and "control →" in tooltips[-1]
+
+    imgui_frame(render)
+    assert_status("not installed here", globals_["IDLE"])
+    assert state.polls == 0
+    click["label"] = "Connect"
+    imgui_frame(render)
+    assert state.polls == 1, "Connect must still look for a hand started elsewhere"
+    click["label"] = None
+    state.busy, state.finished = False, True
+    imgui_frame(render)
+    assert_status("no Virtual Hand answered · not installed here", globals_["DANGER"])
 
 
 def test_hand_rechecks_bus_after_observing_attempt_completion(app_module, monkeypatch, imgui_frame):

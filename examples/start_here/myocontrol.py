@@ -643,8 +643,10 @@ def hand_ui() -> None:
     elif phase == "failed":
         tone = DANGER
         detail = binder.status if binder.last_error is not None else "no Virtual Hand answered"
+        if not hand_processes and binder.last_error is None:
+            detail += " · not installed here"
     else:
-        tone, detail = IDLE, "not running"
+        tone, detail = IDLE, "not running" if hand_processes else "not installed here"
     if running or phase in ("checking", "launched", "stopping"):
         action = "Stop"
     elif bound:
@@ -655,6 +657,7 @@ def hand_ui() -> None:
         f"{alias} → {', '.join(target.address for target in binding.targets)} · {ALIAS_ROLES.get(alias, UNDRIVEN)}"
         for alias, binding in CONTROL_MAP.bindings.items()
     )
+    hint = f"{vhi.install_hint.strip()}\n\n" if not hand_processes else ""
     style = imgui.get_style()
     with tinted_row() as width:
         right = imgui.get_cursor_pos_x() + width
@@ -671,7 +674,7 @@ def hand_ui() -> None:
         mono_text(_ellipsize(detail, available), muted())
         if font is not None:
             imgui.pop_font()
-        imgui.set_item_tooltip(f"{detail}\n\n{mapping}")
+        imgui.set_item_tooltip(f"{detail}\n\n{hint}{mapping}")
         if action:
             imgui.same_line()
             imgui.set_cursor_pos_x(right - action_w)
