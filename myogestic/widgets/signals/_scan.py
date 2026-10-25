@@ -6,12 +6,20 @@ Internal — exported for the viewer modules only.
 from __future__ import annotations
 
 import threading as _threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import DANGER, IDLE, WARNING, muted
+from myogestic.widgets.common import DANGER, IDLE, WARNING, muted, primary_button, ui_px
+
+if TYPE_CHECKING:
+    from myogestic.stream import Stream
+
+_SCAN_LABEL = f"{fa.ICON_FA_ARROWS_ROTATE}  Scan"
+_SCANNING_LABEL = "Scanning…"
 
 
 @dataclass
@@ -41,15 +49,23 @@ def _scan_panel(stream_name: str, stream: object) -> None:
         return
 
     s = _scans.setdefault(stream_name, _ScanState())
+    _scan_action(stream_name, discover_fn, s, busy=s.busy)
+    _scan_results(stream_name, stream, s)
 
-    # Snapshot busy at top so begin/end_disabled and the "Scanning..." label
-    # are decided consistently within this frame. Without this snapshot, the
-    # button click below sets s.busy=True synchronously, so the bottom check
-    # would call end_disabled() without a matching begin_disabled().
-    was_busy = s.busy
-    if was_busy:
-        imgui.begin_disabled()
-    if imgui.button(f"Scan##{stream_name}"):
+
+def _scan_action(
+    stream_name: str,
+    discover_fn: Callable[[], list[dict[str, str]]],
+    s: _ScanState,
+    *,
+    busy: bool,
+) -> None:
+    """Draw discovery or its muted status using the frame's busy snapshot."""
+    if busy:
+        imgui.align_text_to_frame_padding()
+        imgui.text_colored(muted(), _SCANNING_LABEL)
+        return
+    if imgui.button(f"{_SCAN_LABEL}##{stream_name}"):
         s.busy = True
 
         def _scan() -> None:
@@ -60,27 +76,35 @@ def _scan_panel(stream_name: str, stream: object) -> None:
                 s.busy = False
 
         _threading.Thread(target=_scan, daemon=True).start()
-    if was_busy:
-        imgui.end_disabled()
-        imgui.same_line()
-        imgui.text("Scanning...")
+    imgui.set_item_tooltip("Look for other outlets")
 
-    if s.results:
-        names = [f"{r['name']} ({r['info']})" for r in s.results]
-        imgui.push_item_width(300)
-        changed, idx = imgui.combo(f"##scan_{stream_name}", s.selected, names)
-        if changed:
-            s.selected = idx
-        imgui.pop_item_width()
-        imgui.same_line()
-        if imgui.button(f"Connect##{stream_name}"):
-            target = s.results[s.selected]["name"]
 
-            def _connect_target() -> None:
-                stream.reconnect(target)
+def _scan_results(
+    stream_name: str, stream: Stream, s: _ScanState, *, centered: bool = False,
+) -> None:
+    """Keep the outlet selector and its Connect inside the available row."""
+    if not s.results:
+        return
+    style = imgui.get_style()
+    avail = imgui.get_content_region_avail().x
+    connect_w = imgui.calc_text_size("Connect").x + style.frame_padding.x * 2
+    combo_w = min(ui_px(300), max(1.0, avail - connect_w - style.item_spacing.x))
+    if centered:
+        _centered(avail, combo_w + style.item_spacing.x + connect_w)
+    names = [f"{r['name']} ({r['info']})" for r in s.results]
+    imgui.set_next_item_width(combo_w)
+    changed, idx = imgui.combo(f"##scan_{stream_name}", s.selected, names)
+    if changed:
+        s.selected = idx
+    imgui.same_line()
+    if imgui.button(f"Connect##{stream_name}"):
+        target = s.results[s.selected]["name"]
 
-            _threading.Thread(target=_connect_target, daemon=True).start()
-            s.results = []
+        def _connect_target() -> None:
+            stream.reconnect(target)
+
+        _threading.Thread(target=_connect_target, daemon=True).start()
+        s.results = []
 
 
 def _centered(width: float, item_w: float) -> None:
@@ -126,11 +150,25 @@ def _disconnected_ui(stream_name: str, stream: object, *, show_connect: bool = T
 
     style = imgui.get_style()
     avail = imgui.get_content_region_avail()
+    discover_fn = getattr(stream._source, "discover", None) if show_connect else None
+    scan = _scans.setdefault(stream_name, _ScanState()) if discover_fn is not None else None
+    # The worker may finish during this frame; measure and draw the same state.
+    busy = scan.busy if scan is not None else False
+    button_w = imgui.calc_text_size(label).x + style.frame_padding.x * 2
+    scan_w = imgui.calc_text_size(_SCANNING_LABEL if busy else _SCAN_LABEL).x
+    if not busy:
+        scan_w += style.frame_padding.x * 2
+    row_w = button_w + style.item_spacing.x + scan_w if scan is not None else button_w
+    wrap_actions = scan is not None and row_w > avail.x
     title_size = imgui.calc_text_size(title, wrap_width=max(1.0, avail.x))
     hint_size = imgui.calc_text_size(hint, wrap_width=max(1.0, avail.x))
     block_h = title_size.y + hint_size.y + 2 * style.item_spacing.y
     if show_connect:
         block_h += imgui.get_frame_height() + style.item_spacing.y * 2
+        if wrap_actions:
+            block_h += imgui.get_frame_height() + style.item_spacing.y
+        if scan is not None and scan.results:
+            block_h += imgui.get_frame_height() + style.item_spacing.y
     imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + max((avail.y - block_h) * 0.5, 0.0))
 
     _centered(avail.x, title_size.x)
@@ -146,9 +184,8 @@ def _disconnected_ui(stream_name: str, stream: object, *, show_connect: bool = T
     if not show_connect:
         return
 
-    button_w = imgui.calc_text_size(label).x + style.frame_padding.x * 2
-    _centered(avail.x, button_w)
-    if imgui.button(f"{label}##{stream_name}_reconnect"):
+    _centered(avail.x, button_w if wrap_actions else row_w)
+    if primary_button(f"{label}##{stream_name}_reconnect"):
         import sys as _sys
 
         if _sys.platform == "emscripten":
@@ -163,7 +200,10 @@ def _disconnected_ui(stream_name: str, stream: object, *, show_connect: bool = T
 
             _threading.Thread(target=_reconnect, daemon=True).start()
 
-    discover_fn = getattr(stream._source, "discover", None)
-    if discover_fn is not None:
-        imgui.spacing()
-        _scan_panel(stream_name, stream)
+    if scan is not None:
+        if wrap_actions:
+            _centered(avail.x, scan_w)
+        else:
+            imgui.same_line()
+        _scan_action(stream_name, discover_fn, scan, busy=busy)
+        _scan_results(stream_name, stream, scan, centered=True)
