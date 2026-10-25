@@ -54,7 +54,9 @@ class VhiMovementPanel:
         Minimum seconds between background state
         refreshes. Default 1 s.
     title
-        Panel header text rendered above the button grid.
+        Panel header text rendered above the wrapping movement chips.
+    widget_id
+        Stable UI identity. Defaults to this panel instance, independently of its client.
 
     Examples
     --------
@@ -66,7 +68,7 @@ class VhiMovementPanel:
     >>> panel.ui()
     """
 
-    __slots__ = ("_cache", "_client", "_on_movement", "_min_interval_s", "_title")
+    __slots__ = ("_cache", "_client", "_on_movement", "_min_interval_s", "_title", "_widget_id")
 
     def __init__(
         self,
@@ -74,13 +76,15 @@ class VhiMovementPanel:
         on_movement: Callable[[str], None],
         *,
         min_interval_s: float = 1.0,
-        title: str = "VHI Control Hand",
+        title: str = "Hand movements",
+        widget_id: str | None = None,
     ) -> None:
         self._client = client
         self._cache = VhiStateCache()
         self._on_movement = on_movement
         self._min_interval_s = min_interval_s
         self._title = title
+        self._widget_id = widget_id or f"vhi_panel:{id(self)}"
 
     def ui(self, *, auto_refresh: bool = True) -> None:
         """Render the panel — call once per frame inside ``@app.ui``.
@@ -103,6 +107,7 @@ class VhiMovementPanel:
             on_movement=self._on_movement,
             on_refresh=lambda: request_vhi_state_refresh(self._client, self._cache, force=True),
             title=self._title,
+            widget_id=self._widget_id,
         )
 
 
