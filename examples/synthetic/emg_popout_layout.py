@@ -30,7 +30,6 @@ from myoverse.transforms import MAV, RMS, WaveformLength
 from myogestic import App, Stream, TrainingData
 from myogestic.controls import ControlLink, load_control_map
 from myogestic.ml import Pipeline, load_pickle, save_pickle
-from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
     catboost_classifier,
     constant_classifier,
@@ -53,8 +52,20 @@ from myogestic.widgets import (
     SignalViewer,
     StreamPanel,
 )
-from myogestic.widgets.common import panel_header
-from myogestic.widgets.panels.log_box import render_log_buttons, render_log_popout
+from myogestic.widgets.common import (
+    IDLE,
+    SUCCESS,
+    WARNING,
+    mono_text,
+    muted,
+    panel_header,
+    pop_selected,
+    primary_button,
+    push_selected,
+    tinted_row,
+    ui_px,
+)
+from myogestic.widgets.panels.log_box import render_log, render_log_buttons, render_log_popout
 
 N_CHANNELS = 32
 CLASSES = ["Rest", "Fist", "Pinch", "Open"]
@@ -292,10 +303,6 @@ def _recording_block() -> None:
 _MODEL_WIDGET_ID = "ml_popout"
 _log_popout_open = False
 
-_train_btn = TrainButton(pipeline)
-_predict_btn = PredictButton(pipeline)
-_training_log = TrainingLog(pipeline, height=80.0, widget_id=_MODEL_WIDGET_ID)
-
 
 def _model_block() -> None:
     global selected_model_idx, _load_dialog, _log_popout_open
@@ -311,40 +318,83 @@ def _model_block() -> None:
         if not still_open:
             _log_popout_open = False
 
-    panel_header("MODEL", fa.ICON_FA_BRAIN)
-    imgui.push_item_width(-1)
+    state = app.ctx.state
+    predicting = state == "predicting"
+    busy = state != "idle"
+    tone = WARNING if state == "training" else SUCCESS if predicting or pipeline.model is not None else IDLE
+    status = ("Training" if state == "training" else "Predicting" if predicting
+              else "Ready" if pipeline.model is not None else "No model")
+    style = imgui.get_style()
+    log_width = imgui.get_frame_height() + style.item_spacing.x
+    panel_header("Model", fa.ICON_FA_BRAIN, status=tone, reserve=log_width)
+    imgui.same_line()
+    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
+        0.0, imgui.get_content_region_avail().x - log_width
+    ))
+    _log_popout_open = render_log_buttons(_MODEL_WIDGET_ID, popped_out=_log_popout_open)
+    with tinted_row(tone):
+        imgui.align_text_to_frame_padding()
+        imgui.text_unformatted(status)
+
+    imgui.text_colored(muted(), "Classifier")
+    imgui.begin_disabled(busy)
+    imgui.set_next_item_width(imgui.get_content_region_avail().x)
     _, selected_model_idx = imgui.combo("##model_sel", selected_model_idx, MODEL_NAMES)
-    imgui.pop_item_width()
-    _train_btn.ui()
-    imgui.same_line()
-    _predict_btn.ui()
-    imgui.same_line()
-    _log_popout_open = render_log_buttons(
-        _MODEL_WIDGET_ID, popped_out=_log_popout_open
-    )
-    if _log_popout_open:
-        imgui.text_disabled("(log popped out — see 'Model training log' window)")
-    else:
-        _training_log.ui()
+    imgui.end_disabled()
+    if busy:
+        imgui.text_wrapped("Return to idle to change the classifier or train.")
+
+    data = pipeline.training_data
+    can_train = not busy and data is not None and not data.is_empty
+    imgui.begin_disabled(not can_train)
+    if primary_button("Train", size=(imgui.get_content_region_avail().x, 0)) and can_train:
+        pipeline.start_training()
+    imgui.end_disabled()
+    if not busy and not can_train:
+        imgui.text_wrapped("Select recorded takes in Sessions to train.")
+
+    can_predict = (not busy and pipeline.model is not None
+                   and pipeline.on_extract is not None and pipeline.on_predict is not None)
+    imgui.begin_disabled(not (can_predict or predicting))
+    # Guard both sides with the pre-click state, including the frame Stop is clicked.
+    if predicting:
+        push_selected()
+    clicked = imgui.small_button("Stop predicting" if predicting else "Predict")
+    if predicting:
+        pop_selected()
+    imgui.end_disabled()
+    if clicked and (can_predict or predicting):
+        if predicting:
+            pipeline.stop_predicting()
+        else:
+            pipeline.start_predicting()
+    if not predicting and not can_predict:
+        imgui.text_wrapped("Return to idle to predict." if busy else "Train or load a model to predict.")
 
     can_save = pipeline.model is not None
-    if not can_save:
-        imgui.begin_disabled()
-    if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save") and pipeline.model is not None:
+    imgui.begin_disabled(not can_save)
+    save_clicked = imgui.small_button(f"{fa.ICON_FA_FLOPPY_DISK}##save_model")
+    imgui.end_disabled()
+    imgui.set_item_tooltip("Save model" if can_save else "Train or load a model to save it.")
+    if save_clicked and can_save:
         MODELS_DIR.mkdir(exist_ok=True)
         slug = _slug(MODEL_NAMES[selected_model_idx])
         ts = _time.strftime("%Y%m%d_%H%M%S")
         path = MODELS_DIR / f"{slug}_{ts}.joblib"
         save_pickle(pipeline.model, str(path))
         app.ctx.log(f"Model saved → {path}")
-    if not can_save:
-        imgui.end_disabled()
     imgui.same_line()
-    if imgui.button(f"{fa.ICON_FA_FOLDER_OPEN}  Load..."):
+    if imgui.small_button(f"{fa.ICON_FA_FOLDER_OPEN}##load_model"):
         MODELS_DIR.mkdir(exist_ok=True)
         _load_dialog = pfd.open_file("Load model", str(MODELS_DIR), ["Model", "*.joblib"])
-    imgui.same_line()
-    imgui.text_disabled(f"({len(_list_saved())} saved)")
+    imgui.set_item_tooltip("Load model")
+    mono_text(f"{len(_list_saved())} saved", muted())
+    imgui.set_item_tooltip(str(MODELS_DIR))
+
+    if _log_popout_open:
+        imgui.text_wrapped("Training log is open in its own window.")
+    elif pipeline.train_log:
+        render_log(_MODEL_WIDGET_ID, pipeline.train_log, height=ui_px(80))
 
     if _load_dialog is not None and _load_dialog.ready():  # type: ignore
         result = _load_dialog.result()  # type: ignore
