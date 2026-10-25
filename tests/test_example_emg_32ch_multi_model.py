@@ -8,6 +8,8 @@ import pytest
 import myogestic.remote
 
 _EXAMPLES_ROOT = Path(__file__).resolve().parent.parent / "examples"
+PANELS = {"Signal", "Streams", "Log", "Processes", "Connect", "Recording", "Model",
+          "Post-processing", "Sessions", "Prediction", "Simulated EMG"}
 
 
 @pytest.fixture
@@ -46,6 +48,11 @@ def test_multi_model_uses_the_session_shell(multi_model_app):
     assert isinstance(ns["simulator"], SimulatorControls)
     assert "ctrl_outlet" not in ns
     assert not ns["recording"]._show_header
+    assert ns["app"]._docking
+    assert ns["simulator"]._presets == list(zip(ns["CLASSES"], ns["CTRL_VALUES"], strict=True))
+    specs = ns["app"]._popout_specs
+    assert {title for title, *_ in specs} == PANELS
+    assert all(spec[2:] == (False, True, False) for spec in specs)
     assert layout.panel_names == {"header", "signal", "simulator", "step", "sessions", "log", "status"}
     assert layout._breakpoint == Px(1100)
     assert layout._wide._col_tracks == [Fr(1), Px(400)]
@@ -87,9 +94,9 @@ def test_multi_model_completion_tracks_the_participants_takes(multi_model_app, m
 @pytest.mark.parametrize("width", [2560, 1800])
 @pytest.mark.parametrize("participant", ["", "P-014"])
 @pytest.mark.parametrize("trained", [False, True])
-@pytest.mark.parametrize("recording_active", [False, True])
+@pytest.mark.parametrize("state", ["idle", "recording", "training"])
 def test_multi_model_shell_fits_light_theme(
-    multi_model_app, monkeypatch, implot_frame, step, width, participant, trained, recording_active,
+    multi_model_app, monkeypatch, implot_frame, step, width, participant, trained, state,
 ):
     """Every active card fits the default window; narrow cards remain reachable."""
     import platform
@@ -110,8 +117,8 @@ def test_multi_model_shell_fits_light_theme(
         ns["pipeline"].train_log.append("Trained on 100 windows from 2 sessions.")
         ns["pipeline"].predictions.update({"class": 1, "proba": [0.1, 0.7, 0.1, 0.1]})
         app.ctx.state = "predicting" if step == 3 else "idle"
-    if recording_active:
-        app.ctx.state = "recording"
+    if state != "idle":
+        app.ctx.state = state
     monkeypatch.setattr(_scale, "_current", 2.0)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
@@ -181,7 +188,7 @@ def test_multi_model_shell_fits_light_theme(
 
     monkeypatch.setitem(app._ui_fn.__globals__, "connect_ui", connect)
     for name in ("viewer", "simulator", "recording", "train_button", "training_log",
-                 "prediction", "predict_button", "output_filter", "sessions", "log", "status"):
+                 "prediction", "predict_button", "output_filter", "sessions", "status"):
         widget = ns[name]
         render = type(widget).ui
 
@@ -195,6 +202,16 @@ def test_multi_model_shell_fits_light_theme(
             return result
 
         monkeypatch.setattr(type(widget), "ui", view)
+
+    render_log = ns["log_ui"]
+
+    def log():
+        views.append(("log", {}))
+        render_log()
+        cells.append(("log", imgui.get_cursor_pos_y(), imgui.get_window_size().y,
+                      imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+
+    monkeypatch.setitem(app._ui_fn.__globals__, "log_ui", log)
 
     def draw():
         imgui.set_next_window_pos(imgui.ImVec2(0, 0))
@@ -211,7 +228,7 @@ def test_multi_model_shell_fits_light_theme(
         buttons.clear()
         text_bounds.clear()
         implot_frame(draw)
-    assert headers == [ns["steps"].steps[step], "Simulated EMG"]
+    assert headers == [ns["steps"].steps[step], "Signal", "Simulated EMG", "Activity log"]
     expected = {"viewer", "simulator", "recording", "sessions", "log", "status"}
     expected |= {2: {"train_button", "training_log"},
                  3: {"prediction", "predict_button", "output_filter"}}.get(step, set())
@@ -396,3 +413,136 @@ def test_model_dialog_and_log_survive_leaving_train(multi_model_app, monkeypatch
     assert globals_["_load_dialog"] is None
     assert popouts == [{"title": "Model training log"}]
     assert "Loaded" in ns["app"].ctx.status_message
+
+
+def test_features_and_prediction_preserve_the_original_wiring(multi_model_app, monkeypatch):
+    from types import SimpleNamespace
+
+    import numpy as np
+    import torch
+
+    ns = multi_model_app
+    emg = np.random.default_rng(0).normal(size=(32, 512)).astype(np.float32)
+    tensor = torch.from_numpy(emg).float()
+    expected = np.concatenate([ns[key](tensor).numpy().flatten()
+                               for key in ("rms_transform", "mav_transform", "wl_transform")])
+    np.testing.assert_array_equal(ns["extract"]({"emg": emg}), expected)
+    pushed = []
+    bus = SimpleNamespace(push=lambda values: pushed.append(values) or values)
+    monkeypatch.setattr(type(ns["link"]), "bus", property(lambda self: bus))
+    for index in range(4):
+        proba = np.eye(4)[index]
+        result = ns["predict"](SimpleNamespace(predict_proba=lambda x, p=proba: p[None]), expected)
+        assert result["class"] == index
+        assert pushed[-1] == ns["HAND_POSES"][index]
+
+
+def test_popout_actions_open_registered_windows_and_training_log_survives_steps(
+    multi_model_app, monkeypatch, implot_frame,
+):
+    from imgui_bundle import hello_imgui, imgui
+
+    from myogestic.widgets.panels.popout import _make_dockable_window
+
+    ns = multi_model_app
+    app = ns["app"]
+    params = hello_imgui.RunnerParams()
+    params.docking_params.dockable_windows = [_make_dockable_window(*spec) for spec in app._popout_specs]
+    app._runner_params = params
+    for title in PANELS:
+        assert not ns["_panel_visible"](title)
+        ns["_show_panel"](title)
+        assert ns["_panel_visible"](title)
+        window = next(window for window in params.docking_params.dockable_windows
+                      if window.label == title)
+        assert window.dock_space_name == "" and window.focus_window_at_next_frame
+    # Closing windows in the runner must be reflected immediately, including Recording.
+    for window in params.docking_params.dockable_windows:
+        window.is_visible = False
+    assert not any(ns["_panel_visible"](title) for title in PANELS)
+    calls = []
+    monkeypatch.setitem(app._ui_fn.__globals__, "render_log_popout",
+                        lambda *args, **kwargs: calls.append(kwargs["title"]) or True)
+    monkeypatch.setitem(app._ui_fn.__globals__, "_popout_open", True)
+    for step in range(4):
+        ns["steps"].active = step
+        implot_frame(lambda: app._ui_fn(app.ctx))
+    assert calls == ["Model training log"] * 4
+    # A detached Recording card owns its visible tick; the shell must not tick it twice.
+    ns["_show_panel"]("Recording")
+    monkeypatch.setattr(type(ns["recording"]), "ui", lambda self, *a, **kw: calls.append("record"))
+    callbacks = {title: callback for title, callback, *_ in app._popout_specs}
+
+    def draw():
+        app._ui_fn(app.ctx)
+        imgui.begin("Detached Recording")
+        callbacks["Recording"]()
+        imgui.end()
+
+    for step in range(4):
+        ns["steps"].active = step
+        calls.clear()
+        implot_frame(draw)
+        assert calls.count("record") == 1
+    # Closing the detached window returns the visible or hidden tick to the shell.
+    for window in params.docking_params.dockable_windows:
+        window.is_visible = False
+    calls.clear()
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert calls.count("record") == 1
+
+
+def test_popout_header_buttons_open_windows_and_log(multi_model_app, monkeypatch, implot_frame):
+    from imgui_bundle import imgui
+
+    ns = multi_model_app
+    opened, labels = [], []
+    scope = ns["app"]._ui_fn.__globals__
+    monkeypatch.setitem(scope, "_show_panel", opened.append)
+    original_small, original_button = imgui.small_button, imgui.button
+
+    def small(label):
+        result = original_small(label)
+        if "##panels_" in label:
+            labels.append(label)
+            return True
+        return result
+
+    def button(label, *args, **kwargs):
+        result = original_button(label, *args, **kwargs)
+        return True if label.endswith("##ml_multi_popout") else result
+
+    monkeypatch.setattr(imgui, "small_button", small)
+    monkeypatch.setattr(imgui, "button", button)
+    implot_frame(lambda: ns["_card_header"]("Activity log", panel="Log"))
+    implot_frame(lambda: ns["_card_header"]("Train", training=True))
+    assert opened == ["Log"]
+    assert scope["_popout_open"]
+    assert all(len(label.split("##")[0]) == 1 for label in labels)
+
+
+@pytest.mark.parametrize("target", sorted(PANELS))
+def test_step_header_chooser_can_open_every_card(multi_model_app, monkeypatch, implot_frame, target):
+    """Cards without a window action of their own stay reachable from the step header."""
+    from imgui_bundle import imgui
+
+    ns = multi_model_app
+    opened, choices = [], []
+    scope = ns["demo_ui"].__globals__
+    monkeypatch.setitem(scope, "_show_panel", opened.append)
+    original_button, original_selectable = imgui.small_button, imgui.selectable
+
+    def button(label):
+        result = original_button(label)
+        return True if "##panels_" in label else result
+
+    def selectable(label, selected):
+        original_selectable(label, selected)
+        choices.append(label)
+        return label == target, selected
+
+    monkeypatch.setattr(imgui, "small_button", button)
+    monkeypatch.setattr(imgui, "selectable", selectable)
+    implot_frame(lambda: ns["_card_header"]("Connect"))
+    assert set(choices) == PANELS
+    assert opened == [target]

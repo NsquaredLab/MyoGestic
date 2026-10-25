@@ -66,7 +66,7 @@ Inline components such as `app_logo` and `StepBar` are shown in isolation too.
 
 **Deliberately excluded** (building blocks, not standalone panels):
 `panel_header` (a section header used inside panels), `popout_panel` (a
-layout mechanism — see [`examples/synthetic/emg_popout_layout.py`](../synthetic/emg_popout_layout.py)),
+layout mechanism — see [`examples/synthetic/emg_32ch_multi_model.py`](../synthetic/emg_32ch_multi_model.py)),
 and the non-widget helpers `TemplateInspectorRow`, `request_vhi_state_refresh`,
 `VhiStateCache`, `VhiStateSnapshot`.
 

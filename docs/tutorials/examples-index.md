@@ -214,6 +214,7 @@ training callback streams the same per-epoch log either way.
 sklearn LDA, sklearn SVM, etc. live without re-running the script. Adds
 the **Save/Load model** panel so a tuned model survives a restart, and
 the pose-lookup pattern for mapping multiple gestures to control poses.
+Every card can pop out into its own window; the training log can float independently.
 
 ```bash
 uv run python examples/synthetic/emg_32ch_multi_model.py
@@ -222,21 +223,6 @@ uv run python examples/synthetic/emg_32ch_multi_model.py
 **What to tweak:** plug another classifier into the model registry, add
 more gestures to the pose-lookup, increase the channel count (the
 generator scales to any `--channels`).
-
-### `emg_popout_layout.py` - dockable layout reference
-
-Same flow as `emg_32ch_multi_model.py` but every block is a tear-off
-pop-out window via `App(docking=True)` + `app.popout(...)`. The
-`Prediction` panel gets its own floating window; the training log can
-pop out independently. Reference layout for multi-monitor experiments.
-
-```bash
-uv run python examples/synthetic/emg_popout_layout.py
-```
-
-**What to tweak:** rearrange the `app.popout()` call sites; combine
-docking with the `Grid` layout from
-[Grid layout](../concepts/grid-layout.md) for the in-window panels.
 
 ### `vhi_control_hand.py` - the operator's hand, not the model's
 
@@ -389,7 +375,7 @@ actually on.
   [EMG regression with VHI tutorial](emg-regression-with-vhi.md) →
   `emg_regression.py` → swap in `_raulnet` for the deep variant.
 * **Comparing models** - `emg_32ch_multi_model.py`.
-* **Multi-monitor / docking** - `emg_popout_layout.py`.
+* **Multi-monitor / docking** - `emg_32ch_multi_model.py`.
 * **Posing the control hand for setup or labelling** - `vhi_control_hand.py`.
 * **A session to run, not a loop to build on** - `start_here/myocontrol.py`, which is the
   classification and regression flows in one application that names no hardware.
