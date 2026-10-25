@@ -10,6 +10,19 @@ Widget classes you construct once and render with `.ui(...)` from inside `@app.u
 
 ::: myogestic.widgets.RawSignalViewer
 
+## Simulator controls
+
+::: myogestic.widgets.SimulatorControls
+
+Place `SimulatorControls([("Rest", 0.0), ("Fist", 1.0)])` in a compact Grid row
+under the signal and call `simulator.ui(ctx)` on every step. Preset chips publish
+the selected class value to the generator. The default control outlet is created
+on the first `ui` or `set` call; pass `outlet=` to reuse an existing stream.
+
+Call `simulator.set(value)` from the recording gesture callback to keep the card
+and signal in sync. During recording the manual controls are disabled, with a
+visible explanation that the simulator follows the recorded gesture.
+
 ## Device selection
 
 ::: myogestic.widgets.DevicePicker
