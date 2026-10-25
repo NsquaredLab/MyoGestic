@@ -8,20 +8,30 @@ from __future__ import annotations
 import numpy as np
 from imgui_bundle import imgui, implot
 
-from myogestic.widgets.common import ensure_implot_style
+from myogestic.widgets.common import (
+    ensure_implot_style,
+    fit_text,
+    mono_text,
+    muted,
+    panel_header,
+    plot_empty,
+    plot_size,
+    ui_px,
+)
 
 __all__ = ["Heatmap"]
 
 
 class Heatmap:
-    """2D heatmap widget.
+    """2D heatmap with a panel header, mono range and continuous colour strip.
 
     Parameters
     ----------
     label : str
         Plot label shown above the heatmap.
     size : tuple[float, float], optional
-        Plot size in pixels, by default ``(-1, 300)``.
+        Plot size in UI-scaled pixels, by default ``(-1, 300)``.
+        Nonpositive dimensions fill the available space.
     label_fmt : str, optional
         Printf-style format for the per-cell value labels, by default ``"%.1f"``.
     colormap : int | None, optional
@@ -30,8 +40,10 @@ class Heatmap:
         default, "Deep", is categorical and misleads on a heatmap). Pass e.g.
         ``implot.Colormap_.rd_bu`` for signed / diverging data.
     widget_id : str | None, optional
-        Explicit ImGui id scope. Defaults to ``label`` when omitted, so two
-        instances with the same plot label don't collide on ImGui ids.
+        Explicit ImGui id scope, defaulting to ``label``. Supply distinct ids
+        for instances with the same visible label.
+    show_title : bool, optional
+        Show the panel header, by default ``True``. The plot itself has no title.
 
     Examples
     --------
@@ -49,6 +61,7 @@ class Heatmap:
         label_fmt: str = "%.1f",
         colormap: int | None = None,
         widget_id: str | None = None,
+        show_title: bool = True,
     ) -> None:
         self._label = label
         self._size = size
@@ -56,6 +69,7 @@ class Heatmap:
         # ``None`` resolves to viridis at draw time; see the class docstring.
         self._colormap = colormap
         self._widget_id = widget_id
+        self._show_title = show_title
 
     def ui(
         self,
@@ -83,9 +97,11 @@ class Heatmap:
         """
         imgui.push_id(self._widget_id or self._label)
         try:
+            if self._show_title:
+                panel_header(self._label)
             values = np.ascontiguousarray(data, dtype=np.float64)
             if values.size == 0 or values.ndim != 2:
-                imgui.text_disabled(f"{self._label}: no data")
+                plot_empty("No grid data", "Provide a 2D array to display the heatmap.", self._size)
                 return
             rows, cols = values.shape
 
@@ -93,7 +109,20 @@ class Heatmap:
             cmap = implot.Colormap_.viridis if self._colormap is None else self._colormap
             implot.push_colormap(cmap)
             try:
-                if implot.begin_plot(self._label, imgui.ImVec2(*self._size)):
+                lo, hi = (
+                    (float(values.min()), float(values.max()))
+                    if vrange is None
+                    else (float(vrange[0]), float(vrange[1]))
+                )
+                if not hi > lo:
+                    hi = lo + 1e-12
+                footer = (
+                    imgui.get_text_line_height_with_spacing()
+                    + ui_px(8)
+                    + imgui.get_style().item_spacing.y
+                )
+                flags = int(implot.Flags_.no_title | implot.Flags_.no_legend)
+                if implot.begin_plot("##heatmap_plot", plot_size(self._size, footer=footer), flags):
                     # One tick per cell, at its centre, so the axes read as the
                     # matrix's rows/columns (or the given labels) instead of a
                     # continuous 0-1 scale. Grid lines off + locked to the cells.
@@ -119,13 +148,6 @@ class Heatmap:
                     implot.setup_axis_ticks(
                         implot.ImAxis_.y1, [rows - i - 0.5 for i in range(rows)], y_labels[:rows]
                     )
-                    lo, hi = (
-                        (float(values.min()), float(values.max()))
-                        if vrange is None
-                        else (float(vrange[0]), float(vrange[1]))
-                    )
-                    if not hi > lo:  # degenerate (flat data / empty range): keep implot sane
-                        hi = lo + 1e-12
                     implot.plot_heatmap(
                         "##heatmap",
                         values,
@@ -136,7 +158,31 @@ class Heatmap:
                         bounds_max=implot.Point(float(cols), float(rows)),
                     )
                     implot.end_plot()
+                _scale_strip(cmap)
+                readout = f"{lo:g} — {hi:g}"
+                mono_text(fit_text(readout, imgui.get_content_region_avail().x), muted())
+                imgui.set_item_tooltip(readout)
             finally:
                 implot.pop_colormap()
         finally:
             imgui.pop_id()
+
+
+def _scale_strip(colormap: int) -> None:
+    """Draw the grid's continuous colormap as a horizontal strip."""
+    width = imgui.get_content_region_avail().x
+    height = ui_px(8)
+    pos = imgui.get_cursor_screen_pos()
+    draw = imgui.get_window_draw_list()
+    for i in range(32):
+        left = imgui.get_color_u32(implot.sample_colormap(i / 32, colormap))
+        right = imgui.get_color_u32(implot.sample_colormap((i + 1) / 32, colormap))
+        draw.add_rect_filled_multi_color(
+            imgui.ImVec2(pos.x + width * i / 32, pos.y),
+            imgui.ImVec2(pos.x + width * (i + 1) / 32, pos.y + height),
+            left,
+            right,
+            right,
+            left,
+        )
+    imgui.dummy(imgui.ImVec2(width, height))
