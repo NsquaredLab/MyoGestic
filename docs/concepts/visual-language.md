@@ -104,6 +104,23 @@ An editable list follows one shape at every depth, so a nested one reads without
   sizes are the hierarchy: deleting a control is a bigger act than dropping one of its targets,
   so it gets the bigger control.
 
+### Stream chips
+
+A selectable `DevicePicker` shows sorted stream chips: a status-coloured `CIRCLE`
+followed by the stream name in the mono face. The selected chip uses
+`push_selected()` / `pop_selected()`. Chips wrap to another row when needed;
+measure names in the same font used to draw them and scale padding with the UI.
+
+The trailing `PLUS` opens an inline name field, **Add**, and a bare `XMARK` cancel.
+Only the selected chip offers removal, through a bare `XMARK` and
+`destructive_button`; the last offered stream cannot be removed. Adding and
+removing are disabled during recording, with the reason available on hover.
+
+Connected device details share a single `tinted_row(SUCCESS)` with Reconnect and
+Disconnect icons. `tinted_row()` without a tone uses the theme's surface for a
+compact utility row such as Virtual Hand. Both derive their fill from the active
+theme, reserve room for actions, and keep the full clipped detail in a tooltip.
+
 ### State colours
 
 Four tokens, and they mean the same thing everywhere:

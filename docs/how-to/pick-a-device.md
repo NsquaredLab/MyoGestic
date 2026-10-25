@@ -33,7 +33,8 @@ the numbered procedure — which button to hold, which network to join — and
 
 The dot in the panel header is the connection state — grey until you connect,
 green once samples are arriving, red if the attempt failed. Hover it for the
-reason. The line under the button repeats it in words.
+reason. The action area shows connection progress or live geometry; a failed
+attempt leaves its error below Connect.
 
 One thing the labels cannot tell you: on a Sessantaquattro, **`Bipolar` halves
 the channel count**, so picking `64` and `Bipolar` gives you 32. The status
@@ -236,8 +237,39 @@ streams = StreamManager(
 
 `StreamManager` only names the stream; the app builds it, because the geometry —
 window and buffer length — is the app's decision, not the panel's. Pair it with
-`DevicePicker(selectable=True)`, which gains a **Stream** row so one picker
-follows whichever stream you are setting up instead of needing one panel each.
+`DevicePicker(selectable=True)`, which shows sorted stream chips with status dots
+so one picker follows whichever stream you are setting up. Clicking a chip keeps
+each stream's chosen device, options, and connection state intact.
+
+For one compact card, put those callbacks directly on the picker instead of
+rendering a separate manager:
+
+```python
+from myogestic.widgets import DEFAULT_DEVICES, DevicePicker
+
+picker = DevicePicker(
+    "emg", selectable=True,
+    on_add=lambda name: app.add_stream(
+        Stream(name, source=DEFAULT_DEVICES[0].factory(), window_ms=200)
+    ),
+    on_remove=app.remove_stream,
+)
+```
+
+The trailing **+** chip opens a name field, **Add**, and **×** to cancel. Names use
+`StreamManager`'s rules: lowercase ASCII letters, digits, hyphens, and underscores,
+up to 32 characters. Empty names and duplicates cannot be added. Only the selected
+chip offers **×** removal; the last offered stream cannot be removed, and removing
+the selected stream points the picker at a remaining one. `exclude=("target",)`
+keeps widget-owned streams out of these chips.
+
+Options have captions above their controls in two columns, falling back to one
+column when the controls need more room. Each uses segments when all choices fit,
+or a dropdown otherwise. Scanned devices show an **Outlet** chooser and rescan
+button. **Connect** fills the action row while detached; during connection it
+becomes an elapsed-time readout with **Abort**. Once connected, sample rate,
+channel count and sample age share a tinted row with Reconnect and Disconnect
+icons; attached-device live sliders stay below.
 
 **Both are refused while a recording is running.** A session sizes one Zarr array
 per stream when recording starts, so a stream that appears afterwards has
@@ -251,6 +283,7 @@ already running. Called during setup it behaves exactly like `app.streams(...)`.
 
 ## Recording
 
-**Connect** is disabled while a recording is running. Reconnecting does not
+**Connect**, **Reconnect**, and **Disconnect** are disabled while a recording is running,
+with the reason in each action's tooltip. Reconnecting does not
 detach the session, so the acquire loop would keep appending to the same key at
 the new channel width and corrupt what you recorded. Stop, switch, start again.
