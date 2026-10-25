@@ -31,16 +31,14 @@ from myogestic.widgets.common import (
     DANGER,
     IDLE,
     SUCCESS,
-    destructive_button,
     format_age,
     label_column,
     mono_text,
     muted,
     panel_header,
-    pop_selected,
     primary_button,
-    push_selected,
     segmented,
+    stream_chip,
     tinted_row,
     ui_px,
 )
@@ -685,53 +683,15 @@ class DevicePicker:
                     else DANGER if stream.last_error else IDLE)
             selected = name == self._stream_name
             removable = selected and self._on_remove is not None and len(names) > 1
-            remove_w = (imgui.calc_text_size(fa.ICON_FA_XMARK).x + 2 * style.frame_padding.x
-                        + style.item_spacing.x) if removable else 0.0
-            font = mono_font()
-            if font is not None:
-                imgui.push_font(font, style.font_size_base)
-            shown = name
-            dot_w = imgui.get_font_size() + style.item_spacing.x
-            limit = max(1.0, right - left - remove_w)
-            while shown and imgui.calc_text_size(shown + "…").x + dot_w + 2 * style.frame_padding.x > limit:
-                shown = shown[:-1]
-            if shown != name:
-                shown += "…"
-            width = min(limit, imgui.calc_text_size(shown).x + dot_w + 2 * style.frame_padding.x)
-            if index:
-                imgui.same_line()
-                if imgui.get_cursor_pos_x() + width + remove_w > right:
-                    imgui.new_line()
-            imgui.push_style_var(imgui.StyleVar_.frame_rounding, imgui.get_frame_height() * 0.5)
-            if selected:
-                push_selected()
-            clicked = imgui.button(f"##dp_stream_{name}", imgui.ImVec2(width, 0))
-            if selected:
-                pop_selected()
-            origin = imgui.get_item_rect_min()
-            draw = imgui.get_window_draw_list()
-            draw.add_text(imgui.ImVec2(origin.x + style.frame_padding.x + dot_w,
-                                      origin.y + style.frame_padding.y),
-                          imgui.get_color_u32(imgui.Col_.text), shown)
-            if font is not None:
-                imgui.pop_font()
-            draw.add_text(imgui.ImVec2(origin.x + style.frame_padding.x,
-                                      origin.y + style.frame_padding.y),
-                          imgui.get_color_u32(tone), fa.ICON_FA_CIRCLE)
-            imgui.set_item_tooltip(f"{name}: {stream.last_error or stream.status}")
+            clicked, removed = stream_chip(
+                name, tone, selected=selected, prefix="dp", left=left, right=right,
+                first=index == 0, removable=removable, recording=recording,
+                detail=stream.last_error or stream.status,
+            )
             if clicked:
                 self._select_stream(name)
-            if removable:
-                imgui.same_line()
-                imgui.begin_disabled(recording)
-                if destructive_button(f"{fa.ICON_FA_XMARK}##dp_remove_{name}") and not recording:
-                    remove = name
-                imgui.end_disabled()
-                self._action_tooltip(
-                    "Stop the recording before removing a stream." if recording else "",
-                    f"Remove stream {name!r}.",
-                )
-            imgui.pop_style_var()
+            if removed:
+                remove = name
         if remove is not None:
             self._on_remove(remove)
             remaining = sorted(n for n in ctx.streams if n not in self._excluded)

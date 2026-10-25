@@ -235,11 +235,25 @@ streams = StreamManager(
 )
 ```
 
-`StreamManager` only names the stream; the app builds it, because the geometry —
-window and buffer length — is the app's decision, not the panel's. Pair it with
-`DevicePicker(selectable=True)`, which shows sorted stream chips with status dots
-so one picker follows whichever stream you are setting up. Clicking a chip keeps
-each stream's chosen device, options, and connection state intact.
+`StreamManager` shows sorted mono stream chips with status dots. Select a chip to
+reveal its **×** removal action; the last stream is kept. The trailing **+** opens
+an inline name field, **Add**, and **×** to cancel. During recording the chips are
+dimmed and a caption says to stop recording before adding or removing streams.
+
+The manager only names the stream; the app builds it, because the geometry —
+window and buffer length — is the app's decision. Pair it with
+`DevicePicker(selectable=True)` to choose each source. The picker has its own
+chip selection and keeps each stream's chosen device, options, and connection
+state intact when switching between them.
+
+For sources already configured in code, `StreamPanel` shows one compact row per
+stream: name, sample rate, channels, sample age, and a reconnect icon. Detached
+streams offer **Connect**, connection attempts show elapsed time with **Abort**,
+and failures show their error with **Retry**. With `selectable=True` (the default),
+Connect opens a popover of discovered outlets when the source supports discovery;
+its rescan icon refreshes the choices. The Streams header also offers rescan and
+summarises connection state with a dot. Give panels distinct `widget_id` values
+when displaying more than one; connection attempts belong to each instance.
 
 For one compact card, put those callbacks directly on the picker instead of
 rendering a separate manager:
