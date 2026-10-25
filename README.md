@@ -80,8 +80,8 @@ or against the synthetic one when you have none:
 Five runnable end-to-end demos live in
 [`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic):
 
-- `emg_classification.py` - the reference first read (CatBoost binary)
-- `emg_classification_grpc.py` - adds the VHI gRPC control plane
+- `emg_classification.py` - the reference first read (CatBoost binary), with an optional
+  Virtual Hand driven by continuous LSL pose and discrete gRPC movements
 - `emg_regression.py` - continuous 5-DoF regression
 - `emg_regression_raulnet.py` - same flow with a PyTorch Lightning CNN
 - `emg_32ch_multi_model.py` - selectable classifier + Save/Load
