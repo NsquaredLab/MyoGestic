@@ -33,6 +33,27 @@ if TYPE_CHECKING:
 _GLFW_MONITOR_SPAM = b"Cannot query workarea without screen"
 
 
+def _active_display_count() -> int:
+    """Query drawable macOS displays without requiring PyObjC or initializing GLFW."""
+    import ctypes
+
+    core_graphics = ctypes.CDLL(
+        "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
+    )
+    get_displays = core_graphics.CGGetActiveDisplayList
+    get_displays.argtypes = [
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    get_displays.restype = ctypes.c_int32
+    count = ctypes.c_uint32()
+    error = get_displays(0, None, ctypes.byref(count))
+    if error:
+        raise OSError(f"CGGetActiveDisplayList failed (error {error})")
+    return count.value
+
+
 @contextlib.contextmanager
 def _collapse_glfw_monitor_spam():
     """Show that GLFW error once, count the rest, and pass everything else through.
@@ -611,6 +632,10 @@ class App:
     ) -> None:
         """Blocking entry point.
 
+        On macOS, GUI startup waits for an active display before starting streams
+        or hooks. Unlock or wake the screen to continue; Ctrl+C cancels the wait
+        without starting app resources. Headless mode does not need a display.
+
         Call tree (top → bottom = runtime order):
 
             App.run()
@@ -634,11 +659,30 @@ class App:
             raise ValueError(
                 f"App.run(mode={mode!r}) - unknown mode. Supported: 'gui', 'headless'."
             )
+
+        from myogestic._browser import IS_BROWSER
+
+        # HelloImGui indexes the monitor list even with an explicit window position.
+        # Wait before native setup (and before any app resources start) until macOS
+        # reports a drawable display; sleeping displays are not active for drawing.
+        if mode == "gui" and sys.platform == "darwin" and not IS_BROWSER:
+            try:
+                if _active_display_count() == 0:
+                    print(
+                        "[myogestic] waiting for a display — the screen is locked or asleep",
+                        flush=True,
+                    )
+                    while True:
+                        time.sleep(1.0)
+                        if _active_display_count() > 0:
+                            break
+                    print("[myogestic] display active — continuing startup", flush=True)
+            except KeyboardInterrupt:
+                return
+
         self._running = True
 
         log.info("run() - streams=%s mode=%s", list(self.ctx.streams), mode)
-
-        from myogestic._browser import IS_BROWSER
 
         def _do_cleanup() -> None:
             log.info("run() - cleanup")
