@@ -92,7 +92,7 @@ CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "my
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
 
-output_filter = PostProcessor(hz=PREDICT_HZ)
+output_filter = PostProcessor(hz=PREDICT_HZ, compact=True)
 vhi_control = vhi.control_client()
 
 app = App("MyoGestic — myocontrol", require_participant=True)
@@ -347,15 +347,17 @@ recording = RecordingControls(
 )
 
 
-def _pushed() -> str:
-    """The last frame delivered to VHI, one control per line."""
+def _pushed() -> list[tuple[str, str]]:
+    """The last sent frame as alias → targets and formatted value rows."""
     controls = pipeline.predictions.get("controls")
     if not controls:
-        return "nothing pushed yet"
-    return "\n".join(
-        f"{name:<13}{value}" if isinstance(value, str) else f"{name:<13}{value:+.2f}"
-        for name, value in controls.items()
-    )
+        return []
+    rows = []
+    for name, value in controls.items():
+        binding = CONTROL_MAP.bindings.get(name)
+        targets = ", ".join(ref.address for ref in binding.targets) if binding else "unmapped"
+        rows.append((f"{name} → {targets}", value if isinstance(value, str) else f"{value:+.2f}"))
+    return rows
 
 
 def _ellipsize(text: str, width: float) -> str:
@@ -628,7 +630,7 @@ def drive_ui() -> None:
     # The pre-click value guards both sides, including the frame Stop is clicked.
     if predicting:
         push_selected()
-    clicked = primary_button("Stop predicting" if predicting else "Start predicting")
+    clicked = primary_button("Stop predicting" if predicting else "Start predicting", size=(-1, 0))
     if predicting:
         pop_selected()
     imgui.end_disabled()
@@ -648,10 +650,29 @@ def drive_ui() -> None:
     imgui.spacing()
     output_filter.ui()
     imgui.spacing()
-    # A read-out, not a progress bar: `fist` resolves to [-1, 1] and a bar would clamp
-    # the negative half away without saying so.
-    panel_header("PUSHED")
-    mono_text(_pushed())
+    rows = _pushed()
+    style = imgui.get_style()
+    imgui.push_style_color(imgui.Col_.child_bg, style.color_(imgui.Col_.frame_bg))
+    imgui.begin_child("sent-controls", imgui.ImVec2(0, 0),
+                      imgui.ChildFlags_.auto_resize_y | imgui.ChildFlags_.always_use_window_padding)
+    panel_header("Sent to the hand")
+    if not rows:
+        mono_text("nothing sent yet", muted())
+    for label, value in rows:
+        imgui.push_font(mono_font(), style.font_size_base)
+        value_w = imgui.calc_text_size(value).x
+        imgui.pop_font()
+        room = imgui.get_content_region_avail().x
+        # Fan-out targets stay on one row; hovering exposes the complete route.
+        imgui.text_unformatted(_ellipsize(label, max(0.0, room - value_w - style.item_spacing.x)))
+        imgui.set_item_tooltip(label)
+        imgui.same_line()
+        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
+            0.0, imgui.get_content_region_avail().x - value_w
+        ))
+        mono_text(value)
+    imgui.end_child()
+    imgui.pop_style_color()
 
 
 def hand_ui() -> None:

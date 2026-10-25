@@ -50,6 +50,85 @@ def test_myocontrol_autosaves_models(app_module):
     assert app_module["pipeline"].save_model is save_pickle
 
 
+def test_pushed_rows_name_alias_target_and_signed_value(app_module, monkeypatch):
+    from myogestic.controls import load_control_map
+
+    pushed = app_module["_pushed"]
+    assert pushed() == []
+    mapping = load_control_map({"dofs": {"grip": "vhi.prediction.index", "mode": "hand.mode"}})
+    monkeypatch.setitem(pushed.__globals__, "CONTROL_MAP", mapping)
+    app_module["pipeline"].predictions = {"controls": {"grip": -0.25, "mode": "rest"}}
+    assert pushed() == [("grip → vhi.prediction.index", "-0.25"), ("mode → hand.mode", "rest")]
+
+
+def test_drive_uses_compact_smoothing_and_sent_card(app_module, monkeypatch, imgui_frame):
+    from imgui_bundle import imgui
+
+    assert app_module["output_filter"]._compact is True
+    texts, headers = [], []
+    monkeypatch.setattr(imgui, "text_unformatted", texts.append)
+    monkeypatch.setattr(imgui, "text_colored", lambda color, text: texts.append(text))
+    monkeypatch.setitem(app_module["drive_ui"].__globals__, "panel_header",
+                        lambda title, *a, **k: headers.append(title))
+    imgui_frame(app_module["drive_ui"])
+    assert headers == ["Sent to the hand"]
+    assert "nothing sent yet" in texts
+
+
+@pytest.mark.parametrize("scale,size", [(1.0, (1280, 828)), (2.0, (2560, 1656))])
+@pytest.mark.parametrize("predicting", [False, True])
+def test_drive_fits_real_light_step_layout(app_module, monkeypatch, implot_frame, scale, size, predicting):
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    imgui.get_io().display_size = imgui.ImVec2(*size)
+    app_module["steps"].active = 3
+    if predicting:
+        app_module["app"].ctx.state = "predicting"
+        app_module["pipeline"].model = object()
+        app_module["pipeline"].predictions = {
+            "class": 1, "proba": [0.2, 0.8], "controls": {"prediction": 0.8, "control": 0.0}
+        }
+    render = app_module["drive_ui"]
+    measurements = []
+    actions = []
+    button = imgui.button
+
+    def action(label, *args):
+        available = imgui.get_content_region_avail().x
+        result = button(label, *args)
+        if label in ("Start predicting", "Stop predicting"):
+            actions.append((imgui.get_item_rect_size().x, available))
+        return result
+
+    monkeypatch.setattr(imgui, "button", action)
+
+    def tracked():
+        render()
+        measurements.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y, imgui.get_scroll_max_y()))
+
+    monkeypatch.setitem(app_module["myocontrol_ui"].__globals__, "drive_ui", tracked)
+
+    def draw():
+        imgui.set_next_window_size(imgui.ImVec2(*size))
+        imgui.begin("drive-workflow")
+        app_module["myocontrol_ui"](app_module["app"].ctx)
+        imgui.end()
+
+    # Auto-height cards and their parent each settle from the previous frame.
+    for _ in range(3):
+        implot_frame(draw)
+    cursor, height, scroll = measurements[-1]
+    assert cursor <= height and scroll == 0, measurements
+    assert actions and all(abs(width - available) <= 1 for width, available in actions), actions
+
+
 def test_myocontrol_steps(app_module):
     assert app_module["steps"].steps == ["Connect", "Record", "Train", "Drive"]
 
@@ -530,7 +609,7 @@ def test_header_controls_share_a_row_after_resizing(app_module, monkeypatch, imp
 def test_myocontrol_drive_toggle_balances_selected_style(app_module, monkeypatch, imgui_frame):
     pipeline = app_module["pipeline"]
     pipeline.model = ("Classification", OnlyPredictProba())
-    monkeypatch.setitem(app_module["drive_ui"].__globals__, "primary_button", lambda label: True)
+    monkeypatch.setitem(app_module["drive_ui"].__globals__, "primary_button", lambda label, **k: True)
     imgui_frame(app_module["drive_ui"])
     assert app_module["app"].ctx.state == "predicting"
     imgui_frame(app_module["drive_ui"])
