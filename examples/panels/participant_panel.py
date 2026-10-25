@@ -3,7 +3,7 @@
 Click Set participant, optionally enter a name, then Start session. Reopen the
 chip and type the same name to find its ID. Names are written only to the local
 ``~/myogestic/participant-key.csv`` key file; this example records no data.
-The checkbox demonstrates why participant changes are unavailable while busy.
+The recording chip demonstrates why participant changes are unavailable while busy.
 
 Run with:
     uv run python examples/panels/participant_panel.py
@@ -13,6 +13,7 @@ from imgui_bundle import imgui
 
 from myogestic import App, Context
 from myogestic.widgets import ParticipantPanel, panel_header
+from myogestic.widgets.common import IDLE, WARNING, muted, pop_selected, push_selected, tinted_row
 
 app = App("panel: ParticipantPanel", require_participant=True)
 participant = ParticipantPanel()
@@ -23,9 +24,22 @@ def ui(ctx: Context) -> None:
     """Draw the selector and a simulated busy state."""
     panel_header("Participant")
     participant.ui(ctx)
-    imgui.text(f"Selected ID: {ctx.participant or 'none'}")
-    _, busy = imgui.checkbox("Simulate recording", ctx.state != "idle")
-    ctx.state = "recording" if busy else "idle"
+    # The widget's chip already shows the selected ID.
+    imgui.text_colored(muted(), "Demo state")
+    busy = ctx.state != "idle"
+    if busy:
+        push_selected()
+    if imgui.small_button("Recording"):
+        ctx.state = "idle" if busy else "recording"
+    if busy:
+        pop_selected()
+    with tinted_row(WARNING if ctx.state != "idle" else IDLE):
+        imgui.align_text_to_frame_padding()
+        imgui.text_unformatted("Recording" if ctx.state != "idle" else "Idle")
+    if ctx.state != "idle":
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.text_wrapped("Turn off Recording to change participant.")
+        imgui.pop_style_color()
 
 
 def main() -> None:

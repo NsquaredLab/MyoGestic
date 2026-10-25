@@ -1,7 +1,7 @@
 """``template_inspector`` in isolation — accept/reject a table of rows.
 
 A reusable "extract → review → train" table: one row per candidate
-(template / trial / segment) with an accept checkbox, a class badge, an
+(template / trial / segment) with an acceptance chip, a class badge, an
 optional info line, and an energy bar. Clicking a row selects it; the call
 returns the selected row's ``key`` so a caller can render a detail view.
 
@@ -13,8 +13,11 @@ Run with:
     uv run python examples/panels/template_inspector.py
 """
 
+from imgui_bundle import imgui
+
 from myogestic import App
 from myogestic.widgets import TemplateInspector, TemplateInspectorRow
+from myogestic.widgets.common import mono_text, muted
 
 ROWS = [
     TemplateInspectorRow("s1#0", "OPEN", accepted=True, info_text="2026-05-01", energy=0.82),
@@ -33,9 +36,8 @@ inspector = TemplateInspector("templates", title="Extracted templates")
 def ui(ctx):
     selected = inspector.ui(ROWS)
     if selected is not None:
-        from imgui_bundle import imgui
-
-        imgui.text_disabled(f"selected: {selected}")
+        imgui.text_colored(muted(), "Selected row")
+        mono_text(selected)
 
 
 def main() -> None:

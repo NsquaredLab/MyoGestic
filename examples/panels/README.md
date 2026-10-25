@@ -14,6 +14,12 @@ dummy data, one `@app.ui` panel, `app.run()`. The stream-backed ones feed on
 `myogestic.sources.SyntheticSource` — a paced fake amplifier that ships with
 the package, so an example is also a working recipe.
 
+The widgets use the 2.0 kit directly: one header per card, state rows in words,
+selection chips, and Settings popovers. Demo-only inputs sit in their own cards
+when they accompany a widget. Pong's captioned inputs stack in narrow cells;
+StepBar keeps its navigation in a full-width header cell, with completion controls
+in the card below.
+
 | Script | Widget | Shows |
 |--------|--------|-------|
 | `signal_viewer.py` | [`signal_viewer`][sv] | Live decimated 8-ch scope, per-channel toggles, display filters |
@@ -21,19 +27,22 @@ the package, so an example is also a working recipe.
 | `stream_panel.py` | [`stream_panel`][sp] | Per-stream status + Scan → Connect flow (starts disconnected) |
 | `device_picker.py` | [`DevicePicker`][dp] | Device dropdown + per-device options → Connect (two synthetic devices, then the real OTB list) |
 | `stream_manager.py` | [`StreamManager`][sm2] | Add/remove streams at runtime, each row showing live rate, channels and sample age |
-| `line_plot.py` | [`line_plot`][lp] | Static multi-channel line plot with legend |
+| `line_plot.py` | [`line_plot`][lp] | Static multi-channel line plot with legend and Auto / Shared amplitude range |
 | `heatmap.py` | [`heatmap`][hm] | Labelled 2-D heatmap (mock confusion matrix) |
 | `scatter2d.py` | [`scatter2d`][s2] | 2-D scatter, per-class colouring |
 | `scatter3d.py` | [`scatter3d`][s3] | 3-D scatter with orbit camera |
-| `recording_controls.py` | [`recording_controls`][rc] | Record toggle + per-class buttons + state pill (records to a temp dir) |
+| `recording_controls.py` | [`recording_controls`][rc] | Timed gesture takes with a warm-up, countdown and duration settings; manual capture is also available (records to a temp dir) |
 | `record_button.py` | [`RecordButton`][rb] | Record → Stop → name-the-take dialog, no classes (records to a temp dir) |
 | `session_manager.py` | [`session_manager`][sm] | Session picker over three mock sessions |
 | `prediction_label.py` | [`prediction_label`][pl] | Predicted class + confidence read-out |
-| `feature_selector.py` | [`FeatureSelector`][fs] | Feature tick-list + active count |
+| `feature_selector.py` | [`FeatureSelector`][fs] | Feature chips + active count |
 | `template_inspector.py` | [`template_inspector`][ti] | Accept/reject/select table of rows |
 | `trial_preview.py` | [`trial_preview`][tp] | Stacked waveform + shaded band overlay |
-| `pong.py` | [`PongTask`][pg] | Pong driven by one signed command, from a slider (no model) |
-| `tracking_task.py` | [`TrackingTask`][tt] | Zero/MVC capture then a trapezoid to follow, against a synthetic force channel |
+| `pong.py` | [`PongTask`][pg] | Captioned command/opponent inputs, control segments and a cursor chip above the court (no model) |
+| `tracking_task.py` | [`TrackingTask`][tt] | A captioned effort input above Zero/MVC capture and a trapezoid to follow, against a synthetic force channel |
+| `participant_panel.py` | [`ParticipantPanel`][participant] | Participant selection and local name lookup, with a chip to simulate the recording lock |
+| `step_bar.py` | [`StepBar`][steps] | Full-width workflow navigation with an independent completion chip and state row |
+| `control_map_editor.py` | [`ControlMapEditor`][controls] | Control-map authoring against a fake target, with working save/reload |
 | `post_processor.py` | [`PostProcessor`][pp2] | Live-tunable output smoother (extensible filter palette) |
 | `process_launcher.py` | [`process_launcher`][pr] | Start/stop external subprocesses |
 | `log_panel.py` | [`log_panel`][lg] | App-event log (seeded with dummy lines) |
@@ -49,9 +58,7 @@ dummy data that shows the widget at full functionality (non-empty,
 interactive) — not an idle/empty state. Keep the file to the shape above and
 add a row to the table.
 
-Not every file is a titled "panel": the plots, `app_logo`,
-`template_inspector`, and `trial_preview` are inline components rather than
-self-contained panels — shown in isolation here all the same.
+Inline components such as `app_logo` and `StepBar` are shown in isolation too.
 
 **Deliberately excluded** (building blocks, not standalone panels):
 `panel_header` (a section header used inside panels), `popout_panel` (a
@@ -84,3 +91,6 @@ and the non-widget helpers `TemplateInspectorRow`, `request_vhi_state_refresh`,
 [al]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.app_logo
 [pp]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.ml.widgets.pipeline_panel
 [vh]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.VhiMovementPanel
+[participant]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.ParticipantPanel
+[steps]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.StepBar
+[controls]: https://nsquaredlab.github.io/MyoGestic/api/widgets/#myogestic.widgets.ControlMapEditor
