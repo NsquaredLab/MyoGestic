@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from imgui_bundle import icons_fontawesome_6 as fa
-from imgui_bundle import imgui
+from imgui_bundle import hello_imgui, imgui
 
-from myogestic._theme import mono_font
+from myogestic._theme import display_font, mono_font
 from myogestic.core import Context
 from myogestic.widgets.common import (
     DANGER,
@@ -90,19 +89,21 @@ class AppHeader:
         edge_rule(bottom=True)
         style = imgui.get_style()
         center = imgui.get_cursor_pos_y() + imgui.get_content_region_avail().y / 2
-        imgui.set_cursor_pos_y(center - ui_px(26) / 2)
-        AppLogo(variant="line", height=ui_px(26)).ui()
+        right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+        state = ctx.state.upper()
+        pill_w = imgui.calc_text_size(state).x + ui_px(32) if self.show_state else 0
+        gap = style.item_spacing.x
+        state_w = pill_w + (gap if self.show_state else 0)
+        minimum_nav = self.steps._width(done, padding_x=ui_px(4), minimum=True) if self.steps else 0
+        logo_budget = imgui.get_content_region_avail().x - state_w - minimum_nav - ui_px(14)
+        self._logo(center, logo_budget)
         imgui.same_line(0.0, ui_px(14))
         left = imgui.get_cursor_pos_x()
-        available = imgui.get_content_region_avail().x
-        right = left + available
+        available = right - left
         widths = self._widths.setdefault(self._widget_id, {})
         if widths.get("font_size") != imgui.get_font_size() or widths.get("scale") != ui_px(1):
             widths.clear()
             widths.update(font_size=imgui.get_font_size(), scale=ui_px(1))
-        state = ctx.state.upper()
-        pill_w = widths.get(state, imgui.calc_text_size(state).x + ui_px(40)) if self.show_state else 0
-        gap = style.item_spacing.x
         font = mono_font() if ctx.participant else None
         if font is not None:
             imgui.push_font(font, style.font_size_base)
@@ -110,41 +111,36 @@ class AppHeader:
                   + 2 * style.frame_padding.x) if self.participant else 0
         if font is not None:
             imgui.pop_font()
-        right_w = chip_w + pill_w + gap * (bool(chip_w) + bool(pill_w))
         padding = imgui.ImVec2(style.frame_padding.x, style.frame_padding.y)
-        labels_w = sum(
-            imgui.calc_text_size(f"{fa.ICON_FA_CHECK if complete else i + 1}  {label}").x
-            for i, (label, complete) in enumerate(zip(self.steps.steps, done, strict=True))
-        ) + (len(self.steps.steps) - 1) * ui_px(32) if self.steps else 0
-        nav_w = labels_w + len(self.steps.steps) * 2 * padding.x if self.steps else 0
+        nav_w = self.steps._width(done) if self.steps else 0
         title_w = 2 * gap + ui_px(1) + imgui.calc_text_size(self.title).x
+        # The participant yields first, then the title, then navigation padding.
         show_title = self.steps is None or (
-            imgui.get_window_size().x >= ui_px(1100) and available >= title_w + nav_w + right_w
+            imgui.get_window_size().x >= ui_px(1100) and available >= title_w + nav_w + state_w
         )
         if show_title:
-            self._title(left - ui_px(14) + gap, center, available - right_w - 2 * gap - ui_px(1))
+            self._title(left - ui_px(14) + gap, center, available - state_w - nav_w - 2 * gap - ui_px(1))
             imgui.same_line(0.0, ui_px(14))
             left = imgui.get_cursor_pos_x()
             available = right - left
-        if self.steps and available < nav_w + right_w:
+        nav_budget = max(0.0, available - state_w)
+        if self.steps and nav_budget < nav_w:
             padding.x = ui_px(4)
-            nav_w = labels_w + len(self.steps.steps) * 2 * padding.x
-        compact = bool(self.steps and nav_w + pill_w + gap > available)
-        if compact:
-            nav_w -= sum(
-                imgui.calc_text_size(f"  {label}").x
-                for i, label in enumerate(self.steps.steps) if i != self.steps.active
-            )
+            nav_w = self.steps._width(done, padding_x=padding.x)
+        compact = bool(self.steps and nav_w > nav_budget)
         active = None
         if self.steps:
             imgui.set_cursor_pos(imgui.ImVec2(left, center - imgui.get_frame_height() / 2))
             imgui.push_style_var(imgui.StyleVar_.frame_padding, padding)
             try:
-                active = self.steps.ui(done, compact=True) if compact else self.steps.ui(done)
+                imgui.begin_group()
+                active = self.steps.ui(done, compact=compact, max_width=nav_budget)
+                imgui.end_group()
+                nav_w = imgui.get_item_rect_size().x
             finally:
                 imgui.pop_style_var()
         participant_w = max(0.0, min(
-            max(chip_w, widths.get("participant", chip_w)), available - nav_w - pill_w - 2 * gap,
+            max(chip_w, widths.get("participant", chip_w)), available - nav_w - state_w - gap,
         )) if self.participant else 0
         if participant_w:
             imgui.set_cursor_pos(imgui.ImVec2(
@@ -168,6 +164,21 @@ class AppHeader:
             status_pill(state, tone)
             widths[state] = imgui.get_item_rect_size().x
         return active
+
+    def _logo(self, center: float, width: float) -> None:
+        """Keep the wordmark visible after navigation has exhausted its fallbacks."""
+        height = ui_px(26)
+        asset = "myogestic_logo_line.png"
+        if hello_imgui.asset_exists(asset):
+            size = hello_imgui.image_and_size_from_asset(asset).size
+            natural_w = height * size.x / size.y if size.y else height
+        else:
+            imgui.push_font(display_font(), height / imgui.get_style().font_scale_main)
+            natural_w = imgui.calc_text_size("MyoGestic").x
+            imgui.pop_font()
+        height *= min(1.0, max(1.0, width) / max(1.0, natural_w))
+        imgui.set_cursor_pos_y(center - height / 2)
+        AppLogo(variant="line", height=height).ui()
 
     def _title(self, left: float, center: float, width: float) -> None:
         imgui.set_cursor_pos(imgui.ImVec2(left, center - ui_px(20) / 2))
