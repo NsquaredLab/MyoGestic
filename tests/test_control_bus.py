@@ -632,3 +632,41 @@ def test_connector_tears_down_a_bus_that_resolves_during_stop():
     assert link.bus is None
     assert target.stopped == 1
     assert connector.status == "control connection stopped"
+
+
+def test_connector_finished_includes_late_stop_teardown():
+    entered, release, stopping, stopped = Event(), Event(), Event(), Event()
+
+    class BlockingLink:
+        bus = None
+
+        def ensure(self):
+            entered.set()
+            release.wait(timeout=2)
+            self.bus = object()
+            return self.bus
+
+        def stop(self):
+            if self.bus is not None:
+                stopping.set()
+                stopped.wait(timeout=2)
+                self.bus = None
+
+    link = BlockingLink()
+    connector = ControlLinkConnector(link)
+    assert not connector.finished
+    try:
+        assert connector.poll()
+        assert entered.wait(timeout=1)
+        assert not connector.finished
+        connector.stop(timeout_s=0.0)
+        release.set()
+        assert stopping.wait(timeout=1)
+        assert not connector.finished, "late teardown must finish before a replacement can bind"
+        stopped.set()
+        assert _wait_until(lambda: connector.finished)
+        assert link.bus is None
+    finally:
+        release.set()
+        stopped.set()
+        connector.stop()

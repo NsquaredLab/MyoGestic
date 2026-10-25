@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 
 import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
@@ -209,6 +210,52 @@ def pop_selected() -> None:
     imgui.get_window_draw_list().add_rect_filled(
         imgui.ImVec2(p0.x + 3.0, y), imgui.ImVec2(p1.x - 3.0, p1.y), imgui.get_color_u32(_ACCENT), 1.0
     )
+
+
+@contextmanager
+def tinted_row(tone: imgui.ImVec4 | None = None) -> Iterator[float]:
+    """Frame one compact row with a theme-derived surface and optional status tint.
+
+    Parameters
+    ----------
+    tone
+        Semantic colour mixed into the current surface; ``None`` uses the
+        theme's raised surface alone.
+
+    Yields
+    ------
+    float
+        Inner width available for text and right-aligned controls. The row is
+        one frame high, with scaled padding and rounded corners.
+    """
+    style = imgui.get_style()
+    surface = style.color_(imgui.Col_.frame_bg)
+    if tone is not None:
+        surface = imgui.ImVec4(
+            surface.x * 0.88 + tone.x * 0.12,
+            surface.y * 0.88 + tone.y * 0.12,
+            surface.z * 0.88 + tone.z * 0.12,
+            1.0,
+        )
+    origin = imgui.get_cursor_screen_pos()
+    cursor = imgui.get_cursor_pos()
+    width = imgui.get_content_region_avail().x
+    pad = ui_px(4)
+    height = imgui.get_frame_height() + 2 * pad
+    imgui.get_window_draw_list().add_rect_filled(
+        origin, imgui.ImVec2(origin.x + width, origin.y + height),
+        imgui.get_color_u32(surface), style.frame_rounding,
+    )
+    imgui.begin_group()
+    imgui.indent(pad)
+    imgui.set_cursor_pos_y(cursor.y + pad)
+    try:
+        yield max(1.0, width - 2 * pad)
+    finally:
+        imgui.unindent(pad)
+        imgui.set_cursor_pos(imgui.ImVec2(cursor.x, cursor.y + height))
+        imgui.dummy(imgui.ImVec2(width, 0))
+        imgui.end_group()
 
 
 def primary_button(label: str, size: tuple[float, float] = (0, 0)) -> bool:
