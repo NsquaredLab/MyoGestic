@@ -46,16 +46,179 @@ _APP = Path(__file__).resolve().parent.parent / "examples" / "start_here" / "pon
 
 @pytest.fixture
 def app_module(monkeypatch):
+    import struct
+    from types import SimpleNamespace
+
+    from imgui_bundle import hello_imgui
+
     monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
     # `launchable()` swallows the FileNotFoundError, so this only spares a dev box
     # without VHI installed a pointless env probe at import.
     monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    # The header uses the shipped logo geometry without a GL runner. Earlier tests
+    # may set HelloImGui's asset directory, so a missing-asset fallback is not stable.
+    asset = _APP.parents[2] / "myogestic/assets/myogestic_logo_line.png"
+    width, height = struct.unpack(">II", asset.read_bytes()[16:24])
+    monkeypatch.setattr(hello_imgui, "asset_exists", lambda name: True)
+    monkeypatch.setattr(hello_imgui, "image_and_size_from_asset", lambda name: SimpleNamespace(
+        texture_id=1, size=imgui.ImVec2(width, height),
+    ))
+    monkeypatch.setattr(imgui, "image", lambda texture, size: imgui.dummy(size))
     monkeypatch.syspath_prepend(str(_APP.parent))
-    return runpy.run_path(str(_APP), run_name="__main__")
+    namespace = runpy.run_path(str(_APP), run_name="__main__")
+    if "steps" in namespace:
+        namespace["steps"].active = 0
+    return namespace
+
+
+def test_pong_uses_the_myocontrol_shell(app_module):
+    """One header and step card share the responsive session-app layout."""
+    from myogestic import Fr, Px
+    from myogestic.widgets import AppHeader
+
+    layout = app_module["layout"]
+    header, steps = app_module["header"], app_module["steps"]
+    assert isinstance(header, AppHeader) and header.title == "Pong"
+    assert header.steps is steps and header.participant is app_module["participant"]
+    assert steps.steps == ["Connect", "Record", "Train", "Play"]
+    assert steps._widget_id == "pong_steps"
+    assert layout.panel_names == {"header", "signal", "step", "sessions", "log"}
+    assert layout._breakpoint == Px(1100)
+    assert layout._wide._col_tracks == [Fr(1), Px(400)]
+    assert layout._wide._areas == {
+        "header": (0, 1, 0, 2), "signal": (1, 3, 0, 1),
+        "step": (1, 2, 1, 2), "sessions": (2, 4, 1, 2), "log": (3, 4, 0, 1),
+    }
+    assert layout._wide._row_tracks == [Px(52), Fr(3), Fr(1), Px(110)]
+    assert layout._narrow._row_tracks == [Px(52), Fr(2), Fr(3), Fr(1.5), Px(110)]
+    for grid in (layout._wide, layout._narrow):
+        assert grid._bare == {"header"}
+        assert grid._areas["header"] == (0, 1, 0, grid.cols)
+    assert not app_module["device"]._show_header
+    assert not app_module["recording"]._show_header
 
 
 def test_pong_requires_participant(app_module):
     assert app_module["app"].ctx.require_participant is True
+
+
+def test_step_completion_follows_connection_participant_files_model_and_prediction(
+    app_module, monkeypatch, tmp_path,
+):
+    from types import SimpleNamespace
+
+    monkeypatch.chdir(tmp_path)
+    ctx, done = app_module["app"].ctx, app_module["_step_done"]
+    assert done(ctx) == [False, False, False, False]
+    ctx.participant = "P-014"
+    folder = tmp_path / "sessions" / ctx.participant
+    folder.mkdir(parents=True)
+    (folder / "unrelated.txt").touch()
+    assert not done(ctx)[1]
+    for suffix in ("", ".session.zip"):
+        take = folder / f"P-014_2026-10-25_15-12-03{suffix}"
+        take.touch() if suffix else take.mkdir()
+        assert done(ctx)[1]
+        take.unlink() if suffix else take.rmdir()
+    (folder / "P-014_2026-10-25_15-12-03.session.zip").touch()
+    monkeypatch.setitem(ctx.streams, "emg", SimpleNamespace(status="connected", info=object()))
+    app_module["pipeline"].model = ("Proportional", object())
+    ctx.state = "predicting"
+    assert done(ctx) == [True, True, True, True]
+    ctx.participant = "P-015"
+    assert not done(ctx)[1]
+    ctx.streams["emg"].info = None
+    assert not done(ctx)[0]
+
+
+@pytest.mark.parametrize("step", range(4))
+@pytest.mark.parametrize("protocol", range(2))
+def test_recording_advances_once_in_every_step(app_module, monkeypatch, implot_frame, step, protocol):
+    """Opening another step hides recording controls without pausing their lifecycle."""
+    calls = []
+    app_module["steps"].active = step
+    app_module["record_protocol"]["index"] = protocol
+    controls = app_module["recording"]
+    render = controls.ui
+
+    def tracked(ctx, *, visible=True):
+        calls.append(visible)
+        render(ctx, visible=visible)
+
+    monkeypatch.setattr(controls, "ui", tracked)
+    implot_frame(lambda: app_module["pong_ui"](app_module["app"].ctx))
+    assert calls == [step == 1 and protocol == 1]
+
+
+@pytest.mark.parametrize("step", [0, 2, 3])
+def test_a_take_stops_on_time_while_another_step_is_open(app_module, monkeypatch, implot_frame, step):
+    """Exercise the recorder's deadline through the app, with its controls hidden."""
+    from types import SimpleNamespace
+
+    controls, ctx = app_module["recording"], app_module["app"].ctx
+    ctx.participant, ctx.current_label = "P-014", 1
+    controls._timed, controls._take_lengths = True, (5.0,)
+    now, calls = [0.0], []
+    controls._machine._clock = lambda: now[0]
+
+    def start():
+        calls.append("record")
+        ctx.state = "recording"
+        ctx.session = SimpleNamespace(add_label=lambda i: None)
+
+    def stop():
+        calls.append("stop")
+        ctx.state = "idle"
+
+    controls._on_record, controls._machine._on_stop = start, stop
+    controls._start(ctx)
+    app_module["steps"].active = step
+    now[0] = 2.0
+    implot_frame(lambda: app_module["pong_ui"](ctx))
+    assert calls == ["record"]
+    now[0] = 6.0
+    implot_frame(lambda: app_module["pong_ui"](ctx))
+    assert calls == ["record", "stop"]
+    assert controls.take.phase == "saved"
+
+
+@pytest.mark.parametrize("mode", range(3))
+@pytest.mark.parametrize("protocol", range(2))
+def test_each_recording_protocol_is_available_to_every_model(
+    app_module, monkeypatch, implot_frame, mode, protocol,
+):
+    calls = []
+    app_module["training_mode"]["index"] = mode
+    app_module["record_protocol"]["index"] = protocol
+    monkeypatch.setitem(app_module["record_ui"].__globals__, "block_ui", lambda: calls.append("cursor"))
+    monkeypatch.setattr(app_module["recording"], "ui",
+                        lambda ctx, visible=True: calls.append("gestures") if visible else None)
+    implot_frame(lambda: app_module["record_ui"](app_module["app"].ctx))
+    assert calls == ["cursor" if protocol == 0 else "gestures"]
+
+
+@pytest.mark.parametrize("state", ["recording", "predicting"])
+def test_protocol_choice_remains_available_during_a_take_or_prediction(
+    app_module, monkeypatch, implot_frame, state,
+):
+    """A cursor can join an existing take or run with live prediction as before."""
+    app_module["app"].ctx.state = state
+    app_module["record_protocol"]["index"] = 1
+    button = imgui.button
+    enabled = []
+
+    def choose_cursor(label, *args, **kwargs):
+        result = button(label, *args, **kwargs)
+        if label.startswith("Follow the cursor##"):
+            enabled.append(not bool(imgui.get_item_flags() & imgui.ItemFlags_.disabled))
+            return True
+        return result
+
+    monkeypatch.setattr(imgui, "button", choose_cursor)
+    implot_frame(lambda: app_module["record_ui"](app_module["app"].ctx))
+    assert enabled == [True]
+    assert app_module["record_protocol"]["index"] == 0
+    assert app_module["app"].ctx.state == state
 
 
 def test_pong_constructs_participant_panel(app_module):
@@ -195,16 +358,15 @@ def test_predict_never_binds_the_bus(app_module, monkeypatch):
     assert "controls" not in out, "nothing is bound, so nothing can have been pushed"
 
 
-def test_the_model_and_hand_tabs_draw(app_module, implot_frame):
-    """A layout pass only ever draws a tab bar's *first* tab, and that is Pong — so
-    neither of these is reached by `test_example_draws_a_frame`."""
+def test_the_train_and_hand_controls_draw(app_module, implot_frame):
+    """Train and optional hand controls draw without another card around them."""
     implot_frame(app_module["model_ui"])
     implot_frame(app_module["hand_ui"])
 
 
 @pytest.mark.parametrize("width,scale", [(320, 1.0), (320, 2.0), (1100, 2.0), (1800, 2.0)])
 @pytest.mark.parametrize("running", [False, True])
-def test_controls_are_one_card_with_reachable_actions(
+def test_record_controls_have_reachable_actions(
     app_module, monkeypatch, implot_frame, width, scale, running,
 ):
     """The narrow light card stacks choices and keeps its block action inside."""
@@ -218,14 +380,9 @@ def test_controls_are_one_card_with_reachable_actions(
     if running:
         app_module["target"].start()
     globals_ = app_module["model_ui"].__globals__
-    headers, buttons, actions, columns = [], [], [], []
+    headers, buttons, actions = [], [], []
     header = globals_["panel_header"]
     button = imgui.button
-    table = imgui.begin_table
-
-    def record_table(table_id, count, *args, **kwargs):
-        columns.append(count)
-        return table(table_id, count, *args, **kwargs)
 
     def record_header(title, *args, **kwargs):
         headers.append(title)
@@ -239,7 +396,6 @@ def test_controls_are_one_card_with_reachable_actions(
 
     monkeypatch.setitem(globals_, "panel_header", record_header)
     monkeypatch.setattr(imgui, "button", record_button)
-    monkeypatch.setattr(imgui, "begin_table", record_table)
     if "primary_button" in globals_:
         primary = globals_["primary_button"]
 
@@ -252,41 +408,89 @@ def test_controls_are_one_card_with_reachable_actions(
     def draw():
         imgui.begin_child("controls-probe", imgui.ImVec2(width, 1300),
                           window_flags=imgui.WindowFlags_.horizontal_scrollbar)
-        # Before the refactor this is the whole stack in the Model tab.
-        globals_.get("controls_ui", globals_["model_ui"])()
+        app_module["record_ui"](app_module["app"].ctx)
         imgui.end_child()
 
     for _ in range(3):
         headers.clear()
         buttons.clear()
         actions.clear()
-        columns.clear()
         implot_frame(draw)
-    assert headers == ["Pong controls"]
+    assert headers == [], "the shell owns the Record header"
     assert buttons and all(overhang <= 1 for _, overhang in buttons), buttons
     assert len(actions) == 1 and actions[0][1] == pytest.approx(actions[0][2])
     assert ("Stop" if running else "Follow the cursor") in actions[0][0]
-    assert columns == [2 if width == 1800 else 1]
 
 
-def test_model_view_gives_each_widget_its_own_card(app_module, monkeypatch, implot_frame):
-    """Composed widgets keep their headers in separate grid cells."""
+@pytest.mark.parametrize("step", range(4))
+@pytest.mark.parametrize("width", [2560, 1800])
+def test_each_step_draws_one_card_and_the_subject_view(
+    app_module, monkeypatch, implot_frame, step, width,
+):
+    """The default and narrow light shells keep actions inside their cards at scale two."""
     import myogestic.ml.widgets as ml_widgets
+    import myogestic.widgets.panels.recording as recording_widget
     import myogestic.widgets.training.feature_selector as feature_widget
+    from myogestic import _scale, _theme
 
-    headers = []
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    imgui.get_io().display_size = imgui.ImVec2(width, 1656)
+    app_module["steps"].active = step
+    headers, views, buttons, scroll = [], [], [], []
     original = app_module["panel_header"]
 
     def header(title, *args, **kwargs):
-        headers.append((title, tuple(imgui.get_window_pos())))
+        headers.append(title)
         return original(title, *args, **kwargs)
 
-    monkeypatch.setitem(app_module["model_ui"].__globals__, "panel_header", header)
+    button = imgui.button
+
+    def measure_button(label, *args, **kwargs):
+        edge = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        result = button(label, *args, **kwargs)
+        buttons.append((label, imgui.get_item_rect_max().x - edge))
+        return result
+
+    monkeypatch.setattr(imgui, "button", measure_button)
+    monkeypatch.setattr(imgui, "begin_tab_bar", lambda *a: pytest.fail("the shell has no tabs"))
+    monkeypatch.setitem(app_module["pong_ui"].__globals__, "panel_header", header)
     monkeypatch.setattr(ml_widgets, "panel_header", header)
     monkeypatch.setattr(feature_widget, "panel_header", header)
-    implot_frame(app_module["model_ui"])
-    assert [title.lower() for title, _ in headers] == ["pong controls", "features", "model", "output"]
-    assert len({pos for _, pos in headers}) == 4
+    monkeypatch.setattr(recording_widget, "panel_header", header)
+    for name in ("pong", "viewer"):
+        widget = app_module[name]
+        render = type(widget).ui
+
+        def view(self, *args, name=name, render=render, **kwargs):
+            views.append(name)
+            return render(self, *args, **kwargs)
+
+        monkeypatch.setattr(type(widget), "ui", view)
+
+    def draw():
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(width, 1656))
+        imgui.begin("pong-shell", flags=imgui.WindowFlags_.no_title_bar)
+        app_module["pong_ui"](app_module["app"].ctx)
+        scroll.append((imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+        imgui.end()
+
+    for _ in range(4):
+        headers.clear()
+        views.clear()
+        buttons.clear()
+        implot_frame(draw)
+    assert headers == [app_module["steps"].steps[step]]
+    assert views == ["viewer" if step == 0 else "pong"]
+    assert scroll[-1] == (0, 0)
+    assert all(overhang <= 1 for _, overhang in buttons), buttons
+    assert app_module["layout"]._active is (
+        app_module["layout"]._wide if width == 2560 else app_module["layout"]._narrow
+    )
 
 
 def test_wrapped_choices_still_change_the_model_and_court(app_module, monkeypatch, implot_frame):
@@ -305,10 +509,11 @@ def test_wrapped_choices_still_change_the_model_and_court(app_module, monkeypatc
         return label.startswith(wanted["label"] + "##")
 
     monkeypatch.setattr(imgui, "button", clicked)
-    render = app_module["controls_ui"]
+    render = app_module["play_ui"]
 
     def draw():
         imgui.begin_child("wrapped-choices", imgui.ImVec2(320, 1300))
+        app_module["model_ui"]()
         render()
         imgui.end_child()
 
@@ -332,12 +537,12 @@ def test_unlaunchable_hand_explains_the_next_step(app_module, monkeypatch, implo
     _theme.apply_theme()
     imgui.get_style().scale_all_sizes(2.0)
     imgui.get_style().font_scale_main = 2.0
-    text, buttons = [], []
-    wrapped, button = imgui.text_wrapped, imgui.button
+    hints, buttons, heights = [], [], []
+    tooltip, button = imgui.set_item_tooltip, imgui.small_button
 
     def words(value):
-        text.append(value)
-        wrapped(value)
+        hints.append(value)
+        tooltip(value)
 
     def action(label, *args, **kwargs):
         right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
@@ -345,21 +550,25 @@ def test_unlaunchable_hand_explains_the_next_step(app_module, monkeypatch, implo
         buttons.append((label, imgui.get_item_rect_max().x - right))
         return result
 
-    monkeypatch.setattr(imgui, "text_wrapped", words)
-    monkeypatch.setattr(imgui, "button", action)
+    monkeypatch.setattr(imgui, "set_item_tooltip", words)
+    monkeypatch.setattr(imgui, "small_button", action)
 
     def draw():
         imgui.begin_child("hand-probe", imgui.ImVec2(320, 1000))
+        top = imgui.get_cursor_pos_y()
         app_module["hand_ui"]()
+        heights.append((imgui.get_cursor_pos_y() - top,
+                        imgui.get_frame_height() + app_module["ui_px"](8) + imgui.get_style().item_spacing.y))
         imgui.end_child()
 
     for _ in range(3):
-        text.clear()
+        hints.clear()
         buttons.clear()
         implot_frame(draw)
-    assert "The hand is not running." in text
-    assert any("Start the Virtual Hand" in value for value in text)
-    assert buttons == [("Bind now", pytest.approx(0, abs=1))]
+    assert any("Start the Virtual Hand" in value for value in hints)
+    assert len(buttons) == 1 and "bind_hand" in buttons[0][0]
+    assert buttons[0][1] <= 1
+    assert heights[-1][0] <= heights[-1][1]
 
 
 def test_the_map_declares_exactly_what_the_app_pushes(app_module):
@@ -1179,6 +1388,7 @@ def test_the_ghost_is_driven_only_while_a_block_runs(app_module, monkeypatch, im
     which is a real distinction — a ghost parked at centre court is a target the subject
     would try to hold.
     """
+    app_module["steps"].active = 1
     seen: list[float | None] = []
     monkeypatch.setattr(
         type(app_module["pong"]),

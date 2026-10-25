@@ -473,8 +473,7 @@ def test_start_here_picker_owns_device_streams(name, monkeypatch, implot_frame):
     monkeypatch.setattr(imgui, "begin_tab_item", track_tab)
     implot_frame(lambda: app._ui_fn(app.ctx))
     assert "Streams" not in tabs
-    assert tabs == (["Signal", "Force"] if name == "force_ramps" else
-                    ["Pong", "Signal", "Model", "Source", "Hand"])
+    assert tabs == (["Signal", "Force"] if name == "force_ramps" else [])
 
 
 @pytest.mark.parametrize("name", ["force_ramps", "pong", "myocontrol"])
@@ -517,6 +516,9 @@ def test_start_here_recording_fits_default_grid(name, participant, monkeypatch, 
     namespace = runpy.run_path(str(_EXAMPLES_ROOT / "start_here" / f"{name}.py"))
     app = namespace["app"]
     app.ctx.participant = participant
+    if name == "pong":
+        namespace["steps"].active = 1
+        namespace["record_protocol"]["index"] = 1
     monkeypatch.setattr(_scale, "_current", 2.0)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
@@ -527,8 +529,8 @@ def test_start_here_recording_fits_default_grid(name, participant, monkeypatch, 
     render = type(recording).ui
     measurements = []
 
-    def measured(self, ctx):
-        render(self, ctx)
+    def measured(self, ctx, **kwargs):
+        render(self, ctx, **kwargs)
         measurements.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y,
                              imgui.get_scroll_max_y()))
 

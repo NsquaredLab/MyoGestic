@@ -115,7 +115,7 @@ training_mode = {"index": 0}
 held_control = 0.0
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
-    default=["RMS", "MAV"],
+    default=["RMS", "MAV"], show_header=False,
 )
 training_inputs: dict[str, tuple | None] = {"requested": None, "fitted": None}
 
@@ -563,6 +563,7 @@ def model_ui() -> None:
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(padding, style.frame_padding.y))
     training_mode["index"] = segmented("mode", MODES, training_mode["index"])
     imgui.pop_style_var()
+    imgui.text_colored(muted(), "Features")
     features.ui()
     imgui.end_disabled()
 
