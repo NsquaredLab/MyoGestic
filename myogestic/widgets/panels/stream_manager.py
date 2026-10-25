@@ -12,18 +12,13 @@ from myogestic.widgets.common import (
     DANGER,
     IDLE,
     SUCCESS,
-    destructive_button,
-    format_age,
-    label_column,
-    mono_text,
     muted,
     panel_header,
+    stream_chip,
 )
-from myogestic.widgets.signals.stream_panel import _last_ts_age
 
 if TYPE_CHECKING:
     from myogestic.core import Context
-    from myogestic.stream import Stream
 
 #: A stream name becomes a Zarr array name inside the session and a key in
 #: ``ctx.streams``. Whitelisted rather than blacklisted, the way session names are.
@@ -42,15 +37,17 @@ def _clean_name(typed: str) -> str:
 
 
 class StreamManager:
-    """The streams this app is running: add one, remove one, see their state.
+    """Stream chips with status dots, selection, and inline add or remove actions.
 
     For an app whose sources are not known when it is written — a second
     amplifier, a force transducer on its own device — rather than one that
     declares every stream up front with ``app.streams(...)``. Pair it with a
     `DevicePicker` per stream to choose what each one is attached to.
 
-    Adding and removing are refused while a recording is running, and the panel
-    says so: a session sizes one Zarr array per stream when recording starts, so
+    Select a chip to reveal its remove action; the last stream is kept. The
+    trailing plus opens a name field, Add, and cancel. Chips are dimmed while
+    recording and a caption explains the lock: a session sizes one Zarr array
+    per stream when recording starts, so
     a stream appearing afterwards has nowhere to write, and one vanishing
     mid-take is never finalised.
 
@@ -92,6 +89,8 @@ class StreamManager:
         self._show_header = show_header
         self._widget_id = widget_id or "streams"
         self._typed = ""
+        self._adding = False
+        self._selected = ""
 
     def ui(self, ctx: Context) -> None:
         """Render the manager. Call once per frame."""
@@ -105,116 +104,82 @@ class StreamManager:
         recording = getattr(ctx, "state", "") == "recording"
         if self._show_header:
             panel_header("Streams", fa.ICON_FA_LAYER_GROUP)
-
-        # The remove is *deferred* out of the loop below. `ctx.streams` is being
-        # iterated to draw the rows, and popping from a dict mid-iteration raises
-        # RuntimeError — the click has to be remembered and acted on afterwards.
-        remove: str | None = None
-        for index, (name, stream) in enumerate(ctx.streams.items()):
-            # Between rows, not inside them. A stream's name and its read-out are one
-            # thing and every gap here was the same size, which put the read-out nearer
-            # the next stream's name than its own — so it read as a caption for the
-            # wrong row.
-            if index:
-                imgui.spacing()
-            if self._row(name, stream, recording=recording):
+        names = sorted(ctx.streams)
+        if self._selected not in names:
+            self._selected = names[0] if names else ""
+        style = imgui.get_style()
+        left = imgui.get_cursor_pos_x()
+        right = left + imgui.get_content_region_avail().x
+        remove = None
+        for index, name in enumerate(names):
+            stream = ctx.streams[name]
+            tone = (SUCCESS if stream.status == "connected" and stream.info is not None
+                    else DANGER if stream.last_error else IDLE)
+            selected = name == self._selected
+            clicked, removed = stream_chip(
+                name, tone, selected=selected, prefix="sm", left=left, right=right,
+                first=index == 0, removable=selected and len(names) > 1,
+                recording=recording, locked=recording,
+                detail=stream.last_error or stream.status,
+            )
+            if clicked:
+                self._selected = name
+            if removed:
                 remove = name
         if remove is not None:
             self._on_remove(remove)
-
-        imgui.spacing()
-        self._add_row(ctx, recording=recording)
-
-    def _row(self, name: str, stream: Stream, *, recording: bool) -> bool:
-        """One stream: dot, name, live geometry, Remove. True if Remove was pressed."""
-        info = stream.info
-        attached = stream.status == "connected" and info is not None
-        if attached:
-            tone = SUCCESS
-        elif stream.last_error:
-            tone = DANGER
-        else:
-            tone = IDLE
-
-        style = imgui.get_style()
-        # Closes the gap between this row and the read-out under it. ImGui charges
-        # `ItemSpacing.y` when it places the *next* item, so the value has to be pushed
-        # around the name row — pushed around the read-out it shortens the gap *below*
-        # it instead, which separates the name from its own numbers and pulls the next
-        # stream up against them: the exact fault, inverted.
-        imgui.push_style_var(imgui.StyleVar_.item_spacing, imgui.ImVec2(style.item_spacing.x, 0.0))
-        # The Remove button makes this row a frame high, and plain text sits at the top
-        # of the line box it is given — leaving the name floating above a band of empty
-        # row, and its read-out further from it than the number suggests.
-        imgui.align_text_to_frame_padding()
-        imgui.text_colored(tone, fa.ICON_FA_CIRCLE)
-        imgui.same_line()
-        imgui.text(name)
-
-        button_w = imgui.calc_text_size(fa.ICON_FA_TRASH).x + style.frame_padding.x * 2.0
-        # `same_line` first, *then* measure: taken before it, the cursor has
-        # already wrapped to the next line and the width read is the whole row,
-        # so the offset overshoots by the length of the name and puts the button
-        # off the right edge.
-        imgui.same_line()
-        avail = imgui.get_content_region_avail().x
-        if avail > button_w:
-            imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + avail - button_w)
+            if self._selected not in ctx.streams:
+                self._selected = next(iter(sorted(ctx.streams)), "")
+        if names:
+            imgui.same_line()
+            plus_w = imgui.calc_text_size(fa.ICON_FA_PLUS).x + 2 * style.frame_padding.x
+            if imgui.get_cursor_pos_x() + plus_w > right:
+                imgui.new_line()
+        imgui.begin_disabled(recording)
+        if imgui.button(f"{fa.ICON_FA_PLUS}##sm_add_open") and not recording:
+            self._adding = True
+        imgui.end_disabled()
+        imgui.set_item_tooltip("Add a stream.")
+        if self._adding:
+            self._add_row(ctx, recording=recording)
         if recording:
-            imgui.begin_disabled()
-        clicked = destructive_button(
-            f"{fa.ICON_FA_TRASH}##rm_{name}",
-            tooltip="" if recording else f"Stop {name!r} and remove it",
-        )
-        if recording:
-            imgui.end_disabled()
-            if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-                imgui.set_tooltip("Stop the recording first.")
-        # The button is the row's last item, so the pop has to come after it — that is
-        # the item whose spacing decides where the read-out lands.
-        imgui.pop_style_var()
-
-        imgui.indent(22)
-        if attached and info is not None:
-            mono_text(
-                f"{info.fs:.0f} Hz · {info.n_channels} ch · {format_age(_last_ts_age(stream))}",
-                muted(),
-            )
-        else:
-            imgui.text_colored(muted(), stream.last_error or "not connected")
-        imgui.unindent(22)
-        return clicked
+            imgui.push_style_color(imgui.Col_.text, muted())
+            imgui.text_wrapped("Stop the recording to add or remove streams.")
+            imgui.pop_style_color()
+        elif not names and not self._adding:
+            imgui.text_wrapped("Use + to add your first stream, then connect its source.")
 
     def _add_row(self, ctx: Context, *, recording: bool) -> None:
-        """Name field plus Add, with the reason it is unavailable in the tooltip."""
-        cleaned = _clean_name(self._typed)
-        if recording:
-            reason = "Stop the recording before adding a stream."
-        elif not cleaned:
-            reason = "Type a name first."
-        elif cleaned in ctx.streams:
-            reason = f"A stream named {cleaned!r} already exists."
-        else:
-            reason = ""
-
+        """Inline name, Add and cancel, using the existing safe-name contract."""
         style = imgui.get_style()
-        add_w = imgui.calc_text_size(f"{fa.ICON_FA_PLUS}  Add").x + style.frame_padding.x * 2.0
-        label_column("New", ("New",), reserve=add_w + style.item_spacing.x)
-        changed, typed = imgui.input_text_with_hint("##new", "e.g. force", self._typed)
+        reserve = (imgui.calc_text_size("Add").x + imgui.calc_text_size(fa.ICON_FA_XMARK).x
+                   + 4 * style.frame_padding.x + 2 * style.item_spacing.x)
+        imgui.set_next_item_width(max(1.0, imgui.get_content_region_avail().x - reserve))
+        imgui.begin_disabled(recording)
+        changed, typed = imgui.input_text_with_hint("##sm_new", "e.g. force", self._typed)
         if changed:
             self._typed = typed[:_NAME_MAX]
-
+        cleaned = _clean_name(self._typed)
+        reason = ("Stop the recording before adding a stream." if recording else
+                  "Type a name first." if not cleaned else
+                  f"A stream named {cleaned!r} already exists." if cleaned in ctx.streams else "")
         imgui.same_line()
-        blocked = bool(reason)
-        if blocked:
-            imgui.begin_disabled()
-        if imgui.button(f"{fa.ICON_FA_PLUS}  Add"):
+        imgui.begin_disabled(bool(reason))
+        if imgui.button("Add##sm_add") and not reason:
             self._on_add(cleaned)
             self._typed = ""
-        if blocked:
-            imgui.end_disabled()
+            self._adding = False
+            if cleaned in ctx.streams:
+                self._selected = cleaned
+        imgui.end_disabled()
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            imgui.set_tooltip(reason or f"Add a stream named {cleaned!r}")
+            imgui.set_tooltip(reason or f"Add a stream named {cleaned!r}.")
+        imgui.same_line()
+        if imgui.button(f"{fa.ICON_FA_XMARK}##sm_add_cancel"):
+            self._adding = False
+            self._typed = ""
+        imgui.set_item_tooltip("Cancel adding a stream.")
+        imgui.end_disabled()
 
 
 __all__ = ["StreamManager"]
