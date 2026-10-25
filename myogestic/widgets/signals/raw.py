@@ -12,9 +12,27 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
+from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui, implot
 
-from myogestic.widgets.common import PALETTE, ensure_implot_style, muted
+from myogestic._theme import mono_font
+from myogestic.widgets.common import (
+    DANGER,
+    IDLE,
+    PALETTE,
+    SUCCESS,
+    WARNING,
+    ensure_implot_style,
+    fit_text,
+    mono_text,
+    muted,
+    panel_header,
+    plot_empty,
+    plot_legend,
+    plot_size,
+    segmented,
+    ui_px,
+)
 from myogestic.widgets.signals._scan import _disconnected_ui
 
 if TYPE_CHECKING:
@@ -23,49 +41,50 @@ if TYPE_CHECKING:
 
 @dataclass
 class _RawViewerState:
-    """Per-stream raw-viewer state — buffers + channel toggles + FPS history."""
+    """Per-widget raw-viewer buffers, channel selection, window and FPS history."""
 
     window: float = 1.0
     channels: set[int] = field(default_factory=set)
     bufs: dict = field(default_factory=dict)
     specs: list = field(default_factory=list)
     fps: list[float] = field(default_factory=list)
-    channels_initialized: bool = False
+    n_channels: int = -1
 
 
 _raw_viewers: dict[str, _RawViewerState] = {}
 
 
 class RawSignalViewer:
-    """Raw signal viewer — every visible sample, no decimation, bounded-copy render path.
+    """Every visible sample, with a Window selector and a Channels chip popup.
 
-    Construct once with the stream name (+ optional size / channel height),
-    then call [`ui`][] with the live ``ctx`` each frame.
+    Construct once and call [`ui`][] each frame. The header names the stream;
+    the mono footer reports sample rate, selected channels, raw points and FPS.
+    Disconnected and empty states explain the next step in the plot's space.
 
     Parameters
     ----------
-    stream_name
+    stream_name : str
         Stream to draw, as registered with ``app.streams``.
-    size
-        Plot size in pixels, ``(width, height)``. A negative width fills the
-        available space, which is what the default ``(-1, 300)`` does.
-    show_connect
-        Offer a Connect button while the stream is detached. Turn it **off** in
-        an app where another widget owns connecting — a `StreamPanel` or a
-        `DevicePicker` — or the app shows two controls named Connect that do
-        different things: this one attaches whatever source the stream already
-        holds, a picker's builds a new one from its dropdown.
-    channel_height
-        Vertical spacing between channel traces, in signal units. ``0`` (the
-        default) derives it from the data's own range each frame, so the
-        channels stay separated whatever the amplitude. Set it explicitly when
-        several viewers must be read against each other — with per-viewer
-        autoscaling a quiet channel and a loud one render identically.
+    size : tuple[float, float], optional
+        Plot size in UI-scaled pixels, by default ``(-1, 300)``. Nonpositive
+        dimensions fill the available space, reserving the footer.
+    show_connect : bool, optional
+        Offer a Connect button while detached. Turn it off when a StreamPanel
+        or DevicePicker owns connecting, to avoid duplicate Connect controls.
+    channel_height : float, optional
+        Trace spacing in signal units. ``0`` derives spacing from the visible
+        data. Set a common value when comparing several viewers.
+    widget_id : str | None, optional
+        State and ImGui identity, defaulting to ``stream_name``. Supply distinct
+        ids for independent views of the same stream.
+    show_title : bool, optional
+        Show the panel title, by default ``True``. Window and Channels remain
+        available when the title is hidden.
 
     Examples
     --------
     >>> from myogestic.widgets import RawSignalViewer
-    >>> viewer = RawSignalViewer("emg")
+    >>> viewer = RawSignalViewer("emg", widget_id="raw:left")
     >>> viewer.ui(ctx)
     """
 
@@ -76,159 +95,171 @@ class RawSignalViewer:
         size: tuple[float, float] = (-1, 300),
         channel_height: float = 0.0,
         show_connect: bool = True,
+        widget_id: str | None = None,
+        show_title: bool = True,
     ) -> None:
         self._stream_name = stream_name
         self._size = size
         self._channel_height = channel_height
         self._show_connect = show_connect
+        self._widget_id = stream_name if widget_id is None else widget_id
+        self._show_title = show_title
 
     def ui(self, ctx: Context) -> None:
         """Render the raw viewer. Call once per frame inside ``@app.ui``."""
-        stream_name = self._stream_name
-        size = self._size
-        channel_height = self._channel_height
+        imgui.push_id(self._widget_id)
+        try:
+            self._draw(ctx)
+        finally:
+            imgui.pop_id()
 
-        stream = ctx.streams.get(stream_name)
+    def _draw(self, ctx: Context) -> None:
+        """Render one scoped viewer, requesting only its visible raw tail."""
+        stream = ctx.streams.get(self._stream_name)
         if stream is None:
-            imgui.text(f"{stream_name}: not found")
+            self._header(None, IDLE)
+            plot_empty("Stream not found", "Add this stream to the app.", self._size)
             return
         if stream.status != "connected" or stream.info is None:
-            _disconnected_ui(stream_name, stream, show_connect=self._show_connect)
+            tone = DANGER if stream.last_error else WARNING if stream.info is not None else IDLE
+            self._header(None, tone)
+            imgui.begin_child("disconnected", plot_size(self._size))
+            try:
+                _disconnected_ui(self._stream_name, stream, show_connect=self._show_connect)
+            finally:
+                imgui.end_child()
             return
 
-        r = _raw_viewers.get(stream_name)
-        if r is None:
-            r = _RawViewerState(window=stream._window)
-            _raw_viewers[stream_name] = r
-
+        r = _raw_viewers.setdefault(self._widget_id, _RawViewerState(window=stream._window))
         t_start = _time.perf_counter()
-
-        changed, new_win = imgui.slider_float(
-            f"Window (s)##{stream_name}_raw_win",
-            r.window,
-            0.1,
-            60.0,
-            "%.1f s",
-        )
-        if changed:
-            r.window = new_win
-
-        # Request only the visible tail. Copying the full acquisition history
-        # every frame makes a short raw view slow down as a long buffer fills.
+        self._header(r, SUCCESS)
         snapshot = stream.get_raw_snapshot_stable(r.window)
         if snapshot is None:
-            imgui.text_disabled(f"{stream_name}: no data")
+            plot_empty("No samples yet", "Start the source to display raw signals.", self._size)
             return
         _, _, _, all_ts, all_data = snapshot
-        n_win = int(r.window * stream.info.fs)
-        if len(all_data) > n_win:
-            data = all_data[-n_win:]
-            ts = all_ts[-n_win:]
-        else:
-            data = all_data
-            ts = all_ts
-
+        n_win = max(1, int(r.window * stream.info.fs))
+        data, ts = all_data[-n_win:], all_ts[-n_win:]
         n_samples, n_channels = data.shape
-
-        if not r.channels_initialized or max(r.channels, default=-1) >= n_channels:
+        if r.n_channels != n_channels:
             r.channels = set(range(n_channels))
-            r.specs = []
-            r.bufs = {}  # invalidate per-channel ys buffers
-            r.channels_initialized = True
-        enabled = r.channels
-        ch_names = stream.info.channel_names if stream.info else None
-
-        for ch in range(n_channels):
-            if ch > 0:
-                imgui.same_line()
-                if imgui.get_content_region_avail().x < 80:
-                    imgui.new_line()
-            is_on = ch in enabled
-            color = PALETTE[ch % len(PALETTE)]
-            if is_on:
-                imgui.push_style_color(
-                    imgui.Col_.button, imgui.ImVec4(color[0], color[1], color[2], 0.7)
-                )
-            else:
-                # Off channels take the theme's own control fill, dimmed — a fixed
-                # grey read as "disabled" on dark and as a smudge on light.
-                off = imgui.get_style().color_(imgui.Col_.button)
-                imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(off.x, off.y, off.z, 0.5))
-            label = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
-            if imgui.button(f"{label}##{stream_name}_rawtog{ch}"):
-                if is_on:
-                    enabled.discard(ch)
-                else:
-                    enabled.add(ch)
-            imgui.pop_style_color()
-
-        if not enabled:
-            imgui.text("No channels enabled")
+            r.specs, r.bufs = [], {}
+            r.n_channels = n_channels
+        ch_names = stream.info.channel_names
+        series = [
+            (ch, ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}")
+            for ch in range(n_channels)
+        ]
+        popup_width = min(ui_px(320), imgui.get_content_region_avail().x)
+        imgui.set_next_window_size_constraints(
+            imgui.ImVec2(popup_width, 0), imgui.ImVec2(popup_width, ui_px(320))
+        )
+        if imgui.begin_popup("channels"):
+            plot_legend(series, selected=r.channels)
+            imgui.end_popup()
+        if n_samples == 0:
+            plot_empty("No samples yet", "Start the source to display raw signals.", self._size)
+            return
+        if not r.channels:
+            hint = (
+                "Open Channels and enable a channel."
+                if n_channels
+                else "Connect a source with signal channels."
+            )
+            plot_empty("No channels enabled", hint, self._size)
             return
 
         bufs = r.bufs
         if not bufs or bufs.get("cap", 0) < n_samples:
             cap = n_samples + 1024
-            bufs = {
-                "cap": cap,
-                "xs": np.empty(cap, dtype=np.float64),
-                "ys": {ch: np.empty(cap, dtype=np.float64) for ch in range(n_channels)},
-            }
+            bufs = {"cap": cap, "xs": np.empty(cap, dtype=np.float64), "ys": {}}
             r.bufs = bufs
-
-        # `bufs` is a heterogeneous dict (str keys -> int / ndarray / dict); the
-        # casts tell the checker the concrete type behind each known key.
         xs = cast("np.ndarray", bufs["xs"])
         np.subtract(ts, ts[0], out=xs[:n_samples])
-        xs_view = xs[:n_samples]
-
+        channel_height = self._channel_height
         if channel_height <= 0:
-            d_min, d_max = np.inf, -np.inf
-            for ch in enabled:
-                d_min = min(d_min, float(np.min(data[:, ch])))
-                d_max = max(d_max, float(np.max(data[:, ch])))
-            data_range = d_max - d_min
-            channel_height = data_range * 1.2 if data_range > 0 else 1.0
+            lo = min(float(np.min(data[:, ch])) for ch in r.channels)
+            hi = max(float(np.max(data[:, ch])) for ch in r.channels)
+            channel_height = (hi - lo) * 1.2 if hi > lo else 1.0
 
-        ensure_implot_style()  # without it this plot renders as stock ImPlot, not the app
-        if len(r.specs) < n_channels:
-            r.specs = []
+        ensure_implot_style()
+        if not r.specs:
             for ch in range(n_channels):
-                c = PALETTE[ch % len(PALETTE)]
-                s = implot.Spec()
-                s.line_color = imgui.ImVec4(c[0], c[1], c[2], 0.9)
-                s.line_weight = 1.0
-                r.specs.append(s)
-        specs = r.specs
-
-        if implot.begin_plot(f"{stream_name}##{stream_name}_raw", imgui.ImVec2(size[0], size[1])):
-            plot_idx = 0
+                color = PALETTE[ch % len(PALETTE)]
+                spec = implot.Spec()
+                spec.line_color = imgui.ImVec4(*map(float, color), 0.9)
+                r.specs.append(spec)
+        flags = int(implot.Flags_.no_title | implot.Flags_.no_legend)
+        footer = imgui.get_text_line_height_with_spacing()
+        if implot.begin_plot("##raw", plot_size(self._size, footer=footer), flags):
             ys_bufs = cast("dict[int, np.ndarray]", bufs["ys"])
-            cap = cast("int", bufs["cap"])
-            for ch in sorted(enabled):
-                offset = -plot_idx * channel_height
+            for plot_idx, ch in enumerate(sorted(r.channels)):
                 if ch not in ys_bufs:
-                    ys_bufs[ch] = np.empty(cap, dtype=np.float64)
+                    ys_bufs[ch] = np.empty(bufs["cap"], dtype=np.float64)
                 ys = ys_bufs[ch]
-                np.add(data[:, ch], offset, out=ys[:n_samples])
-                label = ch_names[ch] if ch_names and ch < len(ch_names) else f"ch{ch}"
-                implot.plot_line(f"{label}##{stream_name}_raw", xs_view, ys[:n_samples], specs[ch])
-                plot_idx += 1
+                np.add(data[:, ch], -plot_idx * channel_height, out=ys[:n_samples])
+                r.specs[ch].line_weight = ui_px(1)
+                implot.plot_line(f"##channel{ch}", xs[:n_samples], ys[:n_samples], r.specs[ch])
             implot.end_plot()
+        r.fps.append(_time.perf_counter() - t_start)
+        del r.fps[:-60]
+        dt = float(np.mean(r.fps))
+        fps = 1.0 / dt if dt > 0 else 0.0
+        detail = f"{stream.info.fs:g} Hz · {len(r.channels)}/{n_channels} ch · {n_samples} pts/ch raw · {fps:.0f} fps"
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, imgui.get_style().font_size_base)
+        clipped = fit_text(detail, imgui.get_content_region_avail().x)
+        if font is not None:
+            imgui.pop_font()
+        mono_text(clipped, muted())
+        imgui.set_item_tooltip(detail)
 
-        frame_dt = _time.perf_counter() - t_start
-        r.fps.append(frame_dt)
-        if len(r.fps) > 60:
-            r.fps.pop(0)
-        avg_ms = np.mean(r.fps) * 1000
-        fps = 1000.0 / avg_ms if avg_ms > 0 else 0
-        imgui.text_colored(
-            muted(),
-            f"{fps:.0f} fps ({avg_ms:.1f} ms) | "
-            f"fs={stream.info.fs:.0f} Hz | "
-            f"{len(enabled)}/{n_channels} ch | "
-            f"{n_samples} pts/ch (raw)",
+    def _header(self, state: _RawViewerState | None, tone: imgui.ImVec4) -> None:
+        """Wrap the Window selector below the header in a narrow cell."""
+        style = imgui.get_style()
+        if state is None:
+            if self._show_title:
+                panel_header(f"Raw · {self._stream_name}", status=tone)
+            return
+        windows = [0.1, 1.0, 5.0]
+        if state.window not in windows:
+            windows[1] = state.window
+            windows.sort()
+        labels = [f"{win:g} s" for win in windows]
+        controls = sum(
+            imgui.calc_text_size(s).x + 2 * style.frame_padding.x for s in labels
+        ) + ui_px(4)
+        caption = imgui.calc_text_size("Window").x + style.item_spacing.x
+        icon = fa.ICON_FA_LAYER_GROUP
+        button_w = imgui.calc_text_size(icon).x + 2 * style.frame_padding.x
+        width = imgui.get_content_region_avail().x
+        inline = width >= controls + caption + button_w + ui_px(100)
+        reserve = (
+            button_w
+            + style.item_spacing.x
+            + (controls + caption + style.item_spacing.x if inline else 0)
         )
+        if self._show_title:
+            panel_header(f"Raw · {self._stream_name}", reserve=reserve, status=tone)
+            imgui.set_item_tooltip("Connected")
+            imgui.same_line()
+        if not inline:
+            imgui.set_cursor_pos_x(
+                imgui.get_cursor_pos_x() + max(0.0, imgui.get_content_region_avail().x - button_w)
+            )
+        if imgui.button(f"{icon}##channels_button"):
+            imgui.open_popup("channels")
+        imgui.set_item_tooltip("Channels")
+        if inline:
+            imgui.same_line()
+        if width < controls + caption:
+            imgui.text_colored(muted(), "Window")
+        else:
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(muted(), "Window")
+            imgui.same_line()
+        state.window = windows[segmented("window", labels, windows.index(state.window))]
 
 
 __all__ = ["RawSignalViewer"]
