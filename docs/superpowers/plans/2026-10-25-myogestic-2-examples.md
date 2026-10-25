@@ -70,3 +70,25 @@
 ### Task P5 (coordinator): gallery screenshots
 
 Needs an active display. After P1–P4 merge: `uv run python tools/widget_screenshot.py --all`, review every PNG in `docs/images/widgets/`, commit `docs: 2.0 widget gallery`.
+
+## Phase 2b: one header everywhere (decided after reviewing the first shots)
+
+The myocontrol header (logo line, title, step bar, participant chip, state pill) becomes the
+`AppHeader` widget, and every example opens with it in a bare `Px(52)` row. Session apps pass a
+`StepBar` and take the myocontrol shell (signal | step card, sessions, log); viewers, tools and
+panel demos pass only a title. Standalone `AppLogo` image cells go. Examples are then converted
+one at a time and reviewed with before/after screenshots: pong, force_ramps, the synthetic
+session apps, sessantaquattro_app, then viewers, tools and panel demos.
+
+### Task H1: `AppHeader`
+
+**Files:** Create `myogestic/widgets/panels/app_header.py`, `examples/panels/app_header.py`, `tests/test_app_header.py`. Modify `myogestic/widgets/__init__.py`, `myogestic/widgets/common.py` (`edge_rule`), `examples/start_here/myocontrol.py`, `docs/api/widgets.md`.
+
+**Interfaces — Produces:**
+- `AppHeader(title: str, *, steps: StepBar | None = None, participant: ParticipantPanel | None = None, show_state: bool = True, widget_id: str = "app_header")`
+- `AppHeader.ui(ctx: Context, done: list[bool] | None = None) -> int | None` — the active step, or `None` without steps.
+- `edge_rule(*, bottom: bool) -> None` in `common.py` (moved from myocontrol's `_edge_rule`).
+
+- [ ] Tests first: logo line drawn; with steps, `ui` returns `steps.active` and the title is dropped before the steps compress; without steps the title is shown and ellipsized, `ui` returns `None`; participant chip and state pill right-aligned and never overlapping the steps at 640/1100/1800 px and scale 1/2; renders correctly in a bare `Px(52)` cell with no style pushed by the caller.
+- [ ] Move myocontrol's `header_ui` logic into the widget unchanged in look; myocontrol uses `AppHeader("Myocontrol", steps=steps, participant=participant)` and keeps its footer.
+- [ ] `tests/test_myocontrol_wiring.py`, `tests/test_examples.py`, the new tests and ruff pass; full suite once; commit `feat(widgets): AppHeader — the myocontrol header for every app`.
