@@ -39,13 +39,27 @@ import tomllib
 from imgui_bundle import imgui
 from imgui_bundle import portable_file_dialogs as pfd
 
-from myogestic import App, Fr, Grid, Layout, Px
+from myogestic import App, Context, Fr, Grid, Layout, Px
+from myogestic._theme import mono_font
 from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.keyboard import KeyboardTarget
 from myogestic.remote import RemoteTarget
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import AppLogo, ControlMapEditor, ProcessLauncher
-from myogestic.widgets.common import DANGER, SUCCESS, WARNING, muted, panel_header
+from myogestic.widgets.common import (
+    DANGER,
+    IDLE,
+    SUCCESS,
+    WARNING,
+    mono_text,
+    muted,
+    panel_header,
+    pop_selected,
+    primary_button,
+    push_selected,
+    tinted_row,
+    ui_px,
+)
 
 #: Where the editor *starts*. After `Save as...`, `editor.path` is the answer, not this.
 CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "playground.toml"
@@ -55,7 +69,7 @@ vhi_control = vhi.control_client()
 
 # A key is a two-state discrete control, so nothing in the map format or the bus knows the
 # difference between pressing `w` and bending a finger. Starts DISARMED and sends nothing
-# until the checkbox below is ticked: a resolved map types into whatever window has focus, so
+# until the Send keys chip is selected: a resolved map types into whatever window has focus, so
 # a twitchy signal on `keyboard.tap.edit.enter` would act on your terminal.
 keys = KeyboardTarget()
 
@@ -129,8 +143,9 @@ layout = Layout(
         logo       editor
         processes  editor
         drive      editor
+        keyboard   editor
         """,
-        row_height=[LOGO_H, Px(90), Fr(1)],
+        row_height=[LOGO_H, Px(90), Fr(1), Fr(0.7)],
         col_width=[Px(CONTROLS_W), Fr(1)],
     ),
     # A shorter wordmark here, and `Fr(2)` for the editor: the slider panel above it is empty
@@ -140,9 +155,10 @@ layout = Layout(
         logo
         processes
         drive
+        keyboard
         editor
         """,
-        row_height=[Px(90), Px(90), Fr(1), Fr(2)],
+        row_height=[Px(90), Px(90), Fr(1), Fr(0.7), Fr(2)],
     ),
     breakpoint=Px(STACK_BELOW),
 )
@@ -316,7 +332,7 @@ def _rebuild_if_the_manifest_changed() -> None:
 
 
 @app.ui
-def studio_ui(ctx):
+def studio_ui(ctx: Context) -> None:
     """Sliders and the editor: side by side when there is room, stacked when not."""
     with layout["logo"]:
         logo.ui()
@@ -325,27 +341,10 @@ def studio_ui(ctx):
         processes.ui()
 
     with layout["drive"]:
-        panel_header("DRIVE THE MAP")
-        if imgui.button("Connect / Reload"):
-            _connect()
-        if imgui.get_content_region_avail().x >= 160.0:
-            imgui.same_line()
-        imgui.push_style_color(imgui.Col_.text, muted())
-        imgui.text_wrapped(editor().label)
-        imgui.pop_style_color()
+        _drive_ui()
 
-        if failure:
-            imgui.text_colored(DANGER, "Refused:")
-            imgui.text_wrapped(failure)
-        else:
-            imgui.push_style_color(imgui.Col_.text, SUCCESS if bus is not None else muted())
-            imgui.text_wrapped(status)
-            imgui.pop_style_color()
-
-        if bus is not None:
-            _sliders_ui()
-            _keyboard_ui()
-        _waiting_ui()
+    with layout["keyboard"]:
+        _keyboard_ui()
 
     with layout["editor"]:
         _tabs_ui()
@@ -355,40 +354,84 @@ def studio_ui(ctx):
         _rebuild_if_the_manifest_changed()
 
 
+def _drive_ui() -> None:
+    """The active map's state, connection action and captioned controls."""
+    tone = DANGER if failure else SUCCESS if bus is not None else IDLE
+    panel_header("DRIVE THE MAP", status=tone)
+    with tinted_row(tone):
+        imgui.align_text_to_frame_padding()
+        imgui.text_unformatted("Connection failed" if failure else "Driving" if bus else "Not connected")
+    _caption(editor().label)
+    imgui.push_style_color(imgui.Col_.text, muted())
+    imgui.text_wrapped(failure or status)
+    if bus is None:
+        imgui.text_wrapped("Save a map, then Connect. Launch VHI first for hand controls.")
+    imgui.pop_style_color()
+    if primary_button("Connect / Reload", size=(imgui.get_content_region_avail().x, 0)):
+        _connect()
+    if bus is not None:
+        _sliders_ui()
+    _waiting_ui()
+
+
+def _caption(label: str, value: float | None = None) -> None:
+    """Keep the alias above its field, with a mono value and the full name on hover."""
+    style = imgui.get_style()
+    room = imgui.get_content_region_avail().x
+    right = imgui.get_cursor_pos_x() + room
+    text = f"{value:.3f}" if value is not None else ""
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, style.font_size_base)
+    value_w = imgui.calc_text_size(text).x
+    if font is not None:
+        imgui.pop_font()
+    available = room - value_w - style.item_spacing.x if text else room
+    shown = label
+    while shown and imgui.calc_text_size(shown + ("…" if shown != label else "")).x > available:
+        shown = shown[:-1]
+    imgui.text_colored(muted(), shown + ("…" if shown != label else ""))
+    imgui.set_item_tooltip(label)
+    if text:
+        imgui.same_line()
+        imgui.set_cursor_pos_x(right - value_w)
+        mono_text(text)
+
+
 def _sliders_ui() -> None:
     """One slider per control in the file, sized to the column it is in.
 
-    On a narrow column the label goes *above* the slider rather than beside it, which buys
-    back the label's width for the track — a 60-pixel slider cannot be dragged usefully.
+    Captions sit above the sliders; two columns become one when tracks would be too narrow.
 
     **Double-click a slider to type a value instead.** ImGui already offers Ctrl+Click for
     this; double-click is the gesture people reach for first, wired to the same thing.
     """
     assert bus is not None
-    avail = imgui.get_content_region_avail().x
-    inline = avail >= 260.0
     changed = False
-    for alias in levels:
-        if not inline:
-            imgui.text_unformatted(alias)
-        label = alias if inline else f"##{alias}"
-        width = avail - (imgui.calc_text_size(alias).x + 12.0 if inline else 0.0)
-        imgui.set_next_item_width(width)
-        if alias in typing:
-            changed = _typed_value_ui(alias, width, alias if inline else None) or changed
-            continue
-        before = levels[alias]
-        edited, levels[alias] = imgui.slider_float(label, levels[alias], -1.0, 1.0)
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("Drag, or double-click (or Ctrl+Click) to type a value")
-        if imgui.is_item_hovered() and imgui.is_mouse_double_clicked(0):
-            # A click on the track jumps the value to where it landed, so by the second click
-            # the number has already moved. Put it back — a double-click means "type".
-            levels[alias] = before
-            typing[alias] = before
-            focus_pending.add(alias)
-            edited = False
-        changed = changed or edited
+    columns = 2 if imgui.get_content_region_avail().x >= ui_px(480) else 1
+    if imgui.begin_table("map-controls", columns, imgui.TableFlags_.sizing_stretch_same):
+        for alias in levels:
+            imgui.table_next_column()
+            _caption(alias, levels[alias])
+            label = f"##{alias}"
+            width = imgui.get_content_region_avail().x
+            imgui.set_next_item_width(width)
+            if alias in typing:
+                changed = _typed_value_ui(alias, width, None) or changed
+                continue
+            before = levels[alias]
+            edited, levels[alias] = imgui.slider_float(label, levels[alias], -1.0, 1.0)
+            if imgui.is_item_hovered():
+                imgui.set_tooltip("Drag, or double-click (or Ctrl+Click) to type a value")
+            if imgui.is_item_hovered() and imgui.is_mouse_double_clicked(0):
+                # A click on the track jumps the value to where it landed, so by the second click
+                # the number has already moved. Put it back — a double-click means "type".
+                levels[alias] = before
+                typing[alias] = before
+                focus_pending.add(alias)
+                edited = False
+            changed = changed or edited
+        imgui.end_table()
     if imgui.button("Rest"):
         levels.update(dict.fromkeys(levels, 0.0))
         changed = True
@@ -398,36 +441,46 @@ def _sliders_ui() -> None:
 
 
 def _keyboard_ui() -> None:
-    """The arm switch, shown only when the map actually names a key.
+    """A keyboard card, with an arm switch when the map actually names a key.
 
-    A checkbox, not a hold-to-arm button: this is an arm you can forget about. It is off until
-    you say so, loud when it is on, and `KeyboardTarget.stop` lets go of everything on exit.
+    The selected chip stays armed until switched off; `KeyboardTarget.stop` lets go of
+    everything on exit.
     """
     global keyboard_error
-    if not keys.claims:
-        return
-    imgui.separator()
-    panel_header("KEYBOARD")
     # Asked before the click, not after: without it the switch flicks on, `arm` refuses, it
     # flicks back, and the reason goes to `app.ctx.log`, which this app never draws.
-    refusal = keys.arm_refusal
-    imgui.begin_disabled(bool(refusal) and not keys.armed)
-    changed, armed = imgui.checkbox("Send keys to the system", keys.armed)
+    refusal = keys.arm_refusal if keys.claims else ""
+    armed = keys.armed
+    problem = (refusal or keyboard_error) if keys.claims else ""
+    tone = DANGER if problem else WARNING if armed else IDLE
+    state = "Cannot send keys" if problem else "Armed" if armed else "Disarmed"
+    panel_header("KEYBOARD", status=tone)
+    with tinted_row(tone):
+        imgui.align_text_to_frame_padding()
+        imgui.text_unformatted(state if keys.claims else "No keys mapped")
+    if not keys.claims:
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.text_wrapped("No keys mapped. Add a keyboard control to the map, then Connect.")
+        imgui.pop_style_color()
+        return
+    imgui.begin_disabled(bool(refusal) and not armed)
+    if armed:
+        push_selected()
+    changed = imgui.button("Send keys")
+    if armed:
+        pop_selected()
     imgui.end_disabled()
     if changed:
         try:
-            keys.arm() if armed else keys.disarm()
+            keys.disarm() if armed else keys.arm()
             keyboard_error = ""
         except RuntimeError as exc:
             keyboard_error = str(exc)
     if refusal or keyboard_error:
-        imgui.push_style_color(imgui.Col_.text, DANGER)
-        imgui.text_wrapped("Cannot send keys yet:")
-        imgui.pop_style_color()
         imgui.push_style_color(imgui.Col_.text, muted())
         imgui.text_wrapped(refusal or keyboard_error)
         imgui.pop_style_color()
-        if imgui.button("Grant access..."):
+        if primary_button("Grant access...", size=(imgui.get_content_region_avail().x, 0)):
             # It cannot grant anything — only the user can, in System Settings. What it does is
             # register this binary in the Accessibility list and open the pane.
             keyboard_error = keys.request_accessibility() or keyboard_error
@@ -436,16 +489,18 @@ def _keyboard_ui() -> None:
                 "Asks macOS and opens the Accessibility list with this program in it.\n"
                 "You still have to switch it on, then restart MyoGestic."
             )
-        imgui.same_line()
         if imgui.button("Copy the path"):
             # For a dismissed prompt or a hand-edited list: the path must be exact and is long.
             imgui.set_clipboard_text(os.path.realpath(sys.executable))
         return
-    imgui.push_style_color(imgui.Col_.text, DANGER if keys.armed else muted())
+    mono_text(str(len(keys.claims)))
+    imgui.same_line()
+    imgui.text_colored(muted(), "mapped keys")
+    imgui.push_style_color(imgui.Col_.text, muted())
     imgui.text_wrapped(
-        f"ARMED — {len(keys.claims)} control(s) are typing into whatever window has focus."
+        "Keys are typing into whatever window has focus."
         if keys.armed
-        else f"Disarmed. {len(keys.claims)} key control(s) are mapped and will do nothing."
+        else "Select Send keys to enable keyboard output."
     )
     imgui.pop_style_color()
 
@@ -465,7 +520,7 @@ def _typed_value_ui(alias: str, width: float, label: str | None) -> bool:
     style = imgui.get_style()
     field_w = min(
         width,
-        imgui.calc_text_size(f"{typing[alias]:.3f}").x + style.frame_padding.x * 2.0 + 8.0,
+        imgui.calc_text_size(f"{typing[alias]:.3f}").x + style.frame_padding.x * 2.0 + ui_px(8),
     )
     imgui.set_cursor_pos_x(start_x + (width - field_w) * 0.5)
     imgui.set_next_item_width(field_w)
@@ -677,7 +732,7 @@ def _confirm_close_ui() -> None:
         f"{_tab_label(index) if document else 'That map'} has unsaved edits. "
         f"Closing it loses them."
     )
-    imgui.separator()
+    imgui.spacing()
     if imgui.button("Discard and close"):
         confirm_close.discard(index)
         if document is not None:
@@ -698,13 +753,11 @@ def _waiting_ui() -> None:
     """
     if not waiting:
         return
-    imgui.separator()
-    imgui.push_style_color(imgui.Col_.text, WARNING)
-    imgui.text_wrapped(f"{len(waiting)} control(s) not driven:")
-    imgui.pop_style_color()
+    with tinted_row(WARNING):
+        imgui.align_text_to_frame_padding()
+        imgui.text_unformatted("Waiting for targets")
     imgui.push_style_color(imgui.Col_.text, muted())
     for alias, why in waiting.items():
-        imgui.bullet()
         imgui.text_wrapped(f"{alias}: {why}")
     imgui.pop_style_color()
 
@@ -718,16 +771,20 @@ def _held_states_ui() -> None:
     assert bus is not None
     if not states:
         return
-    imgui.separator()
-    for alias, options in states.items():
-        imgui.set_next_item_width(imgui.get_content_region_avail().x * 0.6)
-        if imgui.begin_combo(alias, chosen.get(alias, options[0])):
-            for state in options:
-                selected, _ = imgui.selectable(state, chosen.get(alias) == state)
-                if selected:
-                    chosen[alias] = state
-                    bus.select(alias, state)
-            imgui.end_combo()
+    columns = 2 if imgui.get_content_region_avail().x >= ui_px(480) else 1
+    if imgui.begin_table("held-controls", columns, imgui.TableFlags_.sizing_stretch_same):
+        for alias, options in states.items():
+            imgui.table_next_column()
+            _caption(alias)
+            imgui.set_next_item_width(imgui.get_content_region_avail().x)
+            if imgui.begin_combo(f"##{alias}", chosen.get(alias, options[0])):
+                for state in options:
+                    selected, _ = imgui.selectable(state, chosen.get(alias) == state)
+                    if selected:
+                        chosen[alias] = state
+                        bus.select(alias, state)
+                imgui.end_combo()
+        imgui.end_table()
 
 
 def main() -> None:
