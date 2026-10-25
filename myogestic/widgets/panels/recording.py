@@ -490,8 +490,9 @@ class RecordingControls:
     Parameters
     ----------
     class_names
-        Gesture tiles. Idle clicks choose the next take's label; start/stop
-        mode also permits label changes during capture. Timed takes lock it.
+        Gesture tiles. The first is selected when idle without a valid label.
+        Idle clicks choose the next take's label; start/stop mode also permits
+        label changes during capture. Timed takes lock it.
         Names are copied to ``ctx.class_names`` for session metadata.
     on_record
         Begin capture, normally ``app.start_recording``.
@@ -582,9 +583,18 @@ class RecordingControls:
             finally:
                 imgui.pop_id()
 
+    def _gesture_index(self, ctx: Context) -> int:
+        """Resolve the idle default without changing the shared capture label."""
+        names = self._class_names or []
+        index = _safe_label_index(ctx.current_label, len(names))
+        if index < 0 and names and ctx.state == AppState.IDLE and self.take.phase == "idle":
+            return 0
+        return index
+
     def _gesture(self, ctx: Context) -> str | None:
         names = self._class_names or []
-        return names[ctx.current_label] if 0 <= ctx.current_label < len(names) else None
+        index = self._gesture_index(ctx)
+        return names[index] if index >= 0 else None
 
     def _remember(self, ctx: Context) -> None:
         self._ctx = ctx
@@ -601,7 +611,7 @@ class RecordingControls:
         if ctx.state != AppState.IDLE or (ctx.require_participant and not ctx.participant):
             return
         if self._class_names:
-            ctx.current_label = _safe_label_index(ctx.current_label, len(self._class_names))
+            ctx.current_label = self._gesture_index(ctx)
             ctx.class_names = list(self._class_names)
             if self._timed and self._gesture(ctx) is None:
                 return
