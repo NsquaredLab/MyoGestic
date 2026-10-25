@@ -25,9 +25,9 @@ import time
 
 import numpy as np
 
-from myogestic import App, Grid, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.stream import ChannelGrid, StreamInfo
-from myogestic.widgets import SignalViewer
+from myogestic.widgets import AppHeader, SignalViewer
 from myogestic.widgets.signals._channel_grid import auto_shape
 
 N_CHANNELS = 256
@@ -94,7 +94,8 @@ class _SyntheticGridSource:
 app = App("Channel Grid Demo")
 app.streams(Stream("emg", source=_SyntheticGridSource(), window_ms=1000, buffer_ms=10000))
 
-grid = Grid(1, 1)
+grid = Grid.areas("header\nsignal", row_height=[Px(52), Fr(1)], bare=("header",))
+header = AppHeader("Channel grid", show_state=False)
 
 viewer = SignalViewer(
     "emg", selectable=True, initial_channels=range(16),
@@ -104,7 +105,9 @@ viewer = SignalViewer(
 
 @app.ui
 def demo_ui(ctx):
-    with grid[0, 0]:
+    with grid.area("header"):
+        header.ui(ctx)
+    with grid.area("signal"):
         viewer.ui(ctx)
 
 
