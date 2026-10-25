@@ -29,9 +29,14 @@ def ui(ctx):
 
 The panel:
 
-- A button selector (Identity / Gaussian / One Euro)
+- A filter combo (Identity / Gaussian / One Euro)
 - Sliders for the active filter's parameters
 - A **Reset** button that clears smoothing history (use after Train so the new model's first frames don't get blended with the old one's tail)
+
+For a compact workflow step, construct `PostProcessor(hz=20.0, compact=True)`.
+This keeps Smoothing, the filter combo, the estimated latency and a settings icon
+on one row. The settings popover contains every slider, a description and the same
+Reset action; `compact=False` (the default) keeps the full panel above.
 
 One Euro's parameters update *in place* - no rebuild - so smoothing history survives live tuning. Gaussian rebuilds its kernel when you change its window.
 

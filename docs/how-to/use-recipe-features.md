@@ -36,8 +36,9 @@ pipeline) without surprises.
 
 ## Wiring into a pipeline
 
-`FeatureSelector` takes a `{name: fn}` dict and exposes a GUI toggle for
-each feature:
+`FeatureSelector` takes a `{name: fn}` dict and exposes a wrapping mono toggle chip for
+each feature under a Features caption. Active chips are tinted; all chips can be
+deselected, but extraction then raises until at least one is selected:
 
 ```python
 from myogestic.recipes.features import rms, mav, wl, var, zc
@@ -45,7 +46,7 @@ from myogestic.widgets import FeatureSelector
 
 feats = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
-    default=["RMS", "MAV"],          # start with these checked
+    default=["RMS", "MAV"],          # start with these active
 )
 
 @pipeline.extract

@@ -90,7 +90,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![FilterControl](images/widgets/FilterControl.png){ .widget-thumb loading=lazy }
 
-    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). Sliders tune parameters in place; Reset clears smoothing history. Pair with `output_filter(pose, timestamp=time.monotonic())` inside `@pipeline.predict`.
+    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). The default full panel keeps sliders visible; `compact=True` shows a Smoothing row with the filter, latency and a settings popover containing every parameter and Reset. Reset clears smoothing history. Pair with `output_filter(pose, timestamp=time.monotonic())` inside `@pipeline.predict`.
 
 </div>
 
@@ -102,7 +102,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![FeatureSelector](images/widgets/FeatureSelector.png){ .widget-thumb loading=lazy }
 
-    Live tickbox panel for choosing which feature transforms feed the model. Construct with `{name: callable}`; the selector concatenates active features along axis 0. Use `selector.n_active` to size architecture hyperparams.
+    Wrapping mono toggle chips for choosing which feature transforms feed the model, under a Features caption. Active chips carry the shared selected cue. Construct with `{name: callable}`; the selector concatenates active features along axis 0. Use `selector.n_active` to size architecture hyperparams.
 
 </div>
 
@@ -126,7 +126,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![prediction_label](images/widgets/prediction_label.png){ .widget-thumb loading=lazy }
 
-    Big, centred class-name readout of the current classifier output. Reads `pipeline.predictions["class"]`, colour-codes via the shared palette, optionally renders the predicted class's probability as a coloured progress bar.
+    Surface card with the current classifier label in the display face and a muted mono prediction interval. Idle shows a dash and the reason. Reads `pipeline.predictions["class"]`; `show_probability=True` adds one thin bar per class in its palette colour, with a mono percentage on a shared 0–1 range.
 
 </div>
 
