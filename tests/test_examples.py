@@ -195,3 +195,101 @@ def test_every_example_outside_otb_is_in_the_list():
         + "\n\nAdd the folder to EXAMPLES above, or exclude it deliberately the way "
         "`otb/` is — with the reason written down."
     )
+
+
+@pytest.mark.parametrize("name", ["control_map_studio", "vhi_control_hand"])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+@pytest.mark.parametrize("connected", [False, True])
+def test_control_example_cards_fit_and_explain_their_state(
+    name, scale, connected, monkeypatch, imgui_frame,
+):
+    """Exercise the local cards at 320 px, including an unlaunchable hand."""
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+    from myogestic.widgets import common
+
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / f"{name}.py"))
+    draw_ui = namespace["app"]._ui_fn
+    scope = draw_ui.__globals__
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    monkeypatch.setattr(scope["logo"], "ui", lambda: None)
+    monkeypatch.setattr(scope["processes"], "ui", lambda: None)
+    bus = SimpleNamespace(push=lambda values: None) if connected else None
+    if name == "control_map_studio":
+        monkeypatch.setitem(scope, "bus", bus)
+        monkeypatch.setitem(scope, "levels", {"close": 0.5} if connected else {})
+        monkeypatch.setitem(scope, "states", {})
+        monkeypatch.setitem(scope, "status", "Driving close." if connected else "Press Connect.")
+        monkeypatch.setitem(scope, "keys", SimpleNamespace(claims=set(), armed=False, arm_refusal="Access required."))
+        monkeypatch.setitem(scope, "_tabs_ui", lambda: None)
+        monkeypatch.setitem(scope, "_rebuild_if_the_manifest_changed", lambda: None)
+        monkeypatch.setitem(scope, "editor", lambda: SimpleNamespace(label="Untitled", ui=lambda: False))
+    else:
+        monkeypatch.setitem(scope, "link", SimpleNamespace(bus=bus))
+    headers, rows, primary, texts, overhangs = [], [], [], [], []
+    cell, bounds = {}, {}
+
+    class Cells:
+        @contextmanager
+        def __getitem__(self, key):
+            cell["key"] = str(key)
+            imgui.set_cursor_pos(imgui.ImVec2(0, 0))
+            imgui.begin_child(f"cell-{key}", imgui.ImVec2(320, 400))
+            bounds["left"] = imgui.get_cursor_screen_pos().x
+            bounds["right"] = bounds["left"] + imgui.get_content_region_avail().x
+            yield
+            imgui.end_child()
+
+    monkeypatch.setitem(scope, "layout" if name == "control_map_studio" else "grid", Cells())
+    original_button, original_wrapped = imgui.button, imgui.text_wrapped
+
+    def header(title, **kwargs):
+        headers.append((cell["key"], title, kwargs.get("status")))
+        common.panel_header(title, **kwargs)
+
+    @contextmanager
+    def row(tone=None, **kwargs):
+        rows.append((cell["key"], tone))
+        with common.tinted_row(tone, **kwargs) as width:
+            yield width
+
+    def forward(label, size=(0, 0)):
+        result = common.primary_button(label, size)
+        primary.append((cell["key"], label, imgui.get_item_rect_size().x,
+                        bounds["right"] - bounds["left"]))
+        return result
+
+    def button(label, *args):
+        result = original_button(label, *args)
+        overhangs.append(imgui.get_item_rect_max().x - bounds["right"])
+        return result
+
+    def wrapped(text):
+        texts.append(text)
+        original_wrapped(text)
+
+    monkeypatch.setitem(scope, "panel_header", header)
+    monkeypatch.setitem(scope, "tinted_row", row)
+    monkeypatch.setitem(scope, "primary_button", forward)
+    monkeypatch.setattr(imgui, "button", button)
+    monkeypatch.setattr(imgui, "text_wrapped", wrapped)
+    imgui_frame(lambda: draw_ui(scope["app"].ctx))
+    assert headers and len({key for key, _, _ in headers}) == len(headers), "one header per card"
+    assert rows, "the connection state belongs in a tinted row"
+    assert primary and all(width == pytest.approx(room, abs=1) for _, _, width, room in primary)
+    assert max(overhangs) <= 1, "actions must stay reachable in a narrow cell"
+    tone = common.SUCCESS if connected else common.IDLE
+    assert headers[0][2] == tone and rows[0][1] == tone
+    if name == "control_map_studio":
+        assert next(tone for _, title, tone in headers if title == "KEYBOARD") == common.IDLE
+    if not connected:
+        assert any("Connect" in text or "Launch" in text for text in texts), "show the next step"
