@@ -38,6 +38,11 @@ def _try_set_macos_dock_icon() -> None:
     `app_settings/icon.png` convention automatically once the assets folder
     is registered - see ``_register_assets_folder``.
 
+    macOS uses ``app_settings/icon_macos.png`` with Apple's 824 px tile centred
+    on a 1024 px canvas, leaving transparent space for its shadow. The full-bleed
+    window icon looks oversized in the Dock, but remains a fallback when the
+    macOS asset is missing.
+
     Why we need this at all: macOS bans changing the Dock icon at runtime
     without going through ``NSApplication.setApplicationIconImage_``; GLFW's
     `glfwSetWindowIcon` is a no-op on Cocoa, and Python's own process icon
@@ -67,7 +72,9 @@ def _try_set_macos_dock_icon() -> None:
     except ImportError:
         print("[myogestic] dock icon: pyobjc-framework-Cocoa not installed", file=sys.stderr)
         return
-    icon_path = Path(_assets_folder()) / "app_settings" / "icon.png"
+    icon_path = Path(_assets_folder()) / "app_settings" / "icon_macos.png"
+    if not icon_path.exists():
+        icon_path = icon_path.with_name("icon.png")
     if not icon_path.exists():
         print(f"[myogestic] dock icon: file missing at {icon_path}", file=sys.stderr)
         return
