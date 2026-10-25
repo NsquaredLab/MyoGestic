@@ -5,6 +5,7 @@ import runpy
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from imgui_bundle import hello_imgui, imgui
 
@@ -17,9 +18,8 @@ from myogestic.widgets.signals import _state
 ROOT = Path(__file__).resolve().parents[1]
 VIEWERS = {
     "high_channel_viewer": "High-channel viewer",
-    "channel_grid_demo": "Channel grid",
+    "electrode_grids": "Electrode grids",
     "electrode_overview": "Electrode overview",
-    "multi_panel_grids": "Multi-panel grids",
 }
 
 
@@ -75,7 +75,7 @@ def test_viewer_header_and_body_fit(
     stream = app.ctx.streams["emg"]
     if connected:
         if name == "high_channel_viewer":
-            source = runpy.run_path(str(ROOT / "examples/synthetic/channel_grid_demo.py"))
+            source = runpy.run_path(str(ROOT / "examples/synthetic/electrode_grids.py"))
             stream._source = source["_SyntheticGridSource"]()
         stream.reconnect()
         stream._acquire_step()
@@ -142,8 +142,8 @@ def test_viewer_header_and_body_fit(
     assert any(label == title for label, *_ in items)
     header_lo, header_hi, *_ = cells["header"]
     assert header_hi[1] - header_lo[1] == pytest.approx(104)
-    assert len(cells) == {"high_channel_viewer": 5, "channel_grid_demo": 2,
-                          "electrode_overview": 7, "multi_panel_grids": 6}[name]
+    assert len(cells) == {"high_channel_viewer": 5, "electrode_grids": 5,
+                          "electrode_overview": 7}[name]
     for cell, (lo, hi, scroll_x, scroll_y) in cells.items():
         assert scroll_x == scroll_y == 0, (cell, scroll_x, scroll_y)
         assert 0 <= lo[0] < hi[0] <= width and 0 <= lo[1] < hi[1] <= 1656, (cell, lo, hi)
@@ -152,6 +152,61 @@ def test_viewer_header_and_body_fit(
     clipped = [(label, lo, hi, clip_lo, clip_hi) for label, lo, hi, clip_lo, clip_hi in items
                if any(lo[i] < clip_lo[i] - 1 or hi[i] > clip_hi[i] + 1 for i in (0, 1))]
     assert not clipped, clipped
+
+
+def test_electrode_grids_keep_separate_selections_and_one_manual_range(monkeypatch, implot_frame):
+    """Every electrode belongs to one tile; quiet arrays retain their relative amplitude."""
+    ns = runpy.run_path(str(ROOT / "examples/synthetic/electrode_grids.py"))
+    app, viewers = ns["app"], ns["viewers"]
+    monkeypatch.setattr(_state, "_viewers", {})
+    monkeypatch.setattr(AppLogo, "ui", lambda self: None)
+    stream = app.ctx.streams["emg"]
+    stream.reconnect()
+    stream._acquire_step()
+    try:
+        implot_frame(lambda: app._ui_fn(app.ctx))
+        states = [_state._viewers[viewer._widget_id] for viewer in viewers]
+        assert len({id(state) for state in states}) == 4
+        assert all(state.scale_mode == "manual" for state in states)
+        assert {(state.y_min, state.y_max) for state in states} == {ns["Y_RANGE"]}
+        assert all(not state.per_channel_scale for state in states)
+        scopes = [set(viewer._channel_scope) for viewer in viewers]
+        assert set.union(*scopes) == set(range(256))
+        assert sum(map(len, scopes)) == 256
+        assert all(len(scope) == 64 for scope in scopes)
+        for viewer, state, scope, channel_grid in zip(
+            viewers, states, scopes, stream.info.channel_grids, strict=True,
+        ):
+            assert viewer._stream_name == "emg"
+            assert set(channel_grid.columns) == scope
+            enabled = _state.resolve_enabled(state, "emg", 256, viewer._initial_channels,
+                                             list(viewer._channel_scope))
+            assert enabled == scope
+
+        # Editing one tile cannot change any other tile's channel selection.
+        states[0].channels.clear()
+        assert all(states[i].channels == scopes[i] for i in range(1, 4))
+    finally:
+        stream.disconnect()
+
+
+def test_electrode_grid_source_is_paced_and_preserves_amplitude_differences(monkeypatch):
+    """A standalone stream must not busy-loop, and shared axes must show quieter arrays."""
+    ns = runpy.run_path(str(ROOT / "examples/synthetic/electrode_grids.py"))
+    times = iter([0.0, 0.0, ns["CHUNK"] / ns["FS"]])
+    monkeypatch.setattr(ns["time"], "perf_counter", lambda: next(times))
+    source = ns["_SyntheticGridSource"]()
+    info = source.connect()
+    data, timestamps = source.read()
+    assert data.shape == (ns["CHUNK"], info.n_channels)
+    assert info.n_channels == 256
+    assert data.dtype == np.float32
+    assert source.read() == (None, None)
+    next_data, next_timestamps = source.read()
+    assert next_data.shape == data.shape
+    assert next_timestamps[0] - timestamps[-1] == pytest.approx(1.0 / info.fs)
+    rms = np.sqrt(np.mean(data.reshape(ns["CHUNK"], 4, 64) ** 2, axis=(0, 2)))
+    assert np.all(np.diff(rms) < 0)
 
 
 @pytest.mark.parametrize("width", [400, 640, 900, 1800])
