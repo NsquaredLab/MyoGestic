@@ -140,11 +140,13 @@ def test_timed_widget_labels_only_when_capture_begins(timed_controls, imgui_fram
     assert controls.take.saved_text == "Saved · Fist · 5.0 s"
 
 
-def test_timed_take_requires_a_selected_gesture(timed_controls):
+def test_timed_take_uses_first_gesture_by_default(timed_controls):
     controls, ctx, _, calls, _ = timed_controls
     ctx.current_label = -1
     controls._start(ctx)
-    assert controls.take.phase == "idle"
+    assert controls.take.phase == "warmup"
+    assert controls.take.gesture == "Rest"
+    assert ctx.current_label == 0
     assert calls == []
 
 
@@ -210,7 +212,7 @@ def test_only_timed_takes_lock_gestures(timed_controls, imgui_frame, monkeypatch
 
     def click(label, *args):
         original(label, *args)
-        return label == "Rest##rec_gesture0"
+        return label.endswith("##rec_gesture0")
 
     monkeypatch.setattr(imgui, "button", click)
     imgui_frame(lambda: controls.ui(ctx))
