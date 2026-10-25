@@ -103,8 +103,9 @@ class PredictionLabel:
     def ui(self) -> None:
         """Render a surface card with a display label and muted mono detail.
 
-        Idle shows a dash and the reason; while predicting, the detail gives
-        the prediction interval. Probability bars share the fixed 0–1 range.
+        Idle and predicting share a hero-sized label with vertically centred
+        detail: the idle reason or prediction interval at the right.
+        Probability bars share the fixed 0–1 range.
         """
         imgui.push_id(self._widget_id or self._title)
         style = imgui.get_style()
@@ -133,18 +134,20 @@ class PredictionLabel:
             if live:
                 color = imgui.ImVec4(*PALETTE[idx % len(PALETTE)], 1.0)
                 color = flash_color(self._widget_id or self._title, idx, color, primary())
-            imgui.push_font(display_font(), style.font_size_base * self._font_scale)
+            base_size = style.font_size_base
+            imgui.push_font(display_font(), base_size * self._font_scale)
             imgui.text_colored(color, self._class_names[idx] if live else "—")
             imgui.pop_font()
             imgui.set_item_tooltip(self._title)
-            end = imgui.get_item_rect_max().x
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
             right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
-            imgui.push_font(mono_font(), style.font_size_base)
+            imgui.push_font(mono_font(), base_size)
             detail_w = imgui.calc_text_size(detail).x
-            if end + style.item_spacing.x + detail_w <= right:
+            if hi.x + style.item_spacing.x + detail_w <= right:
                 imgui.same_line()
-                imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
-                    0.0, imgui.get_content_region_avail().x - detail_w
+                imgui.set_cursor_screen_pos(imgui.ImVec2(
+                    right - detail_w,
+                    lo.y + (hi.y - lo.y - imgui.get_text_line_height()) / 2,
                 ))
             imgui.text_colored(muted(), detail)
             imgui.pop_font()
