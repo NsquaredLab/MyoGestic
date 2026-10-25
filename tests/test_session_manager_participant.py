@@ -186,12 +186,12 @@ def test_empty_participant_offers_file_picker(tmp_path, imgui_frame, monkeypatch
 
     manager = SessionManager(str(tmp_path))
     messages = []
-    real_text = imgui.text_colored
+    real_text = imgui.text_wrapped
     real_button = imgui.small_button
 
-    def text(color, value):
+    def text(value):
         messages.append(value)
-        real_text(color, value)
+        real_text(value)
 
     def button(label):
         clicked = real_button(label)
@@ -202,7 +202,7 @@ def test_empty_participant_offers_file_picker(tmp_path, imgui_frame, monkeypatch
             return False
 
     dialog = PendingDialog()
-    monkeypatch.setattr(imgui, "text_colored", text)
+    monkeypatch.setattr(imgui, "text_wrapped", text)
     monkeypatch.setattr(imgui, "small_button", button)
     monkeypatch.setattr(module.pfd, "open_file", lambda *args: dialog)
     imgui_frame(lambda: manager.ui(participant="P-014"))
@@ -247,6 +247,37 @@ def test_participant_header_and_summary_stay_visible(
     assert fa.ICON_FA_FOLDER_OPEN in labels
     assert fa.ICON_FA_BROOM in labels
     assert ("Load files from elsewhere…" in labels) == (bool(participant) and not has_takes)
+
+
+@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("width", [320, 400])
+def test_empty_participant_guidance_wraps_inside_its_card(
+    tmp_path, imgui_frame, monkeypatch, scale, width,
+):
+    """Guidance fits the session column even with a wider platform font."""
+    from myogestic import _scale, _theme
+
+    manager = SessionManager(str(tmp_path))
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    imgui.get_io().display_size = imgui.ImVec2(1280 * scale, 828 * scale)
+    bounds = []
+
+    def draw():
+        imgui.begin_child("empty-takes", imgui.ImVec2(width * scale, 260 * scale))
+        manager.ui(participant="P-014")
+        bounds.append((imgui.get_scroll_max_x(), imgui.get_scroll_max_y(),
+                       imgui.get_item_rect_max().y, imgui.get_window_draw_list().get_clip_rect_max().y))
+        imgui.end_child()
+
+    for _ in range(4):
+        imgui_frame(draw)
+    horizontal, vertical, bottom, clip_bottom = bounds[-1]
+    assert horizontal == vertical == 0, bounds
+    assert bottom <= clip_bottom, bounds
 
 
 def test_session_row_shows_recorded_seconds(tmp_path, imgui_frame, monkeypatch):

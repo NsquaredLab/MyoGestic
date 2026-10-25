@@ -213,15 +213,22 @@ def _render_empty_participant(
     """Centre the empty participant's guidance and existing file-picker action."""
     left = imgui.get_cursor_pos_x()
     width = imgui.get_content_region_avail().x
-    height = imgui.get_text_line_height_with_spacing() * 3
-    gap = max(0.0, (imgui.get_content_region_avail().y - height) / 2)
-    imgui.dummy(imgui.ImVec2(0, gap))
-    for line in (
+    lines = (
         f"No takes for {state.participant} yet.",
         "Takes you record appear here, already ticked for training.",
-    ):
+    )
+    spacing = imgui.get_style().item_spacing.y
+    height = sum(imgui.calc_text_size(line, wrap_width=width).y + spacing for line in lines)
+    height += imgui.get_text_line_height()
+    gap = max(0.0, (imgui.get_content_region_avail().y - height) / 2)
+    imgui.dummy(imgui.ImVec2(0, gap))
+    imgui.push_style_color(imgui.Col_.text, muted())
+    imgui.push_text_wrap_pos(left + width)
+    for line in lines:
         imgui.set_cursor_pos_x(left + max(0.0, (width - imgui.calc_text_size(line).x) / 2))
-        imgui.text_colored(muted(), line)
+        imgui.text_wrapped(line)
+    imgui.pop_text_wrap_pos()
+    imgui.pop_style_color()
     label = "Load files from elsewhere…"
     button_width = imgui.calc_text_size(label).x + imgui.get_style().frame_padding.x * 2
     imgui.set_cursor_pos_x(left + max(0.0, (width - button_width) / 2))
