@@ -9,6 +9,50 @@ Everything here exists in [`myogestic/_theme.py`](https://github.com/NsquaredLab
 and [`myogestic/widgets/common.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/myogestic/widgets/common.py).
 Reach for the helper; don't re-derive the styling inline.
 
+## The 2.0 kit
+
+A widget is **one card with one `panel_header`**. Put its state dot in that header with
+`status=…`, and keep header actions icon-only. Use `panel_header_button` for a header with one
+action; when composing a status dot and actions, reserve their width with `panel_header(...,
+reserve=…)`. Do not nest sub-headers, `separator_text` or `collapsing_header` sections inside
+the card. A state row, a control row and the forward action give it its structure.
+
+| Pattern | Draw it with | Contract |
+| --- | --- | --- |
+| State in words | `tinted_row(tone)` | Say what is happening, such as **Running**, **Recording** or **Connection failed**; put values and elapsed time in `mono_text`. Reserve room for the action beside the detail. `tinted_row()` without a tone uses the theme's surface for a neutral utility row. |
+| Forward action | `primary_button` | One full-width forward action, such as **Launch**, **Train** or **Start**. Pass `size=(imgui.get_content_region_avail().x, 0)` to fill the available width; the default only fits the label. |
+| Removal | `destructive_button` | Quiet at rest, red on hover or press. Never make a removal button permanently red. Use `TRASH` for the whole item and `XMARK` for an entry inside it, with a tooltip naming what will be removed. |
+| Sticky on/off | `push_selected()` / `pop_selected()` around a chip button | Use chips instead of checkboxes or solid `PALETTE` fills. Capture the selected state before the button can change it, so the push and pop stay paired. Use `segmented()` for a visible one-of-N choice. |
+| Lists | `mono_text`, `imgui.small_button`, and reserved action space | Compact one-line rows, approximately `ui_px(26)` high with room for the current font and padding. Keep values and times mono and right-aligned. Ellipsize names and details instead of wrapping; expose the full clipped text on hover. |
+| Rare settings | An icon-only `imgui.small_button`, then `imgui.open_popup` / `imgui.begin_popup` / `imgui.end_popup` | Put rarely touched settings in a popover opened by a `SLIDERS` icon with a **Settings** tooltip. Keep the current setting or summary visible on the card. |
+| Fields | `imgui.text_colored(muted(), caption)` above each control, arranged with `imgui.begin_table` | Use captions above controls in a two-column grid, with mono values beside slider captions. Fall back to one column when the controls no longer fit, including narrow cells around 320 px. Do not use `label_column` for this layout. |
+| Empty state | Plain words with `imgui.text_wrapped` and `muted()` for supporting text | Centre a short explanation in an empty panel and give the next step: **The hand is not running** / **Launch it, then refresh to load its movements.** Avoid a bare **(no data)** when an action can help. |
+| Locked state | `imgui.begin_disabled` / `imgui.end_disabled`, followed by a visible caption | Dim the unavailable controls and explain how to unlock them outside the disabled block: **Stop the recording to add or remove streams.** A tooltip alone is not enough. |
+
+State colours have one meaning across the kit: `SUCCESS` is working now, `IDLE` is not running
+and nothing is wrong, `WARNING` is something worth knowing, and `DANGER` is a failure. An
+**unattached stream is `IDLE`**, not `DANGER`; a failed connection gets `DANGER` with the error
+and **Retry**. Selection uses the accent tint; `PALETTE` is only for categorical identity, such
+as a channel or gesture dot, never a state or a continuous ramp.
+
+State selection can run without a window. This small example is executed by the docs tests;
+the drawing helpers above belong inside the app's GUI callback, where an ImGui frame exists.
+
+<!--docs:run-->
+```python
+from myogestic.widgets.common import IDLE, SUCCESS
+
+connected = False
+tone = SUCCESS if connected else IDLE
+message = "Connected" if connected else "Not connected — choose a stream, then Connect."
+assert tone is IDLE  # Being unattached is not a failure.
+```
+
+Use `ui_px` for every fixed pixel size and theme tokens for every colour. Check the whole card
+at UI scale 2.0, in the light theme, and in a narrow cell: captions stack, rows ellipsize, actions
+stay reachable, and every state remains readable in words. Keep any selection or popup state
+under the widget's stable `widget_id`, so two cards never share it accidentally.
+
 ## Type
 
 | Role | Face | Helper |
@@ -42,8 +86,8 @@ control so the *title* collapses instead of pushing it off.
 `panel_header_button(title, icon, button_icon)` is the same header with one right-aligned
 icon-only action, dropping to its own line when the row is too tight.
 
-Never `imgui.text()` a panel title directly: you lose the casing, the muting, the icon and the
-truncation, and the panel stops matching its neighbours.
+Use one header per card. Never `imgui.text()` a panel title directly: you lose the casing, the
+muting, the icon and the truncation, and the panel stops matching its neighbours.
 
 ## State cues
 
@@ -52,11 +96,13 @@ truncation, and the panel stops matching its neighbours.
 | Translucent accent tint + 2 px accent underline | `push_selected()` / `pop_selected()` | "this is on" |
 | Raised chip among flat segments | `segmented()` | one-of-N choice, all options visible |
 | Blue fill with white text | `primary_button()` | the one forward action in a step |
+| Quiet button, red on hover or press | `destructive_button()` | remove or discard |
+| Theme surface with a semantic tint | `tinted_row()` | state in words, with detail and an action |
 | Colour flash decaying over ~0.18 s | `flash_color()` | "this value just updated" |
 
 `primary_button` uses `PRIMARY_FILL` (`#0062CC`) and `ON_PRIMARY_TEXT` (white), fixed
 in both themes for readable action labels. Hover and press gently lighten the fill.
-Use it for the one forward action (Train, Start predicting, Start session).
+Use it full-width for the one forward action (Train, Start predicting, Start session).
 
 The selected cue is deliberately a *tint*, not a solid fill: it should read as selection, not as a
 button caught mid-press. **Any control with a sticky on/off state uses it**: the channel grid's
@@ -100,9 +146,9 @@ An editable list follows one shape at every depth, so a nested one reads without
 * **Removing is `destructive_button`**, red *on hover only*. `DANGER` means destructive and a
   delete has to read as one, but a permanently red button in every row turns the list into an
   alarm. Quiet at rest, red when the pointer is on it.
-* **`TRASH` with a label for the whole row, a bare `XMARK` for one entry inside it.** The two
-  sizes are the hierarchy: deleting a control is a bigger act than dropping one of its targets,
-  so it gets the bigger control.
+* **`TRASH` for the whole row, a bare `XMARK` for one entry inside it.** The glyphs express the
+  hierarchy: deleting a control removes its targets too. A bare icon needs a tooltip that names
+  what it removes; add a label when the surrounding row does not make that clear.
 
 ### Stream chips
 
@@ -114,12 +160,14 @@ measure names in the same font used to draw them and scale padding with the UI.
 The trailing `PLUS` opens an inline name field, **Add**, and a bare `XMARK` cancel.
 Only the selected chip offers removal, through a bare `XMARK` and
 `destructive_button`; the last offered stream cannot be removed. Adding and
-removing are disabled during recording, with the reason available on hover.
+removing are disabled during recording, with a visible caption:
+*Stop the recording to add or remove streams.*
 
 Connected device details share a single `tinted_row(SUCCESS)` with Reconnect and
 Disconnect icons. `tinted_row()` without a tone uses the theme's surface for a
-compact utility row such as Virtual Hand. Both derive their fill from the active
-theme, reserve room for actions, and keep the full clipped detail in a tooltip.
+compact utility row such as Virtual Hand. The helper supplies the background and inner width;
+the caller reserves room for actions, ellipsizes the detail and provides its full text in a
+tooltip.
 
 ### State colours
 
@@ -128,19 +176,17 @@ Four tokens, and they mean the same thing everywhere:
 | Token | Means |
 | --- | --- |
 | `SUCCESS` | running, connected, armed - working right now |
-| `IDLE` | not running, and nothing is wrong with that |
-| `WARNING` | works, but something about it is worth knowing |
-| `DANGER` | failed, refused, or destructive |
+| `IDLE` | not running or unattached, and nothing is wrong with that |
+| `WARNING` | something is worth knowing or needs attention, such as missing calibration |
+| `DANGER` | failed or refused; also the hover/press cue for a destructive action |
 
 `panel_header(title, icon, status=…)` puts a `CIRCLE` in one of them at the **right** end
-of the header row, so a panel says how its subject is doing without spending a row on the
-word — and stacked panels still line their titles up on the first glyph, which a leading
-dot would break for whichever of them happen to carry state. **Colour is the only
-thing a dot carries**, so the state has to live somewhere else as well — either a visible
-read-out in the panel, or a tooltip on the header with the detail (a PID, an exit code) —
-so the fact survives for a reader who cannot tell the hues apart. **One of the two, not
-both.** A panel that already prints its state in words gains nothing from a tooltip
-repeating it, and gains a second copy to keep in step.
+of the header row. Stacked panels line their titles up on the first glyph; a leading dot would
+indent only the ones that carry state. **Colour is the only thing a dot carries**, so the kit
+also puts the state in words in a `tinted_row`, readable without distinguishing the hues.
+A header tooltip can add detail such as a PID or exit code; do not repeat a visible read-out
+just to explain the same dot. An unattached stream uses `IDLE` and **Not connected**, with a
+**Connect** action; reserve `DANGER` for a connection that actually failed.
 
 ## Plots
 
@@ -180,8 +226,8 @@ Two different affordances, two different jobs; don't substitute one for the othe
   somewhere. For a panel whose cell is *fixed*, a tile in a `Grid`, where the chrome costs more
   than it gives. Dropping the title too is `show_title=False`, which takes the whole header row.
 
-Layout itself is always [`Grid`](grid-layout.md) with `Px`/`Fr` tracks. Widgets do not position
-themselves.
+Panel placement is always [`Grid`](grid-layout.md) with `Px`/`Fr` tracks. Widgets lay out their
+controls within the cell they receive; they do not position themselves in the app.
 
 ### Four ways a row lies to you
 
