@@ -241,7 +241,7 @@ def test_control_example_cards_fit_and_explain_their_state(
     _theme.apply_theme()
     imgui.get_style().scale_all_sizes(scale)
     imgui.get_style().font_scale_main = scale
-    monkeypatch.setattr(scope["logo"], "ui", lambda: None)
+    monkeypatch.setattr(scope["header"], "ui", lambda ctx: None)
     monkeypatch.setattr(scope["processes"], "ui", lambda: None)
     bus = SimpleNamespace(push=lambda values: None) if connected else None
     if name == "control_map_studio":
@@ -268,6 +268,8 @@ def test_control_example_cards_fit_and_explain_their_state(
             bounds["right"] = bounds["left"] + imgui.get_content_region_avail().x
             yield
             imgui.end_child()
+
+        area = __getitem__
 
     monkeypatch.setitem(scope, "layout" if name == "control_map_studio" else "grid", Cells())
     original_button, original_wrapped = imgui.button, imgui.text_wrapped

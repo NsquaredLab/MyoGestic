@@ -45,7 +45,7 @@ from myogestic.controls import ControlBus, load_control_map, resolve
 from myogestic.keyboard import KeyboardTarget
 from myogestic.remote import RemoteTarget
 from myogestic.vhi import virtual_hand
-from myogestic.widgets import AppLogo, ControlMapEditor, ProcessLauncher
+from myogestic.widgets import AppHeader, ControlMapEditor, ProcessLauncher
 from myogestic.widgets.common import (
     DANGER,
     IDLE,
@@ -122,11 +122,7 @@ def editor() -> ControlMapEditor:
     return documents[active]
 # `launchable` not `launcher`: an unlaunchable target must not stop this app from opening.
 processes = ProcessLauncher(vhi.launchable())
-logo = AppLogo()
-
-LOGO_CELL_W = 260
-WORDMARK_ASPECT = 800 / 540
-LOGO_H = Px(LOGO_CELL_W / WORDMARK_ASPECT)
+header = AppHeader("Control map studio", show_state=False)
 
 # Two arrangements, picked per frame from the window's width: a Grid's column count and
 # proportions are fixed at construction, and a 50/50 split is wrong at both ends — at 700 px
@@ -140,25 +136,27 @@ CONTROLS_W = 420.0
 layout = Layout(
     wide=Grid.areas(
         """
-        logo       editor
+        header     header
         processes  editor
         drive      editor
         keyboard   editor
         """,
-        row_height=[LOGO_H, Px(90), Fr(1), Fr(0.7)],
+        row_height=[Px(52), Px(140), Fr(1), Fr(0.7)],
         col_width=[Px(CONTROLS_W), Fr(1)],
+        bare=("header",),
     ),
-    # A shorter wordmark here, and `Fr(2)` for the editor: the slider panel above it is empty
+    # `Fr(2)` for the editor: the slider panel above it is empty
     # until Connect, and an even split left the editor cut off mid-row.
     narrow=Grid.areas(
         """
-        logo
+        header
         processes
         drive
         keyboard
         editor
         """,
-        row_height=[Px(90), Px(90), Fr(1), Fr(0.7), Fr(2)],
+        row_height=[Px(52), Px(140), Fr(1), Fr(0.7), Fr(2)],
+        bare=("header",),
     ),
     breakpoint=Px(STACK_BELOW),
 )
@@ -334,8 +332,8 @@ def _rebuild_if_the_manifest_changed() -> None:
 @app.ui
 def studio_ui(ctx: Context) -> None:
     """Sliders and the editor: side by side when there is room, stacked when not."""
-    with layout["logo"]:
-        logo.ui()
+    with layout["header"]:
+        header.ui(ctx)
 
     with layout["processes"]:
         processes.ui()

@@ -22,7 +22,7 @@ from myogestic._theme import mono_font
 from myogestic.controls import ControlLink, load_control_map
 from myogestic.remote import RemoteTarget
 from myogestic.vhi import virtual_hand
-from myogestic.widgets import AppLogo, ProcessLauncher
+from myogestic.widgets import AppHeader, ProcessLauncher
 from myogestic.widgets.common import (
     IDLE,
     SUCCESS,
@@ -64,28 +64,25 @@ link = ControlLink(
 # from opening — a target that is already running needs no button.
 PROCESSES = vhi.launchable()
 processes = ProcessLauncher(PROCESSES)
-logo = AppLogo()
+header = AppHeader("VHI control hand", show_state=False)
 
-LOGO_CELL_W = 300
-WORDMARK_ASPECT = 800 / 540
-grid = Grid(
-    3,
-    1,
-    row_height=[Px(LOGO_CELL_W / WORDMARK_ASPECT), Px(80), Fr(1)],
-    col_width=[Fr(1)],
+grid = Grid.areas(
+    "header\nprocesses\nhand",
+    row_height=[Px(52), Px(140), Fr(1)],
+    bare=("header",),
 )
 
 
 @app.ui
 def demo_ui(ctx: Context) -> None:
     """Sliders, one per alias in the file."""
-    with grid[0, 0]:
-        logo.ui()
+    with grid.area("header"):
+        header.ui(ctx)
 
-    with grid[1, 0]:
+    with grid.area("processes"):
         processes.ui()
 
-    with grid[2, 0]:
+    with grid.area("hand"):
         bus = link.bus
         tone = SUCCESS if bus is not None else IDLE
         panel_header("CONTROL HAND", status=tone)
