@@ -23,10 +23,9 @@ What to try:
       could not do this: it only seeds the opening selection.)
     * Open **[Edit...]** in a tile: only that array's grid is listed.
     * Press the header's toggle to collapse a tile's chrome down to the plot.
-    * Note the tiles do **not** share a y-scale — each auto-scales alone, so do
-      not compare amplitudes across them by eye. Give them a common manual
-      range when that matters, or see `electrode_overview.py` for the
-      shared-scale spatial view.
+    * Compare amplitudes across tiles: all start on the same manual range,
+      so a quiet array stays visibly quieter. Keep that common range when
+      adjusting Scale, or see `electrode_overview.py` for the spatial view.
 """
 
 import time
@@ -45,6 +44,7 @@ LAYOUT_COLS = 3  # 3 across x 2 down: 5 tiles, one cell to spare
 FS = 2048.0
 CHUNK = 64
 WINDOW_S = 1.0  # short on purpose: every viewer copies the buffer tail per frame
+Y_RANGE = (-4.0, 4.0)  # one amplitude scale for every array, including the quietest
 
 
 def _grid_columns(index: int) -> list[int]:
@@ -66,8 +66,7 @@ class _SyntheticGridSource:
         self._pos = 0
         self._last_read_time: float | None = None
         self._rng = np.random.default_rng(0)
-        # Distinct amplitude per array — also what makes the *absence* of a
-        # shared y-scale across tiles obvious.
+        # Distinct amplitude per array, visible against the shared manual range.
         self._scale = np.repeat(
             np.geomspace(1.0, 0.15, N_GRIDS).astype(np.float32), CHANNELS_PER_GRID
         )
@@ -117,6 +116,8 @@ viewers = [
         initial_channels=_grid_columns(i),
         show_controls=False,
         window_s=WINDOW_S,
+        scale_mode="manual",
+        y_range=Y_RANGE,
     )
     for i in range(N_GRIDS)
 ]
