@@ -47,10 +47,14 @@ def _fit(text: str, width: float) -> str:
     return text + "…" if text else ""
 
 
+def _segments_min_width(options: list[str]) -> float:
+    # Match segmented()'s two-pixel gaps, before any button padding is added.
+    return sum(imgui.calc_text_size(text).x for text in options) + 2 * (len(options) - 1)
+
+
 def _segments(key: str, options: list[str], index: int, width: float) -> int:
     style = imgui.get_style()
-    text_width = sum(imgui.calc_text_size(text).x for text in options)
-    pad = max(0.0, (width - text_width - 2 * (len(options) - 1)) / (2 * len(options)))
+    pad = max(0.0, (width - _segments_min_width(options)) / (2 * len(options)))
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(pad, style.frame_padding.y))
     try:
         return segmented(key, options, index)
@@ -68,23 +72,38 @@ def _timing_choices(controls: RecordingControls) -> None:
                              imgui.get_content_region_avail().x)
         if not active:
             controls._timed = bool(selected)
-        if controls._timed and imgui.begin_table("take-options", 2, imgui.TableFlags_.sizing_stretch_same):
+        if not controls._timed:
+            return
+        fields = [
+            (caption, key, [f"{n:g} s" if n else "Off" for n in values], index)
+            for caption, key, values, index in (
+                ("Take length", "length", controls._take_lengths, controls._length_index),
+                ("Warm-up", "warmup", controls._warmups, controls._warmup_index),
+            )
+        ]
+        min_width = max(
+            max(imgui.calc_text_size(caption).x, _segments_min_width(options))
+            for caption, _, options, _ in fields
+        )
+        # A borderless table has no outer padding; each column contributes one
+        # cell-padding width to the gap between the two fields.
+        two_columns = 2 * (min_width + imgui.get_style().cell_padding.x)
+        columns = 2 if imgui.get_content_region_avail().x >= two_columns else 1
+        if imgui.begin_table("take-options", columns, imgui.TableFlags_.sizing_stretch_same):
             try:
-                for caption in ("Take length", "Warm-up"):
-                    imgui.table_next_column()
-                    imgui.text_colored(muted(), caption)
-                for key, values, index in (
-                    ("length", controls._take_lengths, controls._length_index),
-                    ("warmup", controls._warmups, controls._warmup_index),
-                ):
-                    imgui.table_next_column()
-                    options = [f"{n:g} s" if n else "Off" for n in values]
-                    selected = _segments(key, options, index, imgui.get_content_region_avail().x)
-                    if not active:
-                        if key == "length":
-                            controls._length_index = selected
-                        else:
-                            controls._warmup_index = selected
+                for start in range(0, len(fields), columns):
+                    row = fields[start:start + columns]
+                    for caption, _, _, _ in row:
+                        imgui.table_next_column()
+                        imgui.text_colored(muted(), caption)
+                    for _, key, options, index in row:
+                        imgui.table_next_column()
+                        selected = _segments(key, options, index, imgui.get_content_region_avail().x)
+                        if not active:
+                            if key == "length":
+                                controls._length_index = selected
+                            else:
+                                controls._warmup_index = selected
             finally:
                 imgui.end_table()
     finally:
