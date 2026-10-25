@@ -571,7 +571,7 @@ def classification_app(monkeypatch, tmp_path):
 def test_classification_uses_the_session_shell(classification_app):
     """One header and active step surround a persistent signal and sessions."""
     from myogestic import Fr, Px
-    from myogestic.widgets import AppHeader, StatusBar
+    from myogestic.widgets import AppHeader, SimulatorControls, StatusBar
 
     ns = classification_app
     layout, header, steps = (ns[name] for name in ("layout", "header", "steps"))
@@ -580,19 +580,24 @@ def test_classification_uses_the_session_shell(classification_app):
     assert steps.steps == ["Connect", "Record", "Train", "Predict"]
     assert steps._widget_id == "emg_classification_steps"
     assert isinstance(ns["status"], StatusBar) and ns["status"].pipeline is ns["pipeline"]
+    assert isinstance(ns["simulator"], SimulatorControls)
+    assert "ctrl_outlet" not in ns
     assert ns["app"].ctx.require_participant
     assert not ns["recording"]._show_header and not ns["features"]._show_header
-    assert layout.panel_names == {"header", "signal", "step", "sessions", "log", "status"}
+    assert layout.panel_names == {"header", "signal", "simulator", "step", "sessions", "log", "status"}
     assert layout._breakpoint == Px(1100)
     assert layout._wide._col_tracks == [Fr(1), Px(400)]
     assert layout._wide._areas == {
         "header": (0, 1, 0, 2), "signal": (1, 3, 0, 1),
-        "step": (1, 2, 1, 2), "sessions": (2, 4, 1, 2), "log": (3, 4, 0, 1),
-        "status": (4, 5, 0, 2),
+        "step": (1, 2, 1, 2), "sessions": (2, 5, 1, 2),
+        "simulator": (3, 4, 0, 1), "log": (4, 5, 0, 1), "status": (5, 6, 0, 2),
     }
     for grid in (layout._wide, layout._narrow):
         assert grid._bare == {"header", "status"}
         assert grid._row_tracks[0] == Px(52) and grid._row_tracks[-1] == Px(26)
+        signal, simulator = grid._areas["signal"], grid._areas["simulator"]
+        assert simulator[0] == signal[1] and simulator[2:] == signal[2:]
+        assert grid._row_tracks[simulator[0]] == Px(76)
 
 
 def test_classification_completion_tracks_the_participants_takes(classification_app, monkeypatch, tmp_path):
@@ -620,8 +625,9 @@ def test_classification_completion_tracks_the_participants_takes(classification_
 @pytest.mark.parametrize("width", [2560, 1800])
 @pytest.mark.parametrize("participant", ["", "P-014"])
 @pytest.mark.parametrize("trained", [False, True])
+@pytest.mark.parametrize("recording_active", [False, True])
 def test_classification_shell_fits_light_theme(
-    classification_app, monkeypatch, implot_frame, step, width, participant, trained,
+    classification_app, monkeypatch, implot_frame, step, width, participant, trained, recording_active,
 ):
     """Every active card fits the default window; narrow cards remain reachable."""
     import platform
@@ -631,6 +637,7 @@ def test_classification_shell_fits_light_theme(
     from myogestic import _scale, _theme
     from myogestic.ml import widgets as ml_widgets
     from myogestic.widgets.panels import process_launcher, recording
+    from myogestic.widgets.signals import simulator_controls
     from myogestic.widgets.training import feature_selector
 
     ns = classification_app
@@ -642,6 +649,8 @@ def test_classification_shell_fits_light_theme(
         ns["pipeline"].train_log.append("Trained on 100 windows from 2 sessions.")
         ns["pipeline"].predictions.update({"class": 1, "proba": [0.1, 0.9]})
         app.ctx.state = "predicting" if step == 3 else "idle"
+    if recording_active:
+        app.ctx.state = "recording"
     monkeypatch.setattr(_scale, "_current", 2.0)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
@@ -659,7 +668,7 @@ def test_classification_shell_fits_light_theme(
     imgui.get_style().scale_all_sizes(2.0)
     imgui.get_style().font_scale_main = 2.0
     imgui.get_io().display_size = imgui.ImVec2(width, 1656)
-    headers, views, cells, buttons = [], [], [], []
+    headers, views, cells, buttons, heights = [], [], [], [], {}
     original_header = ns["panel_header"]
 
     def header(title, *args, **kwargs):
@@ -667,7 +676,7 @@ def test_classification_shell_fits_light_theme(
         return original_header(title, *args, **kwargs)
 
     monkeypatch.setitem(app._ui_fn.__globals__, "panel_header", header)
-    for module in (ml_widgets, process_launcher, recording, feature_selector):
+    for module in (ml_widgets, process_launcher, recording, feature_selector, simulator_controls):
         monkeypatch.setattr(module, "panel_header", header)
     monkeypatch.setattr(imgui, "begin_tab_bar", lambda *a: pytest.fail("the shell has no tabs"))
     original_button = imgui.button
@@ -679,6 +688,15 @@ def test_classification_shell_fits_light_theme(
         return result
 
     monkeypatch.setattr(imgui, "button", button)
+    original_chip = imgui.small_button
+
+    def chip(label):
+        right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        result = original_chip(label)
+        buttons.append((label, imgui.get_item_rect_max().x - right))
+        return result
+
+    monkeypatch.setattr(imgui, "small_button", chip)
     render_connect = ns["connect_ui"]
 
     def connect(ctx):
@@ -687,7 +705,7 @@ def test_classification_shell_fits_light_theme(
                       imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
 
     monkeypatch.setitem(app._ui_fn.__globals__, "connect_ui", connect)
-    for name in ("viewer", "recording", "features", "train_button", "training_log",
+    for name in ("viewer", "simulator", "recording", "features", "train_button", "training_log",
                  "prediction", "predict_button", "output_filter", "sessions", "log", "status"):
         widget = ns[name]
         render = type(widget).ui
@@ -696,6 +714,7 @@ def test_classification_shell_fits_light_theme(
             views.append((name, kwargs))
             result = render(self, *args, **kwargs)
             if kwargs.get("visible", True) and name != "status":
+                heights[name] = imgui.get_window_size().y
                 cells.append((name, imgui.get_cursor_pos_y(), imgui.get_window_size().y,
                               imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
             return result
@@ -716,8 +735,8 @@ def test_classification_shell_fits_light_theme(
         cells.clear()
         buttons.clear()
         implot_frame(draw)
-    assert headers == [ns["steps"].steps[step]]
-    expected = {"viewer", "recording", "sessions", "log", "status"}
+    assert headers == [ns["steps"].steps[step], "Simulated EMG"]
+    expected = {"viewer", "simulator", "recording", "sessions", "log", "status"}
     expected |= {2: {"features", "train_button", "training_log"},
                  3: {"prediction", "predict_button", "output_filter"}}.get(step, set())
     assert {name for name, _ in views} == expected
@@ -727,6 +746,9 @@ def test_classification_shell_fits_light_theme(
     assert next(kwargs for name, kwargs in views if name == "sessions") == {"participant": participant}
     assert all(overhang <= 1 for _, overhang in buttons), buttons
     assert all(horizontal == 0 for _, _, _, horizontal, _ in cells), cells
+    assert heights["viewer"] > heights["simulator"]
+    assert all(cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
+               for name, cursor, height, _, vertical in cells if name == "simulator"), cells
     if width == 2560:
         assert all(cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
                    for _, cursor, height, _, vertical in cells), cells
@@ -737,17 +759,65 @@ def test_classification_recording_callbacks_keep_the_generator_and_hand_wiring(c
     """The new step only moves controls; the same callbacks label and capture."""
     import numpy as np
 
+    from myogestic.tools import emg_generator
+
     ns = classification_app
     calls = []
     monkeypatch.setattr(type(ns["link"]), "ensure", lambda self: calls.append("bind"))
-    monkeypatch.setattr(ns["ctrl_outlet"], "push_sample", lambda value: calls.append(value))
+    outlet = emg_generator.control_outlet()
+    monkeypatch.setattr(outlet, "push_sample", lambda value: calls.append(value))
+    monkeypatch.setattr(emg_generator, "control_outlet", lambda: outlet)
     monkeypatch.setattr(ns["app"], "start_recording", lambda: calls.append("record"))
     ns["_on_gesture"](1)
     assert calls[0] == "bind"
     np.testing.assert_array_equal(calls[1], np.array([1.0], dtype=np.float32))
+    assert ns["simulator"].value == 1.0
     calls.clear()
     ns["_on_record"]()
     assert calls == ["bind", "record"]
+    # Previewing another signal must not change the gesture of the next take.
+    calls.clear()
+    ns["app"].ctx.current_label = 0
+    ns["_on_record"]()
+    assert calls[0] == "bind" and calls[2] == "record"
+    np.testing.assert_array_equal(calls[1], np.array([0.0], dtype=np.float32))
+    assert ns["simulator"].value == 0.0
+
+
+@pytest.mark.parametrize("step", range(4))
+@pytest.mark.parametrize("state", ["idle", "recording", "predicting"])
+def test_classification_simulator_steers_each_step_and_defers_to_recording(
+    classification_app, monkeypatch, implot_frame, step, state,
+):
+    """The persistent chips drive only the signal, and recording can still set it."""
+    from imgui_bundle import imgui
+
+    ns = classification_app
+    ns["steps"].active = step
+    ns["app"].ctx.state = state
+    # Establish the lazy outlet, then observe the samples without touching LSL.
+    ns["simulator"].set(0.0)
+    samples, chips = [], []
+    monkeypatch.setattr(ns["simulator"]._outlet, "push_sample", lambda value: samples.append(value))
+    button = imgui.small_button
+
+    def click(label):
+        result = button(label)
+        if "##preset_" in label:
+            disabled = bool(imgui.get_item_flags() & imgui.ItemFlags_.disabled)
+            chips.append((label.split("##")[0], disabled))
+            return label.startswith("Fist##") and not disabled
+        return result
+
+    monkeypatch.setattr(imgui, "small_button", click)
+    implot_frame(lambda: ns["app"]._ui_fn(ns["app"].ctx))
+    assert chips == [("Rest", state == "recording"), ("Fist", state == "recording")]
+    assert ns["simulator"].value == (0.0 if state == "recording" else 1.0)
+    assert len(samples) == (0 if state == "recording" else 1)
+    assert ns["app"].ctx.current_label == -1
+    monkeypatch.setattr(type(ns["link"]), "ensure", lambda self: None)
+    ns["_on_gesture"](1)
+    assert ns["simulator"].value == 1.0
 
 
 @pytest.fixture
