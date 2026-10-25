@@ -202,6 +202,166 @@ def test_the_model_and_hand_tabs_draw(app_module, implot_frame):
     implot_frame(app_module["hand_ui"])
 
 
+@pytest.mark.parametrize("width,scale", [(320, 1.0), (320, 2.0), (1100, 2.0), (1800, 2.0)])
+@pytest.mark.parametrize("running", [False, True])
+def test_controls_are_one_card_with_reachable_actions(
+    app_module, monkeypatch, implot_frame, width, scale, running,
+):
+    """The narrow light card stacks choices and keeps its block action inside."""
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    if running:
+        app_module["target"].start()
+    globals_ = app_module["model_ui"].__globals__
+    headers, buttons, actions, columns = [], [], [], []
+    header = globals_["panel_header"]
+    button = imgui.button
+    table = imgui.begin_table
+
+    def record_table(table_id, count, *args, **kwargs):
+        columns.append(count)
+        return table(table_id, count, *args, **kwargs)
+
+    def record_header(title, *args, **kwargs):
+        headers.append(title)
+        return header(title, *args, **kwargs)
+
+    def record_button(label, *args, **kwargs):
+        right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        result = button(label, *args, **kwargs)
+        buttons.append((label, imgui.get_item_rect_max().x - right))
+        return result
+
+    monkeypatch.setitem(globals_, "panel_header", record_header)
+    monkeypatch.setattr(imgui, "button", record_button)
+    monkeypatch.setattr(imgui, "begin_table", record_table)
+    if "primary_button" in globals_:
+        primary = globals_["primary_button"]
+
+        def record_primary(label, *, size=(0, 0)):
+            actions.append((label, size[0], imgui.get_content_region_avail().x))
+            return primary(label, size=size)
+
+        monkeypatch.setitem(globals_, "primary_button", record_primary)
+
+    def draw():
+        imgui.begin_child("controls-probe", imgui.ImVec2(width, 1300),
+                          window_flags=imgui.WindowFlags_.horizontal_scrollbar)
+        # Before the refactor this is the whole stack in the Model tab.
+        globals_.get("controls_ui", globals_["model_ui"])()
+        imgui.end_child()
+
+    for _ in range(3):
+        headers.clear()
+        buttons.clear()
+        actions.clear()
+        columns.clear()
+        implot_frame(draw)
+    assert headers == ["Pong controls"]
+    assert buttons and all(overhang <= 1 for _, overhang in buttons), buttons
+    assert len(actions) == 1 and actions[0][1] == pytest.approx(actions[0][2])
+    assert ("Stop" if running else "Follow the cursor") in actions[0][0]
+    assert columns == [2 if width == 1800 else 1]
+
+
+def test_model_view_gives_each_widget_its_own_card(app_module, monkeypatch, implot_frame):
+    """Composed widgets keep their headers in separate grid cells."""
+    import myogestic.ml.widgets as ml_widgets
+    import myogestic.widgets.training.feature_selector as feature_widget
+
+    headers = []
+    original = app_module["panel_header"]
+
+    def header(title, *args, **kwargs):
+        headers.append((title, tuple(imgui.get_window_pos())))
+        return original(title, *args, **kwargs)
+
+    monkeypatch.setitem(app_module["model_ui"].__globals__, "panel_header", header)
+    monkeypatch.setattr(ml_widgets, "panel_header", header)
+    monkeypatch.setattr(feature_widget, "panel_header", header)
+    implot_frame(app_module["model_ui"])
+    assert [title.lower() for title, _ in headers] == ["pong controls", "features", "model", "output"]
+    assert len({pos for _, pos in headers}) == 4
+
+
+def test_wrapped_choices_still_change_the_model_and_court(app_module, monkeypatch, implot_frame):
+    """Clicking an earlier row must survive the selected segment in a later row."""
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    button = imgui.button
+    wanted = {"label": ""}
+
+    def clicked(label, *args, **kwargs):
+        button(label, *args, **kwargs)
+        return label.startswith(wanted["label"] + "##")
+
+    monkeypatch.setattr(imgui, "button", clicked)
+    render = app_module["controls_ui"]
+
+    def draw():
+        imgui.begin_child("wrapped-choices", imgui.ImVec2(320, 1300))
+        render()
+        imgui.end_child()
+
+    for choices, state in [(app_module["MODES"], app_module["training_mode"]),
+                           (app_module["CONTROLS"], app_module["control_mode"]),
+                           (app_module["LEVELS"], app_module["opponent_level"])]:
+        for index in reversed(range(len(choices))):
+            wanted["label"] = choices[index]
+            implot_frame(draw)
+            assert state["index"] == index, wanted["label"]
+    court = render.__globals__["pong"]
+    assert court._control == app_module["CONTROLS"][0].lower()
+
+
+def test_unlaunchable_hand_explains_the_next_step(app_module, monkeypatch, implot_frame):
+    """An optional missing target gets useful words even in the narrow light card."""
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    text, buttons = [], []
+    wrapped, button = imgui.text_wrapped, imgui.button
+
+    def words(value):
+        text.append(value)
+        wrapped(value)
+
+    def action(label, *args, **kwargs):
+        right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        result = button(label, *args, **kwargs)
+        buttons.append((label, imgui.get_item_rect_max().x - right))
+        return result
+
+    monkeypatch.setattr(imgui, "text_wrapped", words)
+    monkeypatch.setattr(imgui, "button", action)
+
+    def draw():
+        imgui.begin_child("hand-probe", imgui.ImVec2(320, 1000))
+        app_module["hand_ui"]()
+        imgui.end_child()
+
+    for _ in range(3):
+        text.clear()
+        buttons.clear()
+        implot_frame(draw)
+    assert "The hand is not running." in text
+    assert any("Start the Virtual Hand" in value for value in text)
+    assert buttons == [("Bind now", pytest.approx(0, abs=1))]
+
+
 def test_the_map_declares_exactly_what_the_app_pushes(app_module):
     """Every alias in the map is driven, and every alias pushed is declared.
 

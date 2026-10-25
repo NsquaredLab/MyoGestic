@@ -53,6 +53,7 @@ from myogestic.widgets.common import (
     muted,
     panel_header,
     pop_selected,
+    primary,
     primary_button,
     push_selected,
     segmented,
@@ -658,7 +659,7 @@ def connect_ui(ctx: Context) -> None:
     device.ui(ctx)
     imgui.spacing()
     imgui.align_text_to_frame_padding()
-    imgui.text("Mains notch")
+    imgui.text_colored(muted(), "Mains notch")
     imgui.set_item_tooltip("Filters the recording and the model input.")
     imgui.same_line()
     imgui.begin_disabled(ctx.state != "idle")
@@ -809,7 +810,7 @@ def hand_ui() -> None:
         imgui.align_text_to_frame_padding()
         imgui.text_colored(tone, fa.ICON_FA_CIRCLE)
         imgui.same_line()
-        imgui.text("Virtual Hand")
+        imgui.text_colored(primary(), "Virtual Hand")
         imgui.same_line()
         font = mono_font()
         if font is not None:
@@ -823,7 +824,7 @@ def hand_ui() -> None:
             imgui.same_line()
             imgui.set_cursor_pos_x(right - action_w)
             imgui.begin_disabled(phase == "stopping")
-            if imgui.button(action) and phase != "stopping":
+            if imgui.small_button(action) and phase != "stopping":
                 if action == "Stop":
                     binder.stop(timeout_s=0.0)
                     if running:
