@@ -1,6 +1,6 @@
 """Five electrode arrays at a glance: spatial RMS maps that are comparable.
 
-The overview counterpart to `multi_panel_grids.py`. Five 64-channel arrays
+The overview counterpart to `electrode_grids.py`. Five 64-channel arrays
 (IN1-IN5) of one 320-channel stream, each drawn as a live **spatial RMS
 heatmap** in two rows of three cells below the app header, with a full
 `SignalViewer` in the sixth for temporal detail.
@@ -67,7 +67,7 @@ HEATMAPS = [Heatmap(g.label, size=(-1, -1), label_fmt="%.2f", show_title=False) 
 class _SyntheticArraySource:
     """In-process 320-channel source (no LSL) as five 8x8 electrode arrays.
 
-    Wall-clock paced (see `channel_grid_demo.py` for why). Each array runs at a
+    Wall-clock paced (see `electrode_grids.py` for why). Each array runs at a
     different amplitude, and one electrode is deliberately dead, so the map has
     something to reveal.
     """
