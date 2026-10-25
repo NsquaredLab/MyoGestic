@@ -57,6 +57,8 @@ class FeatureSelector:
         Optional iterable of feature names to start active.
         ``None`` (default) activates every feature; an empty list activates
         none.
+    show_header
+        Render the standard panel header.
 
     Raises
     ------
@@ -77,11 +79,13 @@ class FeatureSelector:
         default: Iterable[str] | None = None,
         *,
         widget_id: str = "features",
+        show_header: bool = True,
     ) -> None:
         if not features:
             raise ValueError("FeatureSelector needs at least one feature")
         self._features: dict[str, FeatureFn] = dict(features)
         self._widget_id = widget_id
+        self._show_header = show_header
         if default is None:
             default_set = set(self._features)
         else:
@@ -155,7 +159,8 @@ class FeatureSelector:
         """
         imgui.push_id(self._widget_id)
         try:
-            panel_header("Features")
+            if self._show_header:
+                panel_header("Features")
             imgui.push_font(mono_font(), imgui.get_style().font_size_base)
             try:
                 style = imgui.get_style()

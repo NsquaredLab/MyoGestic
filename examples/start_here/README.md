@@ -18,11 +18,13 @@ In `myocontrol.py`, set a participant ID, then follow Connect → Record → Tra
 
 The Source card includes stream chips and a **+** action for adding another amplifier;
 the generated target stays separate from device selection. In `force_ramps.py`, Source
-is always visible beside the Signal / Force views. In `pong.py`, the subject's Pong
-view opens first, with Signal and Model as the other full-cell views. Model groups
-the block action and court settings in one controls card, beside cards for features,
-training and output; these stack when space is narrow. Source / Hand share the right
-cell, and Hand explains how to connect the optional mirror when it is not running.
+is always visible beside the Signal / Force views. In `pong.py`, follow
+Connect → Record → Train → Play in the header. The subject sees Signal during Connect
+and the Pong court in the remaining steps. One step card contains Source and the
+optional hand mirror in Connect, the cursor or gesture protocol in Record, model mode
+and features in Train, and court settings, smoothing and prediction in Play. Sessions
+and the activity log remain visible; the signal, step, sessions and log stack when the
+window is narrow. A recording continues when another step is open.
 
 The rest of `examples/` answers "how do I do X": [`panels/`](../panels) stands
 up one widget at a time, and [`synthetic/`](../synthetic) and
