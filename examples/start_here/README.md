@@ -17,14 +17,21 @@ with no Virtual Hand at all — the wrist there only mirrors the paddle.
 In `myocontrol.py`, set a participant ID, then follow Connect → Record → Train → Drive; recordings and trained models are saved under `sessions/<ID>/`.
 
 The Source card includes stream chips and a **+** action for adding another amplifier;
-the generated target stays separate from device selection. In `force_ramps.py`, Source
-is always visible beside the Signal / Force views. In `pong.py`, follow
+the generated target stays separate from device selection. In `force_ramps.py`, follow
+Connect → Track in the header. Connect shows the signal and the Source picker with
+EMG and force stream chips. Track shows the complete force-tracking card, including
+calibration, target settings and Start, beside the recording control. In `pong.py`, follow
 Connect → Record → Train → Play in the header. The subject sees Signal during Connect
 and the Pong court in the remaining steps. One step card contains Source and the
 optional hand mirror in Connect, the cursor or gesture protocol in Record, model mode
 and features in Train, and court settings, smoothing and prediction in Play. Sessions
 and the activity log remain visible; the signal, step, sessions and log stack when the
-window is narrow. A recording continues when another step is open.
+window is narrow. A recording continues when another step is open. All three apps
+keep acquisition, participant and the session folder in a footer; Myocontrol and
+Pong also show the fitted or saved model there.
+
+The narrow force-ramps layout reserves height for the complete tracking card, so
+the target stays visible; its step and sessions cards scroll when space is tight.
 
 The rest of `examples/` answers "how do I do X": [`panels/`](../panels) stands
 up one widget at a time, and [`synthetic/`](../synthetic) and
