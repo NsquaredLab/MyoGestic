@@ -157,6 +157,13 @@ def test_recording_controls_layout(imgui_frame, monkeypatch, width, n_gestures, 
         assert row[-1][2] - row[0][0] == pytest.approx(available[0], abs=1)
     widths = [box[2] - box[0] for box in gestures]
     assert widths == pytest.approx([widths[0]] * n_gestures)
-    for key, box in boxes.items():
-        assert box[3] - box[1] == pytest.approx(ui_px(44)), key
-    assert boxes["rec_btn"][2] - boxes["rec_btn"][0] == pytest.approx(available[0], abs=1)
+    for box in gestures:
+        assert box[3] - box[1] == pytest.approx(ui_px(44))
+    action = boxes["rec_btn"]
+    if state == "idle":
+        assert action[3] - action[1] == pytest.approx(ui_px(52))
+        assert action[2] - action[0] == pytest.approx(available[0], abs=1)
+    else:
+        # Stop is right-aligned within the full-width status row.
+        assert action[2] <= gestures[-1][2]
+        assert action[0] >= gestures[-1][0]

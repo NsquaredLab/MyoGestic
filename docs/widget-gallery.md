@@ -48,7 +48,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![recording_controls](images/widgets/recording_controls.png){ .widget-thumb loading=lazy }
 
-    One button per class plus a Record toggle. Clicking a class button writes a [`LabelEvent`][myogestic.session.LabelEvent] and fires your `on_gesture` callback. Status pill shows IDLE / RECORDING.
+    Gesture tiles plus a recording action row with an elapsed clock. Opt into **Timed** with `take_lengths` and `warmups`: count down without capture, record one gesture for the selected duration, then stop and save automatically. **Cancel** saves nothing during warm-up; **Stop early** keeps the captured take. The immutable `take` read supports countdown and progress overlays.
 
 -   __[SessionManager][myogestic.widgets.SessionManager]__
 

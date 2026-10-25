@@ -207,6 +207,9 @@ class Context:
     notifications: list[Notification] = field(default_factory=list)
     participant: str = ""
     require_participant: bool = False
+    # A Stop during a countdown is still a cancellation, even though capture has
+    # not begun and state remains idle. Widgets observe this without callbacks.
+    _recording_stop_revision: int = field(default=0, init=False, repr=False)
 
     def notify(self, title: str, detail: str = "", kind: str = "info") -> None:
         """Show a corner toast and mirror it to the app log, from any thread.
@@ -502,6 +505,7 @@ class App:
         (the original folder is kept until the pack succeeds). Refuses
         to stop if ``ctx.state`` isn't ``"recording"``.
         """
+        self.ctx._recording_stop_revision += 1
         if not can_transition(self.ctx.state, AppState.IDLE):
             self.ctx.status_message = (
                 f"Cannot stop recording: state is {self.ctx.state!r}, expected 'recording'."
@@ -573,6 +577,7 @@ class App:
 
         Refuses to run if ``ctx.state`` isn't ``"recording"``.
         """
+        self.ctx._recording_stop_revision += 1
         if not can_transition(self.ctx.state, AppState.IDLE):
             self.ctx.status_message = (
                 f"Cannot discard recording: state is {self.ctx.state!r}, expected 'recording'."

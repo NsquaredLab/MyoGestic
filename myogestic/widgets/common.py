@@ -213,7 +213,7 @@ def pop_selected() -> None:
 
 
 @contextmanager
-def tinted_row(tone: imgui.ImVec4 | None = None) -> Iterator[float]:
+def tinted_row(tone: imgui.ImVec4 | None = None, *, height: float | None = None) -> Iterator[float]:
     """Frame one compact row with a theme-derived surface and optional status tint.
 
     Parameters
@@ -221,6 +221,8 @@ def tinted_row(tone: imgui.ImVec4 | None = None) -> Iterator[float]:
     tone
         Semantic colour mixed into the current surface; ``None`` uses the
         theme's raised surface alone.
+    height
+        Optional row height in scaled pixels, for a two-line status and action.
 
     Yields
     ------
@@ -241,7 +243,7 @@ def tinted_row(tone: imgui.ImVec4 | None = None) -> Iterator[float]:
     cursor = imgui.get_cursor_pos()
     width = imgui.get_content_region_avail().x
     pad = ui_px(4)
-    height = imgui.get_frame_height() + 2 * pad
+    height = imgui.get_frame_height() + 2 * pad if height is None else height
     imgui.get_window_draw_list().add_rect_filled(
         origin, imgui.ImVec2(origin.x + width, origin.y + height),
         imgui.get_color_u32(surface), style.frame_rounding,
