@@ -113,9 +113,29 @@ def test_example_draws_a_frame(path, monkeypatch, implot_frame):
     draws += [gui_fn for _title, gui_fn, *_rest in app._popout_specs]
     if not draws:
         pytest.skip(f"{path.name} registers no UI callback")
+
+    panel_demo = path.parent.name == "panels"
+    if panel_demo:
+        from imgui_bundle import imgui
+
+        from myogestic import _scale, _theme
+
+        monkeypatch.setattr(_scale, "_current", 2.0)
+        monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+        _theme.apply_theme()
+        imgui.get_style().scale_all_sizes(2.0)
+        imgui.get_style().font_scale_main = 2.0
+        imgui.get_io().display_size = imgui.ImVec2(360, 1800)
+
     def draw_all() -> None:
+        if panel_demo:
+            imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+            imgui.set_next_window_size(imgui.ImVec2(320, 1800))
+            imgui.begin("narrow-panel-demo", flags=imgui.WindowFlags_.no_saved_settings)
         for fn in draws:
             fn(app.ctx) if fn is app._ui_fn else fn()
+        if panel_demo:
+            imgui.end()
 
     try:
         implot_frame(draw_all)
@@ -195,3 +215,134 @@ def test_every_example_outside_otb_is_in_the_list():
         + "\n\nAdd the folder to EXAMPLES above, or exclude it deliberately the way "
         "`otb/` is — with the reason written down."
     )
+
+
+@pytest.mark.parametrize("name,label", [
+    ("participant_panel", "Recording"),
+    ("step_bar", "Complete"),
+    ("pong", "Follow"),
+])
+def test_panel_demo_chips_toggle_without_leaking_selection(
+    monkeypatch, implot_frame, name, label,
+):
+    """Demo toggles stay paired on the actual frames that switch on and off."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    imgui.get_io().display_size = imgui.ImVec2(360, 1800)
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "panels" / f"{name}.py"))
+    app = namespace["app"]
+    if name == "step_bar":
+        namespace["steps"].active = 1
+    button = imgui.small_button
+    clicked = []
+
+    def click_chip(text):
+        result = button(text)
+        if text.split("##")[0] == label:
+            clicked.append((
+                imgui.get_item_rect_max().x,
+                imgui.get_window_pos().x + imgui.get_window_size().x,
+            ))
+            return True
+        return result
+
+    monkeypatch.setattr(imgui, "small_button", click_chip)
+
+    def enabled():
+        if name == "participant_panel":
+            return app.ctx.state == "recording"
+        if name == "step_bar":
+            return namespace["done"][namespace["steps"].active]
+        return app._ui_fn.__globals__["started"] is not None
+
+    def draw():
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(320, 1800))
+        imgui.begin("demo-chip", flags=imgui.WindowFlags_.no_saved_settings)
+        app._ui_fn(app.ctx)
+        imgui.end()
+
+    for expected in (True, False):
+        implot_frame(draw)
+        assert enabled() is expected
+    assert len(clicked) == 2
+    assert all(right <= edge for right, edge in clicked), clicked
+
+
+@pytest.mark.parametrize("name,captions", [
+    ("pong", ["Command", "Opponent"]),
+    ("tracking_task", ["Effort"]),
+])
+@pytest.mark.parametrize("width", [320, 1200])
+def test_panel_demo_inputs_fit_with_captions_at_large_scale(
+    monkeypatch, implot_frame, name, captions, width,
+):
+    """Demo sliders stack their captions and stay reachable in a narrow light card."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    imgui.get_io().display_size = imgui.ImVec2(width + 40, 1800)
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "panels" / f"{name}.py"))
+    app = namespace["app"]
+    slider, text = imgui.slider_float, imgui.text_colored
+    labels, controls, readouts = {}, {}, []
+    mono = app._ui_fn.__globals__["mono_text"]
+
+    def readout(value):
+        right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        mono(value)
+        readouts.append((value, imgui.get_item_rect_max().x, right))
+
+    def caption(color, value):
+        text(color, value)
+        if value in captions:
+            labels[value] = tuple(imgui.get_item_rect_min())
+
+    def track_slider(label, *args, **kwargs):
+        result = slider(label, *args, **kwargs)
+        key = label.lstrip("#").capitalize()
+        if key in captions:
+            edge = imgui.get_window_pos().x + imgui.get_window_size().x
+            controls[key] = (
+                label, tuple(imgui.get_item_rect_min()), tuple(imgui.get_item_rect_max()), edge,
+            )
+        return result
+
+    monkeypatch.setattr(imgui, "text_colored", caption)
+    monkeypatch.setattr(imgui, "slider_float", track_slider)
+    monkeypatch.setitem(app._ui_fn.__globals__, "mono_text", readout)
+
+    def draw():
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(width, 1800))
+        imgui.begin("panel-demo", flags=imgui.WindowFlags_.no_saved_settings)
+        app._ui_fn(app.ctx)
+        imgui.end()
+
+    try:
+        for _ in range(3):
+            implot_frame(draw)
+        assert set(labels) == set(controls) == set(captions)
+        assert all(right <= edge for _, right, edge in readouts), readouts
+        for key, (label, lo, hi, edge) in controls.items():
+            assert label.startswith("##"), "captions belong above controls, not beside them"
+            assert labels[key][1] < lo[1]
+            assert hi[0] <= edge
+        if width == 320:
+            assert len({round(lo[0]) for _, lo, _, _ in controls.values()}) == 1
+    finally:
+        for stream in app.ctx.streams.values():
+            stream.stop()
