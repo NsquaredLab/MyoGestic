@@ -3,7 +3,7 @@
 One signed number in ``[-1, +1]`` moves the paddle: a rally rewards *graded* contraction
 where a trapezoid only rewards tracking.
 
-Two ways to record the training set, both started from the Model tab. **Follow the
+Two ways to record the training set, both started from the Record step. **Follow the
 cursor** runs a `Pursuit` block — a ghost paddle wanders the court, the subject chases it,
 and the cursor is recorded beside the EMG on the `target` stream. The Down / Rest / Up
 buttons cue the older three-class protocol.
@@ -16,7 +16,7 @@ linear model gains nothing either way. What the cursor buys is human: told "go t
 subject has no idea what 0.6 feels like.
 
 The Virtual Hand is a **mirror**, not a target: the paddle follows a float that reaches it
-whether or not VHI answers. The far paddle is played by the app, at a speed the Model tab
+whether or not VHI answers. The far paddle is played by the app, at a speed the Play step
 sets; a wall would return everything, so a rally against one only ends in the subject's
 own miss.
 
@@ -32,11 +32,11 @@ import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic import App, Fr, Grid, Px, Stream, TrainingData
+from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
 from myogestic._theme import mono_font
 from myogestic.controls import ControlBus, ControlLink, ControlLinkConnector, load_control_map
 from myogestic.ml import Pipeline
-from myogestic.ml.widgets import PipelinePanel
+from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
     catboost_classifier,
     catboost_regressor,
@@ -50,6 +50,7 @@ from myogestic.tracking import Pursuit
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     DEFAULT_DEVICES,
+    AppHeader,
     DevicePicker,
     FeatureSelector,
     LogPanel,
@@ -61,15 +62,18 @@ from myogestic.widgets import (
     RecordingControls,
     SessionManager,
     SignalViewer,
+    StepBar,
 )
 from myogestic.widgets.common import (
     DANGER,
     IDLE,
     SUCCESS,
     WARNING,
+    fit_text,
     mono_text,
     muted,
     panel_header,
+    primary,
     primary_button,
     segmented,
     tinted_row,
@@ -153,6 +157,8 @@ link = ControlLink(
 # Dicts, so the UI callbacks write them without `global`. `training_mode` is read only by
 # `train`, `opponent_level` only by `_new_game`.
 training_mode = {"index": 0}
+record_protocol = {"index": 0}
+PROTOCOLS = ["Follow the cursor", "Gestures"]
 opponent_level = {"index": LEVELS.index("Fair")}
 control_mode = {"index": 0}
 #: Whether the *block* started the recording it is being written into. It stops the one
@@ -165,7 +171,7 @@ block = {"recording": False}
 held_cue = 0.0
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
-    default=["RMS", "MAV"],
+    default=["RMS", "MAV"], show_header=False,
 )
 #: How each feature answers a gain ``g``: RMS/MAV/WL by ``g``, VAR by ``g**2``, ZC not at
 #: all. The gain only cancels if every ticked column moves alike, so `train` refuses a mix
@@ -369,22 +375,46 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
     return out
 
 
-# Keep gesture tiles, timing choices and the recording action visible together.
-grid = Grid(6, 3, row_height=[Fr(1), Fr(1), Fr(1), Px(200), Fr(1), Fr(1)],
-            col_width=[Fr(1), Fr(1), Fr(1)])
+layout = Layout(
+    wide=Grid.areas(
+        """
+        header   header
+        signal   step
+        signal   sessions
+        log      sessions
+        """,
+        row_height=[Px(52), Fr(3), Fr(1), Px(110)],
+        col_width=[Fr(1), Px(400)],
+        bare=("header",),
+    ),
+    narrow=Grid.areas(
+        """
+        header
+        signal
+        step
+        sessions
+        log
+        """,
+        row_height=[Px(52), Fr(2), Fr(3), Fr(1.5), Px(110)],
+        bare=("header",),
+    ),
+    breakpoint=Px(1100),
+)
+steps = StepBar(["Connect", "Record", "Train", "Play"], widget_id="pong_steps")
+participant = ParticipantPanel()
+header = AppHeader("Pong", steps=steps, participant=participant)
 
 # The cursor is generated here, not acquired — pointing a device at it would replace
 # the very thing the block is recording.
 device = DevicePicker(
-    "emg", selectable=True, exclude=(TARGET_STREAM,),
+    "emg", selectable=True, exclude=(TARGET_STREAM,), show_header=False,
     # The picker names additional amplifiers; the app owns their geometry.
     on_add=lambda name: app.add_stream(
         Stream(name, source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS)
     ),
     on_remove=app.remove_stream,
 )
-log = LogPanel()
-participant = ParticipantPanel()
+log = LogPanel(title="Activity log")
 # The Source panel owns connecting, so the viewer offers no button of its own.
 viewer = SignalViewer("emg", show_connect=False, selectable=True, show_title=True)
 
@@ -397,8 +427,8 @@ def _new_game() -> PongTask:
     played against a slower paddle — or with a different thing on the other end of the
     command — does not carry over, so changing one *should* reset it.
 
-    `court_height=0` fills the cell. The game is this app's whole point and its cell is
-    five rows tall, so a fixed 260 px court would leave most of it dead grey.
+    `court_height=0` fills the subject's view, so a fixed 260 px court would leave
+    most of it dead grey.
     """
     return PongTask(
         court_height=0.0,
@@ -416,7 +446,9 @@ processes = ProcessLauncher(hand_processes)
 # rate-limited and single-flight, safe to poll every frame.
 binder = ControlLinkConnector(link)
 sessions = SessionManager("sessions", class_names=CLASSES)
-panel = PipelinePanel(pipeline)
+train_button = TrainButton(pipeline, size=(-1, 0))
+predict_button = PredictButton(pipeline, size=(-1, 0))
+training_log = TrainingLog(pipeline)
 # No probability bar: three classes on one axis, and the paddle beside it already shows
 # the magnitude the bar would. The name is the part the court cannot say.
 prediction = PredictionLabel(pipeline, CLASSES)
@@ -444,7 +476,7 @@ def _bind() -> ControlBus | None:
         app.ctx.log(f"Control map does not fit this VHI: {exc}")
         return None
     if bus is None:
-        app.ctx.log("VHI is not answering — launch it from the Hand tab, or press Bind now.")
+        app.ctx.log("VHI is not answering — launch or bind the Virtual Hand in Connect.")
     return bus
 
 
@@ -453,7 +485,7 @@ def _on_cue(index: int) -> None:
 
     Remembering is the whole job. Unlike `myocontrol`, this does **not** bind: the cue is
     shown on the paddle, which needs no bus at all, so binding on every press would log
-    "VHI is not answering" along the app's entirely normal path. Binding stays a Hand-tab
+    "VHI is not answering" along the app's entirely normal path. Binding stays a Connect
     act, for the operator who actually wants the wrist to mirror.
     """
     global held_cue
@@ -465,6 +497,7 @@ recording = RecordingControls(
     on_record=app.start_recording,
     on_stop=app.stop_recording,
     on_gesture=_on_cue,
+    show_header=False,
 )
 
 
@@ -675,163 +708,195 @@ def _choice(key: str, caption: str, options: list[str], selected: int) -> int:
     return result
 
 
-def controls_ui() -> None:
-    """One card for the operator's choices, block action and signed output."""
-    global pong
-    panel_header("Pong controls", fa.ICON_FA_CROSSHAIRS,
-                 status=SUCCESS if target.running else IDLE)
-    # Each field owns its caption; two columns become one before choices clip.
-    columns = 2 if imgui.get_content_region_avail().x >= ui_px(760) else 1
-    if imgui.begin_table("pong-fields", columns, imgui.TableFlags_.sizing_stretch_same):
-        imgui.table_next_column()
-        training_mode["index"] = _choice("mode", "Training mode", MODES, training_mode["index"])
-        model = pipeline.model
-        with tinted_row(IDLE if model is None else
-                        WARNING if model[0] != MODES[training_mode["index"]] else SUCCESS):
-            _detail("No model yet — train to begin." if model is None else
-                    f"Driving: {model[0].lower()}" +
-                    (" — train to switch" if model[0] != MODES[training_mode["index"]] else ""))
-        imgui.table_next_column()
-        # A model with few distinct outputs is playable under velocity and stuck
-        # under position. Changing either court setting resets the rally.
-        control = _choice("control", "Paddle control", CONTROLS, control_mode["index"])
-        if control != control_mode["index"]:
-            control_mode["index"] = control
-            pong = _new_game()
-        _detail("The command is a speed." if control == 0 else "The command is the height.")
-        imgui.table_next_column()
-        level = _choice("opponent", "Opponent", LEVELS, opponent_level["index"])
-        if level != opponent_level["index"]:
-            opponent_level["index"] = level
-            pong = _new_game()
-        _detail("Changing this clears the court — serve again.")
-        imgui.table_next_column()
-        imgui.text_colored(muted(), "Sent to the hand")
-        # Signed text preserves the negative half a progress bar would hide.
-        for line in _pushed().splitlines():
-            _detail(line, numeric=True)
-        imgui.end_table()
+def connect_ui(ctx: Context) -> None:
+    """Choose acquisition and connect the optional hand mirror."""
+    device.ui(ctx)
     imgui.spacing()
-    block_ui()
+    hand_ui()
+
+
+def record_ui(ctx: Context) -> None:
+    """Choose a recording protocol without changing what the next model fits."""
+    # This switches controls, not the capture: a cursor block may join a take the
+    # operator started by hand, and `_end_block` leaves that take running.
+    record_protocol["index"] = _choice("protocol", "Recording protocol", PROTOCOLS, record_protocol["index"])
+    imgui.spacing()
+    if record_protocol["index"] == 0:
+        recording.ui(ctx, visible=False)
+        block_ui()
+    else:
+        recording.ui(ctx)
 
 
 def model_ui() -> None:
-    """Give controls, features, training and output their own grid cards."""
-    imgui.begin_child("model-cards")
-    if imgui.get_content_region_avail().x >= ui_px(720):
-        cards = Grid.areas(
-            "controls features\ncontrols training\ncontrols output",
-            row_height=[Px(110), Px(120), Fr(1)], col_width=[Fr(1), Fr(1)],
-        )
-    else:
-        cards = Grid.areas(
-            "controls\nfeatures\ntraining\noutput",
-            row_height=[Px(520), Px(110), Px(120), Px(300)],
-        )
-    with cards.area("controls"):
-        controls_ui()
-    with cards.area("features"):
-        features.ui()
-    with cards.area("training"):
-        panel.ui()
-    with cards.area("output"):
-        panel_header("Output")
-        output_filter.ui()
-        prediction.ui()
-    imgui.end_child()
+    """Choose the fit and its features, train on selected takes, and read its log."""
+    training_mode["index"] = _choice("mode", "Training mode", MODES, training_mode["index"])
+    model = pipeline.model
+    with tinted_row(IDLE if model is None else
+                    WARNING if model[0] != MODES[training_mode["index"]] else SUCCESS):
+        _detail("No model yet — train to begin." if model is None else
+                f"Driving: {model[0].lower()}" +
+                (" — train to switch" if model[0] != MODES[training_mode["index"]] else ""))
+    imgui.text_colored(muted(), "Features")
+    features.ui()
+    imgui.spacing()
+    train_button.ui()
+    training_log.ui()
+
+
+def play_ui() -> None:
+    """Start prediction and tune the court and the output mirrored by the hand."""
+    global pong
+    # A model with few distinct outputs is playable under velocity and stuck
+    # under position. Changing either court setting resets the rally.
+    control = _choice("control", "Paddle control", CONTROLS, control_mode["index"])
+    if control != control_mode["index"]:
+        control_mode["index"] = control
+        pong = _new_game()
+    _detail("The command is a speed." if control == 0 else "The command is the height.")
+    level = _choice("opponent", "Opponent", LEVELS, opponent_level["index"])
+    if level != opponent_level["index"]:
+        opponent_level["index"] = level
+        pong = _new_game()
+    _detail("Changing this clears the court — serve again.")
+    imgui.spacing()
+    output_filter.ui()
+    imgui.spacing()
+    imgui.text_colored(muted(), "Sent to the hand")
+    # Signed text preserves the negative half a progress bar would hide.
+    for line in _pushed().splitlines():
+        _detail(line, numeric=True)
+    imgui.spacing()
+    prediction.ui()
+    predict_button.ui()
+
+
+hand_status = {"error": ""}
 
 
 def hand_ui() -> None:
-    """Show the optional launcher and mirror connection in separate cards.
+    """Keep the optional launcher and mirror connection in one compact row.
 
     The paddle never reads the bus, so everything here only buys the mirror — a
     wrist that follows the same number the court is already showing.
     """
-    imgui.begin_child("hand-cards")
-    cards = Grid.areas(
-        "process\nconnection" if hand_processes else "connection",
-        row_height=[Px(210), Px(230)] if hand_processes else [Fr(1)],
+    bound = link.bus is not None
+    running = processes.running(vhi.name)
+    error = hand_status["error"] or binder.last_error
+    tone = SUCCESS if bound else DANGER if error else WARNING if running else IDLE
+    detail = ("Bound — the wrist mirrors the paddle." if bound else
+              "Connection failed" if error else
+              "Launched — connecting…" if running else "Not connected")
+    if not bound and running:
+        # Launch arms the background binder; an idle app never polls it.
+        binder.poll()
+        detail = binder.status or "Binding as soon as VHI answers…"
+    mapping = "\n".join(
+        f"{alias} → {', '.join(ref.address for ref in binding.targets)} · {ALIAS_ROLES.get(alias, UNDRIVEN)}"
+        for alias, binding in CONTROL_MAP.bindings.items()
     )
-    if hand_processes:
-        with cards.area("process"):
-            processes.ui()
-    with cards.area("connection"):
-        bound = link.bus is not None
-        running = processes.running(vhi.name)
-        tone = SUCCESS if bound else DANGER if binder.last_error else WARNING if running else IDLE
-        panel_header("Virtual Hand", status=tone)
-        with tinted_row(tone):
-            _detail("Bound — the wrist mirrors the paddle." if bound else
-                    "Connection failed" if binder.last_error else
-                    "Launched — connecting…" if running else "Not connected")
-        imgui.text_colored(muted(), "Control map")
-        for alias, binding in CONTROL_MAP.bindings.items():
-            _detail(f"{alias} → {', '.join(ref.address for ref in binding.targets)}", numeric=True)
-            _detail(ALIAS_ROLES.get(alias, UNDRIVEN))
-        if not bound and running:
-            # Launch arms the background binder; an idle app never polls it.
-            binder.poll()
-            _detail(binder.status or "Binding as soon as VHI answers…")
-        elif not bound:
-            if not hand_processes:
-                imgui.text_wrapped("The hand is not running.")
-                imgui.push_style_color(imgui.Col_.text, muted())
-                imgui.text_wrapped("Start the Virtual Hand, then bind to mirror the paddle.")
-                imgui.pop_style_color()
-                imgui.set_item_tooltip(vhi.install_hint.strip())
-            if primary_button("Retry" if binder.last_error else "Bind now",
-                              size=(imgui.get_content_region_avail().x, 0)) and _bind() is None:
-                app.ctx.log("VHI did not answer. Launch it above, or start it before the app.")
-            _detail("Optional — the game plays without it.")
-    imgui.end_child()
+    hint = ("Launch the Virtual Hand, or bind to one already running." if hand_processes else
+            "Start the Virtual Hand, then bind to mirror the paddle.")
+    tooltip = f"{detail}\n{error or hint}\nOptional — the game plays without it.\n\n{mapping}"
+    if not hand_processes:
+        tooltip += f"\n\n{vhi.install_hint.strip()}"
+    style = imgui.get_style()
+    action_count = int(bool(hand_processes)) + int(not bound)
+    action_width = imgui.calc_text_size(fa.ICON_FA_LINK).x + 2 * style.frame_padding.x
+    reserved = action_count * (action_width + style.item_spacing.x)
+    with tinted_row() as width:
+        right = imgui.get_cursor_pos_x() + width
+        imgui.align_text_to_frame_padding()
+        imgui.text_colored(tone, fa.ICON_FA_CIRCLE)
+        imgui.same_line()
+        room = max(0.0, right - reserved - imgui.get_cursor_pos_x())
+        imgui.text_colored(primary(), fit_text("Virtual Hand", room))
+        imgui.set_item_tooltip(tooltip)
+        remaining = (right - reserved - imgui.get_item_rect_max().x
+                     + imgui.get_window_pos().x - style.item_spacing.x)
+        if remaining > ui_px(60):
+            imgui.same_line()
+            imgui.push_font(mono_font(), style.font_size_base)
+            mono_text(fit_text(detail, remaining), muted())
+            imgui.pop_font()
+            imgui.set_item_tooltip(tooltip)
+        if hand_processes:
+            imgui.same_line()
+            imgui.set_cursor_pos_x(right - reserved + style.item_spacing.x)
+            icon = fa.ICON_FA_STOP if running else fa.ICON_FA_PLAY
+            if imgui.small_button(f"{icon}##launch_hand"):
+                if running:
+                    processes.stop(vhi.name)
+                else:
+                    try:
+                        processes.launch(vhi.name)
+                        hand_status["error"] = ""
+                    except Exception as exc:
+                        hand_status["error"] = str(exc)
+                        app.ctx.log(f"Virtual Hand launch failed: {exc}")
+            imgui.set_item_tooltip("Stop the Virtual Hand" if running else "Launch the Virtual Hand")
+        if not bound:
+            imgui.same_line()
+            imgui.set_cursor_pos_x(right - action_width)
+            if imgui.small_button(f"{fa.ICON_FA_LINK}##bind_hand") and _bind() is None:
+                app.ctx.log("VHI did not answer. Launch it here, or start it before the app.")
+            imgui.set_item_tooltip("Retry binding the Virtual Hand" if error else "Bind the Virtual Hand")
+
+
+def _step_done(ctx: Context) -> list[bool]:
+    """Completion reflects connection, participant takes, a model and live prediction."""
+    stream = ctx.streams.get("emg")
+    return [
+        stream is not None and stream.status == "connected" and stream.info is not None,
+        bool(ctx.participant)
+        and any(pathlib.Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        pipeline.model is not None,
+        ctx.state == "predicting",
+    ]
 
 
 @app.ui
-def pong_ui(ctx):
-    # `TargetSource` ends its own block on the acquire thread, so a block left in a
-    # background tab cannot overrun. This just closes the recording that press opened.
+def pong_ui(ctx: Context) -> None:
+    """Keep the subject's view, sessions and activity visible around the active step."""
+    # `TargetSource` ends its own block on the acquire thread even while another
+    # step is open. This just closes the recording that press opened.
     if block["recording"] and not target.running:
         _end_block()
 
-    with grid[0:5, 0:2]:
-        # Pong first: a layout pass draws only a tab bar's first tab, so this is the one
-        # CI ever renders — and it is the one a subject looks at all session.
-        if imgui.begin_tab_bar("game_cell"):
-            selected, _ = imgui.begin_tab_item("Pong")
-            if selected:
-                # The ghost is the cursor and nothing else: `None` outside a block, so
-                # the court is exactly what it was whenever no one is being asked to
-                # follow anything.
-                pong.ui(_command(ctx), _cursor(), _effort(ctx))
-                imgui.end_tab_item()
-            selected, _ = imgui.begin_tab_item("Signal")
-            if selected:
-                viewer.ui(ctx)
-                imgui.end_tab_item()
-            selected, _ = imgui.begin_tab_item("Model")
-            if selected:
-                model_ui()
-                imgui.end_tab_item()
-            imgui.end_tab_bar()
-    with grid[5, 0:2]:
-        log.ui(ctx)
-    with grid[0:3, 2]:
-        participant.ui(ctx)
-        imgui.spacing()
-        if imgui.begin_tab_bar("source_cell"):
-            selected, _ = imgui.begin_tab_item("Source")
-            if selected:
-                device.ui(ctx)
-                imgui.end_tab_item()
-            selected, _ = imgui.begin_tab_item("Hand")
-            if selected:
-                hand_ui()
-                imgui.end_tab_item()
-            imgui.end_tab_bar()
-    with grid[3, 2]:
-        recording.ui(ctx)
-    with grid[4:6, 2]:
+    with layout["header"]:
+        active = header.ui(ctx, _step_done(ctx))
+    padding = imgui.get_style().window_padding
+    imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))
+    # Recording state advances once each frame, including when its controls are hidden.
+    if active != 1:
+        recording.ui(ctx, visible=False)
+    # Refresh the selection before Train can read it this frame.
+    with layout["sessions"]:
         pipeline.training_data = sessions.ui(participant=ctx.participant)
+    with layout["step"]:
+        stream = ctx.streams.get("emg")
+        tone = (SUCCESS if stream is not None and stream.status == "connected" and stream.info is not None
+                else DANGER if stream is not None and stream.last_error else IDLE)
+        panel_header(steps.steps[active], status=tone if active == 0 else None)
+        if active == 0:
+            connect_ui(ctx)
+        elif active == 1:
+            record_ui(ctx)
+        elif active == 2:
+            model_ui()
+        else:
+            play_ui()
+    with layout["signal"]:
+        if active == 0:
+            viewer.ui(ctx)
+        else:
+            # The ghost is the cursor and nothing else: `None` outside a block, so
+            # the court is exactly what it was whenever no one is being asked to
+            # follow anything.
+            pong.ui(_command(ctx), _cursor(), _effort(ctx))
+    with layout["log"]:
+        log.ui(ctx)
+    imgui.pop_style_var()
 
     # Stream it, do not fire it once: VHI holds a pose only while samples keep arriving
     # (5 s, then `StopToRest()`). While predicting the predict loop is already doing that.
