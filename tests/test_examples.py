@@ -1131,7 +1131,7 @@ def test_electrode_overview_names_empty_cards_and_gives_a_next_step(monkeypatch,
 
 @pytest.mark.parametrize("path", [
     *(_EXAMPLES_ROOT / "synthetic" / f"{name}.py" for name in (
-        "emg_32ch_multi_model", "emg_popout_layout", "emg_classification",
+        "emg_32ch_multi_model", "emg_classification",
         "emg_classification_grpc", "emg_regression", "emg_regression_raulnet",
         "high_channel_viewer", "electrode_grids", "electrode_overview",
     )),

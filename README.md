@@ -77,7 +77,7 @@ or against the synthetic one when you have none:
 - `pong.py` - chase a cursor with the paddle, train one signed `[-1, +1]`
   command, and play Pong with your wrist; the Virtual Hand only mirrors it
 
-Six runnable end-to-end demos live in
+Five runnable end-to-end demos live in
 [`examples/synthetic/`](https://github.com/NsquaredLab/MyoGestic/tree/main/examples/synthetic):
 
 - `emg_classification.py` - the reference first read (CatBoost binary)
@@ -85,7 +85,7 @@ Six runnable end-to-end demos live in
 - `emg_regression.py` - continuous 5-DoF regression
 - `emg_regression_raulnet.py` - same flow with a PyTorch Lightning CNN
 - `emg_32ch_multi_model.py` - selectable classifier + Save/Load
-- `emg_popout_layout.py` - the same flow in a dockable tear-off layout
+  Every card can pop out into its own window.
 
 For electrode-array comparisons, `examples/synthetic/electrode_grids.py` splits a
 256-channel synthetic stream into four tiled viewers with a shared manual range.

@@ -13,6 +13,7 @@ Workflow:
        Logistic Regression / Dummy Constant.
     5. Click Train → Predict — VHI hand follows the predicted class.
     6. Use Simulated EMG on any step to try all four classes while predicting.
+    7. Use a card's pop-out icon to open panels in their own windows.
 
 Mirrors `emg_classification.py` but expands to 32 channels and 4 classes, and lets
 you compare classifiers side-by-side without editing the file.
@@ -54,7 +55,6 @@ from myogestic.sources import LSLSource
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     AppHeader,
-    LogPanel,
     ParticipantPanel,
     PostProcessor,
     PredictionLabel,
@@ -65,6 +65,7 @@ from myogestic.widgets import (
     SimulatorControls,
     StatusBar,
     StepBar,
+    StreamPanel,
 )
 from myogestic.widgets.common import (
     DANGER,
@@ -79,7 +80,7 @@ from myogestic.widgets.common import (
     tinted_row,
     ui_px,
 )
-from myogestic.widgets.panels.log_box import render_log_buttons, render_log_popout
+from myogestic.widgets.panels.log_box import render_log, render_log_buttons, render_log_popout
 
 N_CHANNELS = 32
 CLASSES = ["Rest", "Fist", "Pinch", "Open"]
@@ -164,7 +165,7 @@ PROCESSES = [
     *vhi.launchable(),
 ]
 
-app = App("EMG · 32 ch multi-model")
+app = App("EMG · 32 ch multi-model", docking=True)
 app.streams(Stream("emg", source=LSLSource("TestEMG32"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 # Wire generic save/load so save_model_button / load_model_button work, and
@@ -436,9 +437,10 @@ def _on_record() -> None:
 
 
 # The Connect step owns acquisition; signal and simulator stay visible on every step.
-viewer = SignalViewer("emg", selectable=True, show_connect=False)
+viewer = SignalViewer("emg", selectable=True, show_connect=False, show_title=False)
 simulator = SimulatorControls(list(zip(CLASSES, CTRL_VALUES, strict=True)))
 processes = ProcessLauncher(PROCESSES)
+streams = StreamPanel()
 recording = RecordingControls(
     CLASSES,
     on_record=_on_record,
@@ -448,9 +450,72 @@ recording = RecordingControls(
 )
 sessions = SessionManager("sessions", class_names=CLASSES)
 prediction = PredictionLabel(pipeline, CLASSES)
-log = LogPanel(title="Activity log")
 connection = {"busy": False}
 launch_errors: dict[str, str] = {}
+
+
+def _panel_visible(title: str) -> bool:
+    """Read visibility from the runner, including windows closed with their X."""
+    params = getattr(app, "_runner_params", None)
+    return params is not None and any(
+        window.label == title and window.is_visible
+        for window in params.docking_params.dockable_windows
+    )
+
+
+def _show_panel(title: str) -> None:
+    """Open an already registered window, leaving the central shell in place."""
+    params = getattr(app, "_runner_params", None)
+    if params is not None:
+        for window in params.docking_params.dockable_windows:
+            if window.label == title:
+                window.dock_space_name = ""
+                window.is_visible = True
+                window.focus_window_at_next_frame = True
+                break
+
+
+def _card_header(
+    title: str, *, panel: str | None = None, status: imgui.ImVec4 | None = None,
+    training: bool = False, clear_log: bool = False,
+) -> None:
+    """Keep window, model and log actions on one icon-only header line."""
+    style = imgui.get_style()
+    icon = fa.ICON_FA_UP_RIGHT_FROM_SQUARE
+    icons = [icon]
+    if training:
+        log_icon = (fa.ICON_FA_DOWN_LEFT_AND_UP_RIGHT_TO_CENTER if _popout_open
+                    else fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER)
+        icons += [fa.ICON_FA_FLOPPY_DISK, fa.ICON_FA_FOLDER_OPEN, log_icon]
+    if clear_log:
+        icons.append(fa.ICON_FA_BROOM)
+    actions_width = sum(imgui.calc_text_size(action).x + 2 * style.frame_padding.x
+                        for action in icons) + (len(icons) - 1) * style.item_spacing.x
+    right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+    panel_header(title, reserve=actions_width + style.item_spacing.x, status=status)
+    imgui.same_line()
+    imgui.set_cursor_pos_x(right - actions_width)
+    if imgui.small_button(f"{icon}##panels_{title}"):
+        if panel is not None:
+            _show_panel(panel)
+        else:
+            imgui.open_popup("detachable_panels")
+    imgui.set_item_tooltip(f"Open {panel} in its own window" if panel else
+                           "Open a panel in its own window")
+    if training:
+        imgui.same_line()
+        model_actions_ui()
+    if clear_log:
+        imgui.same_line()
+        if imgui.small_button(f"{fa.ICON_FA_BROOM}##clear_log"):
+            app.ctx.logs.clear()
+        imgui.set_item_tooltip("Clear the log")
+    if panel is None and imgui.begin_popup("detachable_panels"):
+        for name, *_ in app._popout_specs:
+            if imgui.selectable(name, _panel_visible(name))[0]:
+                _show_panel(name)
+        imgui.end_popup()
+
 
 def _connect() -> None:
     """Resolve the synthetic stream off the render thread, one attempt at a time."""
@@ -535,6 +600,19 @@ def predict_ui() -> None:
     prediction.ui()
     predict_button.ui()
 
+
+def signal_ui() -> None:
+    """Draw the signal card with its own detachable-window action."""
+    _card_header("Signal", panel="Signal")
+    viewer.ui(app.ctx)
+
+
+def log_ui() -> None:
+    """Keep the activity log's clear and pop-out actions on its header."""
+    _card_header("Activity log", panel="Log", clear_log=True)
+    render_log("activity", app.ctx.logs or ["(no events yet)"])
+
+
 def _step_done(ctx: Context) -> list[bool]:
     """Completion follows the connection, participant takes, model and prediction."""
     stream = ctx.streams.get("emg")
@@ -556,8 +634,9 @@ def demo_ui(ctx: Context) -> None:
         active = header.ui(ctx, done)
     padding = imgui.get_style().window_padding
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))
-    # Recording state advances once per frame, even with another step open.
-    if active != 1:
+    # A detached Recording card owns its tick; otherwise advance it off-step.
+    detached_recording = _panel_visible("Recording")
+    if active != 1 and not detached_recording:
         recording.ui(ctx, visible=False)
     # Refresh the participant's selection before Train reads it this frame.
     with layout["sessions"]:
@@ -565,36 +644,71 @@ def demo_ui(ctx: Context) -> None:
     with layout["step"]:
         stream = ctx.streams.get("emg")
         tone = SUCCESS if done[0] else DANGER if stream is not None and stream.last_error else IDLE
-        if active == 2:
-            style = imgui.get_style()
-            icons = (fa.ICON_FA_FLOPPY_DISK, fa.ICON_FA_FOLDER_OPEN,
-                     fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER)
-            actions_width = sum(imgui.calc_text_size(icon).x + 2 * style.frame_padding.x
-                                for icon in icons) + 2 * style.item_spacing.x
-            right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
-            panel_header(steps.steps[active], reserve=actions_width + style.item_spacing.x)
-            imgui.same_line()
-            imgui.set_cursor_pos_x(right - actions_width)
-            model_actions_ui()
-        else:
-            panel_header(steps.steps[active], status=tone if active == 0 else None)
+        _card_header(steps.steps[active], status=tone if active == 0 else None,
+                     training=active == 2)
         if active == 0:
             connect_ui(ctx)
         elif active == 1:
-            recording.ui(ctx)
+            if detached_recording:
+                imgui.push_style_color(imgui.Col_.text, muted())
+                imgui.text_wrapped("Recording controls are open in their own window. Close it to return here.")
+                imgui.pop_style_color()
+            else:
+                recording.ui(ctx)
         elif active == 2:
             model_ui()
         else:
             predict_ui()
     with layout["signal"]:
-        viewer.ui(ctx)
+        signal_ui()
     with layout["simulator"]:
         simulator.ui(ctx)
     with layout["log"]:
-        log.ui(ctx)
+        log_ui()
     imgui.pop_style_var()
     with layout["status"]:
         status.ui(ctx)
+
+
+def _connect_panel() -> None:
+    panel_header("Connect")
+    connect_ui(app.ctx)
+
+
+def _recording_panel() -> None:
+    panel_header("Record")
+    recording.ui(app.ctx)
+
+
+def _training_panel() -> None:
+    _card_header("Train", training=True)
+    model_ui()
+
+
+def _sessions_panel() -> None:
+    pipeline.training_data = sessions.ui(participant=app.ctx.participant)
+
+
+def _prediction_panel() -> None:
+    panel_header("Predict")
+    predict_ui()
+
+
+# Start closed: the session shell stays the default and its header actions open windows.
+for _title, _draw in (
+    ("Signal", signal_ui),
+    ("Streams", lambda: streams.ui(app.ctx)),
+    ("Log", log_ui),
+    ("Processes", processes.ui),
+    ("Connect", _connect_panel),
+    ("Recording", _recording_panel),
+    ("Model", _training_panel),
+    ("Post-processing", output_filter.ui),
+    ("Sessions", _sessions_panel),
+    ("Prediction", _prediction_panel),
+    ("Simulated EMG", lambda: simulator.ui(app.ctx)),
+):
+    app.popout(_title, _draw, default_open=False, can_be_closed=True, remember_is_visible=False)
 
 
 def main() -> None:
