@@ -486,46 +486,103 @@ def record_ui(ctx: Context) -> None:
 
 
 def model_ui() -> None:
-    """Train step: choose the model inputs and fit the selected takes."""
+    """Train step: choose inputs and see exactly which takes and gestures will fit."""
     busy = app.ctx.state != "idle"
+    style = imgui.get_style()
     imgui.begin_disabled(busy)
-    panel_header("MODE")
+    room = imgui.get_content_region_avail().x
+    labels_width = sum(imgui.calc_text_size(label).x for label in MODES)
+    padding = max(0.0, (room - labels_width - 2 * (len(MODES) - 1)) / (2 * len(MODES)))
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(padding, style.frame_padding.y))
     training_mode["index"] = segmented("mode", MODES, training_mode["index"])
-    imgui.spacing()
+    imgui.pop_style_var()
     features.ui()
     imgui.end_disabled()
 
-    imgui.spacing()
-    panel_header("INPUT")
+    summary = sessions.selection()
+    seconds = summary.class_seconds
+    total = _duration(sum(seconds.values()))
+    # One shared range keeps gesture durations comparable inside this card.
+    maximum = max(seconds.values(), default=0.0)
+    height = (2 * style.window_padding.y + imgui.get_text_line_height_with_spacing()
+              + len(seconds) * imgui.get_frame_height_with_spacing())
+    imgui.push_style_color(imgui.Col_.child_bg, style.color_(imgui.Col_.frame_bg))
+    imgui.begin_child("training-selection", imgui.ImVec2(0, height),
+                      imgui.ChildFlags_.always_use_window_padding)
+    total_width = imgui.calc_text_size(total).x
+    panel_header(f"Training on {summary.n_selected} takes", reserve=total_width + style.item_spacing.x)
+    imgui.same_line()
+    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
+        0.0, imgui.get_content_region_avail().x - total_width,
+    ))
+    mono_text(total, muted())
+    name_width = max((imgui.calc_text_size(name).x for name in seconds), default=0.0)
+    value_width = imgui.calc_text_size(_duration(maximum)).x
+    for index, (name, elapsed) in enumerate(seconds.items()):
+        left = imgui.get_cursor_pos_x()
+        imgui.align_text_to_frame_padding()
+        imgui.text_unformatted(name)
+        imgui.same_line()
+        imgui.set_cursor_pos_x(left + name_width + style.item_spacing.x)
+        width = max(ui_px(1), imgui.get_content_region_avail().x - value_width - style.item_spacing.x)
+        ci = CLASSES.index(name) if name in CLASSES else index
+        color = PALETTE[ci % len(PALETTE)]
+        # Reserve a full line but draw only a thin bar, centred on its text.
+        top = imgui.get_cursor_pos_y()
+        imgui.set_cursor_pos_y(top + (imgui.get_frame_height() - ui_px(4)) / 2)
+        imgui.push_style_color(imgui.Col_.plot_histogram, imgui.ImVec4(*color, 1.0))
+        imgui.progress_bar(elapsed / maximum if maximum else 0.0, imgui.ImVec2(width, ui_px(4)), "")
+        imgui.pop_style_color()
+        imgui.same_line()
+        imgui.set_cursor_pos_y(top)
+        imgui.align_text_to_frame_padding()
+        mono_text(_duration(elapsed), muted())
+    imgui.end_child()
+    imgui.pop_style_color()
+
     stream = app.ctx.streams.get("emg")
     channels = str(stream.info.n_channels) if stream is not None and stream.info else "—"
     mode = MODES[training_mode["index"]]
     estimator = "classifier" if mode == "Classification" else "regressor"
-    imgui.text_wrapped(
-        f"Window {WINDOW_MS} ms · Notch {NOTCH_CHOICES[notch['index']]} · "
-        f"Channels {channels} · CatBoost {estimator}"
-    )
+    detail = f"{WINDOW_MS} ms windows · notch {NOTCH_CHOICES[notch['index']].lower()} · {channels} ch · CatBoost"
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, style.font_size_base)
+    mono_text(_ellipsize(detail, imgui.get_content_region_avail().x), muted())
+    if font is not None:
+        imgui.pop_font()
+    imgui.set_item_tooltip(detail)
     if pipeline.model is not None and training_inputs["fitted"] != _input_fingerprint():
         imgui.push_style_color(imgui.Col_.text, WARNING)
         imgui.text_wrapped("Features changed — retrain to apply them.")
         imgui.pop_style_color()
-    imgui.spacing()
     data = pipeline.training_data
-    can_train = not busy and data is not None and not data.is_empty and features.n_active > 0
+    missing = [name for name in CLASSES if name not in seconds]
+    if busy:
+        reason = "Busy — wait until the current action finishes."
+    elif features.n_active == 0:
+        reason = "Select at least one feature."
+    elif data is None or data.is_empty or summary.n_selected == 0:
+        reason = "Record a take or select takes below first."
+    elif missing:
+        reason = f"No selected takes for {', '.join(missing)} — include those gestures below."
+    else:
+        reason = ""
+    can_train = not reason
     imgui.begin_disabled(not can_train)
-    clicked = primary_button(f"Train {estimator}")
+    clicked = primary_button(f"Train {estimator}", size=(-1, 0))
     imgui.end_disabled()
     if clicked and can_train:
         training_inputs["requested"] = _input_fingerprint()
         pipeline.start_training()
     if not can_train:
-        if busy:
-            reason = "Busy — wait until the current action finishes."
-        elif features.n_active == 0:
-            reason = "Select at least one feature."
-        else:
-            reason = "Record a take or select session files below first."
         _disabled_reason(reason)
+    if pipeline.model is not None and pipeline.last_saved_model:
+        with tinted_row(SUCCESS) as width:
+            saved = f"{fa.ICON_FA_CHECK}  {pathlib.Path(pipeline.last_saved_model).name}"
+            imgui.align_text_to_frame_padding()
+            imgui.text_unformatted(_ellipsize(saved, width))
+            imgui.set_item_tooltip(pipeline.last_saved_model)
 
 
 def connect_ui(ctx: Context) -> None:
