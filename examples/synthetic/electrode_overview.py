@@ -2,8 +2,8 @@
 
 The overview counterpart to `multi_panel_grids.py`. Five 64-channel arrays
 (IN1-IN5) of one 320-channel stream, each drawn as a live **spatial RMS
-heatmap** in a `Grid(2, 3)` cell, with a full `SignalViewer` in the sixth for
-temporal detail.
+heatmap** in two rows of three cells below the app header, with a full
+`SignalViewer` in the sixth for temporal detail.
 
 Why maps rather than traces: 64 overlaid traces in a small tile is texture, not
 signal. A map answers "which electrode is dead, loose or noisy?" instantly,
@@ -30,9 +30,9 @@ import time
 import numpy as np
 from imgui_bundle import imgui
 
-from myogestic import App, Grid, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.stream import ChannelGrid, StreamInfo
-from myogestic.widgets import Heatmap, SignalViewer
+from myogestic.widgets import AppHeader, Heatmap, SignalViewer
 from myogestic.widgets.common import IDLE, SUCCESS, muted, panel_header, tinted_row
 
 N_GRIDS = 5
@@ -109,7 +109,12 @@ class _SyntheticArraySource:
 app = App(f"Electrode overview - {N_GRIDS} x {CHANNELS_PER_GRID} ch @ {FS:.0f} Hz")
 app.streams(Stream("emg", source=_SyntheticArraySource(), window_ms=2000, buffer_ms=10000))
 viewer = SignalViewer("emg")
-grid = Grid(2, LAYOUT_COLS)
+grid = Grid.areas(
+    "header header header\nIN1 IN2 IN3\nIN4 IN5 signal",
+    row_height=[Px(52), Fr(1), Fr(1)],
+    bare=("header",),
+)
+header = AppHeader("Electrode overview", show_state=False)
 
 
 def _channel_rms(stream) -> np.ndarray | None:
@@ -123,6 +128,8 @@ def _channel_rms(stream) -> np.ndarray | None:
 
 @app.ui
 def demo_ui(ctx):
+    with grid.area("header"):
+        header.ui(ctx)
     stream = ctx.streams.get("emg")
     rms = _channel_rms(stream) if stream is not None else None
     # ONE range across every array: comparing them is the entire point, and
@@ -130,8 +137,8 @@ def demo_ui(ctx):
     vmax = float(rms.max()) if rms is not None and rms.size else 0.0
     vrange = (0.0, vmax if vmax > 0.0 else 1.0)
 
-    for i, (g, heatmap, idx) in enumerate(zip(GRIDS, HEATMAPS, INDEX_MAPS, strict=True)):
-        with grid[divmod(i, LAYOUT_COLS)]:
+    for g, heatmap, idx in zip(GRIDS, HEATMAPS, INDEX_MAPS, strict=True):
+        with grid.area(g.label):
             panel_header(g.label, status=SUCCESS if rms is not None else IDLE)
             if rms is None:
                 connected = stream is not None and stream.status == "connected"
@@ -146,7 +153,7 @@ def demo_ui(ctx):
                 continue
             heatmap.ui(np.where(idx >= 0, rms[idx], 0.0), vrange=vrange)
 
-    with grid[1, LAYOUT_COLS - 1]:  # last cell: temporal detail
+    with grid.area("signal"):  # last cell: temporal detail
         viewer.ui(ctx)
 
 
