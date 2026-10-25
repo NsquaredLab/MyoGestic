@@ -62,6 +62,7 @@ from myogestic.widgets import (
     RecordingControls,
     SessionManager,
     SignalViewer,
+    StatusBar,
     StepBar,
 )
 from myogestic.widgets.common import (
@@ -382,10 +383,11 @@ layout = Layout(
         signal   step
         signal   sessions
         log      sessions
+        status   status
         """,
-        row_height=[Px(52), Fr(3), Fr(1), Px(110)],
+        row_height=[Px(52), Fr(3), Fr(1), Px(110), Px(26)],
         col_width=[Fr(1), Px(400)],
-        bare=("header",),
+        bare=("header", "status"),
     ),
     narrow=Grid.areas(
         """
@@ -394,15 +396,17 @@ layout = Layout(
         step
         sessions
         log
+        status
         """,
-        row_height=[Px(52), Fr(2), Fr(3), Fr(1.5), Px(110)],
-        bare=("header",),
+        row_height=[Px(52), Fr(2), Fr(3), Fr(1.5), Px(110), Px(26)],
+        bare=("header", "status"),
     ),
     breakpoint=Px(1100),
 )
 steps = StepBar(["Connect", "Record", "Train", "Play"], widget_id="pong_steps")
 participant = ParticipantPanel()
 header = AppHeader("Pong", steps=steps, participant=participant)
+status = StatusBar("emg", pipeline=pipeline)
 
 # The cursor is generated here, not acquired — pointing a device at it would replace
 # the very thing the block is recording.
@@ -897,6 +901,8 @@ def pong_ui(ctx: Context) -> None:
     with layout["log"]:
         log.ui(ctx)
     imgui.pop_style_var()
+    with layout["status"]:
+        status.ui(ctx)
 
     # Stream it, do not fire it once: VHI holds a pose only while samples keep arriving
     # (5 s, then `StopToRest()`). While predicting the predict loop is already doing that.

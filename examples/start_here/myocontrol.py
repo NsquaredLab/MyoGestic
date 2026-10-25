@@ -38,6 +38,7 @@ from myogestic.widgets import (
     RecordingControls,
     SessionManager,
     SignalViewer,
+    StatusBar,
     StepBar,
 )
 from myogestic.widgets.common import (
@@ -46,7 +47,6 @@ from myogestic.widgets.common import (
     PALETTE,
     SUCCESS,
     WARNING,
-    edge_rule,
     mono_text,
     muted,
     panel_header,
@@ -259,6 +259,7 @@ layout = Layout(
 steps = StepBar(["Connect", "Record", "Train", "Drive"], widget_id="myocontrol_steps")
 participant = ParticipantPanel()
 header = AppHeader("Myocontrol", steps=steps, participant=participant)
+status = StatusBar("emg", pipeline=pipeline)
 # These are view caches, not another source of recording state.
 recorded: dict[str, Any] = {"participant": None, "state": "idle", "time": RecordedTime(0, 0.0, {})}
 
@@ -853,40 +854,6 @@ def _step_done(ctx: Context) -> list[bool]:
     ]
 
 
-def status_ui(ctx: Context) -> None:
-    """Show acquisition, participant storage and the most recent saved model."""
-    stream = ctx.streams.get("emg")
-    connected = stream is not None and stream.status == "connected" and stream.info is not None
-    if connected:
-        info = stream.info
-        source = f"{stream.name} · {info.n_channels} ch / {info.fs:g} Hz"
-    else:
-        source = "emg · disconnected"
-    folder = pathlib.Path("sessions") / ctx.participant
-    if pipeline.model is None:
-        model = "Model: none"
-    elif pipeline.last_saved_model:
-        model = f"Model: {pathlib.Path(pipeline.last_saved_model).name}"
-    else:
-        model = "Model: fitted (not saved)"
-    edge_rule(bottom=False)
-    imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + max(
-        0.0, (imgui.get_content_region_avail().y - imgui.get_text_line_height()) / 2
-    ))
-    imgui.text_colored(SUCCESS if connected else IDLE, fa.ICON_FA_CIRCLE)
-    imgui.same_line()
-    available = imgui.get_content_region_avail().x
-    right = imgui.get_cursor_pos_x() + available
-    model_w = min(imgui.calc_text_size(model).x, available * 0.4)
-    text = f"{source} · {ctx.participant or 'No participant'} · {folder}"
-    imgui.text_colored(muted(), _ellipsize(text, available - model_w - imgui.get_style().item_spacing.x))
-    if imgui.is_item_hovered():
-        imgui.set_tooltip(text)
-    imgui.same_line()
-    imgui.set_cursor_pos_x(right - model_w)
-    _muted_line(model)
-
-
 @app.ui
 def myocontrol_ui(ctx: Context) -> None:
     """A visible workflow with persistent signal, activity and session files."""
@@ -920,9 +887,9 @@ def myocontrol_ui(ctx: Context) -> None:
         _take_overlay(recording.take)
     with layout["log"]:
         log.ui(ctx)
-    with layout["status"]:
-        status_ui(ctx)
     imgui.pop_style_var()
+    with layout["status"]:
+        status.ui(ctx)
 
     # Stream it, do not fire it once: VHI holds a pose only while samples keep arriving
     # (5 s, then `StopToRest()`). While predicting the predict loop is already doing that.
