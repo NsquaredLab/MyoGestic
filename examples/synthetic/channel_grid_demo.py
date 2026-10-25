@@ -18,6 +18,7 @@ What to try:
     * Shift-click to select a contiguous range from the last click.
     * Watch the plot: only enabled channels ever get decimated/drawn, so
       toggling channels off should keep the view responsive even at 256 ch.
+      Manual scaling keeps the same amplitude range as you compare arrays.
 """
 
 import time
@@ -95,7 +96,10 @@ app.streams(Stream("emg", source=_SyntheticGridSource(), window_ms=1000, buffer_
 
 grid = Grid(1, 1)
 
-viewer = SignalViewer("emg", selectable=True, initial_channels=range(16))
+viewer = SignalViewer(
+    "emg", selectable=True, initial_channels=range(16),
+    scale_mode="manual", y_range=(-4.0, 4.0),
+)
 
 
 @app.ui

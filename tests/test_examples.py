@@ -195,3 +195,189 @@ def test_every_example_outside_otb_is_in_the_list():
         + "\n\nAdd the folder to EXAMPLES above, or exclude it deliberately the way "
         "`otb/` is — with the reason written down."
     )
+
+
+def _synthetic_example(name, monkeypatch):
+    """Load an app without opening its runner or requiring an installed hand."""
+    monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    try:
+        return runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / f"{name}.py"), run_name="__main__")
+    except (ImportError, ModuleNotFoundError) as exc:
+        pytest.skip(f"optional dependency missing for {name}: {exc}")
+
+
+def _light_scaled_ui(monkeypatch):
+    """Use the real light theme and double-sized fonts and geometry."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+
+
+@pytest.mark.parametrize("name,callback", [
+    ("emg_32ch_multi_model", "model_panel"),
+    ("emg_popout_layout", "_model_block"),
+])
+@pytest.mark.parametrize("state", ["idle", "recording", "predicting"])
+def test_synthetic_model_actions_fit_a_narrow_card(
+    name, callback, state, monkeypatch, implot_frame,
+):
+    """Train fills the card; persistence and prediction remain reachable at 2x."""
+    from imgui_bundle import imgui
+
+    namespace = _synthetic_example(name, monkeypatch)
+    namespace["app"].ctx.state = state
+    if state == "predicting":
+        namespace["pipeline"].model = object()
+    _light_scaled_ui(monkeypatch)
+    seen = []
+    for method in ("button", "small_button"):
+        original = getattr(imgui, method)
+
+        def spy(label, *args, _original=original, **kwargs):
+            available = imgui.get_content_region_avail().x
+            left = imgui.get_cursor_screen_pos().x
+            result = _original(label, *args, **kwargs)
+            seen.append((label, imgui.get_item_rect_size().x, available,
+                         imgui.get_item_rect_max().x - left - available))
+            return result
+
+        monkeypatch.setattr(imgui, method, spy)
+
+    def draw():
+        imgui.begin_child("model-card", imgui.ImVec2(320, 1200))
+        namespace[callback]()
+        imgui.end_child()
+
+    for _ in range(4):
+        implot_frame(draw)
+    assert seen
+    assert max(overhang for _, _, _, overhang in seen) <= 1.0, seen
+    train = [(width, available) for label, width, available, _ in seen if "Train" in label]
+    assert train, "the model card lost its training action"
+    assert all(abs(width - available) <= 1.0 for width, available in train), train
+
+
+@pytest.mark.parametrize("name", ["channel_grid_demo", "multi_panel_grids"])
+def test_synthetic_array_traces_use_one_manual_range(name, monkeypatch, implot_frame):
+    """A quiet electrode must not be inflated to the same height as a loud one."""
+    from myogestic.widgets.signals import _state
+
+    namespace = _synthetic_example(name, monkeypatch)
+    app = namespace["app"]
+    monkeypatch.setattr(_state, "_viewers", {})
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    viewers = namespace.get("viewers", [namespace.get("viewer")])
+    states = [_state._viewers[viewer._widget_id or "emg"] for viewer in viewers]
+    assert all(state.scale_mode == "manual" for state in states)
+    assert len({(state.y_min, state.y_max) for state in states}) == 1
+    assert all(not state.per_channel_scale for state in states)
+
+
+def test_electrode_overview_names_empty_cards_and_gives_a_next_step(monkeypatch, implot_frame):
+    """Detached arrays still have a title and explain how to get their first samples."""
+    from imgui_bundle import imgui
+
+    namespace = _synthetic_example("electrode_overview", monkeypatch)
+    _light_scaled_ui(monkeypatch)
+    headings, text = [], []
+    original_header = namespace["demo_ui"].__globals__.get("panel_header")
+    if original_header is not None:
+        def header(title, *args, **kwargs):
+            headings.append(title)
+            return original_header(title, *args, **kwargs)
+
+        monkeypatch.setitem(namespace["demo_ui"].__globals__, "panel_header", header)
+    for method in ("text", "text_disabled", "text_wrapped", "text_unformatted"):
+        original = getattr(imgui, method)
+
+        def capture(value, *args, _original=original, **kwargs):
+            text.append(value)
+            return _original(value, *args, **kwargs)
+
+        monkeypatch.setattr(imgui, method, capture)
+    implot_frame(lambda: namespace["demo_ui"](namespace["app"].ctx))
+    assert headings == ["IN1", "IN2", "IN3", "IN4", "IN5"]
+    assert sum("Not connected" in line for line in text) >= 5
+    assert sum("Connect" in line and "signal" in line.lower() for line in text) >= 5
+
+
+@pytest.mark.parametrize("name,callback", [
+    ("emg_32ch_multi_model", "model_panel"),
+    ("emg_popout_layout", "_model_block"),
+])
+def test_synthetic_model_prediction_chip_keeps_its_style_balanced(
+    name, callback, monkeypatch, implot_frame,
+):
+    """Starting and stopping prediction must not leak selected colours into the next card."""
+    from imgui_bundle import imgui
+
+    namespace = _synthetic_example(name, monkeypatch)
+    namespace["pipeline"].model = object()
+    original = imgui.small_button
+
+    def click_prediction(label, *args, **kwargs):
+        result = original(label, *args, **kwargs)
+        return True if label in {"Predict", "Stop predicting"} else result
+
+    monkeypatch.setattr(imgui, "small_button", click_prediction)
+
+    def draw():
+        style = imgui.get_style()
+        before = tuple(style.color_(imgui.Col_.button))
+        namespace[callback]()
+        assert tuple(style.color_(imgui.Col_.button)) == before
+
+    implot_frame(draw)
+    assert namespace["app"].ctx.state == "predicting"
+    implot_frame(draw)
+    assert namespace["app"].ctx.state == "idle"
+
+
+@pytest.mark.parametrize("path", [
+    *(_EXAMPLES_ROOT / "synthetic" / f"{name}.py" for name in (
+        "emg_32ch_multi_model", "emg_popout_layout", "emg_classification",
+        "emg_classification_grpc", "emg_regression", "emg_regression_raulnet",
+        "high_channel_viewer", "channel_grid_demo", "electrode_overview", "multi_panel_grids",
+    )),
+    _EXAMPLES_ROOT / "otb" / "sessantaquattro_app.py",
+], ids=lambda path: path.stem)
+def test_synthetic_and_otb_cards_draw_in_light_theme_at_double_scale(path, monkeypatch, implot_frame):
+    """Draw every P2 app at 2x without a display, hardware, or logo texture upload."""
+    from imgui_bundle import imgui
+
+    from myogestic.widgets import AppLogo
+    from myogestic.widgets.signals import _state
+
+    monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    # Only texture upload needs a live runner; keep every actual control in the pass.
+    monkeypatch.setattr(AppLogo, "ui", lambda self: None)
+    monkeypatch.setattr(_state, "_viewers", {})
+    try:
+        namespace = runpy.run_path(str(path), run_name="__main__")
+    except (ImportError, ModuleNotFoundError) as exc:
+        pytest.skip(f"optional dependency missing for {path.name}: {exc}")
+    _light_scaled_ui(monkeypatch)
+    app = namespace["app"]
+    imgui.get_io().display_size = imgui.ImVec2(1920, 1400)
+    for _ in range(4):
+        imgui.new_frame()
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(1920, 1400))
+        imgui.begin("scaled-app", None, imgui.WindowFlags_.no_saved_settings)
+        if app._ui_fn is not None:
+            app._ui_fn(app.ctx)
+        for title, callback, *_ in app._popout_specs:
+            imgui.begin_child(title, imgui.ImVec2(320, 1200))
+            callback()
+            imgui.end_child()
+        imgui.end()
+        imgui.end_frame()
+        imgui.render()

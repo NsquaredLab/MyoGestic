@@ -33,6 +33,7 @@ from imgui_bundle import imgui
 from myogestic import App, Grid, Stream
 from myogestic.stream import ChannelGrid, StreamInfo
 from myogestic.widgets import Heatmap, SignalViewer
+from myogestic.widgets.common import IDLE, SUCCESS, muted, panel_header, tinted_row
 
 N_GRIDS = 5
 GRID_ROWS, GRID_COLS = 8, 8  # 8x8 electrode block per array
@@ -60,7 +61,7 @@ INDEX_MAPS = [
     np.array([[-1 if c is None else c for c in row] for row in g.cells], dtype=np.intp)
     for g in GRIDS
 ]
-HEATMAPS = [Heatmap(g.label, size=(-1, -1), label_fmt="%.2f") for g in GRIDS]
+HEATMAPS = [Heatmap(g.label, size=(-1, -1), label_fmt="%.2f", show_title=False) for g in GRIDS]
 
 
 class _SyntheticArraySource:
@@ -131,11 +132,18 @@ def demo_ui(ctx):
 
     for i, (g, heatmap, idx) in enumerate(zip(GRIDS, HEATMAPS, INDEX_MAPS, strict=True)):
         with grid[divmod(i, LAYOUT_COLS)]:
+            panel_header(g.label, status=SUCCESS if rms is not None else IDLE)
             if rms is None:
-                imgui.text_disabled(f"{g.label}: no data")
+                connected = stream is not None and stream.status == "connected"
+                with tinted_row(IDLE):
+                    imgui.text_unformatted("Waiting for samples" if connected else "Not connected")
+                imgui.push_style_color(imgui.Col_.text, muted())
+                imgui.text_wrapped(
+                    "The array will appear when samples arrive." if connected
+                    else "Connect the signal viewer to see this array."
+                )
+                imgui.pop_style_color()
                 continue
-            if i == 0:
-                imgui.text_disabled(f"RMS 0-{vrange[1]:.2f} (shared across arrays)")
             heatmap.ui(np.where(idx >= 0, rms[idx], 0.0), vrange=vrange)
 
     with grid[1, LAYOUT_COLS - 1]:  # last cell: temporal detail
