@@ -45,13 +45,15 @@ from myogestic.recipes.estimators import (
 from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.remote import RemoteTarget
 from myogestic.session import iter_labeled_windows, iter_target_windows, split_sessions_by_stream
-from myogestic.sources import TargetSource
+from myogestic.sources import SyntheticSource, TargetSource
+from myogestic.stream import StreamInfo
 from myogestic.tracking import Pursuit
 from myogestic.vhi import virtual_hand
 from myogestic.widgets import (
     DEFAULT_DEVICES,
     AppHeader,
     DevicePicker,
+    DeviceSpec,
     FeatureSelector,
     LogPanel,
     ParticipantPanel,
@@ -62,6 +64,7 @@ from myogestic.widgets import (
     RecordingControls,
     SessionManager,
     SignalViewer,
+    SimulatorControls,
     StatusBar,
     StepBar,
 )
@@ -124,6 +127,39 @@ assert set(POSES) == set(CLASSES), f"POSES and CLASSES disagree: {set(POSES) ^ s
 #: The same table as an array, indexed by class. It is the regression target at train
 #: time and the read-out lookup at predict time, so the two cannot drift apart.
 POSE_VALUES = np.array([POSES[name] for name in CLASSES], dtype=np.float32)
+
+
+# A dummy subject for trying Pong without hardware: unlike SyntheticForceSource,
+# this example deliberately follows targets, rather than measuring a person's effort.
+class DummyWristSource:
+    def __init__(self) -> None:
+        self._source = SyntheticSource()
+        self.drive = 0.0
+
+    def connect(self) -> StreamInfo:
+        return self._source.connect()
+
+    def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
+        data, ts = self._source.read()
+        if data is not None:
+            drive = min(max(self.drive, -1.0), 1.0)
+            half = data.shape[1] // 2
+            data[:, :half] *= 0.05 + max(drive, 0.0)
+            data[:, half:] *= 0.05 + max(-drive, 0.0)
+        return data, ts
+
+    def disconnect(self) -> None:
+        self._source.disconnect()
+
+
+class _DummyOutlet:
+    def push_sample(self, sample: np.ndarray) -> None:
+        source = app.ctx.streams["emg"]._source
+        if isinstance(source, DummyWristSource):
+            source.drive = float(np.clip(sample[0], -1.0, 1.0))
+
+
+simulator = SimulatorControls(list(POSES.items()), outlet=_DummyOutlet())
 
 vhi = virtual_hand()
 
@@ -376,33 +412,35 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
     return out
 
 
-layout = Layout(
+layout, dummy_layout = (Layout(
     wide=Grid.areas(
-        """
+        f"""
         header   header
         signal   step
         signal   sessions
+        {"simulator sessions" if simulated else ""}
         log      sessions
         status   status
         """,
-        row_height=[Px(52), Fr(3), Fr(1), Px(110), Px(26)],
+        row_height=[Px(52), Fr(3), Fr(1), *([Px(76)] if simulated else []), Px(110), Px(26)],
         col_width=[Fr(1), Px(400)],
         bare=("header", "status"),
     ),
     narrow=Grid.areas(
-        """
+        f"""
         header
         signal
+        {"simulator" if simulated else ""}
         step
         sessions
         log
         status
         """,
-        row_height=[Px(52), Fr(2), Fr(3), Fr(1.5), Px(110), Px(26)],
+        row_height=[Px(52), Fr(2), *([Px(76)] if simulated else []), Fr(3), Fr(1.5), Px(110), Px(26)],
         bare=("header", "status"),
     ),
     breakpoint=Px(1100),
-)
+) for simulated in (False, True))
 steps = StepBar(["Connect", "Record", "Train", "Play"], widget_id="pong_steps")
 participant = ParticipantPanel()
 header = AppHeader("Pong", steps=steps, participant=participant)
@@ -412,6 +450,10 @@ status = StatusBar("emg", pipeline=pipeline)
 # the very thing the block is recording.
 device = DevicePicker(
     "emg", selectable=True, exclude=(TARGET_STREAM,), show_header=False,
+    devices=(*DEFAULT_DEVICES, DeviceSpec(
+        "Synthetic wrist (dummy follows the cursor)", DummyWristSource,
+        hint="A test subject for trying Pong without hardware, not EMG. Follows the cursor during a block.",
+    )),
     # The picker names additional amplifiers; the app owns their geometry.
     on_add=lambda name: app.add_stream(
         Stream(name, source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS)
@@ -867,7 +909,12 @@ def pong_ui(ctx: Context) -> None:
     if block["recording"] and not target.running:
         _end_block()
 
-    with layout["header"]:
+    stream = ctx.streams.get("emg")
+    dummy = (stream._source if stream is not None and stream.status == "connected"
+             and stream.info is not None and isinstance(stream._source, DummyWristSource) else None)
+    view = dummy_layout if dummy is not None else layout
+
+    with view["header"]:
         active = header.ui(ctx, _step_done(ctx))
     padding = imgui.get_style().window_padding
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))
@@ -875,9 +922,9 @@ def pong_ui(ctx: Context) -> None:
     if active != 1:
         recording.ui(ctx, visible=False)
     # Refresh the selection before Train can read it this frame.
-    with layout["sessions"]:
+    with view["sessions"]:
         pipeline.training_data = sessions.ui(participant=ctx.participant)
-    with layout["step"]:
+    with view["step"]:
         stream = ctx.streams.get("emg")
         tone = (SUCCESS if stream is not None and stream.status == "connected" and stream.info is not None
                 else DANGER if stream is not None and stream.last_error else IDLE)
@@ -890,7 +937,7 @@ def pong_ui(ctx: Context) -> None:
             model_ui()
         else:
             play_ui()
-    with layout["signal"]:
+    with view["signal"]:
         if active == 0:
             viewer.ui(ctx)
         else:
@@ -898,10 +945,15 @@ def pong_ui(ctx: Context) -> None:
             # the court is exactly what it was whenever no one is being asked to
             # follow anything.
             pong.ui(_command(ctx), _cursor(), _effort(ctx))
-    with layout["log"]:
+    if dummy is not None:
+        with view["simulator"]:
+            simulator.ui(ctx)
+        cursor = _cursor()
+        dummy.drive = simulator.value if cursor is None else cursor
+    with view["log"]:
         log.ui(ctx)
     imgui.pop_style_var()
-    with layout["status"]:
+    with view["status"]:
         status.ui(ctx)
 
     # Stream it, do not fire it once: VHI holds a pose only while samples keep arriving
