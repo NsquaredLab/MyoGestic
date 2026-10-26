@@ -226,16 +226,20 @@ def test_title_without_steps_ellipsizes_and_exposes_full_text(probe, monkeypatch
     assert title in tooltips
 
 
-def test_local_participant_name_yields_without_moving_the_pill(probe):
+@pytest.mark.parametrize("scale", [1., 2.])
+def test_header_shows_participant_id_without_revealing_the_local_name(probe, scale):
     probe.participant._state.active_pid = probe.ctx.participant
     probe.participant._state.local_name = "A very long local name " * 20
     header = AppHeader("Myocontrol", participant=probe.participant,
                        steps=StepBar(["Connect", "Record", "Train", "Drive"]))
-    view = probe.render(header, 900)
+    view = probe.render(header, 900 * scale, scale)
     pill, = [item for item in view.items if item.kind == "pill"]
-    name, = [item for item in view.items if item.label == probe.participant._state.local_name]
-    assert name.hi[0] > name.clip_hi[0]
-    assert name.clip_hi[0] < pill.lo[0]
+    chip, = [item for item in view.items if item.kind == "participant"]
+    assert chip.label == f"{probe.ctx.participant}###chip"
+    assert not any(probe.participant._state.local_name in item.label for item in view.items)
+    assert chip.hi[0] <= chip.clip_hi[0] < pill.lo[0]
+    for item in view.items:
+        assert view.bounds[0][0] <= item.lo[0] <= item.hi[0] <= view.bounds[1][0]
     assert view.scroll == [0, 0]
 
 
