@@ -213,6 +213,51 @@ def test_model_is_not_saved_for_a_take_the_pipeline_never_wrote_into(tmp_path):
         meta = json.loads(zf.read("meta.json"))
         names = set(zf.namelist())
     assert "model.joblib" not in names
-    info = meta["extras"]["pipeline"]
-    assert info["model"] is None
-    assert "did not predict" in info["model_note"]
+    assert "pipeline" not in meta.get("extras", {})
+
+
+def test_selected_input_streams_exclude_feedback_and_its_clock(tmp_path):
+    from types import SimpleNamespace
+
+    app = App("selected inputs")
+    pipeline = Pipeline(app, input_streams=("emg",))
+    pipeline.model = object()
+    app.ctx.state = "predicting"
+    app.ctx.streams = {
+        "emg": SimpleNamespace(get_window=lambda: (np.ones((2, 4)), np.array([1., 2.]))),
+        "feedback": SimpleNamespace(get_window=lambda: (np.ones((9, 4)), np.array([9., 10.]))),
+    }
+    seen = []
+    pipeline.on_extract = lambda windows: seen.append(set(windows)) or [1.0]
+    pipeline.on_predict = lambda model, feats: {"pose": [0.5]}
+    from myogestic.session import Session
+
+    app.ctx.session = Session(str(tmp_path))
+    app.ctx.recording = True
+    pipeline._predict_step(app)
+    app.ctx.session.freeze()
+    assert seen == [{"emg"}]
+    assert np.array(app.ctx.session.ts_stores["pipeline.tick"]).tolist() == [2.0]
+
+
+def test_delayed_finalize_keeps_each_takes_model_and_skip_list(tmp_path):
+    """A following run cannot replace the model or skipped values of a pending save."""
+    from myogestic.session import Session
+
+    app = App("two pending runs")
+    pipeline = Pipeline(app)
+    saved = []
+    pipeline.save_model = lambda model, path: saved.append((model, path))
+    sessions = []
+    for model in ("first", "second"):
+        session = Session(str(tmp_path))
+        app.ctx.session, app.ctx.recording = session, True
+        pipeline.model = model
+        pipeline._record_tick(app, {model: "skipped text"}, {"pose": [0.0]}, 1.0)
+        session.freeze()
+        sessions.append(session)
+    for session in sessions:
+        pipeline._on_finalize(session)
+    assert [model for model, path in saved] == ["first", "second"]
+    assert set(sessions[0].extras["pipeline"]["skipped"]) == {"features.first"}
+    assert set(sessions[1].extras["pipeline"]["skipped"]) == {"features.second"}

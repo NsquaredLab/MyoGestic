@@ -35,7 +35,78 @@ def ui(ctx):
 
 The `on_gesture` callback is yours; the label is added by `RecordingControls` itself before calling it. You don't need to call `ctx.session.add_label()` manually.
 
-`SessionManager` lists every folder/archive under `base_path`, lets the user tick which to include in training, and returns a [`TrainingData`][myogestic.TrainingData] instance ready for `@pipeline.train`.
+### Timed takes
+
+Offer fixed-length takes alongside the usual **Start / stop** mode:
+
+```python
+recording = RecordingControls(
+    CLASSES,
+    on_record=app.start_recording,
+    on_stop=app.stop_recording,
+    take_lengths=(3.0, 5.0, 10.0),
+    warmups=(0.0, 1.0, 2.0, 3.0),
+    timed=True,
+    take_length=5.0,
+    warmup=2.0,
+)
+```
+
+By default, the widget starts in **Start / stop** mode. Pass `timed=True` to open in
+**Timed**, which shows the take-length and warm-up choices. The keyword-only
+`take_length` and `warmup` arguments select the initial entries; each defaults to
+`None`, selecting the first value in `take_lengths` or `warmups`. An explicit value
+outside its sequence raises `ValueError` naming the allowed values. The example
+above opens in **Timed** at 5 s with a 2 s warm-up, as Myocontrol does.
+
+Empty `take_lengths` keeps start/stop only; `timed=True` without any take lengths
+raises `ValueError`. Take lengths must be finite and positive; warm-ups must be
+finite and nonnegative, with at least one choice. Zero is **Off** and starts capture
+on the Record press.
+
+Choose a gesture before starting a labelled timed take. Warm-up records nothing.
+**Cancel** returns to idle without creating a session.
+When capture begins, the chosen gesture is labelled once and the other tiles are
+disabled until the take ends. The action row shows elapsed / target time and a
+progress line. The first UI frame at or after the deadline calls `on_stop`, saving
+the take through the existing app callback. Timing resolution follows the frame
+rate; a delayed frame stops immediately when it resumes. **Stop early** also saves
+the captured data and marks the confirmation `(stopped early)`. The confirmation
+lasts two seconds. Start/stop mode shows elapsed time and permits gesture changes.
+
+`recording.take` is an immutable snapshot with `phase` (`idle`, `warmup`, `recording`,
+or `saved`), `timed`, `gesture`, `elapsed_s`, `length_s`, `warmup_left_s`, and
+`saved_text`. Read it after `ui()` to draw a signal overlay, as Myocontrol does.
+Call `recording.ui(ctx, visible=False)` on frames where another workflow step is
+open: this advances the timer without drawing controls. Call `ui()` once per frame.
+
+Participant changes or a recorded stream disconnecting cancel a countdown; during
+capture they stop and retain the data already collected, then return the widget
+to idle. An outside stop or a replacement session clears the widget's pending
+action without stopping another capture. Calling `app.stop_recording()` during
+warm-up cancels that countdown even though the app is still idle.
+
+### Saved sessions
+
+`SessionManager` lists folders and archives under `base_path` when you press its rescan icon.
+Passing `ui(participant="P-014")` scans that participant's subfolder automatically. Each take
+occupies one line, grouped by its recorded day (Today, Yesterday, or a date); only the newest
+group starts open. A take's gesture names, time, and duration stay on that line, with its file
+name, optional take name, and streams in the tooltip. The list alone scrolls, leaving the
+header, selected count, and gesture chips visible.
+
+Use **All** / **None** to select or clear every take, including collapsed days. Gesture chips
+show totals across all listed takes; toggling one excludes that class from training and mutes
+its chips in the take rows. Exclusions survive **None** followed by **All**, and reset when you
+change participants or clear the list. The load icon adds files from elsewhere under **Loaded**;
+the broom clears the list while leaving files on disk.
+
+`ui()` returns a [`TrainingData`][myogestic.TrainingData] instance ready for `@pipeline.train`.
+`selection()` reads the same selection without rendering or scanning: `n_selected`, `n_total`,
+and `class_seconds` (selected takes and included gestures only). Older recordings without
+per-gesture duration metadata contribute zero seconds for their labels. Myocontrol's Train
+card uses this summary for its gesture bars and total, explains missing gestures before a fit,
+and shows the saved model's filename after training.
 
 ## Recording cycles
 
@@ -161,7 +232,9 @@ no manual-advance call.
 
 ## Record a prediction run
 
-Load or train a model, press **Predict**, then press **Record**. The pill row reads `PREDICTING REC`. Stop when done; the archive holds the raw streams *and* what the model saw and did:
+Load or train a model, press **Predict**, then press **Record**. The pill row reads `PREDICTING REC`. In Myocontrol’s Drive step, use **Record this run** while predicting. Press it again to save; predicting continues. **Stop predicting** saves an open run first, then returns to idle. Drive runs appear in Takes with a **Drive** tag and stay unticked for training until selected.
+
+Stop when done; the archive holds the raw streams *and* what the model saw and did:
 
 ```python
 from myogestic.session import open_session_store

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 
 import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui, implot
 
+from myogestic._scale import current_scale
 from myogestic._theme import mono_font
 
 # 10 distinct colors for class labels (Category10-like)
@@ -47,6 +49,64 @@ CONSOLE_BG = imgui.ImVec4(0.075, 0.078, 0.086, 1.0)
 CONSOLE_TEXT = imgui.ImVec4(0.88, 0.89, 0.91, 1.0)
 PILL_BG = imgui.ImVec4(0.14, 0.17, 0.21, 1.0)
 ON_PILL_TEXT = imgui.ImVec4(0.93, 0.95, 0.98, 1.0)
+
+# Forward actions keep readable white text on the same blue in both themes.
+PRIMARY_FILL = imgui.ImVec4(0 / 255, 98 / 255, 204 / 255, 1.0)
+ON_PRIMARY_TEXT = imgui.ImVec4(1.0, 1.0, 1.0, 1.0)
+
+
+def ui_px(n: float) -> float:
+    """Convert a fixed pixel size at UI scale 1.0 to the current scale.
+
+    Use for fixed widget geometry so it scales with the text.
+    """
+    return n * current_scale()
+
+
+def status_pill(label: str, color: imgui.ImVec4) -> None:
+    """Draw a labelled status badge with a semantic colour indicator.
+
+    Padding, indicator geometry and label offsets follow the live UI scale.
+
+    Parameters
+    ----------
+    label : str
+        Visible state label, such as ``"IDLE"`` or ``"CONNECTED"``.
+    color : imgui.ImVec4
+        Indicator colour, normally a semantic token such as ``SUCCESS`` or
+        ``IDLE``. The badge background and text use the shared pill tokens.
+    """
+    pad_x, pad_y = ui_px(10), ui_px(4)
+    text = imgui.calc_text_size(label)
+    size = imgui.ImVec2(text.x + pad_x * 2 + ui_px(12), text.y + pad_y * 2)
+    imgui.dummy(size)
+    p0, p1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    draw = imgui.get_window_draw_list()
+    draw.add_rect_filled(
+        p0, p1, imgui.get_color_u32(PILL_BG), size.y * 0.5
+    )
+    y = (p0.y + p1.y) * 0.5
+    draw.add_rect_filled(
+        imgui.ImVec2(p0.x + pad_x - ui_px(1), y - ui_px(3)),
+        imgui.ImVec2(p0.x + pad_x + ui_px(5), y + ui_px(3)),
+        imgui.get_color_u32(color),
+        ui_px(3),
+    )
+    draw.add_text(
+        imgui.ImVec2(p0.x + pad_x + ui_px(10), p0.y + pad_y),
+        imgui.get_color_u32(ON_PILL_TEXT),
+        label,
+    )
+
+
+def edge_rule(*, bottom: bool) -> None:
+    """Separate a bare header or footer from the body with a theme hairline."""
+    origin, size = imgui.get_window_pos(), imgui.get_window_size()
+    y = origin.y + size.y - ui_px(1) if bottom else origin.y
+    imgui.get_window_draw_list().add_line(
+        imgui.ImVec2(origin.x, y), imgui.ImVec2(origin.x + size.x, y),
+        imgui.get_color_u32(hairline()), thickness=ui_px(1),
+    )
 
 
 def primary() -> imgui.ImVec4:
@@ -160,6 +220,85 @@ def pop_selected() -> None:
     imgui.get_window_draw_list().add_rect_filled(
         imgui.ImVec2(p0.x + 3.0, y), imgui.ImVec2(p1.x - 3.0, p1.y), imgui.get_color_u32(_ACCENT), 1.0
     )
+
+
+@contextmanager
+def tinted_row(tone: imgui.ImVec4 | None = None, *, height: float | None = None) -> Iterator[float]:
+    """Frame one compact row with a theme-derived surface and optional status tint.
+
+    Parameters
+    ----------
+    tone
+        Semantic colour mixed into the current surface; ``None`` uses the
+        theme's raised surface alone.
+    height
+        Optional row height in scaled pixels, for a two-line status and action.
+
+    Yields
+    ------
+    float
+        Inner width available for text and right-aligned controls. The row is
+        one frame high, with scaled padding and rounded corners.
+    """
+    style = imgui.get_style()
+    surface = style.color_(imgui.Col_.frame_bg)
+    if tone is not None:
+        surface = imgui.ImVec4(
+            surface.x * 0.88 + tone.x * 0.12,
+            surface.y * 0.88 + tone.y * 0.12,
+            surface.z * 0.88 + tone.z * 0.12,
+            1.0,
+        )
+    origin = imgui.get_cursor_screen_pos()
+    cursor = imgui.get_cursor_pos()
+    width = imgui.get_content_region_avail().x
+    pad = ui_px(4)
+    height = imgui.get_frame_height() + 2 * pad if height is None else height
+    imgui.get_window_draw_list().add_rect_filled(
+        origin, imgui.ImVec2(origin.x + width, origin.y + height),
+        imgui.get_color_u32(surface), style.frame_rounding,
+    )
+    imgui.begin_group()
+    imgui.indent(pad)
+    imgui.set_cursor_pos_y(cursor.y + pad)
+    try:
+        yield max(1.0, width - 2 * pad)
+    finally:
+        imgui.unindent(pad)
+        imgui.set_cursor_pos(imgui.ImVec2(cursor.x, cursor.y + height))
+        imgui.dummy(imgui.ImVec2(width, 0))
+        imgui.end_group()
+
+
+def primary_button(label: str, size: tuple[float, float] = (0, 0)) -> bool:
+    """Draw the primary forward action with white text on a blue fill.
+
+    Parameters
+    ----------
+    label : str
+        Button text, optionally including an ImGui ID suffix.
+    size : tuple[float, float], optional
+        ImGui button size, by default ``(0, 0)`` to fit the label. Pass fixed
+        pixel dimensions through ``ui_px`` before calling.
+
+    Returns
+    -------
+    bool
+        Whether the button was clicked this frame.
+    """
+    imgui.push_style_color(imgui.Col_.text, ON_PRIMARY_TEXT)
+    imgui.push_style_color(imgui.Col_.button, PRIMARY_FILL)
+    for slot, amount in ((imgui.Col_.button_hovered, 0.06), (imgui.Col_.button_active, 0.10)):
+        imgui.push_style_color(slot, imgui.ImVec4(
+            PRIMARY_FILL.x + (1.0 - PRIMARY_FILL.x) * amount,
+            PRIMARY_FILL.y + (1.0 - PRIMARY_FILL.y) * amount,
+            PRIMARY_FILL.z + (1.0 - PRIMARY_FILL.z) * amount,
+            PRIMARY_FILL.w,
+        ))
+    try:
+        return imgui.button(label, imgui.ImVec2(*size))
+    finally:
+        imgui.pop_style_color(4)
 
 
 def destructive_button(label: str, *, tooltip: str = "") -> bool:
@@ -311,7 +450,7 @@ def mono_text(text: str, color: imgui.ImVec4 | None = None) -> None:
     """
     font = mono_font()
     if font is not None:
-        imgui.push_font(font, imgui.get_font_size())
+        imgui.push_font(font, imgui.get_style().font_size_base)
     if color is None:
         imgui.text_unformatted(text)
     else:
@@ -439,3 +578,238 @@ def panel_header_button(title: str, icon: str | None, button_icon: str, *, toolt
     if tooltip and imgui.is_item_hovered():
         imgui.set_tooltip(tooltip)
     return clicked
+
+
+# Trial-region overlay: translucent blue keeps traces legible in both themes.
+TRIAL_BAND = imgui.ImVec4(INFO.x, INFO.y, INFO.z, 0.18)
+
+
+def stream_chip(
+    name: str,
+    tone: imgui.ImVec4,
+    *,
+    selected: bool,
+    prefix: str,
+    left: float,
+    right: float,
+    first: bool = False,
+    removable: bool = False,
+    recording: bool = False,
+    locked: bool = False,
+    detail: str = "",
+) -> tuple[bool, bool]:
+    """Draw a wrapping stream chip shared by DevicePicker and StreamManager.
+
+    Parameters
+    ----------
+    name, tone
+        Mono stream name and semantic state dot.
+    selected
+        Whether to draw the persistent selection cue.
+    prefix
+        ID prefix within the calling widget's ImGui scope.
+    left, right
+        Available row bounds in local window coordinates.
+    first
+        Start a row instead of trying to follow the previous chip.
+    removable
+        Offer a destructive remove action beside this chip.
+    recording
+        Disable removal and explain why on hover.
+    locked
+        Dim and disable selection as well as removal.
+    detail
+        Full state text for the chip's tooltip.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        Whether selection or removal was requested. Apply removal after the
+        caller finishes iterating its streams.
+    """
+    style = imgui.get_style()
+    remove_w = (imgui.calc_text_size(fa.ICON_FA_XMARK).x + 2 * style.frame_padding.x
+                + style.item_spacing.x) if removable else 0.0
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, style.font_size_base)
+    shown = name
+    dot_w = imgui.get_font_size() + style.item_spacing.x
+    limit = max(1.0, right - left - remove_w)
+    while shown and imgui.calc_text_size(shown + "…").x + dot_w + 2 * style.frame_padding.x > limit:
+        shown = shown[:-1]
+    if shown != name:
+        shown += "…"
+    width = min(limit, imgui.calc_text_size(shown).x + dot_w + 2 * style.frame_padding.x)
+    if not first:
+        imgui.same_line()
+        if imgui.get_cursor_pos_x() + width + remove_w > right:
+            imgui.new_line()
+    imgui.push_style_var(imgui.StyleVar_.frame_rounding, imgui.get_frame_height() * 0.5)
+    imgui.begin_disabled(locked)
+    if selected:
+        push_selected()
+    clicked = imgui.button(f"##{prefix}_stream_{name}", imgui.ImVec2(width, 0))
+    if selected:
+        pop_selected()
+    origin = imgui.get_item_rect_min()
+    draw = imgui.get_window_draw_list()
+    draw.add_text(imgui.ImVec2(origin.x + style.frame_padding.x + dot_w,
+                              origin.y + style.frame_padding.y),
+                  imgui.get_color_u32(imgui.Col_.text), shown)
+    if font is not None:
+        imgui.pop_font()
+    draw.add_text(imgui.ImVec2(origin.x + style.frame_padding.x,
+                              origin.y + style.frame_padding.y),
+                  imgui.get_color_u32(tone), fa.ICON_FA_CIRCLE)
+    imgui.set_item_tooltip(f"{name}: {detail}")
+    remove = False
+    if removable:
+        imgui.same_line()
+        imgui.begin_disabled(recording)
+        remove = destructive_button(f"{fa.ICON_FA_XMARK}##{prefix}_remove_{name}")
+        imgui.end_disabled()
+        if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+            imgui.set_tooltip("Stop the recording before removing a stream." if recording
+                              else f"Remove stream {name!r}.")
+    imgui.end_disabled()
+    imgui.pop_style_var()
+    return clicked and not locked, remove and not recording and not locked
+
+
+def ensure_implot3d_style() -> None:
+    """Apply theme-aware plot surfaces and a faint grid to the current 3D context.
+
+    Resolve colours each frame so changing theme or recreating the plotting
+    context cannot leave a stale dark background behind.
+    """
+    from imgui_bundle import implot3d
+
+    style = implot3d.get_style()
+    clear = imgui.ImVec4(0.0, 0.0, 0.0, 0.0)
+    for slot in (implot3d.Col_.frame_bg, implot3d.Col_.plot_bg, implot3d.Col_.plot_border):
+        style.set_color(slot, clear)
+    style.set_color(implot3d.Col_.axis_grid, hairline(0.5))
+    style.set_color(implot3d.Col_.axis_text, muted())
+    style.set_color(implot3d.Col_.axis_tick, hairline())
+    style.set_color(implot3d.Col_.inlay_text, primary())
+
+
+def plot_size(size: tuple[float, float], *, footer: float = 0.0) -> imgui.ImVec2:
+    """Scale explicit plot pixels, preserving fill width and reserving a fill footer.
+
+    Positive heights describe the plot alone. Nonpositive heights fill the
+    available space after the legend or footer, with negative values retaining
+    their ImGui-style bottom inset.
+    """
+    width, height = size
+    return imgui.ImVec2(
+        ui_px(width) if width > 0 else width,
+        ui_px(height)
+        if height > 0
+        else max(ui_px(40), imgui.get_content_region_avail().y + height - footer),
+    )
+
+
+def fit_text(text: str, width: float) -> str:
+    """Ellipsize a single line to ``width`` in the current font."""
+    if imgui.calc_text_size(text).x <= width:
+        return text
+    return _truncate_to_width(text, width - imgui.calc_text_size(_ELLIPSIS).x) + _ELLIPSIS
+
+
+def plot_empty(title: str, hint: str, size: tuple[float, float]) -> None:
+    """Centre an actionable empty state in the plot's allotted space."""
+    height = plot_size(size).y
+    left, top = imgui.get_cursor_pos_x(), imgui.get_cursor_pos_y()
+    width = imgui.get_content_region_avail().x
+    row = imgui.get_text_line_height_with_spacing()
+    imgui.set_cursor_pos_y(top + max(0.0, (height - 2 * row) * 0.5))
+    for text in (title, hint):
+        clipped = fit_text(text, width)
+        imgui.set_cursor_pos_x(left + max(0.0, (width - imgui.calc_text_size(clipped).x) * 0.5))
+        imgui.text_colored(muted(), clipped)
+        if clipped != text:
+            imgui.set_item_tooltip(text)
+    imgui.set_cursor_pos_y(max(imgui.get_cursor_pos_y(), top + height))
+    imgui.set_cursor_pos_x(left)
+    imgui.dummy(imgui.ImVec2(0, 0))
+
+
+def plot_legend(
+    series: Sequence[tuple[int, str]],
+    *,
+    selected: set[int] | None = None,
+    measure_only: bool = False,
+) -> float:
+    """Draw wrapping PALETTE-dot chips, or measure their height before a fill plot.
+
+    Parameters
+    ----------
+    series
+        Stable categorical indices and their visible names. Long names are
+        ellipsized with the complete value available in a tooltip.
+    selected
+        If supplied, turn the chips into channel toggles and update this set
+        on clicks. The selected cue is a theme tint, never a PALETTE fill.
+    measure_only
+        Measure using the same font and row layout without drawing any items.
+
+    Returns
+    -------
+    float
+        Occupied height, including the trailing item spacing.
+    """
+    if not series:
+        return 0.0
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, imgui.get_style().font_size_base)
+    try:
+        style = imgui.get_style()
+        width = max(1.0, imgui.get_content_region_avail().x)
+        dot = ui_px(6)
+        inset = style.frame_padding.x
+        prefix = dot + ui_px(6)
+        height = imgui.get_frame_height()
+        used, rows = 0.0, 1
+        for index, name in series:
+            chip_width = min(width, imgui.calc_text_size(name).x + prefix + 2 * inset)
+            wrap = used > 0 and used + style.item_spacing.x + chip_width > width
+            if wrap:
+                rows += 1
+                used = 0.0
+            if not measure_only:
+                if used > 0:
+                    imgui.same_line()
+                on = selected is not None and index in selected
+                if on:
+                    push_selected()
+                clicked = imgui.button(f"##series{index}", imgui.ImVec2(chip_width, height))
+                if on:
+                    pop_selected()
+                if clicked and selected is not None:
+                    if on:
+                        selected.discard(index)
+                    else:
+                        selected.add(index)
+                p = imgui.get_item_rect_min()
+                draw = imgui.get_window_draw_list()
+                color = PALETTE[index % len(PALETTE)]
+                draw.add_circle_filled(
+                    imgui.ImVec2(p.x + inset + dot * 0.5, p.y + height * 0.5),
+                    dot * 0.5,
+                    imgui.get_color_u32(imgui.ImVec4(*map(float, color), 1.0)),
+                )
+                label = fit_text(name, max(0.0, chip_width - prefix - 2 * inset))
+                draw.add_text(
+                    imgui.ImVec2(p.x + inset + prefix, p.y + style.frame_padding.y),
+                    imgui.get_color_u32(primary()),
+                    label,
+                )
+                imgui.set_item_tooltip(name)
+            used += (style.item_spacing.x if used > 0 else 0.0) + chip_width
+        return rows * (height + style.item_spacing.y)
+    finally:
+        if font is not None:
+            imgui.pop_font()

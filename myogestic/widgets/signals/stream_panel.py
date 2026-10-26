@@ -1,74 +1,64 @@
-"""Per-stream status panel for @app.ui.
-
-Shows source class, connection status, sample rate, channel count and
-last-sample age, plus inline connect buttons for any target the source's
-``discover()`` reports. Rendering is one-shot per frame — no hidden state
-beyond the discovery cache, which is shared with the signal viewers.
-"""
+"""Compact stream status rows with outlet discovery and cancellable connections."""
 
 from __future__ import annotations
 
+import re
 import threading as _threading
 import time as _time
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import DANGER, SUCCESS, muted, panel_header
+from myogestic._theme import mono_font
+from myogestic.widgets.common import (
+    DANGER,
+    IDLE,
+    SUCCESS,
+    WARNING,
+    format_age,
+    mono_text,
+    muted,
+    panel_header,
+    tinted_row,
+    ui_px,
+)
 from myogestic.widgets.signals._scan import _scans, _ScanState
 
 if TYPE_CHECKING:
     from myogestic.core import Context
     from myogestic.stream import Stream
 
-_OK = SUCCESS
-_BAD = DANGER
 
-# Streams we've already auto-discovered once, so the auto-scan fires only on the
-# first frame each stream is seen disconnected. The scan button refreshes later.
-_auto_scanned: set[str] = set()
+@dataclass
+class _Attempt:
+    """One widget's connection attempt, retained until its worker finishes."""
 
-# Streams with a connect attempt in flight. Accepting a device that dials in can
-# block for the source's whole timeout, so the button has to say it is working.
-_connecting: set[str] = set()
-
-
-def _connect(name: str, stream: Stream, ctx: Context) -> None:
-    """Reconnect off-thread, logging start and outcome."""
-    _connecting.add(name)
-    ctx.log(f"{name}: connecting…")
-
-    def run() -> None:
-        try:
-            ok = stream.reconnect()
-            if ok:
-                info = stream.info
-                detail = f"{info.fs:.0f} Hz · {info.n_channels} ch" if info else ""
-                ctx.log(f"{name}: connected {detail}")
-            else:
-                ctx.log(f"{name}: connect failed — {stream.last_error}")
-        except Exception as exc:  # a source may raise rather than return False
-            ctx.log(f"{name}: connect failed — {exc}")
-        finally:
-            _connecting.discard(name)
-
-    _threading.Thread(target=run, daemon=True).start()
+    started: float = field(default_factory=_time.monotonic)
+    busy: bool = True
+    aborted: bool = False
 
 
 class StreamPanel:
-    """Per-stream status panel — one row per stream with status + reconnect.
+    """One-line stream states with reconnect, abort, retry, and outlet picks.
 
-    Construct once (optionally toggling ``selectable`` / ``show_header``),
-    then call [`ui`][] with the live ``ctx`` each frame.
+    Connected rows show a mono name, sample rate, channels and sample age.
+    Detached streams are idle with Connect; failures show the error with Retry.
+    Connecting rows show elapsed time and Abort. The header dot summarises the
+    worst state and its rescan action refreshes discovered outlets.
 
     Parameters
     ----------
     selectable
-        When True and the stream's source supports ``discover()``,
-        auto-populate available targets as inline connect buttons.
+        Connect opens a popover of discovered outlets when the source supports
+        ``discover()``. Otherwise it reconnects the configured source directly.
     show_header
-        Render a uniform ``panel_header`` above the rows.
+        Render the standard Streams header, state dot and rescan action.
+    widget_id
+        ImGui identity, defaulting to this instance. Give a stable unique ID
+        when rendering multiple panels. Connection state belongs to each
+        instance; only outlet discovery is deliberately shared with viewers.
 
     Examples
     --------
@@ -77,165 +67,231 @@ class StreamPanel:
     >>> panel.ui(ctx)
     """
 
-    def __init__(self, *, selectable: bool = True, show_header: bool = True) -> None:
+    def __init__(
+        self, *, selectable: bool = True, show_header: bool = True,
+        widget_id: str | None = None,
+    ) -> None:
         self._selectable = selectable
         self._show_header = show_header
+        self._widget_id = widget_id or f"streams:{id(self)}"
+        self._attempts: dict[str, _Attempt] = {}
 
     def ui(self, ctx: Context) -> None:
-        """Render one row per registered stream. Call once per frame."""
-        if self._show_header:
-            panel_header("Streams", fa.ICON_FA_PLUG)
+        """Render one compact row per registered stream, once per frame."""
+        imgui.push_id(self._widget_id)
+        try:
+            if self._show_header:
+                self._header(ctx)
+            if not ctx.streams:
+                imgui.text_wrapped("No streams registered. Add a stream to connect its source.")
+            for name, stream in ctx.streams.items():
+                self._row(name, stream, ctx)
+        finally:
+            imgui.pop_id()
 
-        if not ctx.streams:
-            imgui.text_colored(muted(), "(no streams registered)")
-            return
-
-        for name, stream in ctx.streams.items():
-            _stream_row(name, stream, selectable=self._selectable, ctx=ctx)
-
-
-def _stream_row(name: str, stream: object, *, selectable: bool, ctx: Context) -> None:
-    from myogestic.stream import Stream
-
-    if not isinstance(stream, Stream):
-        imgui.text(f"{name}: (unknown stream type)")
-        return
-
-    src_label = type(stream._source).__name__
-    connected = stream.status == "connected" and stream.info is not None
-    has_discover = hasattr(stream._source, "discover")
-    scan = _scans.setdefault(name, _ScanState())
-
-    # --- Top line: dot + name + source + action ----------------------------
-    imgui.text_colored(_OK if connected else _BAD, fa.ICON_FA_CIRCLE)
-    imgui.same_line()
-    imgui.text(name)
-    imgui.same_line()
-    imgui.text_colored(muted(), f"({src_label})")
-
-    # One action: a labelled Connect while detached, the retry glyph once attached.
-    busy = name in _connecting
-    if busy:
-        label = "Connecting…"
-    elif connected:
-        label = fa.ICON_FA_ARROWS_ROTATE
-    else:
-        label = f"{fa.ICON_FA_PLUG} Connect"
-
-    imgui.same_line()
-
-    if busy or scan.busy:
-        imgui.begin_disabled()
-    if imgui.small_button(f"{label}##sp_conn_{name}"):
-        _connect(name, stream, ctx)
-    if busy or scan.busy:
-        imgui.end_disabled()
-    if imgui.is_item_hovered():
-        imgui.set_tooltip("Attach this stream to its source. Nothing attaches on its own.")
-
-    if has_discover and selectable:
+    def _header(self, ctx: Context) -> None:
+        streams = list(ctx.streams.values())
+        attached = [s.status == "connected" and s.info is not None for s in streams]
+        problem = any(s.last_error for s in streams) or any(a.busy for a in self._attempts.values())
+        tone = (WARNING if problem or (any(attached) and not all(attached)) else
+                SUCCESS if attached and all(attached) else IDLE)
+        style = imgui.get_style()
+        width = imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x + 2 * style.frame_padding.x
+        panel_header("Streams", fa.ICON_FA_PLUG, reserve=width + style.item_spacing.x, status=tone)
         imgui.same_line()
-        if scan.busy:
-            imgui.begin_disabled()
-        if imgui.small_button(f"{fa.ICON_FA_MAGNIFYING_GLASS}##sp_scan_{name}"):
-            _kickoff_scan(name, stream)
-        if scan.busy:
+        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0, imgui.get_content_region_avail().x - width))
+        if imgui.small_button(f"{fa.ICON_FA_ARROWS_ROTATE}##sp_rescan"):
+            for name, stream in ctx.streams.items():
+                _kickoff_scan(name, stream)
+        imgui.set_item_tooltip("Rescan available sources")
+
+    def _row(self, name: str, stream: Stream, ctx: Context) -> None:
+        attempt = self._attempts.get(name)
+        busy = attempt is not None and attempt.busy
+        connected = stream.status == "connected" and stream.info is not None
+        if busy:
+            elapsed = max(0, _time.monotonic() - attempt.started)
+            detail = f"connecting… {elapsed:.0f} s" if not attempt.aborted else "aborting…"
+            tone, label = IDLE, "Abort"
+        elif stream.last_error:
+            detail, tone, label = stream.last_error, DANGER, "Retry"
+        elif connected:
+            detail = f"{stream.info.fs:.0f} Hz · {stream.info.n_channels} ch · {format_age(_last_ts_age(stream))}"
+            tone, label = SUCCESS, fa.ICON_FA_ARROWS_ROTATE
+        else:
+            detail, tone, label = "not connected", IDLE, "Connect"
+        recording = bool(getattr(ctx, "recording", False))
+        disabled = recording or bool(busy and attempt.aborted)
+        popup_width = imgui.get_content_region_avail().x
+        with tinted_row(
+            tone if tone in (DANGER, SUCCESS) else None,
+            height=max(ui_px(26), imgui.get_frame_height() + ui_px(8)),
+        ) as width:
+            style = imgui.get_style()
+            left = imgui.get_cursor_pos_x()
+            action_w = imgui.calc_text_size(label).x + 2 * style.frame_padding.x
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(tone, fa.ICON_FA_CIRCLE)
+            imgui.same_line()
+            text_w = max(0, width - (imgui.get_cursor_pos_x() - left) - action_w - 2 * style.item_spacing.x)
+            name_w = min(_mono_width(name), text_w * 0.35)
+            mono_text(_fit_mono(name, name_w))
+            imgui.set_item_tooltip(name)
+            imgui.same_line()
+            detail_w = max(0, left + width - action_w - style.item_spacing.x - imgui.get_cursor_pos_x())
+            shown = _fit_mono(detail, detail_w)
+            imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0, detail_w - _mono_width(shown)))
+            mono_text(shown, muted())
+            imgui.set_item_tooltip(detail)
+            imgui.same_line()
+            imgui.set_cursor_pos_x(left + width - action_w)
+            imgui.begin_disabled(disabled)
+            clicked = imgui.button(f"{label}##sp_conn_{name}")
             imgui.end_disabled()
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("Rescan available sources")
+            if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+                imgui.set_tooltip("Stop the recording before changing connections." if recording else
+                                  "Abort this connection attempt" if busy else
+                                  "Reconnect this stream" if connected else "Connect this stream")
+            if clicked and not disabled:
+                if busy:
+                    self._abort(name, stream, ctx)
+                elif label == "Connect" and self._selectable and hasattr(stream._source, "discover"):
+                    imgui.open_popup(f"outlets##{name}")
+                    _kickoff_scan(name, stream)
+                else:
+                    self._connect(name, stream, ctx)
+        self._outlets(name, stream, ctx, popup_width)
 
-    # --- Detail line: indented under the dot --------------------------------
-    imgui.indent(22)
-    info = stream.info
-    if connected and info is not None:
-        last_ts_age = _last_ts_age(stream)
-        age_text = f"last {last_ts_age * 1000:.0f} ms" if last_ts_age is not None else "—"
-        imgui.text_colored(
-            muted(),
-            f"{info.fs:.0f} Hz · {info.n_channels} ch · window {stream._window:.2f}s · {age_text}",
-        )
-    else:
-        imgui.text_colored(muted(), stream.last_error or "disconnected")
+    def _outlets(self, name: str, stream: Stream, ctx: Context, width: float) -> None:
+        popup = f"outlets##{name}"
+        if not imgui.is_popup_open(popup):
+            return
+        imgui.set_next_window_size(imgui.ImVec2(width, 0))
+        if not imgui.begin_popup(popup):
+            return
+        try:
+            scan = _scans.setdefault(name, _ScanState())
+            busy = scan.busy
+            imgui.begin_disabled(busy)
+            if imgui.small_button(f"{fa.ICON_FA_ARROWS_ROTATE}##sp_scan_{name}"):
+                _kickoff_scan(name, stream)
+            imgui.end_disabled()
+            imgui.set_item_tooltip("Rescan available outlets")
+            if busy:
+                imgui.text_wrapped("Scanning for outlets…")
+            elif not scan.results:
+                imgui.text_wrapped("No outlets found. Start the source, then rescan.")
+            recording = bool(getattr(ctx, "recording", False))
+            imgui.begin_disabled(busy or recording)
+            for index, result in enumerate(scan.results):
+                target = result.get("name", "")
+                if not target:
+                    continue
+                detail = _outlet_detail(result)
+                full = f"{target} · {detail}" if detail else target
+                font = mono_font()
+                if font is not None:
+                    imgui.push_font(font, imgui.get_style().font_size_base)
+                shown = _fit_mono(full, imgui.get_content_region_avail().x)
+                clicked, _ = imgui.selectable(f"{shown}##sp_outlet_{index}", False)
+                if font is not None:
+                    imgui.pop_font()
+                imgui.set_item_tooltip(full)
+                if clicked and not busy and not recording:
+                    self._connect(name, stream, ctx, target)
+                    imgui.close_current_popup()
+            imgui.end_disabled()
+        finally:
+            imgui.end_popup()
 
-        # Auto-kick a scan on first disconnect so buttons appear without a click.
-        if has_discover and selectable and name not in _auto_scanned:
-            _auto_scanned.add(name)
-            _kickoff_scan(name, stream)
+    def _connect(self, name: str, stream: Stream, ctx: Context, target: str | None = None) -> None:
+        """Connect off-thread; keep an aborted attempt busy until it settles."""
+        if (name in self._attempts and self._attempts[name].busy) or bool(getattr(ctx, "recording", False)):
+            return
+        attempt = _Attempt()
+        self._attempts[name] = attempt
+        stream.last_error = ""
+        ctx.log(f"{name}: connecting…")
 
-        if has_discover and selectable:
-            _connect_buttons(name, stream, scan)
+        def run() -> None:
+            try:
+                ok = stream.reconnect(target)
+                if not attempt.aborted:
+                    if ok:
+                        stream.last_error = ""
+                        ctx.log(f"{name}: connected")
+                    else:
+                        stream.last_error = stream.last_error or "Connection failed. Check the source and retry."
+                        ctx.log(f"{name}: connect failed — {stream.last_error}")
+            except Exception as exc:
+                if not attempt.aborted:
+                    stream.last_error = str(exc) or type(exc).__name__
+                    ctx.log(f"{name}: connect failed — {stream.last_error}")
+            finally:
+                if attempt.aborted:
+                    stream.disconnect()
+                attempt.busy = False
 
-    imgui.unindent(22)
-    imgui.spacing()
+        _threading.Thread(target=run, daemon=True).start()
+
+    def _abort(self, name: str, stream: Stream, ctx: Context) -> None:
+        """Close the source to interrupt connection and reject any late result."""
+        attempt = self._attempts.get(name)
+        if attempt is not None and attempt.busy:
+            attempt.aborted = True
+            stream.disconnect()
+            ctx.log(f"{name}: connect aborted")
 
 
-def _kickoff_scan(name: str, stream: object) -> None:
-    """Run `source.discover()` on a daemon thread; mutate `_scans[name]`."""
+def _mono_width(text: str) -> float:
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, imgui.get_style().font_size_base)
+    width = imgui.calc_text_size(text).x
+    if font is not None:
+        imgui.pop_font()
+    return width
+
+
+def _fit_mono(text: str, width: float) -> str:
+    text = " ".join(text.split())
+    if _mono_width(text) <= width:
+        return text
+    if _mono_width("…") > width:
+        return ""
+    while text and _mono_width(text + "…") > width:
+        text = text[:-1]
+    return text + "…"
+
+
+def _outlet_detail(result: dict[str, str]) -> str:
+    """Normalise LSL discovery's compact units; preserve serial descriptions."""
+    detail = result.get("info", "")
+    channels = re.search(r"(\d+)\s*ch\b", detail)
+    rate = re.search(r"([\d.]+)\s*Hz\b", detail)
+    if channels and rate:
+        return f"{channels[1]} ch · {rate[1]} Hz"
+    return detail
+
+
+def _kickoff_scan(name: str, stream: Stream) -> None:
+    """Refresh the shared discovery cache off-thread."""
     scan = _scans.setdefault(name, _ScanState())
-    if scan.busy:
-        return
-    discover_fn = getattr(stream._source, "discover", None)  # type: ignore
-    if discover_fn is None:
+    discover = getattr(stream._source, "discover", None)
+    if scan.busy or discover is None:
         return
     scan.busy = True
 
-    def _run() -> None:
+    def run() -> None:
         try:
-            scan.results = discover_fn()
+            scan.results = discover()
             scan.selected = 0
         except Exception:
             scan.results = []
         finally:
             scan.busy = False
 
-    _threading.Thread(target=_run, daemon=True).start()
-
-
-def _connect_buttons(name: str, stream: Stream, scan: _ScanState) -> None:
-    """Render available discover() results as inline connect buttons.
-
-    Skips the button whose name matches the stream's *current* (failed) target,
-    since clicking it would retry the same thing the Reconnect button does.
-    Wraps when the next button would overflow the available width.
-    """
-    if scan.busy:
-        imgui.text_colored(muted(), "scanning…")
-        return
-    if not scan.results:
-        return
-
-    current_target = _current_target(stream)
-    avail_x0 = imgui.get_cursor_pos_x()
-    avail_w = imgui.get_content_region_avail().x
-
-    for r in scan.results:
-        target = r.get("name", "")
-        if not target or target == current_target:
-            continue
-        label = f"{target}##sp_button_{name}_{target}"
-        # Wrap when the next button would overflow the row.
-        text_w = imgui.calc_text_size(target).x + 16
-        cursor_x = imgui.get_cursor_pos_x()
-        if cursor_x + text_w > avail_x0 + avail_w and cursor_x > avail_x0:
-            imgui.new_line()
-        if imgui.small_button(label):
-            _threading.Thread(
-                target=stream.reconnect,
-                args=(target,),
-                daemon=True,  # type: ignore[attr-defined]
-            ).start()
-        imgui.same_line()
-    imgui.new_line()
-
-
-def _current_target(stream: object) -> str | None:
-    """Best-effort read of the stream name the source is currently targeting."""
-    src = stream._source  # type: ignore
-    for attr in ("stream_name", "_stream_name", "name", "_name"):
-        val = getattr(src, attr, None)
-        if isinstance(val, str) and val:
-            return val
-    return None
+    _threading.Thread(target=run, daemon=True).start()
 
 
 def _last_ts_age(stream: object) -> float | None:

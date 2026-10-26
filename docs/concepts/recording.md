@@ -24,7 +24,7 @@ stateDiagram-v2
     end note
 ```
 
-Acquisition threads check `ctx.session is not None` on every chunk; if set, they append to the corresponding Zarr array. Recording adds *no* new threads.
+Acquisition threads append each chunk while their stream has an attached session. Stop detaches the streams, freezes event buffers, then finalizes metadata and the archive on a daemon thread.
 
 `ctx.recording` is the truth of "a take is open". It is independent of `ctx.state`: from `idle`, Record moves the state to `recording`; while a `Pipeline` is `predicting`, Record leaves the state alone and sets the flag. `RECORDABLE_STATES` in `myogestic.core` lists the states a take may start from — core registers `idle`, `myogestic.ml` registers `predicting`. `ctx.session` stays set after a stop so the signal viewer can keep drawing the last take's label markers; do not use it as the flag.
 
@@ -52,6 +52,30 @@ sessions/
 ```
 
 Both are loadable via [`open_session_store(path)`][myogestic.session.open_session_store] - readers don't need to know which they got.
+
+## Notifications
+
+`App` draws corner toasts automatically after your UI. Call `ctx.notify(title, detail="",
+kind="info")` from the UI or a worker thread; each toast also becomes a timestamped
+`ctx.log` line.
+
+<!--docs:run-->
+```python
+from myogestic import Context
+
+ctx = Context()
+ctx.notify("Recording saved", "a.session.zip", "success")
+assert ctx.logs[-1].endswith("Recording saved — a.session.zip")
+```
+
+`success` and `info` last 6 seconds, `warning` lasts 10 seconds, and `danger` stays until
+dismissed. Hovering the overlay pauses expiry. At most the newest three toasts appear;
+older events remain in the log. Click a toast's **×** to dismiss it. An unknown `kind`
+raises `ValueError`.
+
+Stopping a recording reports **Recording saved** with the archive's filename after packing
+succeeds. If packing fails, **Recording not packed** shows the error and confirms that
+the session folder was kept.
 
 ## Labels
 
@@ -98,6 +122,8 @@ With a take open, two producers write event streams for you:
 | `controls` | `ControlBus`, the continuous frame it delivered, DOF names as channels | `push` | delivery clock |
 
 A dict becomes one stream per key. A value is recorded when it is a bool, a number, or a 1-D array; text, `None`, nested dicts and anything 2-D or wider are skipped — once, with a log line, and listed under `extras.pipeline.skipped` in `meta.json`. A raw window returned by `extract` is the recorded stream already; a CNN history is rebuilt from consecutive frames.
+
+For a take that recorded pipeline ticks, `extras.pipeline` identifies it as a Drive run. Takes shows a Drive tag and leaves it unticked for training; the operator can still tick it. Continue → Train selects ordinary takes and skips Drive runs.
 
 On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is written. The pipeline's hook saves the running model as `model.joblib` beside the arrays (when `pipeline.save_model` is set) and writes `extras.pipeline` with the model type, its `report` if it has one, the event streams, and the skip list.
 

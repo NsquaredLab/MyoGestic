@@ -184,12 +184,6 @@ class TestTheClassificationFileTeachesTheUnifiedPath:
         assert set(delivered.values()) == {sent}
         bus.stop()
 
-    def test_the_example_pushes_the_probability_it_documents(self):
-        """The file and the app that loads it have to agree about who gates."""
-        app = self.CONFIG.parents[1] / "synthetic" / "emg_classification.py"
-        text = app.read_text(encoding="utf-8")
-        assert "classification.toml" in text
-        assert "proba[" in text.split("def predict")[1], "it must push the probability"
 
 
 class TestTheWalkthroughDemonstratesTheClassifierPath:

@@ -22,16 +22,21 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+from imgui_bundle import imgui
 
-from myogestic import App, Stream, TrainingData
+from myogestic import App, Fr, Grid, Px, Stream, TrainingData
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.ml.widgets import LoadModelButton, PipelinePanel, SaveModelButton
 from myogestic.sources import SyntheticSource
+from myogestic.widgets import AppHeader
+from myogestic.widgets.common import ui_px
 
 CLASSES = ["Rest", "Fist", "Open", "Pinch"]
 MODEL_PATH = str(Path(tempfile.mkdtemp(prefix="panel_pipeline_")) / "model.pkl")
 
 app = App("panel: pipeline_panel")
+header = AppHeader("PipelinePanel", show_state=True)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 app.streams(Stream("emg", source=SyntheticSource(n_channels=8), window_ms=200))
 
 pipeline = Pipeline(app)
@@ -80,12 +85,15 @@ load_btn = LoadModelButton(pipeline, MODEL_PATH)
 
 @app.ui
 def ui(ctx):
-    from imgui_bundle import imgui
-
-    panel.ui()
-    save_btn.ui()
-    imgui.same_line()
-    load_btn.ui()
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        panel.ui()
+        save_btn.ui()
+        # Save can include a visible disabled caption; Load needs room beside it.
+        if imgui.get_content_region_avail().x >= ui_px(500):
+            imgui.same_line()
+        load_btn.ui()
 
 
 def main() -> None:

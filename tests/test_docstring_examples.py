@@ -14,7 +14,7 @@ import doctest
 
 import pytest
 
-from myogestic import EdgeTrigger, Fr, Grid, Px, StreamInfo, TrainingData
+from myogestic import EdgeTrigger, Fr, Grid, Layout, Px, StreamInfo, TrainingData
 from myogestic import controls as _controls
 from myogestic.outputs import filters
 from myogestic.recipes import estimators, features
@@ -41,6 +41,8 @@ RUNNABLE = [
     Trapezoid,
     Calibration,
     Grid,
+    Grid.areas,
+    Layout,
     Px,
     Fr,
     EdgeTrigger,

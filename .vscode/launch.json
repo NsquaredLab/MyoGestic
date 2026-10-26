@@ -187,7 +187,7 @@
       "presentation": { "group": "3-examples", "order": 2 }
     },
     {
-      "name": "Example: EMG classification → VHI",
+      "name": "Example: EMG classification (optional Virtual Hand)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/examples/synthetic/emg_classification.py",
@@ -199,20 +199,6 @@
       "preLaunchTask": "uv: sync (examples + grpc)",
       "env": { "PYTHONUNBUFFERED": "1" },
       "presentation": { "group": "3-examples", "order": 3 }
-    },
-    {
-      "name": "Example: EMG classification, discrete over gRPC → VHI",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/examples/synthetic/emg_classification_grpc.py",
-      "python": "${workspaceFolder}/.venv/bin/python",
-      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "justMyCode": false,
-      "preLaunchTask": "uv: sync (examples + grpc)",
-      "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "3-examples", "order": 4 }
     },
     {
       "name": "Example: 32-channel multi-model → VHI",
@@ -227,20 +213,6 @@
       "preLaunchTask": "uv: sync (examples + grpc)",
       "env": { "PYTHONUNBUFFERED": "1" },
       "presentation": { "group": "3-examples", "order": 5 }
-    },
-    {
-      "name": "Example: pop-out layout → VHI",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/examples/synthetic/emg_popout_layout.py",
-      "python": "${workspaceFolder}/.venv/bin/python",
-      "windows": { "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "justMyCode": false,
-      "preLaunchTask": "uv: sync (examples + grpc)",
-      "env": { "PYTHONUNBUFFERED": "1" },
-      "presentation": { "group": "3-examples", "order": 6 }
     },
     {
       "name": "Example: control hand, operator pose → VHI",

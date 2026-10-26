@@ -113,9 +113,29 @@ def test_example_draws_a_frame(path, monkeypatch, implot_frame):
     draws += [gui_fn for _title, gui_fn, *_rest in app._popout_specs]
     if not draws:
         pytest.skip(f"{path.name} registers no UI callback")
+
+    panel_demo = path.parent.name == "panels"
+    if panel_demo:
+        from imgui_bundle import imgui
+
+        from myogestic import _scale, _theme
+
+        monkeypatch.setattr(_scale, "_current", 2.0)
+        monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+        _theme.apply_theme()
+        imgui.get_style().scale_all_sizes(2.0)
+        imgui.get_style().font_scale_main = 2.0
+        imgui.get_io().display_size = imgui.ImVec2(360, 1800)
+
     def draw_all() -> None:
+        if panel_demo:
+            imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+            imgui.set_next_window_size(imgui.ImVec2(320, 1800))
+            imgui.begin("narrow-panel-demo", flags=imgui.WindowFlags_.no_saved_settings)
         for fn in draws:
             fn(app.ctx) if fn is app._ui_fn else fn()
+        if panel_demo:
+            imgui.end()
 
     try:
         implot_frame(draw_all)
@@ -195,3 +215,685 @@ def test_every_example_outside_otb_is_in_the_list():
         + "\n\nAdd the folder to EXAMPLES above, or exclude it deliberately the way "
         "`otb/` is — with the reason written down."
     )
+
+
+@pytest.mark.parametrize("name", ["control_map_studio", "vhi_control_hand"])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+@pytest.mark.parametrize("connected", [False, True])
+def test_control_example_cards_fit_and_explain_their_state(
+    name, scale, connected, monkeypatch, imgui_frame,
+):
+    """Exercise the local cards at 320 px, including an unlaunchable hand."""
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+    from myogestic.widgets import common
+
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / f"{name}.py"))
+    draw_ui = namespace["app"]._ui_fn
+    scope = draw_ui.__globals__
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    monkeypatch.setattr(scope["header"], "ui", lambda ctx: None)
+    monkeypatch.setattr(scope["processes"], "ui", lambda: None)
+    bus = SimpleNamespace(push=lambda values: None) if connected else None
+    if name == "control_map_studio":
+        monkeypatch.setitem(scope, "bus", bus)
+        monkeypatch.setitem(scope, "levels", {"close": 0.5} if connected else {})
+        monkeypatch.setitem(scope, "states", {})
+        monkeypatch.setitem(scope, "status", "Driving close." if connected else "Press Connect.")
+        monkeypatch.setitem(scope, "keys", SimpleNamespace(claims=set(), armed=False, arm_refusal="Access required."))
+        monkeypatch.setitem(scope, "_tabs_ui", lambda: None)
+        monkeypatch.setitem(scope, "_rebuild_if_the_manifest_changed", lambda: None)
+        monkeypatch.setitem(scope, "editor", lambda: SimpleNamespace(label="Untitled", ui=lambda: False))
+    else:
+        monkeypatch.setitem(scope, "link", SimpleNamespace(bus=bus))
+    headers, rows, primary, texts, overhangs = [], [], [], [], []
+    cell, bounds = {}, {}
+
+    class Cells:
+        @contextmanager
+        def __getitem__(self, key):
+            cell["key"] = str(key)
+            imgui.set_cursor_pos(imgui.ImVec2(0, 0))
+            imgui.begin_child(f"cell-{key}", imgui.ImVec2(320, 400))
+            bounds["left"] = imgui.get_cursor_screen_pos().x
+            bounds["right"] = bounds["left"] + imgui.get_content_region_avail().x
+            yield
+            imgui.end_child()
+
+        area = __getitem__
+
+    monkeypatch.setitem(scope, "layout" if name == "control_map_studio" else "grid", Cells())
+    original_button, original_wrapped = imgui.button, imgui.text_wrapped
+
+    def header(title, **kwargs):
+        headers.append((cell["key"], title, kwargs.get("status")))
+        common.panel_header(title, **kwargs)
+
+    @contextmanager
+    def row(tone=None, **kwargs):
+        rows.append((cell["key"], tone))
+        with common.tinted_row(tone, **kwargs) as width:
+            yield width
+
+    def forward(label, size=(0, 0)):
+        result = common.primary_button(label, size)
+        primary.append((cell["key"], label, imgui.get_item_rect_size().x,
+                        bounds["right"] - bounds["left"]))
+        return result
+
+    def button(label, *args):
+        result = original_button(label, *args)
+        overhangs.append(imgui.get_item_rect_max().x - bounds["right"])
+        return result
+
+    def wrapped(text):
+        texts.append(text)
+        original_wrapped(text)
+
+    monkeypatch.setitem(scope, "panel_header", header)
+    monkeypatch.setitem(scope, "tinted_row", row)
+    monkeypatch.setitem(scope, "primary_button", forward)
+    monkeypatch.setattr(imgui, "button", button)
+    monkeypatch.setattr(imgui, "text_wrapped", wrapped)
+    imgui_frame(lambda: draw_ui(scope["app"].ctx))
+    assert headers and len({key for key, _, _ in headers}) == len(headers), "one header per card"
+    assert rows, "the connection state belongs in a tinted row"
+    assert primary and all(width == pytest.approx(room, abs=1) for _, _, width, room in primary)
+    assert max(overhangs) <= 1, "actions must stay reachable in a narrow cell"
+    tone = common.SUCCESS if connected else common.IDLE
+    assert headers[0][2] == tone and rows[0][1] == tone
+    if name == "control_map_studio":
+        assert next(tone for _, title, tone in headers if title == "KEYBOARD") == common.IDLE
+    if not connected:
+        assert any("Connect" in text or "Launch" in text for text in texts), "show the next step"
+
+@pytest.mark.parametrize("name,label", [
+    ("participant_panel", "Recording"),
+    ("step_bar", "Complete"),
+    ("pong", "Follow"),
+])
+def test_panel_demo_chips_toggle_without_leaking_selection(
+    monkeypatch, implot_frame, name, label,
+):
+    """Demo toggles stay paired on the actual frames that switch on and off."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    imgui.get_io().display_size = imgui.ImVec2(360, 1800)
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "panels" / f"{name}.py"))
+    app = namespace["app"]
+    if name == "step_bar":
+        namespace["steps"].active = 1
+    button = imgui.small_button
+    clicked = []
+
+    def click_chip(text):
+        result = button(text)
+        if text.split("##")[0] == label:
+            clicked.append((
+                imgui.get_item_rect_max().x,
+                imgui.get_window_pos().x + imgui.get_window_size().x,
+            ))
+            return True
+        return result
+
+    monkeypatch.setattr(imgui, "small_button", click_chip)
+
+    def enabled():
+        if name == "participant_panel":
+            return app.ctx.state == "recording"
+        if name == "step_bar":
+            return namespace["done"][namespace["steps"].active]
+        return app._ui_fn.__globals__["started"] is not None
+
+    def draw():
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(320, 1800))
+        imgui.begin("demo-chip", flags=imgui.WindowFlags_.no_saved_settings)
+        app._ui_fn(app.ctx)
+        imgui.end()
+
+    for expected in (True, False):
+        implot_frame(draw)
+        assert enabled() is expected
+    assert len(clicked) == 2
+    assert all(right <= edge for right, edge in clicked), clicked
+
+
+@pytest.mark.parametrize("name,captions", [
+    ("pong", ["Command", "Opponent"]),
+    ("tracking_task", ["Effort"]),
+])
+@pytest.mark.parametrize("width", [320, 1200])
+def test_panel_demo_inputs_fit_with_captions_at_large_scale(
+    monkeypatch, implot_frame, name, captions, width,
+):
+    """Demo sliders stack their captions and stay reachable in a narrow light card."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    imgui.get_io().display_size = imgui.ImVec2(width + 40, 1800)
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "panels" / f"{name}.py"))
+    app = namespace["app"]
+    slider, text = imgui.slider_float, imgui.text_colored
+    labels, controls, readouts = {}, {}, []
+    mono = app._ui_fn.__globals__["mono_text"]
+
+    def readout(value):
+        right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        mono(value)
+        readouts.append((value, imgui.get_item_rect_max().x, right))
+
+    def caption(color, value):
+        text(color, value)
+        if value in captions:
+            labels[value] = tuple(imgui.get_item_rect_min())
+
+    def track_slider(label, *args, **kwargs):
+        result = slider(label, *args, **kwargs)
+        key = label.lstrip("#").capitalize()
+        if key in captions:
+            edge = imgui.get_window_pos().x + imgui.get_window_size().x
+            controls[key] = (
+                label, tuple(imgui.get_item_rect_min()), tuple(imgui.get_item_rect_max()), edge,
+            )
+        return result
+
+    monkeypatch.setattr(imgui, "text_colored", caption)
+    monkeypatch.setattr(imgui, "slider_float", track_slider)
+    monkeypatch.setitem(app._ui_fn.__globals__, "mono_text", readout)
+
+    def draw():
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(width, 1800))
+        imgui.begin("panel-demo", flags=imgui.WindowFlags_.no_saved_settings)
+        app._ui_fn(app.ctx)
+        imgui.end()
+
+    try:
+        for _ in range(3):
+            implot_frame(draw)
+        assert set(labels) == set(controls) == set(captions)
+        assert all(right <= edge for _, right, edge in readouts), readouts
+        for key, (label, lo, hi, edge) in controls.items():
+            assert label.startswith("##"), "captions belong above controls, not beside them"
+            assert labels[key][1] < lo[1]
+            assert hi[0] <= edge
+        if width == 320:
+            assert len({round(lo[0]) for _, lo, _, _ in controls.values()}) == 1
+    finally:
+        for stream in app.ctx.streams.values():
+            stream.stop()
+
+
+
+
+@pytest.mark.parametrize("name", ["force_ramps", "pong"])
+def test_start_here_picker_owns_device_streams(name, monkeypatch, implot_frame):
+    """Adding an amplifier stays beside Source and cannot replace the target."""
+    from imgui_bundle import imgui
+
+    monkeypatch.setattr(myogestic.core.App, "run", lambda self: None)
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "start_here" / f"{name}.py"))
+    app, picker = namespace["app"], namespace["device"]
+    assert picker._on_add is not None and picker._on_remove is not None
+    assert "target" in picker._excluded
+    target = app.ctx.streams["target"]
+    picker._on_add("second")
+    assert app.ctx.streams["second"]._window == namespace["WINDOW_MS"] / 1000
+    picker._on_remove("second")
+    assert "second" not in app.ctx.streams and app.ctx.streams["target"] is target
+    tabs = []
+    begin_tab = imgui.begin_tab_item
+
+    def track_tab(label, *args, **kwargs):
+        tabs.append(label)
+        return begin_tab(label, *args, **kwargs)
+
+    monkeypatch.setattr(imgui, "begin_tab_item", track_tab)
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert "Streams" not in tabs
+    assert tabs == []
+
+
+@pytest.mark.parametrize("name", ["force_ramps", "pong", "myocontrol"])
+def test_start_here_source_card_fits_narrow_light_cell(name, monkeypatch, implot_frame):
+    """The source card remains readable at scale two with no device attached."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "start_here" / f"{name}.py"))
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    overflow = []
+
+    def draw():
+        imgui.begin_child("source-probe", imgui.ImVec2(320, 1000),
+                          window_flags=imgui.WindowFlags_.horizontal_scrollbar)
+        namespace["device"].ui(namespace["app"].ctx)
+        overflow.append(imgui.get_scroll_max_x())
+        imgui.end_child()
+
+    for _ in range(4):
+        implot_frame(draw)
+    assert overflow[-1] == 0, overflow
+
+
+@pytest.mark.parametrize("name", ["force_ramps", "pong"])
+@pytest.mark.parametrize("participant", ["", "P-014"])
+def test_start_here_recording_fits_default_grid(name, participant, monkeypatch, implot_frame):
+    """Recording's explanation and gesture buttons must fit the actual grid row."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "start_here" / f"{name}.py"))
+    app = namespace["app"]
+    app.ctx.participant = participant
+    namespace["steps"].active = 1
+    if name == "pong":
+        namespace["record_protocol"]["index"] = 1
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    imgui.get_io().display_size = imgui.ImVec2(2560, 1656)
+    recording = namespace["recording"]
+    render = type(recording).ui
+    measurements = []
+
+    def measured(self, ctx, **kwargs):
+        render(self, ctx, **kwargs)
+        measurements.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y,
+                             imgui.get_scroll_max_y()))
+
+    monkeypatch.setattr(type(recording), "ui", measured)
+
+    def draw():
+        imgui.set_next_window_size(imgui.ImVec2(2560, 1656))
+        imgui.begin("start-here-grid")
+        app._ui_fn(app.ctx)
+        imgui.end()
+
+    for _ in range(4):
+        implot_frame(draw)
+    cursor, height, scroll = measurements[-1]
+    assert cursor <= height and scroll == 0, measurements
+
+
+@pytest.fixture
+def force_app(monkeypatch, tmp_path):
+    """Wire the force protocol without a runner, and release all its streams."""
+    monkeypatch.chdir(tmp_path)
+    namespace = runpy.run_path(str(_EXAMPLES_ROOT / "start_here" / "force_ramps.py"))
+    streams = tuple(namespace["app"].ctx.streams.values())
+    try:
+        yield namespace
+    finally:
+        app = namespace["app"]
+        if app.ctx.state == "recording":
+            app.discard_recording()
+        for stream in streams:
+            stream.stop()
+
+
+def test_force_ramps_uses_the_session_shell(force_app):
+    """Navigation owns the participant; the target stays outside Source."""
+    from myogestic import Fr, Px
+    from myogestic.widgets import AppHeader, RecordButton, StatusBar
+
+    layout, header, steps = (force_app[name] for name in ("layout", "header", "steps"))
+    assert isinstance(header, AppHeader) and header.title == "Force ramps"
+    assert header.steps is steps and header.participant is force_app["participant"]
+    assert steps.steps == ["Connect", "Track"] and steps._widget_id == "force_ramps_steps"
+    assert isinstance(force_app["status"], StatusBar) and force_app["status"].pipeline is None
+    assert isinstance(force_app["recording"], RecordButton)
+    assert not force_app["recording"]._show_header and not force_app["device"]._show_header
+    assert force_app["device"]._selectable and force_app["device"]._excluded == {"target"}
+    assert force_app["tracking"]._target is force_app["target"]
+    assert force_app["tracking"]._stream_name == "force"
+    assert force_app["target_stream"].info is not None
+    assert force_app["emg"].info is None and force_app["force_stream"].info is None
+    assert layout.panel_names == {"header", "signal", "step", "sessions", "log", "status"}
+    assert layout._breakpoint == Px(1100)
+    assert layout._wide._col_tracks == [Fr(1), Px(400)]
+    assert layout._narrow._row_tracks[1] == Px(500)
+    assert layout._wide._areas == {
+        "header": (0, 1, 0, 2), "signal": (1, 3, 0, 1),
+        "step": (1, 2, 1, 2), "sessions": (2, 4, 1, 2), "log": (3, 4, 0, 1),
+        "status": (4, 5, 0, 2),
+    }
+    for grid in (layout._wide, layout._narrow):
+        assert grid._bare == {"header", "status"}
+        assert grid._row_tracks[0] == Px(52) and grid._row_tracks[-1] == Px(26)
+        assert grid._areas["status"] == (grid.rows - 1, grid.rows, 0, grid.cols)
+
+
+def test_force_completion_needs_both_devices_and_participant_takes(force_app, monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    ctx, done = force_app["app"].ctx, force_app["_step_done"]
+    assert done(ctx) == [False, False]
+    ctx.participant = "P-014"
+    for name in ("emg", "force"):
+        monkeypatch.setitem(ctx.streams, name, SimpleNamespace(status="connected", info=object()))
+        assert done(ctx) == [name == "force", False]
+    folder = tmp_path / "sessions" / ctx.participant
+    folder.mkdir(parents=True)
+    (folder / "someone-else_take.session.zip").touch()
+    assert done(ctx) == [True, False]
+    (folder / "P-014_take.session.zip").touch()
+    assert done(ctx) == [True, True]
+    ctx.streams["force"].info = None
+    assert done(ctx) == [False, True]
+    ctx.participant = "another-participant"
+    assert done(ctx) == [False, False]
+
+
+@pytest.mark.parametrize("step", [0, 1])
+@pytest.mark.parametrize("width", [2560, 1800])
+@pytest.mark.parametrize("participant", ["", "P-014"])
+@pytest.mark.parametrize("state", ["disconnected", "calibrated", "running"])
+def test_force_shell_draws_the_active_cards_in_light_theme(
+    force_app, monkeypatch, implot_frame, step, width, participant, state,
+):
+    """Exercise both views at scale two in the default and narrow shell."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+    from myogestic.widgets import tracking
+    from myogestic.widgets.panels import recording
+
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+    imgui.get_io().display_size = imgui.ImVec2(width, 1656)
+    app = force_app["app"]
+    app.ctx.participant = participant
+    force_app["steps"].active = step
+    if state != "disconnected":
+        for name in ("emg", "force"):
+            stream = app.ctx.streams[name]
+            monkeypatch.setattr(stream, "_source", force_app["SyntheticForceSource"]())
+            assert stream.reconnect()
+            stream._acquire_step()
+        force_app["tracking"]._zero, force_app["tracking"]._mvc = 0.3, 2.3
+        if state == "running":
+            force_app["tracking"]._start()
+    headers, views, buttons, scroll, cells, record_bounds = [], [], [], [], [], []
+    original = force_app["panel_header"]
+
+    def header(title, *args, **kwargs):
+        headers.append(title)
+        return original(title, *args, **kwargs)
+
+    button = imgui.button
+
+    def measure_button(label, *args, **kwargs):
+        edge = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+        result = button(label, *args, **kwargs)
+        buttons.append((label, imgui.get_item_rect_max().x - edge))
+        if label.endswith("  Record") and width == 1800:
+            draw = imgui.get_window_draw_list()
+            record_bounds[:] = [imgui.get_item_rect_min().y, imgui.get_item_rect_max().y,
+                                draw.get_clip_rect_min().y, draw.get_clip_rect_max().y]
+            imgui.set_scroll_here_y(0.5)
+        return result
+
+    monkeypatch.setattr(imgui, "button", measure_button)
+    monkeypatch.setattr(imgui, "begin_tab_bar", lambda *a: pytest.fail("the force shell has no tabs"))
+    monkeypatch.setitem(app._ui_fn.__globals__, "panel_header", header)
+    monkeypatch.setattr(tracking, "panel_header", header)
+    monkeypatch.setattr(recording, "panel_header", header)
+    for name in ("viewer", "tracking", "recording", "device", "status"):
+        widget = force_app[name]
+        render = type(widget).ui
+
+        def view(self, *args, name=name, render=render, **kwargs):
+            views.append(name)
+            result = render(self, *args, **kwargs)
+            cells.append((name, imgui.get_cursor_pos_y(), imgui.get_window_size().y,
+                          imgui.get_scroll_max_y()))
+            return result
+
+        monkeypatch.setattr(type(widget), "ui", view)
+
+    def draw():
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(width, 1656))
+        imgui.begin("force-shell", flags=imgui.WindowFlags_.no_title_bar)
+        app._ui_fn(app.ctx)
+        scroll.append((imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+        imgui.end()
+
+    for _ in range(4):
+        headers.clear()
+        views.clear()
+        buttons.clear()
+        cells.clear()
+        implot_frame(draw)
+    assert headers == (["Connect"] if step == 0 else ["Track", "Force tracking"])
+    assert set(views) == ({"viewer", "device", "status"} if step == 0
+                          else {"tracking", "recording", "status"})
+    assert scroll[-1] == (0, 0)
+    assert all(overhang <= 1 for _, overhang in buttons), buttons
+    assert all(
+        cursor - imgui.get_style().item_spacing.y <= height and overflow == 0
+        for name, cursor, height, overflow in cells
+        if name in {"tracking", "viewer"} or (width == 2560 and name != "status")
+    ), cells
+    if record_bounds:
+        top, bottom, clip_top, clip_bottom = record_bounds
+        assert top >= clip_top and bottom <= clip_bottom, record_bounds
+    assert force_app["layout"]._active is (
+        force_app["layout"]._wide if width == 2560 else force_app["layout"]._narrow
+    )
+
+
+def test_force_recording_keeps_acquiring_while_connect_is_open(force_app, monkeypatch, implot_frame):
+    """Switching views must leave the same take and all acquisition attached."""
+    from types import SimpleNamespace
+
+    import numpy as np
+    from imgui_bundle import imgui
+
+    from myogestic.stream import StreamInfo
+
+    app = force_app["app"]
+    app.ctx.participant = "P-014"
+    for name in ("emg", "force"):
+        source = SimpleNamespace(
+            connect=lambda: StreamInfo(n_channels=2, fs=100.0),
+            read=lambda: (np.ones((10, 2), dtype=np.float32), np.arange(10) / 100.0),
+            disconnect=lambda: None,
+        )
+        monkeypatch.setattr(app.ctx.streams[name], "_source", source)
+        assert app.ctx.streams[name].reconnect()
+    force_app["steps"].active = 1
+    button = imgui.button
+    clicks = {"record": True}
+
+    def record(label, *args, **kwargs):
+        result = button(label, *args, **kwargs)
+        if label.endswith("  Record") and clicks["record"]:
+            clicks["record"] = False
+            return True
+        return result
+
+    monkeypatch.setattr(imgui, "button", record)
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    session = app.ctx.session
+    assert app.ctx.state == "recording" and session is not None
+    assert set(session.stores) == {"emg", "force", "target"}
+    started = force_app["recording"]._started
+    force_app["steps"].active = 0
+    for _ in range(3):
+        implot_frame(lambda: app._ui_fn(app.ctx))
+        for name in ("emg", "force"):
+            app.ctx.streams[name]._acquire_step()
+    assert app.ctx.state == "recording" and app.ctx.session is session
+    assert all(stream._session is session for stream in app.ctx.streams.values())
+    assert all(session.stores[name].shape[0] == 30 for name in ("emg", "force"))
+    force_app["steps"].active = 1
+    implot_frame(lambda: app._ui_fn(app.ctx))
+    assert force_app["recording"]._started == started
+
+
+@pytest.mark.parametrize("height,show_guidance", [(170, False), (500, True)])
+def test_force_guidance_yields_to_the_recording_control(
+    force_app, monkeypatch, imgui_frame, height, show_guidance,
+):
+    """The three optional setup hints appear together only when the card fits."""
+    from imgui_bundle import imgui
+
+    texts, scroll = [], []
+    wrapped = imgui.text_wrapped
+
+    def remember(text):
+        texts.append(text)
+        wrapped(text)
+
+    monkeypatch.setattr(imgui, "text_wrapped", remember)
+
+    def draw():
+        imgui.begin_child("force-guidance", imgui.ImVec2(380, height))
+        force_app["track_ui"](force_app["app"].ctx)
+        scroll.append(imgui.get_scroll_max_y())
+        imgui.end_child()
+
+    for _ in range(4):
+        texts.clear()
+        imgui_frame(draw)
+    hints = [f"{i}. {text}" for i, text in enumerate(force_app["SYNTHETIC_FORCE"].steps, start=1)]
+    assert all((text in texts) == show_guidance for text in hints)
+    assert scroll[-1] == 0
+
+
+
+
+def _synthetic_example(name, monkeypatch):
+    """Load an app without opening its runner or requiring an installed hand."""
+    monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    try:
+        return runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / f"{name}.py"), run_name="__main__")
+    except (ImportError, ModuleNotFoundError) as exc:
+        pytest.skip(f"optional dependency missing for {name}: {exc}")
+
+
+def _light_scaled_ui(monkeypatch):
+    """Use the real light theme and double-sized fonts and geometry."""
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    monkeypatch.setattr(_scale, "_current", 2.0)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(2.0)
+    imgui.get_style().font_scale_main = 2.0
+
+
+
+
+def test_electrode_overview_names_empty_cards_and_gives_a_next_step(monkeypatch, implot_frame):
+    """Detached arrays still have a title and explain how to get their first samples."""
+    from imgui_bundle import imgui
+
+    namespace = _synthetic_example("electrode_overview", monkeypatch)
+    _light_scaled_ui(monkeypatch)
+    headings, text = [], []
+    original_header = namespace["demo_ui"].__globals__.get("panel_header")
+    if original_header is not None:
+        def header(title, *args, **kwargs):
+            headings.append(title)
+            return original_header(title, *args, **kwargs)
+
+        monkeypatch.setitem(namespace["demo_ui"].__globals__, "panel_header", header)
+    for method in ("text", "text_disabled", "text_wrapped", "text_unformatted"):
+        original = getattr(imgui, method)
+
+        def capture(value, *args, _original=original, **kwargs):
+            text.append(value)
+            return _original(value, *args, **kwargs)
+
+        monkeypatch.setattr(imgui, method, capture)
+    implot_frame(lambda: namespace["demo_ui"](namespace["app"].ctx))
+    assert headings == ["IN1", "IN2", "IN3", "IN4", "IN5"]
+    assert sum("Not connected" in line for line in text) >= 5
+    assert sum("Connect" in line and "signal" in line.lower() for line in text) >= 5
+
+
+
+
+@pytest.mark.parametrize("path", [
+    *(_EXAMPLES_ROOT / "synthetic" / f"{name}.py" for name in (
+        "emg_32ch_multi_model", "emg_classification",
+        "emg_regression", "emg_regression_raulnet",
+        "high_channel_viewer", "electrode_grids", "electrode_overview",
+    )),
+    _EXAMPLES_ROOT / "otb" / "sessantaquattro_app.py",
+], ids=lambda path: path.stem)
+def test_synthetic_and_otb_cards_draw_in_light_theme_at_double_scale(path, monkeypatch, implot_frame):
+    from imgui_bundle import imgui
+
+    from myogestic.widgets import AppLogo
+    from myogestic.widgets.signals import _state
+
+    monkeypatch.setattr(myogestic.core.App, "run", lambda self, *a, **k: None)
+    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
+    # Only texture upload needs a live runner; keep every actual control in the pass.
+    monkeypatch.setattr(AppLogo, "ui", lambda self: None)
+    monkeypatch.setattr(_state, "_viewers", {})
+    try:
+        namespace = runpy.run_path(str(path), run_name="__main__")
+    except (ImportError, ModuleNotFoundError) as exc:
+        pytest.skip(f"optional dependency missing for {path.name}: {exc}")
+    _light_scaled_ui(monkeypatch)
+    app = namespace["app"]
+    imgui.get_io().display_size = imgui.ImVec2(1920, 1400)
+    for _ in range(4):
+        imgui.new_frame()
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(1920, 1400))
+        imgui.begin("scaled-app", None, imgui.WindowFlags_.no_saved_settings)
+        if app._ui_fn is not None:
+            app._ui_fn(app.ctx)
+        for title, callback, *_ in app._popout_specs:
+            imgui.begin_child(title, imgui.ImVec2(320, 1200))
+            callback()
+            imgui.end_child()
+        imgui.end()
+        imgui.end_frame()
+        imgui.render()

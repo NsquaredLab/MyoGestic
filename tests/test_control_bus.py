@@ -690,3 +690,39 @@ def test_a_recording_failure_is_reported_once_and_delivery_continues():
         bus.push({"a": 0.2, "g": 0.2})
         assert len(rec.frames) == 2
         assert len([w for w in warnings if "controls not recorded" in w]) == 1
+def test_connector_finished_includes_late_stop_teardown():
+    entered, release, stopping, stopped = Event(), Event(), Event(), Event()
+
+    class BlockingLink:
+        bus = None
+
+        def ensure(self):
+            entered.set()
+            release.wait(timeout=2)
+            self.bus = object()
+            return self.bus
+
+        def stop(self):
+            if self.bus is not None:
+                stopping.set()
+                stopped.wait(timeout=2)
+                self.bus = None
+
+    link = BlockingLink()
+    connector = ControlLinkConnector(link)
+    assert not connector.finished
+    try:
+        assert connector.poll()
+        assert entered.wait(timeout=1)
+        assert not connector.finished
+        connector.stop(timeout_s=0.0)
+        release.set()
+        assert stopping.wait(timeout=1)
+        assert not connector.finished, "late teardown must finish before a replacement can bind"
+        stopped.set()
+        assert _wait_until(lambda: connector.finished)
+        assert link.bus is None
+    finally:
+        release.set()
+        stopped.set()
+        connector.stop()

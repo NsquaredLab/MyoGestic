@@ -101,6 +101,28 @@ stateDiagram-v2
 
 `ctx.state` is the pipeline's state while it is busy (`training`, `predicting`); otherwise `recording` if a take is open, else `idle`. **Training needs `idle`**: stop predicting, and stop any open take, before Train; the button refuses otherwise. Recording is a flag beside the state (`ctx.recording`), not a fourth exclusive state: press Record while predicting and the raw streams, the pipeline's input and output, and the delivered control frames all land in one session. See [Recording → Event streams](recording.md#event-streams).
 
+The user-facing UI layer (`PipelinePanel`, `TrainButton`, `PredictButton`) handles transitions; user code rarely calls `start_training()` / `stop_predicting()` directly.
+
+## Pipeline controls
+
+`PipelinePanel(pipeline)` is one model card: a single header with a state dot, a tinted
+row saying **Not trained**, **Training…**, **Trained**, **Predicting**, or **Training failed**,
+and one full-width **Train** action. The prediction rate and failure detail use mono text;
+long errors ellipsize with the complete error available on hover. The **Predict** chip
+stays selected while predicting and stops prediction when clicked. Unavailable actions
+show a visible caption explaining how to enable them.
+
+The header's log icon appears once output exists. It opens a selectable mono log in a
+floating window; `log_height=60` adds an optional compact inline log. `TrainingLog` draws
+the same console on its own. Give panels distinct `widget_id` values to keep their controls
+and log windows independent.
+
+`TrainButton`, `PredictButton`, `SaveModelButton` and `LoadModelButton` remain available for
+custom layouts. Save and Load are secondary icon actions with tooltips naming their path;
+their disabled captions explain missing models or callbacks. Their `size=` arguments and
+the log heights use logical pixels that follow the UI scale. Saving and loading still use
+the path passed to each button and the pipeline's existing save/load callbacks.
+
 ## Stale-tick guard
 
 The predict thread wakes every `1/predict_hz`, but the acquisition thread might not have new data - the network or device could be slow. Stateful models (state machines, sequence-aware classifiers) need to know when a tick repeats data. The convention:

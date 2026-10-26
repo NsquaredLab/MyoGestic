@@ -18,17 +18,16 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
-from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import panel_header, panel_header_button
+from myogestic.widgets.common import muted
 from myogestic.widgets.signals._channel_grid import resolve_scope
 from myogestic.widgets.signals._controls import (
     render_channel_controls,
     render_controls,
+    render_display_popup,
 )
 from myogestic.widgets.signals._plot import (
-    render_footer,
     render_plot,
     robust_channel_ranges,
 )
@@ -37,12 +36,10 @@ from myogestic.widgets.signals._state import (
     build_signal_frame,
     get_viewer_state,
     resolve_enabled,
-    select_stream,
 )
 
 if TYPE_CHECKING:
     from myogestic.core import Context
-    from myogestic.widgets.signals._state import ViewerState
 
 
 class SignalViewer:
@@ -66,6 +63,8 @@ class SignalViewer:
         per electrode grid) — otherwise they share a single state and render
         identically. Pair with ``channel_scope`` to give each its own channels,
         and prefer a stable, unique string (grid labels can repeat).
+    exclude
+        Stream names omitted from the selectable viewer, such as target feedback.
     channel_scope
         The columns this viewer may **ever** show — a hard restriction, unlike
         ``initial_channels`` (which only seeds the opening selection). All /
@@ -92,7 +91,7 @@ class SignalViewer:
         Left on by default: an app that is just `App` + `Stream` + a viewer has
         no other way to attach, and nothing attaches on its own.
     show_controls
-        Whether the panel's chrome — control menu, channel bar and footer —
+        Whether the panel's chrome — toolbar, popups and footer —
         starts expanded (default ``True``). The header's ``⌃⌃`` button toggles it
         at runtime and becomes ``⌄⌄`` to unfold it; the title and the toggle stay
         put either way, so a collapsed panel is still identifiable and there is
@@ -103,8 +102,8 @@ class SignalViewer:
         inside a tab or a titled container that already names the panel — a
         `panel_header` under a tab label is the title twice, and the row it
         costs is pure padding. Orthogonal to ``show_controls``, which folds the
-        chrome *below* the header: ``show_title=False, show_controls=True`` is
-        an untitled viewer with its full control menu, channel bar and footer.
+        header controls and footer: ``show_title=False, show_controls=True`` is
+        an untitled viewer with its full toolbar, popups and footer.
         Note the ``⌃⌃`` collapse toggle lives in that header and goes with it, so
         with no title the chrome is fixed at whatever ``show_controls`` was
         constructed with — intended for a tab, where the chrome is a layout
@@ -149,6 +148,7 @@ class SignalViewer:
         show_diagnostics: bool = False,
         show_connect: bool = True,
         selectable: bool = False,
+        exclude: Iterable[str] = (),
         scale_mode: str = "auto",
         y_range: tuple[float, float] = (-1.0, 1.0),
         show_markers: bool = False,
@@ -175,6 +175,7 @@ class SignalViewer:
         self._channel_height = channel_height
         self._show_diagnostics = show_diagnostics
         self._selectable = selectable
+        self._excluded = frozenset(exclude)
         self._scale_mode = scale_mode
         self._y_range = y_range
         self._show_markers = show_markers
@@ -200,60 +201,46 @@ class SignalViewer:
             show_controls=self._show_controls,
         )
         active_stream = v.selected_stream or stream_name
+        if active_stream in self._excluded:
+            active_stream = stream_name
+            v.selected_stream = stream_name
         stream = ctx.streams.get(active_stream)
 
-        # The toggle collapses the chrome — control menu, channel bar and footer
-        # — leaving the plot and its title, which is what a small tiled panel
-        # wants. The title stays either way: it names the panel, and a header
-        # that disappears takes the toggle's position with it.
-        #
-        # Dropping the title is `show_title`'s job, and it takes the whole row —
-        # including the ⌃⌃ toggle, the only UI route to `v.show_controls`, so the
-        # chrome then stays as constructed. Deliberate, not an oversight: this is
-        # for a viewer in a tab, where the label already names the panel and the
-        # chrome is the container's decision rather than the user's.
-        if self._show_title:
-            self._render_header(ctx, v, active_stream)
+        connected = stream is not None and stream.status == "connected" and stream.info is not None
+        n_channels = stream.info.n_channels if connected else 0
+        scope = resolve_scope(self._channel_scope, n_channels)
+        enabled = (
+            resolve_enabled(v, active_stream, n_channels, self._initial_channels, scope)
+            if connected else set()
+        )
+        render_controls(
+            ctx, wid, active_stream, stream, v, self._selectable, enabled, scope,
+            title=self._title, show_title=self._show_title, exclude=self._excluded,
+        )
         if stream is None:
             imgui.text(f"{active_stream}: not found")
             return
-        if stream.status != "connected" or stream.info is None:
+        if not connected:
             _disconnected_ui(active_stream, stream, show_connect=self._show_connect)
             return
-
-        # Resolved before the controls, not after: the channel bar is drawn
-        # inline in the control rows, and the frame's column slice plus the plot
-        # loop's per-channel decimation must only ever touch enabled columns.
-        # Both resolvers are pure functions of `stream.info` and this viewer's
-        # own configuration, so nothing here depends on the controls first.
-        n_channels = stream.info.n_channels
-        # The scope is positional (column indices), so it applies to whichever
-        # stream is shown, clamped to that stream's width — never silently
-        # relaxed, which would break the "may ever show" contract.
-        scope = resolve_scope(self._channel_scope, n_channels)
         if not scope:
             imgui.text_disabled(
                 f"{active_stream}: no channels in scope (stream has {n_channels})"
             )
+            if v.show_controls:
+                render_display_popup(wid, stream, v, None, enabled, self._show_diagnostics)
             return
-        enabled = resolve_enabled(v, active_stream, n_channels, self._initial_channels, scope)
 
-        # The bar reads/mutates `v.channels` (the same set `enabled` points at)
-        # and the grid window reports hover — all applied this frame, so channel
-        # toggles and the hover highlight take effect immediately instead of a
-        # frame late. Hidden with the rest of the chrome; nothing can be hovered
-        # then, so the highlight resets to -1.
         hovered_ch = -1
         if v.show_controls:
-            render_controls(
-                ctx, wid, active_stream, stream, v, self._selectable, enabled, scope
-            )
             _, _, hovered_ch = render_channel_controls(wid, stream, v, n_channels, scope)
         v.last_hovered = hovered_ch
 
         frame = build_signal_frame(stream, v, enabled)
         if frame is None:
             imgui.text_disabled(f"{active_stream}: no data")
+            if v.show_controls:
+                render_display_popup(wid, stream, v, None, enabled, self._show_diagnostics)
             return
 
         ch_names = stream.info.channel_names
@@ -312,103 +299,12 @@ class SignalViewer:
             imgui.text("No channels enabled")
 
         if v.show_controls:
-            render_footer(
-                stream_name=wid,
-                stream=stream,
-                v=v,
-                frame=frame,
-                enabled=enabled,
-                ch_names=ch_names,
-                show_diagnostics=self._show_diagnostics,
-            )
-
-    def _render_header(self, ctx: Context, v: ViewerState, active_stream: str) -> None:
-        """Draw the header row: title, optional stream arrows, chrome toggle.
-
-        The row reads ``SIGNAL · EMG .......... ‹ › ⌃⌃``. The arrows appear only
-        for a ``selectable`` viewer with more than one stream to offer: every
-        single-stream app would otherwise carry a pair of arrows that cycle back
-        to where they started, which is worse than no arrows at all.
-
-        Parameters
-        ----------
-        ctx
-            The live context, for the streams the arrows cycle through.
-        v
-            This viewer's state — the arrows and the toggle both write to it.
-        active_stream
-            The stream currently shown, which names the panel by default.
-        """
-        collapsed = not v.show_controls
-        # The glyph shows what clicking does: fold the chrome away, or unfold it.
-        # Collapsing keeps the title — a panel that loses its name is a panel you
-        # cannot identify at a glance, and the toggle stays in the same place so
-        # it is where you left it.
-        chrome = fa.ICON_FA_ANGLES_DOWN if collapsed else fa.ICON_FA_ANGLES_UP
-        chrome_tip = (
-            "Show controls, channel bar and footer"
-            if collapsed
-            else "Hide controls, channel bar and footer"
-        )
-        title = self._title or f"SIGNAL · {active_stream}"
-        names = list(ctx.streams) if self._selectable else []
-        if len(names) < 2:
-            if panel_header_button(title, fa.ICON_FA_CHART_LINE, chrome, tooltip=chrome_tip):
-                v.show_controls = not v.show_controls
-            return
-
-        # Two groups, not one cluster: the arrows change *which stream the title names*
-        # and belong against it, while the chrome toggle acts on the whole panel and
-        # stays pinned to the right edge — the same x a viewer with no arrows puts it
-        # at, so it does not move when a second stream is registered.
-        #
-        # `panel_header_button` right-aligns exactly one action, so the arithmetic is
-        # repeated here. `small_button` drops only the *vertical* frame padding, so its
-        # width is still text + 2 * padding.
-        style = imgui.get_style()
-        sp = style.item_spacing.x
-        pad = style.frame_padding.x * 2
-        arrows = (fa.ICON_FA_CHEVRON_LEFT, fa.ICON_FA_CHEVRON_RIGHT)
-        arrows_w = sum(imgui.calc_text_size(i).x + pad for i in arrows) + sp
-        chrome_w = imgui.calc_text_size(chrome).x + pad
-        icon_w = imgui.calc_text_size(fa.ICON_FA_CHART_LINE).x
-        inline = imgui.get_content_region_avail().x >= icon_w + sp + arrows_w + sp + chrome_w
-        # `reserve` is what makes the *title* yield: it truncates rather than pushing
-        # the buttons — or `panel_header`'s right-inset status dot — off the row.
-        panel_header(
-            title,
-            fa.ICON_FA_CHART_LINE,
-            reserve=(arrows_w + sp + chrome_w + sp) if inline else 0.0,
-        )
-
-        wid = self._widget_id or self._stream_name
-        step = 0
-        if inline:
-            imgui.same_line()  # straight after the title, which is what they act on
-        # else: the arrows wrap to their own line, left-aligned under the title.
-        if imgui.small_button(f"{arrows[0]}##{wid}_prev_stream"):
-            step = -1
-        imgui.set_item_tooltip("Previous stream")
-        imgui.same_line()
-        if imgui.small_button(f"{arrows[1]}##{wid}_next_stream"):
-            step = 1
-        imgui.set_item_tooltip("Next stream")
-
-        # Right-aligned in both cases, so the toggle is where it was left whether or
-        # not the row had to wrap.
-        imgui.same_line()
-        avail = imgui.get_content_region_avail().x
-        if avail > chrome_w:
-            imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + (avail - chrome_w))
-        if imgui.small_button(f"{chrome}##{wid}_chrome"):
-            v.show_controls = not v.show_controls
-        imgui.set_item_tooltip(chrome_tip)
-        if step:
-            # Wraps, so two buttons reach every stream however many there are. A
-            # selection pointing at a stream that has since been unregistered
-            # restarts from the first rather than raising.
-            cur = names.index(active_stream) if active_stream in names else 0
-            select_stream(v, names[(cur + step) % len(names)])
+            footer = f"{stream.info.fs:g} Hz · {imgui.get_io().framerate:.0f} fps"
+            shift = imgui.get_content_region_avail().x - imgui.calc_text_size(footer).x
+            if shift > 0:
+                imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + shift)
+            imgui.text_colored(muted(), footer)
+            render_display_popup(wid, stream, v, frame, enabled, self._show_diagnostics)
 
 
 __all__ = ["SignalViewer"]

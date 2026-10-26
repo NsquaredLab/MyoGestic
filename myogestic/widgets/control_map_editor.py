@@ -30,12 +30,14 @@ import pathlib
 import threading
 import time
 import tomllib
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 from imgui_bundle import portable_file_dialogs as pfd
 
+from myogestic._theme import mono_font
 from myogestic.controls import (
     Binding,
     ControlMap,
@@ -49,12 +51,16 @@ from myogestic.widgets.common import (
     DANGER,
     IDLE,
     WARNING,
+    _truncate_to_width,
     destructive_button,
-    label_column,
+    mono_text,
     muted,
     panel_header,
     pop_selected,
+    primary_button,
     push_selected,
+    tinted_row,
+    ui_px,
 )
 
 if TYPE_CHECKING:
@@ -102,29 +108,12 @@ _TRANSIENT = (_NO_ANSWER,)
 #: What a new alias is called before the user renames it. Numbered on collision.
 _NEW_ALIAS = "my_control"
 
-# Layout. Every item here is sized explicitly, because ImGui's default item width is a
-# fraction of the *window* — put two defaults on one line with `same_line` and the row is
-# wider than the window, and widening the window makes it worse. So: fixed budgets for the
-# small controls, and whatever is left for the one that should grow.
-#: Below this much room for a row, controls stack instead of sitting side by side.
+#: Two captioned controls need this much scaled room before sharing a row.
 _STACK_BELOW = 420.0
-#: Item spacing allowance between two controls on one line.
-_GAP = 12.0
-#: Between two groups of buttons on one row: enough to read as a break, cheaper than a line.
-_GROUP_GAP = 24.0
-#: Enough room for a weight slider to be draggable rather than a nub.
-_WEIGHT_W = 130.0
-#: A name field wide enough for a real alias, but never more than half a wide row.
-_NAME_MAX_W = 240.0
-#: The two rows of one control share a label column, so `Name` and `Target` line up.
-_ROW_LABELS = ("Name", "Target")
-#: And so do the two gates.
-_GATE_LABELS = ("On at or above", "Steady for")
-#: Widest each value readout gets, reserved so the slider before it never runs it off the
-#: edge. Measured from the string, not guessed: "+0.60" and "100%" are not the same width.
+#: Two editors need room for a usable control card each.
+_TOML_COLUMNS_AT = 760.0
+#: A full signed readout, measured in the same mono face used to render it.
 _WEIGHT_READOUT = "+0.00"
-_PERCENT_READOUT = "100%"
-_SECONDS_READOUT = "0.00 s"
 #: Which addresses pose the operator's hand — and it is not a filter. A map may name any
 #: address any target offers; which stream carries it is the target's business, settled
 #: from the manifest at bind time, so nothing here chooses a hand. But the remote target
@@ -218,15 +207,11 @@ def address_tree(capabilities: Sequence[Capability]) -> dict[str, Any]:
     return root
 
 
-def _label_w(label: str) -> float:
-    """How much room a widget's trailing label needs, including its spacing."""
-    return imgui.calc_text_size(label).x + _GAP
-
-
 class ControlMapEditor:
     """Edit a TOML control map against a live target's manifest.
 
-    Construct once with the file to edit, then call `ui` each frame.
+    Construct once with the file to edit, then call `ui` each frame. Save writes
+    field or TOML edits; the header's TOML toggle opens the text editor.
 
     Parameters
     ----------
@@ -244,7 +229,9 @@ class ControlMapEditor:
         Without it the editor still opens the file and shows it; it just cannot offer a
         list to pick from or validate an address, and says so.
     title
-        Panel header text.
+        Panel header prefix, followed by the filename.
+    widget_id
+        Stable UI identity; defaults to this editor instance, not its file path.
 
     Notes
     -----
@@ -281,7 +268,7 @@ class ControlMapEditor:
         "_asked", "_baseline", "_clients", "_message", "_path", "_raw", "_raw_error", "_raw_open",
         "_refusal",
         "_all_answered", "_open_picker", "_save_as", "_stamp",
-        "_title", "_loaded",
+        "_title", "_loaded", "_widget_id", "_raw_base",
     )
 
     def __init__(
@@ -290,7 +277,8 @@ class ControlMapEditor:
         *,
         client: Any = None,
         clients: Sequence[Any] | None = None,
-        title: str = "CONTROL MAP",
+        title: str = "Control map",
+        widget_id: str | None = None,
     ) -> None:
         self._path = path
         #: Every source of a manifest, in the order they were given. One target used to be
@@ -302,6 +290,7 @@ class ControlMapEditor:
         )
         self._client = self._clients[0] if self._clients else None
         self._title = title
+        self._widget_id = widget_id or f"control_map:{id(self)}"
         #: alias -> [(address, weight)], plus the gates. A plain structure rather than a
         #: ControlMap because a half-edited map is not a valid one, and `Binding` is
         #: frozen on purpose.
@@ -316,6 +305,7 @@ class ControlMapEditor:
         #: and when `Revert` is pressed — *not* every frame, because rewriting the buffer
         #: under someone's cursor is how a text box eats what you just typed.
         self._raw = ""
+        self._raw_base = ""
         self._raw_open = False
         self._raw_error = ""
         #: Why a target that *did* answer was rejected — a version mismatch, say. Kept
@@ -386,6 +376,8 @@ class ControlMapEditor:
     def load(self) -> None:
         """Read the file into the working copy, replacing anything unsaved."""
         self._draft = []
+        self._raw = self._raw_base = ""
+        self._raw_error = ""
         self._error = ""
         self._header = ""
         self._conflict = False
@@ -469,8 +461,40 @@ class ControlMapEditor:
         return on_disk == mine
 
     def _snapshot(self) -> dict[str, Any]:
-        """The working copy in a comparable form."""
-        return (self.as_control_map() or ControlMap(bindings={})).as_control_space()
+        """Snapshot even an invalid draft, so incomplete edits are never discarded."""
+        return {"entries": deepcopy(self._draft)}
+
+    def _edited_count(self) -> int:
+        """Count changed controls, pairing additions and removals as replacements."""
+        before = list((self._baseline or {}).get("entries", []))
+        after = deepcopy(self._draft)
+        if self._raw_pending():
+            try:
+                bindings = load_control_map(tomllib.loads(self._raw)).bindings.values()
+                after = [
+                    {"alias": b.alias, "targets": [[r.address, float(r.weight)] for r in b.targets],
+                     "threshold_fraction": b.threshold_fraction, "debounce_s": float(b.debounce_s)}
+                    for b in bindings
+                ]
+            except (ValueError, tomllib.TOMLDecodeError):
+                return max(1, len(after))
+        changed = []
+        for entry in after:
+            if entry in before:
+                before.remove(entry)
+            else:
+                changed.append(entry)
+        return max(len(before), len(changed))
+
+    def _raw_pending(self) -> bool:
+        """Whether text typed by the user still needs applying, even while hidden."""
+        return self._raw != self._raw_base
+
+    def _sync_raw(self) -> None:
+        """Refresh text after an explicit load, apply or save."""
+        self._raw = self.raw_text()
+        self._raw_base = self._raw
+        self._raw_error = ""
 
     def _dirty(self) -> bool:
         """Whether reloading would throw away something the user typed.
@@ -484,7 +508,7 @@ class ControlMapEditor:
         **Apply**, so an untouched draft can still be sitting under half-written text.
         Reloading then refreshes that buffer and the typing is gone.
         """
-        if self._raw_open and self._raw != self.raw_text():
+        if self._raw_pending():
             return True
         return self._baseline is not None and self._snapshot() != self._baseline
 
@@ -530,7 +554,7 @@ class ControlMapEditor:
         self.load()
         self._message = f"Reloaded {self.label} — it changed on disk."
         if self._raw_open:
-            self._raw = self.raw_text()
+            self._sync_raw()
         return True
 
     def apply_raw(self, text: str) -> bool:
@@ -588,6 +612,8 @@ class ControlMapEditor:
         self._baseline = self._snapshot()
         self._conflict = False
         self._message = f"Saved {len(self._draft)} control(s) to {self.label}."
+        self._error = ""
+        self._raw_error = ""
         return True
 
     def save_as(self, path: pathlib.Path) -> bool:
@@ -614,7 +640,7 @@ class ControlMapEditor:
         self.load()
         self._message = f"Reloaded {self.label}, discarding the unsaved edits."
         if self._raw_open:
-            self._raw = self.raw_text()
+            self._sync_raw()
         return True
 
     def keep_mine(self) -> None:
@@ -639,7 +665,12 @@ class ControlMapEditor:
         self._save_as = None
         if not result:
             return False            # cancelled: the path must not move
-        return self.save_as(pathlib.Path(result))
+        if self._raw_pending() and not self.apply_raw(self._raw):
+            return False
+        saved = self.save_as(pathlib.Path(result))
+        if saved:
+            self._sync_raw()
+        return saved
 
     def as_control_map(self) -> ControlMap | None:
         """The working copy as a `ControlMap`, or None if it is not valid.
@@ -828,211 +859,221 @@ class ControlMapEditor:
     # --- rendering --------------------------------------------------------------
 
     def ui(self) -> bool:
-        """Render the editor. Returns True on the frame the map changed.
+        """Render cards and optional TOML; return True only on a save or reload."""
+        imgui.push_id(self._widget_id)
+        try:
+            return self._ui()
+        finally:
+            imgui.pop_id()
 
-        "Changed" is a save, a reload — whether pressed or picked up from disk — or a
-        `Save As` that moved to a new file. All three mean the same thing to a caller: the
-        control map it built something from is no longer the one in front of it.
-        """
+    def _ui(self) -> bool:
+        """Draw one editor inside its instance identity."""
         if not self._loaded:
             self.load()
-        # Polled *before* the header: it can raise the conflict flag, and the dot reports it.
         saved = self.poll_disk()
         self.poll_connect()
-        dot, detail = self._status()
-        panel_header(self._title, status=dot)
-        imgui.set_item_tooltip(detail)
-
-        # One row for every action, wrapping only when a button genuinely does not fit —
-        # `Connect` had a row of its own for a subject the row no longer states, which spent a
-        # whole line on a gap. It keeps the gap, as a gap: re-asking the targets and writing
-        # the file are different subjects, and `_GROUP_GAP` is what says so now.
-        #
-        # Labels stay: the contract reserves icon-only for the header's one action, and six
-        # places in this code tell a user to press "Connect" by name. The glyphs are the ones
-        # the repo already uses for these meanings (`ml/widgets.py` pairs FLOPPY_DISK with the
-        # word "Save", `widgets/vhi/palette.py` pairs ARROWS_ROTATE with re-fetching).
-        can_save = not self.problems()
-        for index, (label, handler, disabled, gap) in enumerate(
-            (
-                (f"{fa.ICON_FA_ARROWS_ROTATE}  Connect", None, False, 0.0),
-                (f"{fa.ICON_FA_FLOPPY_DISK}  Save", None, not can_save, _GROUP_GAP),
-                # Same content, so the same validity rule: an editor that refused Save and
-                # allowed Save As would write the broken file to a different name.
-                ("Save as...", None, not can_save or self._save_as is not None, 0.0),
-                ("Reload", self.load, False, 0.0),
-            )
-        ):
-            if index and self._room_for(imgui.calc_text_size(label).x + 24.0 + gap):
-                imgui.same_line(0.0, imgui.get_style().item_spacing.x + gap)
-            imgui.begin_disabled(disabled)
-            if imgui.button(label):
-                if label.endswith("Connect"):
-                    # Ask again now rather than waiting out the retry gap. Off-thread, so a
-                    # target that is not listening costs a spinner-free second, not a frozen
-                    # window.
-                    self._refetch = True
-                    self.poll_connect()
-                elif label.endswith("Save") and self._path is None:
-                    # Untitled: Save has nowhere to go, so it *is* Save as. Better than a
-                    # disabled button whose reason is somewhere else on screen.
-                    self._save_as = pfd.save_file(
-                        "Save the control map as", str(pathlib.Path.cwd())
-                    )
-                elif label.endswith("Save"):
-                    saved = self.save() or saved
-                elif label == "Save as...":
-                    self._save_as = pfd.save_file(
-                        "Save the control map as", str(self._path.parent if self._path else pathlib.Path.cwd())
-                    )
-                else:
-                    # Reload reports a change too. It did not before, so pressing it
-                    # reloaded this panel while whatever was built from the file kept
-                    # running the old map.
-                    handler()
-                    saved = True
-            imgui.end_disabled()
-            if label.endswith("Connect"):
-                imgui.set_item_tooltip(
-                    "Re-ask every target what it exports. This happens on its own too — "
-                    "the button is for when you have just launched one."
-                )
-
-        # What a silent target costs *this* map: the one line about the connection worth
-        # printing, and only when the map actually names an address nothing can vouch for.
-        # It was a bulleted block at the bottom, one bullet per address, so a single fact
-        # ("VHI is not running") arrived as five identical sentences. Which addresses is the
-        # detail, so it goes on the tooltip.
-        silent = self.unanswered()
-        for namespace, addresses in sorted(silent.items()):
-            imgui.push_style_color(imgui.Col_.text, WARNING)
-            imgui.text_wrapped(_unanswered_line(namespace, addresses))
-            imgui.pop_style_color()
-            imgui.set_item_tooltip("\n".join(addresses))
-
-        # A target can be silent while this map names nothing of its own. The loop above is
-        # per *named* address, so that case said nothing at all: the picker simply had no
-        # branch for the remote target, with nothing on screen to say why — which reads as "this
-        # is the whole list of what is possible" rather than "one target has not answered".
-        # It also has to say what to do about it, because you *can* author against a target
-        # that is not running: a typed address is offered, and saves.
-        if not self._all_answered and not silent:
-            imgui.push_style_color(imgui.Col_.text, WARNING)
-            imgui.text_wrapped(
-                "A target has not answered, so its controls are not in the list. "
-                "Type its address in the search box to use one anyway."
-            )
-            imgui.pop_style_color()
-
+        saved = self._header_ui() or saved
         if self._conflict:
             saved = self._conflict_ui() or saved
-        # `_refusal` is read live rather than copied into `_message`, because it is a
-        # standing fact about the pair of programs and not a line an event left behind:
-        # copied, it outlived the thing it reported, and the panel went on telling someone
-        # who had just updated their target to update their target.
-        if self._error or self._refusal or self._message:
-            imgui.push_style_color(
-                imgui.Col_.text, DANGER if self._error else muted()
+        if self._dirty():
+            saved = self._changes_ui() or saved
+        elif self._on_disk() is None:
+            saved = self._save_button() or saved
+
+        silent = self.unanswered()
+        for namespace, addresses in sorted(silent.items()):
+            self._notice(_unanswered_line(namespace, addresses), WARNING)
+            imgui.set_item_tooltip("\n".join(addresses))
+        if not self._all_answered and not silent:
+            self._notice(
+                "A target has not answered, so its controls are not in the list. "
+                "Type its address in the search box to use one anyway.", WARNING,
             )
-            imgui.text_wrapped(self._error or self._refusal or self._message)
-            imgui.pop_style_color()
+        if self._clients:
+            if imgui.small_button(f"{fa.ICON_FA_ARROWS_ROTATE}  Connect"):
+                self._refetch = True
+                self.poll_connect()
+            imgui.set_item_tooltip("Refresh targets (also refreshed automatically)")
+        if self._error or self._refusal or self._message:
+            self._notice(
+                self._error or self._refusal or self._message,
+                DANGER if self._error or self._refusal else None,
+            )
 
-        imgui.separator()
-        for index, entry in enumerate(list(self._draft)):
-            self._entry_ui(index, entry)
-
-        # Under the last row, because that is where the row it adds will appear — and it is
-        # the only thing on screen when the map is empty, which is exactly when it is the
-        # thing to press. It used to sit in the row above beside Save, where it read as a
-        # file command and set the panel's "the map changed" return value on every click.
-        if imgui.button(f"{fa.ICON_FA_PLUS}  Add control"):
-            self.add_control()
-        imgui.set_item_tooltip(
-            "Append a control. Name it, then pick what it drives from the dropdown."
-        )
-
+        columns = 2 if self._raw_open and imgui.get_content_region_avail().x >= ui_px(_TOML_COLUMNS_AT) else 1
+        if imgui.begin_table("##editors", columns, imgui.TableFlags_.sizing_stretch_same):
+            imgui.table_next_column()
+            pending = self._raw_pending()
+            before = self._snapshot()
+            imgui.begin_disabled(pending)
+            for index, entry in enumerate(list(self._draft)):
+                self._entry_ui(index, entry)
+            if not self._draft:
+                imgui.text_wrapped("Add a control, name it, then choose what it drives.")
+            if imgui.button(f"{fa.ICON_FA_PLUS}  control##Add control"):
+                self.add_control()
+            imgui.end_disabled()
+            if pending:
+                imgui.text_wrapped("Apply or revert the TOML edits to edit these fields.")
+            if self._snapshot() != before and not pending and self._raw_open and not self.problems():
+                self._sync_raw()
+            if self._raw_open:
+                imgui.table_next_column()
+                self._raw_ui()
+            imgui.end_table()
         problems = self.problems()
         if problems:
-            imgui.separator()
-            imgui.text_colored(DANGER, "Cannot save yet:")
-            for problem in problems:
-                imgui.bullet()
-                imgui.text_wrapped(problem)
-        # No "cannot be checked yet" block here: that is connection state, and it is reported
-        # once, up beside the connection state. What is left at the bottom is only what stops
-        # a save — which is the panel's own subject.
-
-        saved = self._raw_ui() or saved
+            self._notice("Cannot save yet:\n" + "\n".join(problems), DANGER)
         return saved
 
-    def _conflict_ui(self) -> bool:
-        """The file changed under unsaved edits. Ask, and change nothing until told.
+    def _header_ui(self) -> bool:
+        """The filename, map state and three icon-only file actions."""
+        style = imgui.get_style()
+        imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(ui_px(4), style.frame_padding.y))
+        icons = (fa.ICON_FA_ARROWS_ROTATE, fa.ICON_FA_FILE_EXPORT, fa.ICON_FA_CODE)
+        widths = [imgui.calc_text_size(icon).x + 2 * style.frame_padding.x for icon in icons]
+        reserve = sum(widths) + 3 * style.item_spacing.x
+        dot, detail = self._status()
+        available = imgui.get_content_region_avail().x
+        inline = available >= reserve + imgui.calc_text_size(fa.ICON_FA_CIRCLE).x + 3 * style.item_spacing.x
+        panel_header(f"{self._title} · {self.label}", status=dot, reserve=reserve if inline else 0.0)
+        imgui.set_item_tooltip(detail)
+        saved = False
+        for index, (icon, tooltip) in enumerate(zip(icons, ("Reload", "Save as", "TOML"), strict=True)):
+            if inline or index:
+                imgui.same_line()
+            if index == 0:
+                avail = imgui.get_content_region_avail().x
+                imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0.0, avail - reserve + style.item_spacing.x))
+            selected = index == 2 and self._raw_open
+            if selected:
+                push_selected()
+            disabled = index == 1 and (self._conflict or self._save_as is not None or (bool(self.problems()) and not self._raw_pending()))
+            imgui.begin_disabled(disabled)
+            clicked = imgui.small_button(f"{icon}##{tooltip}")
+            imgui.end_disabled()
+            if selected:
+                pop_selected()
+            imgui.set_item_tooltip(tooltip)
+            if not clicked or disabled:
+                continue
+            if index == 0:
+                self.load()
+                self._sync_raw()
+                saved = True
+            elif index == 1:
+                self._save_ui(save_as=True)
+            else:
+                if not self._raw_open and not self._raw_pending():
+                    self._sync_raw()
+                self._raw_open = not self._raw_open
+        imgui.pop_style_var()
+        return saved
 
-        Both answers are non-destructive on their own terms: one takes the file and says
-        the edits went, the other keeps the edits and says the file on disk is newer. What
-        is not offered is doing nothing forever — the banner stays until it is answered,
-        because a silently-diverged editor is how you overwrite someone else's change.
-        """
-        changed = False
-        imgui.push_style_color(imgui.Col_.text, DANGER)
-        imgui.text_wrapped(
-            f"{self.label} changed on disk while this panel has unsaved edits. "
-            f"Nothing has been touched yet."
+    def _changes_ui(self) -> bool:
+        """Keep the unsaved count and the one forward action in the same band."""
+        count = self._edited_count()
+        text = f"Unsaved changes · {count} control{'s' if count != 1 else ''} edited"
+        width = max(1.0, imgui.get_content_region_avail().x - ui_px(8))
+        height = (
+            imgui.calc_text_size(text, wrap_width=width).y + imgui.get_style().item_spacing.y
+            + imgui.get_frame_height() + ui_px(8)
         )
-        imgui.pop_style_color()
-        if imgui.button("Reload from disk"):
-            changed = self.take_disk_version()
-        if self._room_for(imgui.calc_text_size("Keep my edits").x + 24.0):
-            imgui.same_line()
-        if imgui.button("Keep my edits"):
-            self.keep_mine()
+        with tinted_row(WARNING, height=height) as inner:
+            imgui.push_text_wrap_pos(imgui.get_cursor_pos_x() + inner)
+            imgui.text_wrapped(text)
+            imgui.pop_text_wrap_pos()
+            return self._save_button(width=inner)
+
+    def _save_button(self, *, width: float = -1) -> bool:
+        """Disable Save until a disk conflict is resolved."""
+        disabled = (
+            self._conflict or self._save_as is not None
+            or (bool(self.problems()) and not self._raw_pending())
+        )
+        imgui.begin_disabled(disabled)
+        clicked = primary_button("Save", (width, 0))
+        imgui.end_disabled()
+        return self._save_ui() if clicked and not disabled else False
+
+    def _save_ui(self, *, save_as: bool = False) -> bool:
+        """Apply pending text before the single save path, including Save as."""
+        if self._raw_pending() and not self.apply_raw(self._raw):
+            self._raw_open = True
+            return False
+        if self.problems():
+            return False
+        if save_as or self._path is None:
+            self._save_as = pfd.save_file(
+                "Save the control map as", str(self._path.parent if self._path else pathlib.Path.cwd())
+            )
+            return False
+        saved = self.save()
+        if saved:
+            self._sync_raw()
+        return saved
+
+    @staticmethod
+    def _notice(text: str, tone: imgui.ImVec4 | None = None) -> None:
+        """A status row tall enough for wrapped instructions at any UI scale."""
+        width = max(1.0, imgui.get_content_region_avail().x - ui_px(8))
+        height = imgui.calc_text_size(text, wrap_width=width).y + ui_px(8)
+        with tinted_row(tone, height=height):
+            imgui.push_text_wrap_pos(imgui.get_cursor_pos_x() + width)
+            imgui.text_wrapped(text)
+            imgui.pop_text_wrap_pos()
+
+    def _conflict_ui(self) -> bool:
+        """Resolve a disk conflict explicitly before enabling Save again."""
+        text = f"{self.label} changed on disk. Choose which version to keep."
+        style = imgui.get_style()
+        width = max(1.0, imgui.get_content_region_avail().x - ui_px(8))
+        imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(ui_px(4), style.frame_padding.y))
+        needed = sum(imgui.calc_text_size(label).x + 2 * style.frame_padding.x for label in ("Reload from disk", "Keep my edits"))
+        inline = needed + style.item_spacing.x <= width
+        rows = 1 if inline else 2
+        height = imgui.calc_text_size(text, wrap_width=width).y + rows * (imgui.get_frame_height() + style.item_spacing.y) + ui_px(8)
+        changed = False
+        with tinted_row(DANGER, height=height) as inner:
+            imgui.push_text_wrap_pos(imgui.get_cursor_pos_x() + inner)
+            imgui.text_wrapped(text)
+            imgui.pop_text_wrap_pos()
+            button_w = (inner - style.item_spacing.x) / 2 if inline else inner
+            if imgui.button("Reload from disk", imgui.ImVec2(button_w, 0)):
+                changed = self.take_disk_version()
+                self._sync_raw()
+            if inline:
+                imgui.same_line()
+            if imgui.button("Keep my edits", imgui.ImVec2(button_w, 0)):
+                self.keep_mine()
+        imgui.pop_style_var()
         return changed
 
     def _raw_ui(self) -> bool:
-        """Edit the file as text. Returns True if a save happened from here."""
-        imgui.separator()
-        opened = imgui.collapsing_header("Edit as text (TOML)")
-        if opened and not self._raw_open:
-            # Filled on open, not per frame: see `_raw`.
-            self._raw = self.raw_text()
-        self._raw_open = bool(opened)
-        if not opened:
-            return False
-
-        # Width -1 is ImGui's "fill what is left", which it computes *after* deciding
-        # whether the panel needs a vertical scrollbar. Passing the available width
-        # measured beforehand is 16 px too wide exactly when that scrollbar appears.
-        avail = imgui.get_content_region_avail()
-        changed, self._raw = imgui.input_text_multiline(
-            "##raw", self._raw, imgui.ImVec2(-1.0, max(120.0, avail.y - 60.0))
+        """Edit TOML beside the cards; Save remains the panel's single forward action."""
+        imgui.text_disabled("TOML")
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, imgui.get_style().font_size_base)
+        _, self._raw = imgui.input_text_multiline(
+            "##raw", self._raw, imgui.ImVec2(-1, ui_px(240))
         )
-        # Wrapped like the action row above: these labels are long enough that on a
-        # narrow panel one of the three would otherwise sit past the edge.
-        saved = False
-        if imgui.button("Apply to fields"):
-            self.apply_raw(self._raw)
-        if self._room_for(_label_w("Apply and save") + 24.0):
-            imgui.same_line()
-        # `save()` refuses on its own if the applied text still has problems, so the
-        # button is one call rather than a check-then-act.
-        if imgui.button("Apply and save") and self.apply_raw(self._raw):
-            saved = self.save()
-        if self._room_for(_label_w("Revert text") + 24.0):
+        if font is not None:
+            imgui.pop_font()
+        if imgui.button("Apply##Apply to fields") and self.apply_raw(self._raw):
+            self._raw_base = self._raw
+        imgui.set_item_tooltip("Apply TOML to the fields without writing the file")
+        if self._room_for(imgui.calc_text_size("Revert text").x + 2 * imgui.get_style().frame_padding.x):
             imgui.same_line()
         if imgui.button("Revert text"):
-            self._raw = self.raw_text()
-            self._raw_error = ""
+            self._sync_raw()
         if self._raw_error:
-            imgui.push_style_color(imgui.Col_.text, DANGER)
-            imgui.text_wrapped(self._raw_error)
-            imgui.pop_style_color()
+            self._notice(self._raw_error, DANGER)
+        elif self.problems() and not self._raw_pending():
+            imgui.text_wrapped("Fix the field problems to update the TOML preview.")
         else:
-            imgui.push_style_color(imgui.Col_.text, muted())
-            imgui.text_wrapped(
-                "Type freely — nothing reaches the file until it parses and resolves."
-            )
-            imgui.pop_style_color()
-        return saved
+            imgui.text_wrapped("Apply to preview the fields, or Save to apply and write the file.")
+        return False
 
     #: How long to wait before asking the targets again.
     #:
@@ -1190,60 +1231,81 @@ class ControlMapEditor:
         self._asked = False
 
     def _entry_ui(self, index: int, entry: dict[str, Any]) -> None:
-        """One control: its name, its targets, its gates."""
+        """A surface card containing one name, probability chip, targets and gates."""
         imgui.push_id(f"dof{index}")
-        avail = imgui.get_content_region_avail().x
-        stacked = avail < _STACK_BELOW
-
-        remove = f"{fa.ICON_FA_TRASH}  Remove control"
-        label_column(
-            "Name",
-            _ROW_LABELS,
-            reserve=0.0 if stacked else _label_w(remove) + 24.0,
-            max_width=_NAME_MAX_W,
+        style = imgui.get_style()
+        imgui.push_style_color(imgui.Col_.child_bg, style.color_(imgui.Col_.popup_bg))
+        imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(ui_px(8), ui_px(8)))
+        visible = imgui.begin_child(
+            "##card", imgui.ImVec2(0, 0),
+            imgui.ChildFlags_.auto_resize_y | imgui.ChildFlags_.always_auto_resize
+            | imgui.ChildFlags_.always_use_window_padding,
         )
-        changed, alias = imgui.input_text("##name", entry["alias"])
-        if changed:
-            entry["alias"] = alias
-        if not stacked:
+        removed = False
+        if visible:
+            width = imgui.get_content_region_avail().x
+            trash_w = imgui.calc_text_size(fa.ICON_FA_TRASH).x + 2 * style.frame_padding.x
+            chip_w = imgui.calc_text_size("Treat as probability").x + 2 * style.frame_padding.x
+            inline = width >= ui_px(_STACK_BELOW) + chip_w
+            reserved = trash_w + style.item_spacing.x
+            if inline:
+                reserved += chip_w + style.item_spacing.x
+            imgui.set_next_item_width(max(1.0, width - reserved))
+            font = mono_font()
+            if font is not None:
+                imgui.push_font(font, style.font_size_base)
+            changed, alias = imgui.input_text("##name", entry["alias"])
+            if font is not None:
+                imgui.pop_font()
+            imgui.set_item_tooltip("Control name")
+            if changed:
+                entry["alias"] = alias
+            if inline:
+                imgui.same_line()
+                self._probability_ui(entry)
             imgui.same_line()
-        # The only action left on this row, because it is the only one that acts on the *row*.
-        # It was sat beside `Add target`, which acts on the list below — two buttons of equal
-        # weight for a delete and an append, and neither next to what it did.
-        if destructive_button(remove, tooltip="Delete this control and all of its targets."):
-            self._draft.remove(entry)
-            imgui.pop_id()
-            return
-
-        dropped = None
-        for slot, pair in enumerate(list(entry["targets"])):
-            imgui.push_id(f"t{slot}")
-            imgui.indent()
-            if self._target_ui(pair, drop=len(entry["targets"]) > 1):
-                dropped = pair
-            imgui.unindent()
-            imgui.pop_id()
-        if dropped is not None:
-            # Removed after the loop, never during it: mutating the list mid-iteration
-            # shifts every later row's ImGui id, which moves keyboard focus and can
-            # discard a half-typed name.
-            entry["targets"].remove(dropped)
-
-        # At the end of the list it appends to, indented with it — the same rule as
-        # `+ Add control` at the end of the control list, and the same glyph. Up in the name
-        # row it was one indent level above the rows it added.
-        imgui.indent()
-        if imgui.button(f"{fa.ICON_FA_PLUS}  Add target"):
-            entry["targets"].append(["", 1.0])
-        imgui.set_item_tooltip(
-            "Drive this control from another address too. Several targets are summed, each "
-            "scaled by its weight."
-        )
-        imgui.unindent()
-
-        self._gates_ui(entry)
-        imgui.separator()
+            if destructive_button(f"{fa.ICON_FA_TRASH}##Remove control", tooltip="Delete this control and its targets"):
+                self._draft.remove(entry)
+                removed = True
+            if not removed:
+                if not inline:
+                    self._probability_ui(entry)
+                dropped = None
+                for slot, pair in enumerate(list(entry["targets"])):
+                    imgui.push_id(f"t{slot}")
+                    if self._target_ui(pair, drop=True):
+                        dropped = pair
+                    imgui.pop_id()
+                if dropped is not None:
+                    entry["targets"].remove(dropped)
+                if imgui.button(f"{fa.ICON_FA_PLUS}  target##Add target"):
+                    entry["targets"].append(["", 1.0])
+                imgui.set_item_tooltip("Add another weighted target for this control.")
+                self._gates_ui(entry)
+        imgui.end_child()
+        imgui.pop_style_var()
+        imgui.pop_style_color()
         imgui.pop_id()
+
+    def _probability_ui(self, entry: dict[str, Any]) -> None:
+        """The sticky probability interpretation, beside the name when it fits."""
+        gated = entry["threshold_fraction"] is not None
+        reason, _ = self._gate_rules(entry)
+        disabled = bool(reason) and not gated
+        imgui.begin_disabled(disabled)
+        if gated:
+            push_selected()
+        label = "Treat as probability"
+        width = min(imgui.get_content_region_avail().x, imgui.calc_text_size(label).x + 2 * imgui.get_style().frame_padding.x)
+        budget = width - 2 * imgui.get_style().frame_padding.x
+        if imgui.calc_text_size(label).x > budget:
+            label = _truncate_to_width(label, budget - imgui.calc_text_size("…").x) + "…"
+        if imgui.button(f"{label}###probability", imgui.ImVec2(width, 0)) and not disabled:
+            entry["threshold_fraction"] = None if gated else 0.5
+        if gated:
+            pop_selected()
+        imgui.end_disabled()
+        imgui.set_item_tooltip(reason or "Treat as probability: interpret a confidence in 0..1 as on/off at the cutoff below.")
 
     @staticmethod
     def _room_for(needed: float) -> bool:
@@ -1256,73 +1318,38 @@ class ControlMapEditor:
         it fits or not. That is what left the text view's three buttons 16 px over at a
         320 px panel while each of them measured fine alone.
         """
-        # This build of the bindings exposes no `get_window_content_region_max`, so the
-        # right edge is derived: window origin + width, less the padding on both sides.
-        style = imgui.get_style()
-        right = imgui.get_item_rect_max().x + style.item_spacing.x + needed
-        limit = (
-            imgui.get_window_pos().x
-            + imgui.get_window_width()
-            - style.window_padding.x
-            - imgui.get_style().scrollbar_size
-        )
+        right = imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + needed
+        limit = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
         return right <= limit
 
     def _target_ui(self, pair: list[Any], *, drop: bool) -> bool:
-        """One route: which control, at what weight, and a way to remove it.
-
-        Wide enough and it is one line, with the picker taking the slack. Narrow and the
-        weight moves below it — a row that would not fit is reflowed rather than clipped,
-        because a weight slider pushed off the edge cannot be dragged at all.
-
-        Returns whether this target should be removed.
-        """
+        """One line: target picker, signed weight slider, mono value and removal."""
+        style = imgui.get_style()
         avail = imgui.get_content_region_avail().x
-        stacked = avail < _STACK_BELOW
-        # A label is drawn *after* its widget and is not part of `set_next_item_width`, so
-        # every label on the row has to be reserved too. Forgetting them is what left this
-        # overflowing by a constant ~80 px at every width once the widgets themselves fit.
-        # -1..1 rather than 0..1: a signed target can take a negative weight, and a
-        # slider that cannot reach one would make a valid file unsavable.
-        reserved = (
-            0.0
-            if stacked
-            else (
-                _WEIGHT_W
-                + _label_w("Weight")
-                + _label_w(_WEIGHT_READOUT)
-                + (_label_w(fa.ICON_FA_XMARK) + 24.0 + _GAP if drop else 0.0)
-                + _GAP * 2
-            )
-        )
-        self._picker(
-            pair,
-            width=label_column(
-                "Target", _ROW_LABELS, reserve=reserved, max_width=_PICKER_MAX_W
-            ),
-        )
-
-        if not stacked:
-            imgui.same_line()
-        imgui.align_text_to_frame_padding()
-        imgui.text("Weight")
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, style.font_size_base)
+        value_w = imgui.calc_text_size(_WEIGHT_READOUT).x
+        if font is not None:
+            imgui.pop_font()
+        remove_w = imgui.calc_text_size(fa.ICON_FA_XMARK).x + 2 * style.frame_padding.x if drop else 0.0
+        gap = style.item_spacing.x
+        flexible = max(2.0, avail - value_w - remove_w - gap * (3 if drop else 2))
+        weight_w = min(ui_px(130), flexible * 0.36)
+        self._picker(pair, width=min(ui_px(_PICKER_MAX_W), max(1.0, flexible - weight_w)))
         imgui.same_line()
-        imgui.set_next_item_width(_WEIGHT_W)
-        # The value is drawn after the track rather than inside it: a number centred in a
-        # wide flat frame is what an input field looks like, which is why this row read as
-        # three text boxes.
+        imgui.set_next_item_width(weight_w)
         changed, weight = imgui.slider_float("##weight", pair[1], -1.0, 1.0, "")
+        imgui.set_item_tooltip("Weight")
         if changed:
             pair[1] = round(weight, 2)
         imgui.same_line()
-        imgui.text_colored(muted(), f"{pair[1]:+.2f}")
+        imgui.align_text_to_frame_padding()
+        mono_text(f"{pair[1]:+.2f}", muted())
         if not drop:
             return False
         imgui.same_line()
-        # A glyph, not the letter "x", and destructive like the control-level delete it is a
-        # smaller version of. The label stays off: at this size the tooltip is the label, and
-        # the row already says which target it belongs to.
-        return destructive_button(fa.ICON_FA_XMARK, tooltip="Remove this target.")
+        return destructive_button(fa.ICON_FA_XMARK, tooltip="Remove this target")
 
     def _offered(self, current: str = "") -> list[Capability]:
         """The controls worth offering: every address every connected manifest exports.
@@ -1401,21 +1428,25 @@ class ControlMapEditor:
             changed, typed = imgui.input_text("##control", address)
             if changed:
                 pair[0] = typed
+            imgui.set_item_tooltip(address or "Type a target address")
             return
         label = address or "choose a control..."
+        budget = width - imgui.get_frame_height() - 2 * imgui.get_style().frame_padding.x
+        if imgui.calc_text_size(label).x > budget:
+            label = _truncate_to_width(label, budget - imgui.calc_text_size("…").x) + "…"
         # A combo popup sizes itself to its contents, and a `-1` item inside it means
         # "fill the available width" — which in a popup that has not been sized yet is
         # unbounded, so the search field grew the popup to the whole display. Constrain
         # the popup and give the field a real width instead.
-        popup_w = max(width, _PICKER_MAX_W)
+        popup_w = max(width, ui_px(_PICKER_MAX_W))
         imgui.set_next_window_size_constraints(
-            imgui.ImVec2(width, 0.0), imgui.ImVec2(popup_w, 320.0)
+            imgui.ImVec2(width, 0.0), imgui.ImVec2(popup_w, ui_px(320.0))
         )
         key = imgui.get_id("##control")  # unique per row: `_entry_ui` pushed the row's id
         opened = imgui.begin_combo("##control", label)
         just_opened = self._note_open(key, opened)
         if opened:
-            imgui.set_next_item_width(popup_w - 24.0)
+            imgui.set_next_item_width(popup_w - ui_px(24.0))
             if just_opened:
                 # Click, then type. The list is long enough that searching is the normal way
                 # to use it, so the search box is where the keyboard should already be.
@@ -1585,98 +1616,44 @@ class ControlMapEditor:
         return f"held state, one of {len(cap.states)}: {shown}, ..."
 
     def _gates_ui(self, entry: dict[str, Any]) -> None:
-        """`threshold_fraction` and `debounce_s`, in plain words.
+        """Captioned activation sliders, side by side when both tracks fit.
 
-        **Only the gates that can apply are drawn.** They used to be drawn always, disabled,
-        with the reason on hover — which spent two permanent rows per control on settings that
-        do not apply to the continuous DOFs almost every map is made of. `_gate_rules` already
-        knows; a reason now means "do not offer" rather than "offer, greyed".
-
-        Two exceptions, both so the editor cannot hide state it is refusing to save:
-
-        * a value already in the file is always shown, and shown **enabled**, so it can be
-          cleared. Disabled-but-set was a dead end — `problems` blocked the save and the only
-          way to fix it was the text view;
-        * an address nothing has answered for keeps both, because "cannot apply" is not
-          something to assert about a control no one has described yet.
+        Unsupported gates stay hidden unless set in the file, in which case the
+        slider remains editable so an invalid value can be cleared.
         """
-        no_threshold, no_debounce = self._gate_rules(entry)
-        gated = entry["threshold_fraction"] is not None
-        address = entry["targets"][0][0] if entry["targets"] else ""
-        # `bool(address)`: with no target chosen there is nothing to gate at all, which is the
-        # state a control is in the moment it is added.
-        show_threshold = bool(address) and (not no_threshold or gated)
-        show_debounce = bool(address) and (not no_debounce or bool(entry["debounce_s"]))
-        if not (show_threshold or show_debounce):
-            return
-        imgui.indent()
-        # A named band rather than a bare indent: the row above is *what* this control drives,
-        # and these two are *when* it fires. Indentation alone left four unrelated-looking
-        # rows in a stack with nothing saying which belonged to which.
-        imgui.separator_text("Activation")
-        # A sticky on/off, so the contract's toggle — `push_selected`'s accent tint and
-        # underline — rather than a checkbox. It *was* an `imgui.checkbox`, the only labelled
-        # one in the app, and at this theme's frame padding its empty rounded box read as a
-        # text field waiting to be typed into. Short label, explanation on hover: a long
-        # label is the one thing in ImGui that cannot wrap.
-        if show_threshold:
-            if gated:
-                push_selected()
-            # "classifier probability" named the input, not what the button does — and as a
-            # bare noun beside a cutoff slider it read like a second label for that slider.
-            if imgui.button("Treat as probability"):
-                entry["threshold_fraction"] = None if gated else 0.5
-            if gated:
-                pop_selected()  # reads the button's rect, so it has to be the next call
-            imgui.set_item_tooltip(
-                "Turn this on when the model outputs a confidence in 0..1 rather than a\n"
-                "position. It becomes a plain on/off at the cutoff below, and then travels\n"
-                "the same weighted path a regressor's value does."
-            )
-        # Both gates share one label column, so their tracks share a left edge — two labels
-        # of different lengths were starting their sliders at two different x. The reading
-        # order is the app's own (`signals/_controls.py` draws "Window" then its slider), and
-        # the unit goes on the value, in what the operator thinks in: a probability is a
-        # percentage, not a two-decimal fraction.
-        # Re-read rather than reuse `gated`: the button above may have flipped it *this frame*,
-        # in either direction, and `gated` is the state from before the click.
+        _, no_debounce = self._gate_rules(entry)
+        controls = []
         if entry["threshold_fraction"] is not None:
-            label_column("On at or above", _GATE_LABELS, reserve=_label_w(_PERCENT_READOUT))
-            changed, fraction = imgui.slider_float(
-                "##threshold", float(entry["threshold_fraction"]), 0.0, 1.0, ""
-            )
-            if changed:
-                entry["threshold_fraction"] = round(fraction, 2)
-            imgui.same_line()
-            imgui.text_colored(muted(), f"{entry['threshold_fraction']:.0%}")
-
-        if show_debounce:
-            # One group, so hovering the label explains the same thing as hovering the slider.
-            imgui.begin_group()
-            # "Hold for" was ambiguous exactly where it matters: half these addresses are
-            # `keyboard.hold.*`, so it read as "hold the key down this long". It is the
-            # opposite — how long the *input* must stop changing before it is believed.
-            label_column("Steady for", _GATE_LABELS, reserve=_label_w(_SECONDS_READOUT))
-            changed, debounce = imgui.slider_float(
-                "##debounce", entry["debounce_s"], 0.0, 1.0, ""
-            )
-            if changed:
-                entry["debounce_s"] = round(debounce, 2)
-            imgui.same_line()
-            imgui.text_colored(muted(), f"{entry['debounce_s']:.2f} s")
-            imgui.end_group()
-            explain = (
-                "How long the predicted state must stay put before it counts. A classifier\n"
-                "flickering between two states holds the last one until it settles, instead\n"
-                "of chattering. 0 turns it off — every prediction acts immediately."
-            )
-            if no_debounce:
-                # Only reachable via the second exception above: a value is in the file that
-                # this control will not accept. Say so here, since this is the one place it
-                # can be cleared.
-                explain += f"\n\nThis control will not accept one: {no_debounce}."
-            imgui.set_item_tooltip(explain)
-        imgui.unindent()
+            controls.append(("On at or above", "threshold_fraction", "##threshold", ".0%"))
+        if entry["targets"] and (not no_debounce or bool(entry["debounce_s"])):
+            controls.append(("Steady for", "debounce_s", "##debounce", ".2f"))
+        if not controls:
+            return
+        columns = 2 if len(controls) == 2 and imgui.get_content_region_avail().x >= ui_px(_STACK_BELOW) else 1
+        if imgui.begin_table("##activation", columns, imgui.TableFlags_.sizing_stretch_same):
+            for caption, key, label, fmt in controls:
+                imgui.table_next_column()
+                imgui.text_disabled(caption)
+                text = format(entry[key], fmt) + (" s" if key == "debounce_s" else "")
+                font = mono_font()
+                if font is not None:
+                    imgui.push_font(font, imgui.get_style().font_size_base)
+                value_w = imgui.calc_text_size("100%" if key == "threshold_fraction" else "0.00 s").x
+                if font is not None:
+                    imgui.pop_font()
+                imgui.set_next_item_width(max(1.0, imgui.get_content_region_avail().x - value_w - imgui.get_style().item_spacing.x))
+                changed, value = imgui.slider_float(label, float(entry[key]), 0.0, 1.0, "")
+                if changed:
+                    entry[key] = round(value, 2)
+                    text = format(entry[key], fmt) + (" s" if key == "debounce_s" else "")
+                imgui.set_item_tooltip(
+                    "Minimum probability that activates this control."
+                    if key == "threshold_fraction" else
+                    "How long the prediction must stay steady before it counts; 0 acts immediately."
+                )
+                imgui.same_line()
+                mono_text(text, muted())
+            imgui.end_table()
 
     # --- resolution preview -----------------------------------------------------
 

@@ -1,8 +1,10 @@
 """Round-trip test: write Session → pack to .session.zip → read via open_session_store."""
 
+import json
 import shutil
 import sys
 import tempfile
+import zipfile
 
 import numpy as np
 import pytest
@@ -57,6 +59,122 @@ def test_pack_to_zip_roundtrip():
             assert len(loaded.label_track) == 2
             assert loaded.label_track[0].class_index == 0
             assert loaded.label_track[1].class_index == 1
+
+
+def _archive_session(tmp_path, timestamps=(0.0, 10.0), participant="P-001"):
+    """Build a tiny session with a known sample-clock span."""
+    session = Session(str(tmp_path), participant=participant)
+    session.init_stream("emg", StreamInfo(n_channels=1, fs=10.0))
+    if timestamps:
+        session.append("emg", np.zeros((len(timestamps), 1)), np.array(timestamps))
+    return session
+
+
+@pytest.mark.parametrize("label_order", [(0, 1), (1, 0)])
+@pytest.mark.parametrize("participant", ["", "P-001"])
+def test_archive_labels_precede_typed_name_in_class_order(tmp_path, label_order, participant):
+    """Only positive-duration valid classes name the archive, in index order."""
+    session = _archive_session(tmp_path, participant=participant)
+    session.name = "my take"
+    session.add_label(label_order[0], timestamp=0.0)
+    session.add_label(label_order[1], timestamp=3.0)
+    session.add_label(-1, timestamp=6.0)
+    session.add_label(99, timestamp=7.0)
+    session.add_label(0.5, timestamp=8.0)
+    session.add_label(2, timestamp=10.0)  # valid class, but zero recorded seconds
+    folder = session.path
+    session.save_meta("labels", class_names=["fist", "open hand", "rest"])
+    meta_bytes = (folder / "meta.json").read_bytes()
+    assert json.loads(meta_bytes)["class_seconds"] == {"fist": 3.0, "open hand": 3.0}
+    assert session.path == folder
+
+    archive = session.pack_to_zip()
+
+    assert archive.name == f"{folder.name}_fist+open-hand_my-take.session.zip"
+    assert not folder.exists()
+    with zipfile.ZipFile(archive) as packed:
+        assert packed.read("meta.json") == meta_bytes
+    with open_session_store(archive) as loaded:
+        assert loaded.name == "my take"
+        assert loaded.class_names == ["fist", "open hand", "rest"]
+        np.testing.assert_array_equal(loaded.ts_stores["emg"][:], [0.0, 10.0])
+
+
+@pytest.mark.parametrize("name", ["", "my take"])
+@pytest.mark.parametrize(
+    ("class_names", "labels", "timestamps"),
+    [
+        (None, [(0, 0.0)], (0.0, 10.0)),
+        ([], [(0, 0.0)], (0.0, 10.0)),
+        (["fist"], [], (0.0, 10.0)),
+        (["fist"], [(0, 0.0)], ()),
+        (["fist"], [(0, 0.0)], (0.0,)),
+        (["fist"], [(0, 10.0)], (0.0, 10.0)),
+        (["fist"], [(-1, 0.0), (99, 2.0), (0.5, 4.0)], (0.0, 10.0)),
+    ],
+)
+def test_archive_without_recorded_labels_keeps_its_name(
+    tmp_path, name, class_names, labels, timestamps,
+):
+    session = _archive_session(tmp_path, timestamps)
+    session.name = name
+    for index, timestamp in labels:
+        session.add_label(index, timestamp=timestamp)
+    session.save_meta("no-labels", class_names=class_names)
+    stem = session.path.name
+    suffix = "_my-take" if name else ""
+
+    assert session.pack_to_zip().name == f"{stem}{suffix}.session.zip"
+
+
+@pytest.mark.parametrize(
+    ("class_names", "segment"),
+    [
+        (["../fist", "open/hand", "___"], "_fist+open-hand"),
+        (["...", "___"], ""),
+        (["fist", "fist"], "_fist"),
+        (["a" * 19, "b" * 20], f"_{'a' * 19}+{'b' * 20}"),
+        (["a" * 20, "b" * 20], "_2-classes"),
+        ([f"gesture {index}" for index in range(7)], "_7-classes"),
+    ],
+)
+def test_archive_label_slugs_and_length_limit(tmp_path, class_names, segment):
+    session = _archive_session(tmp_path)
+    for index in reversed(range(len(class_names))):
+        session.add_label(index, timestamp=float(len(class_names) - index - 1))
+    session.save_meta("slugs", class_names=class_names)
+    stem = session.path.name
+
+    assert session.pack_to_zip().name == f"{stem}{segment}.session.zip"
+
+
+def test_archive_labels_refresh_when_metadata_is_saved_again(tmp_path):
+    session = _archive_session(tmp_path)
+    session.add_label(0, timestamp=0.0)
+    session.save_meta("labels", class_names=["fist"])
+    session.save_meta("no-labels")
+    stem = session.path.name
+
+    assert session.pack_to_zip().name == f"{stem}.session.zip"
+
+
+def test_labelled_archive_reserves_same_second_participant_stem(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "myogestic.session._core.time.strftime", lambda *args: "2026-10-24_22-13-05",
+    )
+    first = _archive_session(tmp_path)
+    first.name = "my take"
+    first.add_label(0, timestamp=0.0)
+    first.save_meta("first", class_names=["fist"])
+    folder = first.path
+    archive = first.pack_to_zip()
+    assert archive.name == "P-001_2026-10-24_22-13-05_fist_my-take.session.zip"
+    assert not folder.exists()
+
+    second = Session(str(tmp_path), participant="P-001")
+
+    assert second.path == folder.with_name(f"{folder.name}-2")
+    assert archive.exists() and second.path.is_dir()
 
 
 @pytest.mark.skipif(

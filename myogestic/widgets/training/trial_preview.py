@@ -26,12 +26,24 @@ from typing import Literal
 
 import numpy as np
 
-from myogestic.widgets.common import PALETTE, ensure_implot_style, panel_header
+from myogestic._theme import mono_font
+from myogestic.widgets.common import (
+    PALETTE,
+    TRIAL_BAND,
+    _truncate_to_width,
+    ensure_implot_style,
+    mono_text,
+    panel_header,
+    ui_px,
+)
 from myogestic.widgets.signals.transforms import apply_display_filter
 
 
 class TrialPreview:
-    """Render stacked multi-channel waveform with optional band overlay.
+    """Preview stacked waveforms under a header and mono window read-out.
+
+    The optional region band uses the shared translucent ``TRIAL_BAND``
+    token, so the traces remain visible in both light and dark themes.
 
     Examples
     --------
@@ -69,10 +81,11 @@ class TrialPreview:
             ``(n_channels, n_samples)``; ``"samples_first"`` as
             ``(n_samples, n_channels)``.
         title
-            Optional header line shown above the plot.
+            Header above the plot; ``None`` uses ``"Trial preview"``.
+            Pass an empty string to hide the inline header.
         size
-            ImPlot size as ``(width, height)``. ``-1`` width fills the
-            available content region.
+            ImPlot size as ``(width, height)`` at UI scale 1.0. Positive
+            dimensions scale with the UI; ``-1`` width fills the available region.
         channel_names
             Optional per-channel labels. When omitted, channels
             are shown as ``ch0..chN-1``.
@@ -81,7 +94,7 @@ class TrialPreview:
             the traces — useful for marking an extracted template,
             highlighting a labeled segment, etc.
         band_color
-            RGBA in ``[0,1]``. Defaults to a soft cyan.
+            RGBA in ``[0,1]``. Defaults to the shared ``TRIAL_BAND`` token.
         gain
             Multiplier applied to each channel before plotting. Match
             this to your live viewer's gain knob if you want the preview
@@ -129,18 +142,41 @@ class TrialPreview:
         from imgui_bundle import imgui, implot
 
         imgui.push_id(self._widget_id)
+        window_started = False
         try:
+            if self._as_window:
+                imgui.set_next_window_size(imgui.ImVec2(ui_px(960), ui_px(480)),
+                                           imgui.Cond_.first_use_ever)
+                title_id = (self._title or "Trial preview") + f"###trial_preview_{self._widget_id}"
+                opened, _is_open = imgui.begin(title_id, True)
+                window_started = True
+                if not opened:
+                    return
+            title = "Trial preview" if self._title is None else self._title
+            if title:
+                panel_header(title)
             # Normalise to channels-first internally.
             if self._data_layout == "samples_first":
                 arr = np.ascontiguousarray(data.T, dtype=np.float64)
             else:
                 arr = np.asarray(data, dtype=np.float64)
             if arr.ndim != 2 or arr.shape[0] == 0 or arr.shape[1] == 0:
-                if self._as_window:
-                    return
-                imgui.text_disabled("(no data)")
+                imgui.push_text_wrap_pos(0)
+                imgui.text_disabled("Select a template to preview its recorded trial.")
+                imgui.pop_text_wrap_pos()
                 return
             n_ch, n_samp = arr.shape
+            start, end = self._band if self._band is not None else (0.0, n_samp / fs)
+            readout = f"window {start:.3f}–{end:.3f} s · {end - start:.3f} s"
+            imgui.push_font(mono_font(), imgui.get_style().font_size_base)
+            width = imgui.get_content_region_avail().x
+            shown = readout
+            if imgui.calc_text_size(shown).x > width:
+                shown = _truncate_to_width(shown, width - imgui.calc_text_size("…").x) + "…"
+            imgui.pop_font()
+            mono_text(shown)
+            if shown != readout and imgui.is_item_hovered():
+                imgui.set_tooltip(readout)
 
             # Apply display filter on a samples-first view (apply_display_filter
             # contract). Round-trip back to channels-first.
@@ -148,17 +184,6 @@ class TrialPreview:
                 arr = apply_display_filter(
                     arr.T.astype(np.float32, copy=False), self._display_filter, fs
                 ).T.astype(np.float64)
-
-            if self._as_window:
-                imgui.set_next_window_size(imgui.ImVec2(960, 480), imgui.Cond_.first_use_ever)
-                title_id = (self._title or "Trial Preview") + f"###trial_preview_{self._widget_id}"
-                opened, _is_open = imgui.begin(title_id, True)
-                if not opened:
-                    imgui.end()
-                    return
-
-            if self._title is not None and not self._as_window:
-                panel_header(self._title)
 
             # `lane` = per-channel vertical spacing. In manual mode it's the
             # user-provided y_range height; in auto mode it's the global data
@@ -185,7 +210,7 @@ class TrialPreview:
             flags = implot.Flags_.no_legend | implot.Flags_.no_title
             if implot.begin_plot(
                 f"trial_preview##{self._widget_id}",
-                imgui.ImVec2(self._size[0], self._size[1]),
+                imgui.ImVec2(*(ui_px(value) if value > 0 else value for value in self._size)),
                 flags=flags,
             ):
                 implot.setup_axis(implot.ImAxis_.x1, "time (s)")
@@ -195,10 +220,10 @@ class TrialPreview:
 
                 # Band overlay below the traces.
                 if self._band is not None:
-                    bc = self._band_color if self._band_color is not None else (0.4, 0.7, 1.0, 1.0)
+                    bc = self._band_color if self._band_color is not None else tuple(TRIAL_BAND)
                     spec = implot.Spec()
                     spec.fill_color = imgui.ImVec4(bc[0], bc[1], bc[2], 1.0)
-                    spec.fill_alpha = bc[3] if len(bc) >= 4 else 0.22
+                    spec.fill_alpha = bc[3] if len(bc) >= 4 else TRIAL_BAND.w
                     implot.plot_shaded(
                         f"band##{self._widget_id}",
                         np.array(
@@ -225,9 +250,9 @@ class TrialPreview:
                     implot.plot_line(f"{label}##{self._widget_id}", xs, ys, spec)
                 implot.end_plot()
 
-            if self._as_window:
-                imgui.end()
         finally:
+            if window_started:
+                imgui.end()
             imgui.pop_id()
 
 

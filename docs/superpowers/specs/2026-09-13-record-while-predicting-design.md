@@ -1,8 +1,7 @@
 # Design: record while predicting — the session carries the model's input and output
 
-**Status:** draft, plan written (`docs/superpowers/plans/2026-09-13-record-while-predicting.md`).
-Revised after advisor review (write-path cost, freeze ordering, exit handling, replay claim,
-nominal rates). Codex review pending. Not implemented.
+**Status:** implemented; ships in the unreleased MyoGestic 2.0.
+Adapted to 2.0's gesture tiles, timed takes, participant sessions, and AppHeader state pill.
 
 ## Context / problem
 
@@ -258,7 +257,10 @@ message says "finalizing…" from the moment Stop is pressed, as it does now.
 
 `Pipeline.__init__` registers `_on_finalize(session)`:
 
-- If `self.model is not None` and `self.save_model` is set: `save_model(model,
+- Only takes with recorded pipeline ticks get `extras.pipeline`; ordinary training takes
+  do not. The model reference and skip list belong to each take, so a later run cannot
+  replace them while finalization is pending. If that model is not None and
+  `self.save_model` is set: `save_model(model,
   session.path / "model.joblib")`. This pickles on the finalize thread while the predict
   thread may still be calling the model; every model in this repo is read-only in
   `predict`, so the snapshot is consistent. A model that mutates state in `predict` would
@@ -285,18 +287,18 @@ because a daemon would be killed at interpreter exit with the archive half writt
 
 ### 6. Widgets
 
-Fourteen lines in three widgets read the state where they mean the flag, and one ML button
-gates on it:
+The 2.0 widgets read the recording flag whenever they mean a take is open:
 
-- `RecordingControls` (`widgets/panels/recording.py`): `recording = ctx.recording`; the
-  Record button shows when `not ctx.recording and ctx.state in RECORDABLE_STATES`; Stop
-  shows when `ctx.recording`; label snapping and the "n labels · into:" line key off
-  `ctx.recording`. The state pill keeps showing `ctx.state`; when `ctx.recording` and the
-  state is not `"recording"`, a second small pill reading `REC` in `STATE_COLORS["recording"]`
-  follows it, so a predicting-and-recording app shows `PREDICTING REC`. Its `_stop` already
-  detaches the streams at the click so the naming dialog's typing time is not appended; it
-  now also calls `ctx.session.freeze()`, so the event streams end at the click too, and the
-  pipeline's rows during the dialog are dropped at debug level, not warned about.
+- `RecordingControls` (`widgets/panels/recording.py` and `_recording_controls.py`):
+  keep 2.0's gesture tiles, timed takes and saved-take tile. Start is available when
+  `not ctx.recording and ctx.state in RECORDABLE_STATES`; ownership, Stop and label
+  snapping use `ctx.recording`. Timed warm-ups may run in a recordable state.
+- The state pill lives in `AppHeader`. It shows `ctx.state`; when `ctx.recording` and
+  the state is not `"recording"`, a second pill reading `REC` in
+  `STATE_COLORS["recording"]` follows it, so a predicting-and-recording app shows
+  `PREDICTING REC`. RecordingControls no longer draws a pill.
+- `RecordButton._stop` detaches the streams and calls `ctx.session.freeze()` at the
+  click, before its naming dialog, so raw and event rows both end at Stop.
 - `DevicePicker` and `StreamManager` block reconnect during a recording via
   `getattr(ctx, "state", "") == "recording"`; they switch to `getattr(ctx, "recording",
   False)`, which also covers the new case. Reconnecting under a live recording would
@@ -368,7 +370,7 @@ degrades to "not recorded".
 - `save_meta` moves from the Stop click to the finalize thread. A caller that read
   `meta.json` synchronously after `stop_recording()` returned (none in this repo) would now
   have to wait for the archive.
-- Version: 2.7.0.
+- Version: unreleased 2.0.
 
 ## Testing
 

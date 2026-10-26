@@ -125,7 +125,7 @@ def test_streams_cannot_be_added_or_removed_while_recording(tmp_path):
 
 
 # --- the widget --------------------------------------------------------------
-def test_removing_from_the_row_list_does_not_mutate_during_iteration(implot_frame):
+def test_removing_from_the_row_list_does_not_mutate_during_iteration(implot_frame, monkeypatch):
     """The rows are drawn by walking `ctx.streams`; popping mid-walk raises.
 
     The click has to be remembered and acted on after the loop.
@@ -136,19 +136,18 @@ def test_removing_from_the_row_list_does_not_mutate_during_iteration(implot_fram
         app.add_stream(Stream(name, source=SyntheticSource(n_channels=2), window_ms=100))
     manager = StreamManager(on_add=lambda n: None, on_remove=app.remove_stream)
 
-    # Stand in for a click on every row at once — the worst case for the walk.
-    original_row = StreamManager._row
-    try:
-        StreamManager._row = lambda self, name, stream, *, recording: True
+    from myogestic.widgets.panels import stream_manager as module
 
+    # Stand in for simultaneous chip events; apply only one deferred removal.
+    monkeypatch.setattr(module, "stream_chip", lambda *args, **kwargs: (False, True))
+    try:
         def draw() -> None:
             imgui.begin_child("cell", imgui.ImVec2(500, 300))
             manager.ui(app.ctx)
             imgui.end_child()
 
-        implot_frame(draw)  # a RuntimeError here is the bug
+        implot_frame(draw)
     finally:
-        StreamManager._row = original_row
         for s in list(app.ctx.streams.values()):
             s.stop()
 
@@ -166,3 +165,143 @@ def test_the_manager_renders_with_no_streams_at_all(implot_frame):
         imgui.end_child()
 
     implot_frame(draw)
+
+
+@pytest.fixture
+def manager_actions(monkeypatch):
+    seen, click = [], {"id": ""}
+    button = imgui.button
+
+    def tracked(label, *args):
+        result = button(label, *args)
+        disabled = bool(imgui.get_item_flags() & imgui.ItemFlags_.disabled)
+        seen.append((label, disabled))
+        return result or bool(click["id"] and label.endswith(click["id"]) and not disabled)
+
+    monkeypatch.setattr(imgui, "button", tracked)
+    return seen, click
+
+
+def test_chips_select_then_remove_after_iteration(imgui_frame, manager_actions):
+    app = App("test")
+    for name in ("emg", "force", "aux"):
+        app.add_stream(_stream(name))
+    manager = StreamManager(on_add=lambda name: None, on_remove=app.remove_stream)
+    seen, click = manager_actions
+    click["id"] = "##sm_stream_force"
+    imgui_frame(lambda: manager.ui(app.ctx))
+    assert manager._selected == "force"
+    seen.clear()
+    click["id"] = "##sm_remove_force"
+    imgui_frame(lambda: manager.ui(app.ctx))
+    assert "force" not in app.ctx.streams
+    assert manager._selected == "aux"
+    assert len([label for label, _ in seen if "sm_remove" in label]) == 1
+
+
+def test_plus_opens_name_field_and_add_cleans_then_selects(imgui_frame, manager_actions, monkeypatch):
+    app = App("test")
+    manager = StreamManager(on_add=lambda name: app.add_stream(_stream(name)), on_remove=app.remove_stream)
+    _, click = manager_actions
+    click["id"] = "##sm_add_open"
+    imgui_frame(lambda: manager.ui(app.ctx))
+    assert manager._adding
+    monkeypatch.setattr(imgui, "input_text_with_hint", lambda *args: (True, " F/o.rce_2 "))
+    click["id"] = "##sm_add"
+    imgui_frame(lambda: manager.ui(app.ctx))
+    assert list(app.ctx.streams) == ["force_2"]
+    assert manager._selected == "force_2"
+    assert not manager._adding
+
+
+def test_recording_dims_chips_and_explains_lock(imgui_frame, manager_actions, monkeypatch):
+    from myogestic.widgets.panels import stream_manager as module
+
+    app = App("test")
+    app.streams(_stream("emg"), _stream("force"))
+    app.ctx.state = AppState.RECORDING
+    app.ctx.recording = True
+    manager = StreamManager(on_add=lambda name: pytest.fail(name), on_remove=lambda name: pytest.fail(name))
+    words = []
+    text = imgui.text_wrapped
+
+    def tracked(value):
+        words.append(value)
+        return text(value)
+
+    monkeypatch.setattr(module.imgui, "text_wrapped", tracked)
+    seen, click = manager_actions
+    click["id"] = "##sm_add_open"
+    imgui_frame(lambda: manager.ui(app.ctx))
+    assert all(disabled for label, disabled in seen if "##sm_" in label)
+    assert "Stop the recording to add or remove streams." in words
+    assert not manager._adding
+
+
+@pytest.mark.parametrize("scale,width", [(1, 320), (2, 320), (2, 640)])
+def test_manager_chips_and_inline_add_fit_light_narrow_cells(imgui_frame, monkeypatch, scale, width):
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    app = App("test")
+    app.streams(_stream("emg"), _stream("very_long_stream_name_for_wrapping"))
+    manager = StreamManager(on_add=lambda name: None, on_remove=lambda name: None)
+    manager._adding = True
+    items = []
+    for kind in ("button", "input_text_with_hint"):
+        original = getattr(imgui, kind)
+
+        def tracked(*args, original=original):
+            result = original(*args)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            origin, size = imgui.get_window_pos(), imgui.get_window_size()
+            items.append((args[0], lo.x >= origin.x, hi.x <= origin.x + size.x))
+            return result
+
+        monkeypatch.setattr(imgui, kind, tracked)
+
+    def draw():
+        imgui.begin_child("manager-card", imgui.ImVec2(width, 350))
+        manager.ui(app.ctx)
+        imgui.end_child()
+
+    imgui_frame(draw)
+    assert items and all(left and right for _, left, right in items), items
+
+
+@pytest.mark.parametrize("typed", ["...", " EMG "])
+def test_manager_rejects_empty_or_duplicate_names(imgui_frame, manager_actions, monkeypatch, typed):
+    app = App("test")
+    app.streams(_stream("emg"))
+    manager = StreamManager(on_add=lambda name: pytest.fail(name), on_remove=lambda name: None)
+    manager._adding = True
+    monkeypatch.setattr(imgui, "input_text_with_hint", lambda *args: (True, typed))
+    seen, click = manager_actions
+    click["id"] = "##sm_add"
+    imgui_frame(lambda: manager.ui(app.ctx))
+    assert ("Add##sm_add", True) in seen
+
+
+def test_cancel_clears_only_its_own_manager(imgui_frame, manager_actions):
+    app = App("test")
+    first = StreamManager(on_add=lambda name: None, on_remove=lambda name: None, widget_id="one")
+    second = StreamManager(on_add=lambda name: None, on_remove=lambda name: None, widget_id="two")
+    first._adding = second._adding = True
+    first._typed, second._typed = "force", "emg"
+    manager_actions[1]["id"] = "##sm_add_cancel"
+    imgui_frame(lambda: first.ui(app.ctx))
+    assert not first._adding and not first._typed
+    assert second._adding and second._typed == "emg"
+
+
+def test_the_last_stream_cannot_be_removed(imgui_frame, manager_actions):
+    app = App("test")
+    app.streams(_stream("emg"))
+    manager = StreamManager(on_add=lambda name: None, on_remove=lambda name: pytest.fail(name))
+    manager_actions[1]["id"] = "##sm_remove_emg"
+    imgui_frame(lambda: manager.ui(app.ctx))
+    assert not any("sm_remove" in label for label, _ in manager_actions[0])

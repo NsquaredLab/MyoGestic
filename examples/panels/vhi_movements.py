@@ -18,8 +18,8 @@ Run with:
 
 from types import SimpleNamespace
 
-from myogestic import App
-from myogestic.widgets import VhiMovementPanel
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, VhiMovementPanel
 
 MOVEMENTS = (
     "Rest",
@@ -65,11 +65,16 @@ def _on_movement(state: str) -> None:
 panel = VhiMovementPanel(aid, _on_movement)
 
 app = App("panel: VhiMovementPanel")
+header = AppHeader("VhiMovementPanel", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 
 @app.ui
 def ui(ctx):
-    panel.ui()
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        panel.ui()
 
 
 def main() -> None:

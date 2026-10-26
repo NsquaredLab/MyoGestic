@@ -4,7 +4,7 @@
 
 ## The fastest path: [`PostProcessor`][myogestic.widgets.PostProcessor] widget
 
-Drop it in `@app.ui` and you get a tunable panel with the OneEuro / Gaussian / Identity options:
+Drop it in `@app.ui` and you get a compact Smoothing row with the One Euro / Gaussian / Identity options:
 
 ```python
 from myogestic.widgets import PostProcessor
@@ -24,14 +24,21 @@ def predict(model, features):
 @app.ui
 def ui(ctx):
     with grid[6, 0]:
-        pose_filter.ui()  # full panel
+        pose_filter.ui()  # compact row; Settings opens the parameters
 ```
 
-The panel:
+The default compact row shows the filter combo, estimated latency in mono and an
+icon-only settings button. In narrow cells, the combo takes its own row so Settings
+stays reachable. The settings popover contains:
 
-- A button selector (Identity / Gaussian / One Euro)
-- Sliders for the active filter's parameters
-- A **Reset** button that clears smoothing history (use after Train so the new model's first frames don't get blended with the old one's tail)
+- A muted description of the selected filter
+- Captions above each parameter slider, with right-aligned mono values
+- An icon-only **Reset** action that clears smoothing history (use after Train so the new model's first frames do not blend with the old one's tail)
+
+Use `PostProcessor(hz=20.0, compact=False)` for the full panel. It keeps the filter
+combo, Reset action and mono delay visible, with parameter controls in two columns
+when space permits and one column in narrow cells. `FilterProcessor` uses the same
+full-panel controls for a custom filter palette.
 
 One Euro's parameters update *in place* - no rebuild - so smoothing history survives live tuning. Gaussian rebuilds its kernel when you change its window.
 
