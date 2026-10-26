@@ -55,7 +55,7 @@ _raw_viewers: dict[str, _RawViewerState] = {}
 
 
 class RawSignalViewer:
-    """Every visible sample, with a Window selector and a Channels chip popup.
+    """Raw signal viewer with window and channel selection.
 
     Construct once and call [`ui`][] each frame. The header names the stream;
     the mono footer reports sample rate, selected channels, raw points and FPS.

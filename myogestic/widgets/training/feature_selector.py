@@ -151,11 +151,9 @@ class FeatureSelector:
     # -------------------------------------------------------------- UI
 
     def ui(self) -> None:
-        """Render a Features caption and wrapping mono toggle chips.
+        """Render feature toggle chips.
 
-        Active chips use the shared selected cue. Selection order and the
-        ability to deselect every feature are unchanged; updates take effect
-        on the next prediction tick.
+        Updates take effect on the next prediction tick.
         """
         imgui.push_id(self._widget_id)
         try:

@@ -763,7 +763,7 @@ class TrackingTask:
             imgui.end_table()
 
     def _run_ui(self, ctx: Context, stream: Stream | None, now: float, value: float | None) -> None:
-        """Show one primary Start, or a running status, error and reachable Stop."""
+        """Show Start when idle or progress and Stop while running."""
         if self._started is not None:
             t = now - self._started
             rep, _ = self._rep_at(t)
