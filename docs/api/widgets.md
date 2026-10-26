@@ -106,6 +106,10 @@ The command is signed: `+1` is the top of the court, `-1` the bottom, and `-1` i
 
 Without `opponent` the far wall simply returns the ball, and the score is hits against misses. Pass `opponent` and a second paddle plays it back, with each side's points drawn on its own half — the same rally, now with something to win. One number sets the whole difficulty: it is that paddle's top tracking speed as a multiple of `ball_speed`, so `opponent=0.6` covers a little over half the court while the ball crosses and `opponent=1.0` covers more than all of it.
 
+`win_score=11` stops the ball on the winning point and sets the read-only `game_over` property. **Play again** resets the score, paddles, longest rally and clock; `win_score=None` keeps the game endless. `opponent_name="Fair"` labels the CPU, and an optional `on_harder` callback adds **Harder** to the game-over overlay so the app can rebuild at its next difficulty. These constructor arguments are keyword-only.
+
+Serve is inside the court. **Space** also serves when the app window has focus and no text field is active. The **CMD** meter shows the signed command and shades the velocity dead band; when `target` is supplied, **EFFORT** instead shows the unsigned `effort` magnitude with a tick at `abs(target)`. The ghost and effort gauge do not infer the contraction's direction.
+
 ## Process management
 
 ::: myogestic.widgets.ProcessLauncher
