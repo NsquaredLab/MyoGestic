@@ -36,7 +36,7 @@ from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
 from myogestic._theme import mono_font
 from myogestic.controls import ControlBus, ControlLink, ControlLinkConnector, load_control_map
 from myogestic.ml import Pipeline
-from myogestic.ml.widgets import PredictButton, TrainButton, TrainingLog
+from myogestic.ml.widgets import TrainButton, TrainingLog
 from myogestic.recipes.estimators import (
     catboost_classifier,
     catboost_regressor,
@@ -59,26 +59,27 @@ from myogestic.widgets import (
     ParticipantPanel,
     PongTask,
     PostProcessor,
-    PredictionLabel,
     ProcessLauncher,
     RecordingControls,
     SessionManager,
     SignalViewer,
-    SimulatorControls,
     StatusBar,
     StepBar,
 )
 from myogestic.widgets.common import (
     DANGER,
     IDLE,
+    INFO,
     SUCCESS,
     WARNING,
     fit_text,
     mono_text,
     muted,
     panel_header,
+    pop_selected,
     primary,
     primary_button,
+    push_selected,
     segmented,
     tinted_row,
     ui_px,
@@ -151,15 +152,6 @@ class DummyWristSource:
     def disconnect(self) -> None:
         self._source.disconnect()
 
-
-class _DummyOutlet:
-    def push_sample(self, sample: np.ndarray) -> None:
-        source = app.ctx.streams["emg"]._source
-        if isinstance(source, DummyWristSource):
-            source.drive = float(np.clip(sample[0], -1.0, 1.0))
-
-
-simulator = SimulatorControls(list(POSES.items()), outlet=_DummyOutlet())
 
 vhi = virtual_hand()
 
@@ -422,7 +414,7 @@ layout, dummy_layout = (Layout(
         log      sessions
         status   status
         """,
-        row_height=[Px(52), Fr(3), Fr(1), *([Px(76)] if simulated else []), Px(110), Px(26)],
+        row_height=[Px(52), Fr(3), Fr(1), *([Px(142)] if simulated else []), Px(110), Px(26)],
         col_width=[Fr(1), Px(400)],
         bare=("header", "status"),
     ),
@@ -436,7 +428,7 @@ layout, dummy_layout = (Layout(
         log
         status
         """,
-        row_height=[Px(52), Fr(2), *([Px(76)] if simulated else []), Fr(3), Fr(1.5), Px(110), Px(26)],
+        row_height=[Px(52), Fr(2), *([Px(184)] if simulated else []), Fr(3), Fr(1.5), Px(110), Px(26)],
         bare=("header", "status"),
     ),
     breakpoint=Px(1100),
@@ -465,6 +457,13 @@ log = LogPanel(title="Activity log")
 viewer = SignalViewer("emg", show_connect=False, selectable=True, show_title=True)
 
 
+def _harder() -> None:
+    """Move to the next opponent and give it a fresh court."""
+    global pong
+    opponent_level["index"] = min(opponent_level["index"] + 1, len(LEVELS) - 1)
+    pong = _new_game()
+
+
 def _new_game() -> PongTask:
     """A fresh court at the selected difficulty and control mode.
 
@@ -480,6 +479,8 @@ def _new_game() -> PongTask:
         court_height=0.0,
         control=CONTROLS[control_mode["index"]].lower(),
         opponent=OPPONENTS[LEVELS[opponent_level["index"]]],
+        opponent_name=LEVELS[opponent_level["index"]],
+        on_harder=_harder if opponent_level["index"] < len(LEVELS) - 1 else None,
     )
 
 
@@ -493,11 +494,7 @@ processes = ProcessLauncher(hand_processes)
 binder = ControlLinkConnector(link)
 sessions = SessionManager("sessions", class_names=CLASSES)
 train_button = TrainButton(pipeline, size=(-1, 0))
-predict_button = PredictButton(pipeline, size=(-1, 0))
 training_log = TrainingLog(pipeline)
-# No probability bar: three classes on one axis, and the paddle beside it already shows
-# the magnitude the bar would. The name is the part the court cannot say.
-prediction = PredictionLabel(pipeline, CLASSES)
 
 
 #: What drives each alias of the control map *in this app*. The map says where a value
@@ -666,6 +663,8 @@ def _start_block() -> None:
             return
         block["recording"] = True
     target.start()
+    block["number"] = block.get("number", 0) + 1
+    pong._ball = None
 
 
 def _end_block() -> None:
@@ -688,17 +687,27 @@ def block_ui() -> None:
     the effort, and the gap between them is the error being trained out.
     """
     running = target.running
-    with tinted_row(SUCCESS if running else IDLE):
-        _detail("Following the cursor" if running else "Ready to follow")
-        if running:
-            mono_text(f"{target.elapsed:.0f} / {PURSUIT.total_duration:.0f} s", muted())
-    if primary_button("Stop" if running else "Follow the cursor",
-                      size=(imgui.get_content_region_avail().x, 0)):
-        if running:
+    seconds = int(target.elapsed)
+    _value_row(f"Recording block {block.get('number', 1)}" if running else "Ready to follow",
+               f"{seconds // 60}:{seconds % 60:02}" if running else "",
+               tone=DANGER if running else IDLE)
+    if running:
+        if imgui.button(f"{fa.ICON_FA_STOP}  Stop block", imgui.ImVec2(imgui.get_content_region_avail().x, 0)):
             _end_block()
-        else:
+    else:
+        if primary_button("Follow the cursor", size=(imgui.get_content_region_avail().x, 0)):
             _start_block()
-    _detail("Records the EMG and the cursor it asks for.")
+    if not running:
+        _detail("Records the EMG and the cursor it asks for.")
+    columns = 2 if imgui.get_content_region_avail().x >= ui_px(300) else 1
+    if imgui.begin_table("block-detail", columns, imgui.TableFlags_.sizing_stretch_same):
+        imgui.table_next_column()
+        imgui.text_colored(muted(), "Block length")
+        mono_text(f"{PURSUIT.total_duration:.0f} s")
+        imgui.table_next_column()
+        imgui.text_colored(muted(), "Cursor path")
+        _detail("pursuit", numeric=True)
+        imgui.end_table()
     if block.get("verdict"):
         _detail(block["verdict"], numeric=True)
 
@@ -714,10 +723,10 @@ def _command(ctx) -> float:
     return held_cue
 
 
-def _detail(text: str, *, numeric: bool = False) -> None:
+def _detail(text: str, *, numeric: bool = False, width: float | None = None) -> None:
     """Keep a detail on one line, with the complete text available on hover."""
     full = text
-    width = imgui.get_content_region_avail().x
+    width = imgui.get_content_region_avail().x if width is None else max(0, width)
     font = mono_font() if numeric else None
     if font is not None:
         imgui.push_font(font, imgui.get_style().font_size_base)
@@ -757,7 +766,6 @@ def _choice(key: str, caption: str, options: list[str], selected: int) -> int:
 def connect_ui(ctx: Context) -> None:
     """Choose acquisition and connect the optional hand mirror."""
     device.ui(ctx)
-    imgui.spacing()
     hand_ui()
 
 
@@ -765,7 +773,12 @@ def record_ui(ctx: Context) -> None:
     """Choose a recording protocol without changing what the next model fits."""
     # This switches controls, not the capture: a cursor block may join a take the
     # operator started by hand, and `_end_block` leaves that take running.
+    running = target.running
+    imgui.begin_disabled(running)
     record_protocol["index"] = _choice("protocol", "Recording protocol", PROTOCOLS, record_protocol["index"])
+    imgui.end_disabled()
+    if running:
+        imgui.text_wrapped("Stop the block to change the protocol.")
     imgui.spacing()
     if record_protocol["index"] == 0:
         recording.ui(ctx, visible=False)
@@ -790,31 +803,86 @@ def model_ui() -> None:
     training_log.ui()
 
 
+def _value_row(caption: str, value: str, *, tone: imgui.ImVec4 | None = None, settings: bool = False) -> bool:
+    """A utility/state row with a fitted caption, mono value and optional settings."""
+    clicked = False
+    with tinted_row(tone) as width:
+        left, top = imgui.get_cursor_pos()
+        gap = imgui.get_style().item_spacing.x
+        icon_w = imgui.get_frame_height() if settings else 0.0
+        imgui.push_font(mono_font(), imgui.get_style().font_size_base)
+        value_w = min(imgui.calc_text_size(value).x, width * 0.58)
+        imgui.pop_font()
+        caption_w = max(0, width - value_w - gap - (icon_w + gap if settings else 0))
+        imgui.align_text_to_frame_padding()
+        _detail(caption, width=caption_w)
+        imgui.same_line()
+        imgui.set_cursor_pos(imgui.ImVec2(left + width - value_w - (icon_w + gap if settings else 0), top))
+        imgui.align_text_to_frame_padding()
+        _detail(value, numeric=True, width=value_w)
+        if settings:
+            imgui.same_line()
+            imgui.set_cursor_pos(imgui.ImVec2(left + width - icon_w, top))
+            opened = imgui.is_popup_open("smoothing")
+            if opened:
+                push_selected()
+            clicked = imgui.button(f"{fa.ICON_FA_SLIDERS}##smoothing", imgui.ImVec2(icon_w, 0))
+            if opened:
+                pop_selected()
+            imgui.set_item_tooltip("Smoothing settings")
+    return clicked
+
+
+def _smoothing_ui() -> None:
+    """Keep the current filter and delay on one row; details live in its popover."""
+    imgui.push_id("pong_smoothing")
+    spec = output_filter._by_key[output_filter._selected]
+    delay = spec.delay(PREDICT_HZ, output_filter._values[spec.key]) if spec.delay else 0.0
+    if _value_row("Smoothing", f"{spec.name} · {delay:.0f} ms", settings=True):
+        imgui.open_popup("smoothing")
+    imgui.set_next_window_size(imgui.ImVec2(ui_px(340), 0))
+    if imgui.begin_popup("smoothing"):
+        output_filter._render_combo()
+        output_filter._render_description()
+        output_filter._render_params()
+        if imgui.small_button(f"{fa.ICON_FA_ROTATE_LEFT}  Reset"):
+            output_filter.reset()
+        imgui.end_popup()
+    imgui.pop_id()
+
+
 def play_ui() -> None:
-    """Start prediction and tune the court and the output mirrored by the hand."""
+    """Prediction state and forward action, captioned court controls and hand output."""
     global pong
-    # A model with few distinct outputs is playable under velocity and stuck
-    # under position. Changing either court setting resets the rally.
-    control = _choice("control", "Paddle control", CONTROLS, control_mode["index"])
-    if control != control_mode["index"]:
-        control_mode["index"] = control
-        pong = _new_game()
-    _detail("The command is a speed." if control == 0 else "The command is the height.")
-    level = _choice("opponent", "Opponent", LEVELS, opponent_level["index"])
-    if level != opponent_level["index"]:
-        opponent_level["index"] = level
-        pong = _new_game()
-    _detail("Changing this clears the court — serve again.")
-    imgui.spacing()
-    output_filter.ui()
-    imgui.spacing()
-    imgui.text_colored(muted(), "Sent to the hand")
-    # Signed text preserves the negative half a progress bar would hide.
-    for line in _pushed().splitlines():
-        _detail(line, numeric=True)
-    imgui.spacing()
-    prediction.ui()
-    predict_button.ui()
+    running = app.ctx.state == "predicting"
+    _value_row("Predicting" if running else "Ready to play", f"{PREDICT_HZ} Hz" if running else "", tone=SUCCESS if running else IDLE)
+    reason = ("" if running else "Finish the current action to enable Predict." if app.ctx.state != "idle"
+              else "To predict, train or load a model first." if pipeline.model is None else "")
+    imgui.begin_disabled(bool(reason))
+    if running:
+        push_selected()
+        clicked = imgui.button(f"{fa.ICON_FA_STOP}  Stop predicting", imgui.ImVec2(imgui.get_content_region_avail().x, 0))
+        pop_selected()
+    else:
+        clicked = primary_button(f"{fa.ICON_FA_PLAY}  Predict", size=(imgui.get_content_region_avail().x, 0))
+    imgui.end_disabled()
+    if clicked and not reason:
+        pipeline.stop_predicting() if running else pipeline.start_predicting()
+    if reason:
+        imgui.text_wrapped(reason)
+    columns = 2 if imgui.get_content_region_avail().x >= ui_px(320) else 1
+    if imgui.begin_table("court-controls", columns, imgui.TableFlags_.sizing_stretch_same):
+        imgui.table_next_column()
+        control = _choice("control", "Paddle", CONTROLS, control_mode["index"])
+        imgui.table_next_column()
+        level = _choice("opponent", "Opponent", LEVELS, opponent_level["index"])
+        imgui.end_table()
+        if control != control_mode["index"] or level != opponent_level["index"]:
+            control_mode["index"], opponent_level["index"] = control, level
+            pong = _new_game()
+    _detail("Changing either clears the court — serve again.")
+    _smoothing_ui()
+    _value_row("Sent to the hand", " · ".join(_pushed().splitlines()))
 
 
 hand_status = {"error": ""}
@@ -889,6 +957,89 @@ def hand_ui() -> None:
             imgui.set_item_tooltip("Retry binding the Virtual Hand" if error else "Bind the Virtual Hand")
 
 
+_dummy_mouse = {"up": False, "down": False}
+
+
+def _dummy_input_allowed() -> bool:
+    """Only the focused app receives arrows, and never during text entry."""
+    return (not imgui.get_io().want_text_input
+            and imgui.is_window_focused(imgui.FocusedFlags_.root_and_child_windows))
+
+
+def _update_dummy(dummy: DummyWristSource, dt: float) -> None:
+    """Follow the recorded cursor, or ramp the arrow/mouse drive in 150 ms."""
+    cursor = _cursor()
+    if cursor is not None:
+        dummy.drive = cursor
+        return
+    allowed = _dummy_input_allowed()
+    up = allowed and (imgui.is_key_down(imgui.Key.up_arrow) or _dummy_mouse["up"])
+    down = allowed and (imgui.is_key_down(imgui.Key.down_arrow) or _dummy_mouse["down"])
+    goal = float(up) - float(down)
+    reach = max(0.0, dt) / 0.15
+    dummy.drive += min(max(goal - dummy.drive, -reach), reach)
+
+
+def _dummy_key(label: str, name: str, key: imgui.Key) -> None:
+    """A selected keycap is lit for a held key or press-and-hold mouse input."""
+    allowed = _dummy_input_allowed() and not target.running
+    held = allowed and (imgui.is_key_down(key) or _dummy_mouse[name])
+    if held:
+        push_selected()
+    imgui.button(label + f"##dummy_{name}", imgui.ImVec2(ui_px(44), ui_px(40)))
+    _dummy_mouse[name] = allowed and imgui.is_item_active() and imgui.is_mouse_down(0)
+    if held:
+        pop_selected()
+
+
+def simulated_ui(dummy: DummyWristSource) -> None:
+    """Example-local synthetic wrist: held keycaps, signed drive and visible state."""
+    panel_header("Simulated EMG", status=SUCCESS)
+    wide = imgui.get_content_region_avail().x >= ui_px(520)
+    if wide:
+        if not imgui.begin_table("dummy-drive", 3, imgui.TableFlags_.sizing_stretch_prop):
+            _dummy_mouse.update(up=False, down=False)
+            _update_dummy(dummy, imgui.get_io().delta_time)
+            return
+        imgui.table_setup_column("source", init_width_or_weight=0.38)
+        imgui.table_setup_column("keys", imgui.TableColumnFlags_.width_fixed, ui_px(44))
+        imgui.table_setup_column("drive", init_width_or_weight=0.62)
+        imgui.table_next_column()
+    _detail("Synthetic wrist · dummy subject")
+    caption = ("The dummy follows the cursor. Arrows come back when the block ends." if target.running
+               else "Hold ↑ or ↓ to flex. Let go to rest.")
+    if wide:
+        imgui.text_wrapped(caption)
+        imgui.table_next_column()
+    imgui.begin_disabled(target.running)
+    _dummy_key(fa.ICON_FA_ARROW_UP, "up", imgui.Key.up_arrow)
+    if not wide:
+        imgui.same_line()
+    _dummy_key(fa.ICON_FA_ARROW_DOWN, "down", imgui.Key.down_arrow)
+    imgui.end_disabled()
+    _update_dummy(dummy, imgui.get_io().delta_time)
+    if wide:
+        imgui.table_next_column()
+    value = dummy.drive
+    word = "following the cursor" if target.running else "rest" if abs(value) < 0.01 else "flex up" if value > 0 else "flex down"
+    _detail(f"{value:+.2f} · {word}", numeric=True)
+    dl = imgui.get_window_draw_list()
+    origin = imgui.get_cursor_screen_pos()
+    width, height = imgui.get_content_region_avail().x, ui_px(10)
+    far = imgui.ImVec2(origin.x + width, origin.y + height)
+    dl.add_rect_filled(origin, far, imgui.get_color_u32(imgui.Col_.frame_bg), rounding=ui_px(5))
+    zero = origin.x + width / 2
+    tip = zero + value * width / 2
+    dl.add_rect_filled(imgui.ImVec2(min(zero, tip), origin.y), imgui.ImVec2(max(zero, tip), far.y), imgui.get_color_u32(DANGER if target.running else INFO))
+    dl.add_line(imgui.ImVec2(zero, origin.y - ui_px(2)), imgui.ImVec2(zero, far.y + ui_px(2)), imgui.get_color_u32(muted()), thickness=ui_px(1))
+    imgui.dummy(imgui.ImVec2(width, height))
+    _detail("−1 down · rest 0 · +1 up", numeric=True)
+    if wide:
+        imgui.end_table()
+    else:
+        imgui.text_wrapped(caption)
+
+
 def _step_done(ctx: Context) -> list[bool]:
     """Completion reflects connection, participant takes, a model and live prediction."""
     stream = ctx.streams.get("emg")
@@ -947,9 +1098,7 @@ def pong_ui(ctx: Context) -> None:
             pong.ui(_command(ctx), _cursor(), _effort(ctx))
     if dummy is not None:
         with view["simulator"]:
-            simulator.ui(ctx)
-        cursor = _cursor()
-        dummy.drive = simulator.value if cursor is None else cursor
+            simulated_ui(dummy)
     with view["log"]:
         log.ui(ctx)
     imgui.pop_style_var()
