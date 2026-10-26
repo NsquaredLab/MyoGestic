@@ -106,6 +106,161 @@ def test_pong_requires_participant(app_module):
     assert app_module["app"].ctx.require_participant is True
 
 
+def _attach_dummy(app_module, monkeypatch):
+    stream = app_module["app"].ctx.streams["emg"]
+    dummy = app_module["DummyWristSource"]()
+    monkeypatch.setattr(stream, "_source", dummy)
+    assert stream.reconnect()
+    stream._acquire_step()
+    return dummy
+
+
+def test_dummy_is_an_extra_explicit_test_subject(app_module):
+    devices = app_module["device"]._devices
+    assert tuple(devices[:-1]) == app_module["DEFAULT_DEVICES"]
+    assert devices[-1].label == "Synthetic wrist (dummy follows the cursor)"
+    assert devices[-1].factory is app_module["DummyWristSource"]
+    assert "test subject" in devices[-1].hint.lower()
+    assert "not emg" in devices[-1].hint.lower()
+    layout = app_module["dummy_layout"]
+    assert layout.panel_names == app_module["layout"].panel_names | {"simulator"}
+    for grid in (layout._wide, layout._narrow):
+        assert grid._areas["signal"][1] == grid._areas["simulator"][0]
+
+
+@pytest.mark.parametrize("step", range(4))
+def test_dummy_follows_the_cursor_in_every_step(app_module, monkeypatch, implot_frame, step):
+    dummy = _attach_dummy(app_module, monkeypatch)
+    app_module["steps"].active = step
+    target = app_module["target"]
+    app_module["simulator"].set(-1.0)
+    # Even an enabled chip cannot override a running block (which may join prediction).
+    monkeypatch.setattr(app_module["simulator"], "ui", lambda ctx: app_module["simulator"].set(-1.0))
+    target.start()
+    for elapsed in (0.0, 7.3, 12.7, 30.5):
+        target._elapsed = elapsed
+        implot_frame(lambda: app_module["pong_ui"](app_module["app"].ctx))
+        assert dummy.drive == pytest.approx(app_module["_cursor"]())
+    target.stop()
+    implot_frame(lambda: app_module["pong_ui"](app_module["app"].ctx))
+    assert dummy.drive == -1.0
+
+
+@pytest.mark.parametrize("label,drive", [("Up", 1.0), ("Down", -1.0), ("Rest", 0.0)])
+def test_dummy_chips_drive_the_subject_while_playing(
+    app_module, monkeypatch, implot_frame, label, drive,
+):
+    dummy = _attach_dummy(app_module, monkeypatch)
+    app_module["steps"].active = 3
+    app_module["app"].ctx.state = "predicting"
+    button = imgui.small_button
+    monkeypatch.setattr(imgui, "small_button", lambda text, *a, **kw:
+                        button(text, *a, **kw) or text.startswith(f"{label}##preset_"))
+    implot_frame(lambda: app_module["pong_ui"](app_module["app"].ctx))
+    assert dummy.drive == drive
+    assert app_module["simulator"].value == drive
+    assert app_module["simulator"]._outlet is not None  # direct object, no LSL outlet
+
+
+def test_dummy_scales_opposing_channel_halves_and_preserves_the_source_contract(
+    app_module, monkeypatch,
+):
+    from myogestic.sources import SyntheticSource
+
+    dummy = app_module["DummyWristSource"]()
+    info = dummy.connect()
+    samples = np.ones((64, info.n_channels), dtype=np.float32)
+    ts = np.arange(64, dtype=np.float64) / info.fs
+    monkeypatch.setattr(SyntheticSource, "read", lambda self: (samples.copy(), ts))
+    half = info.n_channels // 2
+    for drive in (-2.0, -0.4, 0.0, 0.4, 2.0):
+        dummy.drive = drive
+        data, stamps = dummy.read()
+        clipped = np.clip(drive, -1, 1)
+        np.testing.assert_allclose(data[:, :half], 0.05 + max(clipped, 0.0))
+        np.testing.assert_allclose(data[:, half:], 0.05 + max(-clipped, 0.0))
+        assert stamps is ts and data.dtype == np.float32
+    monkeypatch.setattr(SyntheticSource, "read", lambda self: (None, None))
+    assert dummy.read() == (None, None)
+    disconnected = []
+    monkeypatch.setattr(SyntheticSource, "disconnect", lambda self: disconnected.append(True))
+    dummy.disconnect()
+    assert disconnected == [True]
+
+
+@pytest.mark.parametrize("source,connected", [("dummy", True), ("dummy", False), ("other", True)])
+def test_simulator_card_is_only_shown_for_a_connected_dummy(
+    app_module, monkeypatch, implot_frame, source, connected,
+):
+    from myogestic.sources import SyntheticSource
+
+    stream = app_module["app"].ctx.streams["emg"]
+    monkeypatch.setattr(stream, "_source", app_module["DummyWristSource"]() if source == "dummy"
+                        else SyntheticSource())
+    if connected:
+        assert stream.reconnect()
+        stream._acquire_step()
+    seen = []
+    monkeypatch.setattr(app_module["simulator"], "ui", lambda ctx: seen.append(ctx))
+    implot_frame(lambda: app_module["pong_ui"](app_module["app"].ctx))
+    assert bool(seen) == (source == "dummy" and connected)
+
+
+def test_recorded_dummy_block_trains_signed_paddle_predictions(app_module, monkeypatch, tmp_path):
+    """Record the real dummy chunks on an accelerated clock, then fit the app's model."""
+    import mne_lsl.lsl
+
+    dummy = _attach_dummy(app_module, monkeypatch)
+    target = app_module["target"]
+    pursuit = Pursuit(rest_s=1.0, hop_s=1.0, hops=8, recover_s=1.0)
+    monkeypatch.setitem(app_module["_cursor"].__globals__, "PURSUIT", pursuit)
+    target.trajectory = pursuit
+    rng = np.random.default_rng(17)
+    monkeypatch.setattr(np.random, "randn", lambda *shape: rng.standard_normal(shape))
+    now = [1000.0]
+    monkeypatch.setattr(mne_lsl.lsl, "local_clock", lambda: now[0])
+    emg_info = dummy.connect()
+    target_info = target.connect()
+    target.start()
+    session = Session(base_path=str(tmp_path / "dummy"))
+    session.init_stream("emg", emg_info)
+    session.init_stream("target", target_info)
+    emg_chunks, emg_stamps, target_chunks, target_stamps = [], [], [], []
+    # Advance both paced sources without sleeping, driving from the exact app cursor.
+    while target.running:
+        now[0] += target._CHUNK / target_info.fs
+        rows, stamps = target.read()
+        target_chunks.append(rows)
+        target_stamps.append(stamps)
+        dummy.drive = app_module["_cursor"]() or 0.0
+        while dummy._source._next_tick + dummy._source._CHUNK / emg_info.fs <= now[0]:
+            rows, stamps = dummy.read()
+            emg_chunks.append(rows)
+            emg_stamps.append(stamps)
+    session.append("target", np.concatenate(target_chunks), np.concatenate(target_stamps))
+    session.append("emg", np.concatenate(emg_chunks), np.concatenate(emg_stamps))
+    session.save_meta("PongDummy")
+    path = str(session.pack_to_zip())
+    model = app_module["train"](TrainingData(
+        paths=[path], class_names=app_module["CLASSES"], classes=set(),
+    ))
+    assert model[0] == "Proportional"
+    app_module["pipeline"].model = model
+    app_module["app"].ctx.state = "predicting"
+    for drive in (-1.0, 1.0):
+        app_module["simulator"].set(drive)
+        chunks = []
+        for _ in range(8):
+            now[0] += 1.0
+            chunks.append(dummy.read()[0])
+        window = np.concatenate(chunks)[-int(emg_info.fs * app_module["WINDOW_MS"] / 1000):].T
+        app_module["output_filter"].reset()
+        result = app_module["predict"](model, app_module["extract"]({"emg": window}))
+        app_module["pipeline"].predictions = result
+        assert drive * result["paddle"] > 0.5
+        assert app_module["_command"](app_module["app"].ctx) == result["paddle"]
+
+
 def test_step_completion_follows_connection_participant_files_model_and_prediction(
     app_module, monkeypatch, tmp_path,
 ):
