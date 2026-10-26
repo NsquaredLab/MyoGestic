@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from glob import escape
 from pathlib import Path
 from typing import cast
 
@@ -19,23 +20,76 @@ class SessionWidgetState:
 
 
 _states: dict[str, SessionWidgetState] = {}
+_pending_packs: set[Path] = set()
 
 
 def get_state(widget_id: str) -> SessionWidgetState:
     return _states.setdefault(widget_id, SessionWidgetState())
 
 
+def set_session_saving(path: Path, saving: bool) -> None:
+    """Track finalization before the pack thread creates its temporary archive."""
+    if saving:
+        _pending_packs.add(path.resolve())
+    else:
+        _pending_packs.discard(path.resolve())
+
+
+def is_session_saving(base_path: str) -> bool:
+    """Report pending takes in the folder this manager is showing."""
+    base = Path(base_path).resolve()
+    return any(path.parent == base for path in _pending_packs.copy())
+
+
+def _packed_siblings(path: Path, suffix: str = ".session.zip") -> list[Path]:
+    return sorted(p for p in path.parent.glob(f"{escape(path.name)}*{suffix}") if p.is_file())
+
+
+def packed_session_path(path: Path) -> Path | None:
+    """Find the archive that replaced a session folder, if it has finished."""
+    if path.is_file():
+        return None
+    return next(iter(_packed_siblings(path)), None)
+
+
 def scan_sessions(base_path: str) -> list[dict]:
-    """Find all session folders and .zip archives that contain a meta.json."""
+    """Find saved takes, preferring archives to their source folders."""
     base = Path(base_path)
     sessions = []
     if not base.is_dir():
         return sessions
     for d in sorted(base.iterdir(), reverse=True):
+        if d.is_dir() and (
+            d.resolve() in _pending_packs
+            or _packed_siblings(d)
+            or _packed_siblings(d, ".session.zip.tmp")
+        ):
+            continue
         row = _session_row(d)
         if row is not None:
             sessions.append(row)
     return sessions
+
+
+def reconcile_sessions(state: SessionWidgetState) -> None:
+    """Follow packed folders, preserve their ticks, and drop vanished takes."""
+    rows: dict[str, dict] = {}
+    for row in state.sessions:
+        path = Path(row["path"])
+        packed = packed_session_path(path)
+        if packed is not None:
+            replacement = _session_row(packed)
+            if replacement is None:
+                continue
+            replacement["selected"] = row["selected"]
+            row = replacement
+        elif not path.exists():
+            continue
+        if row["path"] in rows:
+            rows[row["path"]]["selected"] |= row["selected"]
+        else:
+            rows[row["path"]] = row
+    state.sessions[:] = rows.values()
 
 
 def _session_row(path: Path) -> dict | None:
@@ -105,25 +159,19 @@ def add_recorded_session(path: str, base_path: str = "sessions", title: str = "S
     """Register a freshly recorded session as selected."""
     widget_id = f"{title}_{base_path}"
     state = get_state(widget_id)
+    reconcile_sessions(state)
     path = str(Path(path).resolve())  # match the resolved paths stored on rows
     if state.participant is None and any(s["path"] == path for s in state.sessions):
         return
     found = scan_sessions(str(Path(path).parent))
-    recorded = next((row for row in found if row["path"] == path), None)
+    # Explicit registration also handles a failed pack's retained folder,
+    # while the pending marker still hides it from ordinary scans.
+    recorded = _session_row(Path(path))
     if recorded is None:
         return
     # Packing can finish after the operator has switched participant.
     if state.participant is not None and recorded["participant"] != state.participant:
         return
-    if state.participant:
-        # A scan can see the folder while packing is still running. Drop that
-        # vanished row once its archive arrives, retaining picks from elsewhere.
-        parent = Path(path).parent
-        found_paths = {row["path"] for row in found}
-        state.sessions[:] = [
-            row for row in state.sessions
-            if Path(row["path"]).parent != parent or row["path"] in found_paths
-        ]
     existing = {row["path"]: row for row in state.sessions}
     if path in existing:
         existing[path]["selected"] = True
