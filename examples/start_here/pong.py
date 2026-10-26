@@ -119,7 +119,9 @@ TARGET_STREAM = "target"
 #: together. Defaults are a 58 s block: 5 s rest, 24 hops of 2 s, 5 s recover.
 PURSUIT = Pursuit()
 
-#: Retune CPU speed factors here: opponent * BALL_SPEED makes Easy/Fair/Hard scale with the slower ball.
+#: Opponent top tracking speed, as a factor of `BALL_SPEED` (court-`y` per second is
+#: `opponent * BALL_SPEED`), so Easy/Fair/Hard scale with the slower ball. Fair is won by
+#: graded control and lost by overshooting; Hard needs a clean early read.
 OPPONENTS = {"Easy": 0.4, "Fair": 0.6, "Hard": 1.0}
 LEVELS = list(OPPONENTS)
 
