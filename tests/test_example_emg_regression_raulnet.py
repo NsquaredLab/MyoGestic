@@ -37,7 +37,7 @@ def example(monkeypatch, tmp_path):
 
 
 def test_session_shell_and_model_wiring(example):
-    """Only the composition changes; the model and both recorded streams stay wired."""
+    """The session shell retains the model callbacks and both recorded streams."""
     from myogestic import Px
     from myogestic.widgets import AppHeader, SimulatorControls, StatusBar
 
@@ -275,7 +275,6 @@ def test_simulator_is_available_on_each_step_except_during_capture(
 
 @pytest.mark.parametrize("card", ["connect_ui", "model_ui", "predict_ui"])
 def test_step_content_fits_a_320_pixel_card(example, monkeypatch, implot_frame, card):
-    """Check the app's own composition at the kit's minimum review width."""
     from imgui_bundle import imgui
 
     from myogestic import _scale, _theme

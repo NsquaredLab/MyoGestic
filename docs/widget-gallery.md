@@ -122,7 +122,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![FilterControl](images/widgets/FilterControl.png){ .widget-thumb loading=lazy }
 
-    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). The default full panel keeps sliders visible; `compact=True` shows a Smoothing row with the filter, latency and a settings popover containing every parameter and Reset. Reset clears smoothing history. Pair with `output_filter(pose, timestamp=time.monotonic())` inside `@pipeline.predict`.
+    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). The default compact Smoothing row shows the filter, latency and a settings popover with parameters and Reset; `compact=False` keeps the sliders visible in a full panel. Reset clears smoothing history. Pair with `output_filter(pose, timestamp=time.monotonic())` inside `@pipeline.predict`.
 
 </div>
 
