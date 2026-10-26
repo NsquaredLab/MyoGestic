@@ -866,7 +866,6 @@ def test_electrode_overview_names_empty_cards_and_gives_a_next_step(monkeypatch,
     _EXAMPLES_ROOT / "otb" / "sessantaquattro_app.py",
 ], ids=lambda path: path.stem)
 def test_synthetic_and_otb_cards_draw_in_light_theme_at_double_scale(path, monkeypatch, implot_frame):
-    """Draw every P2 app at 2x without a display, hardware, or logo texture upload."""
     from imgui_bundle import imgui
 
     from myogestic.widgets import AppLogo

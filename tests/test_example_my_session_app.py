@@ -234,7 +234,6 @@ def test_shell_fits_in_light_theme_at_scale_two(
 
 
 def test_gallery_render_entries_draw_without_capturing(monkeypatch, implot_frame, tmp_path):
-    """The new gallery recipes wire real widgets without invoking screen capture."""
     from imgui_bundle import imgui
 
     from myogestic import App

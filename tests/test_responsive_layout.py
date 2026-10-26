@@ -1,10 +1,4 @@
-"""Automatic UI scale, scaled `Px`, named areas, tabbed cells and `Layout`.
-
-The arithmetic (scale, template parsing, track resolution, which arrangement a
-width picks) is tested pure. The parts that only exist inside ImGui — a cell's
-rectangle, a panel's child id surviving a reflow, a hidden tab still running its
-body — are drawn for real in the headless frame from `conftest.py`.
-"""
+"""Automatic UI scale, scaled `Px`, named areas, tabbed cells and `Layout`."""
 
 from __future__ import annotations
 
@@ -25,7 +19,7 @@ def _fresh_scale(monkeypatch):
     _scale.reset()
 
 
-# ---------------------------------------------------------------- automatic scale
+# Automatic scale
 
 
 def test_reference_window_on_a_plain_display_is_scale_one():
@@ -76,7 +70,7 @@ def test_before_the_first_frame_the_scale_is_one_or_the_override():
     assert _scale.current_scale() == pytest.approx(1.1)
 
 
-# ------------------------------------------------------------------ scaled tracks
+# Scaled tracks
 
 
 def test_px_follows_the_scale_and_fr_takes_what_is_left():
@@ -88,7 +82,7 @@ def test_px_at_scale_one_is_unchanged():
     assert _resolve_tracks([Px(200), Fr(1)], 1000) == pytest.approx([200, 800])
 
 
-# --------------------------------------------------------------- template parsing
+# Template parsing
 
 
 def test_a_name_repeated_across_a_block_spans_it():
@@ -154,7 +148,7 @@ def test_an_unknown_area_lists_the_ones_that_exist():
         grid.area("c")
 
 
-# ------------------------------------------------------------------------- Layout
+# Layout
 
 
 def _layout(breakpoint: float = 500) -> Layout:
@@ -196,7 +190,7 @@ def test_the_breakpoint_splits_wide_from_narrow():
     assert layout._choose(899) is layout._narrow
 
 
-# ------------------------------------------------------------------ drawn for real
+# Rendered layout
 
 
 @pytest.mark.parametrize("title_bar", [False, True])
@@ -333,8 +327,8 @@ def test_named_cells_do_not_overlap_and_fill_their_track(imgui_frame):
     tx, ty, tw, th = seen["train"]
     sx, sy, sw, sh = seen["signal"]
     assert rw == pytest.approx(200) and tw == pytest.approx(200)
-    assert ty > ry + rh - 1  # train sits below record
-    assert sx > rx + rw  # signal sits right of the sidebar
+    assert ty > ry + rh - 1
+    assert sx > rx + rw
     assert sh == pytest.approx(rh + th + 12)  # spans both rows and the gutter
 
 
@@ -391,8 +385,8 @@ def test_a_hidden_tab_still_runs_but_draws_nothing(imgui_frame):
     for _ in range(3):
         imgui_frame(draw)
 
-    assert ran == {"record": 3, "train": 3}  # return values keep flowing from both
-    assert visible == {"record": True, "train": False}  # only the selected tab draws
+    assert ran == {"record": 3, "train": 3}
+    assert visible == {"record": True, "train": False}
 
 
 def test_a_plot_in_a_hidden_tab_does_not_draw(implot_frame):
@@ -415,7 +409,7 @@ def test_a_plot_in_a_hidden_tab_does_not_draw(implot_frame):
     assert began["train"] is False
 
 
-# ------------------------------------------------------------------ live restyling
+# Live restyling
 
 
 @pytest.fixture

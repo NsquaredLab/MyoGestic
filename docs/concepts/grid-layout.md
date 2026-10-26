@@ -133,10 +133,9 @@ def ui(ctx):
         pipeline.training_data = sessions.ui()
 ```
 
-What this buys, and what it guarantees:
+Reflow behavior:
 
-* **No panel scrolls inside itself because the window got narrow** — below the
-  breakpoint the panels move instead of shrinking.
+* Below the breakpoint, panels move to the narrow arrangement.
 * **Widget state survives the switch.** Your widgets are the same Python
   objects in both arrangements. A panel's child window is keyed by its name,
   not its position, so a panel with a cell of its own in both arrangements
