@@ -29,7 +29,6 @@ def ui(ctx: Context) -> None:
     with layout.area("body"):
         panel_header("Participant")
         participant.ui(ctx)
-        # The widget's chip already shows the selected ID.
         imgui.text_colored(muted(), "Demo state")
         busy = ctx.state != "idle"
         if busy:

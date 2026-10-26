@@ -102,7 +102,6 @@ def _step_done(ctx: Context) -> list[bool]:
 
 @app.ui
 def sessantaquattro_ui(ctx: Context) -> None:
-    """Keep signal, participant takes and activity visible around the active step."""
     done = _step_done(ctx)
     with layout["header"]:
         active = header.ui(ctx, done)
