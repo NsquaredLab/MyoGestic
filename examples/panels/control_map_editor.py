@@ -16,9 +16,9 @@ Run with:
 import pathlib
 import tempfile
 
-from myogestic import App
+from myogestic import App, Fr, Grid, Px
 from myogestic.controls import Capability
-from myogestic.widgets import ControlMapEditor
+from myogestic.widgets import AppHeader, ControlMapEditor
 
 FINGERS = ("thumb", "index", "middle", "ring", "little")
 
@@ -67,16 +67,21 @@ class _FakeTarget:
 editor = ControlMapEditor(SCRATCH, client=_FakeTarget(), title="CONTROL MAP")
 
 app = App("panel: ControlMapEditor")
+header = AppHeader("ControlMapEditor", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 
 @app.ui
 def ui(ctx):
-    if editor.ui():
-        # "changed", not "saved": this also fires when the file is edited outside the app
-        # and picked up, and when `Save as...` moves to a different file — hence
-        # `editor.path` rather than the constant it started on.
-        print(f"[editor] changed -> {editor.path}")
-        print(editor.resolved_summary())
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        if editor.ui():
+            # "changed", not "saved": this also fires when the file is edited outside the app
+            # and picked up, and when `Save as...` moves to a different file — hence
+            # `editor.path` rather than the constant it started on.
+            print(f"[editor] changed -> {editor.path}")
+            print(editor.resolved_summary())
 
 
 def main() -> None:

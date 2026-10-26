@@ -93,6 +93,11 @@ A key is an ordinary two-state control, so the threshold, the debounce and the f
 the same machinery the hand uses — see [Keyboard](../api/keyboard.md). Key sending starts
 **disarmed**, because a resolved map types into whatever window has focus.
 
+The editor shows each control as a card with its name, probability toggle, weighted targets,
+and activation sliders. Its header offers Reload, Save as, and a TOML toggle; TOML appears beside
+the cards when there is room and below them in narrow panels. The single **Save** action applies
+pending TOML edits before writing, and a disk conflict asks which version to keep.
+
 The editor is a widget, so it works in your own app too:
 
 ```python
@@ -111,6 +116,23 @@ To see it with no target at all:
 
 ## The examples
 
+### `electrode_grids.py` - compare electrode arrays
+
+One in-process 256-channel stream split into four 64-channel electrode arrays,
+each in its own `SignalViewer` below the app header. The 2 × 2 tiles start on one
+manual amplitude range, so a quieter array stays visibly quieter. No hardware or
+external generator is needed.
+
+```bash
+uv run python examples/synthetic/electrode_grids.py
+```
+
+**What to tweak:** `Y_RANGE` for the common amplitude scale, `WINDOW_S` for the
+time window, and `initial_channels` for each tile's opening selection. A unique
+`widget_id` keeps selections independent; `channel_scope` keeps All, None,
+Invert and the spatial selection grid inside that tile's array. Expand a tile's
+controls to edit channels, and keep the same manual range when comparing arrays.
+
 ### `my_device.py` - drive your own hardware
 
 A complete in-process target with three lines left for you: name your controls, drive your
@@ -124,6 +146,20 @@ uv run python examples/synthetic/my_device.py
 
 **What to tweak:** the three numbered lines. See
 [Drive your own device](../how-to/add-a-target.md).
+
+### `my_session_app.py` - copy your own session app
+
+A small Connect / Record / Train / Predict app with the shared header, persistent signal
+and simulator, sessions, activity log and status bar. It launches synthetic EMG and fits
+a NumPy nearest-centroid model, so it runs without hardware or an ML package.
+
+```bash
+uv run python examples/synthetic/my_session_app.py
+```
+
+**What to tweak:** the four numbered sections: gesture classes, features, training and
+prediction. Choose a participant in the header, record each gesture and select the takes
+before training. Add your device's output call in `predict` when you are ready.
 
 ### `servo_hand.py` - the same shape, with a real mechanism
 
@@ -140,12 +176,18 @@ uv run python examples/synthetic/servo_hand.py
 
 ### `emg_classification.py` - start here
 
-The simplest end-to-end loop: 8-channel synthetic EMG → MyoVerse RMS+MAV
-features → CatBoost binary classifier → smoothed control values to the VHI
-predicted hand over LSL, on whichever streams its manifest says carry the
-addresses the control file names. No discrete gRPC commands. This is
+The simplest end-to-end loop: 8-channel synthetic EMG → NumPy RMS+MAV
+features → CatBoost binary classifier. It runs fully without the Virtual Hand;
+Connect shows the hand as **Not running** until you choose to connect it. This is
 the reference first read, and its line-by-line companion is the
 [EMG classification tutorial](emg-classification.md).
+
+The optional hand uses two outputs in `classification_grpc.toml`: `fist` streams a
+smoothed pose to the predicted hand over LSL, while `gesture` sends each settled
+class change to the control hand over gRPC (`debounce_s = 0.1`). The compact
+Virtual Hand row in Connect opens the movement palette; Predict shows the last
+values under **Sent to the hand**. Connecting the hand needs the `grpc` extra:
+`uv run --extra grpc python examples/synthetic/emg_classification.py`.
 
 ```bash
 uv run python examples/synthetic/emg_classification.py
@@ -154,23 +196,6 @@ uv run python examples/synthetic/emg_classification.py
 **What to tweak:** swap `rms`/`mav` from `myogestic.recipes.features`
 for your own feature, change `CLASSES`, replace CatBoost with any
 sklearn-shaped classifier.
-
-### `emg_classification_grpc.py` - add the gRPC control plane
-
-Same classifier, plus the `RemoteClient` gRPC plane: each predicted
-class change commands a **discrete DOF**, whose declared
-`debounce_s` gates the tick-to-tick argmax flicker, and a `VhiMovementPanel`
-in the UI lets the user click movements directly. Demonstrates the
-dual-plane idiom (continuous LSL pose + discrete gRPC events) on a single
-script.
-
-```bash
-uv run python examples/synthetic/emg_classification_grpc.py
-```
-
-**What to tweak:** wrap `bus.select` in a custom callback
-to layer a session-label snap; swap the commanded state from class
-name to `(class_name, intensity_bin)` for hysteresis on multiple fields.
 
 ### `emg_regression.py` - continuous-target regression
 
@@ -209,6 +234,7 @@ training callback streams the same per-epoch log either way.
 sklearn LDA, sklearn SVM, etc. live without re-running the script. Adds
 the **Save/Load model** panel so a tuned model survives a restart, and
 the pose-lookup pattern for mapping multiple gestures to control poses.
+Every card can pop out into its own window; the training log can float independently.
 
 ```bash
 uv run python examples/synthetic/emg_32ch_multi_model.py
@@ -217,21 +243,6 @@ uv run python examples/synthetic/emg_32ch_multi_model.py
 **What to tweak:** plug another classifier into the model registry, add
 more gestures to the pose-lookup, increase the channel count (the
 generator scales to any `--channels`).
-
-### `emg_popout_layout.py` - dockable layout reference
-
-Same flow as `emg_32ch_multi_model.py` but every block is a tear-off
-pop-out window via `App(docking=True)` + `app.popout(...)`. The
-`Prediction` panel gets its own floating window; the training log can
-pop out independently. Reference layout for multi-monitor experiments.
-
-```bash
-uv run python examples/synthetic/emg_popout_layout.py
-```
-
-**What to tweak:** rearrange the `app.popout()` call sites; combine
-docking with the `Grid` layout from
-[Grid layout](../concepts/grid-layout.md) for the in-window panels.
 
 ### `vhi_control_hand.py` - the operator's hand, not the model's
 
@@ -292,6 +303,10 @@ number moves a [`PongTask`][myogestic.widgets.PongTask] paddle, `+1` at the top 
 court, against an opponent paddle that plays it back. A rally is the reason for the game:
 it rewards *graded* contraction, where a trapezoid only rewards tracking and a gesture
 classifier rewards nothing continuous at all.
+
+**Serve** sits inside the court; **Space** also starts a rally. The court shows a serif
+score and a signed command meter, or an effort meter during cursor tracking. The header
+shows the rally count and **Stop**; court dimensions follow the UI scale.
 
 Two ways to record the training set, and the Model tab starts either. **Follow the cursor**
 runs a [`Pursuit`][myogestic.tracking.Pursuit] block — a ghost paddle wanders the court, the
@@ -374,12 +389,12 @@ actually on.
 * **I have a device to drive** - `my_device.py`, a complete target with three lines left for
   you, then [Drive your own device](../how-to/add-a-target.md). `servo_hand.py` is the same
   shape carrying a real mechanism: six servos, a coupled thumb, a wire format.
-* **Want gRPC discrete control** - `emg_classification_grpc.py` next.
+* **Want gRPC discrete control** - connect the optional hand in `emg_classification.py`.
 * **Regression flow** -
   [EMG regression with VHI tutorial](emg-regression-with-vhi.md) →
   `emg_regression.py` → swap in `_raulnet` for the deep variant.
 * **Comparing models** - `emg_32ch_multi_model.py`.
-* **Multi-monitor / docking** - `emg_popout_layout.py`.
+* **Multi-monitor / docking** - `emg_32ch_multi_model.py`.
 * **Posing the control hand for setup or labelling** - `vhi_control_hand.py`.
 * **A session to run, not a loop to build on** - `start_here/myocontrol.py`, which is the
   classification and regression flows in one application that names no hardware.

@@ -1,6 +1,6 @@
 """Reusable ImGui widgets for building MyoGestic ``@app.ui`` functions."""
 
-from myogestic.widgets.common import panel_header
+from myogestic.widgets.common import panel_header, primary_button, status_pill
 from myogestic.widgets.control_map_editor import ControlMapEditor
 from myogestic.widgets.panels import (
     BUILTIN_FILTERS,
@@ -10,13 +10,17 @@ from myogestic.widgets.panels import (
     FilterSpec,
     Image,
     LogPanel,
+    ParticipantPanel,
     PostProcessor,
     ProcessLauncher,
     RecordButton,
     RecordingControls,
+    StepBar,
     StreamManager,
     popout_panel,
 )
+from myogestic.widgets.panels.app_header import AppHeader
+from myogestic.widgets.panels.status_bar import StatusBar
 from myogestic.widgets.plots import Heatmap, LinePlot, Scatter2D, Scatter3D
 from myogestic.widgets.pong import PongTask
 from myogestic.widgets.signals import (
@@ -32,6 +36,7 @@ from myogestic.widgets.signals import (
     SignalViewer,
     StreamPanel,
 )
+from myogestic.widgets.signals.simulator_controls import SimulatorControls
 from myogestic.widgets.tracking import TrackingTask
 from myogestic.widgets.training import (
     FeatureSelector,
@@ -55,6 +60,7 @@ __all__ = [
     "LSL_DEVICE",
     "OTB_DEVICES",
     "SYNTHETIC_DEVICE",
+    "AppHeader",
     "AppLogo",
     "DeviceSpec",
     "DevicePicker",
@@ -67,6 +73,7 @@ __all__ = [
     "LinePlot",
     "DeviceParam",
     "LogPanel",
+    "ParticipantPanel",
     "DeviceOption",
     "PongTask",
     "PostProcessor",
@@ -78,8 +85,11 @@ __all__ = [
     "Scatter2D",
     "Scatter3D",
     "SessionManager",
+    "StepBar",
+    "StatusBar",
     "StreamManager",
     "SignalViewer",
+    "SimulatorControls",
     "StreamPanel",
     "TemplateInspector",
     "TemplateInspectorRow",
@@ -91,6 +101,8 @@ __all__ = [
     "VhiStateSnapshot",
     "panel_header",
     "popout_panel",
+    "primary_button",
+    "status_pill",
     "request_vhi_state_refresh",
     "vhi_movement_palette",
 ]

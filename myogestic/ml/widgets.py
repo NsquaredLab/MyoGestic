@@ -16,19 +16,38 @@ def my_ui(ctx):
 
 from __future__ import annotations
 
+from dataclasses import replace
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
+from myogestic._theme import mono_font
 from myogestic.ml import PipelineState
-from myogestic.widgets.common import INFO, WARNING, panel_header
+from myogestic.widgets.common import (
+    DANGER,
+    IDLE,
+    INFO,
+    SUCCESS,
+    WARNING,
+    fit_text,
+    mono_text,
+    muted,
+    panel_header,
+    pop_selected,
+    primary_button,
+    push_selected,
+    tinted_row,
+    ui_px,
+)
 from myogestic.widgets.panels.log_box import (
     render_log,
     render_log_buttons,
     render_log_popout,
 )
 from myogestic.widgets.panels.recording import STATE_COLORS
+from myogestic.widgets.training._session_state import packed_session_path
 
 # Per-panel log UX state, keyed by widget_id (defaults to "ml"), so each panel
 # remembers its own popout state across frames.
@@ -46,39 +65,81 @@ if TYPE_CHECKING:
 # --- Render functions (private; the classes below are the public API) ------
 
 
-def _render_train_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> None:
-    if imgui.button(f"{fa.ICON_FA_GEARS}  Train##ml_train", imgui.ImVec2(*size)):
+def _scaled_size(size: tuple[float, float]) -> tuple[float, float]:
+    """Scale fixed sizes while preserving ImGui's automatic-size sentinels."""
+    return tuple(ui_px(value) if value > 0 else value for value in size)
+
+
+def _disabled_caption(reason: str) -> None:
+    """Keep the next step visible, including in a narrow cell."""
+    if reason:
+        imgui.push_style_color(imgui.Col_.text, muted())
+        imgui.push_text_wrap_pos(imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x)
+        imgui.text_wrapped(reason)
+        imgui.pop_text_wrap_pos()
+        imgui.pop_style_color()
+
+
+def _render_train_button(
+    pipeline: Pipeline, size: tuple[float, float] = (92, 0), *, full_width: bool = False,
+) -> None:
+    state = pipeline.app.ctx.state
+    if state == PipelineState.PREDICTING:
+        reason = "Stop predicting to train a model."
+    elif state == "recording":
+        reason = "Stop recording to train a model."
+    elif state != "idle":
+        reason = "Finish the current action to train a model."
+    elif getattr(pipeline.app.ctx, "pending_saves", None):
+        reason = "Wait until the last take is saved to train."
+    elif pipeline.on_train is None:
+        reason = "Add @pipeline.train to enable training."
+    elif pipeline.training_data is None or pipeline.training_data.is_empty:
+        reason = "Record a take or select training takes to enable Train."
+    else:
+        reason = ""
+    size = (imgui.get_content_region_avail().x, 0) if full_width else _scaled_size(size)
+    imgui.begin_disabled(bool(reason))
+    clicked = primary_button(f"{fa.ICON_FA_GEARS}  Train##ml_train", size=size)
+    imgui.end_disabled()
+    if clicked and not reason:
+        # A pack can finish between this frame's session picker and Train.
+        data = pipeline.training_data
+        paths = [str(packed_session_path(Path(path)) or path) for path in data.paths]
+        if paths != data.paths:
+            pipeline.training_data = replace(data, paths=list(dict.fromkeys(paths)))
         pipeline.start_training()
+    _disabled_caption(reason)
 
 
 def _render_predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 0)) -> None:
     state = pipeline.app.ctx.state
-    can_start = (
-        state == "idle"
-        and pipeline.model is not None
-        and pipeline.on_extract is not None
-        and pipeline.on_predict is not None
-    )
-    if can_start:
-        if imgui.button(f"{fa.ICON_FA_PLAY}  Predict##ml_pred", imgui.ImVec2(*size)):
-            pipeline.start_predicting()
-    elif state == PipelineState.PREDICTING:
-        if imgui.button(f"{fa.ICON_FA_STOP}  Predict##ml_pred", imgui.ImVec2(*size)):
-            pipeline.stop_predicting()
+    selected = state == PipelineState.PREDICTING
+    if selected:
+        reason = ""
+    elif state != "idle":
+        reason = "Finish the current action to enable Predict."
+    elif pipeline.model is None:
+        reason = "To predict, train or load a model."
+    elif pipeline.on_extract is None or pipeline.on_predict is None:
+        reason = "Add @pipeline.extract and @pipeline.predict to enable Predict."
     else:
-        imgui.begin_disabled()
-        imgui.button(f"{fa.ICON_FA_PLAY}  Predict##ml_pred", imgui.ImVec2(*size))
-        imgui.end_disabled()
-        # Say *why* Predict is unavailable — a disabled control with no reason
-        # is a dead end.
-        if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            if state != "idle":
-                why = "Busy — wait until the current action finishes."
-            elif pipeline.model is None:
-                why = "No model yet — train or load a model first."
-            else:
-                why = "Prediction needs @pipeline.extract and @pipeline.predict wired."
-            imgui.set_tooltip(why)
+        reason = ""
+    imgui.begin_disabled(bool(reason))
+    if selected:
+        push_selected()
+    icon = fa.ICON_FA_STOP if selected else fa.ICON_FA_PLAY
+    clicked = imgui.button(f"{icon}  Predict##ml_pred", imgui.ImVec2(*_scaled_size(size)))
+    if selected:
+        pop_selected()
+    imgui.end_disabled()
+    imgui.set_item_tooltip("Stop predicting" if selected else "Start predicting")
+    if clicked and not reason:
+        if selected:
+            pipeline.stop_predicting()
+        else:
+            pipeline.start_predicting()
+    _disabled_caption(reason)
 
 
 def _render_training_log(
@@ -86,24 +147,23 @@ def _render_training_log(
 ) -> None:
     if not pipeline.train_log:
         return
-    render_log(widget_id, pipeline.train_log, height=height)
+    render_log(widget_id, pipeline.train_log, height=ui_px(height) if height > 0 else height)
 
 
 def _render_save_model_button(
     pipeline: Pipeline, path: str, size: tuple[float, float] = (92, 0)
 ) -> None:
-    if pipeline.save_model is None or pipeline.model is None:
-        imgui.begin_disabled()
-        imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save##ml_save", imgui.ImVec2(*size))
-        imgui.end_disabled()
-        if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            imgui.set_tooltip(
-                "No model to save — train or load one first."
-                if pipeline.model is None
-                else "No save function set (pipeline.save_model)."
-            )
-        return
-    if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save##ml_save", imgui.ImVec2(*size)):
+    reason = ""
+    if pipeline.model is None:
+        reason = "To save, train or load a model."
+    elif pipeline.save_model is None:
+        reason = "Set pipeline.save_model to enable Save."
+    imgui.begin_disabled(bool(reason))
+    clicked = imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}##ml_save", imgui.ImVec2(*_scaled_size(size)))
+    imgui.end_disabled()
+    imgui.set_item_tooltip(f"Save model to {path}")
+    _disabled_caption(reason)
+    if clicked and not reason:
         try:
             pipeline.save_model(pipeline.model, path)
             pipeline.app.ctx.status_message = f"Saved model to {path}"
@@ -116,14 +176,13 @@ def _render_save_model_button(
 def _render_load_model_button(
     pipeline: Pipeline, path: str, size: tuple[float, float] = (92, 0)
 ) -> None:
-    if pipeline.load_model is None:
-        imgui.begin_disabled()
-        imgui.button(f"{fa.ICON_FA_FOLDER_OPEN}  Load##ml_load", imgui.ImVec2(*size))
-        imgui.end_disabled()
-        if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            imgui.set_tooltip("No load function set (pipeline.load_model).")
-        return
-    if imgui.button(f"{fa.ICON_FA_FOLDER_OPEN}  Load##ml_load", imgui.ImVec2(*size)):
+    reason = "Set pipeline.load_model to enable Load." if pipeline.load_model is None else ""
+    imgui.begin_disabled(bool(reason))
+    clicked = imgui.button(f"{fa.ICON_FA_FOLDER_OPEN}##ml_load", imgui.ImVec2(*_scaled_size(size)))
+    imgui.end_disabled()
+    imgui.set_item_tooltip(f"Load model from {path}")
+    _disabled_caption(reason)
+    if clicked and not reason:
         try:
             pipeline.model = pipeline.load_model(path)
             pipeline.app.ctx.status_message = f"Loaded model from {path}"
@@ -131,6 +190,41 @@ def _render_load_model_button(
         except Exception as e:
             pipeline.app.ctx.status_message = f"Load failed: {e}"
             pipeline.app.ctx.log(f"Model load failed: {e}")
+
+
+def _pipeline_status(pipeline: Pipeline) -> tuple[imgui.ImVec4, str, str]:
+    """Read pipeline state and training failures."""
+    ctx = pipeline.app.ctx
+    if ctx.state == PipelineState.TRAINING:
+        return WARNING, "Training…", ""
+    if ctx.state == PipelineState.PREDICTING:
+        return SUCCESS, "Predicting", f"{pipeline.predict_hz:g} Hz"
+    if ctx.status_message.startswith("Training failed: "):
+        return DANGER, "Training failed", ctx.status_message.removeprefix("Training failed: ")
+    return IDLE, "Trained" if pipeline.model is not None else "Not trained", ""
+
+
+def _render_state_row(tone: imgui.ImVec4, label: str, detail: str) -> None:
+    """Draw pipeline status with clipped details available on hover."""
+    height = None
+    if detail:
+        height = (2 * imgui.get_text_line_height() + imgui.get_style().item_spacing.y
+                  + ui_px(8))
+    with tinted_row(tone, height=height) as width:
+        if not detail:
+            imgui.align_text_to_frame_padding()
+        imgui.text_unformatted(label)
+        if detail:
+            # Measure in the same face that mono_text uses, so clipping is exact.
+            font = mono_font()
+            if font is not None:
+                imgui.push_font(font, imgui.get_style().font_size_base)
+            single_line = " ".join(detail.splitlines())
+            clipped = fit_text(single_line, width)
+            mono_text(clipped)
+            if font is not None:
+                imgui.pop_font()
+            imgui.set_item_tooltip(detail)
 
 
 def _render_pipeline_panel(
@@ -147,31 +241,42 @@ def _render_pipeline_panel(
         if not still_open:
             _popout_open[widget_id] = False
 
-    panel_header("MODEL", fa.ICON_FA_BRAIN)
-    _render_train_button(pipeline)
-    imgui.same_line()
-    _render_predict_button(pipeline)
+    imgui.push_id(widget_id)
+    try:
+        tone, label, detail = _pipeline_status(pipeline)
+        popped = _popout_open.get(widget_id, False)
+        show_log_action = bool(pipeline.train_log) or popped
+        style = imgui.get_style()
+        icon = (fa.ICON_FA_DOWN_LEFT_AND_UP_RIGHT_TO_CENTER if popped
+                else fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER)
+        action_width = imgui.calc_text_size(icon).x + 2 * style.frame_padding.x
+        reserve = action_width + style.item_spacing.x if show_log_action else 0.0
+        panel_header("MODEL", fa.ICON_FA_BRAIN, status=tone, reserve=reserve)
+        if show_log_action:
+            imgui.same_line()
+            imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
+                0.0, imgui.get_content_region_avail().x - action_width,
+            ))
+            _popout_open[widget_id] = render_log_buttons(widget_id, popped_out=popped)
 
-    # The popout toggle only means something once a log exists, so it renders beside
-    # Train/Predict rather than dangling there before anything has been logged.
-    popped = _popout_open.get(widget_id, False)
-    if pipeline.train_log or popped:
-        imgui.same_line()
-        popped = render_log_buttons(widget_id, popped_out=popped)
-        _popout_open[widget_id] = popped
+        _render_state_row(tone, label, detail)
+        _render_train_button(pipeline, full_width=True)
+        _render_predict_button(pipeline, size=(0, 0))
 
-    # Same rule as `ProcessLauncher`: no inline log unless a caller asks for one. This
-    # panel was filling whatever height its cell gave it with output nobody had asked to
-    # see, and "Training complete" is one line that the popout shows better.
-    if log_height > 0 and not _popout_open.get(widget_id, False):
-        render_log(widget_id, pipeline.train_log, height=log_height)
+        if log_height > 0 and not _popout_open.get(widget_id, False):
+            render_log(widget_id, pipeline.train_log, height=ui_px(log_height))
+    finally:
+        imgui.pop_id()
 
 
 # --- Public widgets --------------------------------------------------------
 
 
 class TrainButton:
-    """Train button — calls [`Pipeline.start_training`][] on click.
+    """Primary Train action — calls [`Pipeline.start_training`][] on click.
+
+    Disabled until idle with a training callback and selected takes.
+    ``size`` uses logical pixels and follows the UI scale.
 
     Examples
     --------
@@ -193,8 +298,8 @@ class PredictButton:
     """Predict/Stop toggle reflecting the pipeline's predict state.
 
     Enabled to start only when the state is ``idle``, a model is loaded, and
-    both the extract and predict callbacks are wired; shows a Stop button
-    while predicting and is disabled otherwise.
+    both the extract and predict callbacks are wired. Click again to stop.
+    ``size`` uses logical pixels and follows the UI scale.
 
     Examples
     --------
@@ -216,7 +321,7 @@ class TrainingLog:
     """Read-only view of ``pipeline.train_log``.
 
     The popout *toggle* isn't drawn here — it lives on
-    [`PipelinePanel`][]'s control row, next to Train/Predict.
+    [`PipelinePanel`][]'s header. ``height`` follows the UI scale.
 
     Examples
     --------
@@ -236,9 +341,10 @@ class TrainingLog:
 
 
 class SaveModelButton:
-    """Save button — writes the model to ``path`` via ``pipeline.save_model``.
+    """Save icon action — writes the model to ``path`` via ``pipeline.save_model``.
 
     Disabled unless both ``pipeline.save_model`` and ``pipeline.model`` are set.
+    ``size`` uses logical pixels and follows the UI scale.
 
     Examples
     --------
@@ -260,9 +366,10 @@ class SaveModelButton:
 
 
 class LoadModelButton:
-    """Load button — reads a model from ``path`` via ``pipeline.load_model``.
+    """Load icon action — reads a model from ``path`` via ``pipeline.load_model``.
 
-    Disabled unless ``pipeline.load_model`` is set.
+    Disabled unless ``pipeline.load_model`` is set. ``size`` uses logical pixels
+    and follows the UI scale.
 
     Examples
     --------
@@ -284,24 +391,23 @@ class LoadModelButton:
 
 
 class PipelinePanel:
-    """Train + Predict + log as a single titled panel.
+    """Model training, prediction controls and logs.
 
-    Matches the visual style of [`RecordingControls`][myogestic.widgets.RecordingControls],
-    [`SessionManager`][myogestic.widgets.SessionManager], and [`PostProcessor`][myogestic.widgets.PostProcessor].
+    Shows pipeline state, prediction rate and training errors.
 
-    The log lives in the ``↗`` popout, the same way
+    The header's icon opens the log in a popout, the same way
     [`ProcessLauncher`][myogestic.widgets.ProcessLauncher]'s does: a window you can move,
-    resize and leave open. Nothing is drawn inline unless you ask for a height — the panel
-    used to fill its whole cell with a box holding one line of output.
+    resize and leave open. Set ``log_height`` to show the log inline.
 
     Parameters
     ----------
     pipeline
         The [`Pipeline`][myogestic.Pipeline] to train and predict with.
     log_height
-        Height in pixels of an **optional** inline log. ``<= 0`` (the default) draws none.
+        Logical pixel height of an **optional** inline log, scaled with the UI.
+        ``<= 0`` (the default) draws none.
     widget_id
-        Unique ID for this panel, so two of them keep separate popout state.
+        Unique ID for this panel, so controls and popout state stay independent.
 
     Examples
     --------

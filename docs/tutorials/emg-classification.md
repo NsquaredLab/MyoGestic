@@ -1,6 +1,6 @@
 # EMG classification (CatBoost)
 
-End-to-end walkthrough of [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py): synthetic 8-channel EMG → RMS+MAV features (from [`myogestic.recipes.features`][myogestic.recipes.features]) → CatBoost binary classifier → smoothed hand pose → VHI.
+End-to-end walkthrough of [`examples/synthetic/emg_classification.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/synthetic/emg_classification.py): synthetic 8-channel EMG → RMS+MAV features (from [`myogestic.recipes.features`][myogestic.recipes.features]) → CatBoost binary classifier, with optional LSL pose and gRPC movement outputs to VHI.
 
 !!! note "Code below is included from the example"
     The Python blocks in this walkthrough are pulled verbatim from the example file via snippet includes, so they can't drift from the runnable script.
@@ -9,24 +9,21 @@ End to end, zero classes besides the framework's `App` and `Pipeline`.
 
 ## Run it first
 
-One terminal, then click **Launch** in the GUI's [`ProcessLauncher`][myogestic.widgets.ProcessLauncher] panel to spawn the synthetic EMG generator.
+One terminal, then launch **EMG Generator** and connect its stream in the **Connect** step.
 
 ```bash
 uv run python examples/synthetic/emg_classification.py
 ```
 
-VHI is optional for this demo - the predicted hand pose is pushed over an LSL outlet whether or not VHI is listening. To see the 3D hand, install it once with `python -m myogestic.tools.install_vhi` (see [Install the Virtual Hand](../how-to/install-vhi.md)) and run it alongside.
+VHI is optional: recording, training and prediction all work without it or the `grpc` extra. The Virtual Hand row shows **Not running** until you connect it. To drive the 3D hand, [install the Virtual Hand](../how-to/install-vhi.md), run with `uv run --extra grpc python examples/synthetic/emg_classification.py`, and click **Connect** on its row. The app first checks for an existing service and launches the hand only if none answers.
 
 ## What you should see
 
 ![EMG classification demo running](../images/gui-overview.png){ loading=lazy }
 
-A 3-column window:
+The header carries **Connect → Record → Train → Predict**, the participant and session state. The signal and **Simulated EMG** controls stay visible beside the active step, with participant sessions and an activity log below. At narrow widths the same cards stack vertically.
 
-- **Right two columns**: live EMG signal viewer.
-- **Left column, top to bottom**: logo, EMG-generator launcher, recording controls, feature selector, session manager, pipeline panel, output-filter panel, prediction label.
-
-Click **Launch** on **EMG Generator** → synthetic 8-channel signal flows. If you started VHI separately, the predicted pose drives its 3D hand.
+Connect has the generator launcher, stream connection and optional Virtual Hand row. **Hand movements…** opens its full movement palette. Predict shows class probabilities, the output filter and **Sent to the hand**, with separate LSL `fist` and gRPC `gesture` values.
 
 ## The walkthrough
 
@@ -34,19 +31,13 @@ The whole script is structured top-to-bottom: imports → outputs → constants 
 
 ### 1. Outputs and side-channels
 
-```python
-from myogestic.tools.emg_generator import control_outlet
-
-ctrl_outlet = control_outlet()
-```
-
-`control_outlet()` is the one-liner over the boilerplate `StreamOutlet(StreamInfo(name="EMG_Control", stype="Control", n_channels=1, ...))` - see [`myogestic.tools.emg_generator.control_outlet`](../api/core.md). The synthetic generator listens on `EMG_Control` for which class pattern to emit. Click "Fist" in the button strip → `ctrl_outlet.push_sample([1.0])` → generator switches to pattern 1.
+[`SimulatorControls`][myogestic.widgets.SimulatorControls] lazily publishes the generator's `EMG_Control` stream. Its persistent **Rest** and **Fist** chips preview either signal without changing a recording label. The Record step's class buttons also select the control-hand movement when a hand is connected; starting a take restores the signal for its selected label.
 
 ```python
 --8<-- "examples/synthetic/emg_classification.py:poses"
 ```
 
-The example declares its own outputs in `examples/controls/classification.toml`. Both entries carry a `threshold_fraction`, which says their input is a **classifier probability** rather than a position: below the fraction the value becomes `0`, at or above it `1`. There are no pose vectors here — `fist` fans out to all five digits and `thumb_spread` abducts the thumb, so a whole-hand pose is two numbers and the target decides what each one drives.
+The example declares two outputs in `examples/controls/classification_grpc.toml`. `fist` is a continuous activation: `0` for Rest and `1` for Fist, fanned out to the predicted hand's digits with negative thumb abduction for opposition. `gesture` is the matching movement name, sent to the control hand over gRPC after the configured `debounce_s = 0.1` settles a class change. The target's manifest supplies its controls and streams; nothing is resolved until the optional hand is connected, and gRPC clients are created only on that request.
 
 ### 2. The output filter
 
@@ -92,16 +83,15 @@ The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s o
 
 The validation up front (`is_empty`, `len(data.classes) < 2`) gives the user actionable error messages - the framework's design principle "errors tell you what to write." If you forget to tick a session in [`SessionManager`][myogestic.widgets.SessionManager], you'll see "No sessions selected. Load some and tick the checkboxes." in the status panel.
 
-### 7. `predict` - classify, gate to an activation, smooth, push
+### 7. `predict` - classify, smooth the pose and command movements
 
 ```python
 --8<-- "examples/synthetic/emg_classification.py:predict"
 ```
 
-There is no pose lookup. `predict` pushes the *probability* of "Fist" and the bus gates it, so three separate decisions happen in a fixed order: `threshold_fraction` decides **whether** the hand is closed (0 or 1), the fan-out weights decide **how much of that** each digit gets, and the filter decides **how fast** the change is allowed to look. VHI receives continuous per-control values — the same ones a regressor would send — so a classifier and a regressor reach the hand the same way. The dict return goes to `pipeline.predictions` for any widgets that want to display class probabilities.
+The class index chooses both values from `CTRL_VALUES` and `CLASSES`. One bus frame carries `{"fist": 1.0, "gesture": "Fist"}` for a fist prediction. The bus smooths the continuous activation and debounces the discrete movement; LSL carries the predicted-hand pose and gRPC carries control-hand class changes. Palette clicks use `bus.select("gesture", state)` to send an immediate movement and rebase that trigger.
 
-!!! tip "Why filter the activation, not the class index?"
-    OneEuro expects a continuous vector. Class indices are integers, so smoothing them is meaningless. Smoothing the gated activation lets the hand fade open and shut cleanly even when the classifier flips on the boundary — and because the gate runs *first*, the filter only ever ramps between 0 and 1, never through some intermediate confidence the model never asserted.
+Without a connected bus, `predict` returns class and probabilities normally. It never tries to bind: capability discovery is a blocking RPC, so the Connect row runs it on a background worker. The returned `hand` dict, when present, supplies the values shown under **Sent to the hand**.
 
 ### 8. Layout
 
@@ -109,28 +99,25 @@ There is no pose lookup. `predict` pushes the *probability* of "Fist" and the bu
 --8<-- "examples/synthetic/emg_classification.py:layout"
 ```
 
-An 8×3 grid: the signal viewer fills the right two columns, and the left column stacks eight widget calls top-to-bottom - logo, EMG-generator launcher, recording controls, feature selector, session manager, pipeline panel, output-filter panel, prediction label. Every panel is a plain function call. `SessionManager` returns a `TrainingData` instance - assigning it to `pipeline.training_data` is the only line that connects "what's ticked in the UI" to "what `train()` will see."
+A responsive [`Grid`][myogestic.Grid] keeps the header and status in bare rows. The wide layout places the live signal beside the active step and sessions; the narrow layout stacks them. Each active step is one card with one header. `SessionManager` returns a `TrainingData` instance; assigning it to `pipeline.training_data` connects the selected participant takes to `train()`.
 
 ### 9. The actual experiment loop
 
 In the GUI:
 
-1. Click `Launch` on **EMG Generator** → live signal appears.
-2. (Optional) start VHI separately → its 3D hand mirrors the predicted pose.
-3. Click the **Rest** button → generator emits the rest pattern.
-4. Click **Record** → start saving to `sessions/<timestamp>/`.
-5. Hold rest for ~3 s, click **Fist**, hold fist ~3 s, click **Rest**, hold rest ~3 s, click **Fist**… (cycle-style - see [Record and replay](../how-to/record-and-replay.md)).
-6. Click **Stop**.
-7. Repeat for a few cycles.
-8. Tick all sessions in **session_manager**.
-9. Click **Train** → console prints `[train] N windows from M sessions ... done - accuracy on train: ~99%`.
-10. Click **Predict** → VHI hand follows your button clicks live.
+1. In **Connect**, launch **EMG Generator**, then connect **TestEMG1**.
+2. Optionally connect **Virtual Hand**; **Hand movements…** opens its palette.
+3. Set a participant in the header and open **Record**.
+4. Select **Rest**, record a take for about 3 s, then stop. Repeat with **Fist** and collect a few takes of each. A connected hand's recording gate disables its local keyboard during each take.
+5. Select the participant's takes in **Sessions**, open **Train**, choose features and train.
+6. Open **Predict** and start predicting. Use **Simulated EMG** to switch between Rest and Fist; the predicted class updates with or without the optional hand.
+7. With a hand connected, inspect the smoothed `fist` and debounced `gesture` values under **Sent to the hand**.
 
 Tune the **One Euro** sliders in the filter panel while predicting to feel the lag/responsiveness trade-off in real time.
 
 ## Variations
 
-- **More classes**: bump `CLASSES`, `CTRL_VALUES` and `--classes`, add an alias per output to the TOML, and push each class's probability under its own alias. Nothing in `predict` needs a branch.
+- **More classes**: extend `CLASSES` and `CTRL_VALUES`, provide distinguishable generator patterns or real signals, and use movement names the hand advertises. The same prediction callback sends the selected activation and movement name.
 - **Different feature set**: swap RMS/MAV for whatever your domain needs. Keep `extract()`'s return shape consistent across training and live.
 - **Different model**: replace `catboost_classifier` with sklearn / XGBoost / PyTorch. See [Add a custom model](../how-to/add-a-model.md) for the patterns.
 - **Real hardware**: replace `LSLSource("TestEMG1")` with a real source - see [Add a custom source](../how-to/add-a-source.md).

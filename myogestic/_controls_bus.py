@@ -597,6 +597,22 @@ class ControlLinkConnector:
             return self._busy
 
     @property
+    def finished(self) -> bool:
+        """Whether an attempted request and any late-stop cleanup have finished.
+
+        False before the first attempt and while its worker is alive. Unlike
+        ``busy``, this includes teardown of a bus returned after ``stop``, so a
+        UI can safely replace a stopped connector before starting another.
+        Read ``connected`` and ``last_error`` to distinguish the outcome.
+        """
+        with self._lock:
+            return (
+                self._last_attempt != float("-inf")
+                and not self._busy
+                and (self._worker is None or not self._worker.is_alive())
+            )
+
+    @property
     def status(self) -> str:
         """A short status suitable for an application's process panel."""
         if self.connected:

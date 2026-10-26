@@ -157,8 +157,7 @@ def test_log_panel_renders_with_horizontal_scroll(imgui_frame):
 
 
 def test_pipeline_panel_log_controls_gated_on_log(imgui_frame, monkeypatch):
-    """The log's autoscroll/popout icons render only when there's a log to
-    control — not orphaned on the Train/Predict row over an empty log."""
+    """The header's popout icon appears only when there is a log to control."""
     from types import SimpleNamespace
 
     from myogestic.ml import widgets
@@ -170,10 +169,12 @@ def test_pipeline_panel_log_controls_gated_on_log(imgui_frame, monkeypatch):
     )
 
     def pipe(log):
-        ctx = SimpleNamespace(state="idle")
+        ctx = SimpleNamespace(state="idle", status_message="")
         return SimpleNamespace(
             app=SimpleNamespace(ctx=ctx),
             model=None,
+            on_train=None,
+            training_data=None,
             on_extract=None,
             on_predict=None,
             train_log=log,
