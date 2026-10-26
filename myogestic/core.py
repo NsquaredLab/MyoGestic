@@ -19,6 +19,8 @@ from myogestic.session import Session
 from myogestic.stream import Stream
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from myogestic.widgets.panels.notifications import Notification
 
 #: GLFW's Cocoa backend logs this once or twice *per frame* (~90 lines a second), burying
@@ -183,6 +185,9 @@ class Context:
     session
         The `Session` being written while ``state == "recording"``, else
         ``None``. Set its ``name`` before `App.stop_recording` to label the take.
+    pending_saves
+        Source folders still being finalized. Nonempty until every pending
+        pack has registered its saved take or reported failure.
     participant
         Pseudonymised ID used to label new recordings; empty when none is set.
     require_participant
@@ -220,6 +225,7 @@ class Context:
     bridges: dict[str, Any] = field(default_factory=dict)
     state: str = AppState.IDLE
     session: Session | None = None
+    pending_saves: set[Path] = field(default_factory=set)
     class_names: list[str] = field(default_factory=list)
     control_space: Any = None
     current_label: int = -1
@@ -550,6 +556,11 @@ class App:
             self.ctx.status_message = f"Saved {n} labels - finalizing…"
 
             from myogestic._browser import IS_BROWSER
+            from myogestic.widgets.training._session_state import set_session_saving
+
+            source_path = session.path.resolve()
+            self.ctx.pending_saves.add(source_path)
+            set_session_saving(source_path, True)
 
             # Pack session folder → .session.zip in a daemon thread so the
             # UI stays responsive during finalization. Register with
@@ -578,6 +589,9 @@ class App:
                         add_recorded_session(str(session.path))
                     except Exception:
                         pass
+                finally:
+                    set_session_saving(source_path, False)
+                    self.ctx.pending_saves.discard(source_path)
 
             if IS_BROWSER:
                 # Pyodide is single-threaded. Zipping inline blocks the frame, which for a
