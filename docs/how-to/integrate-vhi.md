@@ -140,7 +140,10 @@ the recorder hardcoded them, not because VHI ignores them.
 ## A ready-made movement palette
 
 `VhiMovementPanel` packages "fetch control-hand state in the background, render the movement
-buttons, dispatch clicks" into one widget. It reads the recording aid for state and takes the
+chips, dispatch clicks" into one widget. The **Hand movements** header has a refresh action and
+a reachability dot; the chips wrap with the available width and mark the current movement.
+A mono count appears below them. When the hand is not running, launch instructions and a
+**Refresh** action replace the list. It reads the recording aid for state and takes the
 click handler explicitly. Wire that handler to a control-standard DOF (one [degree of
 freedom](../reference/glossary.md#dof)), because dispatching straight at the target would
 bypass the debounce:

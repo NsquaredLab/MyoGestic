@@ -220,6 +220,120 @@ def _slug(name: str) -> str:
     return "-".join(filter(None, kept.split("-")))[:_SLUG_MAX].strip("-_")
 
 
+def labelled_path(base_path: str | Path, participant: str = "", suffix: str = "") -> Path:
+    """Build a timestamped path, optionally nested and labelled by participant.
+
+    Parameters
+    ----------
+    base_path
+        Parent directory for recordings or saved models.
+    participant
+        Pseudonymised ID, reduced to a safe single path segment. An empty
+        slug keeps the timestamp directly under ``base_path``.
+    suffix
+        Optional filename suffix, appended after an underscore, such as
+        ``"model.joblib"``.
+
+    Returns
+    -------
+    pathlib.Path
+        ``base/ID/ID_timestamp[_suffix]`` or ``base/timestamp[_suffix]``.
+        No directories are created and no name is reserved. `Session` adds
+        its collision guard when it creates the recording folder.
+    """
+    participant = _slug(participant)
+    timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+    parent = Path(base_path)
+    if participant:
+        parent /= participant
+        timestamp = f"{participant}_{timestamp}"
+    if suffix:
+        timestamp = f"{timestamp}_{suffix}"
+    return parent / timestamp
+
+
+def _unique_stem(parent: Path, stem: str) -> str:
+    """Find a stem unused by a recording folder or any of its named archives."""
+    candidate = stem
+    ordinal = 2
+    while (parent / candidate).exists() or any(parent.glob(f"{candidate}*.session.zip")):
+        candidate = f"{stem}-{ordinal}"
+        ordinal += 1
+    return candidate
+
+
+@dataclass(frozen=True)
+class RecordedTime:
+    """Recorded durations across the takes directly in one folder.
+
+    Attributes
+    ----------
+    takes
+        Number of session folders and archives, including legacy takes.
+    total_s
+        Sum of sample-clock durations in seconds; legacy takes contribute zero.
+    per_class
+        Recorded seconds for each gesture name, summed across takes.
+    """
+
+    takes: int
+    total_s: float
+    per_class: dict[str, float]
+
+
+def _read_session_metadata(path: Path) -> tuple[dict, list] | None:
+    """Read a folder or zip's metadata and labels without opening its arrays."""
+    try:
+        if path.is_dir() and (path / "meta.json").exists():
+            meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
+            labels_file = path / "labels.json"
+            labels = json.loads(labels_file.read_text(encoding="utf-8")) if labels_file.exists() else []
+        elif path.is_file() and path.name.endswith(".zip"):
+            # Renamed archives remain discoverable by the picker and totals.
+            with zipfile.ZipFile(path) as archive:
+                names = set(archive.namelist())
+                if "meta.json" not in names:
+                    return None
+                meta = json.loads(archive.read("meta.json"))
+                labels = json.loads(archive.read("labels.json")) if "labels.json" in names else []
+        else:
+            return None
+        return (meta, labels) if isinstance(meta, dict) and isinstance(labels, list) else None
+    except (OSError, ValueError, zipfile.BadZipFile):
+        return None
+
+
+def recorded_time(folder: str | Path) -> RecordedTime:
+    """Sum recorded time for the session folders and archives directly in a folder.
+
+    Parameters
+    ----------
+    folder
+        Directory to inspect without recursion. A missing directory is empty.
+
+    Returns
+    -------
+    RecordedTime
+        Take count, total seconds, and seconds per gesture. Sessions without
+        duration metadata count as takes with zero seconds.
+    """
+    base = Path(folder)
+    takes, total_s = 0, 0.0
+    per_class: dict[str, float] = {}
+    if not base.is_dir():
+        return RecordedTime(takes, total_s, per_class)
+    for path in base.iterdir():
+        entry = _read_session_metadata(path)
+        if entry is None:
+            continue
+        meta, _ = entry
+        takes += 1
+        total_s += float(meta.get("duration_s", 0.0))
+        for name, seconds in meta.get("class_seconds", {}).items():
+            per_class[name] = per_class.get(name, 0.0) + float(seconds)
+    return RecordedTime(takes, total_s, per_class)
+
+
 class Session:
     """One recording session on disk: per-stream Zarr arrays + a label track.
 
@@ -248,6 +362,10 @@ class Session:
     base_path
         Parent directory; the session creates a timestamp-named subdirectory
         inside. Default ``"sessions"`` (created if missing).
+    participant
+        Pseudonymised ID. A safe slug labels the folder and ``meta.json`` and
+        nests the recording under ``base_path/ID``. Empty by default, keeping
+        the legacy timestamp and random suffix directly under ``base_path``.
 
     Examples
     --------
@@ -256,14 +374,30 @@ class Session:
     >>> session.add_label(0, timestamp=123.0)
     """
 
-    def __init__(self, base_path: str = "sessions"):
-        ts = time.strftime("%Y-%m-%d_%H-%M-%S")
-        # Random suffix so two sessions started within the same wall-clock second
-        # never share a folder: pack_to_zip() runs on a daemon thread and
-        # shutil.rmtree()s its own folder, so a shared name lets the old session's
-        # pack thread wipe the new recording (and collide on the .session.zip path).
-        self.path = Path(base_path) / f"{ts}_{uuid.uuid4().hex[:8]}"
-        self.path.mkdir(parents=True, exist_ok=True)
+    def __init__(self, base_path: str = "sessions", participant: str = "") -> None:
+        #: Pseudonymised ID only; personal names belong in the local key file.
+        self.participant: str = _slug(participant)
+        if self.participant:
+            labelled = labelled_path(base_path, self.participant)
+            parent = labelled.parent
+            parent.mkdir(parents=True, exist_ok=True)
+            # Archives keep a stem reserved after packing removes its folder.
+            # Exclusive mkdir handles two recorders choosing the same free stem.
+            while True:
+                self.path = parent / _unique_stem(parent, labelled.name)
+                try:
+                    self.path.mkdir(exist_ok=False)
+                except FileExistsError:
+                    continue
+                break
+        else:
+            ts = time.strftime("%Y-%m-%d_%H-%M-%S")
+            # Random suffix so two sessions started within the same wall-clock second
+            # never share a folder: pack_to_zip() runs on a daemon thread and
+            # shutil.rmtree()s its own folder, so a shared name lets the old session's
+            # pack thread wipe the new recording (and collide on the .session.zip path).
+            self.path = Path(base_path) / f"{ts}_{uuid.uuid4().hex[:8]}"
+            self.path.mkdir(parents=True, exist_ok=True)
         #: Free-form facts a widget contributed about this recording, merged into
         #: ``meta.json`` under ``"extras"``. For anything the raw arrays cannot
         #: express on their own — a force calibration is the motivating case: the
@@ -517,8 +651,35 @@ class Session:
             },
             "event_streams": list(self._event_streams),
         }
+        # Use the same clock as add_label, and only the first nonempty stream:
+        # multiple streams describe the same take, not extra recorded time.
+        first, last = 0.0, 0.0
+        for timestamps in self.ts_stores.values():
+            if timestamps.shape[0]:
+                first, last = float(timestamps[0]), float(timestamps[-1])
+                break
+        meta["duration_s"] = max(0.0, last - first)
+        seconds: dict[str, float] = {}
+        if class_names and self.label_track:
+            for i, event in enumerate(self.label_track):
+                if not 0 <= event.class_index < len(class_names):
+                    continue
+                # Existing callers can supply an integer-valued numeric label.
+                index = int(event.class_index)
+                if index != event.class_index:
+                    continue
+                end = self.label_track[i + 1].timestamp if i + 1 < len(self.label_track) else last
+                elapsed = max(0.0, min(last, end) - max(first, event.timestamp))
+                if elapsed:
+                    name = class_names[index]
+                    seconds[name] = seconds.get(name, 0.0) + elapsed
+            meta["class_seconds"] = seconds
+        # Reuse the recorded-time keys, ordered by class index rather than event order.
+        self._recorded_classes = sorted(seconds, key=class_names.index) if class_names else []
         if self.name:
             meta["name"] = self.name
+        if self.participant:
+            meta["participant"] = self.participant
         if self.extras:
             meta["extras"] = dict(self.extras)
         if class_names is not None:
@@ -546,7 +707,15 @@ class Session:
         self.ts_stores.clear()
         gc.collect()
 
-        stem = f"{self.path.name}_{slug}" if (slug := _slug(self.name)) else self.path.name
+        label_slugs = [
+            slug for name in getattr(self, "_recorded_classes", []) if (slug := _slug(name))
+        ]
+        labels = "+".join(label_slugs)
+        if len(labels) > _SLUG_MAX:
+            labels = f"{len(label_slugs)}-classes"
+        stem = f"{self.path.name}_{labels}" if labels else self.path.name
+        if slug := _slug(self.name):
+            stem = f"{stem}_{slug}"
         zip_path = self.path.with_name(stem + ".session.zip")
         tmp_path = zip_path.with_suffix(zip_path.suffix + ".tmp")
         if tmp_path.exists():

@@ -45,10 +45,9 @@ def test_recording_controls_render_while_predicting_and_not_recording(
     assert _rendered_something()
 
 
-def test_recording_controls_render_rec_pill_while_recording_under_predicting(imgui_frame, tmp_path):
+def test_recording_controls_render_while_recording_under_predicting(imgui_frame, tmp_path):
     """`RecordingControls` with a take open (`ctx.recording = True`) under `predicting`:
-    verifies the `REC` pill branch (`ctx.recording and ctx.state != AppState.RECORDING`)
-    renders without raising.
+    verifies the 2.0 take controls render without raising. AppHeader owns the REC pill.
     """
     ctx = Context()
     ctx.state = "predicting"
@@ -61,13 +60,13 @@ def test_recording_controls_render_rec_pill_while_recording_under_predicting(img
     assert _rendered_something()
 
 
-def test_recording_controls_render_state_pill_only_while_recording(imgui_frame):
+def test_recording_controls_render_while_recording(imgui_frame):
     """`RecordingControls` with a take open under the plain `recording` state: verifies
-    the state-pill-only branch (no extra `REC` pill, since `ctx.state == AppState.RECORDING`
-    already) renders without raising.
+    the take controls render without raising; AppHeader owns the state pill.
     """
     ctx = Context()
     ctx.state = AppState.RECORDING
+    ctx.recording = True
     ctx.recording = True
     controls = RecordingControls(on_record=lambda: None, on_stop=lambda: None)
 

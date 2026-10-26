@@ -9,7 +9,7 @@ and the iterators handle the transpose.
 import myogestic._lsl_quiet  # noqa: F401  — side effect; must precede any liblsl load
 from myogestic.contracts import TrainingData
 from myogestic.core import App, AppState, Context
-from myogestic.grid import Fr, Grid, Px
+from myogestic.grid import Fr, Grid, Layout, Px
 from myogestic.ml import Pipeline
 from myogestic.outputs.edge_trigger import EdgeTrigger
 from myogestic.stream import Source, Stream, StreamInfo
@@ -21,6 +21,7 @@ __all__ = [
     "EdgeTrigger",
     "Fr",
     "Grid",
+    "Layout",
     "Px",
     "Pipeline",
     "Source",

@@ -47,6 +47,20 @@ def _sample(value: float) -> np.ndarray:
     return np.array([value], dtype=np.float32)
 
 
+def _build_version(tag: str) -> tuple[int, ...] | None:
+    """A reported build version as comparable integers, or None when it is not one.
+
+    Accepts ``"2.1.0"`` and ``"v2.1.0"`` alike. A branch build calling itself
+    ``"dev"`` parses to None — not ours to judge, the same stance the install-time
+    marker gate takes.
+    """
+    parts = tag.strip().lstrip("v").split(".")
+    try:
+        return tuple(int(p) for p in parts)
+    except ValueError:
+        return None
+
+
 def _retire(outlet: Outlet, rest: float) -> None:
     """Rest a stream, make sure that lands, and take it off the network.
 
@@ -125,7 +139,7 @@ class RemoteTarget:
 
     __slots__ = (
         "_client", "_discrete", "_dofs", "_interface",
-        "_negotiated", "_outlets", "_pending", "_routed",
+        "_negotiated", "_outlets", "_pending", "_routed", "_warned_unversioned",
     )
 
     def __init__(self, *, client: Any = None, interface: Any = None) -> None:
@@ -157,6 +171,8 @@ class RemoteTarget:
         #: Tracked explicitly: a configuration of
         #: only discrete DOFs negotiates fine and drives no stream at all.
         self._negotiated = False
+        #: Whether the once-per-target "reports no build version" warning has fired.
+        self._warned_unversioned = False
 
     @property
     def claims(self) -> frozenset[str]:
@@ -528,7 +544,49 @@ class RemoteTarget:
         """
         fetch = getattr(self._client, "capabilities", None)
         got = fetch() if callable(fetch) else None
-        return None if got is None else tuple(got)
+        if got is None:
+            return None
+        self._check_build_version()
+        return tuple(got)
+
+    def _check_build_version(self) -> None:
+        """Refuse a build the interface knows to be older than it can trust.
+
+        `version_gate` reads a disk marker, so it never sees a build launched by hand,
+        unpacked without a marker, or run from source. The manifest is the one channel
+        every launch path answers on, so the floor is enforced here — at the same
+        choke point `connect_controls` and `negotiate` both fetch through.
+        """
+        floor = getattr(self._interface, "min_target_version", None)
+        if not floor:
+            return
+        name = getattr(self._interface, "name", None) or "the remote target"
+        hint = getattr(self._interface, "install_hint", "") or ""
+        reported = str(getattr(self._client, "target_version", "") or "")
+        parsed = _build_version(reported) if reported else None
+        if parsed is None:
+            # No version (a build predating the field), or not a release version at all
+            # (a branch build). Absence cannot tell an outdated build from a third-party
+            # target that does not version itself, so it is warned about, not refused.
+            if not self._warned_unversioned:
+                self._warned_unversioned = True
+                log.warning(
+                    "%s did not report a build version (%s) — builds before %s do not. "
+                    "It will be driven, but if it misbehaves, update it.%s",
+                    name,
+                    reported or "empty",
+                    floor,
+                    hint,
+                )
+            return
+        wanted = _build_version(floor)
+        if wanted is not None and parsed < wanted:
+            raise ValueError(
+                f"{name} reports build {reported}, and this configuration trusts "
+                f"{floor} or newer. Older builds have served this same contract with "
+                f"known-bad behaviour behind it, which no protocol check can see — "
+                f"that is what this floor is for. Update {name}.{hint}"
+            )
 
     def stop(self) -> None:
         """Return the hand to its declared rest pose, and take every stream down.

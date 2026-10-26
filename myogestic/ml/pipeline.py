@@ -39,14 +39,16 @@ import sys
 import threading
 import time
 import traceback
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
+from weakref import WeakKeyDictionary
 
 import numpy as np
 
 from myogestic.contracts import TrainingData
 from myogestic.core import RECORDABLE_STATES, AppState
+from myogestic.session import labelled_path
 
 if TYPE_CHECKING:
     from myogestic.core import App
@@ -130,6 +132,20 @@ class Pipeline:
         Maximum predict-loop tick rate. Set to 0 or negative to remove
         the cap (run at full speed).
 
+    input_streams : sequence of str or None, optional
+        Streams passed to ``extract`` and used for tick timestamps. ``None``
+        uses every app stream; select inputs to keep feedback recording-only.
+
+    Attributes
+    ----------
+    autosave_dir : str or None
+        Save each successfully trained model here when ``save_model`` is set.
+        The path uses the participant ID and timestamp. ``None`` disables
+        automatic saving (the default).
+    last_saved_model : str or None
+        Path of the most recent successful auto-save, or ``None`` before one
+        succeeds. A save failure leaves the trained model usable in memory.
+
     Examples
     --------
     >>> from myogestic import App
@@ -140,9 +156,13 @@ class Pipeline:
     ...     return windows["emg"].mean(axis=1)
     """
 
-    def __init__(self, app: App, predict_hz: float = 50.0):
+    def __init__(
+        self, app: App, predict_hz: float = 50.0,
+        *, input_streams: Sequence[str] | None = None,
+    ):
         self.app = app
         self.predict_hz = predict_hz
+        self.input_streams = None if input_streams is None else tuple(input_streams)
         self.model: Any = None
         self.predictions: dict[str, Any] = {}
         self.train_log: list[str] = []
@@ -153,6 +173,8 @@ class Pipeline:
         # `myogestic.ml.save_pickle` / `load_pickle` are the default.
         self.save_model: Callable | None = None
         self.load_model: Callable | None = None
+        self.autosave_dir: str | None = None
+        self.last_saved_model: str | None = None
         # Set this from inside `@app.ui` to publish what the user picked
         # in `session_manager(...)` to `@pipeline.train`.
         self.training_data: TrainingData | None = None
@@ -162,6 +184,7 @@ class Pipeline:
         # it (name -> reason), so each skip is logged once and lands in meta.json.
         self._recorded_session: Any = None
         self._skipped: dict[str, str] = {}
+        self._recordings: WeakKeyDictionary = WeakKeyDictionary()
 
         RECORDABLE_STATES.add(PipelineState.PREDICTING)
         app.finalize_hooks.append(self._on_finalize)
@@ -191,7 +214,8 @@ class Pipeline:
         must return any object — it's stored on ``pipeline.model`` and
         forwarded to every subsequent ``predict()`` call. If
         ``pipeline.save_model`` is set, the **Save Model** button calls
-        it as ``save_model(pipeline.model, path)``.
+        it as ``save_model(pipeline.model, path)``. Setting ``autosave_dir``
+        also calls it automatically after successful training.
         """
         self.on_train = fn
         return fn
@@ -216,7 +240,10 @@ class Pipeline:
         No-op (sets ``ctx.status_message``) unless the state is ``idle``,
         a train callback is registered, and non-empty
         `training_data` is set. Flips the state to ``training`` for
-        the duration and stores the returned object on `model`.
+        the duration and stores the returned object on `model`. When
+        ``autosave_dir`` and ``save_model`` are set, save under the participant
+        label and publish the path as ``last_saved_model``. Completion and
+        failures notify the user; a failed save keeps the trained model.
         """
         ctx = self.app.ctx
         if ctx.state != "idle":
@@ -237,19 +264,34 @@ class Pipeline:
         ctx.status_message = "Training..."
         ctx.log("Training started")
         on_train = self.on_train
+        participant = ctx.participant
 
         def _worker() -> None:
+            started = time.perf_counter()
             try:
                 self.model = on_train(data)
                 ctx.status_message = "Training complete"
                 self.train_log.append("Training complete")
-                ctx.log("Training complete")
+                detail = f"in {time.perf_counter() - started:.1f} s"
+                if self.autosave_dir is not None and self.save_model is not None:
+                    try:
+                        path = labelled_path(self.autosave_dir, participant, "model.joblib")
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        self.save_model(self.model, str(path))
+                    except Exception as e:
+                        ctx.status_message = f"Training complete; model save failed: {e}"
+                        self.train_log.append(f"Model save failed: {e}")
+                        ctx.notify("Model not saved", str(e), "danger")
+                    else:
+                        self.last_saved_model = str(path)
+                        detail = path.name
+                ctx.notify("Training finished", detail, "success")
             except Exception as e:
                 tb = traceback.format_exc()
                 ctx.status_message = f"Training failed: {e}"
                 self.train_log.append(f"FAILED: {e}")
                 self.train_log.append(tb)
-                ctx.log(f"Training failed: {e}")
+                ctx.notify("Training failed", str(e), "danger")
             finally:
                 ctx.state = "idle"
 
@@ -309,6 +351,8 @@ class Pipeline:
                 windows: dict[str, Any] = {}
                 latest: float | None = None
                 for name, stream in app.ctx.streams.items():
+                    if self.input_streams is not None and name not in self.input_streams:
+                        continue
                     data, ts = stream.get_window()
                     if data.size > 0:
                         windows[name] = data
@@ -349,6 +393,7 @@ class Pipeline:
         if session is not self._recorded_session:
             self._recorded_session = session
             self._skipped = {}
+        self._recordings[session] = (self.model, self._skipped)
         if "*" in self._skipped:
             return
         try:
@@ -387,19 +432,19 @@ class Pipeline:
         Runs on the finalize thread after `Session.freeze`, so ``event_streams`` is
         complete. A model that cannot be saved is a recorded fact, not a missing file.
         """
+        if "pipeline.tick" not in session.event_streams:
+            return
+        model, skipped = self._recordings.pop(session, (self.model, {}))
         info: dict[str, Any] = {
             "predict_hz": self.predict_hz,
             "event_streams": list(session.event_streams),
-            "skipped": dict(self._skipped) if session is self._recorded_session else {},
+            "skipped": dict(skipped),
             "model": None,
             "model_type": None,
         }
-        model = self.model
         if model is not None:
             info["model_type"] = type(model).__qualname__
-            if session is not self._recorded_session:
-                info["model_note"] = "pipeline did not predict during this take"
-            elif self.save_model is None:
+            if self.save_model is None:
                 info["model_note"] = "not saved: pipeline.save_model is unset"
             else:
                 path = session.path / "model.joblib"

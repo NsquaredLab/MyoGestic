@@ -2,37 +2,53 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 from imgui_bundle import portable_file_dialogs as pfd
 
 from myogestic.contracts import TrainingData
+from myogestic.session._core import _slug
 from myogestic.widgets.common import (
     PALETTE,
+    mono_font,
+    mono_text,
     muted,
     panel_header,
     pop_selected,
-    primary,
     push_selected,
+    ui_px,
 )
 from myogestic.widgets.training._session_state import (
+    SelectionSummary,
     SessionWidgetState,
     add_recorded_session,
     class_pool_and_active,
     get_state,
+    group_sessions,
+    is_session_saving,
     load_session_files,
+    reconcile_sessions,
+    row_gestures,
     scan_sessions,
+    selection_summary,
 )
 
-__all__ = ["SessionManager", "add_recorded_session"]
+__all__ = ["SelectionSummary", "SessionManager", "add_recorded_session"]
 
 
 class SessionManager:
-    """Session picker widget. ``ui()`` returns ``TrainingData(paths, class_names, classes)``.
+    """One-line takes grouped by day, with gesture filters and a selection summary.
 
     Construct once with the base path / title / class names, then call
     [`ui`][] each frame. The widget has two training filters: selected
-    session files and selected class indices. Assign the returned value to
+    session files and included class indices. Compact, clickable take rows are
+    about 26 logical pixels tall. Only the newest day starts open;
+    the list scrolls while its header, summary and gesture chips stay visible.
+    Files loaded outside the scanned folder appear under **Loaded**. Read
+    ``selection()`` for selected-take counts and included gesture seconds.
+    Assign the returned value to
     ``pipeline.training_data`` to make it visible to ``@pipeline.train``::
 
         sessions = SessionManager("sessions", class_names=CLASSES)
@@ -45,15 +61,15 @@ class SessionManager:
     ----------
     base_path
         Folder scanned for ``.session.zip`` archives and session folders. Not
-        read until you press **Scan folder** — opening an app does not present
-        every session anyone ever recorded.
+        read until you press the **Rescan folder** icon, unless ``ui(participant=...)``
+        scopes the list to a participant whose takes appear automatically.
     title
         Panel header text. Also part of the widget's ImGui id scope, so two
         managers over the same folder need different titles to keep separate
         selections.
     class_names
         Human-readable names for the label class indices, used to render the
-        per-class filter buttons. ``None`` falls back to whatever each session
+        gesture chips (with totals across all listed takes). ``None`` falls back to whatever each session
         recorded in its own ``meta.json``, then to ``c0``, ``c1``, …
 
     Examples
@@ -75,82 +91,151 @@ class SessionManager:
         self._class_names = class_names
         self._widget_id = f"{title}_{base_path}"
 
-    def ui(self) -> TrainingData:
-        """Render the picker and return the current training selection."""
+    def select_all(self, participant: str) -> None:
+        """Scan and tick every saved training take of a participant without drawing a frame.
+
+        Parameters
+        ----------
+        participant : str
+            Nonempty participant ID, reduced to the same safe slug used by
+            recordings. Replaces the previous selection and clears class
+            exclusions and pending file dialogs. Takes still being saved are
+            excluded, as are drive runs identified by ``extras.pipeline``. A following ``ui(participant=participant)`` preserves the
+            ticks without scanning again.
+
+        Raises
+        ------
+        ValueError
+            If the ID has no usable characters. Pass a nonempty participant ID.
+        """
+        participant = _slug(participant)
+        if not participant:
+            raise ValueError("Pass a nonempty participant ID to select_all().")
+        state = get_state(self._widget_id)
+        state.participant = participant
+        state.sessions = scan_sessions(str(Path(self._base_path) / participant))
+        for row in state.sessions:
+            row["selected"] = not row.get("drive", False)
+        state.deactivated_classes.clear()
+        state.folder_dialog = None
+        state.last_load_msg = ""
+
+    def ui(self, participant: str | None = None) -> TrainingData:
+        """Render the picker and return the current training selection.
+
+        Parameters
+        ----------
+        participant
+            Participant ID whose subfolder to scan, using the same safe slug
+            as recordings. A nonempty ID lists its takes automatically, unticked
+            except newly recorded takes. Changing it clears the training selection
+            and class filters. ``None`` or an empty ID leaves scanning manual.
+
+        Returns
+        -------
+        TrainingData
+            Selected session paths and active classes for training.
+        """
         widget_id = self._widget_id
         class_names = self._class_names
         state = get_state(widget_id)
+        participant = _slug(participant) if participant is not None else None
+        scan_path = str(Path(self._base_path) / participant) if participant else self._base_path
+        if participant != state.participant:
+            state.sessions.clear()
+            state.deactivated_classes.clear()
+            state.last_load_msg = ""
+            # A file picker opened for the previous participant must not refill
+            # the newly cleared list when it completes.
+            state.folder_dialog = None
+            state.participant = participant
+            if participant:
+                state.sessions.extend(scan_sessions(scan_path))
 
-        # Deliberately empty until asked. This used to scan `base_path` on first
-        # render, so opening an app presented every session anyone had ever recorded
-        # there — 328 of them on the machine this was reported from, none of them
-        # chosen, above a Train button. What a training set contains is a decision,
-        # and a list that arrives on its own is a decision nobody made. `Scan folder`
-        # is the same scan, one click away, and says what it found.
-        panel_header(self._title, fa.ICON_FA_FOLDER_OPEN)
-        render_summary_and_buttons(widget_id, self._base_path, state)
         poll_file_dialog(state)
+        render_header(widget_id, self._title, scan_path, state)
+        saving = is_session_saving(scan_path)
+        if saving:
+            imgui.text_colored(muted(), "Saving the last take…")
+        if any(row.get("drive", False) for row in state.sessions):
+            imgui.text_colored(muted(), "Drive runs are not ticked for training.")
+        render_summary(widget_id, self.selection(), state)
+        render_class_buttons(widget_id, state, class_names)
+        render_session_rows(widget_id, scan_path, state, class_names)
+        if participant and not state.sessions and not saving:
+            _render_empty_participant(widget_id, scan_path, state)
 
+        # Read after every click so returned data and Train agree this frame.
+        reconcile_sessions(state)
         classes_in_pool, active_classes = class_pool_and_active(state)
-        render_class_buttons(
-            widget_id, state.deactivated_classes, classes_in_pool, active_classes, class_names
-        )
-        render_session_rows(widget_id, state.sessions, class_names)
-
         return TrainingData(
             paths=[s["path"] for s in state.sessions if s["selected"]],
             class_names=list(class_names) if class_names else [],
             classes=set(active_classes) if classes_in_pool else set(),
         )
 
+    def selection(self) -> SelectionSummary:
+        """Return selected-take counts and seconds for included gestures.
 
-def render_summary_and_buttons(widget_id: str, base_path: str, state: SessionWidgetState) -> None:
-    sessions = state.sessions
-    n_selected = sum(1 for s in sessions if s["selected"])
-    summary = f"{n_selected}/{len(sessions)} selected"
-    if state.last_load_msg:
-        summary = f"{summary}  ·  {state.last_load_msg}"
+        Returns
+        -------
+        SelectionSummary
+            An independent snapshot of the current selection. Follows folders
+            into their packed archives and drops missing takes without rescanning
+            for new takes, changing filters, or requiring an ImGui context.
+        """
+        state = get_state(self._widget_id)
+        reconcile_sessions(state)
+        return selection_summary(state, self._class_names)
 
-    imgui.align_text_to_frame_padding()
-    imgui.text(summary)
+
+def render_header(widget_id: str, title: str, base_path: str, state: SessionWidgetState) -> None:
+    style = imgui.get_style()
+    icons = [fa.ICON_FA_ARROWS_ROTATE, fa.ICON_FA_FOLDER_OPEN, fa.ICON_FA_BROOM]
+    width = sum(imgui.calc_text_size(icon).x + 2 * style.frame_padding.x for icon in icons)
+    width += 2 * style.item_spacing.x
+    right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+    panel_header(f"Takes · {state.participant}" if state.participant else title,
+                 fa.ICON_FA_FOLDER_OPEN, reserve=width + style.item_spacing.x)
     imgui.same_line()
-    if imgui.button(f"Load Files...##{widget_id}"):
+    imgui.set_cursor_pos_x(max(imgui.get_cursor_pos_x(), right - width))
+    if imgui.small_button(f"{icons[0]}##{widget_id}_scan"):
+        existing = {s["path"] for s in state.sessions}
+        found = [row for row in scan_sessions(base_path) if row["path"] not in existing]
+        state.sessions.extend(found)
+        state.last_load_msg = f"Scanned {base_path}: {len(found)} new"
+    imgui.set_item_tooltip(f"Rescan folder: {base_path}\nEarlier takes stay unticked.")
+    imgui.same_line()
+    if imgui.small_button(f"{icons[1]}##{widget_id}_load"):
         state.folder_dialog = pfd.open_file(
-            "Select session files",
-            base_path,
-            ["Session zip", "*.zip"],
-            pfd.opt.multiselect,
+            "Select session files", base_path, ["Session zip", "*.zip"], pfd.opt.multiselect,
         )
-    if imgui.is_item_hovered():
-        imgui.set_tooltip(
-            "Pick one or more session zip files (multi-select).\n"
-            "Any .zip with a meta.json inside is treated as a session."
-        )
-
+    imgui.set_item_tooltip("Load files from elsewhere… Choose one or more session zip files.")
     imgui.same_line()
-    if imgui.button(f"Scan folder##{widget_id}"):
-        # Merge rather than replace: a session just recorded in this run is in the
-        # list but not yet on disk under a name this finds, and losing it to a scan
-        # would be losing the only copy the user has looked at.
-        existing = {s["path"] for s in sessions}
-        found = [r for r in scan_sessions(base_path) if r["path"] not in existing]
-        sessions.extend(found)
-        state.last_load_msg = f"scanned {base_path}: {len(found)} new"
-    if imgui.is_item_hovered():
-        imgui.set_tooltip(
-            f"List every session already in {base_path}.\n"
-            "Nothing is loaded until you ask — sessions from earlier runs are not\n"
-            "part of this one unless you say so."
-        )
-
-    if not sessions:
-        return
-    imgui.same_line()
-    if imgui.button(f"Clear##{widget_id}"):
-        sessions.clear()
+    if imgui.small_button(f"{icons[2]}##{widget_id}_clear"):
+        state.sessions.clear()
+        state.deactivated_classes.clear()
         state.last_load_msg = ""
-    if imgui.is_item_hovered():
-        imgui.set_tooltip("Drop all loaded sessions from the list.")
+    imgui.set_item_tooltip("Clear the takes list. Files stay on disk.")
+
+
+def render_summary(widget_id: str, summary: SelectionSummary, state: SessionWidgetState) -> None:
+    style = imgui.get_style()
+    right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+    width = sum(imgui.calc_text_size(label).x + 2 * style.frame_padding.x for label in ("All", "None"))
+    width += style.item_spacing.x
+    total = _elapsed_str(sum(summary.class_seconds.values()))
+    imgui.text_colored(muted(), f"{summary.n_selected} of {summary.n_total} selected · {total} total")
+    if state.last_load_msg:
+        imgui.set_item_tooltip(state.last_load_msg)
+    imgui.same_line()
+    imgui.set_cursor_pos_x(max(imgui.get_cursor_pos_x(), right - width))
+    for index, (label, selected) in enumerate((("All", True), ("None", False))):
+        if index:
+            imgui.same_line()
+        if imgui.small_button(f"{label}##{widget_id}"):
+            for row in state.sessions:
+                row["selected"] = selected
 
 
 def poll_file_dialog(state: SessionWidgetState) -> None:
@@ -162,83 +247,152 @@ def poll_file_dialog(state: SessionWidgetState) -> None:
     load_session_files(state, result or [])
 
 
-def render_class_buttons(
-    widget_id: str,
-    deactivated_classes: set[int],
-    classes_in_pool: set[int],
-    active_classes: set[int],
-    class_names: list[str] | None,
+def _render_empty_participant(
+    widget_id: str, base_path: str, state: SessionWidgetState,
 ) -> None:
-    if not classes_in_pool:
-        return
-
-    imgui.align_text_to_frame_padding()
-    imgui.text("Classes:")
-    imgui.same_line()
-    for ci in sorted(classes_in_pool):
-        name = (
-            class_names[ci] if class_names is not None and 0 <= ci < len(class_names) else f"c{ci}"
+    """Centre the empty participant's guidance and existing file-picker action."""
+    left = imgui.get_cursor_pos_x()
+    width = imgui.get_content_region_avail().x
+    lines = (
+        f"No takes for {state.participant} yet.",
+        "Takes you record appear here, already ticked for training.",
+    )
+    spacing = imgui.get_style().item_spacing.y
+    height = sum(imgui.calc_text_size(line, wrap_width=width).y + spacing for line in lines)
+    height += imgui.get_text_line_height()
+    gap = max(0.0, (imgui.get_content_region_avail().y - height) / 2)
+    imgui.dummy(imgui.ImVec2(0, gap))
+    imgui.push_style_color(imgui.Col_.text, muted())
+    imgui.push_text_wrap_pos(left + width)
+    for line in lines:
+        imgui.set_cursor_pos_x(left + max(0.0, (width - imgui.calc_text_size(line).x) / 2))
+        imgui.text_wrapped(line)
+    imgui.pop_text_wrap_pos()
+    imgui.pop_style_color()
+    label = "Load files from elsewhere…"
+    button_width = imgui.calc_text_size(label).x + imgui.get_style().frame_padding.x * 2
+    imgui.set_cursor_pos_x(left + max(0.0, (width - button_width) / 2))
+    if imgui.small_button(f"{label}##{widget_id}_empty"):
+        state.folder_dialog = pfd.open_file(
+            "Select session files", base_path, ["Session zip", "*.zip"], pfd.opt.multiselect,
         )
-        is_active = ci in active_classes
-        if is_active:
+
+
+def render_class_buttons(
+    widget_id: str, state: SessionWidgetState, class_names: list[str] | None,
+) -> None:
+    gestures: dict[tuple[int | None, str], float] = {}
+    for row in state.sessions:
+        for ci, name, seconds in row_gestures(row, class_names):
+            gestures[ci, name] = gestures.get((ci, name), 0.0) + seconds
+    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+    for index, ((ci, name), seconds) in enumerate(gestures.items()):
+        label = f"   {name} {_elapsed_str(seconds)}"
+        width = imgui.calc_text_size(label).x + 2 * imgui.get_style().frame_padding.x
+        if index and imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + width <= right:
+            imgui.same_line()
+        included = ci not in state.deactivated_classes
+        if included:
             push_selected()
-        if imgui.button(f"{name}##{widget_id}_button{ci}"):
-            if is_active:
-                deactivated_classes.add(ci)
-            else:
-                deactivated_classes.discard(ci)
-        if is_active:
+        clicked = imgui.button(f"{label}##{widget_id}_gesture{ci}")
+        if included:
             pop_selected()
-        imgui.same_line()
-    imgui.new_line()
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        color = PALETTE[(ci if ci is not None else index) % len(PALETTE)]
+        imgui.get_window_draw_list().add_circle_filled(
+            imgui.ImVec2(lo.x + imgui.get_style().frame_padding.x + ui_px(3), (lo.y + hi.y) / 2),
+            ui_px(3), imgui.get_color_u32(imgui.ImVec4(*color, 1.0)),
+        )
+        if clicked and ci is not None:
+            if included:
+                state.deactivated_classes.add(ci)
+            else:
+                state.deactivated_classes.discard(ci)
+        imgui.set_item_tooltip(f"{'Exclude' if included else 'Include'} {name} in training")
 
 
 def render_session_rows(
-    widget_id: str, sessions: list[dict], class_names: list[str] | None
+    widget_id: str, base_path: str, state: SessionWidgetState, class_names: list[str] | None,
 ) -> None:
-    for i, row in enumerate(sessions):
-        changed, checked = imgui.checkbox(f"##{widget_id}_{i}", row["selected"])
-        if changed:
-            row["selected"] = checked
-        imgui.same_line()
-        # The operator's own name leads when there is one — that is what they
-        # will be scanning for. The timestamp always follows, since it is the
-        # only part guaranteed unique.
-        stamp = row.get("date_str", row["name"])
-        given = row.get("session_name", "")
-        imgui.text_colored(
-            primary(),
-            f"{given}  ·  {stamp}  ·  {row.get('streams_str', '')}"
-            if given
-            else f"{stamp}  ·  {row.get('streams_str', '')}",
-        )
-        render_label_counts(row, class_names)
+    if not state.sessions:
+        return
+    height = max(ui_px(1), imgui.get_content_region_avail().y - imgui.get_style().item_spacing.y)
+    imgui.begin_child(f"{widget_id}_list", imgui.ImVec2(0, height))
+    for group in group_sessions(state.sessions, base_path):
+        selected = sum(row["selected"] for row in group.rows)
+        duration = _elapsed_str(sum(row.get("duration_s", 0.0) for row in group.rows))
+        imgui.set_next_item_open(group.default_open, imgui.Cond_.once)
+        if imgui.collapsing_header(
+            f"{group.label}  {selected}/{len(group.rows)} · {duration}###{widget_id}_{base_path}_{group.key}"
+        ):
+            for row in group.rows:
+                _render_row(widget_id, row, state.deactivated_classes, class_names)
+    imgui.end_child()
 
 
-def render_label_counts(row: dict, class_names: list[str] | None) -> None:
-    counts = row.get("label_counts", {})
-    named_counts = sorted(
-        ((int(k), v) for k, v in counts.items() if int(k) >= 0),
-        key=lambda x: x[0],
-    )
-    if named_counts:
+def _render_row(
+    widget_id: str, row: dict, excluded: set[int], class_names: list[str] | None,
+) -> None:
+    # Two-pixel vertical padding keeps the checkbox and chips to 18 px with
+    # the 14 px body font; the theme's trailing 8 px gap makes a 26 px row.
+    imgui.push_style_var(imgui.StyleVar_.frame_padding,
+                         imgui.ImVec2(imgui.get_style().frame_padding.x, ui_px(2)))
+    imgui.begin_group()
+    right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+    _, row["selected"] = imgui.checkbox(f"##{widget_id}_{row['path']}", row["selected"])
+    checkbox_hovered = imgui.is_item_hovered()
+    imgui.same_line()
+    created = row.get("created")
+    stamp = created.strftime("%H:%M") if created else "—"
+    duration = _elapsed_str(row.get("duration_s", 0.0))
+    font = mono_font()
+    if font is not None:
+        imgui.push_font(font, imgui.get_style().font_size_base)
+    time_width = imgui.calc_text_size(stamp).x
+    duration_width = imgui.calc_text_size(duration).x
+    if font is not None:
+        imgui.pop_font()
+    gap = imgui.get_style().item_spacing.x
+    time_x = right - time_width - gap - duration_width
+    if row.get("drive", False):
+        imgui.align_text_to_frame_padding()
+        imgui.text_colored(muted(), "Drive")
         imgui.same_line()
-        imgui.text_colored(muted(), "·")
-        sess_names = row.get("class_names") or class_names
-        for ci, n in named_counts:
-            imgui.same_line()
-            c = PALETTE[ci % len(PALETTE)]
-            imgui.text_colored(imgui.ImVec4(c[0], c[1], c[2], 1.0), "●")
-            imgui.same_line()
-            name = (
-                sess_names[ci] if sess_names is not None and 0 <= ci < len(sess_names) else f"c{ci}"
-            )
-            imgui.text(f"{name}:{n}")
+    for index, (ci, name, _) in enumerate(row_gestures(row, class_names)):
+        room = time_x - gap - imgui.get_cursor_pos_x()
+        if room <= ui_px(10):
+            break
+        pad = ui_px(5)
+        label = name
+        while label and imgui.calc_text_size(label).x + 2 * pad > room:
+            label = label[:-1]
+        if label != name:
+            label = label[:-1] + "…" if label else "…"
+        width = min(room, imgui.calc_text_size(label).x + 2 * pad)
+        imgui.dummy(imgui.ImVec2(width, imgui.get_frame_height()))
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        color = PALETTE[(ci if ci is not None else index) % len(PALETTE)]
+        tone = muted() if ci in excluded else imgui.ImVec4(*color, 1.0)
+        draw = imgui.get_window_draw_list()
+        draw.add_rect_filled(lo, hi, imgui.get_color_u32(imgui.ImVec4(tone.x, tone.y, tone.z, 0.16)), ui_px(4))
+        draw.add_text(imgui.ImVec2(lo.x + pad, lo.y + imgui.get_style().frame_padding.y),
+                      imgui.get_color_u32(muted() if ci in excluded else imgui.get_style().color_(imgui.Col_.text)), label)
+        imgui.same_line()
+    imgui.set_cursor_pos_x(max(imgui.get_cursor_pos_x(), time_x))
+    imgui.align_text_to_frame_padding()
+    mono_text(stamp, muted())
+    imgui.same_line()
+    imgui.set_cursor_pos_x(max(imgui.get_cursor_pos_x(), right - duration_width))
+    mono_text(duration, muted())
+    imgui.end_group()
+    imgui.pop_style_var()
+    if not checkbox_hovered and imgui.is_item_clicked():
+        row["selected"] = not row["selected"]
+    name = row.get("session_name", "")
+    imgui.set_item_tooltip(f"{name + chr(10) if name else ''}{row['name']}\n{row.get('streams_str', '')}")
 
-    unlabeled = counts.get("-1", 0)
-    if unlabeled:
-        imgui.same_line()
-        imgui.text_colored(
-            muted(),
-            f"·  unlabeled:{unlabeled}",
-        )
+
+def _elapsed_str(seconds: float) -> str:
+    """Format seconds as the stopwatch duration shown beside a take."""
+    minutes, secs = divmod(max(0, int(seconds)), 60)
+    return f"{minutes}:{secs:02d}"

@@ -279,6 +279,80 @@ def test_an_opponent_that_cannot_move_is_refused_rather_than_shipped(bad: float)
         PongTask(opponent=bad)
 
 
+@pytest.mark.parametrize("paddle_size", [0.36, 0.6])
+@pytest.mark.parametrize("opponent", [None, 0.6])
+def test_none_opponent_size_preserves_the_shared_paddle_geometry(paddle_size, opponent):
+    tasks = [
+        PongTask(paddle_size=paddle_size, opponent=opponent),
+        PongTask(paddle_size=paddle_size, opponent=opponent, opponent_paddle_size=None),
+        PongTask(paddle_size=paddle_size, opponent=opponent, opponent_paddle_size=paddle_size),
+    ]
+    for task in tasks:
+        assert task._opponent_half == task._half == pytest.approx(paddle_size / 2)
+        _play(task, Ball(0.9, 0.8, -0.5, 0.0), until=2.0)
+    assert all(task._ball == tasks[0]._ball for task in tasks)
+    assert all(task._opponent_y == tasks[0]._opponent_y for task in tasks)
+    assert all(task._opponent_misses == tasks[0]._opponent_misses for task in tasks)
+
+
+@pytest.mark.parametrize("size", [-0.5, 0.0, 0.01, 0.36, 2.0, 3.0])
+def test_opponent_size_uses_the_same_bounds_as_player_size(size):
+    player = PongTask(paddle_size=size)
+    opponent = PongTask(opponent_paddle_size=size)
+    assert opponent._opponent_half == player._half
+    assert opponent._half == pytest.approx(0.18)
+
+
+def test_a_larger_player_paddle_returns_a_ball_without_enlarging_the_opponent():
+    default = PongTask(opponent=0.6)
+    larger = PongTask(paddle_size=0.6, opponent_paddle_size=0.36, opponent=0.6)
+    for task in (default, larger):
+        task._ball = Ball(0.98, 0.25, 0.55, 0.0)
+        task._last = 0.0
+        task._tick(_MAX_STEP_S, 0.0)
+    assert (default._hits, default._misses) == (0, 1)
+    assert (larger._hits, larger._misses) == (1, 0)
+    assert larger._ball.vx < 0.0
+    assert larger._opponent_half == default._opponent_half == pytest.approx(0.18)
+    assert larger._limit == pytest.approx(0.7)
+    assert larger._ghost_y(1.0) == pytest.approx(0.7)
+    larger._aim(1.0)
+    assert larger._paddle == pytest.approx(0.7)
+
+
+@pytest.mark.parametrize("player_size", [0.2, 0.8])
+@pytest.mark.parametrize("opponent_size,misses", [(0.2, 1), (0.6, 0)])
+def test_opponent_returns_and_spins_the_ball_using_its_own_half(player_size, opponent_size, misses):
+    task = PongTask(
+        ball_speed=0.5, paddle_size=player_size, opponent_paddle_size=opponent_size,
+        opponent=0.6,
+    )
+    task._ball = Ball(0.02, 0.25, -0.5, 0.0)
+    task._last = 0.0
+    task._tick(_MAX_STEP_S, 0.0)
+    assert task._opponent_misses == misses
+    assert task._misses == 0
+    assert task._opponent_half == pytest.approx(opponent_size / 2)
+    if not misses:
+        assert task._ball.vx > 0.0
+        # Arrival after 0.04 s: the CPU has moved 0.012 toward the ball.
+        assert task._ball.vy == pytest.approx(_SPIN * 0.5 * (0.25 - 0.012) / 0.3)
+
+
+@pytest.mark.parametrize("x,dt", [(0.02, 0.04), (0.5, 0.1)])
+def test_opponent_tracking_clamps_to_its_own_half_at_and_between_crossings(x, dt):
+    task = PongTask(
+        ball_speed=0.5, paddle_size=0.6, opponent_paddle_size=0.2, opponent=0.6,
+    )
+    task._opponent_y = 0.9
+    task._ball = Ball(x, 0.95, -0.5, 0.0)
+    task._last = 0.0
+    task._tick(dt, 0.0)
+    assert task._opponent_y == pytest.approx(0.9)
+    assert task._opponent_misses == 0
+    assert (task._ball.vx > 0.0) is (x == 0.02)
+
+
 def test_the_opponent_chases_only_while_the_ball_is_coming_at_it():
     """Which is what makes it beatable, and what makes it look like it is playing.
 
@@ -887,6 +961,19 @@ class _RectRecorder:
         return lambda *a, **k: None
 
 
+def test_each_paddle_draws_at_its_own_height_and_the_ghost_matches_the_player(imgui_frame, monkeypatch):
+    task = PongTask(paddle_size=0.6, opponent_paddle_size=0.36, opponent=0.6)
+    rec = _RectRecorder()
+    monkeypatch.setattr(imgui, "get_window_draw_list", lambda: rec)
+    imgui_frame(lambda: task._court_ui(task._ghost_y(0.0)))
+    court, opponent, player = rec.fills
+    court_height = court[3] - court[1]
+    assert opponent[3] - opponent[1] == pytest.approx(court_height * 0.18)
+    assert player[3] - player[1] == pytest.approx(court_height * 0.30)
+    ghost = rec.outlines[-1]
+    assert ghost[1] < player[1] and ghost[3] > player[3]
+
+
 def test_a_perfectly_tracked_ghost_is_still_visible(imgui_frame, monkeypatch):
     """An absent reference and a perfectly tracked one must not look the same.
 
@@ -980,3 +1067,189 @@ def test_a_ghost_renders_through_the_public_call_and_leaves_the_id_stack_alone(i
     imgui_frame(draw)
 
     assert len(set(probes)) == 1, "the ghost left the id stack pushed"
+
+
+@pytest.mark.parametrize("typing,focused,serves", [(False, True, True), (True, True, False), (False, False, False)])
+def test_space_serves_only_with_window_focus_and_no_text_input(imgui_frame, monkeypatch, typing, focused, serves):
+    task = PongTask()
+    monkeypatch.setattr(imgui, "is_window_focused", lambda *a: focused)
+    monkeypatch.setattr(imgui, "is_key_pressed", lambda key, *a, **kw: key == imgui.Key.space)
+
+    def draw():
+        imgui.get_io().want_text_input = typing
+        task.ui(0.0)
+
+    imgui_frame(draw)
+    assert (task._ball is not None) is serves
+
+
+@pytest.mark.parametrize("player", [False, True])
+def test_first_to_score_stops_even_while_commands_keep_arriving(player):
+    task = PongTask(opponent=0.6, win_score=2)
+    task._misses = 1
+    task._opponent_misses = 1
+    task._ball = Ball(0.01 if player else 0.99, 0.9, -0.5 if player else 0.5, 0.0)
+    task._last = 0.0
+    task._tick(0.1, 0.0)
+    assert task.game_over
+    assert task._ball is None
+    score = task._misses, task._opponent_misses
+    for i in range(1, 30):
+        task._tick(0.1 + i * 0.1, 0.8)
+    task._serve()
+    assert task._ball is None
+    assert (task._misses, task._opponent_misses) == score
+
+
+def test_endless_game_and_play_again(imgui_frame, monkeypatch):
+    endless = PongTask(win_score=None)
+    endless._misses = 50
+    assert not endless.game_over
+    task = PongTask(win_score=1)
+    task._misses = 1
+    task._best = 12
+    button = imgui.button
+    monkeypatch.setattr(imgui, "button", lambda label, *a, **kw: True if "Play again" in label else button(label, *a, **kw))
+    imgui_frame(lambda: task.ui(0.0))
+    assert not task.game_over
+    assert (task._misses, task._opponent_misses, task._hits, task._best) == (0, 0, 0, 0)
+    assert task._ball is not None
+
+
+def test_wall_returns_count_toward_the_players_win():
+    task = PongTask(win_score=1)
+    task._last = 0.0
+    task._ball = Ball(0.99, 0, 0.5, 0)
+    task._tick(0.1, 0)
+    assert task.game_over
+    assert task._hits == 1
+    assert task._ball is None
+
+
+def test_harder_is_optional_and_calls_the_callback(imgui_frame, monkeypatch):
+    called, labels = [], []
+    button = imgui.button
+
+    def click(label, *a, **kw):
+        labels.append(label)
+        return True if "Harder" in label else button(label, *a, **kw)
+
+    monkeypatch.setattr(imgui, "button", click)
+    task = PongTask(opponent=0.6, win_score=1, on_harder=lambda: called.append(True))
+    task._opponent_misses = 1
+    imgui_frame(lambda: task.ui(0.0))
+    assert called == [True]
+    labels.clear()
+    task = PongTask(win_score=1)
+    task._misses = 1
+    imgui_frame(lambda: task.ui(0.0))
+    assert not any("Harder" in label for label in labels)
+
+
+def test_signed_meter_shows_both_signs_and_velocity_dead_band(imgui_frame, monkeypatch):
+    records = []
+    for control, value in [("velocity", 0.5), ("velocity", -0.5), ("position", 0.5)]:
+        rec = _RectRecorder()
+        monkeypatch.setattr(imgui, "get_window_draw_list", lambda rec=rec: rec)
+        task = PongTask(control=control)
+        imgui_frame(lambda task=task, value=value: task._meter_ui(imgui.ImVec2(20, 20), imgui.ImVec2(60, 300), value, None, None))
+        records.append(rec)
+    up, down, position = records
+    assert up.fills[-1][1] < up.fills[-1][3]
+    assert down.fills[-1][1] >= up.fills[-1][3]
+    assert len(up.fills) == len(position.fills) + 1, "velocity has no shaded dead band"
+
+
+def test_training_side_meter_is_unsigned_and_tick_uses_target_magnitude(imgui_frame, monkeypatch):
+    records = []
+    task = PongTask()
+    for target in (0.5, -0.5):
+        rec = _RectRecorder()
+        monkeypatch.setattr(imgui, "get_window_draw_list", lambda rec=rec: rec)
+        imgui_frame(lambda target=target: task._meter_ui(imgui.ImVec2(20, 20), imgui.ImVec2(60, 300), -0.9, task._ghost_y(target), 0.4))
+        records.append(rec)
+    assert records[0].fills == records[1].fills
+    assert records[0].lines == records[1].lines
+    assert records[0].fills[-1][1] < records[0].fills[-1][3]
+
+
+def test_light_court_uses_accent_paddle_label_and_meter(imgui_frame, monkeypatch):
+    from myogestic import _theme
+    from myogestic.widgets.common import CONSOLE_BG, INFO, ON_PRIMARY_TEXT
+
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    fills, labels = [], []
+    original = imgui.get_window_draw_list
+
+    class Observe:
+        def add_rect_filled(self, lo, hi, color, **kwargs):
+            fills.append(color)
+            original().add_rect_filled(lo, hi, color, **kwargs)
+
+        def add_text(self, pos, color, text):
+            labels.append((text, color))
+            original().add_text(pos, color, text)
+
+        def __getattr__(self, name):
+            return getattr(original(), name)
+
+    monkeypatch.setattr(imgui, "get_window_draw_list", lambda: Observe())
+    task = PongTask()
+    imgui_frame(lambda: task._court_ui(None, command=0.5))
+    assert fills[0] == imgui.get_color_u32(CONSOLE_BG)
+    assert fills[1] == imgui.get_color_u32(INFO), "the paddle is text-coloured instead of accent"
+    assert fills[-1] == imgui.get_color_u32(INFO), "the decoded command lost its accent"
+    assert ("YOU", imgui.get_color_u32(INFO)) in labels
+    assert ("0", imgui.get_color_u32(ON_PRIMARY_TEXT)) in labels
+
+
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+@pytest.mark.parametrize("state", ["serve", "playing", "over"])
+def test_light_court_overlay_meter_and_score_fit_320px(imgui_frame, monkeypatch, scale, state):
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    task = PongTask(court_height=0, opponent=0.6, opponent_name="Fair", on_harder=lambda: None)
+    if state == "playing":
+        task._serve()
+    elif state == "over":
+        task._opponent_misses = 11
+    labels, buttons, bounds = [], [], []
+    original = imgui.get_window_draw_list
+    button = imgui.button
+
+    class Observe:
+        def add_text(self, pos, color, text):
+            labels.append((text, pos.x, pos.x + imgui.calc_text_size(text).x))
+            original().add_text(pos, color, text)
+
+        def __getattr__(self, name):
+            return getattr(original(), name)
+
+    def capture(label, *a, **kw):
+        result = button(label, *a, **kw)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        buttons.append((label, lo.x, hi.x))
+        return result
+
+    monkeypatch.setattr(imgui, "get_window_draw_list", lambda: Observe())
+    monkeypatch.setattr(imgui, "button", capture)
+
+    def draw():
+        imgui.begin_child("court-320", imgui.ImVec2(320, 440))
+        left = imgui.get_cursor_screen_pos().x
+        bounds.append((left, left + imgui.get_content_region_avail().x))
+        task.ui(-0.5)
+        imgui.end_child()
+
+    imgui_frame(draw)
+    lo, hi = bounds[0]
+    assert all(lo - 1 <= left <= right <= hi + 1 for _, left, right in labels + buttons)
+    texts = [label for label, _, _ in labels]
+    assert "CMD" in texts
+    assert ("CPU · FAIR" in texts and "YOU" in texts) or state == "over"

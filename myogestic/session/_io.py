@@ -69,6 +69,7 @@ def open_session_store(path: str | Path) -> Session:
     # be set here or it raises AttributeError instead of coming back empty. `name` is
     # written to meta.json precisely so it survives this trip.
     session.name = str(meta.get("name") or "")
+    session.participant = str(meta.get("participant") or "")
     # Always set (None for folder sessions): keeps Session.close() safe even
     # though open_session_store bypasses __init__ via Session.__new__.
     session._zip_store = zip_store

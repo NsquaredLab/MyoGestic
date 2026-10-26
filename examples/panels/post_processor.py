@@ -9,17 +9,22 @@ Run with:
     uv run python examples/panels/post_processor.py
 """
 
-from myogestic import App
-from myogestic.widgets import PostProcessor
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, PostProcessor
 
 fc = PostProcessor(hz=20.0)
 
 app = App("panel: post_processor")
+header = AppHeader("PostProcessor", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 
 @app.ui
 def ui(ctx):
-    fc.ui()
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        fc.ui()
 
 
 def main() -> None:

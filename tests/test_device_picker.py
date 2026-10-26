@@ -1,9 +1,8 @@
 """`DevicePicker`: option resolution, the shipped device entries, and source swapping.
 
-Rendering is not covered — it needs a GUI. What is covered is everything the
-rendering merely displays: that every offered choice builds a real source, that
-an untouched panel reproduces the library defaults, and that attaching a new
-source closes the one it replaced.
+Headless ImGui frames cover chip interactions, action states, recording guards,
+and responsive layout. Source tests cover configuration defaults, connection
+lifecycle, and closing the source being replaced.
 """
 
 import itertools
@@ -789,3 +788,246 @@ def test_the_synthetic_device_offers_activation_as_a_live_slider():
     cannot cue a subject mid-recording."""
     live = {p.attr for p in SYNTHETIC_DEVICE.live}
     assert "activation" in live, f"activation is not tunable while streaming: {live}"
+
+
+@pytest.fixture
+def picker_buttons(monkeypatch):
+    """Observe real ImGui items and inject one enabled button click by its ID."""
+    from imgui_bundle import imgui
+
+    seen = []
+    click = {"id": None}
+    original = imgui.button
+
+    def button(label, *args):
+        result = original(label, *args)
+        disabled = bool(imgui.get_item_flags() & imgui.ItemFlags_.disabled)
+        seen.append((label, disabled))
+        return result or (label.endswith(click["id"]) and not disabled if click["id"] else False)
+
+    monkeypatch.setattr(imgui, "button", button)
+    return seen, click
+
+
+def test_stream_chip_selects_without_losing_per_stream_state(imgui_frame, picker_buttons):
+    seen, click = picker_buttons
+    ctx = _FakeCtx({name: Stream(name, source=_FakeSource(), window_ms=100) for name in ("emg", "force", "target")})
+    picker = DevicePicker("emg", selectable=True, exclude=("target",))
+    picker._choices[0]["emg"] = 1
+    click["id"] = "##dp_stream_force"
+    imgui_frame(lambda: picker.ui(ctx))
+    assert picker._stream_name == "force"
+    assert not any("dp_stream_target" in label for label, _ in seen)
+    click["id"] = "##dp_stream_emg"
+    imgui_frame(lambda: picker.ui(ctx))
+    assert picker._choices[0]["emg"] == 1
+
+
+def test_add_chip_submits_cleaned_name(imgui_frame, picker_buttons, monkeypatch):
+    from imgui_bundle import imgui
+
+    seen, click = picker_buttons
+    added = []
+    ctx = _FakeCtx({"emg": Stream("emg", source=_FakeSource(), window_ms=100)})
+    picker = DevicePicker("emg", selectable=True, on_add=added.append)
+    click["id"] = "##dp_add_open"
+    imgui_frame(lambda: picker.ui(ctx))
+    monkeypatch.setattr(imgui, "input_text_with_hint", lambda *args: (True, "  F/o.rce-é_2  "))
+    click["id"] = "##dp_add"
+    imgui_frame(lambda: picker.ui(ctx))
+    assert added == ["force-_2"]
+
+
+@pytest.mark.parametrize("recording", [False, True])
+def test_remove_chip_keeps_last_stream_and_blocks_recording(imgui_frame, picker_buttons, recording):
+    seen, click = picker_buttons
+    ctx = _FakeCtx({"emg": Stream("emg", source=_FakeSource(), window_ms=100)})
+    removed = []
+
+    def remove(name):
+        removed.append(name)
+        ctx.streams.pop(name)
+
+    picker = DevicePicker("emg", selectable=True, on_remove=remove)
+    click["id"] = "##dp_remove_emg"
+    imgui_frame(lambda: picker.ui(ctx))
+    assert not any("##dp_remove" in label for label, _ in seen)
+    ctx.streams["force"] = Stream("force", source=_FakeSource(), window_ms=100)
+    ctx.state = "recording" if recording else "idle"
+    ctx.recording = recording
+    seen.clear()
+    imgui_frame(lambda: picker.ui(ctx))
+    assert [disabled for label, disabled in seen if "##dp_remove_emg" in label] == [recording]
+    assert removed == ([] if recording else ["emg"])
+    assert picker._stream_name == ("emg" if recording else "force")
+
+
+def test_removed_selected_stream_falls_back_to_remaining_chip(imgui_frame):
+    ctx = _FakeCtx({"force": Stream("force", source=_FakeSource(), window_ms=100)})
+    picker = DevicePicker("emg", selectable=True)
+    imgui_frame(lambda: picker.ui(ctx))
+    assert picker._stream_name == "force"
+
+
+@pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("recording", [False, True])
+def test_action_area_matches_attachment_and_recording(imgui_frame, picker_buttons, connected, recording):
+    from imgui_bundle import icons_fontawesome_6 as fa
+
+    seen, _ = picker_buttons
+    stream = Stream("emg", source=_FakeSource(), window_ms=100)
+    if connected:
+        assert stream.reconnect()
+        stream.status = "connected"  # acquire loop marks this on the first sample
+    ctx = _FakeCtx({"emg": stream})
+    ctx.state = "recording" if recording else "idle"
+    ctx.recording = recording
+    picker = DevicePicker("emg")
+    imgui_frame(lambda: picker.ui(ctx))
+    actions = [(label, disabled) for label, disabled in seen if "##dp_connect" in label or "##dp_disconnect" in label]
+    expected = ([f"{fa.ICON_FA_ARROWS_ROTATE}##dp_connect", f"{fa.ICON_FA_PLUG_CIRCLE_XMARK}##dp_disconnect"]
+                if connected else [f"{fa.ICON_FA_PLUG}  Connect##dp_connect"])
+    assert actions == [(label, recording) for label in expected]
+
+
+@pytest.mark.parametrize("scale,width", [(1.0, 400), (1.0, 220), (2.0, 800), (2.0, 400)])
+@pytest.mark.parametrize("state", ["idle", "connected", "connecting"])
+def test_compact_controls_stay_inside_the_card(imgui_frame, monkeypatch, scale, width, state):
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    stream = Stream("emg", source=_FakeSource(), window_ms=100)
+    ctx = _FakeCtx({"emg": stream, "long_stream_name_to_wrap": stream, "force": stream})
+    picker = DevicePicker("emg", selectable=True, on_add=lambda name: None, on_remove=lambda name: None)
+    if state == "connected":
+        assert stream.reconnect()
+        stream.status = "connected"
+    if state == "connecting":
+        picker._connecting = True
+        picker._connect_started = time.monotonic()
+    items = []
+    for name in ("button", "combo"):
+        original = getattr(imgui, name)
+
+        def tracked(label, *args, original=original):
+            result = original(label, *args)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            origin, size = imgui.get_window_pos(), imgui.get_window_size()
+            items.append((label, lo.x >= origin.x, hi.x <= origin.x + size.x))
+            return result
+
+        monkeypatch.setattr(imgui, name, tracked)
+
+    def draw():
+        imgui.begin_child("card", imgui.ImVec2(width, 450))
+        picker.ui(ctx)
+        imgui.end_child()
+
+    imgui_frame(draw)
+    assert items and all(left and right for _, left, right in items), items
+
+
+@pytest.mark.parametrize("typed", ["...", " EMG "])
+def test_add_refuses_empty_and_duplicate_names(imgui_frame, picker_buttons, monkeypatch, typed):
+    from imgui_bundle import imgui
+
+    seen, click = picker_buttons
+    added = []
+    ctx = _FakeCtx({"emg": Stream("emg", source=_FakeSource(), window_ms=100)})
+    picker = DevicePicker("emg", selectable=True, on_add=added.append)
+    picker._adding = True
+    monkeypatch.setattr(imgui, "input_text_with_hint", lambda *args: (True, typed))
+    click["id"] = "##dp_add"
+    imgui_frame(lambda: picker.ui(ctx))
+    assert added == []
+    assert ("Add##dp_add", True) in seen
+
+
+def test_recording_blocks_add_and_explains_every_device_action(imgui_frame, picker_buttons, monkeypatch):
+    from imgui_bundle import imgui
+
+    seen, click = picker_buttons
+    tooltips = []
+    monkeypatch.setattr(imgui, "is_item_hovered", lambda *args: True)
+    monkeypatch.setattr(imgui, "set_tooltip", tooltips.append)
+    stream = Stream("emg", source=_FakeSource(), window_ms=100)
+    assert stream.reconnect()
+    stream.status = "connected"
+    ctx = _FakeCtx({"emg": stream, "force": stream})
+    ctx.state = "recording"
+    ctx.recording = True
+    picker = DevicePicker("emg", selectable=True, on_add=lambda name: pytest.fail(name), on_remove=lambda name: pytest.fail(name))
+    click["id"] = "##dp_add_open"
+    imgui_frame(lambda: picker.ui(ctx))
+    assert not picker._adding
+    assert all(disabled for label, disabled in seen if any(key in label for key in ("dp_add", "dp_remove", "dp_connect", "dp_disconnect")))
+    assert "Stop the recording before adding a stream." in tooltips
+    assert "Stop the recording before removing a stream." in tooltips
+    assert tooltips.count("Stop the recording before changing device.") == 2
+
+
+def test_connecting_detail_leaves_room_for_abort(imgui_frame, monkeypatch):
+    from imgui_bundle import imgui
+
+    from myogestic.widgets.signals import device_picker as module
+
+    picker = DevicePicker("emg")
+    picker._connecting = True
+    picker._connect_started = time.monotonic() - 12
+    stream = Stream("emg", source=_FakeSource(), window_ms=100)
+    ctx = _FakeCtx({"emg": stream})
+    rects = {}
+    mono_text, button = module.mono_text, imgui.button
+
+    def text(label, *args):
+        mono_text(label, *args)
+        rects["detail_right"] = imgui.get_item_rect_max().x
+
+    def action(label, *args):
+        result = button(label, *args)
+        if "dp_abort" in label:
+            rects["abort_left"] = imgui.get_item_rect_min().x
+        return result
+
+    monkeypatch.setattr(module, "mono_text", text)
+    monkeypatch.setattr(imgui, "button", action)
+
+    def draw():
+        imgui.begin_child("narrow-connecting", imgui.ImVec2(180, 350))
+        picker.ui(ctx)
+        imgui.end_child()
+
+    imgui_frame(draw)
+    assert rects["detail_right"] < rects["abort_left"]
+
+
+@pytest.mark.parametrize("width,columns", [(400, 2), (180, 1)])
+def test_option_grid_stacks_when_cells_are_too_narrow(imgui_frame, monkeypatch, width, columns):
+    from imgui_bundle import imgui
+
+    positions = {}
+    button = imgui.button
+
+    def tracked(label, *args):
+        result = button(label, *args)
+        if label.startswith(("EMG##", "Off##")):
+            positions[label.split("##")[0]] = imgui.get_item_rect_min().y
+        return result
+
+    monkeypatch.setattr(imgui, "button", tracked)
+    picker = DevicePicker("emg")
+    ctx = _FakeCtx({"emg": Stream("emg", source=_FakeSource(), window_ms=100)})
+
+    def draw():
+        imgui.begin_child("options-grid", imgui.ImVec2(width, 350))
+        picker.ui(ctx)
+        imgui.end_child()
+
+    imgui_frame(draw)
+    assert (positions["EMG"] == positions["Off"]) == (columns == 2)

@@ -10,10 +10,14 @@ from imgui_bundle import imgui
 from myogestic.widgets.common import (
     PALETTE,
     hairline,
+    mono_font,
+    muted,
+    panel_header,
     pop_selected,
     primary,
     push_selected,
     segmented,
+    ui_px,
 )
 from myogestic.widgets.signals._channel_grid import (
     grid_arrangement,
@@ -21,181 +25,291 @@ from myogestic.widgets.signals._channel_grid import (
     rect_to_channels,
     reduce_selection,
 )
+from myogestic.widgets.signals._plot import render_footer
 from myogestic.widgets.signals._scan import _scan_panel
 from myogestic.widgets.signals._state import _DETAIL_FULL, _DETAIL_MIN, select_stream
 
 if TYPE_CHECKING:
     from myogestic.core import Context
     from myogestic.stream import ChannelGrid, Stream
-    from myogestic.widgets.signals._state import ViewerState
+    from myogestic.widgets.signals._state import SignalFrame, ViewerState
 
 
-# Each control row is a borderless table: the button groups keep their natural
-# width while the sliders stretch to whatever is left, so a row stays one line
-# at any panel width. Grouping is carried by hairline rules, not table chrome.
-_ROW_FLAGS = imgui.TableFlags_.sizing_fixed_fit | imgui.TableFlags_.no_pad_outer_x
-
-
-def _group_rule() -> None:
-    """A faint vertical rule between two control groups on the same row."""
-    style = imgui.get_style()
-    imgui.same_line()
-    height = imgui.get_frame_height()
-    pos = imgui.get_cursor_screen_pos()
-    x = pos.x + style.item_spacing.x * 0.5
-    imgui.get_window_draw_list().add_line(
-        imgui.ImVec2(x, pos.y + 3.0),
-        imgui.ImVec2(x, pos.y + height - 3.0),
-        imgui.get_color_u32(hairline(0.8)),
-    )
-    imgui.dummy(imgui.ImVec2(style.item_spacing.x, height))
-    imgui.same_line()
+# Reserve 16 logical px (32 px at scale 2) for platform glyph rounding and group
+# spacing, including when deciding to compact or wrap the toolbar.
+_TOOLBAR_HEADROOM = 16.0
 
 
 def _slider_label(text: str) -> None:
-    """Label to the left of a full-width slider, the layout every slider cell uses."""
+    """Put a muted label in the Display popup's shared control column."""
+    left = imgui.get_cursor_pos_x()
     imgui.align_text_to_frame_padding()
-    imgui.text(text)
+    imgui.text_colored(muted(), text)
     imgui.same_line()
+    imgui.set_cursor_pos_x(left + ui_px(80))
     imgui.set_next_item_width(-1)
+
+
+def _button_width(label: str) -> float:
+    """Measure a button using the current font and frame padding."""
+    return imgui.calc_text_size(label).x + imgui.get_style().frame_padding.x * 2
+
+
+def _toolbar_next(width: float) -> None:
+    """Keep the next control beside this one only when the whole control fits."""
+    imgui.same_line()
+    if imgui.get_content_region_avail().x < width + ui_px(_TOOLBAR_HEADROOM):
+        imgui.new_line()
+
+
+def _popup_button(label: str, widget_id: str, popup_id: str) -> None:
+    """Open a popup, retaining the selected cue while it is open."""
+    selected = imgui.is_popup_open(popup_id)
+    if selected:
+        push_selected()
+    if imgui.button(f"{label}##{widget_id}"):
+        imgui.open_popup(popup_id)
+    if selected:
+        pop_selected()
 
 
 def render_controls(
     ctx: Context,
     stream_name: str,
     active_stream: str,
-    stream: Stream,
+    stream: Stream | None,
     v: ViewerState,
     selectable: bool,
     enabled: set[int] | None = None,
     scope: list[int] | None = None,
+    *,
+    title: str | None = None,
+    show_title: bool = True,
+    exclude: frozenset[str] = frozenset(),
 ) -> None:
-    """Render the control rows and mutate `v` from user input.
+    """Render the title and right-aligned toolbar, wrapping only when necessary.
 
-    Two rows, split by what they act on rather than by what fits: row one is the
-    **signal and the time axis** (freeze, source, notch, view transform, window,
-    detail), row two is the **amplitude axis and the channels** (scale policy,
-    gain, artifact rejection, channel selection). Groups within a row are
-    separated by a hairline rule.
-
-    ``enabled`` / ``scope`` are the resolved channel selection; pass them to get
-    the channel bar inline in row two, omit them and the row ends after the
-    sliders (the caller then draws the bar itself).
+    Popup ids and every control use ``stream_name``, the viewer's widget id,
+    rather than the stream it currently happens to display. Channel operations
+    run before the plot so the frame contains exactly the selected columns.
     """
-    fs = stream.info.fs if stream.info else 0.0
-    max_window = stream._buffer_seconds if hasattr(stream, "_buffer_seconds") else 60.0
-
-    # --- Row 1: the signal, and how much of it in time ---------------------
-    if imgui.begin_table(f"{stream_name}_row_signal", 3, _ROW_FLAGS):
-        imgui.table_setup_column("group", imgui.TableColumnFlags_.width_fixed)
-        imgui.table_setup_column("window", imgui.TableColumnFlags_.width_stretch)
-        imgui.table_setup_column("detail", imgui.TableColumnFlags_.width_stretch)
-        imgui.table_next_row()
-
-        imgui.table_next_column()
-        _render_transport(ctx, stream_name, active_stream, stream, v, selectable)
-        _group_rule()
-        _render_signal_group(stream_name, v, fs)
-
-        imgui.table_next_column()
-        _group_rule()
-        _slider_label("Window")
-        changed_w, new_w = imgui.slider_float(
-            f"##{stream_name}_win", v.window, 0.1, max_window, "%.1f s"
-        )
-        if changed_w:
-            v.window = new_w
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("How much history the scope shows, in seconds.")
-
-        imgui.table_next_column()
-        _slider_label("Detail")
-        # `_slider_label` stretches the next item to the column edge (`-1`). Claim the
-        # toggle's width back first, or `same_line` puts it past that edge and off the
-        # panel — the slider is not "as wide as fits", it is "all of it".
-        style = imgui.get_style()
-        toggle_w = imgui.calc_text_size("1:1").x + style.frame_padding.x * 2.0
-        imgui.set_next_item_width(-(toggle_w + style.item_spacing.x))
-        # `detail_factor` is points-per-pixel internally; shown as a percentage of
-        # full detail (100% = the crispest _DETAIL_FULL density).
-        pct = v.detail_factor / _DETAIL_FULL * 100.0
-        changed_r, new_pct = imgui.slider_float(
-            f"##{stream_name}_detail", pct, _DETAIL_MIN / _DETAIL_FULL * 100.0, 100.0, "%.0f%%"
-        )
-        if changed_r:
-            v.detail_factor = new_pct / 100.0 * _DETAIL_FULL
-        if imgui.is_item_hovered():
-            imgui.set_tooltip(
-                "Display density only — recording and analysis are unchanged.\n"
-                "100% draws a few points per pixel (crispest); drag left for a\n"
-                "coarser, cheaper trace when many channels tax the frame rate.\n"
-                "MinMax keeps peak height, but fine shape and timing coarsen."
-            )
-        imgui.same_line()
-        _render_one_to_one(stream_name, v, fs, enabled, stream)
-        imgui.end_table()
-
-    # --- Row 2: the amplitude axis, and which channels ---------------------
-    show_bar = enabled is not None and bool(scope)
-    n_cols = 4 if show_bar else 3
-    if imgui.begin_table(f"{stream_name}_row_scale", n_cols, _ROW_FLAGS):
-        imgui.table_setup_column("group", imgui.TableColumnFlags_.width_fixed)
-        imgui.table_setup_column("gain", imgui.TableColumnFlags_.width_stretch)
-        imgui.table_setup_column("artifact", imgui.TableColumnFlags_.width_stretch)
-        if show_bar:
-            imgui.table_setup_column("channels", imgui.TableColumnFlags_.width_fixed)
-        imgui.table_next_row()
-
-        imgui.table_next_column()
-        _render_scale_group(stream_name, v)
-
-        imgui.table_next_column()
-        _group_rule()
-        _slider_label("Gain")
-        # Gain is inert in per-channel AUTO (normalization cancels it); in per-channel
-        # MANUAL it magnifies each trace against its frozen range, so it stays live.
-        gain_inert = v.per_channel_scale and v.scale_mode == "auto"
-        if gain_inert:
-            imgui.begin_disabled()
-        changed_g, new_g = imgui.slider_float(
-            f"##{stream_name}_gain",
-            v.gain,
-            0.01,
-            100.0,
-            "%.2fx",
-            flags=imgui.SliderFlags_.logarithmic,
-        )
-        if changed_g:
-            v.gain = new_g
-        if gain_inert:
-            imgui.end_disabled()
-
-        imgui.table_next_column()
-        _slider_label("Artifact")
-        changed_t, new_t = imgui.slider_float(
-            f"##{stream_name}_transient", v.transient_ms, 0.0, 40.0, "< %.0f ms"
-        )
-        if changed_t:
-            v.transient_ms = new_t
-        if imgui.is_item_hovered():
-            imgui.set_tooltip(
-                "Ignore transients shorter than this when fitting the y-scale, so a brief "
-                "movement\nartifact doesn't blow up the range. 0 = plain min/max. Keep it "
-                "below your shortest\nreal contraction."
-            )
-
-        if show_bar:
-            imgui.table_next_column()
-            _group_rule()
+    connected = stream is not None and stream.status == "connected" and stream.info is not None
+    enabled = v.channels if enabled is None else enabled
+    scope = list(range(stream.info.n_channels)) if scope is None and connected else (scope or [])
+    stream_names = [name for name in ctx.streams if name not in exclude]
+    picker = selectable and len(stream_names) > 1
+    retarget = picker and stream is not None and getattr(stream._source, "discover", None) is not None
+    pause = f"{fa.ICON_FA_PLAY}  Resume" if v.paused else f"{fa.ICON_FA_PAUSE}  Pause"
+    channels = f"{len(enabled)}/{len(scope)} ch {fa.ICON_FA_CHEVRON_DOWN}"
+    display = f"{fa.ICON_FA_SLIDERS}  Display"
+    chrome = fa.ICON_FA_ANGLES_UP if v.show_controls else fa.ICON_FA_ANGLES_DOWN
+    sp = imgui.get_style().item_spacing.x
+    view_width = ui_px(130)
+    widths = []
+    if v.show_controls:
+        if picker:
+            widths.append(ui_px(120))
+        if retarget:
+            widths.append(_button_width(fa.ICON_FA_ARROWS_ROTATE))
+        if connected:
+            widths.extend([
+                _button_width(pause), view_width,
+                _button_width("Auto") + _button_width("Manual") + ui_px(2),
+                _button_width(channels), _button_width(display),
+            ])
+    if show_title:
+        widths.append(_button_width(chrome))
+    width = sum(widths) + sp * max(0, len(widths) - 1)
+    if connected and v.show_controls:
+        width += ui_px(_TOOLBAR_HEADROOM)
+    avail = imgui.get_content_region_avail().x
+    inline = avail >= width + imgui.calc_text_size(fa.ICON_FA_CHART_LINE).x + sp * 3
+    source_in_title = show_title and v.show_controls and connected and picker and not inline
+    source_width = ui_px(120) + (_button_width(fa.ICON_FA_ARROWS_ROTATE) + sp if retarget else 0)
+    if source_in_title:
+        # Source selection names the title; it can stay beside it when the
+        # remaining controls need the second row.
+        width -= source_width + sp
+    if connected and v.show_controls and width > avail:
+        # The fallback row must still fit: the transport glyph already names its
+        # action, and the view combo can give some of its preview width back.
+        icon = fa.ICON_FA_PLAY if v.paused else fa.ICON_FA_PAUSE
+        width -= _button_width(pause) - _button_width(icon) + view_width - ui_px(90)
+        pause, view_width = icon, ui_px(90)
+    if show_title:
+        reserve = source_width + sp if source_in_title else (width + sp if inline else 0.0)
+        if inline or source_in_title:
             imgui.align_text_to_frame_padding()
+        panel_header(title or f"SIGNAL · {active_stream}", fa.ICON_FA_CHART_LINE, reserve=reserve)
+        if inline or source_in_title:
+            imgui.same_line()
+    if widths:
+        # Measure after same_line: before it, avail describes the next whole row.
+        avail = imgui.get_content_region_avail().x
+        row_width = source_width if source_in_title else width
+        if avail > row_width:
+            imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + avail - row_width)
+
+    if v.show_controls:
+        if picker:
+            names = stream_names
+            cur = names.index(active_stream) if active_stream in names else 0
+            imgui.set_next_item_width(ui_px(120))
+            changed, idx = imgui.combo(f"##{stream_name}_sel", cur, names)
+            if changed:
+                select_stream(v, names[idx])
+            if retarget or (not source_in_title and (connected or show_title)):
+                imgui.same_line()
+        if retarget:
+            selected = v.show_retarget
+            if selected:
+                push_selected()
+            if imgui.button(f"{fa.ICON_FA_ARROWS_ROTATE}##{stream_name}_retarget"):
+                v.show_retarget = not v.show_retarget
+            if selected:
+                pop_selected()
+            imgui.set_item_tooltip("Change source: scan + reconnect to a different LSL stream.")
+            if not source_in_title and (connected or show_title):
+                imgui.same_line()
+        if connected:
+            if source_in_title:
+                avail = imgui.get_content_region_avail().x
+                if avail > width:
+                    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + avail - width)
+            _render_transport(stream_name, v, pause)
+            _toolbar_next(view_width)
+            _render_signal_group(stream_name, v, view_width)
+            _toolbar_next(_button_width("Auto") + _button_width("Manual") + ui_px(2))
+            _render_scale_group(stream_name, v)
+            _toolbar_next(_button_width(channels))
+            _popup_button(channels, f"{stream_name}_channels", f"{stream_name}_channels_popup")
+            _toolbar_next(_button_width(display))
+            _popup_button(display, f"{stream_name}_display", f"{stream_name}_display_popup")
+            if show_title:
+                _toolbar_next(_button_width(chrome))
+    if show_title:
+        selected = not v.show_controls
+        if selected:
+            push_selected()
+        if imgui.small_button(f"{chrome}##{stream_name}_chrome"):
+            v.show_controls = not v.show_controls
+        if selected:
+            pop_selected()
+        imgui.set_item_tooltip("Show controls and footer" if selected else "Hide controls and footer")
+
+    if v.show_controls and connected:
+        if imgui.begin_popup(f"{stream_name}_channels_popup"):
             ui = _grid_ui.setdefault(stream_name, _GridUIState())
-            render_channel_bar(stream_name, ui, enabled, scope)  # type: ignore
-        imgui.end_table()
+            render_channel_bar(stream_name, ui, enabled, scope)
+            imgui.end_popup()
+        if v.show_retarget and picker:
+            _scan_panel(active_stream, stream)
+    # Keep the cost guard alive even while Display is closed or chrome is folded.
+    if connected and v.window * stream.info.fs * max(len(enabled), 1) > _ONE_TO_ONE_MAX_POINTS:
+        v.one_to_one = False
 
-    # Full-width, below both rows: the scan list is a block, not a control.
-    if v.show_retarget:
-        _scan_panel(active_stream, stream)
 
+def render_display_popup(
+    stream_name: str,
+    stream: Stream,
+    v: ViewerState,
+    frame: SignalFrame | None,
+    enabled: set[int],
+    show_diagnostics: bool,
+) -> None:
+    """Draw display settings and detailed statistics outside the plot's layout.
+
+    Called after plotting so the footer describes the samples actually drawn.
+    Display edits take effect on the next frame, like plot navigation itself.
+    """
+    imgui.set_next_window_size(imgui.ImVec2(ui_px(560), 0), imgui.Cond_.appearing)
+    if not imgui.begin_popup(f"{stream_name}_display_popup"):
+        return
+    fs = stream.info.fs if stream.info else 0.0
+    panel_header("Time")
+    _slider_label("Window")
+    changed, value = imgui.slider_float(
+        f"##{stream_name}_win", v.window, 0.1, getattr(stream, "_buffer_seconds", 60.0), "%.1f s"
+    )
+    if changed:
+        v.window = value
+    imgui.set_item_tooltip("How much history the scope shows, in seconds.")
+    _slider_label("Detail")
+    imgui.set_next_item_width(-(_button_width("1:1") + imgui.get_style().item_spacing.x))
+    changed, value = imgui.slider_float(
+        f"##{stream_name}_detail", v.detail_factor / _DETAIL_FULL * 100,
+        _DETAIL_MIN / _DETAIL_FULL * 100, 100.0, "%.0f%%"
+    )
+    if changed:
+        v.detail_factor = value / 100 * _DETAIL_FULL
+    imgui.set_item_tooltip(
+        "Display density only — recording and analysis are unchanged.\n"
+        "100% draws a few points per pixel; lower detail coarsens shape and timing."
+    )
+    imgui.same_line()
+    _render_one_to_one(stream_name, v, fs, enabled, stream)
+
+    panel_header("Amplitude")
+    _slider_label("Gain")
+    imgui.begin_disabled(v.per_channel_scale and v.scale_mode == "auto")
+    changed, value = imgui.slider_float(
+        f"##{stream_name}_gain", v.gain, 0.01, 100.0, "%.2fx", flags=imgui.SliderFlags_.logarithmic
+    )
+    if changed:
+        v.gain = value
+    imgui.end_disabled()
+    _slider_label("Artifact")
+    changed, value = imgui.slider_float(f"##{stream_name}_transient", v.transient_ms, 0, 40, "< %.0f ms")
+    if changed:
+        v.transient_ms = value
+    imgui.set_item_tooltip(
+        "Ignore shorter transients when fitting the y-scale.\n"
+        "0 = plain min/max; keep this below your shortest real contraction."
+    )
+    _slider_label("Lanes")
+    v.per_channel_scale = bool(segmented(
+        f"{stream_name}_lanes", ["Shared", "Per channel"], int(v.per_channel_scale)
+    ))
+    imgui.set_item_tooltip("Per channel normalizes each lane; trace heights are then not comparable.")
+    imgui.same_line()
+    if imgui.button(f"Rescale now##{stream_name}_rescale"):
+        v.rescale_pending = "per_channel" if v.per_channel_scale else "shared"
+    imgui.set_item_tooltip("Fit the visible range and lock to Manual.")
+    if v.scale_mode == "manual":
+        if v.per_channel_scale:
+            imgui.text_disabled(f"{len(v.pc_ranges)} locked")
+        else:
+            imgui.set_next_item_width(ui_px(100))
+            _, v.y_min = imgui.input_float(f"min##{stream_name}_ymin", v.y_min, 0, 0, "%.2f")
+            imgui.same_line()
+            imgui.set_next_item_width(ui_px(100))
+            _, v.y_max = imgui.input_float(f"max##{stream_name}_ymax", v.y_max, 0, 0, "%.2f")
+
+    panel_header("Display filter")
+    _slider_label("Notch")
+    notch = [0, 50, 60]
+    idx = notch.index(v.mains_notch) if v.mains_notch in notch else 0
+    v.mains_notch = notch[segmented(f"{stream_name}_notch", ["Off", "50 Hz", "60 Hz"], idx)]
+    imgui.push_style_color(imgui.Col_.text, muted())
+    imgui.text_wrapped(
+        "Changes the plot only. The recorded signal's notch is set where the device is connected."
+    )
+    imgui.pop_style_color()
+    if v.display_filter == "rms_env":
+        _render_rms_sliders(stream_name, v, fs)
+
+    panel_header("Diagnostics")
+    if frame is not None:
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, imgui.get_style().font_size_base)
+        render_footer(stream_name, stream, v, frame, enabled,
+                      stream.info.channel_names if stream.info else None, show_diagnostics)
+        if font is not None:
+            imgui.pop_font()
+    else:
+        imgui.text_disabled("Waiting for samples")
+    imgui.end_popup()
 
 
 #: Points per frame that "1:1" is allowed to ask for, summed over drawn channels.
@@ -265,41 +379,19 @@ def _render_one_to_one(
             )
 
 
-def _render_transport(
-    ctx: Context,
-    stream_name: str,
-    active_stream: str,
-    stream: Stream,
-    v: ViewerState,
-    selectable: bool,
-) -> None:
-    """Stream picker (optional), freeze toggle, and the retarget toggle."""
-    if selectable and ctx.streams:
-        names = list(ctx.streams.keys())
-        cur = names.index(active_stream) if active_stream in names else 0
-        imgui.push_item_width(120)
-        changed, idx = imgui.combo(f"stream##{stream_name}_sel", cur, names)
-        imgui.pop_item_width()
-        if changed:
-            select_stream(v, names[idx])
-        imgui.same_line()
-
-    pause_label = f"{fa.ICON_FA_PLAY}  Resume" if v.paused else f"{fa.ICON_FA_PAUSE}  Pause"
-    if imgui.button(f"{pause_label}##{stream_name}_pause"):
+def _render_transport(stream_name: str, v: ViewerState, label: str) -> None:
+    """Freeze the display while acquisition continues."""
+    selected = v.paused
+    if selected:
+        push_selected()
+    if imgui.button(f"{label}##{stream_name}_pause"):
         v.paused = not v.paused
         if not v.paused:
             v.frozen_ts = None
             v.frozen_data = None
-    if imgui.is_item_hovered():
-        imgui.set_tooltip("Freeze the display (acquisition continues).")
-
-    discover_fn = getattr(stream._source, "discover", None)
-    if discover_fn is not None:
-        imgui.same_line()
-        if imgui.button(f"{fa.ICON_FA_ARROWS_ROTATE}##{stream_name}_retarget"):
-            v.show_retarget = not v.show_retarget
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("Change source: scan + reconnect to a different LSL stream.")
+    if selected:
+        pop_selected()
+    imgui.set_item_tooltip("Freeze the display (acquisition continues).")
 
 
 def _render_rms_sliders(stream_name: str, v: ViewerState, fs: float) -> None:
@@ -309,7 +401,7 @@ def _render_rms_sliders(stream_name: str, v: ViewerState, fs: float) -> None:
     than leave gaps; the cap is re-applied every frame in case the window
     slider was dragged below the current hop.
     """
-    imgui.push_item_width(104)
+    imgui.push_item_width(ui_px(104))
     w_changed, w_new = imgui.slider_float(
         f"##{stream_name}_rmswin",
         float(v.rms_window_ms),
@@ -347,103 +439,26 @@ def _render_rms_sliders(stream_name: str, v: ViewerState, fs: float) -> None:
     v.rms_hop_ms = min(float(v.rms_hop_ms), hop_max)
 
 
-def _render_signal_group(stream_name: str, v: ViewerState, fs: float) -> None:
-    """Mains notch and the visual-only display transform."""
-    notch_vals = [0, 50, 60]
-    n_idx = notch_vals.index(v.mains_notch) if v.mains_notch in notch_vals else 0
-    imgui.align_text_to_frame_padding()
-    imgui.text("Notch")
-    imgui.same_line()
-    imgui.push_item_width(84)
-    n_changed, n_new = imgui.combo(f"##{stream_name}_notch", n_idx, ["Off", "50 Hz", "60 Hz"])
-    imgui.pop_item_width()
-    if n_changed:
-        v.mains_notch = notch_vals[n_new]
-    if imgui.is_item_hovered():
-        imgui.set_tooltip(
-            "Remove mains-line hum (50 / 60 Hz + harmonics) from the display —\n"
-            "visual only, applied before the View transform. Recording is untouched."
-        )
-    imgui.same_line()
-
-    df_modes = ["none", "rectify", "dc_removal", "rms_env"]
-    df_labels = ["Raw", "Rectified", "DC removed", "RMS envelope"]
-    df_idx = df_modes.index(v.display_filter) if v.display_filter in df_modes else 0
-    imgui.text("View")
-    imgui.same_line()
-    imgui.push_item_width(130)
-    df_changed, df_new = imgui.combo(f"##{stream_name}_df", df_idx, df_labels)
-    imgui.pop_item_width()
-    if df_changed:
-        v.display_filter = df_modes[df_new]
-    if imgui.is_item_hovered():
-        imgui.set_tooltip("Visual-only transform - never affects recording or model input.")
-
-    if v.display_filter == "rms_env":
-        imgui.same_line()
-        _render_rms_sliders(stream_name, v, fs)
+def _render_signal_group(stream_name: str, v: ViewerState, width: float) -> None:
+    """Choose the visual transform in a combo labelled by its current view."""
+    modes = ["none", "rectify", "dc_removal", "rms_env"]
+    labels = ["Raw", "Rectified", "DC removed", "RMS envelope"]
+    idx = modes.index(v.display_filter) if v.display_filter in modes else 0
+    imgui.set_next_item_width(width)
+    changed, idx = imgui.combo(f"##{stream_name}_df", idx, labels)
+    if changed:
+        v.display_filter = modes[idx]
+    imgui.set_item_tooltip("View: visual-only transform — never affects recording or model input.")
 
 
 def _render_scale_group(stream_name: str, v: ViewerState) -> None:
-    """Y-scaling policy: Auto/Manual + Rescale + Per channel, and the manual range.
-
-    `Per channel` is the scaling BASIS (shared axis vs one lane per channel);
-    `Auto`/`Manual` is the adaptation policy and applies to either basis. Only
-    the shared numeric min/max fields are context-specific.
-    """
-    per_ch = v.per_channel_scale
-    if v.scale_mode not in ("auto", "manual"):
-        v.scale_mode = "auto"
-
-    scale_i = segmented(
-        f"{stream_name}_scale", ["Auto", "Manual"], 1 if v.scale_mode == "manual" else 0
+    """Choose the scale adaptation policy for shared or per-channel lanes."""
+    idx = segmented(f"{stream_name}_scale", ["Auto", "Manual"], int(v.scale_mode == "manual"))
+    v.scale_mode = "manual" if idx else "auto"
+    imgui.set_item_tooltip(
+        "Y-axis scale — Auto eases to the signal range; Manual holds it.\n"
+        "Range and lane settings are in Display."
     )
-    v.scale_mode = "manual" if scale_i == 1 else "auto"
-    if imgui.is_item_hovered():
-        imgui.set_tooltip(
-            "Y-axis scale — Auto: eases to the signal range (~5 s). Manual: holds it.\n"
-            "Per channel on: applied to each channel's own lane instead of one shared range."
-        )
-
-    # One-shot "Fit & lock". The basis is recorded on the click so a same-frame
-    # Per channel toggle can't misapply it.
-    imgui.same_line()
-    if imgui.button(f"Rescale##{stream_name}_rescale"):
-        v.rescale_pending = "per_channel" if per_ch else "shared"
-    if imgui.is_item_hovered():
-        imgui.set_tooltip(
-            ("Fit each channel to its own visible range" if per_ch else "Fit one shared range")
-            + " and lock to Manual.\nClick again any time the trace goes off-scale."
-        )
-
-    imgui.same_line()
-    ch_pc, pc = imgui.checkbox(f"Per channel##{stream_name}_perch", v.per_channel_scale)
-    if ch_pc:
-        v.per_channel_scale = pc
-    if imgui.is_item_hovered():
-        imgui.set_tooltip(
-            "Normalize each enabled channel into its own lane.\n"
-            "Trace heights are then NOT comparable between channels."
-        )
-
-    if per_ch:
-        if v.scale_mode == "manual":  # no 16-field editor — just a small locked-count status
-            imgui.same_line()
-            imgui.text_disabled(f"{len(v.pc_ranges)} locked")
-        return
-    if v.scale_mode != "manual":
-        return
-
-    imgui.same_line()
-    imgui.push_item_width(70)
-    chmin, ymin = imgui.input_float(f"min##{stream_name}_ymin", v.y_min, 0.0, 0.0, "%.2f")
-    if chmin:
-        v.y_min = ymin
-    imgui.same_line()
-    chmax, ymax = imgui.input_float(f"max##{stream_name}_ymax", v.y_max, 0.0, 0.0, "%.2f")
-    if chmax:
-        v.y_max = ymax
-    imgui.pop_item_width()
 
 
 @dataclass
@@ -497,9 +512,9 @@ def render_channel_controls(
     n_channels: int,
     scope: list[int] | None = None,
 ) -> tuple[set[int], list[str] | None, int]:
-    """Render the compact channel bar, and mutate `v.channels` from user input.
+    """Render the spatial channel window and mutate the existing selection.
 
-    The bar is always drawn inline; the spatial toggle-grid renders only when
+    The bar lives in the Channels popup; the spatial toggle-grid renders only when
     `ui.show_grid` is set, in its own floating window (`render_grid_window`).
     `hovered_ch` is -1 whenever that window is closed.
 
@@ -521,7 +536,7 @@ def render_channel_controls(
         ui.drag = _DragSession()
         ui.last_key = v.active_channels_key
 
-    # The bar itself is drawn by `render_controls`, inline in the scale row.
+    # The bar itself is drawn by `render_controls`, in the Channels popup.
     hovered_ch = -1
     if ui.show_grid:
         hovered_ch = render_grid_window(stream_name, layout, enabled, ch_names, ui)
@@ -539,7 +554,7 @@ def render_channel_bar(
     enabled: set[int],
     scope: list[int],
 ) -> None:
-    """Render the always-inline, one-line channel bar.
+    """Render the channel action chips inside the Channels popup.
 
     `Channels {enabled}/{total}` + the global All/None/Invert ops + `[Edit…]`,
     which toggles the floating grid window (`ui.show_grid`).

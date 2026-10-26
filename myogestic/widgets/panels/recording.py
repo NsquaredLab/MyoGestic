@@ -13,68 +13,43 @@
     def my_ui(ctx):
         recording.ui(ctx)
 
-Record/Stop + label buttons + state pill. Training/prediction controls live
+Record/Stop, optional timed takes, and label buttons. Training/prediction controls live
 in `myogestic.ml.widgets` (they require `Pipeline(app)`).
 """
 
 from __future__ import annotations
 
+import math
 import time
-from collections.abc import Callable
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Literal
 
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
+from myogestic._theme import mono_font
 from myogestic.core import RECORDABLE_STATES, AppState
+from myogestic.session._core import _SLUG_MAX, _slug
 from myogestic.widgets.common import (
     DANGER,
     IDLE,
-    ON_PILL_TEXT,
-    PILL_BG,
+    ON_PRIMARY_TEXT,
+    _truncate_to_width,
     destructive_button,
     mono_text,
     muted,
     panel_header,
-    pop_selected,
-    push_selected,
+    primary_button,
+    tinted_row,
+    ui_px,
 )
 
 if TYPE_CHECKING:
     from myogestic.core import Context
 
 
-# Layout — local constants so users can read but not override.
-_RECORD_BTN_W = 118
-_LABEL_BTN_W = 100
-_LABEL_BTN_H = 30
-
-
-_PILL_PAD_Y = 4.0  # internal vertical padding inside the pill
-
-
-def _status_pill(label: str, color: imgui.ImVec4) -> None:
-    pad_x, pad_y = 10.0, _PILL_PAD_Y
-    text = imgui.calc_text_size(label)
-    size = imgui.ImVec2(text.x + pad_x * 2 + 12, text.y + pad_y * 2)
-    imgui.dummy(size)
-    p0, p1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-    draw = imgui.get_window_draw_list()
-    draw.add_rect_filled(p0, p1, imgui.get_color_u32(PILL_BG), size.y * 0.5)
-    y = (p0.y + p1.y) * 0.5
-    draw.add_rect_filled(
-        imgui.ImVec2(p0.x + pad_x - 1, y - 3),
-        imgui.ImVec2(p0.x + pad_x + 5, y + 3),
-        imgui.get_color_u32(color),
-        3.0,
-    )
-    draw.add_text(
-        imgui.ImVec2(p0.x + pad_x + 10, p0.y + pad_y),
-        imgui.get_color_u32(ON_PILL_TEXT),
-        label,
-    )
-
-
+# Shared with the ML extension's state cues.
 STATE_COLORS: dict[str, imgui.ImVec4] = {
     AppState.IDLE: IDLE,
     AppState.RECORDING: DANGER,
@@ -83,17 +58,111 @@ STATE_COLORS: dict[str, imgui.ImVec4] = {
     #     STATE_COLORS["training"] = imgui.ImVec4(...)
     # (Populated by myogestic.ml.widgets on import.)
 }
-_DEFAULT_COLOR = IDLE
+
+
+@dataclass(frozen=True)
+class TakeStatus:
+    """An immutable snapshot of the recording controls' current take.
+
+    Durations are monotonic seconds, measured from capture rather than warm-up.
+    ``saved_text`` describes the captured duration, including an early stop.
+    """
+
+    phase: Literal["idle", "warmup", "recording", "saved"] = "idle"
+    timed: bool = False
+    gesture: str | None = None
+    elapsed_s: float = 0.0
+    length_s: float | None = None
+    warmup_left_s: float = 0.0
+    saved_text: str = ""
+
+
+class _TakeMachine:
+    """Own one take; observe external state before servicing its deadline."""
+
+    def __init__(
+        self, on_record: Callable[[], None], on_stop: Callable[[], None],
+        *, clock: Callable[[], float] | None = None,
+    ) -> None:
+        self._on_record = on_record
+        self._on_stop = on_stop
+        self._clock = clock or time.monotonic
+        self.status = TakeStatus()
+        self._started = 0.0
+        self._deadline = 0.0
+
+    def start(
+        self, gesture: str | None, *, length_s: float | None = None,
+        warmup_s: float = 0.0, now: float | None = None,
+    ) -> None:
+        if self.status.phase in ("warmup", "recording"):
+            return
+        instant = self._clock() if now is None else now
+        warmup_s = warmup_s if length_s is not None else 0.0
+        self.status = TakeStatus(
+            phase="warmup", timed=length_s is not None, gesture=gesture,
+            length_s=length_s, warmup_left_s=warmup_s,
+        )
+        self._deadline = instant + warmup_s
+        if not warmup_s:
+            self._begin(now)
+
+    def _begin(self, now: float | None) -> None:
+        self.status = replace(self.status, phase="recording", warmup_left_s=0.0)
+        try:
+            self._on_record()
+        except Exception:
+            self.status = TakeStatus()
+            raise
+        # Store allocation belongs to setup, not the requested capture length.
+        # An explicit ``now`` is the deterministic timestamp supplied by a test.
+        self._started = self._clock() if now is None else now
+
+    def advance(
+        self, *, recording: bool, valid: bool = True, now: float | None = None,
+    ) -> None:
+        instant = self._clock() if now is None else now
+        phase = self.status.phase
+        if not valid:
+            self.status = TakeStatus()
+            if phase == "recording" and recording:
+                self._on_stop()
+        elif phase == "warmup":
+            if recording:
+                self.status = TakeStatus()
+            elif instant >= self._deadline:
+                self._begin(now)
+            else:
+                self.status = replace(self.status, warmup_left_s=self._deadline - instant)
+        elif phase == "recording":
+            if not recording:
+                self.status = TakeStatus()
+                return
+            self.status = replace(self.status, elapsed_s=max(0.0, instant - self._started))
+            if self.status.length_s is not None and instant >= self._started + self.status.length_s:
+                self.stop(now=instant)
+        elif phase == "saved" and (recording or instant >= self._deadline):
+            self.status = TakeStatus()
+
+    def stop(self, *, now: float | None = None) -> None:
+        if self.status.phase == "warmup":
+            self.status = TakeStatus()
+        elif self.status.phase == "recording":
+            now = self._clock() if now is None else now
+            elapsed = max(0.0, now - self._started)
+            early = self.status.length_s is not None and elapsed < self.status.length_s
+            gesture = f" · {self.status.gesture}" if self.status.gesture else ""
+            self.status = replace(
+                self.status, phase="saved", elapsed_s=elapsed,
+                saved_text=f"Saved{gesture} · {elapsed:.1f} s" + (" (stopped early)" if early else ""),
+            )
+            self._deadline = now + 2.0
+            self._on_stop()
 
 
 def _transport(ctx: Context) -> str:
-    """Which transport button applies.
-
-    ``"stop"`` while a take is open, ``"record"`` when one may start in this
-    state, ``""`` when neither does (``training``, or a state no extension
-    registered in `RECORDABLE_STATES`).
-    """
-    if getattr(ctx, "recording", False):
+    """Choose transport by the take flag and the registered recordable states."""
+    if ctx.recording:
         return "stop"
     return "record" if ctx.state in RECORDABLE_STATES else ""
 
@@ -107,10 +176,26 @@ _POPUP_ID = "Save recording##rec_save"
 _NAME_MAX = 64
 
 
-def _elapsed_str(seconds: float) -> str:
-    """``m:ss`` for a duration, the way a stopwatch reads."""
+def _elapsed_str(seconds: float, *, tenths: bool = False) -> str:
+    """``m:ss`` for a duration, with optional tenths for a live take."""
+    if tenths:
+        ticks = max(0, int(round(seconds * 10)))
+        minutes, ticks = divmod(ticks, 600)
+        return f"{minutes}:{ticks // 10:02d}.{ticks % 10}"
     minutes, secs = divmod(int(seconds), 60)
     return f"{minutes}:{secs:02d}"
+
+
+def _record_button(ctx: Context, label: str, size: imgui.ImVec2) -> bool:
+    """Render Record with a reason when the participant gate disables it."""
+    if not getattr(ctx, "require_participant", False) or getattr(ctx, "participant", ""):
+        return imgui.button(label, size)
+    imgui.begin_disabled()
+    imgui.button(label, size)
+    imgui.end_disabled()
+    if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+        imgui.set_tooltip("Set a participant ID before recording.")
+    return False
 
 
 class RecordButton:
@@ -125,6 +210,9 @@ class RecordButton:
     the dialog opens — so the seconds spent typing a name are never recorded.
     The name is written to the session's ``meta.json`` and into the archive
     filename, so it shows up in `SessionManager` and is findable on disk.
+
+    Shows elapsed time during capture and previews the filename while naming.
+    Record is disabled when a required participant ID is missing.
 
     Parameters
     ----------
@@ -179,30 +267,22 @@ class RecordButton:
     def ui(self, ctx: Context) -> None:
         """Render the recorder. Call once per frame inside ``@app.ui``.
 
-        Deliberately the same shape as `DevicePicker`: status dot in the header,
-        one full-width action, one muted detail line. Stacked in the same column
-        the two panels should read as one instrument, not two widgets that grew
-        up apart. The header icon is an archive rather than the usual record
-        circle — beside a status dot, a second circle reads as a second state.
+        A status dot in the header accompanies the capture or naming row. The
+        archive icon distinguishes the title from the recording state dot.
 
         Drawn inside an ImGui id scope named by ``widget_id``, so two recorders
         in one `Grid` cell do not share a button and a naming dialog.
         """
         imgui.push_id(self._widget_id)
         try:
-            recording = bool(getattr(ctx, "recording", False))
+            recording = ctx.recording
             self._sync(recording)
-            tone, detail = self._state(recording)
+            tone, _ = self._state(recording)
 
             if self._show_header:
-                # No tooltip: the line below the button already says this, and the
-                # elapsed clock in it would need keeping in step in two places.
                 panel_header("RECORDING", fa.ICON_FA_BOX_ARCHIVE, status=tone)
 
             self._button(ctx, recording)
-            # Mono: the clock ticks while you watch it, and the UI face's digits are
-            # not tabular, so a proportional one shuffles the text as it counts.
-            mono_text(detail, muted())
             self._dialog(ctx)
         finally:
             imgui.pop_id()
@@ -229,12 +309,10 @@ class RecordButton:
         """
         for stream in ctx.streams.values():
             stream.detach_session()
-        # End the event streams at the click as well: the pipeline keeps ticking during the
-        # naming dialog, and those rows are not part of the take either.
+        self._captured = time.monotonic() - self._started if self._started is not None else 0.0
+        self._started = None
         if ctx.session is not None:
             ctx.session.freeze()
-        self._captured = time.monotonic() - self._started if self._started else 0.0
-        self._started = None
         self._naming = True
 
     def _save(self, ctx: Context) -> None:
@@ -260,36 +338,103 @@ class RecordButton:
     def _state(self, recording: bool) -> tuple[imgui.ImVec4, str]:
         """State tone and its one-line detail, matching `DevicePicker`'s status line."""
         if self._naming:
-            return IDLE, f"naming · {_elapsed_str(self._captured)}"
+            return IDLE, f"naming · {_elapsed_str(self._captured, tenths=True)} captured"
         if recording:
-            elapsed = time.monotonic() - self._started if self._started else 0.0
-            return DANGER, f"recording · {_elapsed_str(elapsed)}"
+            elapsed = time.monotonic() - self._started if self._started is not None else 0.0
+            return DANGER, f"{_elapsed_str(elapsed, tenths=True)} elapsed"
         return IDLE, "not recording"
 
     # --- rendering ----------------------------------------------------------
     def _button(self, ctx: Context, recording: bool) -> None:
-        """Record ↔ Stop, full width. The glyph shows what clicking will do."""
-        full = imgui.ImVec2(-1, 0)
+        """One forward action when idle; a state row while capturing or naming."""
+        _, detail = self._state(recording)
         if self._naming:
-            imgui.begin_disabled()
-            imgui.button(f"{fa.ICON_FA_STOP}  Stop", full)
-            imgui.end_disabled()
+            with tinted_row() as width:
+                imgui.align_text_to_frame_padding()
+                self._mono_detail(detail, width)
             return
 
+        height = max(ui_px(52), 2 * imgui.get_text_line_height() + ui_px(12))
         if recording:
-            if imgui.button(f"{fa.ICON_FA_STOP}  Stop", full):
-                self._stop(ctx)
-        elif _transport(ctx) == "record":
-            if imgui.button(f"{fa.ICON_FA_CIRCLE_DOT}  Record", full):
+            with tinted_row(DANGER, height=height) as width:
+                left, top = imgui.get_cursor_pos()
+                stop_w = imgui.calc_text_size("Stop").x + 2 * imgui.get_style().frame_padding.x
+                text_w = max(0.0, width - stop_w - ui_px(8))
+                imgui.text_unformatted(_truncate_to_width("Recording", text_w))
+                imgui.set_cursor_pos_y(top + imgui.get_text_line_height() + ui_px(2))
+                self._mono_detail(detail, text_w)
+                imgui.same_line()
+                imgui.set_cursor_pos(imgui.ImVec2(
+                    left + width - stop_w,
+                    top + (height - ui_px(8) - imgui.get_frame_height()) / 2,
+                ))
+                if imgui.button("Stop"):
+                    self._stop(ctx)
+            return
+
+        busy = ctx.state not in RECORDABLE_STATES
+        imgui.begin_disabled(busy)
+        for slot, color in ((imgui.Col_.button, DANGER), (imgui.Col_.button_hovered, DANGER),
+                            (imgui.Col_.button_active, DANGER), (imgui.Col_.text, ON_PRIMARY_TEXT)):
+            imgui.push_style_color(slot, color)
+        try:
+            if _record_button(ctx, f"{fa.ICON_FA_CIRCLE}  Record", imgui.ImVec2(-1, height)) and not busy:
                 self._name = ""
                 self._started = time.monotonic()
                 self._on_record()
-        else:
-            imgui.begin_disabled()
-            imgui.button(f"{fa.ICON_FA_CIRCLE_DOT}  Record", full)
+        finally:
+            imgui.pop_style_color(4)
             imgui.end_disabled()
-            if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-                imgui.set_item_tooltip("Busy — wait until the current action finishes.")
+        if busy:
+            imgui.set_item_tooltip("Busy — wait until the current action finishes.")
+        if getattr(ctx, "require_participant", False) and not getattr(ctx, "participant", ""):
+            imgui.push_style_color(imgui.Col_.text, muted())
+            imgui.text_wrapped("Set a participant first — recordings are saved under their ID.")
+            imgui.pop_style_color()
+
+    @staticmethod
+    def _mono_detail(text: str, width: float) -> None:
+        """Keep a readout on one line, with its full value available on hover."""
+        font = mono_font()
+        if font is not None:
+            imgui.push_font(font, imgui.get_style().font_size_base)
+        try:
+            shown = text
+            if imgui.calc_text_size(text).x > width:
+                ellipsis = "…" if imgui.calc_text_size("…").x <= width else ""
+                shown = _truncate_to_width(text, width - imgui.calc_text_size(ellipsis).x) + ellipsis
+            mono_text(shown, muted())
+        finally:
+            if font is not None:
+                imgui.pop_font()
+        imgui.set_item_tooltip(text)
+
+    def _file_stem(self, ctx: Context) -> str:
+        """Preview the archive stem without writing metadata or changing the session."""
+        session = ctx.session
+        if session is None:
+            return ""
+        # Match save_meta's recorded-time labels; metadata is only written at Save.
+        first, last = 0.0, 0.0
+        for timestamps in session.ts_stores.values():
+            if timestamps.shape[0]:
+                first, last = float(timestamps[0]), float(timestamps[-1])
+                break
+        recorded = set()
+        for i, event in enumerate(session.label_track):
+            if not 0 <= event.class_index < len(ctx.class_names):
+                continue
+            index = int(event.class_index)
+            if index != event.class_index:
+                continue
+            end = session.label_track[i + 1].timestamp if i + 1 < len(session.label_track) else last
+            if min(last, end) > max(first, event.timestamp):
+                recorded.add(ctx.class_names[index])
+        slugs = [_slug(name) for name in sorted(recorded, key=ctx.class_names.index) if _slug(name)]
+        labels = "+".join(slugs)
+        if len(labels) > _SLUG_MAX:
+            labels = f"{len(slugs)}-classes"
+        return "_".join(part for part in (session.path.name, labels, _slug(self._name)) if part)
 
     def _dialog(self, ctx: Context) -> None:
         """The naming modal. Deliberately has no way out but Save or Discard.
@@ -306,12 +451,14 @@ class RecordButton:
         # cell in the grid.
         center = imgui.get_main_viewport().get_center()
         imgui.set_next_window_pos(center, imgui.Cond_.appearing, imgui.ImVec2(0.5, 0.5))
+        width = min(ui_px(360), imgui.get_main_viewport().work_size.x - ui_px(24))
+        imgui.set_next_window_size(imgui.ImVec2(width, 0))
         opened, _ = imgui.begin_popup_modal(_POPUP_ID, None, imgui.WindowFlags_.always_auto_resize)
         if not opened:
             return
         try:
-            imgui.text(f"Captured {_elapsed_str(self._captured)}.")
-            imgui.set_next_item_width(280)
+            imgui.text_unformatted("Name (optional)")
+            imgui.set_next_item_width(-1)
             if imgui.is_window_appearing():
                 imgui.set_keyboard_focus_here()
             changed, typed = imgui.input_text_with_hint(
@@ -319,59 +466,69 @@ class RecordButton:
             )
             if changed:
                 self._name = typed[:_NAME_MAX]
-            imgui.text_colored(muted(), "Optional — the timestamp always identifies the session.")
+            imgui.text_colored(muted(), "File stem")
+            self._mono_detail(self._file_stem(ctx), imgui.get_content_region_avail().x)
             imgui.spacing()
 
-            if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save", imgui.ImVec2(120, 0)):
+            if primary_button(f"{fa.ICON_FA_FLOPPY_DISK}  Save", (-1, 0)):
                 self._save(ctx)
                 imgui.close_current_popup()
             if self._on_discard is not None:
-                imgui.same_line()
-                if destructive_button(
-                    f"{fa.ICON_FA_TRASH}  Discard",
-                    tooltip=f"Delete these {_elapsed_str(self._captured)} of data permanently",
-                ):
+                duration = _elapsed_str(self._captured, tenths=True)
+                imgui.push_style_var(imgui.StyleVar_.frame_border_size, ui_px(1))
+                try:
+                    discarded = destructive_button(
+                        f"{fa.ICON_FA_TRASH}  Discard {duration}",
+                        tooltip=f"Delete these {duration} of data permanently",
+                    )
+                finally:
+                    imgui.pop_style_var()
+                if discarded:
                     self._discard()
                     imgui.close_current_popup()
         finally:
             imgui.end_popup()
 
 
-class RecordingControls:
-    """Record/Stop toggle + per-class label buttons + state pill.
 
-    Construct once with the class names and callbacks, then call [`ui`][]
-    with the live ``ctx`` each frame. Pass ``app.start_recording`` /
-    ``app.stop_recording`` for ``on_record`` / ``on_stop`` if you're using
-    the standard App. For plain capture with no gesture protocol, use
-    `RecordButton` instead.
+class RecordingControls:
+    """Record labelled takes, with an optional warm-up and fixed duration.
+
+    Construct once, then call ``ui(ctx)`` every frame. ``take`` is an immutable
+    snapshot for an app's countdown or signal overlay. For unlabelled capture
+    with a naming dialog, use `RecordButton`.
 
     Parameters
     ----------
     class_names
-        One label button per name. Clicking one while recording snaps a label
-        event at that moment; outside a recording it sets the class the next
-        Record will start in. ``None`` renders the transport alone. The names
-        are mirrored into ``ctx.class_names`` so `App.stop_recording` persists
-        them in the session's ``meta.json`` — old recordings stay
-        self-describing.
+        Gesture tiles. The first is selected when idle without a valid label.
+        Idle clicks choose the next take's label; start/stop mode also permits
+        label changes during capture. Timed takes lock it.
+        Names are copied to ``ctx.class_names`` for session metadata.
     on_record
-        Called when Record is clicked (idle → recording).
+        Begin capture, normally ``app.start_recording``.
     on_stop
-        Called when Stop is clicked (recording → idle).
+        Stop and save capture, normally ``app.stop_recording``.
     on_gesture
-        Optional ``(class_index) -> None`` for side effects on a label-button
-        click — cueing a subject, switching a fake-signal generator.
-
-    Examples
-    --------
-    >>> from myogestic.widgets import RecordingControls
-    >>> controls = RecordingControls(
-    ...     ["Rest", "Fist"],
-    ...     on_record=app.start_recording,
-    ...     on_stop=app.stop_recording,
-    ... )
-    >>> controls.ui(ctx)
+        Optional side effect when a gesture tile is selected.
+    show_header
+        Render the standard panel header.
+    take_lengths
+        Positive durations in seconds. Empty keeps start/stop only.
+    warmups
+        Nonnegative countdown durations in seconds; zero means Off.
+        Must contain at least one value.
+    timed : bool, optional
+        Open in Timed mode instead of Start / stop. Defaults to ``False``.
+        ``True`` requires nonempty ``take_lengths`` or raises ``ValueError``.
+    take_length : float or None, optional
+        Initially selected entry of ``take_lengths``. ``None`` selects the
+        first entry when offered. A value outside the sequence raises
+        ``ValueError`` naming the allowed values.
+    warmup : float or None, optional
+        Initially selected entry of ``warmups``. ``None`` selects the first
+        entry. A value outside the sequence raises ``ValueError`` naming the
+        allowed values.
     """
 
     def __init__(
@@ -381,139 +538,134 @@ class RecordingControls:
         on_record: Callable[[], None],
         on_stop: Callable[[], None],
         on_gesture: Callable[[int], None] | None = None,
+        show_header: bool = True,
+        take_lengths: Sequence[float] = (),
+        warmups: Sequence[float] = (0.0,),
+        timed: bool = False,
+        take_length: float | None = None,
+        warmup: float | None = None,
     ) -> None:
         self._class_names = class_names
         self._on_record = on_record
         self._on_stop = on_stop
         self._on_gesture = on_gesture
+        self._show_header = show_header
+        self._take_lengths = tuple(take_lengths)
+        self._warmups = tuple(warmups)
+        if any(not math.isfinite(n) or n <= 0 for n in self._take_lengths):
+            raise ValueError("Give take_lengths finite, positive durations in seconds.")
+        if not self._warmups or any(not math.isfinite(n) or n < 0 for n in self._warmups):
+            raise ValueError("Give warmups finite, nonnegative durations; use (0.0,) for Off.")
+        if timed and not self._take_lengths:
+            raise ValueError("Give take_lengths at least one duration when timed=True.")
+        if take_length is not None and take_length not in self._take_lengths:
+            raise ValueError(f"Choose take_length from take_lengths: {self._take_lengths}.")
+        if warmup is not None and warmup not in self._warmups:
+            raise ValueError(f"Choose warmup from warmups: {self._warmups}.")
+        self._length_index = self._take_lengths.index(take_length) if take_length is not None else 0
+        self._warmup_index = self._warmups.index(warmup) if warmup is not None else 0
+        self._timed = timed
+        self._ctx: Context | None = None
+        self._session = None
+        self._participant = ""
+        self._label = -1
+        self._streams: tuple = ()
+        self._stop_revision = 0
+        self._machine = _TakeMachine(self._begin_recording, self._on_stop)
 
-    def ui(self, ctx: Context) -> None:
-        """Render the recording controls. Call once per frame inside ``@app.ui``."""
-        _render_recording_controls(
-            ctx,
-            self._class_names,
-            on_record=self._on_record,
-            on_stop=self._on_stop,
-            on_gesture=self._on_gesture,
+    @property
+    def take(self) -> TakeStatus:
+        """Read the take as of the most recent ``ui`` call, without side effects."""
+        return self._machine.status
+
+    def ui(self, ctx: Context, *, visible: bool = True) -> None:
+        """Advance once per frame, and optionally render the controls.
+
+        Call with ``visible=False`` while another workflow step is open so a
+        timed take still stops on its first frame at or after the deadline.
+        """
+        self._sync(ctx)
+        if visible:
+            from ._recording_controls import _render_recording_controls
+
+            imgui.push_id(str(id(self)))
+            try:
+                _render_recording_controls(ctx, self)
+            finally:
+                imgui.pop_id()
+
+    def _gesture_index(self, ctx: Context) -> int:
+        """Resolve the idle default without changing the shared capture label."""
+        names = self._class_names or []
+        index = _safe_label_index(ctx.current_label, len(names))
+        if index < 0 and names and ctx.state in RECORDABLE_STATES and self.take.phase == "idle":
+            return 0
+        return index
+
+    def _gesture(self, ctx: Context) -> str | None:
+        names = self._class_names or []
+        index = self._gesture_index(ctx)
+        return names[index] if index >= 0 else None
+
+    def _remember(self, ctx: Context) -> None:
+        self._ctx = ctx
+        self._session = ctx.session
+        self._participant = ctx.participant
+        self._label = ctx.current_label
+        self._streams = tuple(
+            (name, stream, stream.info) for name, stream in ctx.streams.items()
+            if stream.info is not None
+        )
+        self._stop_revision = ctx._recording_stop_revision
+
+    def _start(self, ctx: Context) -> None:
+        if ctx.recording or ctx.state not in RECORDABLE_STATES or (ctx.require_participant and not ctx.participant):
+            return
+        if self._class_names:
+            ctx.current_label = self._gesture_index(ctx)
+            ctx.class_names = list(self._class_names)
+            if self._timed and self._gesture(ctx) is None:
+                return
+        self._remember(ctx)
+        self._machine.start(
+            self._gesture(ctx),
+            length_s=self._take_lengths[self._length_index] if self._timed else None,
+            warmup_s=self._warmups[self._warmup_index] if self._timed else 0.0,
         )
 
+    def _begin_recording(self) -> None:
+        ctx = self._ctx
+        self._on_record()
+        self._session = ctx.session
+        if not ctx.recording:
+            self._machine.advance(recording=False)
+            return
+        if ctx.session is not None and self._gesture(ctx) is not None:
+            ctx.session.add_label(ctx.current_label)
 
-def _render_recording_controls(
-    ctx: Context,
-    class_names: list[str] | None = None,
-    *,
-    on_record: Callable[[], None],
-    on_stop: Callable[[], None],
-    on_gesture: Callable[[int], None] | None = None,
-) -> None:
-    """Record/Stop + per-class label buttons + state pill.
-
-    Clicking a class button while recording snaps a label event at that moment
-    (the active class is shown in the "Recording into: …" header). Outside of
-    recording it just sets the *next* class to be used when Record is clicked.
-
-    Parameters
-    ----------
-    ctx
-        myogestic Context. Mutated: `current_label` is clamped to a
-        valid index for `class_names`, and `class_names` itself is
-        mirrored into `ctx.class_names` so `App.stop_recording` can
-        persist them in the session metadata.
-    class_names
-        Per-class label-button names.
-    on_record
-        Called when Record is clicked (idle → recording).
-    on_stop
-        Called when Stop is clicked (recording → idle).
-    on_gesture
-        Optional `(class_index) -> None` for side effects on
-        label-button click (e.g. switching a fake-signal generator).
-    """
-    n_classes = len(class_names) if class_names else 0
-    # CLASSES can be swapped between runs; a leftover index would corrupt labels.
-    if class_names:
-        ctx.current_label = _safe_label_index(ctx.current_label, n_classes)
-        # Mirror into ctx so save_meta() can persist them in the session's
-        # meta.json without the App knowing about CLASSES.
-        ctx.class_names = list(class_names)
-
-    panel_header("RECORDING", fa.ICON_FA_CIRCLE_DOT)
-    recording = bool(getattr(ctx, "recording", False))
-    transport = _transport(ctx)
-
-    if class_names:
-        imgui.text("Gesture:")
-
-    # try/finally: an exception from on_record / on_stop / on_gesture must not
-    # leave the ImGui style stack unbalanced — that trips an IM_ASSERT on the
-    # next end_child further up the call chain.
-    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(12, 8))
-    try:
-        if class_names:
-            # Wrap the label buttons onto the next row instead of letting a
-            # wide class list run them off the right edge.
-            # (get_window_content_region_max isn't in this binding, so derive
-            # the row's right edge from the cursor + available width.)
-            spacing = imgui.get_style().item_spacing.x
-            right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
-            for i, name in enumerate(class_names):
-                if i > 0 and imgui.get_item_rect_max().x + spacing + _LABEL_BTN_W <= right:
-                    imgui.same_line()
-                selected = ctx.current_label == i
-                if selected:
-                    push_selected()
-                try:
-                    if imgui.button(
-                        f"{name}##rec_gesture{i}", imgui.ImVec2(_LABEL_BTN_W, _LABEL_BTN_H)
-                    ):
-                        ctx.current_label = i
-                        if on_gesture is not None:
-                            on_gesture(i)
-                        if recording and ctx.session is not None and 0 <= i < n_classes:
-                            ctx.session.add_label(i)
-                finally:
-                    if selected:
-                        pop_selected()
-            imgui.spacing()
-
-        # Record / Stop
-        if transport == "record":
-            if imgui.button(
-                f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
-            ):
-                on_record()
-                # Auto-add the current label at the start of the recording.
-                if ctx.session is not None and class_names and 0 <= ctx.current_label < n_classes:
-                    ctx.session.add_label(ctx.current_label)
-        elif transport == "stop" and imgui.button(
-            f"{fa.ICON_FA_STOP}  Stop##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
-        ):
-            on_stop()
-    finally:
-        imgui.pop_style_var()
-
-    # Status line — state pill + status message + (when recording) the snap hint.
-    imgui.spacing()
-    color = STATE_COLORS.get(ctx.state, _DEFAULT_COLOR)
-    _status_pill(ctx.state.upper(), color)
-    if recording and ctx.state != AppState.RECORDING:
-        # A take under another state: say so beside the state, in recording's colour.
-        imgui.same_line()
-        _status_pill("REC", STATE_COLORS[AppState.RECORDING])
-    imgui.same_line()
-    message = ctx.status_message or "Ready"
-    if message.startswith("Saved"):
-        message = f"{fa.ICON_FA_FLOPPY_DISK}  {message}"
-    if recording:
-        n_labels = len(ctx.session.label_track) if ctx.session else 0
-        active_name = (
-            class_names[ctx.current_label]
-            if class_names and 0 <= ctx.current_label < n_classes
-            else "—"
-        )
-        message = f"{n_labels} labels · into: {active_name} (click a class to snap)"
-    # Nudge the text down by the pad to share a baseline with the taller pill.
-    # Don't restore the cursor afterwards — moving the cursor without submitting
-    # an item next breaks imgui's window-growth assertion in end_child.
-    imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + _PILL_PAD_Y)
-    imgui.text(message)
+    def _sync(self, ctx: Context) -> None:
+        if self._class_names:
+            ctx.current_label = _safe_label_index(ctx.current_label, len(self._class_names))
+            ctx.class_names = list(self._class_names)
+        phase = self.take.phase
+        if phase == "idle" and ctx.recording:
+            # An external capture still needs a Stop control and an elapsed read.
+            self._remember(ctx)
+            self._machine._started = self._machine._clock()
+            self._machine.status = TakeStatus(phase="recording", gesture=self._gesture(ctx))
+            return
+        owned = ctx.recording and ctx.session is self._session
+        valid = self._ctx is ctx and ctx.participant == self._participant
+        if phase in ("warmup", "recording"):
+            if self.take.timed:
+                valid = valid and ctx.current_label == self._label and self._gesture(ctx) == self.take.gesture
+            valid = valid and all(
+                ctx.streams.get(name) is stream and stream.info is info and stream.status == "connected"
+                for name, stream, info in self._streams
+            )
+            if phase == "warmup":
+                valid = valid and not ctx.recording and ctx.state in RECORDABLE_STATES and ctx.session is self._session
+                valid = valid and ctx._recording_stop_revision == self._stop_revision
+        self._machine.advance(recording=owned, valid=valid)
+        if self.take.phase == "recording" and not self.take.timed:
+            self._machine.status = replace(self.take, gesture=self._gesture(ctx))

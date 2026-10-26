@@ -28,6 +28,18 @@ def ui(ctx):
 
 Every widget follows this shape — `SignalViewer("emg").ui(ctx)`, `Heatmap("Confusion").ui(cm)`, `PipelinePanel(pipeline).ui()`. One convention, no exceptions.
 
+`ProcessLauncher(processes)` shows a full-width process selector and **Launch**.
+While running, its tinted state row gives the PID, elapsed time and **Stop**;
+failures show the exit code, **Show output** and **Launch again**. The header's
+pop-out icon opens the selected process's log, which stays open when another
+process is selected. Each launcher gets its own identity by default; set
+`widget_id` explicitly to keep that identity across reconstruction.
+
+`PostProcessor(hz=50)` defaults to a compact Smoothing row with a filter combo,
+mono delay and a settings popover for the description, captioned sliders and
+Reset. Pass `compact=False` for the full panel; `FilterProcessor` provides the
+same full-panel controls for a custom filter palette.
+
 ## The contract
 
 1. **Construct once; render every frame.** The instance holds state, so build it at module/app scope and only call `.ui(...)` inside the frame. Constructing a widget *inside* `@app.ui` rebuilds it every frame and silently resets its state (channel selection, scroll, filter tuning).

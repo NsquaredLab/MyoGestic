@@ -17,6 +17,8 @@ uv run python tools/widget_screenshot.py --all
 
 <div class="gallery-nav" markdown>
 [Signal viewers](#signal-viewers)
+[Session shell](#session-shell)
+[Simulator controls](#simulator-controls)
 [Recording & sessions](#recording-and-sessions)
 [Process management](#process-management)
 [ML pipeline](#ml-pipeline)
@@ -40,6 +42,36 @@ uv run python tools/widget_screenshot.py --all
 
 </div>
 
+## Session shell
+
+<div class="grid cards" markdown>
+
+-   __[AppHeader][myogestic.widgets.AppHeader]__
+
+    ![AppHeader](images/widgets/AppHeader.png){ .widget-thumb loading=lazy }
+
+    Shared application header with the line logo, title and state pill. Session apps add four-step navigation and an optional participant chip. Place it in a bare `Px(52)` Grid row.
+
+-   __[StatusBar][myogestic.widgets.StatusBar]__
+
+    ![StatusBar](images/widgets/StatusBar.png){ .widget-thumb loading=lazy }
+
+    Acquisition details, participant and session folder, with an optional fitted or saved model readout. Long values ellipsize and show their full text on hover. Place it in a bare `Px(26)` bottom row.
+
+</div>
+
+## Simulator controls
+
+<div class="grid cards" markdown>
+
+-   __[SimulatorControls][myogestic.widgets.SimulatorControls]__
+
+    ![SimulatorControls](images/widgets/SimulatorControls.png){ .widget-thumb loading=lazy }
+
+    Persistent Rest/Fist presets that steer the synthetic EMG generator on every workflow step. During recording the gesture callback sets the signal, and manual controls lock with a visible explanation.
+
+</div>
+
 ## Recording and sessions
 
 <div class="grid cards" markdown>
@@ -48,13 +80,13 @@ uv run python tools/widget_screenshot.py --all
 
     ![recording_controls](images/widgets/recording_controls.png){ .widget-thumb loading=lazy }
 
-    One button per class plus a Record toggle. Clicking a class button writes a [`LabelEvent`][myogestic.session.LabelEvent] and fires your `on_gesture` callback. Status pill shows IDLE / RECORDING.
+    Gesture tiles plus a recording action row with an elapsed clock. Opt into **Timed** with `take_lengths` and `warmups`: count down without capture, record one gesture for the selected duration, then stop and save automatically. **Cancel** saves nothing during warm-up; **Stop early** keeps the captured take. The immutable `take` read supports countdown and progress overlays.
 
 -   __[SessionManager][myogestic.widgets.SessionManager]__
 
     ![session_manager](images/widgets/session_manager.png){ .widget-thumb loading=lazy }
 
-    Browses recorded sessions (folders or `.session.zip`), lets the user tick which to include, and returns a [`TrainingData`][myogestic.TrainingData] for `@pipeline.train`. Per-row class buttons select active classes.
+    One compact, clickable line per take (about 26 logical pixels), grouped by day with only the newest group open. The list scrolls beneath a fixed header, selection summary, and gesture chips; **All** / **None** change every take, and gesture chips include or exclude classes from training. Files loaded from outside the scanned folder appear under **Loaded**. Returns [`TrainingData`][myogestic.TrainingData] for `@pipeline.train`; `selection()` exposes selected/total counts and included gesture seconds for a Train card.
 
 </div>
 
@@ -90,7 +122,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![FilterControl](images/widgets/FilterControl.png){ .widget-thumb loading=lazy }
 
-    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). Sliders tune parameters in place; Reset clears smoothing history. Pair with `output_filter(pose, timestamp=time.monotonic())` inside `@pipeline.predict`.
+    Live-tunable post-prediction smoother (Identity / Gaussian / One Euro). The default compact Smoothing row shows the filter, latency and a settings popover with parameters and Reset; `compact=False` keeps the sliders visible in a full panel. Reset clears smoothing history. Pair with `output_filter(pose, timestamp=time.monotonic())` inside `@pipeline.predict`.
 
 </div>
 
@@ -102,7 +134,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![FeatureSelector](images/widgets/FeatureSelector.png){ .widget-thumb loading=lazy }
 
-    Live tickbox panel for choosing which feature transforms feed the model. Construct with `{name: callable}`; the selector concatenates active features along axis 0. Use `selector.n_active` to size architecture hyperparams.
+    Wrapping mono toggle chips for choosing which feature transforms feed the model, under a Features caption. Active chips carry the shared selected cue. Construct with `{name: callable}`; the selector concatenates active features along axis 0. Use `selector.n_active` to size architecture hyperparams.
 
 </div>
 
@@ -126,7 +158,7 @@ uv run python tools/widget_screenshot.py --all
 
     ![prediction_label](images/widgets/prediction_label.png){ .widget-thumb loading=lazy }
 
-    Big, centred class-name readout of the current classifier output. Reads `pipeline.predictions["class"]`, colour-codes via the shared palette, optionally renders the predicted class's probability as a coloured progress bar.
+    Surface card with the current classifier label in the display face and a muted mono prediction interval, right-aligned and vertically centred beside it. Idle shows a dash at the same hero size and the reason in the same layout. Reads `pipeline.predictions["class"]`; `show_probability=True` adds one thin bar per class in its palette colour, with a mono percentage on a shared 0–1 range.
 
 </div>
 

@@ -903,7 +903,7 @@ class TestOneWayToDriveTheControlHand:
 
     def test_a_pose_on_the_model_hand_beside_a_movement_is_fine(self, tmp_path):
         """Different hands: the prediction stream and a control-hand movement coexist —
-        which is exactly what emg_classification_grpc does."""
+        which is exactly what emg_classification does."""
         editor = self._editor(
             tmp_path,
             '[dofs]\nmodel = "vhi.prediction.thumb.flexion"\nheld = "vhi.control.gesture"\n',

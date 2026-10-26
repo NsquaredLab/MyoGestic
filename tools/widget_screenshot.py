@@ -100,6 +100,9 @@ SIZES: dict[str, tuple[int, int]] = {
     "app_logo": (360, 260),
     "prediction_label": (440, 200),
     "VhiMovementPanel": (640, 360),
+    "AppHeader": (1100, 76),
+    "StatusBar": (700, 50),
+    "SimulatorControls": (440, 120),
 }
 
 
@@ -328,6 +331,62 @@ def render_app_logo(out: Path) -> None:
     app.run(window_size=SIZES["app_logo"])
 
 
+def render_app_header(out: Path) -> None:
+    from myogestic import App, Grid, Px
+    from myogestic.widgets import AppHeader, StepBar
+
+    app = App("AppHeader")
+    grid = Grid.areas("header", row_height=[Px(52)], bare=("header",))
+    steps = StepBar(["Connect", "Record", "Train", "Predict"], widget_id="gallery_app_header_steps")
+    steps.active = 1
+    header = AppHeader("My session app", steps=steps)
+
+    @app.ui
+    def ui(ctx):
+        with grid.area("header"):
+            header.ui(ctx, [True, False, False, False])
+
+    _self_capture_after(3.0, out)
+    app.run(window_size=SIZES["AppHeader"])
+
+
+def render_status_bar(out: Path) -> None:
+    from myogestic import App, Grid, Px, Stream
+    from myogestic.sources import SyntheticSource
+    from myogestic.widgets import StatusBar
+
+    app = App("StatusBar")
+    app.ctx.participant = "P-014"
+    stream = Stream("emg", source=SyntheticSource(n_channels=8, fs=2048), window_ms=200)
+    stream.reconnect()
+    app.streams(stream)
+    grid = Grid.areas("status", row_height=[Px(26)], bare=("status",))
+    status = StatusBar("emg")
+
+    @app.ui
+    def ui(ctx):
+        with grid.area("status"):
+            status.ui(ctx)
+
+    _self_capture_after(3.0, out)
+    app.run(window_size=SIZES["StatusBar"])
+
+
+def render_simulator_controls(out: Path) -> None:
+    from myogestic import App
+    from myogestic.widgets import SimulatorControls
+
+    app = App("SimulatorControls")
+    simulator = SimulatorControls([("Rest", 0.0), ("Fist", 1.0)])
+
+    @app.ui
+    def ui(ctx):
+        simulator.ui(ctx)
+
+    _self_capture_after(3.0, out)
+    app.run(window_size=SIZES["SimulatorControls"])
+
+
 def render_prediction_label(out: Path) -> None:
     import numpy as np
     from myogestic import App
@@ -411,6 +470,9 @@ WIDGETS: dict[str, callable] = {
     "app_logo": render_app_logo,
     "prediction_label": render_prediction_label,
     "VhiMovementPanel": render_vhi_movement_panel,
+    "AppHeader": render_app_header,
+    "StatusBar": render_status_bar,
+    "SimulatorControls": render_simulator_controls,
 }
 
 

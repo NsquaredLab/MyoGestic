@@ -10,8 +10,8 @@ Run with:
 
 import numpy as np
 
-from myogestic import App
-from myogestic.widgets import PredictionLabel
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, PredictionLabel
 
 CLASSES = ("Rest", "Fist")
 
@@ -24,13 +24,18 @@ class _FakePipeline:
 pipeline = _FakePipeline()
 
 app = App("panel: prediction_label")
+header = AppHeader("PredictionLabel", show_state=True)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 label = PredictionLabel(pipeline, CLASSES, show_probability=True)
 
 
 @app.ui
 def ui(ctx):
-    label.ui()
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        label.ui()
 
 
 def main() -> None:

@@ -9,10 +9,12 @@ Run with:
     uv run python examples/panels/log_panel.py
 """
 
-from myogestic import App
-from myogestic.widgets import LogPanel
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, LogPanel
 
 app = App("panel: log_panel")
+header = AppHeader("LogPanel", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 panel = LogPanel()
 _seeded = False
 
@@ -20,17 +22,20 @@ _seeded = False
 @app.ui
 def ui(ctx):
     global _seeded
-    if not _seeded:
-        for line in (
-            "App started",
-            "Stream 'emg' connected — 8 ch · 2048 Hz",
-            "Recording started",
-            "Recording saved → sessions/2026-05-01_10-00-00",
-            "Model loaded ← models/rf.joblib",
-        ):
-            ctx.log(line)
-        _seeded = True
-    panel.ui(ctx)
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        if not _seeded:
+            for line in (
+                "App started",
+                "Stream 'emg' connected — 8 ch · 2048 Hz",
+                "Recording started",
+                "Recording saved → sessions/2026-05-01_10-00-00",
+                "Model loaded ← models/rf.joblib",
+            ):
+                ctx.log(line)
+            _seeded = True
+        panel.ui(ctx)
 
 
 def main() -> None:
