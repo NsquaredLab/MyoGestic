@@ -50,6 +50,20 @@ the source, so the same file runs against a Muovi, a Quattrocento, an LSL
 outlet, or the synthetic amplifier when there is no hardware to hand. See
 [Pick a device](../../docs/how-to/pick-a-device.md).
 
+## Trying Pong without hardware
+
+In `pong.py`, connect **Synthetic wrist (dummy follows the cursor)**. During a
+cursor block the dummy follows the recorded cursor automatically. After training,
+hold **↑** to flex up or **↓** to flex down; the drive ramps from rest to full
+effort in 150 ms. Release the keys, or hold both, to return to rest. You can also
+press and hold the arrow keycaps in **Simulated EMG** with the mouse.
+
+Arrows and **Space** act only while the app has focus and no text field is active.
+The simulated card appears only for a connected dummy wrist. With real hardware,
+your contractions drive the model. **Space** or **Serve** starts a fresh game;
+first to 11 ends it. **Play again** resets the court, and **Harder** moves to the
+next opponent level when one is available.
+
 ## Adding one
 
 The bar is that somebody could run a study with it and change nothing. That
