@@ -53,3 +53,6 @@ tools/lsl-dummy-stream
 # CI generates both fresh each deploy; committing would just bitrot.
 docs/playground/wheels/*.whl
 docs/playground/wheels/manifest.json
+
+# Linked worktrees for isolated feature work (superpowers:using-git-worktrees)
+.worktrees/

@@ -1,12 +1,16 @@
 """Core tests — only idle ↔ recording. ML pipeline tests live in test_ml.py."""
 
+import ctypes
 import shutil
 import threading
 import time
+from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from mne_lsl.lsl import StreamInfo, StreamOutlet, local_clock
 
+from myogestic import _browser, core
 from myogestic.core import App, can_transition
 from myogestic.sources.lsl import LSLSource
 from myogestic.stream import Stream
@@ -157,7 +161,7 @@ def test_run_cleanup_fires_on_before_run_hook_failure(capsys):
     import pytest
 
     with pytest.raises(RuntimeError, match="hook2 boom"):
-        app.run(mode="gui")
+        app.run(mode="headless")
 
     # hook1 ran, cleanups ran despite hook2 raising
     assert "hook1_ok" in cleanup_calls
@@ -206,7 +210,7 @@ def test_run_cleanup_continues_on_cleanup_hook_failure():
     import pytest
 
     with pytest.raises(RuntimeError):
-        app.run()
+        app.run(mode="headless")
 
     # The second cleanup hook ran even though the first one raised
     assert calls == ["after_boom"]
@@ -235,3 +239,140 @@ def test_the_glfw_stderr_filter_starts_no_thread_in_the_browser(monkeypatch):
 
     with _collapse_glfw_monitor_spam():
         pass  # must enter and exit cleanly
+
+
+# --- Starting with a locked or sleeping display ---
+
+
+@pytest.fixture
+def startup(monkeypatch):
+    """Record startup and cleanup without opening a native window or stream."""
+    monkeypatch.setattr(core.sys, "platform", "darwin")
+    monkeypatch.setattr(_browser, "IS_BROWSER", False)
+    app = core.App("Display startup")
+    events = []
+    app.ctx.streams["test"] = SimpleNamespace(
+        start=lambda: events.append("stream start"),
+        stop=lambda: events.append("stream stop"),
+    )
+    app.before_run_hooks.append(lambda app: events.append("before run"))
+    app.cleanup_hooks.append(lambda app: events.append("cleanup"))
+    monkeypatch.setattr(app, "_gui_loop", lambda **kwargs: events.append(("gui", kwargs)))
+    monkeypatch.setattr(app, "_headless_loop", lambda: events.append("headless"))
+    return app, events
+
+
+@pytest.mark.parametrize("fullscreen", [False, True])
+def test_waits_for_display_before_starting_streams_or_hooks(
+    startup, monkeypatch, capsys, fullscreen
+):
+    app, events = startup
+    counts = iter([0, 0, 1])
+
+    def query():
+        events.append("query")
+        assert not app._running
+        return next(counts)
+
+    def sleep(seconds):
+        events.append(("sleep", seconds))
+        assert not app._running
+        assert "stream start" not in events
+
+    monkeypatch.setattr(core, "_active_display_count", query, raising=False)
+    monkeypatch.setattr(core.time, "sleep", sleep)
+
+    app.run(window_size=(960, 640), fullscreen=fullscreen)
+
+    assert events == [
+        "query", ("sleep", 1.0), "query", ("sleep", 1.0), "query",
+        "stream start", "before run",
+        ("gui", {"window_size": (960, 640), "fullscreen": fullscreen}),
+        "cleanup", "stream stop",
+    ]
+    assert not app._running
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 2
+    assert "waiting for a display — the screen is locked or asleep" in lines[0]
+    assert "continuing" in lines[1]
+
+
+def test_active_display_starts_immediately_without_wait_messages(startup, monkeypatch, capsys):
+    app, events = startup
+    monkeypatch.setattr(core, "_active_display_count", lambda: 1, raising=False)
+    monkeypatch.setattr(core.time, "sleep", lambda _: pytest.fail("unexpected wait"))
+    app.run()
+    assert events[:2] == ["stream start", "before run"]
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("interrupt_at", ["query", "sleep"])
+def test_ctrl_c_during_wait_exits_without_starting_resources(startup, monkeypatch, interrupt_at):
+    app, events = startup
+
+    def interrupt(*args):
+        raise KeyboardInterrupt
+
+    query = interrupt if interrupt_at == "query" else lambda: 0
+    monkeypatch.setattr(core, "_active_display_count", query, raising=False)
+    monkeypatch.setattr(core.time, "sleep", interrupt)
+
+    app.run()
+
+    assert events == []
+    assert not app._running
+    # An interrupted wait must not leave the app marked as already running.
+    monkeypatch.setattr(core, "_active_display_count", lambda: 1)
+    app.run()
+    assert events[:2] == ["stream start", "before run"]
+
+
+@pytest.mark.parametrize(
+    "platform,browser,mode",
+    [
+        ("linux", False, "gui"),
+        ("win32", False, "gui"),
+        ("emscripten", True, "gui"),
+        ("darwin", True, "gui"),
+        ("darwin", False, "headless"),
+    ],
+)
+def test_other_platforms_browser_and_headless_do_not_query_displays(
+    startup, monkeypatch, platform, browser, mode
+):
+    app, events = startup
+    monkeypatch.setattr(core.sys, "platform", platform)
+    monkeypatch.setattr(_browser, "IS_BROWSER", browser)
+    monkeypatch.setattr(
+        core, "_active_display_count", lambda: pytest.fail("unexpected display query"),
+        raising=False,
+    )
+    app.run(mode=mode)
+    assert events[:2] == ["stream start", "before run"]
+    assert ("cleanup" in events) is not browser
+
+
+@pytest.mark.parametrize("count", [0, 1, 3])
+def test_display_count_uses_coregraphics_without_pyobjc(monkeypatch, count):
+    def get_active_display_list(max_displays, displays, count_pointer):
+        assert max_displays == 0
+        assert displays is None
+        ctypes.cast(count_pointer, ctypes.POINTER(ctypes.c_uint32))[0] = count
+        return 0
+
+    library = SimpleNamespace(CGGetActiveDisplayList=get_active_display_list)
+    monkeypatch.setattr(ctypes, "CDLL", lambda path: library)
+
+    assert core._active_display_count() == count
+
+
+def test_failed_display_query_does_not_start_native_gui(startup, monkeypatch):
+    app, events = startup
+    library = SimpleNamespace(CGGetActiveDisplayList=lambda *args: 1000)
+    monkeypatch.setattr(ctypes, "CDLL", lambda path: library)
+
+    with pytest.raises(OSError, match="CGGetActiveDisplayList.*1000"):
+        app.run()
+
+    assert events == []
+    assert not app._running

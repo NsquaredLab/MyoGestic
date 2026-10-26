@@ -212,17 +212,9 @@ class TestTheTextViewFitsToo:
 
     @staticmethod
     def _open(editor):
-        editor._raw = editor.raw_text()
-
-        def draw():
-            original = imgui.collapsing_header
-            imgui.collapsing_header = lambda label, *a, **k: True   # as if expanded
-            try:
-                editor.ui()
-            finally:
-                imgui.collapsing_header = original
-
-        return draw
+        editor._raw_open = True
+        editor._sync_raw()
+        return editor.ui
 
     @pytest.mark.parametrize("width", (240, *WIDTHS))
     def test_the_text_box_stays_inside_the_panel(self, _context, tmp_path, width):
@@ -245,44 +237,24 @@ class TestTheActionsStayReachable:
     """Save and Reload are the two things a user cannot work around."""
 
     @pytest.mark.parametrize("width", WIDTHS)
-    def test_every_action_is_drawn_inside_the_panel(self, _context, tmp_path, width):
+    def test_every_action_is_drawn_inside_the_panel(self, _context, tmp_path, monkeypatch, width):
         editor = _editor(tmp_path)
-        seen: list[tuple[str, float]] = []
-        original = imgui.button
+        editor._draft[0]["alias"] = "edited"
+        seen = []
+        for method in ("button", "small_button"):
+            original = getattr(imgui, method)
 
-        def spy(label, *args, **kwargs):
-            result = original(label, *args, **kwargs)
-            seen.append((label, imgui.get_item_rect_max().x))
-            return result
+            def spy(label, *args, _original=original, **kwargs):
+                result = _original(label, *args, **kwargs)
+                seen.append((label, imgui.get_item_rect_max().x))
+                return result
 
-        imgui.button = spy
-        try:
-            io = _context
-            io.display_size = imgui.ImVec2(width + 40, 1400)
-            for _ in range(3):
-                seen.clear()
-                imgui.new_frame()
-                imgui.set_next_window_pos(imgui.ImVec2(0, 0))
-                imgui.set_next_window_size(imgui.ImVec2(width, 1400))
-                imgui.begin(f"actions{width}", None, imgui.WindowFlags_.no_saved_settings)
-                right = imgui.get_window_pos().x + imgui.get_window_width()
-                editor.ui()
-                imgui.end()
-                imgui.end_frame()
-        finally:
-            imgui.button = original
-
-        # Matched as a suffix: the labels now carry a leading glyph (`FLOPPY_DISK  Save`),
-        # and what this class is about is that the *action* is reachable, not how it is
-        # spelled. Save-as is deliberately absent — Save covers the untitled case by routing
-        # to the same dialog, so it is the one that cannot be worked around.
-        for label in ("Connect", "Save", "Reload", "Add control"):
+            monkeypatch.setattr(imgui, method, spy)
+        _overflow(_context, width, editor.ui)
+        for label in ("Connect", "Save", "Reload", "Save as", "TOML", "Add control"):
             drawn = [x for name, x in seen if name.endswith(label)]
             assert drawn, f"{label} was not drawn at {width} px"
-            assert max(drawn) <= right + 1.0, (
-                f"{label} extends past the panel at {width} px "
-                f"({max(drawn):.0f} > {right:.0f})"
-            )
+            assert max(drawn) <= width + 1.0
 
 
 
@@ -334,7 +306,9 @@ class TestAddControlSitsWithTheControls:
         return drawn
 
     def test_it_is_below_the_file_commands(self, _context, tmp_path):
-        seen = self._ys(_context, _editor(tmp_path))
+        editor = _editor(tmp_path)
+        editor._draft[0]["alias"] = "edited"
+        seen = self._ys(_context, editor)
         assert min(self._at(seen, "Add control")) > max(self._at(seen, "Save")), (
             "Add control is level with or above Save — it is back in the file-command row"
         )
@@ -368,7 +342,9 @@ class TestAddControlSitsWithTheControls:
         editor = _editor(tmp_path)
         seen = self._ys(_context, editor)
         # BUSY's first control has five targets, so this has to clear the last of them.
-        assert min(self._at(seen, "Add target")) > max(self._at(seen, fa.ICON_FA_XMARK)), (
+        first_card_end = self._at(seen, "Remove control")[1]
+        first_targets = [y for y in self._at(seen, fa.ICON_FA_XMARK) if y < first_card_end]
+        assert min(self._at(seen, "Add target")) > max(first_targets), (
             "Add target is not below the target rows it appends to"
         )
         assert min(self._at(seen, "Add target")) > min(self._at(seen, "Remove control")), (
@@ -396,7 +372,7 @@ class TestTheProbabilityGateIsAToggle:
 
         def spy(text, *args, **kwargs):
             original(text, *args, **kwargs)
-            return text.endswith(label)
+            return text.split("##")[0].endswith(label)
 
         imgui.button = spy
         try:
@@ -415,7 +391,7 @@ class TestTheProbabilityGateIsAToggle:
     def test_it_is_drawn_as_a_button(self, _context, tmp_path):
         editor = _editor(tmp_path)
         seen = TestAddControlSitsWithTheControls._ys(_context, editor)
-        assert any(label == "Treat as probability" for label, _ in seen), (
+        assert any(label.split("##")[0] == "Treat as probability" for label, _ in seen), (
             "the gate is not among the buttons drawn — it is still a checkbox"
         )
 
@@ -501,67 +477,26 @@ class TestTheLabelColumnLinesFieldsUp:
 
 
 
-class TestTheActionsShareOneRow:
-    """Four buttons on one line when they fit, with a gap where the subject changes.
+class TestTheHeaderActionsShareOneRow:
+    """Reload, Save as and TOML are compact icon-only header actions."""
 
-    `Connect` had a row to itself because it sat beside a note about the target. The note is
-    gone — how many addresses a target publishes is not something anyone reads — so the row
-    was a line spent on a gap. It keeps the gap, as a gap.
-    """
-
-    ACTIONS = ("Connect", "Save", "Save as...", "Reload")
-
-    def _row(self, io, editor, width):
-        """Every action button, as (label, x, y), from a settled frame at `width`."""
-        seen: list[tuple[str, float, float]] = []
-        original = imgui.button
+    @pytest.mark.parametrize("width", WIDTHS)
+    def test_header_icons_share_one_line(self, _context, tmp_path, monkeypatch, width):
+        seen = []
+        original = imgui.small_button
 
         def spy(label, *args, **kwargs):
             result = original(label, *args, **kwargs)
-            if label.endswith(self.ACTIONS):
-                seen.append((label, imgui.get_item_rect_min().x, imgui.get_item_rect_min().y))
+            if label.endswith(("##Reload", "##Save as", "##TOML")):
+                seen.append((label, imgui.get_item_rect_min().y))
             return result
 
-        imgui.button = spy
-        try:
-            io.display_size = imgui.ImVec2(width + 40, 1400)
-            for _ in range(3):
-                seen.clear()
-                imgui.new_frame()
-                imgui.set_next_window_pos(imgui.ImVec2(0, 0))
-                imgui.set_next_window_size(imgui.ImVec2(width, 1400))
-                imgui.begin(f"actions_row{width}", None, imgui.WindowFlags_.no_saved_settings)
-                editor.ui()
-                imgui.end()
-                imgui.end_frame()
-        finally:
-            imgui.button = original
-        return seen[: len(self.ACTIONS)]
-
-    @pytest.mark.parametrize("width", (420, 560, 720, 1000, 1600))
-    def test_they_all_share_one_line_when_there_is_room(self, _context, tmp_path, width):
-        row = self._row(_context, _editor(tmp_path), width)
-        assert len(row) == len(self.ACTIONS), f"an action went missing: {row}"
-        assert len({y for _, _, y in row}) == 1, f"the actions wrapped at {width} px: {row}"
-
-    def test_a_narrow_panel_still_wraps_rather_than_clips(self, _context, tmp_path):
-        """320 px cannot hold four, so one drops to a second line — never off the edge."""
-        row = self._row(_context, _editor(tmp_path), 320)
-        assert len({y for _, _, y in row}) > 1, "four buttons cannot fit 320 px"
-
-    def test_the_gap_marks_where_the_subject_changes(self, _context, tmp_path):
-        """Re-asking the targets and writing the file are two subjects, so `_GROUP_GAP`.
-
-        Measured as a comparison, not against a pixel count: what matters is that the break
-        before Save is wider than the ordinary spacing between the file buttons.
-        """
-        row = {label.split("  ")[-1]: x for label, x, _ in self._row(_context, _editor(tmp_path), 900)}
-        before_save = row["Save"] - row["Connect"]
-        between_file_buttons = row["Reload"] - row["Save as..."]
-        assert before_save > between_file_buttons, (
-            f"no visible break before Save: {row}"
-        )
-
+        monkeypatch.setattr(imgui, "small_button", spy)
+        _overflow(_context, width, _editor(tmp_path).ui)
+        row = seen[-3:]
+        assert len(row) == 3
+        assert len({y for _, y in row}) == 1
+        assert all(len(label.split("##")[0]) == 1 for label, _ in row)
 
 
 class TestOnlyTheGatesThatApplyAreDrawn:
@@ -579,7 +514,7 @@ class TestOnlyTheGatesThatApplyAreDrawn:
     def _labels(io, editor):
         """Every button and label drawn for one settled frame."""
         seen: list[str] = []
-        original_button, original_text = imgui.button, imgui.text
+        original_button, original_text = imgui.button, imgui.text_disabled
 
         def spy_button(label, *args, **kwargs):
             seen.append(label)
@@ -589,7 +524,7 @@ class TestOnlyTheGatesThatApplyAreDrawn:
             seen.append(label)
             return original_text(label, *args, **kwargs)
 
-        imgui.button, imgui.text = spy_button, spy_text
+        imgui.button, imgui.text_disabled = spy_button, spy_text
         try:
             io.display_size = imgui.ImVec2(940, 1400)
             for _ in range(3):
@@ -602,7 +537,7 @@ class TestOnlyTheGatesThatApplyAreDrawn:
                 imgui.end()
                 imgui.end_frame()
         finally:
-            imgui.button, imgui.text = original_button, original_text
+            imgui.button, imgui.text_disabled = original_button, original_text
         return seen
 
     @staticmethod
@@ -626,7 +561,7 @@ class TestOnlyTheGatesThatApplyAreDrawn:
         editor = self._editor_for(tmp_path, '[dofs]\na = "vhi.control.gesture"\n')
         drawn = self._labels(_context, editor)
         assert "Steady for" in drawn
-        assert "Treat as probability" in drawn
+        assert any(label.split("##")[0] == "Treat as probability" for label in drawn)
 
     def test_a_control_with_no_address_yet_is_offered_neither(self, _context, tmp_path):
         """The state every control is in the moment it is added: nothing to gate."""
@@ -733,8 +668,10 @@ class TestThePlaygroundPicksALayoutForTheWidth:
             / "synthetic"
             / "control_map_studio.py"
         ).read_text(encoding="utf-8")
-        assert "WIDE = Grid(" in source
-        assert "NARROW = Grid(" in source
+        assert "layout = Layout(" in source
+        assert "wide=Grid.areas(" in source
+        assert "narrow=Grid.areas(" in source
+        assert "breakpoint=Px(STACK_BELOW)" in source
         # The whole point: the wide layout gives the editor the slack, so the control
         # column is Px and the editor column is Fr.
         assert "col_width=[Px(CONTROLS_W), Fr(1)]" in source

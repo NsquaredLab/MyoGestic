@@ -1,8 +1,8 @@
-"""VHI movement palette — a button grid for the VHI control hand's movements.
+"""VHI movement palette — wrapping movement chips for the VHI control hand's movements.
 
 The Virtual Hand Interface reports its valid movement names over the gRPC
 control plane (``RecordingClient.state().available_movements`` — 17 in AI
-mode, 15 in Classifier mode). This module renders them as a grid of buttons;
+mode, 15 in Classifier mode). This module renders them as wrapping chips;
 clicking one commands that movement on VHI's control hand.
 
 Two pieces, deliberately separate:
@@ -49,19 +49,20 @@ from typing import TYPE_CHECKING
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic.widgets.common import DANGER, SUCCESS, panel_header, pop_selected, push_selected
+from myogestic.widgets.common import (
+    IDLE,
+    SUCCESS,
+    _truncate_to_width,
+    mono_text,
+    muted,
+    panel_header,
+    pop_selected,
+    push_selected,
+    ui_px,
+)
 
 if TYPE_CHECKING:
     from myogestic.remote._recording import RecordingClient
-
-# Movement button size. Columns are computed from the panel width, so the grid
-# reflows as the panel is resized. Width fits VHI's longest name ("ThreeFingerPinch").
-_BTN_W = 132.0
-_BTN_H = 28.0
-
-_DOT_OK = SUCCESS
-_DOT_BAD = DANGER
-
 
 @dataclass(frozen=True)
 class VhiStateSnapshot:
@@ -203,19 +204,15 @@ def vhi_movement_palette(
     current_movement: str = "",
     connected: bool = False,
     status: str = "",
-    title: str = "VHI Movements",
+    title: str = "Hand movements",
+    widget_id: str = "vhi_movements",
 ) -> None:
-    """Render VHI's movement names as a grid of command buttons.
+    """Render wrapping movement chips with the current movement selected.
 
-    Pure ImGui: performs no RPC and owns no client. ``movements`` is the cached
-    list from the last successful ``GetState``; ``on_movement(name)`` fires on
-    click (wire it to a discrete DOF, e.g. ``bus.select("gesture", name)``). If
-    ``on_refresh`` is
-    given, a refresh button is drawn. Movement buttons are disabled while
-    ``connected`` is False, but a stale list stays visible.
-
-    The grid uses as many columns as fit the panel width, so it reflows when
-    the panel is resized; the button matching ``current_movement`` is highlighted.
+    Pure ImGui: performs no RPC and owns no client. ``on_movement(name)`` fires
+    on click; wire it to a discrete DOF such as ``bus.select("gesture", name)``.
+    While disconnected, launch instructions and an optional Refresh action replace
+    the cached list. ``widget_id`` isolates multiple palettes in the same window.
 
     Examples
     --------
@@ -224,39 +221,76 @@ def vhi_movement_palette(
     ...     ["Rest", "Fist"], connected=True, on_movement=vhi_client.set_movement
     ... )
     """
-    panel_header(title, fa.ICON_FA_HAND)
-
-    if on_refresh is not None:
-        if imgui.button(f"{fa.ICON_FA_ARROWS_ROTATE}  Refresh from VHI"):
-            on_refresh()
-        imgui.same_line()
-    imgui.text_colored(_DOT_OK if connected else _DOT_BAD, fa.ICON_FA_CIRCLE)
-    imgui.same_line()
-    imgui.text_disabled(status or ("connected" if connected else "not connected"))
-
-    if not movements:
-        imgui.spacing()
-        imgui.text_disabled("No movements yet — launch VHI, then refresh.")
-        return
-
-    imgui.spacing()
-    # As many columns as fit the current panel width (at least one).
-    avail = imgui.get_content_region_avail().x
-    spacing = imgui.get_style().item_spacing.x
-    n_cols = max(1, int((avail + spacing) // (_BTN_W + spacing)))
-
-    imgui.begin_disabled(not connected)
-    for i, name in enumerate(movements):
-        if i % n_cols != 0:
+    imgui.push_id(widget_id)
+    try:
+        style = imgui.get_style()
+        refresh_w = imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x + 2 * style.frame_padding.x
+        panel_header(
+            title, fa.ICON_FA_HAND, status=SUCCESS if connected else IDLE,
+            reserve=refresh_w + style.item_spacing.x if on_refresh else 0.0,
+        )
+        if connected:
+            imgui.set_item_tooltip(status or "The hand is reachable")
+        if on_refresh is not None:
             imgui.same_line()
-        is_current = name == current_movement
-        if is_current:
-            push_selected()
-        if imgui.button(f"{name}##vhi_mv_{i}", imgui.ImVec2(_BTN_W, _BTN_H)):
-            on_movement(name)
-        if is_current:
-            pop_selected()
-    imgui.end_disabled()
+            avail = imgui.get_content_region_avail().x
+            imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0.0, avail - refresh_w))
+            if imgui.small_button(f"{fa.ICON_FA_ARROWS_ROTATE}##refresh"):
+                on_refresh()
+            imgui.set_item_tooltip("Refresh movements")
+
+        if not connected or not movements:
+            lines = (
+                ("The hand is not running", "Launch it, then refresh to load its movements.")
+                if not connected else
+                ("No movements available", "Refresh to load the hand's movements.")
+            )
+            available = imgui.get_content_region_avail()
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + max(0.0, (available.y - ui_px(140)) / 2))
+            for line in lines:
+                left = imgui.get_cursor_pos_x()
+                width = imgui.get_content_region_avail().x
+                imgui.set_cursor_pos_x(left + max(0.0, (width - imgui.calc_text_size(line).x) / 2))
+                imgui.push_style_color(imgui.Col_.text, muted())
+                imgui.text_wrapped(line)
+                imgui.pop_style_color()
+            if on_refresh is not None:
+                width = imgui.calc_text_size("Refresh").x + 2 * style.frame_padding.x
+                imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
+                    0.0, (imgui.get_content_region_avail().x - width) / 2
+                ))
+                if imgui.button("Refresh"):
+                    on_refresh()
+            return
+
+        left = imgui.get_cursor_pos_x()
+        available = imgui.get_content_region_avail().x
+        used = 0.0
+        for index, name in enumerate(movements):
+            width = min(available, imgui.calc_text_size(name).x + 2 * style.frame_padding.x)
+            if used and used + style.item_spacing.x + width <= available:
+                imgui.same_line()
+                used += style.item_spacing.x
+            else:
+                used = 0.0
+                imgui.set_cursor_pos_x(left)
+            label = name
+            budget = width - 2 * style.frame_padding.x
+            if imgui.calc_text_size(label).x > budget:
+                label = _truncate_to_width(name, budget - imgui.calc_text_size("…").x) + "…"
+            selected = name == current_movement
+            if selected:
+                push_selected()
+            clicked = imgui.button(f"{label}##vhi_mv_{index}", imgui.ImVec2(width, ui_px(26)))
+            if selected:
+                pop_selected()
+            imgui.set_item_tooltip(name)
+            if clicked:
+                on_movement(name)
+            used += width
+        mono_text(f"{len(movements)} movements", muted())
+    finally:
+        imgui.pop_id()
 
 
 __all__ = ["VhiStateCache", "VhiStateSnapshot", "request_vhi_state_refresh", "vhi_movement_palette"]

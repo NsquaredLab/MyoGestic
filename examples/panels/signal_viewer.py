@@ -13,11 +13,13 @@ Run with:
     uv run python examples/panels/signal_viewer.py
 """
 
-from myogestic import App, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.sources import SyntheticSource
-from myogestic.widgets import SignalViewer
+from myogestic.widgets import AppHeader, SignalViewer
 
 app = App("panel: signal_viewer")
+header = AppHeader("SignalViewer", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 app.streams(Stream("emg", source=SyntheticSource(n_channels=8), window_ms=2000, buffer_ms=10000))
 
 viewer = SignalViewer("emg", selectable=True)
@@ -25,7 +27,10 @@ viewer = SignalViewer("emg", selectable=True)
 
 @app.ui
 def ui(ctx):
-    viewer.ui(ctx)
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        viewer.ui(ctx)
 
 
 def main() -> None:

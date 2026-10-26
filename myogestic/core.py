@@ -12,11 +12,16 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from myogestic._platform import _register_assets_folder, _try_set_macos_dock_icon
 from myogestic.session import Session
 from myogestic.stream import Stream
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from myogestic.widgets.panels.notifications import Notification
 
 #: GLFW's Cocoa backend logs this once or twice *per frame* (~90 lines a second), burying
 #: everything the application prints.
@@ -28,6 +33,27 @@ from myogestic.stream import Stream
 #: Not fixable here — it reproduces in a bare imgui_bundle app, and GLFW's error callback is
 #: unreachable because imgui_bundle links GLFW statically. Rendering is unaffected.
 _GLFW_MONITOR_SPAM = b"Cannot query workarea without screen"
+
+
+def _active_display_count() -> int:
+    """Query drawable macOS displays without requiring PyObjC or initializing GLFW."""
+    import ctypes
+
+    core_graphics = ctypes.CDLL(
+        "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
+    )
+    get_displays = core_graphics.CGGetActiveDisplayList
+    get_displays.argtypes = [
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    get_displays.restype = ctypes.c_int32
+    count = ctypes.c_uint32()
+    error = get_displays(0, None, ctypes.byref(count))
+    if error:
+        raise OSError(f"CGGetActiveDisplayList failed (error {error})")
+    return count.value
 
 
 @contextlib.contextmanager
@@ -159,6 +185,14 @@ class Context:
     session
         The `Session` being written while ``state == "recording"``, else
         ``None``. Set its ``name`` before `App.stop_recording` to label the take.
+    pending_saves
+        Source folders still being finalized. Nonempty until every pending
+        pack has registered its saved take or reported failure.
+    participant
+        Pseudonymised ID used to label new recordings; empty when none is set.
+    require_participant
+        Refuse recording until a participant ID is set. Recording widgets
+        mirror this opt-in gate with a disabled Record button.
     class_names
         Names for the label class indices, mirrored here by the recording
         widgets so `App.stop_recording` can persist them in ``meta.json``.
@@ -174,6 +208,9 @@ class Context:
     logs
         The app-event lines `LogPanel` renders. Append via [`log`][], which
         timestamps and bounds them.
+    notifications
+        Corner toasts drawn by the `App`. Append via [`notify`][], which also
+        mirrors each event to the log; the UI prunes expired or dismissed toasts.
 
     Examples
     --------
@@ -188,11 +225,41 @@ class Context:
     bridges: dict[str, Any] = field(default_factory=dict)
     state: str = AppState.IDLE
     session: Session | None = None
+    pending_saves: set[Path] = field(default_factory=set)
     class_names: list[str] = field(default_factory=list)
     control_space: Any = None
     current_label: int = -1
     status_message: str = ""
     logs: list[str] = field(default_factory=list)
+    notifications: list[Notification] = field(default_factory=list)
+    participant: str = ""
+    require_participant: bool = False
+    # A Stop during a countdown is still a cancellation, even though capture has
+    # not begun and state remains idle. Widgets observe this without callbacks.
+    _recording_stop_revision: int = field(default=0, init=False, repr=False)
+
+    def notify(self, title: str, detail: str = "", kind: str = "info") -> None:
+        """Show a corner toast and mirror it to the app log, from any thread.
+
+        Parameters
+        ----------
+        title
+            Short description of the event.
+        detail
+            Optional supporting text, such as a saved archive's name.
+        kind
+            ``"success"`` or ``"info"`` (6 seconds), ``"warning"`` (10 seconds),
+            or ``"danger"`` (until dismissed). Hovering pauses expiry.
+
+        Raises
+        ------
+        ValueError
+            If ``kind`` is not one of the four supported notification kinds.
+        """
+        from myogestic.widgets.panels.notifications import Notification
+
+        self.notifications.append(Notification(title, detail, kind, time.monotonic()))
+        self.log(f"{title} — {detail}" if detail else title)
 
     def log(self, message: str, max_lines: int = 500) -> None:
         """Append a one-line app event for the `log_panel` widget.
@@ -238,10 +305,15 @@ class App:
         registered via ``app.popout(...)`` become tearable DockableWindows. macOS
         Retina viewport sizing of detached windows can be wrong on the first draw.
     ui_scale
-        Global UI zoom factor - scales the font and imgui's style metrics (padding,
-        spacing, rounding). ``None`` uses ``$MYOGESTIC_UI_SCALE`` then ``1.0``; the
-        env var overrides an explicit value. Clamped to ``[0.5, 2.0]``. No effect
-        when ``theme=False``.
+        Fixed UI zoom factor - scales the font, imgui's style metrics (padding,
+        spacing, rounding) and every `Px` track. ``None`` (the default) scales
+        automatically: the OS display scale times how big the window is, updated
+        live as the window is resized or moved to another monitor.
+        ``$MYOGESTIC_UI_SCALE`` overrides both. Clamped to ``[0.5, 2.0]``. No
+        effect when ``theme=False``.
+    require_participant
+        Require ``ctx.participant`` before recording. Defaults to ``False``
+        so apps without participant labels keep their existing behaviour.
 
     Examples
     --------
@@ -254,10 +326,16 @@ class App:
     """
 
     def __init__(
-        self, name: str, theme: bool = True, docking: bool = False, ui_scale: float | None = None
+        self,
+        name: str,
+        theme: bool = True,
+        docking: bool = False,
+        ui_scale: float | None = None,
+        require_participant: bool = False,
     ):
         self.name = name
         self.ctx = Context()
+        self.ctx.require_participant = require_participant
         self._ui_fn: Callable[[Context], None] | None = None
         self._theme_enabled = theme
         self._ui_scale = ui_scale
@@ -416,9 +494,13 @@ class App:
                 f"Cannot start recording: state is {self.ctx.state!r}, expected 'idle'."
             )
             return
+        if self.ctx.require_participant and not self.ctx.participant:
+            self.ctx.status_message = "Set a participant ID before recording."
+            self.ctx.notify("Recording refused", "Set a participant ID first.", "warning")
+            return
         # A stream with info=None has no zarr schema and would fail on append.
         self.ctx.state = AppState.RECORDING
-        self.ctx.session = Session(base_path=base_path)
+        self.ctx.session = Session(base_path=base_path, participant=self.ctx.participant)
         n_ready = 0
         for name, stream in self.ctx.streams.items():
             if stream.info is None:
@@ -450,6 +532,7 @@ class App:
         (the original folder is kept until the pack succeeds). Refuses
         to stop if ``ctx.state`` isn't ``"recording"``.
         """
+        self.ctx._recording_stop_revision += 1
         if not can_transition(self.ctx.state, AppState.IDLE):
             self.ctx.status_message = (
                 f"Cannot stop recording: state is {self.ctx.state!r}, expected 'recording'."
@@ -473,6 +556,11 @@ class App:
             self.ctx.status_message = f"Saved {n} labels - finalizing…"
 
             from myogestic._browser import IS_BROWSER
+            from myogestic.widgets.training._session_state import set_session_saving
+
+            source_path = session.path.resolve()
+            self.ctx.pending_saves.add(source_path)
+            set_session_saving(source_path, True)
 
             # Pack session folder → .session.zip in a daemon thread so the
             # UI stays responsive during finalization. Register with
@@ -481,7 +569,7 @@ class App:
                 try:
                     zip_path = session.pack_to_zip()
                     self.ctx.status_message = f"Saved {n} labels"
-                    self.ctx.log(f"Session saved → {zip_path}")
+                    self.ctx.notify("Recording saved", zip_path.name, "success")
                     from myogestic.widgets.training.session_manager import (
                         add_recorded_session,
                     )
@@ -491,7 +579,7 @@ class App:
                 except Exception as e:
                     log.exception("pack_to_zip failed: %s", e)
                     self.ctx.status_message = f"Pack failed: {e} - folder kept"
-                    self.ctx.log(f"Pack failed: {e} - folder kept at {session.path}")
+                    self.ctx.notify("Recording not packed", f"{e} — folder kept", "danger")
                     # Fall back: register the folder so user doesn't lose it
                     try:
                         from myogestic.widgets.training.session_manager import (
@@ -501,6 +589,9 @@ class App:
                         add_recorded_session(str(session.path))
                     except Exception:
                         pass
+                finally:
+                    set_session_saving(source_path, False)
+                    self.ctx.pending_saves.discard(source_path)
 
             if IS_BROWSER:
                 # Pyodide is single-threaded. Zipping inline blocks the frame, which for a
@@ -521,6 +612,7 @@ class App:
 
         Refuses to run if ``ctx.state`` isn't ``"recording"``.
         """
+        self.ctx._recording_stop_revision += 1
         if not can_transition(self.ctx.state, AppState.IDLE):
             self.ctx.status_message = (
                 f"Cannot discard recording: state is {self.ctx.state!r}, expected 'recording'."
@@ -554,6 +646,10 @@ class App:
     ) -> None:
         """Blocking entry point.
 
+        On macOS, GUI startup waits for an active display before starting streams
+        or hooks. Unlock or wake the screen to continue; Ctrl+C cancels the wait
+        without starting app resources. Headless mode does not need a display.
+
         Call tree (top → bottom = runtime order):
 
             App.run()
@@ -577,11 +673,30 @@ class App:
             raise ValueError(
                 f"App.run(mode={mode!r}) - unknown mode. Supported: 'gui', 'headless'."
             )
+
+        from myogestic._browser import IS_BROWSER
+
+        # HelloImGui indexes the monitor list even with an explicit window position.
+        # Wait before native setup (and before any app resources start) until macOS
+        # reports a drawable display; sleeping displays are not active for drawing.
+        if mode == "gui" and sys.platform == "darwin" and not IS_BROWSER:
+            try:
+                if _active_display_count() == 0:
+                    print(
+                        "[myogestic] waiting for a display — the screen is locked or asleep",
+                        flush=True,
+                    )
+                    while True:
+                        time.sleep(1.0)
+                        if _active_display_count() > 0:
+                            break
+                    print("[myogestic] display active — continuing startup", flush=True)
+            except KeyboardInterrupt:
+                return
+
         self._running = True
 
         log.info("run() - streams=%s mode=%s", list(self.ctx.streams), mode)
-
-        from myogestic._browser import IS_BROWSER
 
         def _do_cleanup() -> None:
             log.info("run() - cleanup")
@@ -663,16 +778,19 @@ class App:
         # loop (Stream acquisition, Output sending, Pipeline predict) - no threads, no
         # asyncio. On desktop those are daemon threads and the tick is a no-op.
         from myogestic._browser import IS_BROWSER, tick_all
+        from myogestic.widgets.panels.notifications import render_notifications
 
         if IS_BROWSER:
 
             def gui_callback() -> None:
                 tick_all()
                 ui_fn(self.ctx)
+                render_notifications(self.ctx)
         else:
 
             def gui_callback() -> None:
                 ui_fn(self.ctx)
+                render_notifications(self.ctx)
 
         runner_params = hello_imgui.RunnerParams()
         runner_params.fps_idling.enable_idling = False
@@ -703,9 +821,10 @@ class App:
         runner_params.ini_filename = f".imgui_state/{self.name.replace(' ', '_')}.ini"
 
         if self._theme_enabled:
-            from myogestic._theme import apply_theme, load_fonts, set_ui_scale
+            from myogestic._theme import apply_theme, load_fonts, reset_live_scale, set_ui_scale
 
-            set_ui_scale(self._ui_scale)  # consumed by load_fonts / apply_theme below
+            set_ui_scale(self._ui_scale)  # None = automatic, see myogestic/_scale.py
+            reset_live_scale()
             runner_params.callbacks.default_icon_font = hello_imgui.DefaultIconFont.font_awesome6
             runner_params.callbacks.load_additional_fonts = load_fonts
             runner_params.callbacks.setup_imgui_style = apply_theme
@@ -774,6 +893,14 @@ class App:
                 io.config_flags |= imgui.ConfigFlags_.viewports_enable.value
 
             runner_params.callbacks.setup_imgui_style = _setup_with_docking
+
+        if self._theme_enabled:
+            # Last, so it re-runs the *whole* style chain (theme, viewport, docking)
+            # whenever the scale moves — see apply_live_scale.
+            from myogestic._theme import apply_live_scale
+
+            full_style = runner_params.callbacks.setup_imgui_style
+            runner_params.callbacks.pre_new_frame = lambda: apply_live_scale(full_style)
 
         global _active_app
         _active_app = self

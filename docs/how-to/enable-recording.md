@@ -23,7 +23,7 @@ def ui(ctx):
 app.run()
 ```
 
-Click **Record** → data flows into `sessions/<timestamp>/`. Click **Stop** → that folder packs into `sessions/<timestamp>.session.zip`. No further setup required.
+Click **Record** → data flows into `sessions/<timestamp>/`. Click **Stop** → that folder packs into `sessions/<timestamp>[_<labels>].session.zip`, with the recorded gesture labels included when available. No further setup required.
 
 ## Just capture, and name it afterwards
 
@@ -41,7 +41,13 @@ recorder = RecordButton(
 
 **Capture ends the moment you press Stop**, not when you press Save — the streams are detached before the dialog opens, so the seconds spent typing never reach the recording.
 
-The name is written to `meta.json` and appended to the archive filename, so a saved take is `sessions/<timestamp>_<name>.session.zip` and shows up in `SessionManager` by name rather than by timestamp alone. Naming is optional; the timestamp always identifies a session on its own. What you type is slugged down to ASCII letters, digits, `-` and `_` before it touches a path, so a name can never escape the sessions folder.
+The full-width red **Record** button becomes a tinted **Recording** row with a mono elapsed
+clock and **Stop**. After stopping, a surface row shows the captured duration; the naming dialog
+offers **Name (optional)**, a preview of the resulting file stem, **Save**, and an outlined
+**Discard** labelled with the captured duration when a discard handler is supplied. If the app
+requires a participant, Record stays disabled with a visible reminder to set their ID first.
+
+The name is written to `meta.json` and appended to the archive filename, so a saved take is `<folder>[_<labels>][_<name>].session.zip` beside its original recording folder and appears in `SessionManager` with gesture chips, time, and duration; its tooltip preserves the take name and archive filename. The optional labels segment contains only classes with recorded time, in class-index order, joined with `+` (for example, `fist+open-hand`). Labels and the typed name are slugged down to ASCII letters, digits, `-` and `_`; empty label slugs are omitted. If the joined labels exceed 40 characters, the segment becomes `<n>-classes`. Naming is optional, and a take with no recorded labels keeps the existing filename format. The recording folder name, including its timestamp and any participant ID, stays the archive's prefix.
 
 **Discard** deletes the take outright — the folder is removed and no archive is written. That is `app.discard_recording()`, and it is the counterpart to `stop_recording()` rather than a wrapper around it: nothing is saved and then cleaned up.
 

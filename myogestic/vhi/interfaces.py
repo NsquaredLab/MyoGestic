@@ -130,7 +130,7 @@ def _user_data_root() -> Path:
 
 
 def _default_install_root() -> Path:
-    """Default location to look for / install VHI.
+    """Default location to install VHI.
 
     1. ``<repo>/tools/MyoGestic-VHI`` when running from a writable git
        checkout — keeps the install visible next to the source; gitignored.
@@ -159,6 +159,15 @@ def _installed_binary(install_root: Path) -> Path | None:
     else:
         return None
     return binary if binary.exists() else None
+
+
+def _find_install_root() -> Path:
+    """Prefer an existing checkout or per-user install over the default destination."""
+    default = _default_install_root()
+    for root in (default, _user_data_root() / "vhi"):
+        if _installed_binary(root) is not None or (root / "project.godot").exists():
+            return root
+    return default
 
 
 def _resolve_godot_bin(godot_bin: str | None) -> str | None:
@@ -248,9 +257,10 @@ def virtual_hand(
         ``which("godot")``, then platform GUI defaults.
     vhi_path
         Directory containing VHI (binary install OR Godot project).
-        Falls back to ``$VHI_PATH``, then the default install root —
-        ``<repo>/tools/MyoGestic-VHI`` in a git checkout, otherwise
-        ``<user_data>/myogestic/vhi``.
+        Falls back to ``$VHI_PATH``, then an existing install in
+        ``<repo>/tools/MyoGestic-VHI`` in a writable git checkout or
+        ``<user_data>/myogestic/vhi``. If neither exists, uses the default
+        install destination (the checkout when writable, otherwise per-user).
     grpc_host
         VHI gRPC host. Falls back to ``$VHI_GRPC_HOST`` then
         ``127.0.0.1``.
@@ -273,7 +283,7 @@ def virtual_hand(
     >>> vhi.n_output_channels
     9
     """
-    install_root = Path(vhi_path or os.environ.get("VHI_PATH") or _default_install_root())
+    install_root = Path(vhi_path or os.environ.get("VHI_PATH") or _find_install_root())
     launch_mode = launch_mode or os.environ.get("VHI_LAUNCH_MODE", "auto")
     if launch_mode not in ("auto", "binary", "godot"):
         raise ValueError(f"launch_mode must be 'auto', 'binary', or 'godot'; got {launch_mode!r}")

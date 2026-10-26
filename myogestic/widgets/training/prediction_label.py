@@ -1,7 +1,7 @@
-"""Show the latest classifier prediction as a centred class-name label.
+"""Show the latest classifier prediction in a compact card.
 
 Reads ``pipeline.predictions`` every frame and renders the predicted class
-as a big, centred panel — "what does the model think *right now*" without
+as a display label on a surface card — "what does the model think *right now*" without
 having to read the signal viewer or watch the VHI hand. Drop it next to the
 pipeline panel::
 
@@ -29,18 +29,17 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
-from myogestic._theme import display_font
-from myogestic.widgets.common import PALETTE, flash_color, panel_header, primary
+from myogestic._theme import display_font, mono_font
+from myogestic.widgets.common import PALETTE, flash_color, mono_text, muted, primary, ui_px
 
 if TYPE_CHECKING:
     from myogestic.ml import Pipeline
 
 
 class PredictionLabel:
-    """Render the current predicted class name as a big centred label.
+    """Render the predicted class, cadence and per-class probability bars.
 
     The class index is looked up in ``pipeline.predictions[class_key]`` and the
     name is taken from ``class_names``. Colour-coded from the shared `PALETTE`,
@@ -82,10 +81,10 @@ class PredictionLabel:
             Dict key holding the per-class probability vector,
             consumed only when ``show_probability`` is on.
         title
-            Panel header text.
+            Card identity and tooltip text.
         show_probability
-            When True, render a coloured progress bar of the
-            predicted class's probability below the name.
+            When True, render one thin categorical bar and mono percentage
+            for every class below the name.
         font_scale
             Multiplier applied to the class name's text size.
             Defaults to 2× the panel font.
@@ -102,56 +101,91 @@ class PredictionLabel:
         self._widget_id = widget_id
 
     def ui(self) -> None:
-        """Render the current predicted class name as a big centred label."""
+        """Render the prediction or idle reason.
+
+        Probability bars share a fixed 0–1 range.
+        """
         imgui.push_id(self._widget_id or self._title)
+        style = imgui.get_style()
+        imgui.push_style_color(imgui.Col_.child_bg, style.color_(imgui.Col_.frame_bg))
+        imgui.begin_child("card", imgui.ImVec2(0, 0),
+                          imgui.ChildFlags_.auto_resize_y | imgui.ChildFlags_.always_use_window_padding)
         try:
-            panel_header(self._title, fa.ICON_FA_BRAIN)
-            imgui.spacing()
-
-            idx = self._pipeline.predictions.get(self._class_key)
-            if not isinstance(idx, int) or not (0 <= idx < len(self._class_names)):
-                imgui.text_disabled("—  (no prediction yet)")
-                imgui.spacing()
-                return
-
-            name = self._class_names[idx]
-            rgb = PALETTE[idx % len(PALETTE)]
-            rgba = imgui.ImVec4(float(rgb[0]), float(rgb[1]), float(rgb[2]), 1.0)
-            # Pulse on a class change, toward the theme's text colour rather than
-            # literal white — white flashes the readout into the light-theme card.
-            rgba = flash_color(self._widget_id or self._title, idx, rgba, primary())
-
-            # Big, centred class name in the display face; `display_font()`
-            # returns None when it isn't loaded, which keeps the body font.
-            # `push_font` takes a size in the *unscaled* base unit — style
-            # global scale factors are applied on top automatically.
-            base_size = imgui.get_style().font_size_base
+            predictions = self._pipeline.predictions
+            idx = predictions.get(self._class_key)
+            # Static previews can still supply only the predictions mapping.
+            app = getattr(self._pipeline, "app", None)
+            state = app.ctx.state if app is not None else "predicting" if predictions else "idle"
+            live = state == "predicting" and isinstance(idx, int) and 0 <= idx < len(self._class_names)
+            if live:
+                hz = getattr(self._pipeline, "predict_hz", 0.0)
+                detail = f"every {1000 / hz:.0f} ms" if hz > 0 else "predicting"
+            elif state == "predicting":
+                detail = "waiting for first prediction"
+            elif state != "idle":
+                detail = state
+            elif getattr(self._pipeline, "model", None) is None:
+                detail = "train or load a model"
+            else:
+                detail = "ready to predict"
+            color = muted()
+            if live:
+                color = imgui.ImVec4(*PALETTE[idx % len(PALETTE)], 1.0)
+                color = flash_color(self._widget_id or self._title, idx, color, primary())
+            base_size = style.font_size_base
             imgui.push_font(display_font(), base_size * self._font_scale)
-            try:
-                avail = imgui.get_content_region_avail().x
-                text_w = imgui.calc_text_size(name).x
-                imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0.0, (avail - text_w) * 0.5))
-                imgui.text_colored(rgba, name)
-            finally:
-                imgui.pop_font()
-
-            if self._show_probability:
-                proba = self._pipeline.predictions.get(self._probability_key)
-                try:
-                    p = float(proba[idx])  # type: ignore
-                except (TypeError, IndexError):
-                    p = None
-                imgui.spacing()
-                if p is None:
-                    imgui.text_disabled("(no probability vector in predictions)")
-                else:
-                    imgui.push_style_color(imgui.Col_.plot_histogram, rgba)
-                    imgui.progress_bar(p, imgui.ImVec2(-1, 0), f"{p:.0%}")
-                    imgui.pop_style_color()
-
-            imgui.spacing()
+            imgui.text_colored(color, self._class_names[idx] if live else "—")
+            imgui.pop_font()
+            imgui.set_item_tooltip(self._title)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+            imgui.push_font(mono_font(), base_size)
+            detail_w = imgui.calc_text_size(detail).x
+            if hi.x + style.item_spacing.x + detail_w <= right:
+                imgui.same_line()
+                imgui.set_cursor_screen_pos(imgui.ImVec2(
+                    right - detail_w,
+                    lo.y + (hi.y - lo.y - imgui.get_text_line_height()) / 2,
+                ))
+            imgui.text_colored(muted(), detail)
+            imgui.pop_font()
+            if live and self._show_probability:
+                self._probabilities(predictions.get(self._probability_key))
         finally:
+            imgui.end_child()
+            imgui.pop_style_color()
             imgui.pop_id()
+
+    def _probabilities(self, probabilities: Sequence[float] | None) -> None:
+        style = imgui.get_style()
+        gap = style.item_spacing.x
+        name_w = max(imgui.calc_text_size(name).x for name in self._class_names)
+        imgui.push_font(mono_font(), style.font_size_base)
+        value_w = imgui.calc_text_size("100%").x
+        imgui.pop_font()
+        for index, name in enumerate(self._class_names):
+            try:
+                value = float(probabilities[index])
+            except (TypeError, IndexError, ValueError):
+                value = None
+            left, top = imgui.get_cursor_pos()
+            imgui.text_unformatted(name)
+            imgui.same_line()
+            imgui.set_cursor_pos_x(left + name_w + gap)
+            width = max(ui_px(1), imgui.get_content_region_avail().x - value_w - gap)
+            height = ui_px(4)
+            imgui.set_cursor_pos_y(top + (imgui.get_text_line_height() - height) / 2)
+            imgui.push_style_color(imgui.Col_.plot_histogram, imgui.ImVec4(*PALETTE[index % len(PALETTE)], 1.0))
+            imgui.push_style_color(imgui.Col_.frame_bg, style.color_(imgui.Col_.popup_bg))
+            # A thin bar has no frame padding; charging it to the line would
+            # lower the following percentage below its class label.
+            imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(style.frame_padding.x, 0))
+            imgui.progress_bar(value if value is not None else 0.0, imgui.ImVec2(width, height), "")
+            imgui.pop_style_var()
+            imgui.pop_style_color(2)
+            imgui.same_line()
+            imgui.set_cursor_pos_y(top)
+            mono_text(f"{value:.0%}" if value is not None else "—", muted())
 
 
 __all__ = ["PredictionLabel"]

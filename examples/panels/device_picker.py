@@ -19,9 +19,9 @@ Run with:
 
 from functools import partial
 
-from myogestic import App, Stream
+from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.sources import SyntheticSource
-from myogestic.widgets import OTB_DEVICES, SYNTHETIC_DEVICE, DevicePicker, DeviceSpec
+from myogestic.widgets import OTB_DEVICES, SYNTHETIC_DEVICE, AppHeader, DevicePicker, DeviceSpec
 
 DEMO_DEVICES = (
     SYNTHETIC_DEVICE,
@@ -35,6 +35,8 @@ DEMO_DEVICES = (
 )
 
 app = App("panel: device_picker")
+header = AppHeader("DevicePicker", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 app.streams(Stream("emg", source=DEMO_DEVICES[0].factory(), window_ms=1000))
 
 picker = DevicePicker("emg", devices=DEMO_DEVICES)
@@ -42,7 +44,10 @@ picker = DevicePicker("emg", devices=DEMO_DEVICES)
 
 @app.ui
 def ui(ctx):
-    picker.ui(ctx)
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        picker.ui(ctx)
 
 
 def main() -> None:

@@ -1,9 +1,9 @@
-"""``FeatureSelector`` in isolation — tick which features to extract.
+"""``FeatureSelector`` in isolation — choose which features to extract.
 
-Register a ``name → callable`` map; the widget renders one checkbox per
+Register a ``name → callable`` map; the widget renders one chip per
 feature and a live active-count. Calling the selector with an EMG window
 returns the *active* features stacked along the channel axis — wire that
-inside ``@pipeline.extract``. Here we only show the checkbox UI.
+inside ``@pipeline.extract``. Here we only show the selection UI.
 
 Run with:
     uv run python examples/panels/feature_selector.py
@@ -11,8 +11,8 @@ Run with:
 
 import numpy as np
 
-from myogestic import App
-from myogestic.widgets import FeatureSelector
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, FeatureSelector
 
 selector = FeatureSelector(
     {
@@ -26,11 +26,16 @@ selector = FeatureSelector(
 )
 
 app = App("panel: FeatureSelector")
+header = AppHeader("FeatureSelector", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 
 @app.ui
 def ui(ctx):
-    selector.ui()
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        selector.ui()
 
 
 def main() -> None:

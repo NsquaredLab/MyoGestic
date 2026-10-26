@@ -10,8 +10,8 @@ Run with:
 
 import numpy as np
 
-from myogestic import App
-from myogestic.widgets import Scatter3D
+from myogestic import App, Fr, Grid, Px
+from myogestic.widgets import AppHeader, Scatter3D
 
 rng = np.random.default_rng(1)
 CENTERS = np.array([[-2.0, 0.0, 0.0], [2.0, 1.0, -1.0], [0.0, -2.0, 2.0]])
@@ -20,13 +20,18 @@ LABELS = np.repeat([0, 1, 2], 60)
 CLASS_NAMES = ["Rest", "Fist", "Open"]
 
 app = App("panel: scatter3d")
+header = AppHeader("Scatter3D", show_state=False)
+layout = Grid.areas("header\nbody", row_height=[Px(52), Fr(1)], bare=("header",))
 
 sc = Scatter3D("Feature embedding (3-D)", axis_names=("PC1", "PC2", "PC3"))
 
 
 @app.ui
 def ui(ctx):
-    sc.ui(POINTS, labels=LABELS, class_names=CLASS_NAMES)
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("body"):
+        sc.ui(POINTS, labels=LABELS, class_names=CLASS_NAMES)
 
 
 def main() -> None:

@@ -1,9 +1,9 @@
-"""`TrackingTask` — the imgui-free decisions, plus one render pass.
+"""`TrackingTask` — calibration and trace decisions, plus interactive card layout.
 
 Everything the widget *decides* (which channel it reads, what a calibration capture
 keeps, whether Start is allowed, what a raw sample is worth as a percentage) lives in
-methods that never touch imgui, so it is tested here directly. The render pass is one
-test, and it is about not raising and not corrupting the frame — the look is review.
+methods that never touch imgui, so it is tested here directly. Render tests exercise
+real layout, popup scopes, clicks and disabled controls at both UI scales.
 """
 
 from __future__ import annotations
@@ -479,11 +479,10 @@ def test_a_block_of_nothing_is_describable_rather_than_a_division_by_zero():
 
 # --- the sketch's segment geometry -------------------------------------------
 def test_a_segment_is_the_gap_between_the_two_corners_that_bound_it():
-    """The invariant the highlight rests on.
+    """The sketch's hover label must name the segment under the pointer.
 
-    `_light` lights the region between outline corners ``i`` and ``i + 1`` and calls it
-    segment ``i``. Off by one and hovering "Hold" lights the ramp beside it — a picture
-    that is wrong in the one way nobody checks, because it still looks like a trapezoid.
+    Segment ``i`` lies between outline corners ``i`` and ``i + 1``. Off by one and
+    pointing at Hold names Ramp down instead, even though the picture looks right.
     """
     trap = Trapezoid(
         rest_s=3.0, ramp_up_s=5.0, hold_s=10.0, ramp_down_s=5.0, recover_s=5.0, level_pct=30.0
@@ -530,3 +529,368 @@ def test_distinct_keeps_corners_that_only_share_one_coordinate():
     points = [imgui.ImVec2(0, 0), imgui.ImVec2(0, 5), imgui.ImVec2(3, 5)]
 
     assert len(_distinct(points)) == 3
+
+
+@pytest.fixture
+def tracking_card(implot_frame, monkeypatch):
+    """Observe real layout and popup scopes, injecting only operator clicks and data."""
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    from myogestic.core import Context
+    from myogestic.widgets import common
+    from myogestic.widgets import tracking as module
+
+    task = TrackingTask("force", widget_id="tracking:left")
+    ctx = Context()
+    info = SimpleNamespace(n_channels=2, channel_names=["Load cell", "Auxiliary"])
+    ctx.streams["force"] = SimpleNamespace(info=info)
+    ui = SimpleNamespace(
+        task=task, ctx=ctx, items={}, texts=[], text_bounds=[], headers=[], sections=[], rows=[],
+        primary=[], click="", changes={}, width=600, value=0.61, now=21.0,
+    )
+    monkeypatch.setattr(task, "_read", lambda stream: ui.value if stream else None)
+    monkeypatch.setattr(module.time, "monotonic", lambda: ui.now)
+
+    for name in ("button", "small_button", "combo", "drag_float", "slider_float", "input_int"):
+        original = getattr(imgui, name)
+
+        def tracked(label, *args, original=original, **kwargs):
+            result = original(label, *args, **kwargs)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            pos, size = imgui.get_window_pos(), imgui.get_window_size()
+            disabled = bool(imgui.get_current_context().current_item_flags & imgui.ItemFlags_.disabled)
+            ui.items[label] = SimpleNamespace(
+                x=lo.x, y=lo.y, right=hi.x, bottom=hi.y, disabled=disabled,
+                fits=lo.x >= pos.x and hi.x <= pos.x + size.x,
+                identity=imgui.get_id(label),
+            )
+            if not disabled and label in ui.changes:
+                return True, ui.changes.pop(label)
+            clicked = ui.click == imgui.get_id(label) or (
+                isinstance(ui.click, str) and ui.click and label.endswith(ui.click)
+            )
+            if not disabled and clicked:
+                ui.click = ""
+                return True
+            return result
+
+        monkeypatch.setattr(imgui, name, tracked)
+
+    for name in ("text", "text_unformatted", "text_colored"):
+        original = getattr(imgui, name)
+
+        def text(*args, original=original, **kwargs):
+            ui.texts.append(str(args[-1]))
+            result = original(*args, **kwargs)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            pos, size = imgui.get_window_pos(), imgui.get_window_size()
+            ui.text_bounds.append((str(args[-1]), lo.x >= pos.x, hi.x <= pos.x + size.x))
+            return result
+
+        monkeypatch.setattr(imgui, name, text)
+
+    original_header = module.panel_header
+
+    def header(title, *args, **kwargs):
+        ui.headers.append((title, kwargs.get("status")))
+        return original_header(title, *args, **kwargs)
+
+    def primary(label, size=(0, 0)):
+        ui.primary.append((label, size))
+        return common.primary_button(label, size)
+
+    @contextmanager
+    def row(tone=None, **kwargs):
+        ui.rows.append(tone)
+        with common.tinted_row(tone, **kwargs) as width:
+            yield width
+
+    monkeypatch.setattr(module, "panel_header", header)
+    monkeypatch.setattr(module, "primary_button", primary, raising=False)
+    monkeypatch.setattr(module, "tinted_row", row, raising=False)
+    original_section = imgui.separator_text
+
+    def section(label):
+        ui.sections.append(label)
+        original_section(label)
+
+    monkeypatch.setattr(imgui, "separator_text", section)
+
+    def draw():
+        imgui.begin_child("tracking_card", imgui.ImVec2(ui.width, 1000))
+        task.ui(ctx)
+        imgui.end_child()
+
+    def frame(click="", changes=None):
+        ui.click = click
+        ui.changes.update(changes or {})
+        for collection in (ui.items, ui.texts, ui.text_bounds, ui.headers, ui.sections, ui.rows, ui.primary):
+            collection.clear()
+        implot_frame(draw)
+
+    ui.frame = frame
+    return ui
+
+
+def test_tracking_is_one_card_with_inline_calibration_and_a_primary_start(tracking_card):
+    from myogestic.widgets.common import WARNING
+
+    ui = tracking_card
+    ui.frame()
+    assert ui.headers == [("Force tracking", WARNING)]
+    assert ui.sections == []
+    assert "Capture zero, then MVC" in ui.texts
+    assert WARNING in ui.rows
+    assert "Zero##tt_zero" in ui.items and "MVC##tt_mvc" in ui.items
+    assert ui.items["Zero##tt_zero"].y == ui.items["MVC##tt_mvc"].y
+    assert ui.primary and ui.primary[0][1][0] < 0  # full available width
+    assert "##tt_hold_s" not in ui.items
+    assert "##tt_ahead" not in ui.items
+    assert "##series0" in ui.items
+    assert "##series1" in ui.items
+
+
+@pytest.mark.parametrize("width,side_by_side", [(600, True), (320, False)])
+def test_source_captions_and_controls_stack_only_when_narrow(tracking_card, width, side_by_side):
+    ui = tracking_card
+    ui.width = width
+    ui.frame()
+    source, channel = ui.items["##tt_stream"], ui.items["##tt_channel"]
+    assert (source.y == channel.y) is side_by_side
+    assert "Stream" in ui.texts and "Channel" in ui.texts
+
+
+def test_target_settings_open_edit_the_recorded_shape_and_keep_view_settings(tracking_card):
+    ui = tracking_card
+    target = _FakeTarget()
+    ui.task._target = target
+    ui.frame(click="##tt_settings")
+    assert ui.click == "", "the settings action was not submitted"
+    ui.frame()
+    assert all(f"##tt_{attr}" in ui.items for attr, _ in _SEGMENT_ROWS)
+    assert {"##tt_level", "##tt_reps", "##tt_ahead"} <= ui.items.keys()
+    assert ui.items["##tt_rest_s"].y == ui.items["##tt_ramp_up_s"].y
+    ui.frame(changes={"##tt_hold_s": 7.0, "##tt_level": 40.0, "##tt_reps": 5, "##tt_ahead": 2.5})
+    assert ui.task._trap.hold_s == 7.0
+    assert target.trajectory == ui.task._trap
+    assert target.trajectory.level_pct == 40.0 and target.trajectory.reps == 5
+    assert ui.task._look_ahead_s == 2.5
+
+
+def test_calibration_buttons_capture_and_count_down_in_the_same_row(tracking_card):
+    ui = tracking_card
+    ui.frame(click="##tt_zero")
+    assert ui.task._zero == ui.value
+    ui.frame(click="##tt_mvc")
+    ui.value = 3.4
+    ui.now += 1.0
+    ui.frame()
+    assert any("MVC capture" in text and "2.0 s" in text for text in ui.texts)
+    assert ui.items["MVC##tt_mvc"].disabled
+    assert ui.items["Zero##tt_zero"].disabled
+    ui.now += 2.0
+    ui.frame()
+    assert ui.task._mvc == 3.4
+    assert any("zero 0.61 · MVC 3.40" in text for text in ui.texts)
+
+
+def test_running_status_shows_signed_error_and_locks_setup_but_stop_works(tracking_card):
+    from myogestic.widgets.common import SUCCESS
+
+    ui = tracking_card
+    ui.task._set_trap(Trapezoid(
+        rest_s=2, ramp_up_s=3, hold_s=5, ramp_down_s=3, recover_s=2, level_pct=58, reps=5,
+    ))
+    ui.task._zero, ui.task._mvc = 0.0, 1.0
+    ui.task._started = 0.0
+    ui.frame()
+    assert ui.headers == [("Force tracking", SUCCESS)]
+    assert "Rep 2 of 5 · hold" in ui.texts
+    assert "61 % MVC · error +3 %" in ui.texts
+    assert any(tone is SUCCESS for tone in ui.rows)
+    for suffix in ("##tt_stream", "##tt_channel", "##tt_zero", "##tt_mvc", "##tt_settings"):
+        assert next(item for label, item in ui.items.items() if label.endswith(suffix)).disabled
+    assert not ui.primary
+    ui.frame(click="##tt_stop")
+    assert ui.task._started is None
+
+
+def test_no_stream_says_how_to_begin_and_still_renders_the_card(tracking_card):
+    from myogestic.widgets.common import IDLE
+
+    ui = tracking_card
+    ui.ctx.streams.clear()
+    ui.frame()
+    assert ui.headers == [("Force tracking", IDLE)]
+    assert any("Register" in text and "stream" in text for text in ui.texts)
+    assert ui.primary
+    assert ui.items["Zero##tt_zero"].disabled
+
+
+@pytest.mark.parametrize("scale,width", [(1.0, 320), (2.0, 320), (2.0, 800)])
+@pytest.mark.parametrize("state", ["uncalibrated", "ready", "running", "settings"])
+def test_tracking_controls_fit_narrow_light_cards_at_both_scales(
+    tracking_card, monkeypatch, scale, width, state,
+):
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    ui = tracking_card
+    ui.width = width
+    if state in ("ready", "running"):
+        ui.task._zero, ui.task._mvc = 0.0, 1.0
+    if state == "running":
+        ui.task._started = ui.now - 1.0
+    ui.frame(click="##tt_settings" if state == "settings" else "")
+    ui.frame()
+    assert ui.items and all(item.fits for item in ui.items.values()), ui.items
+    assert all(left and right for _, left, right in ui.text_bounds), ui.text_bounds
+
+
+def test_legend_uses_shared_palette_dot_chips(tracking_card, monkeypatch):
+    from myogestic.widgets import common
+    from myogestic.widgets import tracking as module
+
+    calls = []
+
+    def legend(series, *, selected):
+        calls.append((series, selected.copy()))
+        return common.plot_legend(series, selected=selected)
+
+    monkeypatch.setattr(module, "plot_legend", legend, raising=False)
+    tracking_card.frame()
+    assert calls == [([(0, "Target"), (1, "Force")], {0, 1})]
+
+
+def test_legend_clicks_toggle_only_the_named_trace_and_balance_styles(tracking_card, monkeypatch):
+    from imgui_bundle import implot
+
+    ui = tracking_card
+    plotted = []
+    original = implot.plot_line
+
+    def line(label, *args):
+        plotted.append(label)
+        return original(label, *args)
+
+    monkeypatch.setattr(implot, "plot_line", line)
+    ui.task._trace_t, ui.task._trace_y = [0.0, 1.0], [0.0, 20.0]
+    ui.frame(click="##series1")
+    assert ui.task._show_target and not ui.task._show_force
+    assert plotted == ["target##tt_target"]
+    plotted.clear()
+    ui.frame(click="##series1")
+    assert ui.task._show_target and ui.task._show_force
+    assert plotted == ["target##tt_target", "force##tt_force"]
+    plotted.clear()
+    ui.frame(click="##series0")
+    assert not ui.task._show_target and ui.task._show_force
+    assert plotted == ["force##tt_force"]
+    plotted.clear()
+    ui.frame(click="##series1")
+    assert not ui.task._show_force and not plotted
+    ui.frame(click="##series0")
+    assert ui.task._show_target and plotted == ["target##tt_target"]
+    assert ui.task._trace_y == [0.0, 20.0]
+
+
+def test_start_uses_existing_session_and_missing_samples_block_it(tracking_card):
+    from types import SimpleNamespace
+
+    ui = tracking_card
+    ui.task._zero, ui.task._mvc = 0.0, 1.0
+    ui.ctx.session = SimpleNamespace(extras={})
+    ui.value = None
+    ui.frame(click="##tt_start")
+    assert ui.task._started is None
+    assert "Connect the force stream to begin." in ui.texts
+    ui.value = 0.3
+    ui.frame(click="##tt_start")
+    assert ui.task._started == ui.now
+    assert ui.ctx.session.extras["force_tracking"][0]["mvc"] == 1.0
+
+
+def test_zero_capture_uses_the_channel_selected_on_that_frame(tracking_card, monkeypatch):
+    ui = tracking_card
+    ui.task._zero, ui.task._mvc = 0.0, 1.0
+    monkeypatch.setattr(ui.task, "_read", lambda stream: 0.1 if ui.task._channel == 0 else 0.8)
+    ui.frame(changes={"##tt_channel": 1}, click="##tt_zero")
+    assert ui.task._zero == 0.8 and ui.task._mvc is None
+
+
+def test_settings_popup_and_legend_are_scoped_to_widget_identity(tracking_card, monkeypatch):
+    from imgui_bundle import imgui
+
+    ui = tracking_card
+    other = TrackingTask("force", widget_id="tracking:right")
+    monkeypatch.setattr(other, "_read", lambda stream: ui.value)
+    ui.frame(click="##tt_settings")
+    own_draw = ui.task.ui
+    ids = {}
+
+    def both(ctx):
+        own_draw(ctx)
+        ids["left"] = ui.items["##series0"].identity
+        assert "##tt_hold_s" in ui.items  # the first popup remains open
+        ui.items.clear()
+        other.ui(ctx)
+        ids["right"] = ui.items["##series0"].identity
+        assert "##tt_hold_s" not in ui.items
+        # Leave the second task's legend off without changing the first one.
+        other._show_target = False
+        assert ui.task._show_target
+        assert imgui.get_current_context().current_window is not None
+
+    monkeypatch.setattr(ui.task, "ui", both)
+    ui.frame()
+    assert ids["left"] != ids["right"]
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_two_tracking_legends_toggle_independently_in_one_window(tracking_card, monkeypatch, side):
+    ui = tracking_card
+    other = TrackingTask("force", widget_id="tracking:right")
+    monkeypatch.setattr(other, "_read", lambda stream: ui.value)
+    own_draw = ui.task.ui
+    ids = {}
+
+    def both(ctx):
+        own_draw(ctx)
+        ids["left"] = {i: ui.items[f"##series{i}"].identity for i in (0, 1)}
+        other.ui(ctx)
+        ids["right"] = {i: ui.items[f"##series{i}"].identity for i in (0, 1)}
+
+    monkeypatch.setattr(ui.task, "ui", both)
+    ui.frame()
+    assert set(ids["left"].values()).isdisjoint(ids["right"].values())
+    clicked, untouched = (ui.task, other) if side == "left" else (other, ui.task)
+    ui.frame(click=ids[side][1])
+    assert ui.click == ""
+    assert not clicked._show_force and untouched._show_force
+    assert clicked._show_target and untouched._show_target
+    ui.frame()
+    assert not clicked._show_force and untouched._show_force
+    ui.frame(click=ids[side][1])
+    assert ui.click == ""
+    assert clicked._show_force and untouched._show_force
+
+
+@pytest.mark.parametrize("level", [0.0, 40.0])
+def test_zero_length_target_has_guidance_and_cannot_start(tracking_card, level):
+    ui = tracking_card
+    ui.task._zero, ui.task._mvc = 0.0, 1.0
+    ui.task._set_trap(Trapezoid(
+        rest_s=0, ramp_up_s=0, hold_s=0, ramp_down_s=0, recover_s=0, level_pct=level,
+    ))
+    ui.frame(click="##tt_start")
+    assert ui.task._started is None
+    assert "Set at least one target duration above zero." in ui.texts

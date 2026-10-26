@@ -17,14 +17,17 @@ Run with:
 
 from imgui_bundle import imgui
 
-from myogestic import App, Stream
+from myogestic import App, Context, Fr, Grid, Px, Stream
 from myogestic.sources import SyntheticForceSource, TargetSource
 from myogestic.tracking import Trapezoid
-from myogestic.widgets import TrackingTask
+from myogestic.widgets import AppHeader, TrackingTask
+from myogestic.widgets.common import mono_text, muted, panel_header
 
 TRAPEZOID = Trapezoid(rest_s=2.0, ramp_up_s=3.0, hold_s=5.0, ramp_down_s=3.0, recover_s=2.0)
 
 app = App("panel: tracking_task")
+header = AppHeader("TrackingTask", show_state=True)
+layout = Grid.areas("header\ninput\ntracking", row_height=[Px(52), Px(115), Fr(1)], bare=("header",))
 # A fake load cell, not `SyntheticSource`: fixed sine channels have no resting level to
 # zero and no peak to calibrate against.
 target = TargetSource(trajectory=TRAPEZOID)
@@ -36,16 +39,29 @@ app.streams(
 for stream in app.ctx.streams.values():
     stream.reconnect()  # software, not hardware: nothing to plug in
 
-task = TrackingTask("force", target=target, trapezoid=TRAPEZOID)
+# Leave room for the block summary when the source fields stack below the header.
+task = TrackingTask("force", target=target, trapezoid=TRAPEZOID, plot_height=180)
 
 
 @app.ui
-def ui(ctx):
-    # Your hand on the transducer: nothing follows the target for you.
-    changed, effort = imgui.slider_float("effort", force.effort, 0.0, 1.2, "%.2f")
-    if changed:
-        force.effort = effort
-    task.ui(ctx)
+def ui(ctx: Context) -> None:
+    with layout.area("header"):
+        header.ui(ctx)
+    with layout.area("input"):
+        panel_header("Demo input")
+        # Your hand on the transducer: nothing follows the target for you.
+        if imgui.begin_table("demo-input", 1):
+            imgui.table_next_column()
+            imgui.text_colored(muted(), "Effort")
+            imgui.same_line()
+            mono_text(f"{force.effort:.2f}x")
+            imgui.set_next_item_width(-1)
+            changed, effort = imgui.slider_float("##effort", force.effort, 0.0, 1.2, "%.2fx")
+            if changed:
+                force.effort = effort
+            imgui.end_table()
+    with layout.area("tracking"):
+        task.ui(ctx)
 
 
 def main() -> None:
