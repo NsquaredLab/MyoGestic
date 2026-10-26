@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from imgui_bundle import hello_imgui, imgui
+from matplotlib import get_data_path
 
 from myogestic import Px, _scale, _theme
 from myogestic.grid import _AreaCell
@@ -29,8 +30,9 @@ VIEWERS = {
 ])
 @pytest.mark.parametrize("width", [2560, 1280])
 @pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("ui_font", ["platform", "dejavu"])
 def test_viewer_header_and_body_fit(
-    name, title, launch_failed, width, connected, monkeypatch, implot_frame,
+    name, title, launch_failed, width, connected, ui_font, monkeypatch, implot_frame,
 ):
     """Measure real text, actions and cell bounds after the header takes its row."""
     ns = runpy.run_path(str(ROOT / "examples" / "synthetic" / f"{name}.py"))
@@ -52,9 +54,14 @@ def test_viewer_header_and_body_fit(
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
     io = imgui.get_io()
-    font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
-    if not font_path.is_file():
-        font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
+    if ui_font == "dejavu":
+        # Matplotlib ships this wider Linux face on macOS and Windows too.
+        font_path = Path(get_data_path()) / "fonts/ttf/DejaVuSans.ttf"
+        assert font_path.is_file()
+    else:
+        font_path = Path(_theme._SYS_FONTS.get(platform.system(), ""))
+        if not font_path.is_file():
+            font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
     io.font_default = io.fonts.add_font_from_file_ttf(str(font_path), 14)
     font = io.fonts.add_font_from_file_ttf(
         str(ROOT / "myogestic/assets/fonts/IBMPlexMono-Regular.ttf"), 13,
@@ -95,7 +102,9 @@ def test_viewer_header_and_body_fit(
         items.append((str(label), tuple(imgui.get_item_rect_min()), tuple(imgui.get_item_rect_max()),
                       tuple(draw.get_clip_rect_min()), tuple(draw.get_clip_rect_max())))
 
-    for method in ("text_unformatted", "text_wrapped", "text_disabled", "text", "button", "small_button"):
+    for method in (
+        "text_unformatted", "text_wrapped", "text_disabled", "text", "button", "small_button", "combo",
+    ):
         original = getattr(imgui, method)
 
         def item(label, *args, _original=original, **kwargs):
