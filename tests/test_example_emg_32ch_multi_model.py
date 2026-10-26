@@ -119,6 +119,7 @@ def test_multi_model_shell_fits_light_theme(
         app.ctx.state = "predicting" if step == 3 else "idle"
     if state != "idle":
         app.ctx.state = state
+        app.ctx.recording = state == "recording"
     monkeypatch.setattr(_scale, "_current", 2.0)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
@@ -289,6 +290,7 @@ def test_multi_model_simulator_steers_each_step_and_defers_to_recording(
     ns = multi_model_app
     ns["steps"].active = step
     ns["app"].ctx.state = state
+    ns["app"].ctx.recording = state == "recording"
     # Establish the lazy outlet, then observe the samples without touching LSL.
     ns["simulator"].set(0.0)
     samples, chips = [], []

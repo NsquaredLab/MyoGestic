@@ -251,6 +251,7 @@ def test_simulator_is_available_on_each_step_except_during_capture(
     ns = example
     ns["steps"].active = step
     ns["app"].ctx.state = state
+    ns["app"].ctx.recording = state == "recording"
     ns["simulator"].set(0.0)
     samples, chips = [], []
     monkeypatch.setattr(ns["simulator"]._outlet, "push_sample", lambda value: samples.append(value))
