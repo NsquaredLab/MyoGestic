@@ -27,7 +27,9 @@ def _rows(key):
 
 
 def _panel(tmp_path, widget_id="test-participant"):
-    return _api().ParticipantPanel(key_file=tmp_path / "key.csv", widget_id=widget_id)
+    return _api().ParticipantPanel(
+        key_file=tmp_path / "key.csv", sessions_dir=tmp_path / "sessions", widget_id=widget_id,
+    )
 
 
 def _buttons(monkeypatch):
@@ -200,12 +202,12 @@ def test_start_logs_id_only(tmp_path):
     panel, ctx = _panel(tmp_path, "log-id"), Context()
     assert panel._start(ctx, " P/014 ", "Jane", "Doe") is True
     assert len(ctx.logs) == 1
-    assert ctx.logs[-1].endswith("Participant P-014 · saving to sessions/P-014/")
+    assert ctx.logs[-1].endswith(f"Participant P-014 · saving to {tmp_path}/sessions/P-014/")
     assert all("Jane" not in line and "Doe" not in line for line in ctx.logs)
 
 
-def test_dialog_labels_left(tmp_path, imgui_frame, monkeypatch):
-    from myogestic.widgets.common import muted, ui_px
+def test_dialog_captions_above(tmp_path, imgui_frame, monkeypatch):
+    from myogestic.widgets.common import muted
 
     panel, ctx = _panel(tmp_path, "labels-left"), Context()
     positions = _buttons(monkeypatch)
@@ -221,6 +223,13 @@ def test_dialog_labels_left(tmp_path, imgui_frame, monkeypatch):
         inputs[label] = tuple(imgui.get_item_rect_min())
         return result
 
+    text_wrapped = imgui.text_wrapped
+
+    def capture_wrapped(text):
+        text_wrapped(text)
+        labels[text] = (tuple(imgui.get_item_rect_min()), tuple(muted()))
+
+    monkeypatch.setattr(imgui, "text_wrapped", capture_wrapped)
     monkeypatch.setattr(imgui, "text_colored", capture_label)
     monkeypatch.setattr(imgui, "input_text", capture_input)
 
@@ -235,10 +244,10 @@ def test_dialog_labels_left(tmp_path, imgui_frame, monkeypatch):
         assert f"##{label}" in inputs
         origin, color = labels[label]
         assert color == tuple(muted())
-        assert inputs[f"##{label}"][0] - origin[0] == pytest.approx(ui_px(120))
-        assert origin[1] >= inputs[f"##{label}"][1]
+        assert inputs[f"##{label}"][0] == pytest.approx(origin[0])
+        assert origin[1] < inputs[f"##{label}"][1]
     assert any("Stays on this computer, in the key file. Never in a recording." in text for text in labels)
-    assert positions["Cancel"][0] < positions["Start session"][0]
+    assert positions["Cancel"][1] < positions["Start session"][1]
 
 
 @pytest.mark.parametrize("typed", [" p/014 ", "../x", "Jörg"])
@@ -342,6 +351,7 @@ def test_modal_uses_returning_id_and_shared_preview(tmp_path, imgui_frame, monke
 
     monkeypatch.setattr(imgui, "input_text", type_names)
     monkeypatch.setattr(imgui, "text_colored", capture_text)
+    monkeypatch.setattr(imgui, "set_item_tooltip", text.append)
 
     def draw():
         panel.ui(ctx)
