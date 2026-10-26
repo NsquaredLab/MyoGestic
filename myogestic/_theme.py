@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import platform
 import subprocess
@@ -250,7 +251,7 @@ def _os_scale() -> float:
     the 2x lives only in the framebuffer, so it must not be counted again (measured:
     dpi_scale 1.0, framebuffer_scale 2.0 on macOS 26).
     """
-    return max(0.5, imgui.get_main_viewport().dpi_scale or 1.0)
+    return imgui.get_main_viewport().dpi_scale
 
 
 def apply_live_scale(setup_style) -> None:
@@ -266,10 +267,18 @@ def apply_live_scale(setup_style) -> None:
     global _styled_at
     os_scale = _os_scale()
     size = imgui.get_io().display_size
+    # A sleeping/locked display can temporarily lose its DPI or dimensions.
+    # Keep both the current scale and style until the display can be measured.
+    if any(not math.isfinite(value) or value <= 0.0 for value in (os_scale, size.x, size.y)):
+        return
+    os_scale = max(0.5, os_scale)
     scale = _scale.update(os_scale, size.x / os_scale, size.y / os_scale)
     if scale == _styled_at:
         return
     _styled_at = scale
+    # Theme setup only overwrites some metrics. Reset the entire style to ImGui's
+    # unscaled defaults so every size (including ones added by ImGui) starts fresh.
+    imgui.get_current_context().style = imgui.Style()
     setup_style()
     style = imgui.get_style()
     if scale != 1.0:

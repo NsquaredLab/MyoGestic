@@ -421,8 +421,11 @@ def test_a_plot_in_a_hidden_tab_does_not_draw(implot_frame):
 @pytest.fixture
 def _styled(imgui_frame):
     """A context with the theme applied by `apply_live_scale`, as `App` does each frame."""
+    from imgui_bundle import imgui
+
     from myogestic import _theme
 
+    imgui.get_main_viewport().dpi_scale = 1.0
     _theme.reset_live_scale()
     yield _theme
     _theme.reset_live_scale()
