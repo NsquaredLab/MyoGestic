@@ -35,8 +35,8 @@ and nothing is wrong, `WARNING` is something worth knowing, and `DANGER` is a fa
 and **Retry**. Selection uses the accent tint; `PALETTE` is only for categorical identity, such
 as a channel or gesture dot, never a state or a continuous ramp.
 
-State selection can run without a window. This small example is executed by the docs tests;
-the drawing helpers above belong inside the app's GUI callback, where an ImGui frame exists.
+State selection can run without a window; drawing helpers require an ImGui frame
+inside the app's GUI callback.
 
 <!--docs:run-->
 ```python

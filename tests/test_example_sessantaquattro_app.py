@@ -35,7 +35,6 @@ def otb_app(monkeypatch, tmp_path):
 
 
 def test_sessantaquattro_uses_the_session_shell(otb_app):
-    """Keep acquisition wiring while adding the header, steps and footer."""
     from myogestic import Fr, Px
     from myogestic.widgets import AppHeader, StatusBar
 
@@ -268,7 +267,6 @@ def test_sessantaquattro_connect_button_reaches_device_only_while_idle(
 
 
 def test_sessantaquattro_keeps_the_device_dropout_warning(otb_app, monkeypatch, capsys):
-    """Finishing the UI still reports lost hardware samples."""
     ns = otb_app
     monkeypatch.setattr(ns["app"], "run", lambda: None)
     ns["source"].dropped_samples = 8

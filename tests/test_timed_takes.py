@@ -125,7 +125,7 @@ def test_start_stop_elapsed_and_immutable_snapshot(take):
     assert machine.status.saved_text == "Saved · Fist · 10.0 s"
 
 
-def test_injected_clock(take):
+def test_injected_clock():
     calls = []
     now = [42.0]
     machine = _TakeMachine(lambda: calls.append("record"), lambda: calls.append("stop"),
