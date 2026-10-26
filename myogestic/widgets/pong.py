@@ -23,6 +23,7 @@ import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from itertools import pairwise
 
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
@@ -89,6 +90,10 @@ _MIN_COURT_H = 80.0
 
 #: Guards the gauge's divide when a degenerate paddle leaves no travel.
 _EPS_LIMIT = 1e-9
+
+#: Observed cursor positions only: three seconds reach half a court to the left.
+_CURSOR_HISTORY_S = 3.0
+_CURSOR_HISTORY_POINTS = 120
 
 
 @dataclass(frozen=True)
@@ -445,6 +450,7 @@ class PongTask:
         self._miss_at = -math.inf
         self._miss_detail = ""
         self._trail: list[Ball] = []
+        self._cursor_history: list[tuple[float, float]] = []
 
     @property
     def game_over(self) -> bool:
@@ -661,6 +667,22 @@ class PongTask:
         )
         return " · ".join(parts)
 
+    def _remember_cursor(self, now: float, ghost: float | None) -> None:
+        """Keep recent observations under this widget, downsampled to about 40 Hz."""
+        if ghost is None:
+            self._cursor_history.clear()
+            return
+        history = self._cursor_history
+        history[:] = [(stamp, y) for stamp, y in history if now - stamp <= _CURSOR_HISTORY_S]
+        # Keep the latest observation in each time bucket, including this frame. A
+        # plain frame-count cap would shrink three seconds to half a second at 240 Hz.
+        interval = _CURSOR_HISTORY_S / (_CURSOR_HISTORY_POINTS - 1)
+        if history and int(now / interval) == int(history[-1][0] / interval):
+            history[-1] = (now, ghost)
+        else:
+            history.append((now, ghost))
+        del history[:-_CURSOR_HISTORY_POINTS]
+
     # --- render --------------------------------------------------------------
     def ui(
         self, command: float, target: float | None = None, effort: float | None = None
@@ -682,7 +704,9 @@ class PongTask:
             recorded, not a court coordinate, and a subject sitting on the ghost has
             produced exactly what the recording says they were asked for. ``None``, the
             default, draws nothing and leaves the court exactly as it was. The ghost does
-            not play the ball and is not a second player.
+            not play the ball and is not a second player. Its dashed trail shows the
+            last three seconds of observed positions, never future ones; passing
+            ``None`` clears that history when the block ends.
         effort
             How hard the subject is contracting now, on ``0..1``, drawn as a magnitude
             gauge at the left of the court with a tick at ``abs(target)``. For the
@@ -694,7 +718,9 @@ class PongTask:
         imgui.push_id(self._widget_id)
         try:
             ghost = self._ghost_y(target)
-            self._tick(time.monotonic(), command)
+            now = time.monotonic()
+            self._remember_cursor(now, ghost)
+            self._tick(now, command)
             self._header_ui()
             if (target is None and not self.game_over and self._ball is None
                     and not imgui.get_io().want_text_input
@@ -741,6 +767,9 @@ class PongTask:
                 at(0.5, 1.0 - 2.0 * i / dashes), at(0.5, 1.0 - 2.0 * (i + 1) / dashes),
                 faint, thickness=ui_px(1),
             )
+
+        if ghost is not None:
+            self._cursor_trail_ui(at)
 
         frame = imgui.get_frame_height()
         thick = max(frame * _PADDLE_EM, ui_px(3))
@@ -843,6 +872,46 @@ class PongTask:
         if command is not None:
             self._meter_ui(imgui.ImVec2(far.x + gap, origin.y), imgui.ImVec2(meter_w, height), command, ghost, effort)
         return origin, size
+
+    def _cursor_trail_ui(self, at: Callable[[float, float], imgui.ImVec2]) -> None:
+        """Dash the observed path from the ghost leftward, fading with elapsed time."""
+        if len(self._cursor_history) < 2:
+            return
+        now = self._cursor_history[-1][0]
+        points = [
+            (stamp, at(1.0 - 0.5 * (now - stamp) / _CURSOR_HISTORY_S, y))
+            for stamp, y in reversed(self._cursor_history)
+        ]
+        dl = imgui.get_window_draw_list()
+        dash, gap = ui_px(5), ui_px(6)
+        drawing, remaining = True, dash
+        dl.push_clip_rect(at(0.0, 1.0), at(1.0, -1.0), True)
+        try:
+            for (stamp_a, a), (stamp_b, b) in pairwise(points):
+                dx, dy = b.x - a.x, b.y - a.y
+                length = math.hypot(dx, dy)
+                travel = 0.0
+                while travel < length:
+                    step = min(remaining, length - travel)
+                    start, end = travel / length, (travel + step) / length
+                    if drawing:
+                        age = now - (stamp_a + (stamp_b - stamp_a) * (start + end) * 0.5)
+                        tone = imgui.ImVec4(*DANGER)
+                        tone.w *= 0.65 - 0.5 * age / _CURSOR_HISTORY_S
+                        dl.add_line(
+                            imgui.ImVec2(a.x + dx * start, a.y + dy * start),
+                            imgui.ImVec2(a.x + dx * end, a.y + dy * end),
+                            imgui.get_color_u32(tone), thickness=ui_px(2),
+                        )
+                    travel += step
+                    remaining -= step
+                    # Carry the phase through vertices so short sample segments do
+                    # not turn the dashed polyline into a solid line at high fps.
+                    if remaining < 1e-6:
+                        drawing = not drawing
+                        remaining = dash if drawing else gap
+        finally:
+            dl.pop_clip_rect()
 
     @staticmethod
     def _court_text(text: str, x: float, y: float, tone: imgui.ImVec4, *, display: bool = False, mono: bool = False, height: float | None = None, width: float | None = None) -> None:
