@@ -157,7 +157,7 @@ def test_naming_dialog_previews_safe_stem_and_offers_primary_save_and_outlined_d
 
 
 @pytest.mark.parametrize("scale", [1.0, 2.0])
-def test_pong_serve_is_primary_and_rally_has_tint_detail_and_stop(
+def test_pong_serve_is_primary_in_court_and_header_stop_fits(
     imgui_frame, monkeypatch, scale,
 ):
     _theme_at(monkeypatch, scale)
@@ -168,7 +168,7 @@ def test_pong_serve_is_primary_and_rally_has_tint_detail_and_stop(
     def draw():
         imgui.begin_child("narrow", imgui.ImVec2(320, 400))
         bounds.append(imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x)
-        task.ui(0.0, target=0.5)
+        task.ui(0.0)
         imgui.end_child()
 
     imgui_frame(draw)
@@ -176,15 +176,15 @@ def test_pong_serve_is_primary_and_rally_has_tint_detail_and_stop(
     assert serve[1] == pytest.approx(tuple(common.PRIMARY_FILL))
     task._serve()
     imgui_frame(draw)
-    assert rows == [common.SUCCESS]
-    assert any("paddle" in t for t in texts)
-    stop = next(b for b in buttons if "Stop" in b[0])
+    assert rows == []
+    assert any("rally" in t for t in texts)
+    stop = next(b for b in buttons if "pong_stop" in b[0])
     assert stop[3][2] <= bounds[-1]
 
 
-def test_pong_score_is_measured_and_drawn_in_mono_font(imgui_frame, monkeypatch):
+def test_pong_score_is_measured_and_drawn_in_display_font(imgui_frame, monkeypatch):
     font = imgui.get_io().fonts.add_font_default()
-    monkeypatch.setattr(pong, "mono_font", lambda: font, raising=False)
+    monkeypatch.setattr(pong, "display_font", lambda: font)
     used = []
     push = imgui.push_font
 
