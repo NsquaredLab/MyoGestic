@@ -9,15 +9,18 @@ Run with:
 
 import math
 import pathlib
+import random
 import threading
 import time
 import tomllib
 from datetime import datetime, timedelta
+from itertools import pairwise
 from typing import Any
 
 import numpy as np
 from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
+from mne_lsl.lsl import local_clock
 
 from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
 from myogestic._theme import display_font, mono_font
@@ -357,7 +360,8 @@ device = DevicePicker(
 log = LogPanel(title="Activity log")
 # The Source panel owns connecting, so the viewer offers no button of its own.
 viewer = SignalViewer(
-    "emg", show_connect=False, selectable=True, show_title=True, exclude=("vhi_control",),
+    "emg", show_connect=False, selectable=True, show_title=True, show_markers=True,
+    exclude=("vhi_control",),
 )
 # `launchable`, never `launcher`: a VHI that cannot be launched must not stop this app
 # from opening, and one already running needs no button.
@@ -371,6 +375,143 @@ sessions = SessionManager("sessions", class_names=CLASSES)
 prediction = PredictionLabel(pipeline, CLASSES, show_probability=True)
 hand_connection: dict[str, Any] = {"announced": None, "feedback_pending": False}
 drive_run: dict[str, float | None] = {"started": None}
+drive_mode = {"index": 0}
+guided_run: dict[str, Any] = {
+    "phase": "setup", "reps": 5, "cue_s": 4.0, "order": [], "index": -1,
+    "deadline": 0.0, "session": None, "score": None,
+}
+
+
+def score_guided_run(path: str | pathlib.Path) -> dict:
+    """Score a guided run's predictions against its cues.
+
+    Parameters
+    ----------
+    path
+        Saved session folder or ``.session.zip`` with ``extras.guided``.
+
+    Returns
+    -------
+    dict
+        Row-weighted ``match`` and ``per_class`` fractions, ``median_reach_s``,
+        and ``reached`` / ``cues`` counts. Windows include their onset and exclude
+        their closing label. Repeated gestures count toward match but not reach;
+        the first cue counts toward reach. Fractions with no rows and a median
+        with no reached cues are ``None``. Only closed cue windows are scored.
+    """
+    with open_session_store(path) as take:
+        names = take.extras["guided"]["classes"]
+        if "prediction.class" in take.stores:
+            predictions, timestamps = take.get_continuous("prediction.class")
+            predictions = predictions.reshape(-1)
+        else:
+            predictions, timestamps = np.array([]), np.array([])
+        counts = {name: [0, 0] for name in names}
+        reach = []
+        cues = 0
+        previous = None
+        for cue, closing in pairwise(take.label_track):
+            ci = cue.class_index
+            if not 0 <= ci < len(names):
+                previous = None
+                continue
+            inside = (timestamps >= cue.timestamp) & (timestamps < closing.timestamp)
+            matches = inside & (predictions == ci)
+            counts[names[ci]][0] += int(np.count_nonzero(matches))
+            counts[names[ci]][1] += int(np.count_nonzero(inside))
+            if ci != previous:
+                cues += 1
+                if matches.any():
+                    reach.append(float(np.min(timestamps[matches]) - cue.timestamp))
+            previous = ci
+        matched = sum(value[0] for value in counts.values())
+        rows = sum(value[1] for value in counts.values())
+        return {
+            "match": matched / rows if rows else None,
+            "per_class": {name: good / n if n else None for name, (good, n) in counts.items()},
+            "median_reach_s": float(np.median(reach)) if reach else None,
+            "reached": len(reach), "cues": cues,
+        }
+
+
+def _prediction_reason() -> str:
+    """The shared gate for free prediction and a guided run."""
+    if app.ctx.state != "idle":
+        return "Busy — wait until the current action finishes."
+    if pipeline.model is None:
+        return "No model yet — train or load a model first."
+    if not _device_connected(app.ctx):
+        return "Connect a device in Connect before predicting."
+    if pipeline.on_extract is None or pipeline.on_predict is None:
+        return "Prediction needs @pipeline.extract and @pipeline.predict wired."
+    return ""
+
+
+def _start_guided_run() -> None:
+    """Start prediction and a take, then wait three seconds before the first cue."""
+    if _prediction_reason() or guided_run["phase"] in ("warmup", "cue", "saving"):
+        return
+    pipeline.start_predicting()
+    if app.ctx.state != "predicting":
+        return
+    app.start_recording()
+    if not app.ctx.recording:
+        reason = app.ctx.status_message
+        pipeline.stop_predicting()
+        app.ctx.status_message = reason
+        return
+    seed = random.SystemRandom().randrange(2**32)
+    order = list(range(len(CLASSES))) * guided_run["reps"]
+    random.Random(seed).shuffle(order)
+    session = app.ctx.session
+    session.extras["guided"] = {
+        "classes": list(CLASSES), "reps": guided_run["reps"], "cue_s": guided_run["cue_s"],
+        "seed": seed, "order": order,
+    }
+    guided_run.update(phase="warmup", order=order, index=-1, deadline=local_clock() + 3.0,
+                      session=session, score=None)
+
+
+def _stop_guided_run() -> None:
+    """Close even a partial cue, save the take and return prediction to idle."""
+    if guided_run["phase"] not in ("warmup", "cue"):
+        return
+    guided_run["session"].add_label(-1, local_clock())
+    guided_run["phase"] = "saving"
+    _stop_drive()
+
+
+def _sync_guided_run() -> None:
+    """Advance on the data clock, even when another workflow step is visible."""
+    phase = guided_run["phase"]
+    if phase in ("warmup", "cue"):
+        now = local_clock()
+        if now >= guided_run["deadline"]:
+            index = guided_run["index"] + 1
+            if index == len(guided_run["order"]):
+                _stop_guided_run()
+            else:
+                ci = guided_run["order"][index]
+                guided_run["session"].add_label(ci, now)
+                # A delayed UI frame must not invent unseen cues or shorten the next.
+                guided_run.update(phase="cue", index=index, deadline=now + guided_run["cue_s"])
+    if guided_run["phase"] == "saving" and not app.ctx.pending_saves:
+        try:
+            guided_run["score"] = score_guided_run(guided_run["session"].path)
+            guided_run["phase"] = "results"
+        except Exception:
+            # A failed or incomplete save may still leave the take recoverable.
+            guided_run["phase"] = "error"
+            app.ctx.log("The guided run could not be scored from its saved take.")
+
+
+def _cleanup_guided_run(_app: App) -> None:
+    """Close the cue before the app finalises an open take at shutdown."""
+    if guided_run["phase"] in ("warmup", "cue"):
+        guided_run["session"].add_label(-1, local_clock())
+
+
+app.cleanup_hooks.append(_cleanup_guided_run)
 
 
 #: What drives each alias here. The map says where a value goes, not what sends one.
@@ -862,18 +1003,163 @@ def connect_ui(ctx: Context) -> None:
     hand_ui()
 
 
+def _guided_hero(text: str, ci: int | None = None) -> None:
+    """Give the participant a display-sized cue with its gesture identity dot."""
+    if ci is not None:
+        size = ui_px(48)
+        imgui.dummy(imgui.ImVec2(ui_px(12), size))
+        lo = imgui.get_item_rect_min()
+        color = imgui.ImVec4(*PALETTE[ci % len(PALETTE)], 1.0)
+        imgui.get_window_draw_list().add_circle_filled(
+            imgui.ImVec2(lo.x + ui_px(4), lo.y + size / 2), ui_px(4), imgui.get_color_u32(color),
+        )
+        imgui.same_line()
+    imgui.push_font(display_font(), ui_px(48))
+    imgui.text_unformatted(_ellipsize(text, imgui.get_content_region_avail().x))
+    imgui.pop_font()
+
+
+def _guided_start_ui(label: str) -> None:
+    """Use the free-prediction gate and its visible explanation for guided starts."""
+    reason = _prediction_reason()
+    imgui.begin_disabled(bool(reason))
+    clicked = primary_button(label, size=(-1, 0))
+    imgui.end_disabled()
+    if clicked and not reason:
+        _start_guided_run()
+    if reason:
+        _disabled_reason(reason)
+        if (app.ctx.state == "idle" and pipeline.model is not None
+                and not _device_connected(app.ctx)
+                and imgui.button("Go to Connect", imgui.ImVec2(-1, 0))):
+            steps.active = 0
+
+
+def _guided_results_ui() -> None:
+    """Show saved-take match and reach without exposing participant names."""
+    score = guided_run["score"]
+    match = score["match"]
+    _guided_hero(f"{match:.0%}" if match is not None else "—")
+    imgui.push_style_color(imgui.Col_.text, muted())
+    imgui.text_wrapped("of the time the prediction matched the cue")
+    imgui.pop_style_color()
+    imgui.spacing()
+    for ci, (name, value) in enumerate(score["per_class"].items()):
+        if imgui.begin_table(f"guided-match-{ci}", 3, imgui.TableFlags_.sizing_stretch_prop):
+            imgui.table_setup_column("Gesture", imgui.TableColumnFlags_.width_fixed,
+                                     imgui.calc_text_size(name).x)
+            imgui.table_setup_column("Match", imgui.TableColumnFlags_.width_stretch)
+            imgui.table_setup_column("Value", imgui.TableColumnFlags_.width_fixed, ui_px(42))
+            imgui.table_next_column()
+            imgui.text_unformatted(name)
+            imgui.table_next_column()
+            top = imgui.get_cursor_pos_y()
+            imgui.set_cursor_pos_y(top + (imgui.get_text_line_height() - ui_px(4)) / 2)
+            imgui.push_style_color(imgui.Col_.plot_histogram,
+                                   imgui.ImVec4(*PALETTE[ci % len(PALETTE)], 1.0))
+            imgui.progress_bar(value or 0.0, imgui.ImVec2(-1, ui_px(4)), "")
+            imgui.pop_style_color()
+            imgui.table_next_column()
+            mono_text(f"{value:.0%}" if value is not None else "—", muted())
+            imgui.end_table()
+    imgui.spacing()
+    reach = score["median_reach_s"]
+    mono_text(f"{reach:.2f} s" if reach is not None else "—")
+    _muted_line("Median time to reach a cue")
+    _muted_line(f"{score['reached']} of {score['cues']} cues reached")
+    if match is None:
+        _muted_line("No predictions were recorded inside the cues.")
+    imgui.spacing()
+    filename = guided_run["session"].path.name
+    mono_text(_ellipsize(filename, imgui.get_content_region_avail().x), muted())
+    imgui.set_item_tooltip(filename)
+    _guided_start_ui("Run again")
+    if imgui.button("Done", imgui.ImVec2(-1, 0)):
+        guided_run.update(phase="setup", session=None, score=None)
+
+
+def _guided_ui() -> None:
+    """Draw the setup, participant cue, save status or saved-run result."""
+    phase = guided_run["phase"]
+    if phase == "setup":
+        columns = 2 if imgui.get_content_region_avail().x >= ui_px(360) else 1
+        if imgui.begin_table("guided-settings", columns):
+            imgui.table_next_column()
+            imgui.text_colored(muted(), "Repetitions per gesture")
+            imgui.set_next_item_width(-1)
+            changed, reps = imgui.input_int("##guided-reps", guided_run["reps"])
+            if changed:
+                guided_run["reps"] = max(1, reps)
+            imgui.table_next_column()
+            imgui.text_colored(muted(), "Cue length (s)")
+            imgui.set_next_item_width(-1)
+            changed, seconds = imgui.input_float("##guided-cue", guided_run["cue_s"], format="%.1f")
+            if changed and math.isfinite(seconds):
+                guided_run["cue_s"] = max(0.1, seconds)
+            imgui.end_table()
+        imgui.spacing()
+        _guided_start_ui("Start guided run")
+    elif phase in ("warmup", "cue"):
+        left = max(0.0, guided_run["deadline"] - local_clock())
+        if phase == "warmup":
+            _muted_line("Get ready")
+            _guided_hero(str(math.ceil(left)))
+            _muted_line("Follow each gesture when it appears.")
+        else:
+            ci = guided_run["order"][guided_run["index"]]
+            _guided_hero(CLASSES[ci], ci)
+            mono_text(f"{guided_run['index'] + 1} of {len(guided_run['order'])} · {left:.1f} s left", muted())
+            predicted = pipeline.predictions.get("class")
+            name = CLASSES[predicted] if isinstance(predicted, int) and 0 <= predicted < len(CLASSES) else "Waiting for prediction"
+            matches = predicted == ci
+            imgui.push_style_color(imgui.Col_.text, SUCCESS if matches else muted())
+            imgui.text_wrapped(f"{name} · {'matches cue' if matches else 'not matching yet'}")
+            imgui.pop_style_color()
+        imgui.spacing()
+        if imgui.button("Stop run", imgui.ImVec2(-1, 0)):
+            _stop_guided_run()
+    elif phase == "saving":
+        _muted_line("Saving the run…")
+    elif phase == "results":
+        _guided_results_ui()
+    else:
+        imgui.text_wrapped("The saved run could not be scored. Check the take in Takes.")
+        if imgui.button("Done", imgui.ImVec2(-1, 0)):
+            guided_run.update(phase="setup", session=None, score=None)
+
+
 def drive_ui() -> None:
-    """Drive step: start prediction, tune smoothing and inspect sent controls."""
+    """Drive freely, or follow a recorded sequence of gesture cues."""
+    _sync_guided_run()
+    locked = app.ctx.state != "idle" or app.ctx.recording or guided_run["phase"] == "saving"
+    imgui.begin_disabled(locked)
+    width = (imgui.get_content_region_avail().x - imgui.get_style().item_spacing.x) / 2
+    for index, label in enumerate(("Free", "Guided")):
+        if index:
+            imgui.same_line()
+        selected = drive_mode["index"] == index
+        if selected:
+            push_selected()
+        clicked = imgui.button(label + "##drive-mode", imgui.ImVec2(width, 0))
+        if selected:
+            pop_selected()
+        if clicked and not locked:
+            drive_mode["index"] = index
+    imgui.end_disabled()
+    imgui.spacing()
+    if drive_mode["index"] == 1:
+        _guided_ui()
+        return
+    _free_drive_ui()
+
+
+def _free_drive_ui() -> None:
+    """Keep free prediction, smoothing and control inspection together."""
     prediction.ui()
     state = app.ctx.state
     predicting = state == "predicting"
-    can_start = (
-        state == "idle"
-        and pipeline.model is not None
-        and pipeline.on_extract is not None
-        and pipeline.on_predict is not None
-        and _device_connected(app.ctx)
-    )
+    reason = _prediction_reason()
+    can_start = not reason
     enabled = can_start or predicting
     imgui.begin_disabled(not enabled)
     # The pre-click value guards both sides, including the frame Stop is clicked.
@@ -889,14 +1175,6 @@ def drive_ui() -> None:
         else:
             pipeline.start_predicting()
     if not enabled:
-        if state != "idle":
-            reason = "Busy — wait until the current action finishes."
-        elif pipeline.model is None:
-            reason = "No model yet — train or load a model first."
-        elif not _device_connected(app.ctx):
-            reason = "Connect a device in Connect before predicting."
-        else:
-            reason = "Prediction needs @pipeline.extract and @pipeline.predict wired."
         _disabled_reason(reason)
         if (state == "idle" and pipeline.model is not None and not _device_connected(app.ctx)
                 and imgui.button("Go to Connect", imgui.ImVec2(-1, 0))):
@@ -1062,6 +1340,7 @@ def _step_done(ctx: Context) -> list[bool]:
 
 @app.ui
 def myocontrol_ui(ctx: Context) -> None:
+    _sync_guided_run()
     _ensure_hand_feedback()
     # External context changes refresh data without overriding a manually chosen step.
     _select_participant(ctx, navigate=False)
