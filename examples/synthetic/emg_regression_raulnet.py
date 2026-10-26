@@ -632,7 +632,6 @@ def _step_done(ctx: Context) -> list[bool]:
 
 @app.ui
 def demo_ui(ctx: Context) -> None:
-    """Keep the signal, simulator, sessions and activity around the active step."""
     done = _step_done(ctx)
     with layout["header"]:
         active = header.ui(ctx, done)

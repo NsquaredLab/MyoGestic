@@ -45,7 +45,6 @@ task = TrackingTask("force", target=target, trapezoid=TRAPEZOID, plot_height=180
 
 @app.ui
 def ui(ctx: Context) -> None:
-    """Keep the simulated transducer input above the tracking widget."""
     with layout.area("header"):
         header.ui(ctx)
     with layout.area("input"):

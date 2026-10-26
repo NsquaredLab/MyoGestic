@@ -195,9 +195,7 @@ def train(data: TrainingData):
 # --8<-- [start:predict]
 @pipeline.predict
 def predict(model, features):
-    """Classify, then output it two ways: stream the hand pose to VHI's
-    predicted hand (LSL), and on each class *change* command the control
-    hand (gRPC)."""
+    """Stream the predicted hand pose over LSL and gesture changes over gRPC."""
     proba = model.predict_proba(features.reshape(1, -1))[0]
     class_idx = int(np.argmax(proba))
     if link is None or link.bus is None:
@@ -427,7 +425,7 @@ def hand_ui() -> None:
     if phase == "idle" and running and not bound and _init_hand():
         phase = "launched"
     if phase == "checking" and binder.finished:
-        # Re-read after completion: the worker may have bound since this frame began.
+        # The connection may have completed since this frame began.
         bound = link is not None and link.bus is not None
         if not bound:
             if binder.last_error is not None:
@@ -455,9 +453,9 @@ def hand_ui() -> None:
     if bound and phase != "stopping":
         tone, detail = SUCCESS, "Connected · LSL + gRPC"
     elif phase == "stopping":
-        tone, detail = WARNING, "stopping…"
+        tone, detail = WARNING, "Stopping…"
     elif phase in ("checking", "launched"):
-        tone, detail = WARNING, binder.status or "launched · binding as soon as it answers…"
+        tone, detail = WARNING, binder.status or "Launched · waiting for the hand…"
     elif phase == "failed" and binder is not None:
         tone = DANGER
         detail = hand_attempt["error"] or (binder.status if binder.last_error is not None
@@ -599,7 +597,6 @@ def _step_done(ctx: Context) -> list[bool]:
 
 @app.ui
 def demo_ui(ctx: Context) -> None:
-    """Keep the signal, sessions and activity visible around the active step."""
     done = _step_done(ctx)
     with layout["header"]:
         active = header.ui(ctx, done)
