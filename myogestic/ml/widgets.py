@@ -16,6 +16,8 @@ def my_ui(ctx):
 
 from __future__ import annotations
 
+from dataclasses import replace
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from imgui_bundle import icons_fontawesome_6 as fa
@@ -45,6 +47,7 @@ from myogestic.widgets.panels.log_box import (
     render_log_popout,
 )
 from myogestic.widgets.panels.recording import STATE_COLORS
+from myogestic.widgets.training._session_state import packed_session_path
 
 # Per-panel log UX state, keyed by widget_id (defaults to "ml"), so each panel
 # remembers its own popout state across frames.
@@ -87,6 +90,8 @@ def _render_train_button(
         reason = "Stop recording to train a model."
     elif state != "idle":
         reason = "Wait until the current action finishes to train a model."
+    elif getattr(pipeline.app.ctx, "pending_saves", None):
+        reason = "Wait until the last take is saved to train."
     elif pipeline.on_train is None:
         reason = "Add @pipeline.train to enable training."
     elif pipeline.training_data is None or pipeline.training_data.is_empty:
@@ -98,6 +103,11 @@ def _render_train_button(
     clicked = primary_button(f"{fa.ICON_FA_GEARS}  Train##ml_train", size=size)
     imgui.end_disabled()
     if clicked and not reason:
+        # A pack can finish between this frame's session picker and Train.
+        data = pipeline.training_data
+        paths = [str(packed_session_path(Path(path)) or path) for path in data.paths]
+        if paths != data.paths:
+            pipeline.training_data = replace(data, paths=list(dict.fromkeys(paths)))
         pipeline.start_training()
     _disabled_caption(reason)
 

@@ -27,7 +27,9 @@ from myogestic.widgets.training._session_state import (
     class_pool_and_active,
     get_state,
     group_sessions,
+    is_session_saving,
     load_session_files,
+    reconcile_sessions,
     row_gestures,
     scan_sessions,
     selection_summary,
@@ -123,13 +125,17 @@ class SessionManager:
 
         poll_file_dialog(state)
         render_header(widget_id, self._title, scan_path, state)
+        saving = is_session_saving(scan_path)
+        if saving:
+            imgui.text_colored(muted(), "Saving the last take…")
         render_summary(widget_id, self.selection(), state)
         render_class_buttons(widget_id, state, class_names)
         render_session_rows(widget_id, scan_path, state, class_names)
-        if participant and not state.sessions:
+        if participant and not state.sessions and not saving:
             _render_empty_participant(widget_id, scan_path, state)
 
         # Read after every click so returned data and Train agree this frame.
+        reconcile_sessions(state)
         classes_in_pool, active_classes = class_pool_and_active(state)
         return TrainingData(
             paths=[s["path"] for s in state.sessions if s["selected"]],
@@ -143,10 +149,13 @@ class SessionManager:
         Returns
         -------
         SelectionSummary
-            An independent snapshot of the current selection. Reading it does
-            not scan files, change filters, or require an ImGui context.
+            An independent snapshot of the current selection. Follows folders
+            into their packed archives and drops missing takes without rescanning
+            for new takes, changing filters, or requiring an ImGui context.
         """
-        return selection_summary(get_state(self._widget_id), self._class_names)
+        state = get_state(self._widget_id)
+        reconcile_sessions(state)
+        return selection_summary(state, self._class_names)
 
 
 def render_header(widget_id: str, title: str, base_path: str, state: SessionWidgetState) -> None:
