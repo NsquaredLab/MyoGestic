@@ -631,7 +631,7 @@ def _take_overlay(take: TakeStatus) -> None:
 
 
 def model_ui() -> None:
-    """Train step: choose inputs and see exactly which takes and gestures will fit."""
+    """Choose model inputs and review the selected training takes."""
     if pipeline.model is not None and pipeline.model is saved_model["model"]:
         _saved_model_ui()
         return
@@ -740,7 +740,7 @@ def _training_reason() -> str:
 
 
 def _saved_model_ui() -> None:
-    """Give a loaded model a direct route to Drive and an explicit retrain action."""
+    """Offer Drive and retraining for the loaded model."""
     # Two text lines keep both state and timestamp readable in a 320 px cell.
     height = (2 * imgui.get_text_line_height_with_spacing() + ui_px(8))
     with tinted_row(SUCCESS, height=height) as width:
@@ -876,7 +876,7 @@ def hand_ui() -> None:
     if phase == "idle" and running and not bound:
         phase = "launched"
     if phase == "checking" and binder.finished:
-        # Re-read after completion: the worker may have bound since this frame began.
+        # The connection may have completed since this frame began.
         bound = link.bus is not None
         if not bound:
             if binder.last_error is not None:
@@ -897,18 +897,18 @@ def hand_ui() -> None:
     hand_attempt["phase"] = phase
     if bound and phase != "stopping":
         _announce_binding(link.bus)
-        tone, detail = SUCCESS, "bound · prediction and control → hand"
+        tone, detail = SUCCESS, "Connected · prediction and control → hand"
     elif phase == "stopping":
-        tone, detail = WARNING, "stopping…"
+        tone, detail = WARNING, "Stopping…"
     elif phase in ("checking", "launched"):
-        tone, detail = WARNING, binder.status or "launched · binding as soon as it answers…"
+        tone, detail = WARNING, binder.status or "Launched · waiting for the hand…"
     elif phase == "failed":
         tone = DANGER
         detail = binder.status if binder.last_error is not None else "no Virtual Hand answered"
         if not hand_processes and binder.last_error is None:
             detail += " · not installed here"
     else:
-        tone, detail = IDLE, "not running" if hand_processes else "not installed here"
+        tone, detail = IDLE, "Not running" if hand_processes else "not installed here"
     if running or phase in ("checking", "launched", "stopping"):
         action = "Stop"
     elif bound:
@@ -973,7 +973,6 @@ def _step_done(ctx: Context) -> list[bool]:
 
 @app.ui
 def myocontrol_ui(ctx: Context) -> None:
-    """A visible workflow with persistent signal, activity and session files."""
     # External context changes refresh data without overriding a manually chosen step.
     _select_participant(ctx, navigate=False)
     previous_participant = ctx.participant
@@ -983,7 +982,6 @@ def myocontrol_ui(ctx: Context) -> None:
     if participant_workflow["pending_step"] is not None:
         active = participant_workflow["pending_step"]
         participant_workflow["pending_step"] = None
-    # Retain the compact body-card spacing of this workflow.
     padding = imgui.get_style().window_padding
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))
     if active != 1 or not ctx.participant:

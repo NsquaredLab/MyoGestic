@@ -17,12 +17,9 @@ pill, while viewers and tools use `show_state=False`. The stream-backed ones fee
 `myogestic.sources.SyntheticSource` — a paced fake amplifier that ships with
 the package, so an example is also a working recipe.
 
-The widgets use the 2.0 kit directly: one header per card, state rows in words,
-selection chips, and Settings popovers. Demo-only inputs sit in their own cards
-when they accompany a widget. Pong's captioned inputs stack in narrow cells;
-StepBar keeps its navigation in a full-width card beneath the app header, with
-completion controls in the card below. The AppLogo demo still shows the fit-to-cell
-wordmark in its body; the header uses the inline logo like every other demo.
+Demo inputs sit in separate cards. Pong's inputs stack in narrow cells;
+StepBar's navigation and completion controls occupy separate cards. AppLogo
+shows the fit-to-cell wordmark beneath the header's inline logo.
 
 | Script | Widget | Shows |
 |--------|--------|-------|

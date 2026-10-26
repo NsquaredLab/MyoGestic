@@ -22,7 +22,6 @@ status = StatusBar("emg")
 
 @app.ui
 def ui(ctx: Context) -> None:
-    """Keep the footer outside the signal card, with its own edge rule."""
     with layout.area("header"):
         header.ui(ctx)
     with layout.area("body"):

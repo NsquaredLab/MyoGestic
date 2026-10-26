@@ -29,7 +29,6 @@ done = [True, False, False, False]
 
 @app.ui
 def ui(ctx: Context) -> None:
-    """Draw both header variants without changing any caller styles."""
     with grid.area("workflow"):
         active = workflow.ui(ctx, done)
     with grid.area("viewer"):

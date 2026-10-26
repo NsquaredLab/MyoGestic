@@ -159,8 +159,7 @@ PROCESSES = [
             "EMG_Control",
         ],
     ),
-    # vhi.launchable() returns a [(name, argv)] entry for the Connect card.
-    # `launchable` rather than `launcher` because an unlaunchable target must not stop this app from opening — a running one needs no
+    # An unavailable launcher must not prevent startup; a running hand needs no
     # button, and the reason is logged either way.
     *vhi.launchable(),
 ]
@@ -532,7 +531,7 @@ def _connect() -> None:
     threading.Thread(target=connect, daemon=True).start()
 
 def _process_ui(ctx: Context, name: str) -> None:
-    """Keep each original process launcher in a compact captioned row."""
+    """Show a process's status and launch action."""
     running = processes.running(name)
     error = launch_errors.get(name, "")
     tone = SUCCESS if running else DANGER if error else IDLE
@@ -627,7 +626,6 @@ def _step_done(ctx: Context) -> list[bool]:
 
 @app.ui
 def demo_ui(ctx: Context) -> None:
-    """Keep the signal, sessions and activity visible around the active step."""
     _poll_model_ui()
     done = _step_done(ctx)
     with layout["header"]:

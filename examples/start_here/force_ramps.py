@@ -157,7 +157,6 @@ def track_ui(ctx: Context) -> None:
 
 @app.ui
 def force_ramps_ui(ctx: Context) -> None:
-    """Keep sessions, activity and acquisition visible around Connect and Track."""
     done = _step_done(ctx)
     with layout["header"]:
         active = header.ui(ctx, done)
