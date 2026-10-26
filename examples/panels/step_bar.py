@@ -31,7 +31,6 @@ layout = Grid.areas("header\nworkflow\nselection", row_height=[Px(52), Px(90), F
 
 @app.ui
 def ui(ctx: Context) -> None:
-    """Keep the navigation and its demo state in separate cards below the header."""
     with layout.area("header"):
         header.ui(ctx)
     with layout.area("workflow"):

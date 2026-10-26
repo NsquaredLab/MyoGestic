@@ -42,7 +42,7 @@ from myogestic.widgets.common import (
     ui_px,
 )
 
-# ── 1. Name your gesture classes (class 0 is rest) ──────────────────────────────
+# 1. Name your gesture classes (class 0 is rest).
 CLASSES = ["Rest", "Fist"]
 WINDOW_MS, HOP_MS = 200, 100
 app = App("My session app", require_participant=True)
@@ -50,17 +50,17 @@ app.streams(Stream("emg", source=LSLSource("MySessionEMG"), window_ms=WINDOW_MS,
 pipeline = Pipeline(app)
 
 
-# ── 2. Extract your features, identically during training and prediction ────────
+# 2. Extract the same features during training and prediction.
 @pipeline.extract
 def extract(windows: dict[str, np.ndarray]) -> np.ndarray:
     """Reduce each channels-first EMG window to per-channel RMS."""
     return np.sqrt(np.mean(windows["emg"].astype(np.float64) ** 2, axis=1))
 
 
-# ── 3. Fit your model on the selected, labelled recording windows ──────────────
+# 3. Fit your model on selected, labelled windows.
 @pipeline.train
 def train(data: TrainingData) -> dict[int, np.ndarray]:
-    """Keep one mean feature vector per class: a tiny nearest-centroid model."""
+    """Fit a nearest-centroid model with one mean feature vector per class."""
     grouped: dict[int, list[np.ndarray]] = {}
     for window, _ts, label in iter_labeled_windows(
         data.paths, "emg", WINDOW_MS, HOP_MS, classes=data.classes,
@@ -71,7 +71,7 @@ def train(data: TrainingData) -> dict[int, np.ndarray]:
     return {label: np.mean(windows, axis=0) for label, windows in grouped.items()}
 
 
-# ── 4. Predict; add your device's output call here if you need one ──────────────
+# 4. Predict; add your device's output call here.
 @pipeline.predict
 def predict(model: dict[int, np.ndarray], features: np.ndarray) -> dict[str, int]:
     """Return the original class index, even when only some classes were trained."""
@@ -152,7 +152,6 @@ def _step_done(ctx: Context) -> list[bool]:
 
 @app.ui
 def ui(ctx: Context) -> None:
-    """Keep acquisition, sessions and activity visible around the current step."""
     done = _step_done(ctx)
     with layout["header"]:
         active = header.ui(ctx, done)

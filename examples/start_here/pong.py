@@ -862,7 +862,7 @@ def _smoothing_ui() -> None:
 
 
 def play_ui() -> None:
-    """Prediction state and forward action, captioned court controls and hand output."""
+    """Start prediction, adjust the court and show the hand output."""
     global pong
     running = app.ctx.state == "predicting"
     _value_row("Predicting" if running else "Ready to play", f"{PREDICT_HZ} Hz" if running else "", tone=SUCCESS if running else IDLE)
@@ -1003,7 +1003,7 @@ def _dummy_key(label: str, name: str, key: imgui.Key) -> None:
 
 
 def simulated_ui(dummy: DummyWristSource) -> None:
-    """Example-local synthetic wrist: held keycaps, signed drive and visible state."""
+    """Control the synthetic wrist with arrow keys or mouse input."""
     panel_header("Simulated EMG", status=SUCCESS)
     wide = imgui.get_content_region_avail().x >= ui_px(520)
     if wide:
@@ -1064,7 +1064,6 @@ def _step_done(ctx: Context) -> list[bool]:
 
 @app.ui
 def pong_ui(ctx: Context) -> None:
-    """Keep the subject's view, sessions and activity visible around the active step."""
     # `TargetSource` ends its own block on the acquire thread even while another
     # step is open. This just closes the recording that press opened.
     if block["recording"] and not target.running:

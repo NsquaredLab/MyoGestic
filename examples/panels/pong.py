@@ -166,7 +166,6 @@ def inputs_ui() -> float | None:
 
 @app.ui
 def ui(ctx: Context) -> None:
-    """Keep demo inputs and the widget's own Serve action in separate cards."""
     with layout["header"]:
         header.ui(ctx)
     with layout["inputs"]:
