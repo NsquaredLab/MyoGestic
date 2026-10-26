@@ -49,6 +49,7 @@ moved and catch a sign error. Nothing requires it.
 | serve `SweepControl` | letting a client sweep one DOF and read back the degrees it produced, as a direction check |
 | serve `SetPresentation` | for a client asking you to smooth incoming poses |
 | serve the four recording RPCs | driving a ground-truth hand through a capture session |
+| report `target_version` in the manifest | your build's own release version (`"2.1.0"`), so a client that knows your release history can refuse a build whose *protocol* is current but whose *behaviour* is known-bad — the case `vocabulary_version` cannot see. Leaving it empty is safe: an absent version is warned about, never refused, because absence cannot distinguish an old build from a target that does not version itself |
 
 Nothing above is about *running* the thing. The table below is what turns a process that
 satisfies the wire into an application you can leave up - a separate table only because a
