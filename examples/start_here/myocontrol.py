@@ -817,7 +817,11 @@ def _take_overlay(take: TakeStatus) -> None:
             tenths = round(max(0, take.elapsed_s) * 10)
             minutes, tenths = divmod(tenths, 600)
             clock = f"{minutes}:{tenths // 10:02d}.{tenths % 10}"
-            text = f"REC {take.gesture or ''} · {clock}"
+            gesture = take.gesture or ""
+            if app.ctx.state == "predicting":
+                gesture = (CLASSES[guided_run["order"][guided_run["index"]]]
+                           if guided_run["phase"] == "cue" else "run")
+            text = f"REC {gesture} · {clock}"
             imgui.push_font(mono_font(), style.font_size_base)
             try:
                 text = _ellipsize(text, right - left - 3 * pad)
@@ -1044,24 +1048,29 @@ def _guided_results_ui() -> None:
     imgui.text_wrapped("of the time the prediction matched the cue")
     imgui.pop_style_color()
     imgui.spacing()
+    style = imgui.get_style()
+    gap = style.item_spacing.x
+    name_width = max((imgui.calc_text_size(name).x for name in score["per_class"]), default=0.0)
+    imgui.push_font(mono_font(), style.font_size_base)
+    value_width = imgui.calc_text_size("100%").x
+    imgui.pop_font()
     for ci, (name, value) in enumerate(score["per_class"].items()):
-        if imgui.begin_table(f"guided-match-{ci}", 3, imgui.TableFlags_.sizing_stretch_prop):
-            imgui.table_setup_column("Gesture", imgui.TableColumnFlags_.width_fixed,
-                                     imgui.calc_text_size(name).x)
-            imgui.table_setup_column("Match", imgui.TableColumnFlags_.width_stretch)
-            imgui.table_setup_column("Value", imgui.TableColumnFlags_.width_fixed, ui_px(42))
-            imgui.table_next_column()
-            imgui.text_unformatted(name)
-            imgui.table_next_column()
-            top = imgui.get_cursor_pos_y()
-            imgui.set_cursor_pos_y(top + (imgui.get_text_line_height() - ui_px(4)) / 2)
-            imgui.push_style_color(imgui.Col_.plot_histogram,
-                                   imgui.ImVec4(*PALETTE[ci % len(PALETTE)], 1.0))
-            imgui.progress_bar(value or 0.0, imgui.ImVec2(-1, ui_px(4)), "")
-            imgui.pop_style_color()
-            imgui.table_next_column()
-            mono_text(f"{value:.0%}" if value is not None else "—", muted())
-            imgui.end_table()
+        left, top = imgui.get_cursor_pos()
+        imgui.text_unformatted(name)
+        imgui.same_line()
+        imgui.set_cursor_pos_x(left + name_width + gap)
+        width = max(ui_px(1), imgui.get_content_region_avail().x - value_width - gap)
+        imgui.set_cursor_pos_y(top + (imgui.get_text_line_height() - ui_px(4)) / 2)
+        imgui.push_style_color(imgui.Col_.plot_histogram,
+                               imgui.ImVec4(*PALETTE[ci % len(PALETTE)], 1.0))
+        # Match PredictionLabel: a thin bar must not charge frame padding to the row.
+        imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(style.frame_padding.x, 0))
+        imgui.progress_bar(value or 0.0, imgui.ImVec2(width, ui_px(4)), "")
+        imgui.pop_style_var()
+        imgui.pop_style_color()
+        imgui.same_line()
+        imgui.set_cursor_pos_y(top)
+        mono_text(f"{value:.0%}" if value is not None else "—", muted())
     imgui.spacing()
     reach = score["median_reach_s"]
     mono_text(f"{reach:.2f} s" if reach is not None else "—")

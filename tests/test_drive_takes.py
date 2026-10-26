@@ -70,6 +70,30 @@ def test_select_all_skips_only_pipeline_provenance(tmp_path):
     assert {row["path"] for row in rows if row["drive"]} == {str(drive.resolve())}
 
 
+@pytest.mark.parametrize("selected", [False, True])
+@pytest.mark.parametrize("guided", [False, True])
+def test_class_chip_counts_drive_time_only_when_ticked(imgui_frame, monkeypatch, selected, guided):
+    from myogestic.widgets.training.session_manager import render_class_buttons
+
+    state = _session_state.SessionWidgetState(sessions=[
+        {"class_seconds": {"Rest": 4.}, "selected": True},
+        {"class_seconds": {"Fist": 4.}, "selected": False, "drive": False},
+        {"class_seconds": {"Rest": 8., "Fist": 8.}, "selected": selected,
+         "drive": True, "guided": guided},
+    ])
+    labels = []
+    button = imgui.button
+
+    def capture(label, *args):
+        labels.append(label.split("##")[0].strip())
+        return button(label, *args)
+
+    monkeypatch.setattr(imgui, "button", capture)
+    imgui_frame(lambda: render_class_buttons("drive-counts", state, ["Rest", "Fist"]))
+    seconds = "0:12" if selected else "0:04"
+    assert labels == [f"Rest {seconds}", f"Fist {seconds}"]
+
+
 def test_pending_zarr_without_meta_never_reaches_metadata_reader(tmp_path, monkeypatch):
     folder = tmp_path / "pending"
     (folder / "emg.zarr").mkdir(parents=True)
