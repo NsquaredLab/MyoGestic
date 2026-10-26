@@ -148,8 +148,8 @@ def _track(opponent_y: float, ball: Ball, dt: float, *, cap: float, half: float)
     It chases the ball only while the ball is coming at it and drifts back to the
     centre otherwise, which is both what a player does and what keeps it beatable: a
     paddle glued to ``ball.y`` for the whole rally is already waiting wherever the
-    return goes. The cap is the only difficulty knob — a ball it cannot reach in time
-    is a point, and nothing else decides that.
+    return goes. The cap bounds its reach — a ball outside the paddle when it arrives
+    is a point.
 
     Parameters
     ----------
@@ -185,6 +185,7 @@ def _step(
     paddle_vy: float = 0.0,
     opponent_y: float | None = None,
     opponent_cap: float = 0.0,
+    opponent_half: float | None = None,
 ) -> tuple[Ball, list[str], float | None]:
     """Advance the ball one frame and say everything that happened to it.
 
@@ -198,8 +199,7 @@ def _step(
     dt
         Seconds to advance by.
     half
-        Half a paddle's height, in court ``y``. Must be positive. Both paddles are the
-        same size, so there is one of these.
+        Half the subject's paddle height, in court ``y``. Must be positive.
     speed
         The ball's speed, preserved across every bounce — a rally that accelerated
         would end itself rather than train anything.
@@ -221,8 +221,10 @@ def _step(
         rather than by the caller so it is advanced *to each crossing instant* and no
         further: adjudicate a crossing against where the paddle got to by the end of
         the frame and a long frame hands it reach its cap does not have, which makes
-        the frame rate a difficulty knob (see `_track`, where the cap is meant to be
-        the only one).
+        the frame rate a difficulty knob.
+    opponent_half
+        Half the opponent's paddle height, in court ``y``. Must be positive, or
+        ``None`` to use `half` for both paddles.
 
     Returns
     -------
@@ -236,6 +238,7 @@ def _step(
     """
     x, y, vx, vy = ball.x, ball.y, ball.vx, ball.vy
     events: list[str] = []
+    opponent_half = half if opponent_half is None else opponent_half
     # Both paddles are swept, so both need the travel elapsed inside this frame and the
     # clamp `_aim` and `_track` apply to a centre — half a paddle from each wall.
     elapsed, limit = 0.0, max(1.0 - half, 0.0)
@@ -257,11 +260,10 @@ def _step(
         if travel > dt:
             break
         # The opponent gets only the time that has actually passed when the ball
-        # arrives, so what it can cover is `cap * travel` — the one thing difficulty
-        # is supposed to be. Its own docstring's promise, made structural here.
+        # arrives, so what it can cover is `cap * travel`.
         if opponent_y is not None:
             opponent_y = _track(
-                opponent_y, Ball(x, y, vx, vy), travel, cap=opponent_cap, half=half
+                opponent_y, Ball(x, y, vx, vy), travel, cap=opponent_cap, half=opponent_half
             )
         x, dt, elapsed = edge, dt - travel, elapsed + travel
         y, vy = _bounce(y + vy * travel, vy)
@@ -274,7 +276,7 @@ def _step(
         if plane is None:
             vx = -vx  # a plain far wall, which has nothing to miss
             continue
-        offset = (y - plane) / half
+        offset = (y - plane) / (half if mine else opponent_half)
         if abs(offset) > 1.0:
             events.append("miss" if mine else "opponent_miss")
             return Ball(edge, y, vx, vy), events, opponent_y
@@ -286,7 +288,9 @@ def _step(
         vx = -math.copysign(math.sqrt(max(speed * speed - vy * vy, 0.0)), vx)
 
     if opponent_y is not None:
-        opponent_y = _track(opponent_y, Ball(x, y, vx, vy), dt, cap=opponent_cap, half=half)
+        opponent_y = _track(
+            opponent_y, Ball(x, y, vx, vy), dt, cap=opponent_cap, half=opponent_half
+        )
     y, vy = _bounce(y + vy * dt, vy)
     return Ball(x + vx * dt, y, vx, vy), events, opponent_y
 
@@ -323,8 +327,13 @@ class PongTask:
         Ball speed in court widths per second. The court is 1.0 wide, so 0.55 crosses
         it in a little under two seconds.
     paddle_size
-        Paddle height as a fraction of the court, which is 2.0 tall. Bigger is easier;
-        this is the difficulty knob.
+        Subject's paddle height in court ``y`` units; the court is 2.0 tall, so
+        ``0.36`` covers 18% and ``0.6`` covers 30%. Clamped to ``[0.02, 2.0]``.
+        Bigger is easier.
+    opponent_paddle_size
+        Opponent's paddle height in the same units and with the same bounds as
+        `paddle_size`, or ``None`` to use `paddle_size` for both paddles. Set it
+        separately to enlarge the subject's paddle without enlarging the opponent's.
     control
         What the command does to the paddle. Neither mode is the right one in general.
 
@@ -349,9 +358,9 @@ class PongTask:
         does.
     opponent
         Speed factor of a paddle playing back from the far wall, or ``None`` for the
-        plain wall to rally against. It is the same height as the subject's and its top
-        tracking speed is ``opponent * ball_speed`` in court ``y`` per second — that one
-        cap is the whole difficulty: **~0.6 is a fair rally, 1.0 and above is hard**.
+        plain wall to rally against. Its top tracking speed is
+        ``opponent * ball_speed`` in court ``y`` per second, so a slower ball also
+        slows the opponent. With equal paddles, **~0.6 is a fair rally, 1.0 and above is hard**.
         Must be positive.
     court_height
         Court height in pixels at UI scale 1.0, or ``0`` or less to take the height the cell has left
@@ -382,6 +391,7 @@ class PongTask:
         *,
         ball_speed: float = 0.55,
         paddle_size: float = 0.36,
+        opponent_paddle_size: float | None = None,
         control: str = "velocity",
         opponent: float | None = None,
         court_height: float = 260.0,
@@ -421,6 +431,10 @@ class PongTask:
         # Floored so the offset arithmetic in `_step` always has something to divide
         # by, and capped so a paddle cannot be taller than the court it defends.
         self._half = min(max(paddle_size, 0.02), 2.0) * 0.5
+        self._opponent_half = (
+            self._half if opponent_paddle_size is None
+            else min(max(opponent_paddle_size, 0.02), 2.0) * 0.5
+        )
         # How far the paddle's *centre* may go: half a paddle from each wall, so a
         # saturated command covers the ceiling exactly. Fixed for the widget's life,
         # like `_half`, and read by the ghost too so the reference stays reachable.
@@ -587,6 +601,7 @@ class PongTask:
             paddle_vy=paddle_vy,
             opponent_y=self._opponent_y if self._opponent is not None else None,
             opponent_cap=(self._opponent or 0.0) * self._speed,
+            opponent_half=self._opponent_half,
         )
         if opponent_y is not None:
             self._opponent_y = opponent_y
@@ -776,8 +791,8 @@ class PongTask:
 
         if self._opponent is not None:
             # Muted, not primary: the accent belongs to the paddle the subject drives.
-            head = at(0.0, self._opponent_y + self._half)
-            foot = at(0.0, self._opponent_y - self._half)
+            head = at(0.0, self._opponent_y + self._opponent_half)
+            foot = at(0.0, self._opponent_y - self._opponent_half)
             dl.add_rect_filled(
                 head,
                 imgui.ImVec2(foot.x + thick, foot.y),

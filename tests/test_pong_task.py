@@ -279,6 +279,80 @@ def test_an_opponent_that_cannot_move_is_refused_rather_than_shipped(bad: float)
         PongTask(opponent=bad)
 
 
+@pytest.mark.parametrize("paddle_size", [0.36, 0.6])
+@pytest.mark.parametrize("opponent", [None, 0.6])
+def test_none_opponent_size_preserves_the_shared_paddle_geometry(paddle_size, opponent):
+    tasks = [
+        PongTask(paddle_size=paddle_size, opponent=opponent),
+        PongTask(paddle_size=paddle_size, opponent=opponent, opponent_paddle_size=None),
+        PongTask(paddle_size=paddle_size, opponent=opponent, opponent_paddle_size=paddle_size),
+    ]
+    for task in tasks:
+        assert task._opponent_half == task._half == pytest.approx(paddle_size / 2)
+        _play(task, Ball(0.9, 0.8, -0.5, 0.0), until=2.0)
+    assert all(task._ball == tasks[0]._ball for task in tasks)
+    assert all(task._opponent_y == tasks[0]._opponent_y for task in tasks)
+    assert all(task._opponent_misses == tasks[0]._opponent_misses for task in tasks)
+
+
+@pytest.mark.parametrize("size", [-0.5, 0.0, 0.01, 0.36, 2.0, 3.0])
+def test_opponent_size_uses_the_same_bounds_as_player_size(size):
+    player = PongTask(paddle_size=size)
+    opponent = PongTask(opponent_paddle_size=size)
+    assert opponent._opponent_half == player._half
+    assert opponent._half == pytest.approx(0.18)
+
+
+def test_a_larger_player_paddle_returns_a_ball_without_enlarging_the_opponent():
+    default = PongTask(opponent=0.6)
+    larger = PongTask(paddle_size=0.6, opponent_paddle_size=0.36, opponent=0.6)
+    for task in (default, larger):
+        task._ball = Ball(0.98, 0.25, 0.55, 0.0)
+        task._last = 0.0
+        task._tick(_MAX_STEP_S, 0.0)
+    assert (default._hits, default._misses) == (0, 1)
+    assert (larger._hits, larger._misses) == (1, 0)
+    assert larger._ball.vx < 0.0
+    assert larger._opponent_half == default._opponent_half == pytest.approx(0.18)
+    assert larger._limit == pytest.approx(0.7)
+    assert larger._ghost_y(1.0) == pytest.approx(0.7)
+    larger._aim(1.0)
+    assert larger._paddle == pytest.approx(0.7)
+
+
+@pytest.mark.parametrize("player_size", [0.2, 0.8])
+@pytest.mark.parametrize("opponent_size,misses", [(0.2, 1), (0.6, 0)])
+def test_opponent_returns_and_spins_the_ball_using_its_own_half(player_size, opponent_size, misses):
+    task = PongTask(
+        ball_speed=0.5, paddle_size=player_size, opponent_paddle_size=opponent_size,
+        opponent=0.6,
+    )
+    task._ball = Ball(0.02, 0.25, -0.5, 0.0)
+    task._last = 0.0
+    task._tick(_MAX_STEP_S, 0.0)
+    assert task._opponent_misses == misses
+    assert task._misses == 0
+    assert task._opponent_half == pytest.approx(opponent_size / 2)
+    if not misses:
+        assert task._ball.vx > 0.0
+        # Arrival after 0.04 s: the CPU has moved 0.012 toward the ball.
+        assert task._ball.vy == pytest.approx(_SPIN * 0.5 * (0.25 - 0.012) / 0.3)
+
+
+@pytest.mark.parametrize("x,dt", [(0.02, 0.04), (0.5, 0.1)])
+def test_opponent_tracking_clamps_to_its_own_half_at_and_between_crossings(x, dt):
+    task = PongTask(
+        ball_speed=0.5, paddle_size=0.6, opponent_paddle_size=0.2, opponent=0.6,
+    )
+    task._opponent_y = 0.9
+    task._ball = Ball(x, 0.95, -0.5, 0.0)
+    task._last = 0.0
+    task._tick(dt, 0.0)
+    assert task._opponent_y == pytest.approx(0.9)
+    assert task._opponent_misses == 0
+    assert (task._ball.vx > 0.0) is (x == 0.02)
+
+
 def test_the_opponent_chases_only_while_the_ball_is_coming_at_it():
     """Which is what makes it beatable, and what makes it look like it is playing.
 
@@ -885,6 +959,19 @@ class _RectRecorder:
 
     def __getattr__(self, _name):  # add_line / add_circle_filled / add_text — ignored
         return lambda *a, **k: None
+
+
+def test_each_paddle_draws_at_its_own_height_and_the_ghost_matches_the_player(imgui_frame, monkeypatch):
+    task = PongTask(paddle_size=0.6, opponent_paddle_size=0.36, opponent=0.6)
+    rec = _RectRecorder()
+    monkeypatch.setattr(imgui, "get_window_draw_list", lambda: rec)
+    imgui_frame(lambda: task._court_ui(task._ghost_y(0.0)))
+    court, opponent, player = rec.fills
+    court_height = court[3] - court[1]
+    assert opponent[3] - opponent[1] == pytest.approx(court_height * 0.18)
+    assert player[3] - player[1] == pytest.approx(court_height * 0.30)
+    ghost = rec.outlines[-1]
+    assert ghost[1] < player[1] and ghost[3] > player[3]
 
 
 def test_a_perfectly_tracked_ghost_is_still_visible(imgui_frame, monkeypatch):

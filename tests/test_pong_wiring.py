@@ -39,6 +39,7 @@ from myogestic.sources.target import PHASE_CODES
 from myogestic.stream import StreamInfo
 from myogestic.tracking import Pursuit
 from myogestic.widgets import ParticipantPanel, PongTask
+from myogestic.widgets.pong import Ball
 from myogestic.widgets.training._session_state import SessionWidgetState, _states
 
 _APP = Path(__file__).resolve().parent.parent / "examples" / "start_here" / "pong.py"
@@ -104,6 +105,29 @@ def test_pong_uses_the_myocontrol_shell(app_module):
 
 def test_pong_requires_participant(app_module):
     assert app_module["app"].ctx.require_participant is True
+
+
+def test_new_game_uses_the_decoder_play_tunables_at_every_difficulty(app_module, monkeypatch):
+    assert app_module["BALL_SPEED"] == 0.35
+    assert app_module["PADDLE_SIZE"] == 0.6
+    assert app_module["OPPONENT_PADDLE_SIZE"] == 0.36
+    new_game = app_module["_new_game"]
+    for level, name in enumerate(app_module["LEVELS"]):
+        app_module["opponent_level"]["index"] = level
+        court = new_game()
+        assert court._speed == pytest.approx(0.35)
+        assert court._half == pytest.approx(0.3)
+        assert court._opponent_half == pytest.approx(0.18)
+        court._ball = Ball(0.5, 0.9, -0.35, 0.0)
+        court._last = 0.0
+        court._tick(0.1, 0.0)
+        assert court._opponent_y == pytest.approx(app_module["OPPONENTS"][name] * 0.35 * 0.1)
+
+    # Changing the knobs must reach each rebuilt game too.
+    for key, value in [("BALL_SPEED", 0.3), ("PADDLE_SIZE", 0.8), ("OPPONENT_PADDLE_SIZE", 0.2)]:
+        monkeypatch.setitem(new_game.__globals__, key, value)
+    court = new_game()
+    assert (court._speed, court._half, court._opponent_half) == pytest.approx((0.3, 0.4, 0.1))
 
 
 def _attach_dummy(app_module, monkeypatch):

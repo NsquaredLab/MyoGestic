@@ -92,6 +92,12 @@ HOP_MS = 100
 # One rate for the predict loop, the smoother and the control bus. Let them drift and
 # the post-processor's time constants are tuned for a timebase nothing runs on.
 PREDICT_HZ = 32
+# Retune ball pace here: court widths/s; 0.35 crosses in ~2.9 s (default 0.55: ~1.8 s).
+BALL_SPEED = 0.35
+# Retune the player's paddle here: 0.6 of the 2.0-tall court covers 30% (default: 18%).
+PADDLE_SIZE = 0.6
+# Retune the CPU paddle here independently of the player's; 0.36 keeps its usual 18%.
+OPPONENT_PADDLE_SIZE = 0.36
 #: Three cued classes on one signed axis. Down is a real ``-1``, not a second one-way
 #: channel: a wrist is the canonical bidirectional DOF and the paddle needs both halves.
 CLASSES = ["Down", "Rest", "Up"]
@@ -113,8 +119,7 @@ TARGET_STREAM = "target"
 #: together. Defaults are a 58 s block: 5 s rest, 24 hops of 2 s, 5 s recover.
 PURSUIT = Pursuit()
 
-#: Opponent top tracking speed, in court-`y` per second. Fair is won by graded control
-#: and lost by overshooting; Hard needs a clean early read.
+#: Retune CPU speed factors here: opponent * BALL_SPEED makes Easy/Fair/Hard scale with the slower ball.
 OPPONENTS = {"Easy": 0.4, "Fair": 0.6, "Hard": 1.0}
 LEVELS = list(OPPONENTS)
 
@@ -476,6 +481,9 @@ def _new_game() -> PongTask:
     most of it dead grey.
     """
     return PongTask(
+        ball_speed=BALL_SPEED,
+        paddle_size=PADDLE_SIZE,
+        opponent_paddle_size=OPPONENT_PADDLE_SIZE,
         court_height=0.0,
         control=CONTROLS[control_mode["index"]].lower(),
         opponent=OPPONENTS[LEVELS[opponent_level["index"]]],
