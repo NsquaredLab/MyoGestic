@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Myocontrol's Guided drive runs cue shuffled gesture repetitions, save prediction takes, and score match and cue reach from the saved take; Takes marks them **Guided** and leaves them unticked for training.
 - Myocontrol records the hand’s LSL feedback with the EMG and offers **Record this run** in Drive. Stopping prediction saves an open run first; Drive takes carry the running model and stay unticked for training unless selected.
 - `Pipeline(input_streams=...)` selects model inputs and their tick clock independently of recording-only feedback; `SignalViewer(exclude=...)` keeps those streams out of the EMG viewer.
 - **Record while predicting.** `App.start_recording` works from any state in

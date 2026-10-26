@@ -1848,3 +1848,318 @@ def test_drive_narrow_dejavu_fonts(app_module, implot_frame, monkeypatch, width,
         implot_frame(draw)
     assert all(x <= right + 1 and text < size for x, right, text, size in measurements)
     assert end[-1][0] <= end[-1][1] and end[-1][2] == 0, end
+
+
+@pytest.mark.parametrize("packed", [False, True])
+def test_guided_score_uses_saved_timestamp_windows_and_excludes_repeated_reach(
+    app_module, tmp_path, packed,
+):
+    from myogestic.session import Session
+
+    session = Session(base_path=str(tmp_path))
+    names = ["Quiet", "Grip", "Open"]
+    session.extras["guided"] = {"classes": names}
+    for ci, timestamp in [(0, 10), (1, 12), (1, 14), (0, 16), (2, 18), (-1, 20)]:
+        session.add_label(ci, timestamp)
+    # Unequal row counts, out-of-order timestamps, exact boundaries, and outside rows.
+    for timestamp, ci in [
+        (21, 0), (10.5, 0), (11, 0), (10, 1), (9.9, 0),
+        (12, 0), (12.25, 1), (13, 1), (14, 0), (14.1, 1), (15, 1),
+        (16, 1), (17, 1), (18, 0), (19, 1), (20, 2),
+    ]:
+        session.append_event("prediction.class", [ci], timestamp)
+    session.freeze()
+    session.save_meta("Guided scoring", class_names=names)
+    path = session.pack_to_zip() if packed else session.path
+    score = app_module["score_guided_run"](path)
+    assert score == {
+        "match": 6 / 13,
+        "per_class": {"Quiet": 2 / 5, "Grip": 4 / 6, "Open": 0.0},
+        "median_reach_s": 0.375, "reached": 2, "cues": 4,
+    }
+
+
+@pytest.mark.parametrize("stop", [1.5, 2.0])
+def test_guided_score_partial_last_cue_and_no_reached_cues(app_module, tmp_path, stop):
+    from myogestic.session import Session
+
+    session = Session(base_path=str(tmp_path))
+    session.extras["guided"] = {"classes": ["Rest", "Fist"]}
+    session.add_label(1, 1.0)
+    session.add_label(-1, stop)
+    session.append_event("prediction.class", [0], 1.1)
+    session.append_event("prediction.class", [1], 1.75)
+    session.append_event("prediction.class", [0], 2.0)
+    session.freeze()
+    session.save_meta("Partial run")
+    score = app_module["score_guided_run"](session.pack_to_zip())
+    assert score == {
+        "match": 0.0 if stop == 1.5 else 0.5,
+        "per_class": {"Rest": None, "Fist": 0.0 if stop == 1.5 else 0.5},
+        "median_reach_s": None if stop == 1.5 else 0.75,
+        "reached": 0 if stop == 1.5 else 1, "cues": 1,
+    }
+
+
+@pytest.mark.parametrize("started_cue", [False, True])
+def test_guided_score_with_no_predictions(app_module, tmp_path, started_cue):
+    from myogestic.session import Session
+
+    session = Session(base_path=str(tmp_path))
+    session.extras["guided"] = {"classes": ["Rest", "Fist"]}
+    if started_cue:
+        session.add_label(0, 10.)
+    session.add_label(-1, 10.5)
+    session.save_meta("Empty run")
+    assert app_module["score_guided_run"](session.pack_to_zip()) == {
+        "match": None, "per_class": {"Rest": None, "Fist": None},
+        "median_reach_s": None, "reached": 0, "cues": int(started_cue),
+    }
+
+
+@pytest.mark.parametrize("stop_after", [0, 2, 4])
+def test_guided_run_schedule_labels_save_idle_and_unticked_tag(
+    app_module, tmp_path, monkeypatch, imgui_frame, stop_after,
+):
+    import random
+
+    from imgui_bundle import imgui
+
+    from myogestic.session import open_session_store
+    from myogestic.stream import StreamInfo
+    from myogestic.widgets.training import _session_state, session_manager
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("myogestic._browser.IS_BROWSER", True)
+    monkeypatch.setattr(_session_state, "_states", {})
+    app, pipeline = app_module["app"], app_module["pipeline"]
+    ctx = app.ctx
+    ctx.participant = "P-014"
+    ctx.class_names = app_module["CLASSES"]
+    stream = ctx.streams["emg"]
+    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100.)
+    namespace = app_module["_start_guided_run"].__globals__
+    now = [100.]
+    monkeypatch.setitem(namespace, "local_clock", lambda: now[0])
+    pipeline.model = ("Classification", {"fitted": True})
+    run = app_module["guided_run"]
+    run.update(reps=2, cue_s=2.)
+    app_module["_start_guided_run"]()
+    session = ctx.session
+    assert ctx.state == "predicting" and ctx.recording
+    assert run["phase"] == "warmup" and not session.label_track
+    schedule = dict(session.extras["guided"])
+    assert schedule["classes"] == app_module["CLASSES"]
+    assert schedule["reps"] == 2 and schedule["cue_s"] == 2.
+    expected = [0, 1] * 2
+    random.Random(schedule["seed"]).shuffle(expected)
+    assert schedule["order"] == expected
+    now[0] = 102.9
+    app_module["_sync_guided_run"]()
+    assert not session.label_track
+    for index in range(stop_after):
+        now[0] = 103. + index * 2
+        app_module["_sync_guided_run"]()
+        ci = expected[index]
+        assert session.label_track[-1].timestamp == now[0]
+        assert session.label_track[-1].class_index == ci
+        # Exercise real pipeline recording and its saved model provenance.
+        pipeline._record_tick(app, np.zeros(4), {"class": ci, "proba": [0.5, 0.5]}, now[0] + .1)
+    now[0] = 103. + stop_after * 2 if stop_after == 4 else now[0] + .5
+    if stop_after == 4:
+        app_module["_sync_guided_run"]()
+    else:
+        app_module["_stop_guided_run"]()
+    assert ctx.state == "idle" and not ctx.recording
+    assert session.path.is_file() and not ctx.pending_saves
+    with open_session_store(session.path) as saved:
+        assert saved.extras["guided"] == schedule
+        assert [label.class_index for label in saved.label_track] == expected[:stop_after] + [-1]
+        assert len(saved.label_track) == stop_after + 1
+        if stop_after:
+            assert saved.extras["pipeline"]["model"] == "model.joblib"
+    # Results wait for pending saves, then read the archive rather than these objects.
+    run["phase"] = "saving"
+    ctx.pending_saves.add(Path("pending"))
+    session.label_track.clear()
+    session.extras.clear()
+    app_module["_sync_guided_run"]()
+    assert run["phase"] == "saving"
+    ctx.pending_saves.clear()
+    app_module["_sync_guided_run"]()
+    assert run["phase"] == "results"
+    assert run["score"]["match"] == (1.0 if stop_after else None)
+    rows = _session_state.get_state("Sessions_sessions").sessions
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["guided"] and row["drive"] and not row["selected"]
+    tags = []
+    real_text = imgui.text_colored
+
+    def text(color, label):
+        tags.append(label)
+        real_text(color, label)
+
+    monkeypatch.setattr(imgui, "text_colored", text)
+    imgui_frame(lambda: session_manager._render_row("guided", row, set(), app_module["CLASSES"]))
+    assert "Guided" in tags and "Drive" not in tags
+    # A normal participant scan also leaves Guided runs out of the training selection.
+    app_module["sessions"].select_all("P-014")
+    assert app_module["sessions"].selection().n_selected == 0
+    assert isinstance(pipeline.model, tuple)
+
+
+@pytest.mark.parametrize("phase", ["setup", "warmup", "cue", "saving", "results"])
+@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("dark", [False, True])
+def test_guided_drive_narrow_dejavu_fonts(
+    app_module, implot_frame, monkeypatch, phase, scale, dark,
+):
+    import matplotlib
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: dark)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    font_path = Path(matplotlib.get_data_path()) / "fonts" / "ttf" / "DejaVuSans.ttf"
+    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14.)
+    imgui.get_io().font_default = font
+    monkeypatch.setattr(_theme, "_MONO_FONT", font)
+    monkeypatch.setattr(_theme, "_DISPLAY_FONT", font)
+    app_module["drive_mode"]["index"] = 1
+    run = app_module["guided_run"]
+    from types import SimpleNamespace
+
+    run.update(phase=phase, order=[0, 1] * 5, index=1, deadline=102.,
+               session=SimpleNamespace(path=Path("P-014_2026-10-26_12-00-00_Rest-Fist.session.zip")),
+               score={"match": .75, "per_class": {"Rest": .9, "Fist": .6},
+                      "median_reach_s": .25, "reached": 8, "cues": 9})
+    ctx = app_module["app"].ctx
+    ctx.state = "predicting" if phase in ("warmup", "cue") else "idle"
+    if phase == "saving":
+        ctx.pending_saves.add(Path("pending"))
+    app_module["pipeline"].predictions = {"class": 1}
+    monkeypatch.setitem(app_module["drive_ui"].__globals__, "local_clock", lambda: 100.)
+    bounds, buttons, heights = [], [], []
+    button, text = imgui.button, imgui.text_unformatted
+
+    def measured_button(label, *args):
+        result = button(label, *args)
+        buttons.append(label)
+        measure()
+        return result
+
+    def measured_text(*args):
+        result = text(*args)
+        measure()
+        return result
+
+    def measure():
+        edge = imgui.get_window_pos().x + imgui.get_window_size().x - imgui.get_style().window_padding.x
+        bounds.append((imgui.get_item_rect_max().x, edge))
+
+    monkeypatch.setattr(imgui, "button", measured_button)
+    monkeypatch.setattr(imgui, "text_unformatted", measured_text)
+
+    def draw():
+        imgui.set_next_window_size(imgui.ImVec2(320 * scale, 510 * scale))
+        imgui.begin("narrow-guided")
+        app_module["drive_ui"]()
+        heights.append((imgui.get_cursor_pos_y(), imgui.get_window_height(), imgui.get_scroll_max_y()))
+        imgui.end()
+
+    for _ in range(3):
+        implot_frame(draw)
+    assert bounds and all(right <= edge + 1 for right, edge in bounds), bounds
+    assert heights[-1][0] <= heights[-1][1] and heights[-1][2] == 0, heights
+    assert not any("drive_record" in label for label in buttons)
+    assert app_module["viewer"]._show_markers
+
+
+@pytest.mark.parametrize("missing", ["busy", "model", "device", "extract", "predict"])
+def test_guided_start_uses_free_prediction_gate(app_module, monkeypatch, imgui_frame, missing):
+    from imgui_bundle import imgui
+
+    from myogestic.stream import StreamInfo
+
+    ctx, pipeline = app_module["app"].ctx, app_module["pipeline"]
+    stream = ctx.streams["emg"]
+    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100.)
+    ctx.state = "training" if missing == "busy" else "idle"
+    pipeline.model = None if missing == "model" else object()
+    if missing == "device":
+        stream.info = None
+    if missing in ("extract", "predict"):
+        setattr(pipeline, f"on_{missing}", None)
+    reason = app_module["_prediction_reason"]()
+    assert reason
+    seen = []
+    monkeypatch.setitem(app_module["drive_ui"].__globals__, "_disabled_reason", seen.append)
+    monkeypatch.setattr(pipeline, "start_predicting", lambda: pytest.fail("Start is gated"))
+    button = imgui.button
+
+    def click(label, *args):
+        result = button(label, *args)
+        return result or label in ("Start guided run", "Start predicting")
+
+    monkeypatch.setattr(imgui, "button", click)
+    imgui_frame(app_module["drive_ui"])
+    app_module["drive_mode"]["index"] = 1
+    imgui_frame(app_module["drive_ui"])
+    assert seen == [reason, reason]
+    app_module["_start_guided_run"]()
+    assert not ctx.recording
+
+
+@pytest.mark.parametrize("mode", [0, 1])
+def test_drive_mode_is_locked_while_predicting(app_module, monkeypatch, imgui_frame, mode):
+    from imgui_bundle import imgui
+
+    app_module["app"].ctx.state = "predicting"
+    app_module["drive_mode"]["index"] = mode
+    button = imgui.button
+
+    def click(label, *args):
+        result = button(label, *args)
+        return result or label.endswith("##drive-mode")
+
+    monkeypatch.setattr(imgui, "button", click)
+    imgui_frame(app_module["drive_ui"])
+    assert app_module["drive_mode"]["index"] == mode
+
+
+@pytest.mark.parametrize("action", ["Run again", "Done"])
+def test_guided_results_actions_keep_settings(app_module, monkeypatch, imgui_frame, action):
+    from types import SimpleNamespace
+
+    from imgui_bundle import imgui
+
+    from myogestic.stream import StreamInfo
+
+    app_module["drive_mode"]["index"] = 1
+    ctx, pipeline = app_module["app"].ctx, app_module["pipeline"]
+    stream = ctx.streams["emg"]
+    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100.)
+    pipeline.model = object()
+    run = app_module["guided_run"]
+    run.update(phase="results", reps=3, cue_s=1.5,
+               session=SimpleNamespace(path=Path("P-014_take.session.zip")),
+               score={"match": 1., "per_class": {"Rest": 1., "Fist": 1.},
+                      "median_reach_s": 0., "reached": 2, "cues": 2})
+    starts = []
+    monkeypatch.setitem(app_module["drive_ui"].__globals__, "_start_guided_run", lambda: starts.append(True))
+    button = imgui.button
+
+    def click(label, *args):
+        result = button(label, *args)
+        return result or label == action
+
+    monkeypatch.setattr(imgui, "button", click)
+    imgui_frame(app_module["drive_ui"])
+    assert (run["reps"], run["cue_s"]) == (3, 1.5)
+    assert starts == ([True] if action == "Run again" else [])
+    assert run["phase"] == ("results" if action == "Run again" else "setup")

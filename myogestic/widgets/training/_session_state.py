@@ -117,7 +117,8 @@ def _session_row(path: Path) -> dict | None:
             "class_names": list(meta.get("class_names") or []),
             "duration_s": float(meta.get("duration_s", 0.0)),
             "class_seconds": dict(meta.get("class_seconds") or {}),
-            "drive": "pipeline" in (meta.get("extras") or {}),
+            "drive": any(key in (meta.get("extras") or {}) for key in ("pipeline", "guided")),
+            "guided": "guided" in (meta.get("extras") or {}),
             "selected": False,
         }
     except Exception:
