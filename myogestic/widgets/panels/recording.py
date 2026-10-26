@@ -204,11 +204,8 @@ class RecordButton:
     The name is written to the session's ``meta.json`` and into the archive
     filename, so it shows up in `SessionManager` and is findable on disk.
 
-    Idle shows a full-width red Record action. Capture shows a tinted Recording
-    row with a mono elapsed clock and Stop; naming shows the captured duration.
-    The dialog previews the file stem, with an optional name, Save and an
-    outlined Discard action. A required participant ID gates Record with a
-    visible explanation.
+    Shows elapsed time during capture and previews the filename while naming.
+    Record is disabled when a required participant ID is missing.
 
     Parameters
     ----------

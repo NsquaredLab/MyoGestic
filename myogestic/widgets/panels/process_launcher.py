@@ -224,9 +224,8 @@ _popout_open: dict[tuple[str, str], bool] = {}  # (widget_id, proc_name) -> log 
 class ProcessLauncher:
     """Select a process, launch it, and read its running or failed state.
 
-    The header holds the state dot and an icon-only output pop-out. A full-width
-    selector and Launch action become a tinted runtime row with PID, elapsed
-    time and Stop while running. Failures offer Show output and Launch again.
+    Shows PID and elapsed time while running, with output in a popout.
+    Failed processes can be relaunched.
 
     Construct once with the process list, then call [`ui`][] each frame.
     Multiple launchers can coexist — each gets unique ImGui IDs via

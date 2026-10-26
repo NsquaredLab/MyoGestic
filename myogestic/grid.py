@@ -90,9 +90,7 @@ def _validate_value(value: object, kind: str) -> float:
 class Px:
     """Fixed size. ``Px(300)`` means "300 px at UI scale 1.0".
 
-    The track follows the live UI scale (see ``App(ui_scale=...)``), so a fixed
-    sidebar grows and shrinks with the text it holds instead of drifting out of
-    proportion between a laptop and a 4K monitor.
+    Tracks follow the live UI scale (see ``App(ui_scale=...)``).
 
     Examples
     --------
@@ -280,13 +278,11 @@ class Grid:
         col_width: list[Track] | None = None,
         bare: Iterable[str] = (),
     ) -> Grid:
-        """A grid whose cells are named, drawn as text. Place panels with `area`.
+        """Create named cells from a text template; place panels with `area`.
 
         One line per row, one word per cell. A name repeated across a rectangle
-        spans it; ``.`` leaves a cell empty; ``a | b | c`` puts panels that are
-        never needed at the same time in one cell, as tabs. Naming panels instead
-        of indexing ``[row, col]`` is what lets a `Layout` move them between
-        arrangements without losing their state.
+        spans it; ``.`` leaves a cell empty; ``a | b | c`` puts tabbed panels in
+        one cell. Names let `Layout` move panels without changing widget identity.
 
         Parameters
         ----------
@@ -564,12 +560,8 @@ class _AreaCell:
 class Layout:
     """Two arrangements of the same named panels, picked by window width.
 
-    Above ``breakpoint`` the panels go where ``wide`` puts them; below it, where
-    ``narrow`` does — typically one column, with panels used in different phases
-    (record, train, predict) sharing a cell as tabs. The breakpoint is in pixels
-    at UI scale 1.0, so it switches at the same size *relative to the text* on a
-    laptop and on a 4K monitor. ``@app.ui`` code places panels by name and never
-    changes between arrangements.
+    Use ``wide`` at or above ``breakpoint`` and ``narrow`` below it. The breakpoint
+    follows the UI scale. Panels are placed by name in either arrangement.
 
     Parameters
     ----------

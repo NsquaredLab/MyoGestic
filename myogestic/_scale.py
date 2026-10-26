@@ -1,24 +1,19 @@
-"""The live UI scale: one number that fonts, style metrics and `Px` tracks follow.
+"""Shared UI scale for fonts, style metrics and `Px` tracks.
 
 Resolved in this order:
 
-1. ``$MYOGESTIC_UI_SCALE`` — a fixed scale, for whoever is at the keyboard.
-2. ``App(ui_scale=...)`` — a fixed scale, for whoever wrote the app.
-3. Automatic — the OS display scale times how big the window is, recomputed every
-   frame, so the same app is comfortable on a 14" laptop and a 27" 4K monitor and
-   follows the window when it is resized or dragged to another screen.
+1. ``$MYOGESTIC_UI_SCALE``.
+2. ``App(ui_scale=...)``.
+3. OS display scale adjusted for window size, recomputed each frame.
 
-Pure Python and imgui-free, so `grid.py` and `_theme.py` can both read it and the
-arithmetic is testable without a GUI.
+Independent of ImGui so layout calculations can run without a GUI.
 """
 
 from __future__ import annotations
 
 import os
 
-#: The window size, in logical pixels, at which the automatic scale is exactly the
-#: OS display scale. Bigger windows draw a little larger, smaller ones a little
-#: smaller — within `FIT_RANGE`.
+#: Logical window size at which automatic scale equals the OS display scale.
 REFERENCE_SIZE: tuple[float, float] = (1280.0, 800.0)
 
 #: How far the window size may move the scale away from the OS display scale. The
@@ -40,7 +35,7 @@ def clamp_scale(scale: float) -> float:
 
 
 def set_ui_scale(scale: float | None) -> None:
-    """Fix the scale from code — what ``App(ui_scale=...)`` calls. ``None`` = automatic."""
+    """Set the app's fixed scale; ``None`` selects automatic scaling."""
     global _override
     _override = scale
 
@@ -72,7 +67,7 @@ def auto_scale(os_scale: float, width: float, height: float) -> float:
 
 
 def update(os_scale: float, width: float, height: float) -> float:
-    """Recompute the scale for this frame and return it. Called before each frame."""
+    """Recompute and return the scale for this frame."""
     global _current
     fixed = override_scale()
     _current = fixed if fixed is not None else auto_scale(os_scale, width, height)
@@ -88,6 +83,6 @@ def current_scale() -> float:
 
 
 def reset() -> None:
-    """Forget the last automatic value — between `App` runs, and in tests."""
+    """Clear the cached scale between `App` runs."""
     global _current
     _current = None

@@ -31,7 +31,7 @@ from myogestic.widgets.common import (
     INFO,
     SUCCESS,
     WARNING,
-    _truncate_to_width,
+    fit_text,
     mono_text,
     muted,
     panel_header,
@@ -89,7 +89,7 @@ def _render_train_button(
     elif state == "recording":
         reason = "Stop recording to train a model."
     elif state != "idle":
-        reason = "Wait until the current action finishes to train a model."
+        reason = "Finish the current action to train a model."
     elif getattr(pipeline.app.ctx, "pending_saves", None):
         reason = "Wait until the last take is saved to train."
     elif pipeline.on_train is None:
@@ -120,7 +120,7 @@ def _render_predict_button(pipeline: Pipeline, size: tuple[float, float] = (92, 
     elif state != "idle":
         reason = "Finish the current action to enable Predict."
     elif pipeline.model is None:
-        reason = "To predict, train or load a model first."
+        reason = "To predict, train or load a model."
     elif pipeline.on_extract is None or pipeline.on_predict is None:
         reason = "Add @pipeline.extract and @pipeline.predict to enable Predict."
     else:
@@ -155,7 +155,7 @@ def _render_save_model_button(
 ) -> None:
     reason = ""
     if pipeline.model is None:
-        reason = "To save, train or load a model first."
+        reason = "To save, train or load a model."
     elif pipeline.save_model is None:
         reason = "Set pipeline.save_model to enable Save."
     imgui.begin_disabled(bool(reason))
@@ -193,7 +193,7 @@ def _render_load_model_button(
 
 
 def _pipeline_status(pipeline: Pipeline) -> tuple[imgui.ImVec4, str, str]:
-    """Read state and failure details from the existing pipeline lifecycle."""
+    """Read pipeline state and training failures."""
     ctx = pipeline.app.ctx
     if ctx.state == PipelineState.TRAINING:
         return WARNING, "Training…", ""
@@ -205,7 +205,7 @@ def _pipeline_status(pipeline: Pipeline) -> tuple[imgui.ImVec4, str, str]:
 
 
 def _render_state_row(tone: imgui.ImVec4, label: str, detail: str) -> None:
-    """Keep state in words and fit mono details with the full text on hover."""
+    """Draw pipeline status with clipped details available on hover."""
     height = None
     if detail:
         height = (2 * imgui.get_text_line_height() + imgui.get_style().item_spacing.y
@@ -220,9 +220,7 @@ def _render_state_row(tone: imgui.ImVec4, label: str, detail: str) -> None:
             if font is not None:
                 imgui.push_font(font, imgui.get_style().font_size_base)
             single_line = " ".join(detail.splitlines())
-            clipped = single_line
-            if imgui.calc_text_size(clipped).x > width:
-                clipped = _truncate_to_width(clipped, width - imgui.calc_text_size("…").x) + "…"
+            clipped = fit_text(single_line, width)
             mono_text(clipped)
             if font is not None:
                 imgui.pop_font()
@@ -265,7 +263,6 @@ def _render_pipeline_panel(
         _render_train_button(pipeline, full_width=True)
         _render_predict_button(pipeline, size=(0, 0))
 
-        # Match ProcessLauncher: an inline mono log is explicitly opt-in.
         if log_height > 0 and not _popout_open.get(widget_id, False):
             render_log(widget_id, pipeline.train_log, height=ui_px(log_height))
     finally:
@@ -278,9 +275,8 @@ def _render_pipeline_panel(
 class TrainButton:
     """Primary Train action — calls [`Pipeline.start_training`][] on click.
 
-    Disabled until idle with a training callback and selected takes. A visible
-    caption explains what is missing. ``size`` uses logical pixels and follows
-    the UI scale.
+    Disabled until idle with a training callback and selected takes.
+    ``size`` uses logical pixels and follows the UI scale.
 
     Examples
     --------
@@ -302,8 +298,7 @@ class PredictButton:
     """Predict/Stop toggle reflecting the pipeline's predict state.
 
     Enabled to start only when the state is ``idle``, a model is loaded, and
-    both the extract and predict callbacks are wired. The selected chip stops
-    prediction when clicked; unavailable states show a visible next-step caption.
+    both the extract and predict callbacks are wired. Click again to stop.
     ``size`` uses logical pixels and follows the UI scale.
 
     Examples
@@ -326,8 +321,7 @@ class TrainingLog:
     """Read-only view of ``pipeline.train_log``.
 
     The popout *toggle* isn't drawn here — it lives on
-    [`PipelinePanel`][]'s header. The compact, selectable console uses the mono
-    font, and ``height`` follows the UI scale.
+    [`PipelinePanel`][]'s header. ``height`` follows the UI scale.
 
     Examples
     --------
@@ -350,8 +344,7 @@ class SaveModelButton:
     """Save icon action — writes the model to ``path`` via ``pipeline.save_model``.
 
     Disabled unless both ``pipeline.save_model`` and ``pipeline.model`` are set.
-    A visible caption explains how to enable it. ``size`` uses logical pixels
-    and follows the UI scale.
+    ``size`` uses logical pixels and follows the UI scale.
 
     Examples
     --------
@@ -375,8 +368,8 @@ class SaveModelButton:
 class LoadModelButton:
     """Load icon action — reads a model from ``path`` via ``pipeline.load_model``.
 
-    Disabled unless ``pipeline.load_model`` is set, with a visible next-step
-    caption. ``size`` uses logical pixels and follows the UI scale.
+    Disabled unless ``pipeline.load_model`` is set. ``size`` uses logical pixels
+    and follows the UI scale.
 
     Examples
     --------
@@ -398,16 +391,13 @@ class LoadModelButton:
 
 
 class PipelinePanel:
-    """One model card with pipeline state, Train, Predict and a compact log.
+    """Model training, prediction controls and logs.
 
-    The header's state dot is repeated in words in a tinted row, with mono
-    prediction rate or failure detail. Train is the full-width primary action;
-    Predict is a sticky chip. Disabled controls explain their next step visibly.
+    Shows pipeline state, prediction rate and training errors.
 
     The header's icon opens the log in a popout, the same way
     [`ProcessLauncher`][myogestic.widgets.ProcessLauncher]'s does: a window you can move,
-    resize and leave open. The selectable mono log is only drawn inline when a
-    height is supplied.
+    resize and leave open. Set ``log_height`` to show the log inline.
 
     Parameters
     ----------

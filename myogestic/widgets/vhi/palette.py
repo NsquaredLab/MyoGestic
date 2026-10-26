@@ -211,9 +211,8 @@ def vhi_movement_palette(
 
     Pure ImGui: performs no RPC and owns no client. ``on_movement(name)`` fires
     on click; wire it to a discrete DOF such as ``bus.select("gesture", name)``.
-    A reachable hand has a SUCCESS header dot and a mono movement count. While
-    disconnected, launch instructions and an optional Refresh action replace the
-    cached list. ``widget_id`` isolates multiple palettes in the same window.
+    While disconnected, launch instructions and an optional Refresh action replace
+    the cached list. ``widget_id`` isolates multiple palettes in the same window.
 
     Examples
     --------

@@ -210,10 +210,8 @@ def address_tree(capabilities: Sequence[Capability]) -> dict[str, Any]:
 class ControlMapEditor:
     """Edit a TOML control map against a live target's manifest.
 
-    Construct once with the file to edit, then call `ui` each frame. Controls are
-    surface-tone cards with wrapping probability chips and captioned activation
-    sliders. One Save action writes field or TOML edits; the header's TOML toggle
-    places the text editor beside the cards, stacking below them in narrow cells.
+    Construct once with the file to edit, then call `ui` each frame. Save writes
+    field or TOML edits; the header's TOML toggle opens the text editor.
 
     Parameters
     ----------
@@ -895,7 +893,7 @@ class ControlMapEditor:
             if imgui.small_button(f"{fa.ICON_FA_ARROWS_ROTATE}  Connect"):
                 self._refetch = True
                 self.poll_connect()
-            imgui.set_item_tooltip("Refresh the target list now; it also refreshes automatically.")
+            imgui.set_item_tooltip("Refresh targets (also refreshed automatically)")
         if self._error or self._refusal or self._message:
             self._notice(
                 self._error or self._refusal or self._message,
@@ -988,7 +986,7 @@ class ControlMapEditor:
             return self._save_button(width=inner)
 
     def _save_button(self, *, width: float = -1) -> bool:
-        """The only primary Save, disabled until a disk conflict has been resolved."""
+        """Disable Save until a disk conflict is resolved."""
         disabled = (
             self._conflict or self._save_as is not None
             or (bool(self.problems()) and not self._raw_pending())

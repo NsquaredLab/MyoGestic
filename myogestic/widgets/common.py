@@ -56,11 +56,9 @@ ON_PRIMARY_TEXT = imgui.ImVec4(1.0, 1.0, 1.0, 1.0)
 
 
 def ui_px(n: float) -> float:
-    """``n`` pixels at UI scale 1.0, in pixels now.
+    """Convert a fixed pixel size at UI scale 1.0 to the current scale.
 
-    For a size a widget fixes itself — a button width, a wrap width, a minimum
-    height. Without it the text inside grows with the UI scale and the box around
-    it does not, so the label overflows on a 4K monitor.
+    Use for fixed widget geometry so it scales with the text.
     """
     return n * current_scale()
 
