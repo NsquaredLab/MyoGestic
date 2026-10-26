@@ -283,6 +283,8 @@ def render_class_buttons(
 ) -> None:
     gestures: dict[tuple[int | None, str], float] = {}
     for row in state.sessions:
+        if row.get("drive", False) and not row["selected"]:
+            continue
         for ci, name, seconds in row_gestures(row, class_names):
             gestures[ci, name] = gestures.get((ci, name), 0.0) + seconds
     right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x

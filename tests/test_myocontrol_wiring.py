@@ -158,6 +158,41 @@ def test_timed_take_stops_when_another_step_is_open(app_module, monkeypatch, imp
     assert controls.take.phase == "saved"
 
 
+@pytest.mark.parametrize("state,phase,elapsed,expected", [
+    ("predicting", "setup", 4.0, "REC run · 0:04.0"),
+    ("predicting", "warmup", 1.0, "REC run · 0:01.0"),
+    ("predicting", "cue", 10.0, "REC Rest · 0:10.0"),
+    ("recording", "cue", 4.0, "REC Fist · 0:04.0"),
+])
+def test_take_overlay_names_the_active_capture(
+    app_module, monkeypatch, imgui_frame, state, phase, elapsed, expected,
+):
+    from imgui_bundle import imgui
+
+    from myogestic.widgets.panels.recording import TakeStatus
+
+    app_module["app"].ctx.state = state
+    app_module["guided_run"].update(phase=phase, order=[0, 1], index=0)
+    texts = []
+    get_draw_list = imgui.get_window_draw_list
+
+    class DrawList:
+        def __init__(self, draw):
+            self.draw = draw
+
+        def __getattr__(self, name):
+            return getattr(self.draw, name)
+
+        def add_text(self, pos, color, text):
+            texts.append(text)
+            self.draw.add_text(pos, color, text)
+
+    monkeypatch.setattr(imgui, "get_window_draw_list", lambda: DrawList(get_draw_list()))
+    take = TakeStatus(phase="recording", gesture="Fist", elapsed_s=elapsed)
+    imgui_frame(lambda: app_module["_take_overlay"](take))
+    assert texts == [expected]
+
+
 def test_myocontrol_autosaves_models(app_module):
     from myogestic.ml import save_pickle
 
@@ -2078,6 +2113,84 @@ def test_guided_drive_narrow_dejavu_fonts(
     assert heights[-1][0] <= heights[-1][1] and heights[-1][2] == 0, heights
     assert not any("drive_record" in label for label in buttons)
     assert app_module["viewer"]._show_markers
+
+
+@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("dark", [False, True])
+@pytest.mark.parametrize("values", [(.9, .6), (1., None)])
+def test_guided_results_rows_share_centres_with_mono_values(
+    app_module, imgui_frame, monkeypatch, scale, dark, values,
+):
+    from types import SimpleNamespace
+
+    import matplotlib
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: dark)
+    _theme.apply_theme()
+    style = imgui.get_style()
+    style.scale_all_sizes(scale)
+    style.font_scale_main = scale
+    imgui.get_io().display_size = imgui.ImVec2(1280 * scale, 828 * scale)
+    fonts = Path(matplotlib.get_data_path()) / "fonts" / "ttf"
+    ui = imgui.get_io().fonts.add_font_from_file_ttf(str(fonts / "DejaVuSans.ttf"), 14.)
+    mono = imgui.get_io().fonts.add_font_from_file_ttf(str(fonts / "DejaVuSansMono.ttf"), 14.)
+    imgui.get_io().font_default = ui
+    monkeypatch.setattr(_theme, "_MONO_FONT", mono)
+    monkeypatch.setattr(_theme, "_DISPLAY_FONT", ui)
+    app_module["guided_run"].update(
+        phase="results", session=SimpleNamespace(path=Path("P-014_take.session.zip")),
+        score={"match": .75, "per_class": dict(zip(["Rest", "Fist"], values, strict=True)),
+               "median_reach_s": .25, "reached": 8, "cues": 9},
+    )
+    positions, bars = {}, []
+    text, colored, bar = imgui.text_unformatted, imgui.text_colored, imgui.progress_bar
+
+    def measure():
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        edge = imgui.get_window_pos().x + imgui.get_window_width() - style.window_padding.x
+        assert hi.x <= edge + 1
+        return (lo.x, hi.x, (lo.y + hi.y) / 2)
+
+    def plain(label):
+        text(label)
+        if label in ("Rest", "Fist"):
+            positions[label] = measure()
+
+    def color(tone, label):
+        colored(tone, label)
+        if label in ("90%", "60%", "100%", "—"):
+            positions[label] = measure()
+
+    def progress(value, size, overlay):
+        bar(value, size, overlay)
+        bars.append(measure())
+
+    monkeypatch.setattr(imgui, "text_unformatted", plain)
+    monkeypatch.setattr(imgui, "text_colored", color)
+    monkeypatch.setattr(imgui, "progress_bar", progress)
+
+    def draw():
+        imgui.set_next_window_size(imgui.ImVec2(320 * scale, 510 * scale))
+        imgui.begin("guided-results-alignment")
+        app_module["_guided_results_ui"]()
+        imgui.end()
+
+    padding = tuple(style.frame_padding)
+    for _ in range(2):
+        bars.clear()
+        imgui_frame(draw)
+    assert tuple(style.frame_padding) == padding
+    assert len(bars) == 2
+    for name, value, bar_pos in zip(["Rest", "Fist"], values, bars, strict=True):
+        label = f"{value:.0%}" if value is not None else "—"
+        assert positions[label][2] == pytest.approx(positions[name][2], abs=1)
+        assert bar_pos[2] == pytest.approx(positions[name][2], abs=1)
+        assert positions[name][1] < bar_pos[0] < bar_pos[1] < positions[label][0]
+    assert bars[0][:2] == pytest.approx(bars[1][:2], abs=1)
 
 
 @pytest.mark.parametrize("missing", ["busy", "model", "device", "extract", "predict"])
