@@ -73,6 +73,8 @@ def test_scale_changes_match_a_single_application_for_every_style_field(scales, 
 def test_invalid_display_readings_keep_previous_scale_and_skip_restyling(
     invalid, reading, already_styled
 ):
+    if reading == "os_scale" and invalid == 0.0 and not already_styled:
+        pytest.skip("an unknown DPI before the first style is styled at 1x; see the next test")
     io = imgui.get_io()
     viewport = imgui.get_main_viewport()
     io.display_size = (1920, 1200)
@@ -101,6 +103,19 @@ def test_invalid_display_readings_keep_previous_scale_and_skip_restyling(
     _theme.apply_live_scale(setup)
     assert _scale.current_scale() == pytest.approx(1.5)
     assert setup.call_count == 1
+
+
+def test_unknown_dpi_before_the_first_style_styles_at_1x():
+    """A backend that never reports a DPI (0) must still get the theme, at 1x."""
+    io = imgui.get_io()
+    io.display_size = (1920, 1200)
+    imgui.get_main_viewport().dpi_scale = 0.0
+    setup = Mock(wraps=_setup_style)
+
+    _theme.apply_live_scale(setup)
+
+    setup.assert_called_once_with()
+    assert _scale.current_scale() == pytest.approx(_scale.auto_scale(1.0, 1920, 1200))
 
 
 def test_unchanged_scale_skips_restyling():

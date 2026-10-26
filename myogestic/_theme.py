@@ -269,8 +269,16 @@ def apply_live_scale(setup_style) -> None:
     size = imgui.get_io().display_size
     # A sleeping/locked display can temporarily lose its DPI or dimensions.
     # Keep both the current scale and style until the display can be measured.
-    if any(not math.isfinite(value) or value <= 0.0 for value in (os_scale, size.x, size.y)):
+    if any(not math.isfinite(value) or value < 0.0 for value in (os_scale, size.x, size.y)):
         return
+    if size.x == 0.0 or size.y == 0.0:
+        return
+    if os_scale == 0.0:
+        # 0 means "unknown": keep the last scale, but a backend that never reports one
+        # (headless, some browsers) still gets styled once at 1x.
+        if _styled_at is not None:
+            return
+        os_scale = 1.0
     os_scale = max(0.5, os_scale)
     scale = _scale.update(os_scale, size.x / os_scale, size.y / os_scale)
     if scale == _styled_at:
