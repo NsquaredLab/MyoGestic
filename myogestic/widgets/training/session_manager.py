@@ -91,6 +91,35 @@ class SessionManager:
         self._class_names = class_names
         self._widget_id = f"{title}_{base_path}"
 
+    def select_all(self, participant: str) -> None:
+        """Scan and tick every saved take of a participant without drawing a frame.
+
+        Parameters
+        ----------
+        participant : str
+            Nonempty participant ID, reduced to the same safe slug used by
+            recordings. Replaces the previous selection and clears class
+            exclusions and pending file dialogs. Takes still being saved are
+            excluded. A following ``ui(participant=participant)`` preserves the
+            ticks without scanning again.
+
+        Raises
+        ------
+        ValueError
+            If the ID has no usable characters. Pass a nonempty participant ID.
+        """
+        participant = _slug(participant)
+        if not participant:
+            raise ValueError("Pass a nonempty participant ID to select_all().")
+        state = get_state(self._widget_id)
+        state.participant = participant
+        state.sessions = scan_sessions(str(Path(self._base_path) / participant))
+        for row in state.sessions:
+            row["selected"] = True
+        state.deactivated_classes.clear()
+        state.folder_dialog = None
+        state.last_load_msg = ""
+
     def ui(self, participant: str | None = None) -> TrainingData:
         """Render the picker and return the current training selection.
 
