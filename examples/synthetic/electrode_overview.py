@@ -33,7 +33,7 @@ from imgui_bundle import imgui
 from myogestic import App, Fr, Grid, Px, Stream
 from myogestic.stream import ChannelGrid, StreamInfo
 from myogestic.widgets import AppHeader, Heatmap, SignalViewer
-from myogestic.widgets.common import IDLE, SUCCESS, muted, panel_header, tinted_row
+from myogestic.widgets.common import IDLE, SUCCESS, muted, panel_header, tinted_row, ui_px
 
 N_GRIDS = 5
 GRID_ROWS, GRID_COLS = 8, 8  # 8x8 electrode block per array
@@ -145,10 +145,16 @@ def demo_ui(ctx):
                 with tinted_row(IDLE):
                     imgui.text_unformatted("Waiting for samples" if connected else "Not connected")
                 imgui.push_style_color(imgui.Col_.text, muted())
+                # Leave a small inner gutter: ImGui rounds wrapped glyph advances
+                # up, which can put the last word just past the content edge.
+                imgui.push_text_wrap_pos(
+                    imgui.get_cursor_pos_x() + max(1.0, imgui.get_content_region_avail().x - ui_px(4))
+                )
                 imgui.text_wrapped(
                     "The array will appear when samples arrive." if connected
                     else "Connect the signal viewer to see this array."
                 )
+                imgui.pop_text_wrap_pos()
                 imgui.pop_style_color()
                 continue
             heatmap.ui(np.where(idx >= 0, rms[idx], 0.0), vrange=vrange)

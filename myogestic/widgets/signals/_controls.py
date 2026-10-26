@@ -35,6 +35,11 @@ if TYPE_CHECKING:
     from myogestic.widgets.signals._state import SignalFrame, ViewerState
 
 
+# Reserve 16 logical px (32 px at scale 2) for platform glyph rounding and group
+# spacing, including when deciding to compact or wrap the toolbar.
+_TOOLBAR_HEADROOM = 16.0
+
+
 def _slider_label(text: str) -> None:
     """Put a muted label in the Display popup's shared control column."""
     left = imgui.get_cursor_pos_x()
@@ -53,7 +58,7 @@ def _button_width(label: str) -> float:
 def _toolbar_next(width: float) -> None:
     """Keep the next control beside this one only when the whole control fits."""
     imgui.same_line()
-    if imgui.get_content_region_avail().x < width:
+    if imgui.get_content_region_avail().x < width + ui_px(_TOOLBAR_HEADROOM):
         imgui.new_line()
 
 
@@ -113,6 +118,8 @@ def render_controls(
     if show_title:
         widths.append(_button_width(chrome))
     width = sum(widths) + sp * max(0, len(widths) - 1)
+    if connected and v.show_controls:
+        width += ui_px(_TOOLBAR_HEADROOM)
     avail = imgui.get_content_region_avail().x
     inline = avail >= width + imgui.calc_text_size(fa.ICON_FA_CHART_LINE).x + sp * 3
     source_in_title = show_title and v.show_controls and connected and picker and not inline

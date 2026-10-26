@@ -202,7 +202,8 @@ def test_start_logs_id_only(tmp_path):
     panel, ctx = _panel(tmp_path, "log-id"), Context()
     assert panel._start(ctx, " P/014 ", "Jane", "Doe") is True
     assert len(ctx.logs) == 1
-    assert ctx.logs[-1].endswith(f"Participant P-014 · saving to {tmp_path}/sessions/P-014/")
+    folder = (tmp_path / "sessions" / "P-014").as_posix()
+    assert ctx.logs[-1].endswith(f"Participant P-014 · saving to {folder}/")
     assert all("Jane" not in line and "Doe" not in line for line in ctx.logs)
 
 
@@ -456,6 +457,7 @@ def test_key_write_failure_preserves_selection_without_logging_names(tmp_path, m
 
 def test_default_key_is_outside_sessions(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     panel, ctx = _api().ParticipantPanel(widget_id="default-key"), Context()
     panel._start(ctx, "P-014", "Jane", "Doe")
     assert (tmp_path / "myogestic" / "participant-key.csv").exists()
