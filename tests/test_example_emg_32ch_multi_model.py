@@ -250,7 +250,7 @@ def test_multi_model_shell_fits_light_theme(
 
 
 def test_multi_model_recording_callbacks_keep_the_generator_and_hand_wiring(multi_model_app, monkeypatch):
-    """The new step only moves controls; the same callbacks label and capture."""
+    """Recording callbacks synchronize the simulator, hand and selected label."""
     import numpy as np
 
     from myogestic.tools import emg_generator
