@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `AppHeader` shares the line logo, title, state pill, workflow steps and optional participant chip across apps.
+- `StatusBar` shows acquisition details, participant, session folder and an optional fitted or saved model readout.
+- `SimulatorControls` provides synthetic EMG presets on every workflow step and follows the selected gesture during recording.
+- Timed takes in `RecordingControls`, with configurable warm-up and length, automatic stop, progress and elapsed time.
+- The participant dialog lists recorded IDs, gestures, take counts, duration and saved models; Myocontrol can load a participant's saved model directly for Drive.
+- `my_session_app.py`, a copyable session app with a NumPy nearest-centroid model and no hardware requirement.
+- Pong offers a dummy synthetic wrist for recording and training without hardware, with arrow-key control during play.
 - Myocontrol's Connect → Record → Train → Drive workflow combines a slim header, participant-labelled recording and model saves, recorded gesture-time bars, visible action guidance, and a one-line status bar.
 - Bare grid areas, step completion connectors, and a calmer participant dialog with an `open()` request and ID-only session log.
 - Recorded time per gesture and public `recorded_time` summaries, participant session lists that fill automatically with duration chips, and full-width recording controls with responsive gesture buttons.
@@ -47,12 +54,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The 2.0 widget kit uses one header per card, state rows, selectable chips, captioned fields and settings popovers across device, stream, recording, process, training and hand controls.
+- `force_ramps`, `pong`, the synthetic EMG examples and `sessantaquattro_app` use the shared session shell with workflow steps, persistent signals and participant sessions.
+- Panel and viewer demos, `control_map_studio` and `vhi_control_hand` use the shared application header.
+- `emg_classification` includes the optional LSL pose and gRPC movement outputs previously shown in `emg_classification_grpc`.
+- `emg_32ch_multi_model` includes the detachable cards and floating training log previously shown in `emg_popout_layout`.
+- `electrode_grids` replaces `multi_panel_grids` and `channel_grid_demo` with four electrode-array viewers, independent channel selections and a shared amplitude range.
+- Pong 2.0 puts Serve inside the court, adds serif scores, command and effort meters, a cursor history trail and first-to-11 games, and uses a slower ball and larger player paddle in the session example.
+- `ControlMapEditor` uses control cards and one Save action for form and TOML edits, with TOML beside the cards when space permits.
+- Plot widgets use shared legend chips and comparable ranges; `RawSignalViewer` adds a compact toolbar and independent channel and window selections.
+- `TrackingTask` groups calibration in one row and target settings in a popover, with visible reasons when a block cannot start.
+- `PostProcessor` defaults to a compact Smoothing row with parameters and Reset in a settings popover.
+- Session archive filenames include recorded gesture labels before the optional take name.
 - `SignalViewer` uses a one-row toolbar with Channels and Display popups, and a compact sample-rate and frame-rate footer.
 - `Px(n)` and the grid gutter are pixels at UI scale 1.0 and follow the scale, so fixed
   side panels keep their proportion to the text in them.
 - Examples no longer hardcode `ui_scale=0.85`; the automatic scale replaces it.
 - Fonts load at their base size and are scaled through `style.font_scale_main`, so ImGui
   1.92 re-rasterises them at the drawn size instead of the app reloading them.
+
+### Fixed
+
+- A take selected while saving remains selected and trainable after its folder becomes an archive; scans skip incomplete saves.
+- Live UI rescaling starts from base style sizes, preventing compounded sizes and crashes; unknown display scale keeps the last scale or styles once at 1.0.
+- macOS GUI startup waits for an active display when the screen is locked or asleep, before starting streams or hooks.
+- Virtual Hand lookup finds an existing per-user installation from another checkout and reports when the hand is not installed.
+- Headers, recording timing fields, signal toolbars and session guidance fit narrow cards and larger UI scales.
+- The macOS Dock icon uses Apple's tile size and transparent padding.
 
 ## [2.6.2] - 2026-08-10
 
