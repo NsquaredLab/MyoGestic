@@ -62,6 +62,62 @@ def test_autoscan_follows_participant(tmp_path, imgui_frame, monkeypatch):
     assert [s["path"] for s in state.sessions] == [second]
 
 
+def test_select_all_scopes_and_ticks_saved_takes_without_a_frame(tmp_path, imgui_frame, monkeypatch):
+    first = {_take(tmp_path, "P-014", "one"), _take(tmp_path, "P-014", "two")}
+    second = _take(tmp_path, "P-015", "three")
+    manager = SessionManager(str(tmp_path))
+    manager.select_all("P-014")
+    assert manager.selection().n_selected == manager.selection().n_total == 2
+    data = _render(manager, "P-014", imgui_frame, monkeypatch)
+    assert set(data.paths) == first
+    state = get_state(manager._widget_id)
+    state.deactivated_classes.add(0)
+    state.folder_dialog = object()
+    state.last_load_msg = "previous participant"
+    manager.select_all("P-015")
+    assert manager.selection().n_selected == manager.selection().n_total == 1
+    assert state.deactivated_classes == set()
+    assert state.folder_dialog is None and state.last_load_msg == ""
+    data = _render(manager, "P-015", imgui_frame, monkeypatch)
+    assert data.paths == [second] and data.classes == {0}
+
+
+def test_select_all_scans_once_and_leaves_pending_takes_unselected(tmp_path, imgui_frame, monkeypatch):
+    from myogestic.widgets.training import session_manager as module
+    from myogestic.widgets.training._session_state import set_session_saving
+
+    take = _take(tmp_path, "p-014", "done")
+    pending = tmp_path / "p-014" / "packing"
+    pending.mkdir()
+    (pending / "meta.json").write_text(json.dumps({"participant": "p-014"}))
+    set_session_saving(pending, True)
+    calls = []
+    scan = module.scan_sessions
+
+    def tracked(path):
+        calls.append(path)
+        return scan(path)
+
+    monkeypatch.setattr(module, "scan_sessions", tracked)
+    manager = SessionManager(str(tmp_path))
+    try:
+        manager.select_all(" p/014 ")
+        for _ in range(2):
+            data = _render(manager, "p-014", imgui_frame, monkeypatch)
+        assert data.paths == [take]
+        assert len(calls) == 1
+    finally:
+        set_session_saving(pending, False)
+    manager.select_all("p-014")
+    assert manager.selection().n_selected == 2
+
+
+def test_select_all_refuses_an_empty_participant(tmp_path):
+    manager = SessionManager(str(tmp_path))
+    with pytest.raises(ValueError, match="participant ID"):
+        manager.select_all(" ... / ")
+
+
 def test_no_participant_stays_empty_until_scan(tmp_path, imgui_frame, monkeypatch):
     path = _take(tmp_path, "", "legacy")
     manager = SessionManager(str(tmp_path))
