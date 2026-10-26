@@ -10,6 +10,7 @@ Run with:
 import math
 import pathlib
 import tomllib
+from datetime import datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -19,7 +20,7 @@ from imgui_bundle import imgui
 from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
 from myogestic._theme import display_font, mono_font
 from myogestic.controls import ControlBus, ControlLink, ControlLinkConnector, load_control_map
-from myogestic.ml import Pipeline, save_pickle
+from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.recipes.estimators import catboost_classifier, catboost_regressor
 from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.remote import RemoteTarget
@@ -100,6 +101,7 @@ app = App("MyoGestic — myocontrol", require_participant=True)
 app.streams(Stream("emg", source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS))
 pipeline = Pipeline(app, predict_hz=PREDICT_HZ)
 pipeline.save_model = save_pickle
+pipeline.load_model = load_pickle
 pipeline.autosave_dir = "sessions"
 link = ControlLink(
     CONTROL_MAP,
@@ -118,6 +120,9 @@ features = FeatureSelector(
     default=["RMS", "MAV"], show_header=False,
 )
 training_inputs: dict[str, tuple | None] = {"requested": None, "fitted": None}
+# Object identity distinguishes a loaded model from the next successful fit.
+saved_model: dict[str, Any] = {"model": None, "when": ""}
+participant_workflow: dict[str, Any] = {"participant": None, "pending_step": None}
 
 
 def _input_fingerprint() -> tuple[str, tuple[str, ...], int]:
@@ -257,7 +262,79 @@ layout = Layout(
     breakpoint=Px(1100),
 )
 steps = StepBar(["Connect", "Record", "Train", "Drive"], widget_id="myocontrol_steps")
-participant = ParticipantPanel()
+
+
+def _device_connected(ctx: Context) -> bool:
+    """A fitted model still needs a live EMG device before prediction can start."""
+    stream = ctx.streams.get("emg")
+    return stream is not None and stream.status == "connected" and stream.info is not None
+
+
+def _load_saved_model(pid: str, path: pathlib.Path) -> bool:
+    """Use the pipeline loader and report only the pseudonym and model filename."""
+    try:
+        stamp = datetime.fromtimestamp(path.stat().st_mtime)
+        model = pipeline.load_model(str(path))
+    except Exception:
+        # A loader error may contain names from the key file or arbitrary model data.
+        app.ctx.status_message = f"Could not load the saved model for {pid}. Retrain on the takes."
+        app.ctx.log(f"Model load failed for {pid}")
+        return False
+    pipeline.model = model
+    pipeline.last_saved_model = str(path)
+    today = datetime.now().date()
+    when = (stamp.strftime("Today %H:%M") if stamp.date() == today else
+            stamp.strftime("Yesterday %H:%M") if stamp.date() == today - timedelta(days=1) else
+            stamp.strftime("%Y-%m-%d %H:%M"))
+    saved_model.update(model=model, when=when)
+    # The saved tuple owns its prediction mode; expose that same mode for retraining.
+    if isinstance(model, tuple) and len(model) == 2 and model[0] in MODES:
+        training_mode["index"] = MODES.index(model[0])
+    training_inputs["requested"] = None
+    training_inputs["fitted"] = _input_fingerprint()
+    app.ctx.status_message = f"Saved model loaded for {pid}"
+    app.ctx.log(f"Participant {pid} · loaded {path.name}")
+    return True
+
+
+def _select_participant(ctx: Context, *, navigate: bool = True, load_model: bool = True) -> None:
+    """Tick this participant's takes once and discard the previous model and filters."""
+    if ctx.participant == participant_workflow["participant"]:
+        return
+    if participant_workflow["participant"] is not None:
+        pipeline.model = None
+        pipeline.last_saved_model = None
+        pipeline.predictions.clear()
+        saved_model.update(model=None, when="")
+        training_inputs.update(requested=None, fitted=None)
+    participant_workflow["participant"] = ctx.participant
+    if ctx.participant:
+        sessions.select_all(ctx.participant)
+        folder = pathlib.Path("sessions", ctx.participant)
+        if load_model:
+            try:
+                models = [path for path in folder.glob("*_model.joblib") if path.is_file()]
+                newest = max(models, key=lambda path: path.stat().st_mtime, default=None)
+            except OSError:
+                newest = None
+            if newest is not None:
+                _load_saved_model(ctx.participant, newest)
+    if navigate:
+        has_takes = bool(ctx.participant) and sessions.selection().n_total > 0
+        step = 2 if has_takes else 1 if _device_connected(ctx) else 0
+        steps.active = participant_workflow["pending_step"] = step
+
+
+def _drive_participant(pid: str, path: pathlib.Path) -> None:
+    """Open Drive after the panel has selected the ID and the model has loaded."""
+    if app.ctx.state != "idle" or app.ctx.participant != pid:
+        return
+    _select_participant(app.ctx, navigate=False, load_model=False)
+    if _load_saved_model(pid, path):
+        steps.active = participant_workflow["pending_step"] = 3
+
+
+participant = ParticipantPanel(on_drive=_drive_participant)
 header = AppHeader("Myocontrol", steps=steps, participant=participant)
 status = StatusBar("emg", pipeline=pipeline)
 # These are view caches, not another source of recording state.
@@ -555,6 +632,9 @@ def _take_overlay(take: TakeStatus) -> None:
 
 def model_ui() -> None:
     """Train step: choose inputs and see exactly which takes and gestures will fit."""
+    if pipeline.model is not None and pipeline.model is saved_model["model"]:
+        _saved_model_ui()
+        return
     busy = app.ctx.state != "idle"
     style = imgui.get_style()
     imgui.begin_disabled(busy)
@@ -625,18 +705,7 @@ def model_ui() -> None:
         imgui.push_style_color(imgui.Col_.text, WARNING)
         imgui.text_wrapped("Features changed — retrain to apply them.")
         imgui.pop_style_color()
-    data = pipeline.training_data
-    missing = [name for name in CLASSES if name not in seconds]
-    if busy:
-        reason = "Busy — wait until the current action finishes."
-    elif features.n_active == 0:
-        reason = "Select at least one feature."
-    elif data is None or data.is_empty or summary.n_selected == 0:
-        reason = "Record a take or select takes below first."
-    elif missing:
-        reason = f"No selected takes for {', '.join(missing)} — include those gestures below."
-    else:
-        reason = ""
+    reason = _training_reason()
     can_train = not reason
     imgui.begin_disabled(not can_train)
     clicked = primary_button(f"Train {estimator}", size=(-1, 0))
@@ -652,6 +721,48 @@ def model_ui() -> None:
             imgui.align_text_to_frame_padding()
             imgui.text_unformatted(_ellipsize(saved, width))
             imgui.set_item_tooltip(pipeline.last_saved_model)
+
+
+def _training_reason() -> str:
+    """Apply the same training requirements to a fresh fit and a saved-model retrain."""
+    summary = sessions.selection()
+    data = pipeline.training_data
+    missing = [name for name in CLASSES if name not in summary.class_seconds]
+    if app.ctx.state != "idle":
+        return "Busy — wait until the current action finishes."
+    if features.n_active == 0:
+        return "Select at least one feature."
+    if data is None or data.is_empty or summary.n_selected == 0:
+        return "Record a take or select takes below first."
+    if missing:
+        return f"No selected takes for {', '.join(missing)} — include those gestures below."
+    return ""
+
+
+def _saved_model_ui() -> None:
+    """Give a loaded model a direct route to Drive and an explicit retrain action."""
+    # Two text lines keep both state and timestamp readable in a 320 px cell.
+    height = (2 * imgui.get_text_line_height_with_spacing() + ui_px(8))
+    with tinted_row(SUCCESS, height=height) as width:
+        imgui.text_unformatted("Saved model loaded")
+        mono_text(_ellipsize(saved_model["when"], width), muted())
+    imgui.text_wrapped("Drive with it now, or retrain on the ticked takes below.")
+    busy = app.ctx.state != "idle"
+    imgui.begin_disabled(busy)
+    go = primary_button("Go to Drive", size=(imgui.get_content_region_avail().x, 0))
+    imgui.end_disabled()
+    if go and not busy:
+        steps.active = 3
+    reason = _training_reason()
+    count = sessions.selection().n_selected
+    imgui.begin_disabled(bool(reason))
+    retrain = imgui.button(f"Retrain on {count} takes", imgui.ImVec2(-1, 0))
+    imgui.end_disabled()
+    if retrain and not reason:
+        training_inputs["requested"] = _input_fingerprint()
+        pipeline.start_training()
+    if reason:
+        _disabled_reason(reason)
 
 
 def connect_ui(ctx: Context) -> None:
@@ -691,6 +802,7 @@ def drive_ui() -> None:
         and pipeline.model is not None
         and pipeline.on_extract is not None
         and pipeline.on_predict is not None
+        and _device_connected(app.ctx)
     )
     enabled = can_start or predicting
     imgui.begin_disabled(not enabled)
@@ -711,9 +823,14 @@ def drive_ui() -> None:
             reason = "Busy — wait until the current action finishes."
         elif pipeline.model is None:
             reason = "No model yet — train or load a model first."
+        elif not _device_connected(app.ctx):
+            reason = "Connect a device in Connect before predicting."
         else:
             reason = "Prediction needs @pipeline.extract and @pipeline.predict wired."
         _disabled_reason(reason)
+        if (state == "idle" and pipeline.model is not None and not _device_connected(app.ctx)
+                and imgui.button("Go to Connect", imgui.ImVec2(-1, 0))):
+            steps.active = 0
     imgui.spacing()
     output_filter.ui()
     imgui.spacing()
@@ -857,8 +974,15 @@ def _step_done(ctx: Context) -> list[bool]:
 @app.ui
 def myocontrol_ui(ctx: Context) -> None:
     """A visible workflow with persistent signal, activity and session files."""
+    # External context changes refresh data without overriding a manually chosen step.
+    _select_participant(ctx, navigate=False)
+    previous_participant = ctx.participant
     with layout["header"]:
         active = header.ui(ctx, _step_done(ctx))
+    _select_participant(ctx, navigate=ctx.participant != previous_participant)
+    if participant_workflow["pending_step"] is not None:
+        active = participant_workflow["pending_step"]
+        participant_workflow["pending_step"] = None
     # Retain the compact body-card spacing of this workflow.
     padding = imgui.get_style().window_padding
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(padding.x, ui_px(4)))

@@ -717,8 +717,11 @@ def test_header_controls_share_a_row_after_resizing(app_module, monkeypatch, imp
 
 
 def test_myocontrol_drive_toggle_balances_selected_style(app_module, monkeypatch, imgui_frame):
+    from types import SimpleNamespace
+
     pipeline = app_module["pipeline"]
     pipeline.model = ("Classification", OnlyPredictProba())
+    app_module["app"].ctx.streams["emg"] = SimpleNamespace(status="connected", info=object())
     monkeypatch.setitem(app_module["drive_ui"].__globals__, "primary_button", lambda label, **k: True)
     imgui_frame(app_module["drive_ui"])
     assert app_module["app"].ctx.state == "predicting"
@@ -1387,3 +1390,286 @@ def test_train_card_fits_step_cell(app_module, implot_frame, monkeypatch, scale,
     implot_frame(draw)
     assert all(cursor <= height and scroll == 0 for cursor, height, scroll in measurements), measurements
     assert all(right <= edge + 1 for _, right, edge in mono_bounds), mono_bounds
+
+
+def _participant_take(tmp_path, pid="P-014"):
+    import zipfile
+
+    path = tmp_path / "sessions" / pid / f"{pid}_2026-10-25_15-47-00.session.zip"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("meta.json", json.dumps(dict(
+            participant=pid, created="2026-10-25T15:47:00", duration_s=32.,
+            class_names=["Rest", "Fist"], class_seconds={"Rest": 16., "Fist": 16.},
+        )))
+        archive.writestr("labels.json", json.dumps([dict(class_index=0), dict(class_index=1)]))
+    return path
+
+
+@pytest.mark.parametrize("drive", [False, True])
+def test_recorded_participant_loads_newest_model_and_ticks_takes(
+    app_module, monkeypatch, implot_frame, tmp_path, drive,
+):
+    import os
+
+    from imgui_bundle import imgui
+
+    from myogestic.ml import load_pickle, save_pickle
+    from myogestic.widgets.training import _session_state
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_session_state, "_states", {})
+    take = _participant_take(tmp_path)
+    old = take.parent / "old_model.joblib"
+    new = take.parent / "new_model.joblib"
+    save_pickle(("Classification", {"version": "old"}), old)
+    save_pickle(("Regression", {"version": "new"}), new)
+    os.utime(old, (1, 1))
+    panel, ctx = app_module["participant"], app_module["app"].ctx
+    panel._key_file = tmp_path / "key.csv"
+    from myogestic.widgets.panels.participant import _append
+
+    _append(panel._key_file, "P-014", "Jane", "Doe")
+    key_before = panel._key_file.read_bytes()
+    labels, pressed = [], {"value": None}
+    button = imgui.button
+
+    def click(label, *args):
+        result = button(label, *args)
+        visible = label.split("##")[0]
+        labels.append(visible)
+        return result or visible == pressed["value"]
+
+    monkeypatch.setattr(imgui, "button", click)
+    panel.open()
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    assert "Drive with saved model" in labels
+    pressed["value"] = "Drive with saved model" if drive else "Continue with P-014"
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    pressed["value"] = None
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    pipeline = app_module["pipeline"]
+    assert pipeline.load_model is load_pickle
+    assert pipeline.model == ("Regression", {"version": "new"})
+    assert Path(pipeline.last_saved_model).resolve() == new.resolve()
+    assert app_module["steps"].active == (3 if drive else 2)
+    assert pipeline.training_data.paths == [str(take.resolve())]
+    assert app_module["sessions"].selection().n_selected == 1
+    assert panel._key_file.read_bytes() == key_before
+    assert "Jane" not in repr(ctx) and "Doe" not in repr(ctx)
+
+
+@pytest.mark.parametrize("has_takes,connected,expected", [(True, False, 2), (False, False, 0), (False, True, 1)])
+def test_continue_lands_on_next_useful_step(
+    app_module, monkeypatch, implot_frame, tmp_path, has_takes, connected, expected,
+):
+    from imgui_bundle import imgui
+
+    from myogestic.stream import StreamInfo
+    from myogestic.widgets.training import _session_state
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_session_state, "_states", {})
+    if has_takes:
+        _participant_take(tmp_path)
+    if connected:
+        stream = app_module["app"].ctx.streams["emg"]
+        stream.status = "connected"
+        stream.info = StreamInfo(n_channels=2, fs=100.)
+    panel, ctx = app_module["participant"], app_module["app"].ctx
+    panel._key_file = tmp_path / "key.csv"
+    button = imgui.button
+    pressed = {"value": None}
+
+    def click(label, *args):
+        result = button(label, *args)
+        if label == "##Participant ID":
+            return result
+        return result or label.split("##")[0] == pressed["value"]
+
+    monkeypatch.setattr(imgui, "button", click)
+    panel.open()
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    panel._state.pid = "P-014"
+    pressed["value"] = "Continue with P-014" if has_takes else "Start session"
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    assert app_module["steps"].active == expected
+    assert app_module["pipeline"].model is None
+
+
+@pytest.mark.parametrize("action", ["Go to Drive", "Retrain on 1 takes"])
+def test_saved_model_train_card_has_drive_and_retrain(
+    app_module, monkeypatch, imgui_frame, tmp_path, action,
+):
+    from imgui_bundle import imgui
+
+    from myogestic import TrainingData
+    from myogestic.ml import save_pickle
+
+    monkeypatch.chdir(tmp_path)
+    take = _participant_take(tmp_path)
+    path = take.parent / "saved_model.joblib"
+    save_pickle(("Classification", {}), path)
+    ctx = app_module["app"].ctx
+    ctx.participant = "P-014"
+    app_module["participant"]._on_drive("P-014", path)
+    app_module["steps"].active = 2
+    render = app_module["model_ui"]
+    labels, starts, tones = [], [], []
+    button, text_unformatted = imgui.button, imgui.text_unformatted
+    real_row = render.__globals__["tinted_row"]
+
+    def row(tone=None, **kwargs):
+        tones.append(tone)
+        return real_row(tone, **kwargs)
+
+    def text(value):
+        labels.append(value)
+        text_unformatted(value)
+
+    def click(label, *args):
+        result = button(label, *args)
+        labels.append(label)
+        return result or label == action
+
+    monkeypatch.setitem(render.__globals__, "tinted_row", row)
+    monkeypatch.setattr(imgui, "text_unformatted", text)
+    monkeypatch.setattr(imgui, "button", click)
+    monkeypatch.setattr(app_module["pipeline"], "start_training", lambda: starts.append(True))
+    # The selection is read before rendering Train in the normal app callback.
+    app_module["pipeline"].training_data = TrainingData(paths=[str(take)], classes={0, 1})
+    imgui_frame(render)
+    assert any("Saved model loaded" in label for label in labels)
+    assert app_module["SUCCESS"] in tones
+    assert "Go to Drive" in labels and "Retrain on 1 takes" in labels
+    assert starts == ([True] if action.startswith("Retrain") else [])
+    if starts:
+        assert app_module["training_inputs"]["requested"] == app_module["_input_fingerprint"]()
+    else:
+        assert app_module["steps"].active == 3
+    labels.clear()
+    app_module["pipeline"].model = ("Classification", {"retrained": True})
+    imgui_frame(render)
+    assert "Train classifier" in labels
+    assert not any("Saved model loaded" in label for label in labels)
+
+
+def test_drive_without_device_explains_and_offers_connect(app_module, monkeypatch, imgui_frame):
+    from imgui_bundle import imgui
+
+    render = app_module["drive_ui"]
+    app_module["pipeline"].model = object()
+    app_module["steps"].active = 3
+    reasons, labels = [], []
+    monkeypatch.setitem(render.__globals__, "_disabled_reason", reasons.append)
+    monkeypatch.setattr(app_module["pipeline"], "start_predicting", lambda: pytest.fail("device missing"))
+    button = imgui.button
+
+    def click(label, *args):
+        result = button(label, *args)
+        labels.append(label)
+        return result or label in ("Start predicting", "Go to Connect")
+
+    monkeypatch.setattr(imgui, "button", click)
+    imgui_frame(render)
+    assert any("device" in reason.lower() and "Connect" in reason for reason in reasons)
+    assert "Go to Connect" in labels
+    assert app_module["steps"].active == 0
+
+
+def test_switching_participant_clears_old_model_and_training_selection(
+    app_module, monkeypatch, implot_frame, tmp_path,
+):
+    from myogestic.ml import save_pickle
+    from myogestic.widgets.training import _session_state
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_session_state, "_states", {})
+    first = _participant_take(tmp_path)
+    second = _participant_take(tmp_path, "P-015")
+    model = first.parent / "saved_model.joblib"
+    save_pickle(("Classification", {}), model)
+    ctx = app_module["app"].ctx
+    ctx.participant = "P-014"
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    assert app_module["pipeline"].model is not None
+    state = _session_state.get_state(app_module["sessions"]._widget_id)
+    state.deactivated_classes.add(1)
+    ctx.participant = "P-015"
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    assert app_module["pipeline"].model is None
+    assert app_module["pipeline"].last_saved_model is None
+    assert app_module["pipeline"].training_data.paths == [str(second.resolve())]
+    assert app_module["pipeline"].training_data.classes == {0, 1}
+
+
+def test_saved_model_loader_failure_does_not_disclose_exception(
+    app_module, monkeypatch, implot_frame, tmp_path,
+):
+    monkeypatch.chdir(tmp_path)
+    take = _participant_take(tmp_path)
+    path = take.parent / "broken_model.joblib"
+    path.touch()
+    ctx = app_module["app"].ctx
+
+    def fail(_path):
+        raise ValueError("Jane Doe appeared in the model contents")
+
+    monkeypatch.setattr(app_module["pipeline"], "load_model", fail)
+    ctx.participant = "P-014"
+    implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    assert app_module["pipeline"].model is None
+    assert "Could not load" in ctx.status_message
+    assert "Jane" not in repr(ctx) and "Doe" not in repr(ctx)
+
+
+@pytest.mark.parametrize("scale", [1., 2.])
+def test_saved_model_card_fits_light_320_cell(app_module, monkeypatch, imgui_frame, scale, tmp_path):
+    from imgui_bundle import imgui
+
+    from myogestic import _scale, _theme
+    from myogestic.ml import save_pickle
+
+    monkeypatch.chdir(tmp_path)
+    take = _participant_take(tmp_path)
+    path = take.parent / "saved_model.joblib"
+    save_pickle(("Classification", {}), path)
+    app_module["app"].ctx.participant = "P-014"
+    app_module["participant"]._on_drive("P-014", path)
+    monkeypatch.setattr(_scale, "_current", scale)
+    monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
+    _theme.apply_theme()
+    imgui.get_style().scale_all_sizes(scale)
+    imgui.get_style().font_scale_main = scale
+    font_path = Path(myogestic.core.__file__).parent / "assets/fonts/IBMPlexMono-Regular.ttf"
+    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 13.)
+    monkeypatch.setattr(_theme, "_MONO_FONT", font)
+    bounds = []
+    button, text_unformatted = imgui.button, imgui.text_unformatted
+
+    def measure():
+        right = imgui.get_window_pos().x + imgui.get_window_size().x - imgui.get_style().window_padding.x
+        bounds.append((imgui.get_item_rect_max().x, right))
+
+    def measured_button(*args, **kwargs):
+        result = button(*args, **kwargs)
+        measure()
+        return result
+
+    def measured_text(*args, **kwargs):
+        result = text_unformatted(*args, **kwargs)
+        measure()
+        return result
+
+    monkeypatch.setattr(imgui, "button", measured_button)
+    monkeypatch.setattr(imgui, "text_unformatted", measured_text)
+
+    def draw():
+        imgui.set_next_window_size(imgui.ImVec2(320 * scale, 600 * scale))
+        imgui.begin("saved-model-cell")
+        app_module["model_ui"]()
+        imgui.end()
+
+    imgui_frame(draw)
+    imgui_frame(draw)
+    assert bounds and all(right <= edge + 1 for right, edge in bounds), bounds
