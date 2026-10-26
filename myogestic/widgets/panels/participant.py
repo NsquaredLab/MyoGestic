@@ -539,7 +539,7 @@ class ParticipantPanel:
 
 
 def _support(text: str, tone: imgui.ImVec4 | None = None) -> None:
-    """Wrap supporting copy so narrow dialogs retain every explanation."""
+    """Draw wrapped supporting text."""
     imgui.push_style_color(imgui.Col_.text, muted() if tone is None else tone)
     imgui.text_wrapped(text)
     imgui.pop_style_color()
