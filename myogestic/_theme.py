@@ -233,8 +233,7 @@ def mono_font() -> imgui.ImFont | None:
     return _MONO_FONT
 
 
-#: The scale the style was last built at, so a frame with an unchanged scale does
-#: nothing. `None` until the first frame.
+#: Last applied style scale; ``None`` until the first frame.
 _styled_at: float | None = None
 
 
@@ -255,7 +254,7 @@ def _os_scale() -> float:
 
 
 def apply_live_scale(setup_style) -> None:
-    """Recompute the UI scale and restyle if it moved. Runs before every frame.
+    """Recompute the UI scale before each frame and restyle on changes.
 
     Parameters
     ----------

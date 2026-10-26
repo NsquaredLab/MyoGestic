@@ -101,11 +101,9 @@ class PredictionLabel:
         self._widget_id = widget_id
 
     def ui(self) -> None:
-        """Render a surface card with a display label and muted mono detail.
+        """Render the prediction or idle reason.
 
-        Idle and predicting share a hero-sized label with vertically centred
-        detail: the idle reason or prediction interval at the right.
-        Probability bars share the fixed 0–1 range.
+        Probability bars share a fixed 0–1 range.
         """
         imgui.push_id(self._widget_id or self._title)
         style = imgui.get_style()
