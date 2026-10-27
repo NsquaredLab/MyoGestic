@@ -2490,3 +2490,75 @@ def test_guided_results_actions_keep_settings(app_module, monkeypatch, imgui_fra
     assert (run["reps"], run["cue_s"]) == (3, 1.5)
     assert starts == ([True] if action == "Run again" else [])
     assert run["phase"] == ("results" if action == "Run again" else "setup")
+
+
+@pytest.mark.parametrize("manual_stop", [False, True])
+def test_follow_run_drives_and_scores_saved_control_frames(
+    app_module, tmp_path, monkeypatch, manual_stop
+):
+    from myogestic.controls import Continuous, ControlBus, ControlSet
+    from myogestic.session import open_session_store
+    from myogestic.stream import StreamInfo
+    from myogestic.tracking import Sinusoid
+    from myogestic.widgets.training import _session_state
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("myogestic._browser.IS_BROWSER", True)
+    monkeypatch.setattr(_session_state, "_states", {})
+    app, pipeline, follow = app_module["app"], app_module["pipeline"], app_module["follow_run"]
+    app.ctx.participant = "P-014"
+    stream = app.ctx.streams["emg"]
+    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100)
+    now = [100.0]
+    monkeypatch.setattr("mne_lsl.lsl.local_clock", lambda: now[0])
+    monkeypatch.setattr("myogestic.widgets.follow.local_clock", lambda: now[0])
+    # Keep the real predict callback, recorder, delivered bus and finalizer, with a
+    # deterministic clock and estimator in place of an acquisition thread.
+    monkeypatch.setattr(
+        pipeline, "start_predicting", lambda: setattr(app.ctx, "state", "predicting")
+    )
+    monkeypatch.setattr(pipeline, "stop_predicting", lambda: setattr(app.ctx, "state", "idle"))
+    bus = ControlBus(
+        ControlSet({name: Continuous(name) for name in ("prediction", "control")}), ctx=app.ctx
+    )
+    monkeypatch.setattr(ControlLink, "bus", property(lambda self: bus))
+
+    estimator = FollowEstimator()
+    model = ("Regression", estimator)
+    pipeline.model = model
+    follow._state.trajectory = Sinusoid(move_s=1, hold_high_s=1, hold_low_s=1, lead_s=1, reps=1)
+    assert follow.start(app.ctx)
+    session = app.ctx.session
+    stop = 3.7 if manual_stop else 5.0
+    frames = []
+    for t in np.arange(0.05, stop, 0.05):
+        now[0] = 100 + t
+        estimator.value = follow._state.trajectory.value_at(t)
+        output = app_module["predict"](model, np.zeros(4))
+        frames.append(output["controls"])
+        pipeline._record_tick(app, np.zeros(4), output, now[0])
+    assert max(frame["control"] for frame in frames) == 1
+    assert min(frame["control"] for frame in frames) == 0
+    assert all(frame["control"] == pytest.approx(frame["prediction"]) for frame in frames)
+    now[0] = 100 + stop
+    if manual_stop:
+        follow.stop(app.ctx)
+    follow.sync(app.ctx)
+    assert app.ctx.state == "idle" and not app.ctx.recording
+    assert follow.score["rmse"] == pytest.approx(0, abs=1e-7)
+    assert follow.score["r"] == pytest.approx(1)
+    assert follow.score["lag_s"] == 0
+    with open_session_store(session.path) as saved:
+        assert "follow.target" in saved.stores and "controls" in saved.stores
+        assert saved.extras["follow"]["gesture_index"] == 0
+        assert saved.extras["pipeline"]["model"] == "model.joblib"
+    row = _session_state.get_state("Sessions_sessions").sessions[0]
+    assert row["follow"] and not row["selected"]
+    assert app_module["predict"](model, np.zeros(4))["controls"]["control"] == 0
+
+
+class FollowEstimator:
+    value = 0.0
+
+    def predict(self, x):
+        return [self.value]

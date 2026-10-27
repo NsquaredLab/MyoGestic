@@ -2,6 +2,7 @@
 
 from myogestic.widgets.common import panel_header, primary_button, status_pill
 from myogestic.widgets.control_map_editor import ControlMapEditor
+from myogestic.widgets.follow import FollowRun
 from myogestic.widgets.panels import (
     BUILTIN_FILTERS,
     AppLogo,
@@ -65,6 +66,7 @@ __all__ = [
     "DeviceSpec",
     "DevicePicker",
     "FeatureSelector",
+    "FollowRun",
     "FilterParam",
     "FilterProcessor",
     "FilterSpec",

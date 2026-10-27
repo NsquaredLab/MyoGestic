@@ -97,7 +97,7 @@ See [Track a force target](../how-to/track-a-force-target.md) for the whole loop
 
 What a subject is asked to follow. `myogestic.tracking` is plain data — no ImGui, nothing that talks to a device — so the same trajectory can be evaluated in a test, in an offline script and by whatever draws it, with no second implementation to drift. `TrackingTask` forwards every edit to the [`TargetSource`][myogestic.sources.TargetSource] it was handed, so what is drawn and what is recorded cannot diverge.
 
-`Trajectory` is the structural protocol the two shapes satisfy by having its three members, not by inheriting anything. They differ in unit and in what they are for: `Trapezoid` is percent of MVC for [isometric force tracking](../how-to/track-a-force-target.md); `Pursuit` is signed `[-1, +1]` control units for [proportional-control training](../how-to/record-for-proportional-control.md), and it exists because a block cueing only Down / Rest / Up asks for three distinct target values, so what a fit produces between them comes from the estimator rather than from the recording — for the tree ensembles shipped here, nothing at all.
+`Trajectory` is the structural protocol these shapes satisfy by having its three members, not by inheriting anything. They differ in unit and in what they are for: `Trapezoid` is percent of MVC for [isometric force tracking](../how-to/track-a-force-target.md); `Pursuit` is signed `[-1, +1]` control units for [proportional-control training](../how-to/record-for-proportional-control.md), and it exists because a block cueing only Down / Rest / Up asks for three distinct target values, so what a fit produces between them comes from the estimator rather than from the recording — for the tree ensembles shipped here, nothing at all.
 
 ::: myogestic.tracking.Trajectory
 
@@ -244,3 +244,71 @@ for headers with and without workflow steps.
 ::: myogestic.widgets.vhi.palette.VhiStateSnapshot
 
 ::: myogestic.widgets.vhi.palette.request_vhi_state_refresh
+
+## Follow the control hand
+
+::: myogestic.widgets.FollowRun
+
+::: myogestic.tracking.Sinusoid
+
+::: myogestic.tracking.blend_pose
+
+::: myogestic.tracking.score_tracking
+
+`FollowRun` owns a dedicated recorded take. Gesture chips address the supplied names;
+`tick(ctx)` returns `(gesture_index, level)` on each control update, or `None` when idle.
+`level` is a fraction in `[0, peak]`. `Sinusoid` holds relaxed, moves up with a half-cosine,
+holds at the peak, and moves down with a half-cosine, repeating after an optional lead-in.
+The shape uses the existing `PHASE_CODES` without changing the recorded vocabulary.
+
+Construct the card once, call `sync` on every GUI frame (including hidden tabs), and call
+`tick` immediately before delivering each control frame. The widget records those targets
+as `follow.target` with `gesture_index`, `level`, and `phase` channels, on the LSL clock.
+Use the app's relaxed and gesture poses with `blend_pose`. A complete hardware-free demo
+is [`examples/panels/follow_run.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/panels/follow_run.py).
+
+<!--docs:run-->
+```python
+from myogestic import App
+from myogestic.tracking import Sinusoid, blend_pose
+from myogestic.widgets import FollowRun
+
+app = App("Follow example")
+follow = FollowRun(
+    ["Fist", "Pinch"],
+    on_record=app.start_recording,
+    on_stop=app.stop_recording,
+    trajectory=Sinusoid(move_s=2.0, hold_high_s=1.0, hold_low_s=1.0, reps=5),
+)
+relaxed = [0.0, 0.0]
+poses = [[1.0, 1.0], [1.0, 0.0]]
+
+def control_tick(ctx):
+    target = follow.tick(ctx)
+    if target is not None:
+        index, level = target
+        return blend_pose(relaxed, poses[index], level)
+    return None
+
+# In the GUI callback: follow.sync(ctx), then follow.ui(ctx) inside its Grid cell.
+# Before shutdown, close the take while the recording callback is still available.
+app.cleanup_hooks.append(lambda _app: follow.stop(app.ctx))
+assert control_tick(app.ctx) is None
+```
+
+The default score compares `follow.target.level` to the saved `controls` stream's
+`prediction` channel, so it measures delivered predictions. Both must use the same
+fractional units. For a pose-vector app, project the delivered prediction onto its chosen
+gesture, record that scalar using `Session.append_event`, and pass its stream name and
+channel to `FollowRun(prediction_stream=..., prediction_channel=...)`. No device, model,
+or VHI connection is required by the widget itself. Myocontrol wraps the recording
+callbacks to start and stop prediction using the existing Drive gates.
+
+Stopping early scores only the recorded part after the lead-in. The saved take carries
+`extras.follow`, is labelled **Follow** in Takes, and remains unticked for training by
+default. Saving finishes before the widget reopens the take to score it. RMSE and Pearson r
+are measured without a lag correction; lag maximises normalised cross-correlation within
+`max_lag_s` (default ±1 second), at 10 ms resolution. Positive lag means prediction trails
+the control target. No overlapping samples gives undefined metrics; a constant signal has
+an RMSE but no correlation or lag, displayed as a dash. A periodic run can have repeated
+correlation peaks, so choose a search window shorter than a cycle.

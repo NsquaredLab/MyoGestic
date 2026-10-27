@@ -31,6 +31,7 @@ from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.remote import RemoteTarget
 from myogestic.session import RecordedTime, iter_labeled_windows, open_session_store, recorded_time
 from myogestic.sources import LSLSource
+from myogestic.tracking import blend_pose
 from myogestic.vhi import virtual_hand
 from myogestic.vhi.pose import POSE_WIDTH
 from myogestic.widgets import (
@@ -38,6 +39,7 @@ from myogestic.widgets import (
     AppHeader,
     DevicePicker,
     FeatureSelector,
+    FollowRun,
     LogPanel,
     ParticipantPanel,
     PostProcessor,
@@ -234,11 +236,16 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
         value = min(max(float(est.predict(feats.reshape(1, -1))[0]), 0.0), 1.0)
         out = {"class": int(value >= 0.5), "proba": [1.0 - value, value]}
 
+    target = follow_run.tick(app.ctx)
+    control = held_control
+    if target is not None:
+        index, level = target
+        control = float(blend_pose([POSES["Rest"]], [POSES[FOLLOW_GESTURES[index]]], level)[0])
     bus = link.bus
     if bus is not None:
         # `link.bus`, never `ensure()`: that blocks on an RPC and this is the predict
         # thread. `control` must be included or `push` completes it to rest every tick.
-        out["controls"] = bus.push({"prediction": value, "control": held_control})
+        out["controls"] = bus.push({"prediction": value, "control": control})
     return out
 
 
@@ -548,7 +555,7 @@ app.cleanup_hooks.append(_cleanup_guided_run)
 #: What drives each alias here. The map says where a value goes, not what sends one.
 ALIAS_ROLES = {
     "prediction": "the model, every predict tick",
-    "control": "the Rest / Fist buttons",
+    "control": "the gesture buttons or Follow run",
 }
 #: A map that declares an alias nothing here pushes would show a control in this panel
 #: that never moves, so the fallback should never be reached — it is a warning, not a row.
@@ -625,6 +632,36 @@ def _stop_drive() -> None:
         app.stop_recording()
     drive_run["started"] = None
     pipeline.stop_predicting()
+
+
+FOLLOW_GESTURES = [name for name in CLASSES if name != "Rest"]
+
+
+def _start_follow_recording() -> None:
+    """Use Drive's prediction gate and undo a failed recording start."""
+    if _prediction_reason():
+        return
+    pipeline.start_predicting()
+    if app.ctx.state != "predicting":
+        return
+    app.start_recording()
+    if not app.ctx.recording:
+        pipeline.stop_predicting()
+
+
+def _stop_follow_recording() -> None:
+    """Save before stopping prediction and restore the relaxed manual target."""
+    global held_control
+    held_control = POSES["Rest"]
+    _stop_drive()
+
+
+follow_run = FollowRun(
+    FOLLOW_GESTURES,
+    on_record=_start_follow_recording,
+    on_stop=_stop_follow_recording,
+)
+app.cleanup_hooks.append(lambda _app: follow_run.stop(app.ctx))
 
 
 def _bind() -> ControlBus | None:
@@ -1256,8 +1293,8 @@ def drive_ui() -> None:
     _sync_guided_run()
     locked = app.ctx.state != "idle" or app.ctx.recording or guided_run["phase"] == "saving"
     imgui.begin_disabled(locked)
-    width = (imgui.get_content_region_avail().x - imgui.get_style().item_spacing.x) / 2
-    for index, label in enumerate(("Free", "Guided")):
+    width = (imgui.get_content_region_avail().x - 2 * imgui.get_style().item_spacing.x) / 3
+    for index, label in enumerate(("Free", "Guided", "Follow")):
         if index:
             imgui.same_line()
         selected = drive_mode["index"] == index
@@ -1272,6 +1309,9 @@ def drive_ui() -> None:
     imgui.spacing()
     if drive_mode["index"] == 1:
         _guided_ui()
+        return
+    if drive_mode["index"] == 2:
+        follow_run.ui(app.ctx, disabled_reason=_prediction_reason())
         return
     _free_drive_ui()
 
@@ -1473,6 +1513,7 @@ def _step_done(ctx: Context) -> list[bool]:
 @app.ui
 def myocontrol_ui(ctx: Context) -> None:
     _sync_guided_run()
+    follow_run.sync(ctx)
     _ensure_hand_feedback()
     # External context changes refresh data without overriding a manually chosen step.
     _select_participant(ctx, navigate=False)
@@ -1501,7 +1542,8 @@ def myocontrol_ui(ctx: Context) -> None:
             if stream is not None and stream.last_error
             else IDLE
         )
-        panel_header(steps.steps[active], status=tone if active == 0 else None)
+        if active != 3 or drive_mode["index"] != 2:
+            panel_header(steps.steps[active], status=tone if active == 0 else None)
         if active == 0:
             connect_ui(ctx)
         elif active == 1:
