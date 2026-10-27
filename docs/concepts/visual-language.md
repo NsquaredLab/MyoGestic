@@ -244,7 +244,7 @@ instead:
 left = imgui.get_cursor_pos_x()
 imgui.text(f"{n}.")
 imgui.same_line()
-imgui.set_cursor_pos_x(left + gutter)   # not same_line(gutter)
+imgui.set_cursor_pos_x(left + gutter)  # not same_line(gutter)
 ```
 
 **Measure the space left *after* `same_line()`, never before.** Before the call the cursor has
@@ -253,8 +253,8 @@ right-aligned control offset by it overshoots by the width of everything already
 puts it off the panel edge:
 
 ```python
-imgui.same_line()                                # first
-avail = imgui.get_content_region_avail().x       # then measure
+imgui.same_line()  # first
+avail = imgui.get_content_region_avail().x  # then measure
 if avail > button_w:
     imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + avail - button_w)
 ```
@@ -266,7 +266,7 @@ up instead — the same fault, inverted:
 
 ```python
 imgui.push_style_var(imgui.StyleVar_.item_spacing, imgui.ImVec2(sp.x, 0.0))
-name_row()          # the row whose *trailing* gap is being closed
+name_row()  # the row whose *trailing* gap is being closed
 imgui.pop_style_var()
 detail_row()
 ```
@@ -277,7 +277,7 @@ disagrees with the push on the one frame the user clicks — popping a colour th
 pushed, or leaking three into every widget after it. Read it into a local first:
 
 ```python
-selected = v.enabled          # not `if v.enabled:` on both sides
+selected = v.enabled  # not `if v.enabled:` on both sides
 if selected:
     push_selected()
 if imgui.small_button("1:1"):
@@ -300,7 +300,7 @@ State is keyed by **widget identity**, never by the data it happens to show (rul
 `widget_id`, defaulting to the natural single-instance name:
 
 ```python
-Heatmap("IN1", widget_id="grid:IN1")           # defaults to the label
+Heatmap("IN1", widget_id="grid:IN1")  # defaults to the label
 SignalViewer("emg", widget_id="emg:grid:IN1")  # defaults to the stream name
 ```
 

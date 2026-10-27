@@ -46,17 +46,18 @@ from the running UI.**
 ```python
 @dataclass(frozen=True)
 class DeviceOption:
-    kwarg: str                    # constructor keyword
-    label: str                    # row label: "Channels", "Rate (Hz)"
-    choices: Mapping[str, Any]    # {shown: value}, in display order
+    kwarg: str  # constructor keyword
+    label: str  # row label: "Channels", "Rate (Hz)"
+    choices: Mapping[str, Any]  # {shown: value}, in display order
+
 
 @dataclass(frozen=True)
 class DeviceSpec:
-    label: str                              # "Sessantaquattro / +"
-    factory: Callable[..., Any]             # called with the chosen kwargs
+    label: str  # "Sessantaquattro / +"
+    factory: Callable[..., Any]  # called with the chosen kwargs
     options: Sequence[DeviceOption] = ()
-    scan: bool = False                      # target is discovered, not configured
-    hint: str = ""                          # physical setup instruction
+    scan: bool = False  # target is discovered, not configured
+    hint: str = ""  # physical setup instruction
 ```
 
 `DeviceOption` is the whole configuration mechanism. No schema, no base class, no
@@ -90,18 +91,28 @@ _DETECTION = {"Monopolar": "monopolar", "Differential": "differential", "Bipolar
 _SIGNAL = DeviceOption("emg", "Signal", {"EMG": True, "EEG": False})
 
 OTB_DEVICES = (
-    DeviceSpec("Muovi — 32 ch",  MuoviSource,                        (_SIGNAL,), hint=...),
-    DeviceSpec("Muovi+ — 64 ch", partial(MuoviSource, plus=True),    (_SIGNAL,), hint=...),
-    DeviceSpec("Sessantaquattro / +", SessantaquattroSource, (
-        DeviceOption("nch_mode", "Channels",  {"8": 0, "16": 1, "32": 2, "64": 3}),
-        DeviceOption("fs_mode",  "Rate (Hz)", {"500": 0, "1000": 1, "2000": 2, "4000": 3}),
-        DeviceOption("mode",     "Detection", _DETECTION),
-    ), hint=...),
-    DeviceSpec("Quattrocento", QuattrocentoSource, (
-        DeviceOption("nch_mode",  "Channels",  {"96": 0, "192": 1, "288": 2, "384": 3}),
-        DeviceOption("fs_mode",   "Rate (Hz)", {"512": 0, "2048": 1, "5120": 2, "10240": 3}),
-        DeviceOption("detection", "Detection", _DETECTION),
-    ), hint=...),
+    DeviceSpec("Muovi — 32 ch", MuoviSource, (_SIGNAL,), hint=...),
+    DeviceSpec("Muovi+ — 64 ch", partial(MuoviSource, plus=True), (_SIGNAL,), hint=...),
+    DeviceSpec(
+        "Sessantaquattro / +",
+        SessantaquattroSource,
+        (
+            DeviceOption("nch_mode", "Channels", {"8": 0, "16": 1, "32": 2, "64": 3}),
+            DeviceOption("fs_mode", "Rate (Hz)", {"500": 0, "1000": 1, "2000": 2, "4000": 3}),
+            DeviceOption("mode", "Detection", _DETECTION),
+        ),
+        hint=...,
+    ),
+    DeviceSpec(
+        "Quattrocento",
+        QuattrocentoSource,
+        (
+            DeviceOption("nch_mode", "Channels", {"96": 0, "192": 1, "288": 2, "384": 3}),
+            DeviceOption("fs_mode", "Rate (Hz)", {"512": 0, "2048": 1, "5120": 2, "10240": 3}),
+            DeviceOption("detection", "Detection", _DETECTION),
+        ),
+        hint=...,
+    ),
 )
 LSL_DEVICE = DeviceSpec("LSL stream", lambda: LSLSource(""), scan=True, hint=...)
 DEFAULT_DEVICES = (*OTB_DEVICES, LSL_DEVICE)
@@ -126,8 +137,13 @@ connected.
 
 ```python
 class DevicePicker:
-    def __init__(self, stream: str, *, devices: Sequence[DeviceSpec] = DEFAULT_DEVICES,
-                 show_header: bool = True) -> None: ...
+    def __init__(
+        self,
+        stream: str,
+        *,
+        devices: Sequence[DeviceSpec] = DEFAULT_DEVICES,
+        show_header: bool = True,
+    ) -> None: ...
     def ui(self, ctx: Context) -> None: ...
 ```
 
@@ -182,11 +198,11 @@ to a combo. Both paths were checked rendered, not reasoned about.
 On a daemon thread (`accept_timeout` defaults to 30 s and would freeze the UI):
 
 ```python
-source = dev.factory(**chosen)   # build FIRST: a bad combination raises here,
-old = stream._source             # with the stream still on what was working
+source = dev.factory(**chosen)  # build FIRST: a bad combination raises here,
+old = stream._source  # with the stream still on what was working
 stream._source = source
-old.disconnect()                 # load-bearing — see below
-ok = stream.reconnect(target)    # target is None for a statically configured device
+old.disconnect()  # load-bearing — see below
+ok = stream.reconnect(target)  # target is None for a statically configured device
 ```
 
 **Disconnecting the old source is load-bearing, not tidiness.** `Stream.reconnect()`

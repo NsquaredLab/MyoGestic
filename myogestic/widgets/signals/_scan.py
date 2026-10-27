@@ -80,7 +80,11 @@ def _scan_action(
 
 
 def _scan_results(
-    stream_name: str, stream: Stream, s: _ScanState, *, centered: bool = False,
+    stream_name: str,
+    stream: Stream,
+    s: _ScanState,
+    *,
+    centered: bool = False,
 ) -> None:
     """Keep the outlet selector and its Connect inside the available row."""
     if not s.results:
@@ -144,9 +148,7 @@ def _disconnected_ui(stream_name: str, stream: object, *, show_connect: bool = T
     else:
         tone, title, hint = IDLE, "Not connected", "Choose a source and connect it."
     retry = stream.info is not None or bool(stream.last_error)
-    label = (
-        f"{fa.ICON_FA_ARROWS_ROTATE}  Try again" if retry else f"{fa.ICON_FA_PLUG}  Connect"
-    )
+    label = f"{fa.ICON_FA_ARROWS_ROTATE}  Try again" if retry else f"{fa.ICON_FA_PLUG}  Connect"
 
     style = imgui.get_style()
     avail = imgui.get_content_region_avail()

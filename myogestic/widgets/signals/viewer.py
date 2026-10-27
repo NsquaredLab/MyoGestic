@@ -211,11 +211,21 @@ class SignalViewer:
         scope = resolve_scope(self._channel_scope, n_channels)
         enabled = (
             resolve_enabled(v, active_stream, n_channels, self._initial_channels, scope)
-            if connected else set()
+            if connected
+            else set()
         )
         render_controls(
-            ctx, wid, active_stream, stream, v, self._selectable, enabled, scope,
-            title=self._title, show_title=self._show_title, exclude=self._excluded,
+            ctx,
+            wid,
+            active_stream,
+            stream,
+            v,
+            self._selectable,
+            enabled,
+            scope,
+            title=self._title,
+            show_title=self._show_title,
+            exclude=self._excluded,
         )
         if stream is None:
             imgui.text(f"{active_stream}: not found")
@@ -224,9 +234,7 @@ class SignalViewer:
             _disconnected_ui(active_stream, stream, show_connect=self._show_connect)
             return
         if not scope:
-            imgui.text_disabled(
-                f"{active_stream}: no channels in scope (stream has {n_channels})"
-            )
+            imgui.text_disabled(f"{active_stream}: no channels in scope (stream has {n_channels})")
             if v.show_controls:
                 render_display_popup(wid, stream, v, None, enabled, self._show_diagnostics)
             return

@@ -30,11 +30,22 @@ def scan_ui(imgui_frame, monkeypatch):
     config = imgui.ImFontConfig()
     config.merge_mode = True
     io.fonts.add_font_from_file_ttf(
-        hello_imgui.asset_file_full_path("fonts/Font_Awesome_6_Free-Solid-900.otf"), 14, config,
+        hello_imgui.asset_file_full_path("fonts/Font_Awesome_6_Free-Solid-900.otf"),
+        14,
+        config,
     )
     stream = Stream("emg", source=LSLSource("scan-test"), window_ms=1000)
-    ui = SimpleNamespace(stream=stream, items=[], tooltips=[], frames=[], bounds=(),
-                         state=_scan._ScanState(), jobs=[], click="", selection=None)
+    ui = SimpleNamespace(
+        stream=stream,
+        items=[],
+        tooltips=[],
+        frames=[],
+        bounds=(),
+        state=_scan._ScanState(),
+        jobs=[],
+        click="",
+        selection=None,
+    )
     _scan._scans["emg"] = ui.state
 
     for method in ("button", "combo", "text", "text_wrapped", "text_colored"):
@@ -43,13 +54,20 @@ def scan_ui(imgui_frame, monkeypatch):
         def item(*args, _original=original, _method=method, **kwargs):
             result = _original(*args, **kwargs)
             label = args[1] if _method == "text_colored" else args[0]
-            ui.items.append(SimpleNamespace(
-                kind=_method, label=label,
-                lo=tuple(imgui.get_item_rect_min()), hi=tuple(imgui.get_item_rect_max()),
-                color=tuple(args[0] if _method == "text_colored"
-                            else imgui.get_style_color_vec4(imgui.Col_.text)),
-                fill=tuple(imgui.get_style_color_vec4(imgui.Col_.button)),
-            ))
+            ui.items.append(
+                SimpleNamespace(
+                    kind=_method,
+                    label=label,
+                    lo=tuple(imgui.get_item_rect_min()),
+                    hi=tuple(imgui.get_item_rect_max()),
+                    color=tuple(
+                        args[0]
+                        if _method == "text_colored"
+                        else imgui.get_style_color_vec4(imgui.Col_.text)
+                    ),
+                    fill=tuple(imgui.get_style_color_vec4(imgui.Col_.button)),
+                )
+            )
             if _method == "button" and label == ui.click:
                 ui.click = ""
                 return True
@@ -61,9 +79,13 @@ def scan_ui(imgui_frame, monkeypatch):
         monkeypatch.setattr(imgui, method, item)
 
     monkeypatch.setattr(imgui, "set_item_tooltip", ui.tooltips.append)
-    monkeypatch.setattr(_scan._threading, "Thread", lambda *, target, daemon: SimpleNamespace(
-        start=lambda: ui.jobs.append(target),
-    ))
+    monkeypatch.setattr(
+        _scan._threading,
+        "Thread",
+        lambda *, target, daemon: SimpleNamespace(
+            start=lambda: ui.jobs.append(target),
+        ),
+    )
 
     def render(width=640, scale=1, *, connected=False, show_connect=True, frames=3):
         monkeypatch.setattr(_scale, "_current", scale)
@@ -104,8 +126,8 @@ def scan_ui(imgui_frame, monkeypatch):
 
 
 def _actions(items):
-    connect, = [item for item in items if item.label.endswith("##emg_reconnect")]
-    scan, = [item for item in items if "Scan" in item.label]
+    (connect,) = [item for item in items if item.label.endswith("##emg_reconnect")]
+    (scan,) = [item for item in items if "Scan" in item.label]
     return connect, scan
 
 
@@ -152,13 +174,15 @@ def test_results_center_directly_below_actions_and_fit(scan_ui, width, scale, bu
     scan_ui.state.results = [{"name": "An outlet with a long name " * 5, "info": "64 channels"}]
     view = scan_ui.render(width, scale)
     for items in view.frames:
-        combo, = [item for item in items if item.kind == "combo"]
-        connect, = [item for item in items if item.label == "Connect##emg"]
+        (combo,) = [item for item in items if item.kind == "combo"]
+        (connect,) = [item for item in items if item.label == "Connect##emg"]
         actions = _actions(items)
         assert combo.lo[1] == pytest.approx(connect.lo[1], abs=1)
         # An aligned status occupies a full frame, including bottom padding.
-        bottom = max(item.hi[1] + (imgui.get_style().frame_padding.y
-                                  if item.kind == "text_colored" else 0) for item in actions)
+        bottom = max(
+            item.hi[1] + (imgui.get_style().frame_padding.y if item.kind == "text_colored" else 0)
+            for item in actions
+        )
         assert combo.lo[1] == pytest.approx(bottom + imgui.get_style().item_spacing.y, abs=1)
         _assert_centered([combo, connect], view.bounds)
         if width == 1200:

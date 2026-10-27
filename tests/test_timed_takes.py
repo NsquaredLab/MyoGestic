@@ -128,8 +128,9 @@ def test_start_stop_elapsed_and_immutable_snapshot(take):
 def test_injected_clock():
     calls = []
     now = [42.0]
-    machine = _TakeMachine(lambda: calls.append("record"), lambda: calls.append("stop"),
-                           clock=lambda: now[0])
+    machine = _TakeMachine(
+        lambda: calls.append("record"), lambda: calls.append("stop"), clock=lambda: now[0]
+    )
     machine.start("Fist", length_s=5.0)
     now[0] = 47.0
     machine.advance(recording=True)

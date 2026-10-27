@@ -19,9 +19,9 @@ If VHI isn't installed yet, see **[Install the Virtual Hand](install-vhi.md)**.
 ```python
 from myogestic.vhi import virtual_hand
 
-vhi = virtual_hand()                 # resolves install path + gRPC endpoint
-vhi_control = vhi.control_client()   # negotiates the control space (v2)
-recording = vhi.recording_client()   # recording session gate + trajectory playback
+vhi = virtual_hand()  # resolves install path + gRPC endpoint
+vhi_control = vhi.control_client()  # negotiates the control space (v2)
+recording = vhi.recording_client()  # recording session gate + trajectory playback
 ```
 
 `virtual_hand()` looks at `$VHI_PATH`, the per-user install root, and the local git checkout
@@ -58,12 +58,25 @@ import sys
 from myogestic.widgets import ProcessLauncher
 
 PROCESSES = [
-    ("EMG Generator", [sys.executable, "-m", "myogestic.tools.emg_generator",
-                       "--name", "TestEMG1", "--channels", "8", "--fs", "2048"]),
+    (
+        "EMG Generator",
+        [
+            sys.executable,
+            "-m",
+            "myogestic.tools.emg_generator",
+            "--name",
+            "TestEMG1",
+            "--channels",
+            "8",
+            "--fs",
+            "2048",
+        ],
+    ),
     *vhi.launcher(),
 ]
 
 launcher = ProcessLauncher(PROCESSES)
+
 
 @app.ui
 def ui(ctx):
@@ -83,7 +96,7 @@ try:
     PROCESSES = [*base, *vhi.launcher()]
 except FileNotFoundError as e:
     print(f"[demo] {e}", file=sys.stderr)
-    PROCESSES = base       # demo still runs; VHI button just absent
+    PROCESSES = base  # demo still runs; VHI button just absent
 ```
 
 ## What VHI calls its controls
@@ -156,6 +169,7 @@ panel = VhiMovementPanel(
     lambda state: bus.select("gesture", state),
 )
 
+
 @app.ui
 def ui(ctx):
     with grid[8, 0]:
@@ -167,8 +181,8 @@ generator, whatever the experiment needs:
 
 ```python
 def _on_movement_click(name: str) -> None:
-    ctrl_outlet.push_sample(...)                    # e.g. drive the EMG generator
-    bus.select("gesture", name)                     # deliver + rebase the debounce
+    ctrl_outlet.push_sample(...)  # e.g. drive the EMG generator
+    bus.select("gesture", name)  # deliver + rebase the debounce
 ```
 
 [`bus.select`](../concepts/controls.md#continuous-and-discrete-are-different-things) is the
@@ -182,9 +196,9 @@ range. Continuous regression is one, where the control hand is the *regression t
 model learns. The **recording aid** is for that:
 
 ```python
-recording.start_trajectory("Fist", frequency_hz=0.7)   # cycles, producing a trajectory
+recording.start_trajectory("Fist", frequency_hz=0.7)  # cycles, producing a trajectory
 ...
-recording.stop_trajectory()                            # stops and rests the hand
+recording.stop_trajectory()  # stops and rests the hand
 ```
 
 While a trajectory runs it owns the control hand, and discrete DOFs are refused with a reason;

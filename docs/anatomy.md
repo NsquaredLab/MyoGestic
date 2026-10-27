@@ -83,12 +83,16 @@ flowchart LR
 ## Imports, in three layers
 
 ```python
-from myogestic import App, Stream, TrainingData            # the orchestrator + data primitives
-from myogestic.ml import Pipeline, save_pickle, load_pickle # ML lifecycle layer (opt-in)
-from myogestic.session import iter_labeled_windows         # session reading helpers
-from myogestic.sources import LSLSource                    # one of the built-in sources
-from myogestic.widgets import RecordingControls, SessionManager, SignalViewer  # ImGui widget classes
-from sklearn.linear_model import LogisticRegression        # YOUR ML library
+from myogestic import App, Stream, TrainingData  # the orchestrator + data primitives
+from myogestic.ml import Pipeline, save_pickle, load_pickle  # ML lifecycle layer (opt-in)
+from myogestic.session import iter_labeled_windows  # session reading helpers
+from myogestic.sources import LSLSource  # one of the built-in sources
+from myogestic.widgets import (
+    RecordingControls,
+    SessionManager,
+    SignalViewer,
+)  # ImGui widget classes
+from sklearn.linear_model import LogisticRegression  # YOUR ML library
 ```
 
 Three layers, from framework-owned to user-owned:

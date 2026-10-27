@@ -302,6 +302,8 @@ def _on_gesture(i: int) -> None:
     if bus is not None:
         # `CLASSES` must name VHI's own movements; `select` returns False if one does not.
         bus.select("gesture", CLASSES[i])
+
+
 # --8<-- [end:gesture]
 
 
@@ -321,6 +323,8 @@ def _on_record() -> None:
 def _on_stop() -> None:
     app.stop_recording()
     recording_aid.set_recording_session(False)
+
+
 # --8<-- [end:record]
 
 
@@ -381,9 +385,12 @@ def connect_ui(ctx: Context) -> None:
     imgui.text_colored(muted(), "Streams")
     streams.ui(ctx)
     imgui.push_style_color(imgui.Col_.text, muted())
-    imgui.text_wrapped("Return to idle before changing processes." if ctx.state != "idle" else
-                       "Launch the sources, then connect. VHI kinematics are optional; "
-                       "takes without them train from Rest/Fist labels.")
+    imgui.text_wrapped(
+        "Return to idle before changing processes."
+        if ctx.state != "idle"
+        else "Launch the sources, then connect. VHI kinematics are optional; "
+        "takes without them train from Rest/Fist labels."
+    )
     if ctx.state == "recording":
         imgui.text_wrapped("Stop recording before changing connections.")
     imgui.pop_style_color()
@@ -482,7 +489,7 @@ def main() -> None:
         # `link.stop()` first, and it waits: the outlet sends on a paced thread, so the rest
         # pose it pushes at exit would otherwise never go out and the hand would hold.
         link.stop()
-        recording_aid.stop_trajectory()      # no-op unless a trajectory was started
+        recording_aid.stop_trajectory()  # no-op unless a trajectory was started
         recording_aid.set_recording_session(False)
         recording_aid.stop()
         vhi_control.stop()

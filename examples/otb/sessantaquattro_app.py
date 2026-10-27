@@ -39,9 +39,7 @@ CLASSES = ["Rest", "Contract"]
 source = SessantaquattroSource(nch_mode=3, fs_mode=2, mode="monopolar")
 
 app = App("Sessantaquattro — live view and recording", require_participant=True)
-app.streams(
-    Stream("emg", source=source, window_ms=WINDOW_MS, buffer_ms=60000)
-)
+app.streams(Stream("emg", source=source, window_ms=WINDOW_MS, buffer_ms=60000))
 
 layout = Layout(
     wide=Grid.areas(
@@ -118,8 +116,9 @@ def sessantaquattro_ui(ctx: Context) -> None:
             streams.ui(ctx)
             imgui.push_style_color(imgui.Col_.text, muted())
             imgui.text_wrapped(
-                "Stop the recording before changing connections." if ctx.state == "recording" else
-                "Join the device's WiFi or set this PC as its server, then power it on and connect."
+                "Stop the recording before changing connections."
+                if ctx.state == "recording"
+                else "Join the device's WiFi or set this PC as its server, then power it on and connect."
             )
             imgui.pop_style_color()
         else:

@@ -1,6 +1,7 @@
 """Quattrocento config/decoding unit tests (no socket): channel selection vs
 wire scaling boundary, CONF2 filter/detection encoding, start/stop packets, and
 the provenance config_dict."""
+
 import numpy as np
 
 from myogestic.sources.otb import _constants as C
@@ -13,6 +14,7 @@ def _le_int16_frame(values):
 
 # --- A1: scaling follows the WIRE layout, not the output selection -----------
 
+
 def test_scaling_uses_wire_boundary_independent_of_selection():
     # 120-wire (mode 0): bio [0,96), AUX IN [96,112), accessory [112,120).
     # Pick one channel from each region; each must be scaled by its wire region,
@@ -21,9 +23,9 @@ def test_scaling_uses_wire_boundary_independent_of_selection():
     frame = _le_int16_frame(range(120))  # one sample-instant, value == channel idx
     out = src._decode(frame)
     assert out.shape == (1, 3)
-    np.testing.assert_allclose(out[0, 0], 10 * C.QUATTRO_CONV_FACTOR_MV, rtol=1e-6)   # bio -> mV
-    np.testing.assert_allclose(out[0, 1], 100 * C.QUATTRO_AUX_FACTOR_V, rtol=1e-6)    # AUX IN -> V
-    np.testing.assert_allclose(out[0, 2], 115.0, rtol=0)                             # accessory raw
+    np.testing.assert_allclose(out[0, 0], 10 * C.QUATTRO_CONV_FACTOR_MV, rtol=1e-6)  # bio -> mV
+    np.testing.assert_allclose(out[0, 1], 100 * C.QUATTRO_AUX_FACTOR_V, rtol=1e-6)  # AUX IN -> V
+    np.testing.assert_allclose(out[0, 2], 115.0, rtol=0)  # accessory raw
 
 
 def test_select_below_wire_bio_still_scales_as_mv():
@@ -38,11 +40,13 @@ def test_select_below_wire_bio_still_scales_as_mv():
 
 def test_select_out_of_range_rejected():
     import pytest
+
     with pytest.raises(ValueError):
         QuattrocentoSource(nch_mode=0, select=[0, 120])  # 120 == nch_total, invalid
 
 
 # --- A2: CONF2 filter/detection encoding ------------------------------------
+
 
 def test_conf2_defaults_match_read_quattrocento_default():
     assert C.quattro_conf2() == 0x14  # monopolar, HPF 10, LPF 500
@@ -63,22 +67,29 @@ def test_source_embeds_conf2_in_every_input_slot():
 
 # --- A3: stop preserves config, flips only the GO bit -----------------------
 
+
 def test_stop_packet_differs_from_start_only_in_go_bit():
     start = C.quattro_config(fs_mode=3, nch_mode=0, acq_on=True, conf2=0x1E)
     stop = C.quattro_config(fs_mode=3, nch_mode=0, acq_on=False, conf2=0x1E)
     assert start[0] & 0x01 == 1 and stop[0] & 0x01 == 0
-    assert start[0] & ~0x01 == stop[0] & ~0x01     # everything but bit 0 identical
-    assert start[1:39] == stop[1:39]               # config body identical
-    assert start[39] != stop[39]                   # CRC differs (byte 0 changed)
+    assert start[0] & ~0x01 == stop[0] & ~0x01  # everything but bit 0 identical
+    assert start[1:39] == stop[1:39]  # config body identical
+    assert start[39] != stop[39]  # CRC differs (byte 0 changed)
     assert stop[39] == C.crc8(stop[:39])
 
 
 # --- A7: provenance config_dict ---------------------------------------------
 
+
 def test_config_dict_round_trips_and_packet_is_valid():
     src = QuattrocentoSource(
-        device_ip="169.254.1.10", fs_mode=3, nch_mode=0,
-        select=range(16), detection="bipolar", hpf=10, lpf=4400,
+        device_ip="169.254.1.10",
+        fs_mode=3,
+        nch_mode=0,
+        select=range(16),
+        detection="bipolar",
+        hpf=10,
+        lpf=4400,
     )
     d = src.config_dict()
     assert d["device"] == "quattrocento"

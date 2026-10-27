@@ -138,8 +138,15 @@ class RemoteTarget:
     """
 
     __slots__ = (
-        "_client", "_discrete", "_dofs", "_interface",
-        "_negotiated", "_outlets", "_pending", "_routed", "_warned_unversioned",
+        "_client",
+        "_discrete",
+        "_dofs",
+        "_interface",
+        "_negotiated",
+        "_outlets",
+        "_pending",
+        "_routed",
+        "_warned_unversioned",
     )
 
     def __init__(self, *, client: Any = None, interface: Any = None) -> None:
@@ -215,8 +222,7 @@ class RemoteTarget:
             # configuration against the manifest succeeds trivially, leaving a target
             # that is bound, negotiated, and drives nothing.
             raise ValueError(
-                "RemoteTarget has nothing to drive: the configuration declares no DOFs "
-                "at all."
+                "RemoteTarget has nothing to drive: the configuration declares no DOFs at all."
             )
         if self._client is None:
             raise ValueError(
@@ -455,15 +461,10 @@ class RemoteTarget:
             return controls.routes, {
                 alias
                 for alias, refs in controls.routes.items()
-                if any(
-                    getattr(ref, "address", "").split(".", 1)[0] in namespaces
-                    for ref in refs
-                )
+                if any(getattr(ref, "address", "").split(".", 1)[0] in namespaces for ref in refs)
             }
         drivable = {
-            address
-            for address, cap in exported.items()
-            if getattr(cap, "kind", "") == "continuous"
+            address for address, cap in exported.items() if getattr(cap, "kind", "") == "continuous"
         }
         missing = [name for name in controls.channel_labels() if name not in drivable]
         if missing:
@@ -505,9 +506,7 @@ class RemoteTarget:
         # rejection per keystroke.
         # Keyed by address, like every stream this target publishes: the remote target looks the
         # control up by the key and the state up by the value.
-        ours = {
-            address: changed[alias] for alias, address in self._discrete if alias in changed
-        }
+        ours = {address: changed[alias] for alias, address in self._discrete if alias in changed}
         if not ours:
             return
         if self._negotiated:

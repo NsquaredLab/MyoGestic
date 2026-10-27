@@ -38,35 +38,43 @@ line. A **target** renders some DOFs. That is the whole standard.
 
 <!--docs:skip-->
 ```python
-STANDARD_VERSION = "1"        # versions the vocabulary format, NOT the archive layout
+STANDARD_VERSION = "1"  # versions the vocabulary format, NOT the archive layout
+
 
 @dataclass(frozen=True, slots=True)
 class Continuous:
     """A signed, normalized DOF. `+1` is the direction the name denotes."""
+
     name: str
     lo: float = -1.0
     hi: float = 1.0
     rest: float = 0.0
     label: str = ""
 
+
 @dataclass(frozen=True, slots=True)
 class Discrete:
     """A DOF holding exactly one of `states`. `rest` is the neutral state."""
+
     name: str
     states: tuple[str, ...]
     rest: str
     debounce_s: float = 0.0
     label: str = ""
 
-Dof = Continuous | Discrete     # tagged union, no base class, exhaustive under `ty`
+
+Dof = Continuous | Discrete  # tagged union, no base class, exhaustive under `ty`
+
 
 @dataclass(frozen=True, slots=True)
 class ControlSet:
     """A validated configuration. `dofs` insertion order is the canonical wire order."""
+
     dofs: Mapping[str, Dof]
     simultaneous: Mapping[str, tuple[str, ...]]
     standard_version: str = STANDARD_VERSION
     # .continuous  .discrete  .n_concurrent  .channel_labels()  .as_dict()
+
 
 def load_dofs(config: Mapping) -> ControlSet: ...
 def substitute_rest(controls: ControlSet, values: Mapping) -> dict: ...
@@ -388,8 +396,15 @@ Two consequences:
 
 <!--docs:skip-->
 ```python
-_LEGACY = ("thumb.flexion", "thumb.abduction", "index.flexion",
-           "middle.flexion", "ring.flexion", "little.flexion")   # ch 6-8: never read
+_LEGACY = (
+    "thumb.flexion",
+    "thumb.abduction",
+    "index.flexion",
+    "middle.flexion",
+    "ring.flexion",
+    "little.flexion",
+)  # ch 6-8: never read
+
 
 def decode_pose(frame):
     """Legacy 9-ch `vhi_control` -> the six canonical DOFs VHI actually renders.

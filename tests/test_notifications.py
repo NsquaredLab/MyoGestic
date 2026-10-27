@@ -23,7 +23,10 @@ def test_notify_appends_and_mirrors_to_log(monkeypatch):
     notification = ctx.notifications[0]
     assert isinstance(notification, Notification)
     assert (notification.title, notification.detail, notification.kind, notification.created) == (
-        "Recording saved", "a.session.zip", "success", 123.0
+        "Recording saved",
+        "a.session.zip",
+        "success",
+        123.0,
     )
     assert ctx.logs[-1].endswith("Recording saved — a.session.zip")
     ctx.notify("Ready")
@@ -250,5 +253,7 @@ def test_stop_recording_notifies_pack_failure(tmp_path, monkeypatch):
     assert len(app.ctx.notifications) == 1
     notification = app.ctx.notifications[0]
     assert (notification.title, notification.detail, notification.kind) == (
-        "Recording not packed", "Disk full — folder kept", "danger"
+        "Recording not packed",
+        "Disk full — folder kept",
+        "danger",
     )

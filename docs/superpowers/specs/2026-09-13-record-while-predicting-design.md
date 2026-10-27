@@ -59,7 +59,7 @@ the record to compare against.
 `Context` gains one field:
 
 ```python
-recording: bool = False   # a Session is open and streams are appending to it
+recording: bool = False  # a Session is open and streams are appending to it
 ```
 
 `ctx.session` is **not** the flag. `stop_recording` deliberately leaves `ctx.session` set so
@@ -181,7 +181,7 @@ of uptime — the size of the latency the column exists to measure.
 result, the `predict` result. When `app.ctx.recording` and `app.ctx.session` is set:
 
 ```python
-t = max(ts[-1] for ts in window_timestamps if len(ts))   # newest sample this tick saw
+t = max(ts[-1] for ts in window_timestamps if len(ts))  # newest sample this tick saw
 self._record(session, "features", features, t)
 self._record(session, "prediction", result, t)
 session.append_event("pipeline.tick", [local_clock()], t)
@@ -219,12 +219,15 @@ path in `push` is recorded too, as it should be:
 
 ```python
 def _deliver(self, values, changed):
-    for target in self._targets: ...            # unchanged
+    for target in self._targets:
+        ...  # unchanged
     ctx = self._ctx
     if ctx is not None and ctx.recording and ctx.session is not None:
         try:
             ctx.session.append_event(
-                "controls", encode(self._controls, values), local_clock(),
+                "controls",
+                encode(self._controls, values),
+                local_clock(),
                 channel_names=self._names,
             )
         except Exception as exc:

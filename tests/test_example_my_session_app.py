@@ -17,8 +17,11 @@ def session_app(monkeypatch, tmp_path):
 
     monkeypatch.chdir(tmp_path)
     sent = []
-    monkeypatch.setattr(emg_generator, "control_outlet",
-                        lambda: SimpleNamespace(push_sample=lambda value: sent.append(value)))
+    monkeypatch.setattr(
+        emg_generator,
+        "control_outlet",
+        lambda: SimpleNamespace(push_sample=lambda value: sent.append(value)),
+    )
     ns = runpy.run_path(str(ROOT / "examples/synthetic/my_session_app.py"))
     ns["sent"] = sent
     yield ns
@@ -37,8 +40,9 @@ def test_template_trains_saved_windows_and_preserves_class_indices(session_app, 
     ns = session_app
     session = Session(str(tmp_path / "takes"))
     session.init_stream("emg", StreamInfo(n_channels=2, fs=100))
-    session.append("emg", np.repeat([[0.02, 0.04], [0.8, 0.6], [0.4, 0.9]], 100, axis=0),
-                   np.arange(300) / 100)
+    session.append(
+        "emg", np.repeat([[0.02, 0.04], [0.8, 0.6], [0.4, 0.9]], 100, axis=0), np.arange(300) / 100
+    )
     for label in range(3):
         session.add_label(label, timestamp=float(label))
     session.save_meta("template test", ["Rest", "Fist", "Open"])
@@ -61,8 +65,11 @@ def test_connect_is_nonblocking_single_attempt_and_reports_launch_failure(sessio
     """A double click cannot create two workers; a failed launch leaves Retry usable."""
     ns = session_app
     pending, calls = [], []
-    monkeypatch.setattr(ns["threading"], "Thread",
-                        lambda *, target, daemon: SimpleNamespace(start=lambda: pending.append(target)))
+    monkeypatch.setattr(
+        ns["threading"],
+        "Thread",
+        lambda *, target, daemon: SimpleNamespace(start=lambda: pending.append(target)),
+    )
     monkeypatch.setattr(ns["processes"], "launch", lambda name: calls.append(name))
     monkeypatch.setattr(ns["app"].ctx.streams["emg"], "reconnect", lambda: calls.append("connect"))
     ns["_connect"]()
@@ -91,7 +98,9 @@ def test_recording_uses_selected_gesture_after_simulator_preview(session_app, mo
     ns["app"].ctx.current_label = 1
     ns["simulator"].set(0)
     recorded = []
-    monkeypatch.setattr(ns["app"], "start_recording", lambda: recorded.append(ns["simulator"].value))
+    monkeypatch.setattr(
+        ns["app"], "start_recording", lambda: recorded.append(ns["simulator"].value)
+    )
     ns["_on_record"]()
     assert recorded == [1.0]
     np.testing.assert_array_equal(ns["sent"][-1], np.array([1.0], dtype=np.float32))
@@ -105,8 +114,13 @@ def test_completion_follows_this_participants_takes(session_app, monkeypatch, tm
     folder = tmp_path / "sessions" / ctx.participant
     folder.mkdir(parents=True)
     (folder / "someone_else_take.session.zip").touch()
-    monkeypatch.setitem(ctx.streams, "emg", SimpleNamespace(status="connected", info=object(),
-                                                           detach_session=lambda: None, stop=lambda: None))
+    monkeypatch.setitem(
+        ctx.streams,
+        "emg",
+        SimpleNamespace(
+            status="connected", info=object(), detach_session=lambda: None, stop=lambda: None
+        ),
+    )
     assert ns["_step_done"](ctx) == [True, False, False, False]
     (folder / "P-014_take.session.zip").touch()
     ns["pipeline"].model = {0: np.zeros(8), 1: np.ones(8)}
@@ -114,7 +128,9 @@ def test_completion_follows_this_participants_takes(session_app, monkeypatch, tm
     assert ns["_step_done"](ctx) == [True] * 4
 
 
-def test_switching_steps_keeps_the_same_recording_and_stream(session_app, monkeypatch, implot_frame):
+def test_switching_steps_keeps_the_same_recording_and_stream(
+    session_app, monkeypatch, implot_frame
+):
     """Navigation must not stop a take, lose its label or detach acquisition."""
     from myogestic import StreamInfo
 
@@ -124,7 +140,8 @@ def test_switching_steps_keeps_the_same_recording_and_stream(session_app, monkey
     app.ctx.current_label = 1
     stream = app.ctx.streams["emg"]
     source = SimpleNamespace(
-        connect=lambda: StreamInfo(n_channels=2, fs=100), disconnect=lambda: None,
+        connect=lambda: StreamInfo(n_channels=2, fs=100),
+        disconnect=lambda: None,
         read=lambda: (np.ones((10, 2), dtype=np.float32), np.arange(10) / 100),
     )
     monkeypatch.setattr(stream, "_source", source)
@@ -148,7 +165,12 @@ def test_switching_steps_keeps_the_same_recording_and_stream(session_app, monkey
 @pytest.mark.parametrize("step", range(4))
 @pytest.mark.parametrize("state", ["empty", "ready", "recording"])
 def test_shell_fits_in_light_theme_at_scale_two(
-    session_app, monkeypatch, implot_frame, width, step, state,
+    session_app,
+    monkeypatch,
+    implot_frame,
+    width,
+    step,
+    state,
 ):
     """Exercise real controls at the default window and two narrow layouts."""
     from imgui_bundle import hello_imgui, imgui
@@ -230,7 +252,9 @@ def test_shell_fits_in_light_theme_at_scale_two(
     assert {name for name, *_ in cells} == ns["layout"].panel_names
     assert visibility == [step == 1]
     assert all(horizontal == 0 for _, horizontal, _ in cells), cells
-    assert all(vertical == 0 for name, _, vertical in cells if name in {"header", "simulator", "status"}), cells
+    assert all(
+        vertical == 0 for name, _, vertical in cells if name in {"header", "simulator", "status"}
+    ), cells
     assert all(overhang <= 1 for _, overhang in buttons), buttons
     assert ns["layout"]._active is (ns["layout"]._wide if width == 2560 else ns["layout"]._narrow)
 
@@ -245,11 +269,15 @@ def test_gallery_render_entries_draw_without_capturing(monkeypatch, implot_frame
     gallery = runpy.run_path(str(ROOT / "tools/widget_screenshot.py"))
     default_step = StepBar(["First", "Second"]).active
     capture_calls = []
-    monkeypatch.setitem(gallery["render_app_header"].__globals__, "_self_capture_after",
-                        lambda seconds, path: capture_calls.append(path.name))
+    monkeypatch.setitem(
+        gallery["render_app_header"].__globals__,
+        "_self_capture_after",
+        lambda seconds, path: capture_calls.append(path.name),
+    )
     monkeypatch.setattr(AppLogo, "ui", lambda self: None)
-    monkeypatch.setattr(emg_generator, "control_outlet",
-                        lambda: SimpleNamespace(push_sample=lambda value: None))
+    monkeypatch.setattr(
+        emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda value: None)
+    )
 
     def run(app, *, window_size):
         width, height = window_size

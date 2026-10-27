@@ -64,9 +64,7 @@ class RecordingClient:
         — a caller can then decide whether an ungated recording is acceptable, which
         is a judgement about experiment integrity and not this client's to make.
         """
-        return self._call(
-            "SetRecordingSession", pb2.SetRecordingSessionRequest(active=active)
-        )
+        return self._call("SetRecordingSession", pb2.SetRecordingSessionRequest(active=active))
 
     # --- trajectories ----------------------------------------------------------
 
@@ -103,9 +101,7 @@ class RecordingClient:
 
         Safe to call unconditionally.
         """
-        return self._call(
-            "StopRecordingTrajectory", pb2.StopRecordingTrajectoryRequest()
-        )
+        return self._call("StopRecordingTrajectory", pb2.StopRecordingTrajectoryRequest())
 
     # --- state ---------------------------------------------------------------
 
@@ -152,7 +148,9 @@ class RecordingClient:
             log.warning("the target refused %s: %s", rpc_name, ack.message)
         return ack.applied
 
-    def _log_failure(self, operation: str, error: Exception, *, level: int = logging.WARNING) -> None:
+    def _log_failure(
+        self, operation: str, error: Exception, *, level: int = logging.WARNING
+    ) -> None:
         # Keyed on the gRPC status code, not str(error): grpc varies the field order of
         # debug_error_string between calls, so a string key would never dedup.
         call = error if isinstance(error, grpc.Call) else None

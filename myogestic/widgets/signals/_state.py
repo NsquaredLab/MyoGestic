@@ -108,7 +108,9 @@ class NotchCache:
             self._next_seq = end_seq
         else:
             new_count = end_seq - self._next_seq
-            if new_count > 0:  # filter ONLY the newly-arrived samples (column-select just those rows)
+            if (
+                new_count > 0
+            ):  # filter ONLY the newly-arrived samples (column-select just those rows)
                 fresh = self._filter.step(_cols(data_raw[n - new_count :], channel_map))
                 self._filtered = np.concatenate([self._filtered, fresh])
                 self._next_seq = end_seq
@@ -126,7 +128,9 @@ class ViewerState:
     """Per-widget-id viewer state."""
 
     n_pixels: int | None = None  # optional hard cap on drawn points; None/0 = no cap
-    detail_factor: float = 3.0  # draw density (points per plot pixel); the "Detail" slider drives it
+    detail_factor: float = (
+        3.0  # draw density (points per plot pixel); the "Detail" slider drives it
+    )
     one_to_one: bool = False  # draw every sample, no MinMax; the "1:1" toggle drives it
     window: float = 1.0
     gain: float = 1.0
@@ -541,7 +545,16 @@ def _notch_from(
         v.notch_cache.release()
         return _cols(data_raw[region_start_idx:], channel_map)  # row-slice FIRST, then columns
     return v.notch_cache.notched(
-        stream_id, epoch, end_seq, data_raw, ts_raw, region_start_idx, region_start_t, fs, freq, channel_map
+        stream_id,
+        epoch,
+        end_seq,
+        data_raw,
+        ts_raw,
+        region_start_idx,
+        region_start_t,
+        fs,
+        freq,
+        channel_map,
     )
 
 
@@ -627,8 +640,17 @@ def build_signal_frame(
         )
         ts_pre = ts_raw[pre_idx:]
         data_pre = _notch_from(
-            v, id(stream), epoch, end_seq, data_raw, ts_raw, pre_idx,
-            vis_start_t - window_s, fs, v.mains_notch, channel_map,
+            v,
+            id(stream),
+            epoch,
+            end_seq,
+            data_raw,
+            ts_raw,
+            pre_idx,
+            vis_start_t - window_s,
+            fs,
+            v.mains_notch,
+            channel_map,
         )
         rms_ts, rms_data = compute_rms_trace(ts_pre, data_pre, fs, v.rms_window_ms, v.rms_hop_ms)
         # Keep only endpoints inside the visible window (pre-roll was history).
@@ -643,8 +665,17 @@ def build_signal_frame(
         # plotted (`channel_map`); `data_win` stays un-notched for the footer.
         data_win = apply_display_filter(data_win_raw, v.display_filter, fs)
         notched = _notch_from(
-            v, id(stream), epoch, end_seq, data_raw, ts_raw, start_idx,
-            vis_start_t, fs, v.mains_notch, channel_map,
+            v,
+            id(stream),
+            epoch,
+            end_seq,
+            data_raw,
+            ts_raw,
+            start_idx,
+            vis_start_t,
+            fs,
+            v.mains_notch,
+            channel_map,
         )
         data_sel = apply_display_filter(notched, v.display_filter, fs)
         trace_ts = ts_win

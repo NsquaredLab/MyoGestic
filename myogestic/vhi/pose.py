@@ -110,7 +110,5 @@ def split_pose(frame: np.ndarray) -> dict[str, np.ndarray]:
     """
     arr = np.asarray(frame, dtype=np.float32)
     if arr.shape[-1] != POSE_WIDTH:
-        raise ValueError(
-            f"a VHI pose frame is {POSE_WIDTH} channels wide, got {arr.shape[-1]}."
-        )
+        raise ValueError(f"a VHI pose frame is {POSE_WIDTH} channels wide, got {arr.shape[-1]}.")
     return {name: arr[..., i] for i, name in enumerate(POSE_DOFS)}

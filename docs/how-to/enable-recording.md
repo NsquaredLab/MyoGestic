@@ -9,16 +9,20 @@ from myogestic import App, Stream
 from myogestic.sources import LSLSource
 from myogestic.widgets import RecordingControls
 
-app = App("My recording")                                              # 1. construct App
+app = App("My recording")  # 1. construct App
 app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))  # 2. register stream(s)
 
-recording = RecordingControls(["Rest", "Fist"],
-                              on_record=app.start_recording,             # 3. wire Record button
-                              on_stop=app.stop_recording)                # 4. wire Stop button
+recording = RecordingControls(
+    ["Rest", "Fist"],
+    on_record=app.start_recording,  # 3. wire Record button
+    on_stop=app.stop_recording,
+)  # 4. wire Stop button
+
 
 @app.ui
 def ui(ctx):
     recording.ui(ctx)
+
 
 app.run()
 ```
@@ -35,7 +39,7 @@ from myogestic.widgets import RecordButton
 recorder = RecordButton(
     on_record=app.start_recording,
     on_stop=app.stop_recording,
-    on_discard=app.discard_recording,   # optional; omit and the dialog offers no Discard
+    on_discard=app.discard_recording,  # optional; omit and the dialog offers no Discard
 )
 ```
 
@@ -151,17 +155,20 @@ def _capture(app):
     # Run on a background thread so app.run()'s main loop can spin
     # the acquisition threads while we sleep here.
     def _run():
-        time.sleep(2)                              # let buffers warm up
+        time.sleep(2)  # let buffers warm up
         app.start_recording("sessions")
-        app.ctx.session.add_label(0)               # initial class index
-        for class_idx in (1, 0, 1, 0):             # cycle Fist <-> Rest
+        app.ctx.session.add_label(0)  # initial class index
+        for class_idx in (1, 0, 1, 0):  # cycle Fist <-> Rest
             time.sleep(5)
             app.ctx.session.add_label(class_idx)
         time.sleep(5)
         app.stop_recording()
         # Wait for the pack thread to finish before exiting.
         time.sleep(2)
-        import os; os._exit(0)
+        import os
+
+        os._exit(0)
+
     threading.Thread(target=_run, daemon=True).start()
 
 
@@ -178,6 +185,7 @@ For non-default UX (custom Record button placement, conditional triggers, multi-
 ```python
 from imgui_bundle import imgui
 from mne_lsl.lsl import local_clock
+
 
 @app.ui
 def ui(ctx):
@@ -220,10 +228,10 @@ from myogestic.session import open_session_store
 # Works for both packed zips AND unpacked folders.
 sess = open_session_store("sessions/2026-05-17_14-23-05.session.zip")
 
-emg     = sess.stores["emg"]            # zarr.Array, shape (n_samples, n_channels)
-emg_ts  = sess.ts_stores["emg"]         # zarr.Array, shape (n_samples,) float64
-labels  = sess.label_track              # list[LabelEvent]
-info    = sess.stream_info("emg")       # StreamInfo(fs, n_channels, dtype)
+emg = sess.stores["emg"]  # zarr.Array, shape (n_samples, n_channels)
+emg_ts = sess.ts_stores["emg"]  # zarr.Array, shape (n_samples,) float64
+labels = sess.label_track  # list[LabelEvent]
+info = sess.stream_info("emg")  # StreamInfo(fs, n_channels, dtype)
 ```
 
 For windowed training iteration, use the helpers in `myogestic.session`:
@@ -233,17 +241,21 @@ from myogestic.session import iter_labeled_windows, iter_aligned_windows
 
 # Classification: one (window, ts, class_index) per hop step.
 for window, ts, cls in iter_labeled_windows(
-    [sess.path], stream_name="emg",
-    window_ms=200, hop_ms=100,
+    [sess.path],
+    stream_name="emg",
+    window_ms=200,
+    hop_ms=100,
     classes={0, 1},
 ):
     ...
 
 # Regression: align a primary stream with one or more aligned streams.
 for window, aligned, ts in iter_aligned_windows(
-    [sess.path], primary_stream_name="emg",
+    [sess.path],
+    primary_stream_name="emg",
     aligned_stream_names=["vhi_control"],
-    window_ms=200, hop_ms=50,
+    window_ms=200,
+    hop_ms=50,
 ):
     target = aligned["vhi_control"]
     ...

@@ -139,9 +139,7 @@ class ServoHand:
             "ring": levels.get("hand.ring", 0.0),
             "little": levels.get("hand.little", 0.0),
         }
-        angles = (
-            round(lo + fraction[servo] * (hi - lo)) for servo, (lo, hi) in SERVOS.items()
-        )
+        angles = (round(lo + fraction[servo] * (hi - lo)) for servo, (lo, hi) in SERVOS.items())
         return (",".join(str(a) for a in angles) + "\n").encode()
 
 

@@ -24,15 +24,25 @@ VIEWERS = {
 }
 
 
-@pytest.mark.parametrize("name,title,launch_failed", [
-    *((name, title, False) for name, title in VIEWERS.items()),
-    ("high_channel_viewer", "High-channel viewer", True),
-])
+@pytest.mark.parametrize(
+    "name,title,launch_failed",
+    [
+        *((name, title, False) for name, title in VIEWERS.items()),
+        ("high_channel_viewer", "High-channel viewer", True),
+    ],
+)
 @pytest.mark.parametrize("width", [2560, 1280])
 @pytest.mark.parametrize("connected", [False, True])
 @pytest.mark.parametrize("ui_font", ["platform", "dejavu"])
 def test_viewer_header_and_body_fit(
-    name, title, launch_failed, width, connected, ui_font, monkeypatch, implot_frame,
+    name,
+    title,
+    launch_failed,
+    width,
+    connected,
+    ui_font,
+    monkeypatch,
+    implot_frame,
 ):
     """Measure real text, actions and cell bounds after the header takes its row."""
     ns = runpy.run_path(str(ROOT / "examples" / "synthetic" / f"{name}.py"))
@@ -64,7 +74,8 @@ def test_viewer_header_and_body_fit(
             font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
     io.font_default = io.fonts.add_font_from_file_ttf(str(font_path), 14)
     font = io.fonts.add_font_from_file_ttf(
-        str(ROOT / "myogestic/assets/fonts/IBMPlexMono-Regular.ttf"), 13,
+        str(ROOT / "myogestic/assets/fonts/IBMPlexMono-Regular.ttf"),
+        13,
     )
     monkeypatch.setattr(_theme, "_MONO_FONT", font)
     imgui.get_style().scale_all_sizes(2.0)
@@ -73,11 +84,18 @@ def test_viewer_header_and_body_fit(
 
     # Retain the logo's real layout; only its GPU texture needs a stand-in.
     monkeypatch.setattr(hello_imgui, "asset_exists", lambda name: True)
-    monkeypatch.setattr(hello_imgui, "image_and_size_from_asset", lambda name: SimpleNamespace(
-        texture_id=1, size=imgui.ImVec2(519, 128),
-    ))
+    monkeypatch.setattr(
+        hello_imgui,
+        "image_and_size_from_asset",
+        lambda name: SimpleNamespace(
+            texture_id=1,
+            size=imgui.ImVec2(519, 128),
+        ),
+    )
     monkeypatch.setattr(imgui, "image", lambda texture, size: imgui.dummy(size))
-    monkeypatch.setattr(app_header, "status_pill", lambda *args: pytest.fail("viewers have no state pill"))
+    monkeypatch.setattr(
+        app_header, "status_pill", lambda *args: pytest.fail("viewers have no state pill")
+    )
 
     stream = app.ctx.streams["emg"]
     if connected:
@@ -99,11 +117,24 @@ def test_viewer_header_and_body_fit(
 
     def remember(label):
         draw = imgui.get_window_draw_list()
-        items.append((str(label), tuple(imgui.get_item_rect_min()), tuple(imgui.get_item_rect_max()),
-                      tuple(draw.get_clip_rect_min()), tuple(draw.get_clip_rect_max())))
+        items.append(
+            (
+                str(label),
+                tuple(imgui.get_item_rect_min()),
+                tuple(imgui.get_item_rect_max()),
+                tuple(draw.get_clip_rect_min()),
+                tuple(draw.get_clip_rect_max()),
+            )
+        )
 
     for method in (
-        "text_unformatted", "text_wrapped", "text_disabled", "text", "button", "small_button", "combo",
+        "text_unformatted",
+        "text_wrapped",
+        "text_disabled",
+        "text",
+        "button",
+        "small_button",
+        "combo",
     ):
         original = getattr(imgui, method)
 
@@ -124,8 +155,12 @@ def test_viewer_header_and_body_fit(
 
     def exit_cell(self, *args):
         pos, size = imgui.get_window_pos(), imgui.get_window_size()
-        cells[self._name] = (tuple(pos), (pos.x + size.x, pos.y + size.y),
-                            imgui.get_scroll_max_x(), imgui.get_scroll_max_y())
+        cells[self._name] = (
+            tuple(pos),
+            (pos.x + size.x, pos.y + size.y),
+            imgui.get_scroll_max_x(),
+            imgui.get_scroll_max_y(),
+        )
         return original_exit(self, *args)
 
     monkeypatch.setattr(_AreaCell, "__exit__", exit_cell)
@@ -151,15 +186,20 @@ def test_viewer_header_and_body_fit(
     assert any(label == title for label, *_ in items)
     header_lo, header_hi, *_ = cells["header"]
     assert header_hi[1] - header_lo[1] == pytest.approx(104)
-    assert len(cells) == {"high_channel_viewer": 5, "electrode_grids": 5,
-                          "electrode_overview": 7}[name]
+    assert (
+        len(cells)
+        == {"high_channel_viewer": 5, "electrode_grids": 5, "electrode_overview": 7}[name]
+    )
     for cell, (lo, hi, scroll_x, scroll_y) in cells.items():
         assert scroll_x == scroll_y == 0, (cell, scroll_x, scroll_y)
         assert 0 <= lo[0] < hi[0] <= width and 0 <= lo[1] < hi[1] <= 1656, (cell, lo, hi)
         if cell != "header":
             assert lo[1] >= header_hi[1]
-    clipped = [(label, lo, hi, clip_lo, clip_hi) for label, lo, hi, clip_lo, clip_hi in items
-               if any(lo[i] < clip_lo[i] - 1 or hi[i] > clip_hi[i] + 1 for i in (0, 1))]
+    clipped = [
+        (label, lo, hi, clip_lo, clip_hi)
+        for label, lo, hi, clip_lo, clip_hi in items
+        if any(lo[i] < clip_lo[i] - 1 or hi[i] > clip_hi[i] + 1 for i in (0, 1))
+    ]
     assert not clipped, clipped
 
 
@@ -184,12 +224,17 @@ def test_electrode_grids_keep_separate_selections_and_one_manual_range(monkeypat
         assert sum(map(len, scopes)) == 256
         assert all(len(scope) == 64 for scope in scopes)
         for viewer, state, scope, channel_grid in zip(
-            viewers, states, scopes, stream.info.channel_grids, strict=True,
+            viewers,
+            states,
+            scopes,
+            stream.info.channel_grids,
+            strict=True,
         ):
             assert viewer._stream_name == "emg"
             assert set(channel_grid.columns) == scope
-            enabled = _state.resolve_enabled(state, "emg", 256, viewer._initial_channels,
-                                             list(viewer._channel_scope))
+            enabled = _state.resolve_enabled(
+                state, "emg", 256, viewer._initial_channels, list(viewer._channel_scope)
+            )
             assert enabled == scope
 
         # Editing one tile cannot change any other tile's channel selection.
@@ -245,7 +290,9 @@ def test_signal_viewer_fits_small_tile(width, state, monkeypatch, imgui_frame):
     if state == "connected":
         stream.status = "connected"
     elif state == "error":
-        stream.last_error = "The amplifier connection failed; verify the device and try connecting again."
+        stream.last_error = (
+            "The amplifier connection failed; verify the device and try connecting again."
+        )
     bounds, labels = [], []
     for method in ("button", "small_button", "combo", "text_wrapped"):
         original = getattr(imgui, method)

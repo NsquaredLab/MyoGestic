@@ -224,8 +224,8 @@ def test_selected_input_streams_exclude_feedback_and_its_clock(tmp_path):
     pipeline.model = object()
     app.ctx.state = "predicting"
     app.ctx.streams = {
-        "emg": SimpleNamespace(get_window=lambda: (np.ones((2, 4)), np.array([1., 2.]))),
-        "feedback": SimpleNamespace(get_window=lambda: (np.ones((9, 4)), np.array([9., 10.]))),
+        "emg": SimpleNamespace(get_window=lambda: (np.ones((2, 4)), np.array([1.0, 2.0]))),
+        "feedback": SimpleNamespace(get_window=lambda: (np.ones((9, 4)), np.array([9.0, 10.0]))),
     }
     seen = []
     pipeline.on_extract = lambda windows: seen.append(set(windows)) or [1.0]

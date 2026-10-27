@@ -118,9 +118,7 @@ class Rig(pb2_grpc.RemoteControlServicer):
         manifest = pb2.ControlManifest(target_name="rig", vocabulary_version="2")
         for address in ADDRESSES:
             manifest.capabilities.append(
-                pb2.ControlCapability(
-                    address=address, kind=pb2.CONTINUOUS, lo=LO, hi=HI, rest=REST
-                )
+                pb2.ControlCapability(address=address, kind=pb2.CONTINUOUS, lo=LO, hi=HI, rest=REST)
             )
         return manifest
 
@@ -363,16 +361,14 @@ import tomllib
 from myogestic.controls import ControlLink, load_control_map
 from myogestic.remote import InterfaceSpec, RemoteTarget
 
-rig = InterfaceSpec(
-    name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051
-)
+rig = InterfaceSpec(name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051)
 
 #: Held in a variable, not built inline. `link.stop()` deliberately leaves the client
 #: alive so the link can be re-used, so this is the only reference that will ever be able
 #: to shut its worker thread and gRPC channel down. See the end of stage 5.
 client = rig.control_client()
 
-with open("my-rig.toml", "rb") as handle:   # "rb" — tomllib requires binary
+with open("my-rig.toml", "rb") as handle:  # "rb" — tomllib requires binary
     control_map = load_control_map(tomllib.load(handle))
 
 link = ControlLink(control_map, [RemoteTarget(client=client, interface=rig)], hz=32)
@@ -524,103 +520,103 @@ Applying one sample. **This is the one method where a value becomes motion**:
 The loop that drives them:
 
 ```python
-    def _read(self) -> None:
-        """Read every stream and apply each value as it arrives.
+def _read(self) -> None:
+    """Read every stream and apply each value as it arrives.
 
-        One thread, not one per stream: `resolve_streams` is a multicast sweep of the
-        whole network, and one sweep already answers for every stream still missing an
-        inlet.
-        """
-        while not self._stop.is_set():
-            # Resolving is inside the `try` too: an outlet can vanish between the resolve
-            # and the open. Outside it, that ordinary race kills this thread while the gRPC
-            # server keeps answering the manifest — a client would bind successfully
-            # against a target that never reads another sample.
-            try:
-                missing = [a for a in ADDRESSES if a not in self._inlets]
-                if missing:
-                    self._open(missing)
-                for address, inlet in self._inlets.items():
-                    chunk, _ = inlet.pull_chunk(timeout=0.0)
-                    if chunk is not None and len(chunk):
-                        # One channel, so there is nothing to unpack: `chunk[-1][0]` is
-                        # the whole sample.
-                        self._apply(address, float(chunk[-1][0]))
-                self._stop.wait(0.005)
-            except Exception as exc:  # noqa: BLE001 - this thread must survive
-                print(f"rig: lost an inlet ({type(exc).__name__}: {exc}), re-resolving")
-                for inlet in self._inlets.values():
-                    with suppress(Exception):
-                        inlet.close_stream()
-                self._inlets.clear()
-                self._stop.wait(1.0)   # `resolve_streams` can raise too — back off
+    One thread, not one per stream: `resolve_streams` is a multicast sweep of the
+    whole network, and one sweep already answers for every stream still missing an
+    inlet.
+    """
+    while not self._stop.is_set():
+        # Resolving is inside the `try` too: an outlet can vanish between the resolve
+        # and the open. Outside it, that ordinary race kills this thread while the gRPC
+        # server keeps answering the manifest — a client would bind successfully
+        # against a target that never reads another sample.
+        try:
+            missing = [a for a in ADDRESSES if a not in self._inlets]
+            if missing:
+                self._open(missing)
+            for address, inlet in self._inlets.items():
+                chunk, _ = inlet.pull_chunk(timeout=0.0)
+                if chunk is not None and len(chunk):
+                    # One channel, so there is nothing to unpack: `chunk[-1][0]` is
+                    # the whole sample.
+                    self._apply(address, float(chunk[-1][0]))
+            self._stop.wait(0.005)
+        except Exception as exc:  # noqa: BLE001 - this thread must survive
+            print(f"rig: lost an inlet ({type(exc).__name__}: {exc}), re-resolving")
+            for inlet in self._inlets.values():
+                with suppress(Exception):
+                    inlet.close_stream()
+            self._inlets.clear()
+            self._stop.wait(1.0)  # `resolve_streams` can raise too — back off
 ```
 
 And something to watch, because a rig you cannot see is a rig you cannot check:
 
 ```python
-    def _status(self) -> str:
-        """One line naming every address's current value."""
-        axes = "  ".join(
-            f"{a.removeprefix('rig.')}={self.pose[a]:+.2f}" for a in ADDRESSES
-        )
-        return f"rig: {axes}"
+def _status(self) -> str:
+    """One line naming every address's current value."""
+    axes = "  ".join(f"{a.removeprefix('rig.')}={self.pose[a]:+.2f}" for a in ADDRESSES)
+    return f"rig: {axes}"
 
-    def _watch(self) -> None:
-        """Print the driven state whenever it changes."""
-        last = None
-        while not self._stop.is_set():
-            line = self._status()
-            if line != last:
-                last = line
-                print(line)
-            self._stop.wait(0.05)
+
+def _watch(self) -> None:
+    """Print the driven state whenever it changes."""
+    last = None
+    while not self._stop.is_set():
+        line = self._status()
+        if line != last:
+            last = line
+            print(line)
+        self._stop.wait(0.05)
 ```
 
 Finally, `serve` starts both threads and `stop` shuts them down properly:
 
 ```python
-    def serve(self) -> None:
-        """Start the gRPC server, the inlet reader and the status printer."""
-        self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
-        pb2_grpc.add_RemoteControlServicer_to_server(self, self._server)
-        self._server.add_insecure_port(f"127.0.0.1:{self._port}")
-        self._server.start()
-        for target in (self._read, self._watch):
-            thread = threading.Thread(target=target, name=target.__name__, daemon=True)
-            thread.start()
-            self._threads.append(thread)
+def serve(self) -> None:
+    """Start the gRPC server, the inlet reader and the status printer."""
+    self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
+    pb2_grpc.add_RemoteControlServicer_to_server(self, self._server)
+    self._server.add_insecure_port(f"127.0.0.1:{self._port}")
+    self._server.start()
+    for target in (self._read, self._watch):
+        thread = threading.Thread(target=target, name=target.__name__, daemon=True)
+        thread.start()
+        self._threads.append(thread)
 
-    def stop(self) -> None:
-        """Stop the threads, close every inlet, and stop the gRPC server.
 
-        Setting the event is not shutting down. The threads are daemons, so the process
-        will exit either way — but a `stop()` that only sets a flag leaves the reader
-        mid-`pull_chunk` while the caller carries on, and every inlet still open. So join
-        first, then close: closing an inlet is what stops liblsl trying to re-connect to a
-        stream this rig has finished with.
+def stop(self) -> None:
+    """Stop the threads, close every inlet, and stop the gRPC server.
 
-        The join is **bounded, and that is a trade rather than a detail**. Two seconds is
-        comfortably longer than a pass of `_read` — a one-second resolve sweep plus the
-        back-off — so in practice the reader has ended by the time the loop below runs. It
-        is a timeout and not a bare `join()` because a wedged liblsl call would otherwise
-        hang shutdown forever. If it *does* expire, this closes inlets underneath a
-        reader that is still using them, which is a race liblsl makes no promise about;
-        the reader will not re-open anything (`_stop` is set, so that pass is its last)
-        but that is the extent of the guarantee. A rig that cannot accept even that
-        should `join()` without a timeout and accept a hung reader hanging shutdown
-        instead. What you may *not* do is keep the timeout and describe it as a wait.
-        """
-        self._stop.set()
-        for thread in self._threads:
-            thread.join(timeout=2.0)
-        self._threads.clear()
-        for inlet in self._inlets.values():
-            with suppress(Exception):
-                inlet.close_stream()
-        self._inlets.clear()
-        if self._server is not None:
-            self._server.stop(grace=None)
+    Setting the event is not shutting down. The threads are daemons, so the process
+    will exit either way — but a `stop()` that only sets a flag leaves the reader
+    mid-`pull_chunk` while the caller carries on, and every inlet still open. So join
+    first, then close: closing an inlet is what stops liblsl trying to re-connect to a
+    stream this rig has finished with.
+
+    The join is **bounded, and that is a trade rather than a detail**. Two seconds is
+    comfortably longer than a pass of `_read` — a one-second resolve sweep plus the
+    back-off — so in practice the reader has ended by the time the loop below runs. It
+    is a timeout and not a bare `join()` because a wedged liblsl call would otherwise
+    hang shutdown forever. If it *does* expire, this closes inlets underneath a
+    reader that is still using them, which is a race liblsl makes no promise about;
+    the reader will not re-open anything (`_stop` is set, so that pass is its last)
+    but that is the extent of the guarantee. A rig that cannot accept even that
+    should `join()` without a timeout and accept a hung reader hanging shutdown
+    instead. What you may *not* do is keep the timeout and describe it as a wait.
+    """
+    self._stop.set()
+    for thread in self._threads:
+        thread.join(timeout=2.0)
+    self._threads.clear()
+    for inlet in self._inlets.values():
+        with suppress(Exception):
+            inlet.close_stream()
+    self._inlets.clear()
+    if self._server is not None:
+        self._server.stop(grace=None)
 ```
 
 **Refuse the wrong width; do not read element zero of it.** That `n_channels != 1` check buys
@@ -978,9 +974,9 @@ controls = resolve(
 )
 
 mode = controls.dofs["mode"]
-assert mode.states == ("rest", "active")   # the rig said so; the map never mentioned states
+assert mode.states == ("rest", "active")  # the rig said so; the map never mentioned states
 assert mode.rest == "rest"
-assert mode.debounce_s == 0.1              # this one the map did say
+assert mode.debounce_s == 0.1  # this one the map did say
 ```
 
 ### Checkpoint
@@ -1106,9 +1102,7 @@ class Rig(pb2_grpc.RemoteControlServicer):
         manifest = pb2.ControlManifest(target_name="rig", vocabulary_version="2")
         for address in ADDRESSES:
             manifest.capabilities.append(
-                pb2.ControlCapability(
-                    address=address, kind=pb2.CONTINUOUS, lo=LO, hi=HI, rest=REST
-                )
+                pb2.ControlCapability(address=address, kind=pb2.CONTINUOUS, lo=LO, hi=HI, rest=REST)
             )
         manifest.capabilities.append(MODE_CAPABILITY)
         return manifest
@@ -1238,9 +1232,7 @@ class Rig(pb2_grpc.RemoteControlServicer):
 
     def _status(self) -> str:
         """One line naming every address's current value and the held state."""
-        axes = "  ".join(
-            f"{a.removeprefix('rig.')}={self.pose[a]:+.2f}" for a in ADDRESSES
-        )
+        axes = "  ".join(f"{a.removeprefix('rig.')}={self.pose[a]:+.2f}" for a in ADDRESSES)
         return f"rig: {axes}  mode={self.mode}"
 
     def _watch(self) -> None:
@@ -1303,9 +1295,7 @@ import tomllib
 from myogestic.controls import ControlLink, load_control_map
 from myogestic.remote import InterfaceSpec, RemoteTarget
 
-rig = InterfaceSpec(
-    name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051
-)
+rig = InterfaceSpec(name="rig", process=[], n_output_channels=1, output_hz=32.0, grpc_port=50051)
 
 #: Held, not built inline: `link.stop()` deliberately leaves the client alive so the link
 #: can be re-used, so this is the only reference that can ever shut its worker thread and

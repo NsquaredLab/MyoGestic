@@ -72,7 +72,7 @@ The app declares *what it controls*, by name — not which channel of
 which application receives it:
 
 ```python
---8<-- "examples/synthetic/emg_regression.py:dofs"
+--8 < --"examples/synthetic/emg_regression.py:dofs"
 ```
 
 Each is **signed and normalized**: `+1` is the direction the name says
@@ -91,7 +91,7 @@ decode.
 ## The output path
 
 ```python
---8<-- "examples/synthetic/emg_regression.py:bus"
+--8 < --"examples/synthetic/emg_regression.py:bus"
 ```
 
 The bus owns the ordering that must not be re-derived per app:
@@ -110,7 +110,7 @@ is working and holding still.
 The training callback handles **two kinds of session** transparently:
 
 ```python
---8<-- "examples/synthetic/emg_regression.py:kin_loop"
+--8 < --"examples/synthetic/emg_regression.py:kin_loop"
 ```
 
 `iter_aligned_windows` walks every EMG window in the session and
@@ -121,7 +121,7 @@ declaration, which is what keeps train and serve from drifting.
 This is the primary path: sessions with both EMG and kinematics.
 
 ```python
---8<-- "examples/synthetic/emg_regression.py:label_loop"
+--8 < --"examples/synthetic/emg_regression.py:label_loop"
 ```
 
 `iter_labeled_windows` is the fallback for sessions that were recorded
@@ -144,7 +144,7 @@ to the stacked `(X, y)`.
 ## Prediction: name the DOFs, hand them over
 
 ```python
---8<-- "examples/synthetic/emg_regression.py:predict"
+--8 < --"examples/synthetic/emg_regression.py:predict"
 ```
 
 Two steps: regress five numbers, label them, push. Everything else —
@@ -168,7 +168,7 @@ leave — leaving the hand holding its last commanded position.
 ## Layout - six rows, three columns
 
 ```python
---8<-- "examples/synthetic/emg_regression.py:grid"
+--8 < --"examples/synthetic/emg_regression.py:grid"
 ```
 
 A 6×3 grid: a fixed-height top row sized to the wordmark aspect, then

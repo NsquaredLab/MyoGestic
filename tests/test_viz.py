@@ -463,8 +463,8 @@ class TestTheProcessDotSaysTheState:
         from myogestic.widgets.panels.process_launcher import _ProcState, _status_of
 
         state = _ProcState("x", ["true"])
-        state.process = self._Exited(-9)          # SIGKILL, as `stop` leaves it
-        state.process = None                      # ...which `stop` then clears
+        state.process = self._Exited(-9)  # SIGKILL, as `stop` leaves it
+        state.process = None  # ...which `stop` then clears
         assert _status_of(state)[0] is IDLE
 
 

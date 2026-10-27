@@ -105,9 +105,10 @@ from myogestic.widgets import ControlMapEditor
 
 editor = ControlMapEditor(pathlib.Path("my_controls.toml"), client=vhi.control_client())
 
+
 @app.ui
 def ui(ctx):
-    if editor.ui():          # True on the frame a save lands
+    if editor.ui():  # True on the frame a save lands
         rebuild_my_bus()
 ```
 

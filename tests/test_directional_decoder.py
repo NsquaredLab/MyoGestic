@@ -191,10 +191,7 @@ def test_mixing_feature_degrees_costs_the_invariance():
         X = np.vstack([row(a, degrees=degrees) for a in down + up + rest])
         model = directional_decoder().fit(X, y)
         held = np.array(
-            [
-                float(model.predict(row(probe, gain=g, degrees=degrees)[None])[0])
-                for g in (1.0, 4.0)
-            ]
+            [float(model.predict(row(probe, gain=g, degrees=degrees)[None])[0]) for g in (1.0, 4.0)]
         )
         assert bool(abs(held[1] - held[0]) > 0.1) is moved, (degrees, held)
 

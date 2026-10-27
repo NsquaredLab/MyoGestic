@@ -34,12 +34,13 @@
 # tests/test_channel_grid.py
 from myogestic.stream import ChannelGrid, StreamInfo
 
+
 def test_channel_grid_columns_and_streaminfo_field():
     g = ChannelGrid("IN1", [[0, 1], [2, None]])
-    assert g.columns == [0, 1, 2]                     # row-major, skips None
+    assert g.columns == [0, 1, 2]  # row-major, skips None
     info = StreamInfo(n_channels=3, fs=2048.0, channel_grids=[g])
     assert info.channel_grids[0].label == "IN1"
-    assert StreamInfo(n_channels=3, fs=2048.0).channel_grids is None   # default
+    assert StreamInfo(n_channels=3, fs=2048.0).channel_grids is None  # default
     # a malformed layout must NOT raise at construction (viewer validates)
     StreamInfo(n_channels=2, fs=2048.0, channel_grids=[ChannelGrid("x", [[9, 9]])])
 ```
@@ -49,6 +50,7 @@ def test_channel_grid_columns_and_streaminfo_field():
 @dataclass(frozen=True)
 class ChannelGrid:
     """A named electrode grid as a 2-D map of output-column indices (None = empty cell)."""
+
     label: str
     cells: list[list[int | None]]
 
@@ -77,22 +79,25 @@ Add `channel_grids: list[ChannelGrid] | None = None` as the last field of `Strea
 from myogestic.stream import ChannelGrid
 from myogestic.widgets.signals._channel_grid import auto_shape, normalize_layout
 
+
 def test_auto_shape_covers_all_columns_near_square():
     cells = auto_shape(list(range(10)))
     flat = [c for row in cells for c in row if c is not None]
-    assert flat == list(range(10))                    # every column, in order
+    assert flat == list(range(10))  # every column, in order
     assert all(len(row) == len(cells[0]) for row in cells)  # rectangular
-    assert len(cells[0]) <= 4 and len(cells) <= 4     # near-square (ceil(sqrt(10))=4)
+    assert len(cells[0]) <= 4 and len(cells) <= 4  # near-square (ceil(sqrt(10))=4)
+
 
 def test_normalize_none_makes_one_auto_grid():
     layout = normalize_layout(None, 8)
     assert len(layout) == 1 and sorted(layout[0].columns) == list(range(8))
 
+
 def test_normalize_drops_out_of_range_and_dupes_then_falls_back_if_empty():
     good = normalize_layout([ChannelGrid("IN1", [[0, 1, 99], [1, 2]])], 4)
-    assert sorted(good[0].columns) == [0, 1, 2]       # 99 dropped, dup 1 dropped
+    assert sorted(good[0].columns) == [0, 1, 2]  # 99 dropped, dup 1 dropped
     empty = normalize_layout([ChannelGrid("bad", [[50]])], 4)
-    assert sorted(empty[0].columns) == [0, 1, 2, 3]   # invalid -> auto "all"
+    assert sorted(empty[0].columns) == [0, 1, 2, 3]  # invalid -> auto "all"
 ```
 - [ ] **Step 2:** run → FAIL.
 - [ ] **Step 3: Implement** `_channel_grid.py`: `auto_shape` uses `cols = ceil(sqrt(len))`, fills row-major, pads the final row with `None`. `normalize_layout` iterates grids, keeps first-seen in-range columns (set to dedupe, preserve order), re-shapes each kept grid via `auto_shape` only when its own `cells` are invalid — otherwise keeps the given `cells` with invalid entries nulled; if the union of kept columns is empty, return `[ChannelGrid("all", auto_shape(range(n_channels)))]`.
@@ -114,14 +119,20 @@ def test_normalize_drops_out_of_range_and_dupes_then_falls_back_if_empty():
 ```python
 import random
 from myogestic.stream import ChannelGrid
-from myogestic.widgets.signals._channel_grid import rect_to_channels, reduce_selection, resolve_initial
+from myogestic.widgets.signals._channel_grid import (
+    rect_to_channels,
+    reduce_selection,
+    resolve_initial,
+)
 
-GRID = ChannelGrid("g", [[0, 1, 2], [3, None, 5]])   # note the hole at (1,1)
+GRID = ChannelGrid("g", [[0, 1, 2], [3, None, 5]])  # note the hole at (1,1)
+
 
 def test_rect_skips_holes_and_is_direction_invariant():
     a = rect_to_channels(GRID, 0, 0, 1, 2)
-    b = rect_to_channels(GRID, 1, 2, 0, 0)            # dragged the other way
-    assert a == b == {0, 1, 2, 3, 5}                  # (1,1) hole excluded
+    b = rect_to_channels(GRID, 1, 2, 0, 0)  # dragged the other way
+    assert a == b == {0, 1, 2, 3, 5}  # (1,1) hole excluded
+
 
 def test_invert_twice_is_identity_and_in_bounds():
     for _ in range(50):
@@ -132,11 +143,12 @@ def test_invert_twice_is_identity_and_in_bounds():
         assert twice == sel
         assert once <= set(range(n))
 
+
 def test_resolve_initial_policy():
-    assert resolve_initial(None, 16, []) == set(range(16))        # small -> all
-    assert resolve_initial(None, 256, []) == set(range(16))       # large -> first 16
+    assert resolve_initial(None, 16, []) == set(range(16))  # small -> all
+    assert resolve_initial(None, 256, []) == set(range(16))  # large -> first 16
     assert resolve_initial(range(4), 256, []) == {0, 1, 2, 3}
-    assert resolve_initial([1, 2, 999], 8, []) == {1, 2}          # clamp out-of-range
+    assert resolve_initial([1, 2, 999], 8, []) == {1, 2}  # clamp out-of-range
 ```
 - [ ] **Step 2:** run → FAIL.
 - [ ] **Step 3: Implement** the three functions (pure set logic; `rect_to_channels` normalizes `min/max` of the corners then collects non-None cells).
@@ -158,17 +170,19 @@ from myogestic.stream import ChannelGrid, StreamInfo
 from myogestic.session import Session, open_session_store
 import numpy as np
 
+
 def test_channel_grids_round_trip(tmp_path):
-    info = StreamInfo(n_channels=4, fs=8.0,
-                      channel_grids=[ChannelGrid("IN1", [[0, 1], [2, 3]])])
+    info = StreamInfo(n_channels=4, fs=8.0, channel_grids=[ChannelGrid("IN1", [[0, 1], [2, 3]])])
     s = Session(base_path=str(tmp_path))
     s.init_stream("emg", info)
     s.append("emg", np.zeros((2, 4), np.float32), np.arange(2, dtype=np.float64))
     s.save_meta(app_name="t")
-    zip_path = s.pack_to_zip(); s.close()
+    zip_path = s.pack_to_zip()
+    s.close()
     back = open_session_store(zip_path).stream_info("emg")
-    assert back.channel_grids == info.channel_grids   # frozen dataclass equality
-    assert back.channel_names is None                  # existing field still round-trips
+    assert back.channel_grids == info.channel_grids  # frozen dataclass equality
+    assert back.channel_names is None  # existing field still round-trips
+
 
 def test_old_session_without_grids_loads_as_none(tmp_path):
     # a session whose meta lacks channel_grids

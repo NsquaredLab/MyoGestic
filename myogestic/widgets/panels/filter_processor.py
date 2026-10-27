@@ -62,6 +62,7 @@ from myogestic.widgets.common import (
 
 Scalar = float | int
 
+
 @dataclass(frozen=True, slots=True)
 class FilterParam:
     """One tunable slider for a [`FilterSpec`][].
@@ -346,7 +347,9 @@ class FilterProcessor:
 
     def _render(self) -> None:
         if panel_header_button(
-            self._title, fa.ICON_FA_WAVE_SQUARE, fa.ICON_FA_ROTATE_LEFT,
+            self._title,
+            fa.ICON_FA_WAVE_SQUARE,
+            fa.ICON_FA_ROTATE_LEFT,
             tooltip="Clear smoothing history (e.g. on a new session).",
         ):
             self.reset()
@@ -398,9 +401,13 @@ class FilterProcessor:
                 budget = max(0.0, width - value_w - style.item_spacing.x)
                 caption = p.label
                 if imgui.calc_text_size(caption).x > budget:
-                    caption = _truncate_to_width(
-                        caption, budget - imgui.calc_text_size("…").x,
-                    ) + "…"
+                    caption = (
+                        _truncate_to_width(
+                            caption,
+                            budget - imgui.calc_text_size("…").x,
+                        )
+                        + "…"
+                    )
                 imgui.text_unformatted(caption)
                 imgui.set_item_tooltip(p.label)
                 imgui.same_line()
@@ -409,12 +416,21 @@ class FilterProcessor:
                 imgui.set_next_item_width(-1.0)
                 if p.kind == "int":
                     changed, nv = imgui.slider_int(
-                        f"##{p.key}", int(v), int(p.min), int(p.max), "",
+                        f"##{p.key}",
+                        int(v),
+                        int(p.min),
+                        int(p.max),
+                        "",
                     )
                 else:
                     flags = imgui.SliderFlags_.logarithmic if p.log else 0
                     changed, nv = imgui.slider_float(
-                        f"##{p.key}", float(v), p.min, p.max, "", flags,
+                        f"##{p.key}",
+                        float(v),
+                        p.min,
+                        p.max,
+                        "",
+                        flags,
                     )
                 if changed:
                     self._apply_param(p.key, nv)
@@ -477,9 +493,12 @@ class PostProcessor(FilterProcessor):
         imgui.push_font(mono_font(), style.font_size_base)
         # Reserve every selectable delay so a combo change cannot push Settings
         # out of the row on the very frame a longer value first appears.
-        delay_w = max(imgui.calc_text_size(
-            _format_delay(s.delay(self._hz, self._values[s.key])) if s.delay else "0 ms"
-        ).x for s in self._specs)
+        delay_w = max(
+            imgui.calc_text_size(
+                _format_delay(s.delay(self._hz, self._values[s.key])) if s.delay else "0 ms"
+            ).x
+            for s in self._specs
+        )
         imgui.pop_font()
         settings = f"{fa.ICON_FA_SLIDERS}##settings"
         settings_w = imgui.calc_text_size(fa.ICON_FA_SLIDERS).x + 2 * style.frame_padding.x
@@ -501,7 +520,11 @@ class PostProcessor(FilterProcessor):
             if changed and self._specs[idx].key != self._selected:
                 self._select(self._specs[idx].key)
         spec = self._by_key[self._selected]
-        delay = _format_delay(spec.delay(self._hz, self._values[self._selected])) if spec.delay else "0 ms"
+        delay = (
+            _format_delay(spec.delay(self._hz, self._values[self._selected]))
+            if spec.delay
+            else "0 ms"
+        )
         imgui.same_line()
         # At very small widths even the caption yields to Settings.
         if imgui.get_content_region_avail().x >= delay_w + settings_w + gap:
@@ -509,9 +532,13 @@ class PostProcessor(FilterProcessor):
             imgui.same_line()
         if imgui.get_content_region_avail().x < settings_w:
             imgui.new_line()
-        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
-            0.0, imgui.get_content_region_avail().x - settings_w,
-        ))
+        imgui.set_cursor_pos_x(
+            imgui.get_cursor_pos_x()
+            + max(
+                0.0,
+                imgui.get_content_region_avail().x - settings_w,
+            )
+        )
         opened = imgui.is_popup_open("settings")
         if opened:
             push_selected()
@@ -526,8 +553,12 @@ class PostProcessor(FilterProcessor):
             spec = self._by_key[self._selected]
         imgui.set_next_window_size(imgui.ImVec2(ui_px(340), 0))
         if imgui.begin_popup("settings"):
-            if panel_header_button(spec.name, fa.ICON_FA_WAVE_SQUARE, fa.ICON_FA_ROTATE_LEFT,
-                                   tooltip="Clear smoothing history (e.g. on a new session)."):
+            if panel_header_button(
+                spec.name,
+                fa.ICON_FA_WAVE_SQUARE,
+                fa.ICON_FA_ROTATE_LEFT,
+                tooltip="Clear smoothing history (e.g. on a new session).",
+            ):
                 self.reset()
             self._render_description()
             self._render_params()

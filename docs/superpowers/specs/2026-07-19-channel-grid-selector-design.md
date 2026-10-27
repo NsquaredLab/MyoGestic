@@ -29,8 +29,9 @@ Add an optional field (default `None`, so every existing source and old session 
 ```python
 @dataclass(frozen=True)
 class ChannelGrid:
-    label: str                      # "IN1", "grid 0", ...
-    cells: list[list[int | None]]   # 2D map: output-column index, or None for an empty cell
+    label: str  # "IN1", "grid 0", ...
+    cells: list[list[int | None]]  # 2D map: output-column index, or None for an empty cell
+
 
 @dataclass
 class StreamInfo:

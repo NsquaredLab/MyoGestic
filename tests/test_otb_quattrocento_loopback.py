@@ -30,7 +30,7 @@ def test_quattrocento_loopback_validates_config_and_streams():
         conn, _ = srv.accept()
         cfg = conn.recv(40)
         seen["cfg_len"] = len(cfg)
-        seen["crc_ok"] = (cfg[39] == C.crc8(cfg[:39]))
+        seen["crc_ok"] = cfg[39] == C.crc8(cfg[:39])
         frame = _le_int16_frame(list(range(nch)))
         try:
             for _ in range(50):
@@ -45,10 +45,11 @@ def test_quattrocento_loopback_validates_config_and_streams():
     t = threading.Thread(target=fake_device, daemon=True)
     t.start()
 
-    src = QuattrocentoSource(device_ip="127.0.0.1", port=port,
-                             fs_mode=0, nch_mode=0, select=range(64))
+    src = QuattrocentoSource(
+        device_ip="127.0.0.1", port=port, fs_mode=0, nch_mode=0, select=range(64)
+    )
     info = src.connect()
-    assert info.n_channels == 64       # biosignal-only by default
+    assert info.n_channels == 64  # biosignal-only by default
     assert info.fs == 512.0
 
     got = None
@@ -71,4 +72,5 @@ def test_quattrocento_loopback_validates_config_and_streams():
 # Task 10: export
 def test_quattrocento_importable_from_package():
     from myogestic.sources.otb import QuattrocentoSource as Q
+
     assert Q is QuattrocentoSource

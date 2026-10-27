@@ -7,7 +7,8 @@
 ```python
 @pipeline.extract
 def extract(windows):
-    return rms(windows["emg"])   # returns a fresh feature vector each tick
+    return rms(windows["emg"])  # returns a fresh feature vector each tick
+
 
 @pipeline.predict
 def predict(model, features):
@@ -26,6 +27,7 @@ import numpy as np
 # Persists across predict ticks because it's module-level.
 prediction_count = 0
 last_predicted_class: int | None = None
+
 
 @pipeline.predict
 def predict(model, features):
@@ -49,6 +51,7 @@ import numpy as np
 # Last 5 RMS vectors; older entries auto-evict.
 recent_rms: deque[np.ndarray] = deque(maxlen=5)
 
+
 @pipeline.extract
 def extract(windows):
     rms_now = np.sqrt(np.mean(windows["emg"] ** 2, axis=1))
@@ -69,6 +72,7 @@ def extract(windows):
     # Return both the smoothed feature AND raw - predict sees both.
     smooth = np.mean(np.stack(recent_rms), axis=0).astype(np.float32)
     return {"smooth": smooth, "raw": rms_now}
+
 
 @pipeline.predict
 def predict(model, features):
@@ -95,9 +99,11 @@ class StatefulClassifier:
         self._prev_logits = logits
         return int(np.argmax(logits))
 
+
 @pipeline.train
 def train(_data):
-    return StatefulClassifier()   # state lives here
+    return StatefulClassifier()  # state lives here
+
 
 @pipeline.predict
 def predict(model, features):
@@ -115,11 +121,12 @@ from myogestic.outputs import EdgeTrigger
 
 trigger = EdgeTrigger(callback=send_gesture_to_device)
 
+
 @pipeline.predict
 def predict(model, features):
     class_idx = int(model.predict(features.reshape(1, -1))[0])
     name = CLASSES[class_idx]
-    trigger.fire_if_changed(name)    # only fires on the rising edge of a change
+    trigger.fire_if_changed(name)  # only fires on the rising edge of a change
     return {"class": class_idx}
 ```
 
@@ -134,14 +141,15 @@ The predict thread wakes every `1/predict_hz`. The acquisition thread may not ha
 ```python
 @pipeline.extract
 def extract(windows):
-    emg, ts = ctx.streams["emg"].get_window()   # framework helper
+    emg, ts = ctx.streams["emg"].get_window()  # framework helper
     last_ts = float(ts[-1]) if ts.size > 0 else None
     return (emg, last_ts)
+
 
 @pipeline.predict
 def predict(model, features):
     emg, last_ts = features
-    return model.step(emg, last_ts=last_ts)     # model returns prev pred on stale
+    return model.step(emg, last_ts=last_ts)  # model returns prev pred on stale
 ```
 
 The model's `step()` checks `last_ts` against its own stored last value and returns the previous prediction unchanged when the timestamp hasn't advanced.

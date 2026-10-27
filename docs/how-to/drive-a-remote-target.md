@@ -101,7 +101,7 @@ the service defined in `myogestic/remote/_proto/remote_control.proto`; generate 
 file for any language other than Python:
 
 ```python
---8<-- "examples/synthetic/reference_target.py"
+--8 < --"examples/synthetic/reference_target.py"
 ```
 
 ## The standard

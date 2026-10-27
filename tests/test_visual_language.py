@@ -76,7 +76,9 @@ def test_no_hardcoded_colours_outside_the_design_layer(path: pathlib.Path):
         # All-constant numeric args == a colour typed by hand. A single scalar
         # (ImVec2-style sizes are a different call) still counts if it's ImVec4.
         and node.args
-        and all(isinstance(a, ast.Constant) and isinstance(a.value, (int, float)) for a in node.args)
+        and all(
+            isinstance(a, ast.Constant) and isinstance(a.value, (int, float)) for a in node.args
+        )
     ]
     assert not offenders, (
         "Hardcoded colour literal(s) outside the design layer:\n  "

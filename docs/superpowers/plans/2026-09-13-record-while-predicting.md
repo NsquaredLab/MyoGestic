@@ -102,7 +102,9 @@ def _session(tmp) -> Session:
 def test_first_row_declares_the_stream_and_stays_buffered():
     with tempfile.TemporaryDirectory() as tmp:
         s = _session(tmp)
-        s.append_event("prediction.pose", [0.5, -0.25, 1.0], 12.5, channel_names=["a", "b", "c"], fs=32.0)
+        s.append_event(
+            "prediction.pose", [0.5, -0.25, 1.0], 12.5, channel_names=["a", "b", "c"], fs=32.0
+        )
         info = s.stream_info("prediction.pose")
         assert (info.n_channels, info.fs, info.channel_names) == (3, 32.0, ["a", "b", "c"])
         assert s.event_streams == ("prediction.pose",)
@@ -166,7 +168,9 @@ def test_event_streams_survive_pack_and_replay():
     with tempfile.TemporaryDirectory() as tmp:
         s = _session(tmp)
         for i in range(70):
-            s.append_event("controls", [i / 70, 1.0], 100.0 + i / 32, channel_names=["a", "g"], fs=32.0)
+            s.append_event(
+                "controls", [i / 70, 1.0], 100.0 + i / 32, channel_names=["a", "g"], fs=32.0
+            )
         s.save_meta("EventsTest")
         zip_path = s.pack_to_zip()  # freezes, flushes, packs
         with zipfile.ZipFile(zip_path) as zf:
@@ -229,30 +233,28 @@ Add `field` to the dataclasses import. In `Session.__init__`, after `self._zip_s
 Change `init_stream` to accept a chunk size:
 
 ```python
-    def init_stream(
-        self, stream_name: str, info: StreamInfo, *, chunk_rows: int | None = None
-    ) -> None:
-        """Called once per stream when recording starts.
+def init_stream(self, stream_name: str, info: StreamInfo, *, chunk_rows: int | None = None) -> None:
+    """Called once per stream when recording starts.
 
-        ``chunk_rows`` sizes the zarr chunk; the default is one second of samples. Event
-        streams pass `EVENT_CHUNK_ROWS` because their rate is nominal.
-        """
-        rows = max(1, int(info.fs) if chunk_rows is None else int(chunk_rows))
-        self._streams_info[stream_name] = info
-        self.stores[stream_name] = zarr.open_array(
-            str(self.path / f"{stream_name}.zarr"),
-            mode="w",
-            shape=(0, info.n_channels),
-            chunks=(rows, info.n_channels),
-            dtype=info.dtype,
-        )
-        self.ts_stores[stream_name] = zarr.open_array(
-            str(self.path / f"{stream_name}_timestamps.zarr"),
-            mode="w",
-            shape=(0,),
-            chunks=(rows,),
-            dtype=np.float64,
-        )
+    ``chunk_rows`` sizes the zarr chunk; the default is one second of samples. Event
+    streams pass `EVENT_CHUNK_ROWS` because their rate is nominal.
+    """
+    rows = max(1, int(info.fs) if chunk_rows is None else int(chunk_rows))
+    self._streams_info[stream_name] = info
+    self.stores[stream_name] = zarr.open_array(
+        str(self.path / f"{stream_name}.zarr"),
+        mode="w",
+        shape=(0, info.n_channels),
+        chunks=(rows, info.n_channels),
+        dtype=info.dtype,
+    )
+    self.ts_stores[stream_name] = zarr.open_array(
+        str(self.path / f"{stream_name}_timestamps.zarr"),
+        mode="w",
+        shape=(0,),
+        chunks=(rows,),
+        dtype=np.float64,
+    )
 ```
 
 At the top of `append`, before the store lookup:
@@ -266,90 +268,93 @@ At the top of `append`, before the store lookup:
 Add the new methods after `append`:
 
 ```python
-    @property
-    def event_streams(self) -> tuple[str, ...]:
-        """Names of the event streams, in declaration order. One row per tick, nominal rate."""
-        return tuple(self._event_streams)
+@property
+def event_streams(self) -> tuple[str, ...]:
+    """Names of the event streams, in declaration order. One row per tick, nominal rate."""
+    return tuple(self._event_streams)
 
-    def append_event(
-        self,
-        name: str,
-        values: Any,
-        timestamp: float,
-        *,
-        channel_names: Sequence[str] | None = None,
-        fs: float = 1.0,
-    ) -> None:
-        """Append one timestamped row to an event stream, declaring it on first use.
 
-        ``values`` is flattened to ``float32``; its width is fixed by the first call, and a
-        later row of another width raises ``ValueError`` so a producer whose shape changed
-        learns it once instead of writing a ragged array. ``fs`` is the *nominal* rate the
-        declaration carries, so `ReplaySource` can pace the stream; the rows are irregular
-        and ``meta.json`` lists the stream under ``event_streams`` to say so.
+def append_event(
+    self,
+    name: str,
+    values: Any,
+    timestamp: float,
+    *,
+    channel_names: Sequence[str] | None = None,
+    fs: float = 1.0,
+) -> None:
+    """Append one timestamped row to an event stream, declaring it on first use.
 
-        Rows are buffered and written in batches (`EVENT_CHUNK_ROWS`, `EVENT_FLUSH_SECONDS`).
-        After `freeze` a row is dropped with a debug log, like a late `append`.
-        """
-        row = np.asarray(values, dtype=np.float32).ravel()
-        if row.size == 0:
-            raise ValueError(f"{name!r}: an event row needs at least one value")
-        with self._event_lock:
-            if self._finalising:
-                log.debug("dropping event row for frozen session %s", self.path)
-                return
-            buf = self._event_buffers.get(name)
-            if buf is None:
-                if name in self.stores:
-                    raise ValueError(f"{name!r} is a sampled stream, not an event stream")
-                from myogestic.stream import StreamInfo
+    ``values`` is flattened to ``float32``; its width is fixed by the first call, and a
+    later row of another width raises ``ValueError`` so a producer whose shape changed
+    learns it once instead of writing a ragged array. ``fs`` is the *nominal* rate the
+    declaration carries, so `ReplaySource` can pace the stream; the rows are irregular
+    and ``meta.json`` lists the stream under ``event_streams`` to say so.
 
-                self.init_stream(
-                    name,
-                    StreamInfo(
-                        n_channels=int(row.size),
-                        fs=float(fs),
-                        dtype=np.dtype(np.float32),
-                        channel_names=list(channel_names) if channel_names else None,
-                    ),
-                    chunk_rows=EVENT_CHUNK_ROWS,
-                )
-                self._event_streams.append(name)
-                buf = self._event_buffers[name] = _EventBuffer()
-            width = self._streams_info[name].n_channels
-            if row.size != width:
-                raise ValueError(f"{name!r} rows are {width} wide, got {row.size}")
-            now = time.monotonic()
-            buf.rows.append(row)
-            buf.times.append(float(timestamp))
-            if buf.since is None:
-                buf.since = now
-            if len(buf.rows) >= EVENT_CHUNK_ROWS or now - buf.since >= EVENT_FLUSH_SECONDS:
-                self._flush_locked(name, buf)
-
-    def _flush_locked(self, name: str, buf: _EventBuffer) -> None:
-        """Write a buffer as one batch. Caller holds ``_event_lock``."""
-        if not buf.rows:
+    Rows are buffered and written in batches (`EVENT_CHUNK_ROWS`, `EVENT_FLUSH_SECONDS`).
+    After `freeze` a row is dropped with a debug log, like a late `append`.
+    """
+    row = np.asarray(values, dtype=np.float32).ravel()
+    if row.size == 0:
+        raise ValueError(f"{name!r}: an event row needs at least one value")
+    with self._event_lock:
+        if self._finalising:
+            log.debug("dropping event row for frozen session %s", self.path)
             return
-        self.stores[name].append(np.stack(buf.rows))
-        self.ts_stores[name].append(np.asarray(buf.times, dtype=np.float64))
-        buf.rows.clear()
-        buf.times.clear()
-        buf.since = None
+        buf = self._event_buffers.get(name)
+        if buf is None:
+            if name in self.stores:
+                raise ValueError(f"{name!r} is a sampled stream, not an event stream")
+            from myogestic.stream import StreamInfo
 
-    def freeze(self) -> None:
-        """Close the session to new rows and flush every event buffer. Idempotent.
+            self.init_stream(
+                name,
+                StreamInfo(
+                    n_channels=int(row.size),
+                    fs=float(fs),
+                    dtype=np.dtype(np.float32),
+                    channel_names=list(channel_names) if channel_names else None,
+                ),
+                chunk_rows=EVENT_CHUNK_ROWS,
+            )
+            self._event_streams.append(name)
+            buf = self._event_buffers[name] = _EventBuffer()
+        width = self._streams_info[name].n_channels
+        if row.size != width:
+            raise ValueError(f"{name!r} rows are {width} wide, got {row.size}")
+        now = time.monotonic()
+        buf.rows.append(row)
+        buf.times.append(float(timestamp))
+        if buf.since is None:
+            buf.since = now
+        if len(buf.rows) >= EVENT_CHUNK_ROWS or now - buf.since >= EVENT_FLUSH_SECONDS:
+            self._flush_locked(name, buf)
 
-        `App.stop_recording` calls this right after detaching the streams and before any
-        finalize hook or ``meta.json`` is written, so nothing can declare a stream that the
-        metadata does not list. `pack_to_zip` and `discard` call it as well.
-        """
-        with self._event_lock:
-            if self._finalising:
-                return
-            self._finalising = True
-            for name, buf in self._event_buffers.items():
-                self._flush_locked(name, buf)
+
+def _flush_locked(self, name: str, buf: _EventBuffer) -> None:
+    """Write a buffer as one batch. Caller holds ``_event_lock``."""
+    if not buf.rows:
+        return
+    self.stores[name].append(np.stack(buf.rows))
+    self.ts_stores[name].append(np.asarray(buf.times, dtype=np.float64))
+    buf.rows.clear()
+    buf.times.clear()
+    buf.since = None
+
+
+def freeze(self) -> None:
+    """Close the session to new rows and flush every event buffer. Idempotent.
+
+    `App.stop_recording` calls this right after detaching the streams and before any
+    finalize hook or ``meta.json`` is written, so nothing can declare a stream that the
+    metadata does not list. `pack_to_zip` and `discard` call it as well.
+    """
+    with self._event_lock:
+        if self._finalising:
+            return
+        self._finalising = True
+        for name, buf in self._event_buffers.items():
+            self._flush_locked(name, buf)
 ```
 
 In `save_meta`, add to the `meta` dict after the `"streams"` entry:
@@ -891,7 +896,13 @@ def test_each_tick_lands_in_the_session_with_the_window_timestamp(tmp_path):
         meta = json.loads(zf.read("meta.json"))
         names = set(zf.namelist())
     recorded = set(meta["event_streams"])
-    assert {"features.vec", "features.ok", "prediction.pose", "prediction.label", "pipeline.tick"} <= recorded
+    assert {
+        "features.vec",
+        "features.ok",
+        "prediction.pose",
+        "prediction.label",
+        "pipeline.tick",
+    } <= recorded
     assert not {"features.img", "features.why", "prediction.name"} & recorded
     assert meta["streams"]["prediction.pose"]["n_channels"] == 3
     assert meta["streams"]["prediction.pose"]["fs"] == 32.0
@@ -1056,84 +1067,88 @@ and its docstring: "Return to ``idle`` — or to ``recording`` when a take is op
 Add the recording methods to `Pipeline` (after `_predict_step`):
 
 ```python
-    # --- Recording -----------------------------------------------------------
+# --- Recording -----------------------------------------------------------
 
-    def _record_tick(self, app: App, features: Any, result: Any, latest: float | None) -> None:
-        """Write this tick's input and output into the open session, if there is one.
 
-        Rows are stamped with the newest sample the tick consumed, so they align with the
-        raw arrays; ``pipeline.tick`` carries the decision clock, so latency is one
-        subtraction. Never raises: a value that cannot be recorded is skipped, once, with a
-        log line, and the loop goes on.
-        """
-        ctx = app.ctx
-        session = ctx.session
-        if not ctx.recording or session is None or latest is None:
-            return
-        if session is not self._recorded_session:
-            self._recorded_session = session
-            self._skipped = {}
-        if "*" in self._skipped:
-            return
+def _record_tick(self, app: App, features: Any, result: Any, latest: float | None) -> None:
+    """Write this tick's input and output into the open session, if there is one.
+
+    Rows are stamped with the newest sample the tick consumed, so they align with the
+    raw arrays; ``pipeline.tick`` carries the decision clock, so latency is one
+    subtraction. Never raises: a value that cannot be recorded is skipped, once, with a
+    log line, and the loop goes on.
+    """
+    ctx = app.ctx
+    session = ctx.session
+    if not ctx.recording or session is None or latest is None:
+        return
+    if session is not self._recorded_session:
+        self._recorded_session = session
+        self._skipped = {}
+    if "*" in self._skipped:
+        return
+    try:
+        fs = self.predict_hz if self.predict_hz > 0 else 1.0
+        self._record(ctx, session, "features", features, latest, fs)
+        self._record(ctx, session, "prediction", result, latest, fs)
+        from mne_lsl.lsl import local_clock
+
+        session.append_event("pipeline.tick", [local_clock()], latest, fs=fs)
+    except Exception as e:  # noqa: BLE001 - recording must never stop the predict loop
+        self._skip(ctx, "*", f"recording stopped for this take: {e!r}")
+
+
+def _record(self, ctx: Any, session: Any, prefix: str, obj: Any, t: float, fs: float) -> None:
+    items = obj.items() if isinstance(obj, Mapping) else ((None, obj),)
+    for key, value in items:
+        name = prefix if key is None else f"{prefix}.{key}"
+        if name in self._skipped:
+            continue
+        row = _event_row(value)
+        if row is None:
+            self._skip(ctx, name, "not a number or a 1-D array")
+            continue
         try:
-            fs = self.predict_hz if self.predict_hz > 0 else 1.0
-            self._record(ctx, session, "features", features, latest, fs)
-            self._record(ctx, session, "prediction", result, latest, fs)
-            from mne_lsl.lsl import local_clock
+            session.append_event(name, row, t, fs=fs)
+        except ValueError as e:
+            self._skip(ctx, name, str(e))
 
-            session.append_event("pipeline.tick", [local_clock()], latest, fs=fs)
-        except Exception as e:  # noqa: BLE001 - recording must never stop the predict loop
-            self._skip(ctx, "*", f"recording stopped for this take: {e!r}")
 
-    def _record(self, ctx: Any, session: Any, prefix: str, obj: Any, t: float, fs: float) -> None:
-        items = obj.items() if isinstance(obj, Mapping) else ((None, obj),)
-        for key, value in items:
-            name = prefix if key is None else f"{prefix}.{key}"
-            if name in self._skipped:
-                continue
-            row = _event_row(value)
-            if row is None:
-                self._skip(ctx, name, "not a number or a 1-D array")
-                continue
+def _skip(self, ctx: Any, name: str, reason: str) -> None:
+    self._skipped[name] = reason
+    ctx.log(f"Recording: skipped {name} ({reason})")
+
+
+def _on_finalize(self, session: Session) -> None:
+    """Save the running model beside the take and describe what was recorded.
+
+    Runs on the finalize thread after `Session.freeze`, so ``event_streams`` is
+    complete. A model that cannot be saved is a recorded fact, not a missing file.
+    """
+    info: dict[str, Any] = {
+        "predict_hz": self.predict_hz,
+        "event_streams": list(session.event_streams),
+        "skipped": dict(self._skipped) if session is self._recorded_session else {},
+        "model": None,
+        "model_type": None,
+    }
+    model = self.model
+    if model is not None:
+        info["model_type"] = type(model).__qualname__
+        if self.save_model is None:
+            info["model_note"] = "not saved: pipeline.save_model is unset"
+        else:
+            path = session.path / "model.joblib"
+            self.save_model(model, str(path))
+            info["model"] = path.name
+        report = getattr(model, "report", None)
+        if isinstance(report, Mapping):
             try:
-                session.append_event(name, row, t, fs=fs)
-            except ValueError as e:
-                self._skip(ctx, name, str(e))
-
-    def _skip(self, ctx: Any, name: str, reason: str) -> None:
-        self._skipped[name] = reason
-        ctx.log(f"Recording: skipped {name} ({reason})")
-
-    def _on_finalize(self, session: Session) -> None:
-        """Save the running model beside the take and describe what was recorded.
-
-        Runs on the finalize thread after `Session.freeze`, so ``event_streams`` is
-        complete. A model that cannot be saved is a recorded fact, not a missing file.
-        """
-        info: dict[str, Any] = {
-            "predict_hz": self.predict_hz,
-            "event_streams": list(session.event_streams),
-            "skipped": dict(self._skipped) if session is self._recorded_session else {},
-            "model": None,
-            "model_type": None,
-        }
-        model = self.model
-        if model is not None:
-            info["model_type"] = type(model).__qualname__
-            if self.save_model is None:
-                info["model_note"] = "not saved: pipeline.save_model is unset"
-            else:
-                path = session.path / "model.joblib"
-                self.save_model(model, str(path))
-                info["model"] = path.name
-            report = getattr(model, "report", None)
-            if isinstance(report, Mapping):
-                try:
-                    json.dumps(report)
-                    info["report"] = dict(report)
-                except (TypeError, ValueError):
-                    info["report_note"] = "model.report is not JSON-serialisable"
-        session.extras["pipeline"] = info
+                json.dumps(report)
+                info["report"] = dict(report)
+            except (TypeError, ValueError):
+                info["report_note"] = "model.report is not JSON-serialisable"
+    session.extras["pipeline"] = info
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -1246,7 +1261,7 @@ Expected: FAIL, `TypeError: ControlBus.__init__() got an unexpected keyword argu
 Add `"_ctx"` to `ControlBus.__slots__`. Add the parameter to `__init__` (after `on_warn`):
 
 ```python
-        ctx: Any = None,
+ctx: Any = (None,)
 ```
 
 with a docstring entry under Parameters:
@@ -1423,19 +1438,17 @@ def _transport(ctx: Context) -> str:
 `_render_recording_controls`: after `panel_header(...)` add `recording = ctx.recording` and `transport = _transport(ctx)`. In the label loop replace the snap condition with `if recording and ctx.session is not None and 0 <= i < n_classes:`. Replace the Record/Stop block:
 
 ```python
-        # Record / Stop
-        if transport == "record":
-            if imgui.button(
-                f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
-            ):
-                on_record()
-                # Auto-add the current label at the start of the recording.
-                if ctx.session is not None and class_names and 0 <= ctx.current_label < n_classes:
-                    ctx.session.add_label(ctx.current_label)
-        elif transport == "stop" and imgui.button(
-            f"{fa.ICON_FA_STOP}  Stop##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
-        ):
-            on_stop()
+# Record / Stop
+if transport == "record":
+    if imgui.button(f"{fa.ICON_FA_CIRCLE}  Record##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)):
+        on_record()
+        # Auto-add the current label at the start of the recording.
+        if ctx.session is not None and class_names and 0 <= ctx.current_label < n_classes:
+            ctx.session.add_label(ctx.current_label)
+elif transport == "stop" and imgui.button(
+    f"{fa.ICON_FA_STOP}  Stop##rec_btn", imgui.ImVec2(_RECORD_BTN_W, 0)
+):
+    on_stop()
 ```
 
 In the status line, after `_status_pill(ctx.state.upper(), color)` add:

@@ -3,6 +3,7 @@
 Polynomial 0x8C, init 0, LSB-first. Ported verbatim from OT Bioelettronica's
 ``CRC8.m`` (see docs/reference/otb/CRC8.m).
 """
+
 from __future__ import annotations
 
 

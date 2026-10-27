@@ -160,8 +160,10 @@ def _sketch(trap: Trapezoid, size: imgui.ImVec2) -> None:
     dl = imgui.get_window_draw_list()
     accent = _series_color(0)
     dl.add_line(
-        imgui.ImVec2(origin.x, base), imgui.ImVec2(origin.x + size.x, base),
-        imgui.get_color_u32(hairline()), thickness=ui_px(1),
+        imgui.ImVec2(origin.x, base),
+        imgui.ImVec2(origin.x + size.x, base),
+        imgui.get_color_u32(hairline()),
+        thickness=ui_px(1),
     )
     polygon = _distinct(points)
     area = trap.level_pct * (trap.hold_s + (trap.ramp_up_s + trap.ramp_down_s) / 2)
@@ -209,7 +211,9 @@ def _tracking_text(text: str, width: float, *, mono: bool = False) -> None:
             shown = shown[:-1]
         shown = shown + "…" if imgui.calc_text_size("…").x <= width else ""
     if mono:
-        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0.0, width - imgui.calc_text_size(shown).x))
+        imgui.set_cursor_pos_x(
+            imgui.get_cursor_pos_x() + max(0.0, width - imgui.calc_text_size(shown).x)
+        )
     if font is not None:
         imgui.pop_font()
     if mono:
@@ -577,8 +581,10 @@ class TrackingTask:
             self._tick(now, value)
             running = self._started is not None
             status = SUCCESS if running else IDLE
-            if not running and value is not None and (
-                self._calibration is None or self._mvc_until is not None
+            if (
+                not running
+                and value is not None
+                and (self._calibration is None or self._mvc_until is not None)
             ):
                 status = WARNING
             panel_header("Force tracking", fa.ICON_FA_ARROW_TREND_UP, status=status)
@@ -607,7 +613,9 @@ class TrackingTask:
         """Place source captions above their controls, stacking in narrow cells."""
         names = sorted(ctx.streams)
         columns = 2 if imgui.get_content_region_avail().x >= ui_px(360) else 1
-        if not imgui.begin_table("##tt_source_fields", columns, imgui.TableFlags_.sizing_stretch_same):
+        if not imgui.begin_table(
+            "##tt_source_fields", columns, imgui.TableFlags_.sizing_stretch_same
+        ):
             return
         try:
             imgui.table_next_column()
@@ -636,7 +644,9 @@ class TrackingTask:
             imgui.set_next_item_width(-1)
             imgui.begin_disabled(n_channels <= 0 or self._mvc_until is not None)
             changed, idx = imgui.combo(
-                "##tt_channel", self._resolve_channel(n_channels), labels or ["Connect the stream"],
+                "##tt_channel",
+                self._resolve_channel(n_channels),
+                labels or ["Connect the stream"],
             )
             imgui.end_disabled()
             if changed and 0 <= idx < n_channels:
@@ -672,16 +682,22 @@ class TrackingTask:
             if imgui.button("Zero##tt_zero"):
                 self._capture_zero(value)
             _action_tooltip(
-                "Wait for MVC to finish." if capturing else
-                "Connect the force stream first." if value is None else "",
+                "Wait for MVC to finish."
+                if capturing
+                else "Connect the force stream first."
+                if value is None
+                else "",
                 "Capture the resting reading with the subject relaxed.",
             )
             imgui.same_line()
             if imgui.button("MVC##tt_mvc"):
                 self._capture_mvc(now)
             _action_tooltip(
-                "Capture in progress." if capturing else
-                "Connect the force stream first." if value is None else "",
+                "Capture in progress."
+                if capturing
+                else "Connect the force stream first."
+                if value is None
+                else "",
                 f"Push as hard as possible for {self._mvc_capture_s:.0f} s; the peak is kept.",
             )
             imgui.end_disabled()
@@ -718,7 +734,9 @@ class TrackingTask:
     def _settings_ui(self) -> None:
         """Edit the target and look-ahead in a responsive caption-above grid."""
         columns = 2 if imgui.get_content_region_avail().x >= ui_px(360) else 1
-        if not imgui.begin_table("##tt_target_fields", columns, imgui.TableFlags_.sizing_stretch_same):
+        if not imgui.begin_table(
+            "##tt_target_fields", columns, imgui.TableFlags_.sizing_stretch_same
+        ):
             return
         try:
             for attr, label in _SEGMENT_ROWS:
@@ -727,8 +745,13 @@ class TrackingTask:
                 imgui.text_colored(muted(), label)
                 imgui.set_next_item_width(-1)
                 changed, seconds = imgui.drag_float(
-                    f"##tt_{attr}", getattr(self._trap, attr), 0.1, 0.0, _MAX_SEGMENT_S,
-                    "%.1f s", imgui.SliderFlags_.always_clamp,
+                    f"##tt_{attr}",
+                    getattr(self._trap, attr),
+                    0.1,
+                    0.0,
+                    _MAX_SEGMENT_S,
+                    "%.1f s",
+                    imgui.SliderFlags_.always_clamp,
                 )
                 if changed:
                     self._set_trap(replace(self._trap, **{attr: seconds}))
@@ -737,8 +760,12 @@ class TrackingTask:
             imgui.text_colored(muted(), "Level")
             imgui.set_next_item_width(-1)
             changed, level = imgui.slider_float(
-                "##tt_level", self._trap.level_pct, 0.0, 100.0,
-                "%.0f %% MVC", imgui.SliderFlags_.always_clamp,
+                "##tt_level",
+                self._trap.level_pct,
+                0.0,
+                100.0,
+                "%.0f %% MVC",
+                imgui.SliderFlags_.always_clamp,
             )
             if changed:
                 self._set_trap(replace(self._trap, level_pct=level))
@@ -754,7 +781,12 @@ class TrackingTask:
             imgui.text_colored(muted(), "Look ahead")
             imgui.set_next_item_width(-1)
             changed, ahead = imgui.slider_float(
-                "##tt_ahead", self._look_ahead_s, 0.0, 15.0, "%.1f s", imgui.SliderFlags_.always_clamp,
+                "##tt_ahead",
+                self._look_ahead_s,
+                0.0,
+                15.0,
+                "%.1f s",
+                imgui.SliderFlags_.always_clamp,
             )
             if changed:
                 self._look_ahead_s = ahead
@@ -777,9 +809,12 @@ class TrackingTask:
                 _tracking_text(f"Rep {rep + 1} of {self._trap.reps} · {phase}", text_w)
                 _tracking_text(self._detail(now, value), text_w, mono=True)
                 imgui.same_line()
-                imgui.set_cursor_pos(imgui.ImVec2(
-                    left + width - stop_w, top + (height - 2 * ui_px(4) - imgui.get_frame_height()) / 2,
-                ))
+                imgui.set_cursor_pos(
+                    imgui.ImVec2(
+                        left + width - stop_w,
+                        top + (height - 2 * ui_px(4) - imgui.get_frame_height()) / 2,
+                    )
+                )
                 if imgui.button("Stop##tt_stop"):
                     self._stop()
                 imgui.set_item_tooltip("End the block. The trace stays on the plot.")

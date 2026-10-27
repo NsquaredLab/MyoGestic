@@ -128,7 +128,10 @@ def test_recording_disables_controls_but_keeps_caption_visible(monkeypatch, imgu
 
 @pytest.mark.parametrize("state", ["idle", "recording"])
 def test_narrow_card_fits_light_theme_at_double_scale(
-    state, monkeypatch, imgui_frame, outlet,
+    state,
+    monkeypatch,
+    imgui_frame,
+    outlet,
 ):
     from myogestic import _scale, _theme
 
@@ -153,8 +156,9 @@ def test_narrow_card_fits_light_theme_at_double_scale(
     def draw():
         imgui.begin_child("narrow-simulator", imgui.ImVec2(320, 420))
         widget.ui(SimpleNamespace(state=state, recording=state == "recording"))
-        bounds.append((imgui.get_scroll_max_x(), imgui.get_scroll_max_y(),
-                       imgui.get_cursor_pos_y()))
+        bounds.append(
+            (imgui.get_scroll_max_x(), imgui.get_scroll_max_y(), imgui.get_cursor_pos_y())
+        )
         imgui.end_child()
 
     for _ in range(4):
@@ -176,6 +180,10 @@ def test_widget_ids_keep_duplicate_controls_independent(monkeypatch, imgui_frame
 
     monkeypatch.setattr(imgui, "small_button", capture)
     first.set(1.0)
-    imgui_frame(lambda: [widget.ui(SimpleNamespace(state="idle", recording=False)) for widget in (first, second)])
+    imgui_frame(
+        lambda: [
+            widget.ui(SimpleNamespace(state="idle", recording=False)) for widget in (first, second)
+        ]
+    )
     assert len(set(ids)) == 4
     assert first.value == 1.0 and second.value == 0.0

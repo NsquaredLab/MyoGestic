@@ -959,8 +959,10 @@ plus native pop-out windows.
   def ui(ctx):
       signal_viewer(ctx, "emg", selectable=True)
 
+
   # after — construct once, render each frame
   viewer = SignalViewer("emg", selectable=True)
+
 
   @app.ui
   def ui(ctx):

@@ -109,6 +109,7 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'myogestic.sources.otb
 Polynomial 0x8C, init 0, LSB-first. Ported verbatim from OT Bioelettronica's
 ``CRC8.m`` (see docs/reference/otb/CRC8.m).
 """
+
 from __future__ import annotations
 
 
@@ -176,7 +177,7 @@ def test_decode_be_int16_shape_and_order():
     # [c0t0, c1t0, c2t0, c0t1, c1t1, c2t1]
     raw = _be_int16_bytes([10, 20, 30, 11, 21, 31])
     out = decode_be_int16(raw, n_channels=3)
-    assert out.shape == (2, 3)              # sample-major
+    assert out.shape == (2, 3)  # sample-major
     assert out.dtype == np.float32
     np.testing.assert_array_equal(out[0], [10, 20, 30])
     np.testing.assert_array_equal(out[1], [11, 21, 31])
@@ -211,6 +212,7 @@ when shaped (n_channels, n_samples)); we transpose to sample-major to match the
 MyoGestic Source contract. Muovi is big-endian; Quattrocento is little-endian
 (see decode_le_int16 in Task 7).
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -274,7 +276,7 @@ def test_muovi_control_byte_matches_matlab():
 
 def test_muovi_geometry_mode0():
     geo = C.muovi_geometry(plus=False, emg=True, mode=0)
-    assert geo.n_total == 38        # 32 bio + 6 aux
+    assert geo.n_total == 38  # 32 bio + 6 aux
     assert geo.n_bio == 32
     assert geo.fs == 2000.0
     assert geo.bytes_per_sample == 2
@@ -282,7 +284,7 @@ def test_muovi_geometry_mode0():
 
 def test_muovi_geometry_plus_eeg():
     geo = C.muovi_geometry(plus=True, emg=False, mode=0)
-    assert geo.n_total == 70        # 64 bio + 6 aux
+    assert geo.n_total == 70  # 64 bio + 6 aux
     assert geo.n_bio == 64
     assert geo.fs == 500.0
     assert geo.bytes_per_sample == 3
@@ -306,6 +308,7 @@ Expected: FAIL with `cannot import name '_constants'` / `AttributeError`
 Manufacturer-verified (Muovi TCP Protocol v2.4, MuoviLite manual v1.1,
 Read_muovi.m v3.0). See docs/reference/otb/.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -324,10 +327,10 @@ _MUOVIPLUS_BIO_BY_MODE = {0: 64, 1: 32, 2: 64, 3: 64}
 
 @dataclass(frozen=True)
 class MuoviGeometry:
-    n_total: int          # channels per sample-instant on the wire
-    n_bio: int            # biosignal channels (first n_bio rows)
-    n_aux: int            # auxiliary channels (always 6)
-    fs: float             # 2000 (EMG) or 500 (EEG)
+    n_total: int  # channels per sample-instant on the wire
+    n_bio: int  # biosignal channels (first n_bio rows)
+    n_aux: int  # auxiliary channels (always 6)
+    fs: float  # 2000 (EMG) or 500 (EEG)
     bytes_per_sample: int  # 2 (EMG, int16) or 3 (EEG, int24)
 
 
@@ -390,6 +393,7 @@ from myogestic.stream import StreamInfo
 
 class _FakeOTB(_OTBSource):
     """Drives the base buffering/decoding without a real socket."""
+
     def __init__(self):
         super().__init__()
         self._info = StreamInfo(n_channels=2, fs=4.0)
@@ -446,6 +450,7 @@ Owns the pull-side machinery common to every OTB device: a byte accumulator
 fed from the socket, complete-frame slicing, decode dispatch, and per-frame
 timestamping. Subclasses implement the socket/protocol specifics.
 """
+
 from __future__ import annotations
 
 import socket
@@ -606,7 +611,7 @@ def test_muovi_loopback_emg_mode0():
     t.start()
 
     stream_info = src.accept_and_start()  # accept probe, send control byte
-    assert stream_info.n_channels == 32   # biosignal-only by default
+    assert stream_info.n_channels == 32  # biosignal-only by default
     assert stream_info.fs == 2000.0
 
     # pull a few times
@@ -643,6 +648,7 @@ PC is the TCP server on port 54321; the probe connects in as client (in AP
 mode the probe is the WiFi access point and DHCP-assigns the PC). Big-endian
 int16 (EMG) / int24 (EEG); see docs/reference/otb/Read_muovi.m.
 """
+
 from __future__ import annotations
 
 import socket
@@ -787,6 +793,7 @@ git commit -m "feat(otb): add MuoviSource (TCP server, big-endian decode)"
 # append to tests/test_otb_muovi_loopback.py
 def test_muovi_source_importable_from_package():
     from myogestic.sources.otb import MuoviSource as M
+
     assert M is MuoviSource
 ```
 
@@ -893,7 +900,7 @@ Build the 40-byte config string with CRC-8. Ground truth: Quattrocento Configura
 def test_quattro_channel_counts_and_factors():
     assert C.QUATTRO_NCH_BY_MODE == {0: 120, 1: 216, 2: 312, 3: 408}
     assert C.QUATTRO_FS_BY_MODE == {0: 512.0, 1: 2048.0, 2: 5120.0, 3: 10240.0}
-    assert abs(C.QUATTRO_CONV_FACTOR_MV - (5 / 2 ** 16 / 150 * 1000)) < 1e-12
+    assert abs(C.QUATTRO_CONV_FACTOR_MV - (5 / 2**16 / 150 * 1000)) < 1e-12
 
 
 def test_quattro_config_is_40_bytes_with_valid_crc():
@@ -928,8 +935,8 @@ QUATTRO_PORT = 23456
 QUATTRO_FS_BY_MODE = {0: 512.0, 1: 2048.0, 2: 5120.0, 3: 10240.0}
 QUATTRO_NCH_BY_MODE = {0: 120, 1: 216, 2: 312, 3: 408}
 # Read_Quattrocento.m: GainFactor = 5/2^16/150*1000 (mV); AuxGain = 5/2^16/0.5 (V)
-QUATTRO_CONV_FACTOR_MV = 5 / 2 ** 16 / 150 * 1000
-QUATTRO_AUX_FACTOR_V = 5 / 2 ** 16 / 0.5
+QUATTRO_CONV_FACTOR_MV = 5 / 2**16 / 150 * 1000
+QUATTRO_AUX_FACTOR_V = 5 / 2**16 / 0.5
 # Default per-input CONF2 (Read_Quattrocento.m = 0x14): monopolar, HPF 10Hz, LPF 500Hz
 _QUATTRO_DEFAULT_CONF2 = 0x14
 
@@ -958,8 +965,8 @@ def quattro_config(
     cfg[2] = 0  # AN_OUT_CH_SEL
     for i in range(12):  # 8 IN + 4 MULTIPLE IN, 3 bytes each: CONF0/1/2
         base = 3 + i * 3
-        cfg[base + 0] = 0          # CONF0 muscle
-        cfg[base + 1] = 0          # CONF1 sensor+adapter
+        cfg[base + 0] = 0  # CONF0 muscle
+        cfg[base + 1] = 0  # CONF1 sensor+adapter
         cfg[base + 2] = conf2 & 0xFF
     cfg[39] = crc8(bytes(cfg[:39]))
     return bytes(cfg)
@@ -1032,7 +1039,7 @@ def test_quattrocento_loopback_validates_config_and_streams():
         conn, _ = srv.accept()
         cfg = conn.recv(40)
         seen["cfg_len"] = len(cfg)
-        seen["crc_ok"] = (cfg[39] == C.crc8(cfg[:39]))
+        seen["crc_ok"] = cfg[39] == C.crc8(cfg[:39])
         frame = _le_int16_frame(list(range(nch)))
         for _ in range(50):
             conn.sendall(frame)
@@ -1043,10 +1050,9 @@ def test_quattrocento_loopback_validates_config_and_streams():
     t = threading.Thread(target=fake_device, daemon=True)
     t.start()
 
-    src = QuattrocentoSource(device_ip="127.0.0.1", port=port,
-                             fs_mode=0, nch_mode=0, n_bio=64)
+    src = QuattrocentoSource(device_ip="127.0.0.1", port=port, fs_mode=0, nch_mode=0, n_bio=64)
     info = src.connect()
-    assert info.n_channels == 64       # biosignal-only by default
+    assert info.n_channels == 64  # biosignal-only by default
     assert info.fs == 512.0
 
     got = None
@@ -1081,6 +1087,7 @@ PC is the TCP client to the amplifier (default 169.254.1.10:23456). Config is
 a 40-byte CRC-8-terminated string; data is little-endian int16. See
 docs/reference/otb/Read_Quattrocento.m.
 """
+
 from __future__ import annotations
 
 import socket
@@ -1148,13 +1155,11 @@ class QuattrocentoSource(_OTBSource):
         )
 
     def _send_start(self) -> None:
-        cfg = C.quattro_config(fs_mode=self._fs_mode, nch_mode=self._nch_mode,
-                               acq_on=True)
+        cfg = C.quattro_config(fs_mode=self._fs_mode, nch_mode=self._nch_mode, acq_on=True)
         self._sock.sendall(cfg)
 
     def _send_stop(self) -> None:
-        cfg = C.quattro_config(fs_mode=self._fs_mode, nch_mode=self._nch_mode,
-                               acq_on=False)
+        cfg = C.quattro_config(fs_mode=self._fs_mode, nch_mode=self._nch_mode, acq_on=False)
         self._sock.sendall(cfg)
 
     def _decode(self, frame: bytes) -> np.ndarray:
@@ -1192,6 +1197,7 @@ git commit -m "feat(otb): add QuattrocentoSource (TCP client, little-endian deco
 # append to tests/test_otb_quattrocento_loopback.py
 def test_quattrocento_importable_from_package():
     from myogestic.sources.otb import QuattrocentoSource as Q
+
     assert Q is QuattrocentoSource
 ```
 
@@ -1240,6 +1246,7 @@ Setup: hold the Muovi power button ~5 s to start it as a WiFi access point,
 join its "MVxxx-ID" network from this PC, then run this script. The PC acts as
 the TCP server the probe dials into.
 """
+
 from myogestic import Stream
 from myogestic.sources.otb import MuoviSource
 
@@ -1299,8 +1306,10 @@ Give the PC NIC a `169.254.x.x` address on that segment.
 
 ```python
 from myogestic.sources.otb import QuattrocentoSource
-stream = Stream("emg", source=QuattrocentoSource(fs_mode=1, nch_mode=1),
-                window_seconds=1.0)  # 2048 Hz, 216 streamed ch
+
+stream = Stream(
+    "emg", source=QuattrocentoSource(fs_mode=1, nch_mode=1), window_seconds=1.0
+)  # 2048 Hz, 216 streamed ch
 stream.start()
 ```
 

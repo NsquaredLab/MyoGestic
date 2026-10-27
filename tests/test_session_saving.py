@@ -42,12 +42,15 @@ def test_scan_hides_a_folder_with_a_packing_or_packed_sibling(tmp_path, suffix, 
 @pytest.mark.parametrize("read_summary_first", [True, False])
 @pytest.mark.parametrize("selected", [True, False])
 def test_selection_follows_a_folder_into_its_packed_archive(
-    tmp_path, imgui_frame, read_summary_first, selected,
+    tmp_path,
+    imgui_frame,
+    read_summary_first,
+    selected,
 ):
     session = Session(str(tmp_path))
     session.name = "Practice"
-    session.add_label(0, timestamp=0.)
-    session.add_label(0, timestamp=10.)
+    session.add_label(0, timestamp=0.0)
+    session.add_label(0, timestamp=10.0)
     session.save_meta("test", class_names=["Rest"])
     manager = SessionManager(str(tmp_path))
     state = get_state(manager._widget_id)
@@ -70,11 +73,13 @@ def test_selection_follows_a_folder_into_its_packed_archive(
 
 @pytest.mark.parametrize("read_summary_first", [True, False])
 def test_vanished_selection_without_a_replacement_drops_out(
-    tmp_path, imgui_frame, read_summary_first,
+    tmp_path,
+    imgui_frame,
+    read_summary_first,
 ):
     folder = tmp_path / "removed"
     folder.mkdir()
-    (folder / "meta.json").write_text(json.dumps({"class_seconds": {"Rest": 10.}}))
+    (folder / "meta.json").write_text(json.dumps({"class_seconds": {"Rest": 10.0}}))
     manager = SessionManager(str(tmp_path))
     state = get_state(manager._widget_id)
     state.sessions = scan_sessions(str(tmp_path))
@@ -98,9 +103,14 @@ def deferred_pack(monkeypatch):
     monkeypatch.setattr(_browser, "IS_BROWSER", False)
     thread = core.threading.Thread
     monkeypatch.setattr(
-        core.threading, "Thread",
-        lambda **kwargs: thread(**kwargs) if "name" in kwargs else SimpleNamespace(
-            start=lambda: queued.append(kwargs["target"]),
+        core.threading,
+        "Thread",
+        lambda **kwargs: (
+            thread(**kwargs)
+            if "name" in kwargs
+            else SimpleNamespace(
+                start=lambda: queued.append(kwargs["target"]),
+            )
         ),
     )
     return queued
@@ -108,7 +118,10 @@ def deferred_pack(monkeypatch):
 
 @pytest.mark.parametrize("fails", [False, True])
 def test_pending_save_covers_pack_and_clears_on_success_or_failure(
-    tmp_path, monkeypatch, deferred_pack, fails,
+    tmp_path,
+    monkeypatch,
+    deferred_pack,
+    fails,
 ):
     app = App("saving")
     app.start_recording(base_path=str(tmp_path))
@@ -132,8 +145,9 @@ def test_pending_save_covers_pack_and_clears_on_success_or_failure(
     assert pending_during_pack == [True]
     assert not app.ctx.pending_saves
     assert ("Pack failed" in app.ctx.status_message) is fails
-    assert [row["path"] for row in get_state("Sessions_sessions").sessions
-            if row["selected"]] == [str(session.path.resolve())]
+    assert [row["path"] for row in get_state("Sessions_sessions").sessions if row["selected"]] == [
+        str(session.path.resolve())
+    ]
 
 
 def test_saving_stays_pending_until_all_packs_finish(tmp_path, deferred_pack):
@@ -154,12 +168,17 @@ def test_saving_stays_pending_until_all_packs_finish(tmp_path, deferred_pack):
 
 @pytest.mark.parametrize("fails", [False, True])
 def test_session_manager_shows_saving_until_pack_finishes(
-    tmp_path, monkeypatch, imgui_frame, deferred_pack, fails,
+    tmp_path,
+    monkeypatch,
+    imgui_frame,
+    deferred_pack,
+    fails,
 ):
     app = App("saving")
     app.ctx.participant = "P-014"
     app.start_recording(base_path=str(tmp_path))
     if fails:
+
         def fail():
             raise OSError("disk unavailable")
 
@@ -176,8 +195,9 @@ def test_session_manager_shows_saving_until_pack_finishes(
     monkeypatch.setattr(imgui, "text_colored", capture)
     try:
         imgui_frame(lambda: manager.ui(participant="P-014"))
-        assert any(label == "Saving the last take…" and color == dim
-                   for label, color, dim in captions)
+        assert any(
+            label == "Saving the last take…" and color == dim for label, color, dim in captions
+        )
     finally:
         deferred_pack.pop()()
     captions.clear()
@@ -187,7 +207,11 @@ def test_session_manager_shows_saving_until_pack_finishes(
 
 @pytest.mark.parametrize("has_selection", [False, True])
 def test_pipeline_panel_disables_train_with_saving_caption(
-    tmp_path, monkeypatch, imgui_frame, deferred_pack, has_selection,
+    tmp_path,
+    monkeypatch,
+    imgui_frame,
+    deferred_pack,
+    has_selection,
 ):
     from myogestic.contracts import TrainingData
     from myogestic.ml import widgets
@@ -229,7 +253,10 @@ def test_pipeline_panel_disables_train_with_saving_caption(
 
 
 def test_train_follows_a_pack_that_finishes_after_this_frames_selection(
-    tmp_path, monkeypatch, imgui_frame, deferred_pack,
+    tmp_path,
+    monkeypatch,
+    imgui_frame,
+    deferred_pack,
 ):
     from myogestic.ml import widgets
 
@@ -270,7 +297,10 @@ def test_train_follows_a_pack_that_finishes_after_this_frames_selection(
 
 
 def test_stop_then_train_before_metadata_is_written(
-    tmp_path, monkeypatch, imgui_frame, deferred_pack,
+    tmp_path,
+    monkeypatch,
+    imgui_frame,
+    deferred_pack,
 ):
     """A zarr-only pending take stays hidden until it is registered once, ticked."""
     from myogestic.ml import widgets
@@ -284,7 +314,7 @@ def test_stop_then_train_before_metadata_is_written(
     manager = SessionManager()
     app.start_recording()
     session = app.ctx.session
-    session.init_stream("emg", StreamInfo(n_channels=2, fs=100.))
+    session.init_stream("emg", StreamInfo(n_channels=2, fs=100.0))
     app.stop_recording()
     finish = deferred_pack.pop()
     folder = session.path

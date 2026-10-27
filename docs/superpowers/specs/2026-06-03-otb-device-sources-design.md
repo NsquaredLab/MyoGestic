@@ -24,6 +24,7 @@ class Source(Protocol):
     def connect(self) -> StreamInfo: ...
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]: ...
     def disconnect(self) -> None: ...
+
     # optional: discover() -> list[dict[str,str]], reconnect(target) -> StreamInfo
 ```
 
@@ -247,7 +248,8 @@ confirm it.)
             for _ in range(8):
                 s = (crc & 1) ^ (b & 1)
                 crc >>= 1
-                if s: crc ^= 0x8C
+                if s:
+                    crc ^= 0x8C
                 b >>= 1
         return crc
     ```
@@ -286,13 +288,26 @@ confirm it.)
 ## 6. Configuration surface (constructor kwargs)
 
 ```python
-MuoviSource(plus=False, mode="EMG", detection="monopolar_gain_8",
-            host_ip=None, port=54321, include_aux=False)
+MuoviSource(
+    plus=False,
+    mode="EMG",
+    detection="monopolar_gain_8",
+    host_ip=None,
+    port=54321,
+    include_aux=False,
+)
 
-QuattrocentoSource(device_ip="169.254.1.10", port=23456,
-                   fs_mode="MEDIUM", channels_mode="MEDIUM", grids=(0,),
-                   high_pass="none", low_pass="medium", detection="monopolar",
-                   include_aux=False)
+QuattrocentoSource(
+    device_ip="169.254.1.10",
+    port=23456,
+    fs_mode="MEDIUM",
+    channels_mode="MEDIUM",
+    grids=(0,),
+    high_pass="none",
+    low_pass="medium",
+    detection="monopolar",
+    include_aux=False,
+)
 ```
 
 Enums exposed as plain strings. Defaults: Muovi EMG @ 2000 Hz, 32ch monopolar

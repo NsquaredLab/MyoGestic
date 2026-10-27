@@ -119,7 +119,7 @@ def test_clear_after_detach_does_not_crash_acquire_loop():
     try:
         with tempfile.TemporaryDirectory() as tmp:
             stream = Stream("emg", source=_FixedSource(), window_ms=100, buffer_ms=2000)
-            stream.reconnect()   # the loop never attaches on its own
+            stream.reconnect()  # the loop never attaches on its own
             stream.start()
             time.sleep(0.05)  # let it connect + stream
             assert stream.info is not None

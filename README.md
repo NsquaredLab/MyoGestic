@@ -51,12 +51,14 @@ from myogestic.widgets import recording_controls, signal_viewer
 app = App("Hello EMG")
 app.streams(Stream("emg", source=LSLSource("EMG"), window_ms=1000))
 
+
 @app.ui
 def ui(ctx):
     signal_viewer(ctx, "emg")
-    recording_controls(ctx, ["Rest", "Fist"],
-                       on_record=app.start_recording,
-                       on_stop=app.stop_recording)
+    recording_controls(
+        ctx, ["Rest", "Fist"], on_record=app.start_recording, on_stop=app.stop_recording
+    )
+
 
 app.run()
 ```

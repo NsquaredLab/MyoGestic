@@ -74,7 +74,8 @@ def test_missing_logo_uses_display_wordmark(imgui_frame, monkeypatch, variant, s
     imgui.get_style().font_scale_main = scale
     monkeypatch.setattr(hello_imgui, "asset_exists", lambda name: False)
     monkeypatch.setattr(
-        hello_imgui, "image_and_size_from_asset",
+        hello_imgui,
+        "image_and_size_from_asset",
         lambda name: pytest.fail("A missing logo must not be loaded"),
     )
     fonts, labels, heights = [], [], []
@@ -106,12 +107,25 @@ def workflow(monkeypatch):
     return runpy.run_path(str(_ROOT / "examples/start_here/myocontrol.py"))
 
 
-@pytest.mark.parametrize("scale,width,show_title", [
-    (1.0, 1280, True), (1.0, 900, False), (2.0, 2560, True), (2.0, 1800, False),
-])
+@pytest.mark.parametrize(
+    "scale,width,show_title",
+    [
+        (1.0, 1280, True),
+        (1.0, 900, False),
+        (2.0, 2560, True),
+        (2.0, 1800, False),
+    ],
+)
 @pytest.mark.parametrize("dark", [False, True])
 def test_header_is_left_aligned_and_stays_in_one_row(
-    imgui_frame, monkeypatch, logo_image, workflow, scale, width, show_title, dark,
+    imgui_frame,
+    monkeypatch,
+    logo_image,
+    workflow,
+    scale,
+    width,
+    show_title,
+    dark,
 ):
     monkeypatch.setattr(_scale, "_current", scale)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: dark)
@@ -191,7 +205,10 @@ def test_header_is_left_aligned_and_stays_in_one_row(
 
 
 def test_header_pill_stays_inside_on_the_first_frame_after_scaling(
-    imgui_frame, monkeypatch, logo_image, workflow,
+    imgui_frame,
+    monkeypatch,
+    logo_image,
+    workflow,
 ):
     pill = workflow["header"].ui.__func__.__globals__["status_pill"]
     right_edges, pill_edges = [], []

@@ -65,7 +65,7 @@ def test_a_typed_name_becomes_a_safe_filename_fragment(typed, expected):
 
 def test_a_slug_never_contains_a_path_separator():
     """Whitelist, not blacklist — the property that makes the above exhaustive."""
-    hostile = "../a/b\\c\0d:e*f?g\"h<i>j|k"
+    hostile = '../a/b\\c\0d:e*f?g"h<i>j|k'
     assert set(_slug(hostile)) <= set("abcdefghijk-_")
 
 

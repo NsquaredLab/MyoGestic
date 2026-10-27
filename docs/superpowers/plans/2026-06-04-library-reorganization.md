@@ -158,6 +158,7 @@ Single implementation lives in ``myogestic.models`` (joblib-based, handles
 picklable estimators incl. NumPy-heavy ones). These names are kept for the
 pipeline hook API and back-compat.
 """
+
 from pathlib import Path
 from typing import Any
 
@@ -260,6 +261,7 @@ git mv myogestic/_proto         myogestic/vhi/_proto
 ```python
 """Virtual Hand Interface (VHI) integration: output-interface registry, the
 gRPC control client, and the generated protobuf stubs."""
+
 from myogestic.vhi.interfaces import InterfaceSpec, virtual_hand
 
 __all__ = ["InterfaceSpec", "virtual_hand"]

@@ -177,9 +177,7 @@ app = App("MyoGestic — pong", require_participant=True)
 # deliberately not connected here — see `_start_block`, which is the press that does it.
 target = TargetSource(PURSUIT)
 target_stream = Stream(TARGET_STREAM, source=target, window_ms=WINDOW_MS)
-app.streams(
-    Stream("emg", source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS), target_stream
-)
+app.streams(Stream("emg", source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS), target_stream)
 pipeline = Pipeline(app, predict_hz=PREDICT_HZ)
 link = ControlLink(
     CONTROL_MAP,
@@ -207,7 +205,8 @@ block = {"recording": False}
 held_cue = 0.0
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
-    default=["RMS", "MAV"], show_header=False,
+    default=["RMS", "MAV"],
+    show_header=False,
 )
 #: How each feature answers a gain ``g``: RMS/MAV/WL by ``g``, VAR by ``g**2``, ZC not at
 #: all. The gain only cancels if every ticked column moves alike, so `train` refuses a mix
@@ -411,9 +410,10 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
     return out
 
 
-layout, dummy_layout = (Layout(
-    wide=Grid.areas(
-        f"""
+layout, dummy_layout = (
+    Layout(
+        wide=Grid.areas(
+            f"""
         header   header
         signal   step
         signal   sessions
@@ -421,12 +421,12 @@ layout, dummy_layout = (Layout(
         log      sessions
         status   status
         """,
-        row_height=[Px(52), Fr(3), Fr(1), *([Px(142)] if simulated else []), Px(110), Px(26)],
-        col_width=[Fr(1), Px(400)],
-        bare=("header", "status"),
-    ),
-    narrow=Grid.areas(
-        f"""
+            row_height=[Px(52), Fr(3), Fr(1), *([Px(142)] if simulated else []), Px(110), Px(26)],
+            col_width=[Fr(1), Px(400)],
+            bare=("header", "status"),
+        ),
+        narrow=Grid.areas(
+            f"""
         header
         signal
         {"simulator" if simulated else ""}
@@ -435,11 +435,21 @@ layout, dummy_layout = (Layout(
         log
         status
         """,
-        row_height=[Px(52), Fr(2), *([Px(184)] if simulated else []), Fr(3), Fr(1.5), Px(110), Px(26)],
-        bare=("header", "status"),
-    ),
-    breakpoint=Px(1100),
-) for simulated in (False, True))
+            row_height=[
+                Px(52),
+                Fr(2),
+                *([Px(184)] if simulated else []),
+                Fr(3),
+                Fr(1.5),
+                Px(110),
+                Px(26),
+            ],
+            bare=("header", "status"),
+        ),
+        breakpoint=Px(1100),
+    )
+    for simulated in (False, True)
+)
 steps = StepBar(["Connect", "Record", "Train", "Play"], widget_id="pong_steps")
 participant = ParticipantPanel()
 header = AppHeader("Pong", steps=steps, participant=participant)
@@ -448,11 +458,18 @@ status = StatusBar("emg", pipeline=pipeline)
 # The cursor is generated here, not acquired — pointing a device at it would replace
 # the very thing the block is recording.
 device = DevicePicker(
-    "emg", selectable=True, exclude=(TARGET_STREAM,), show_header=False,
-    devices=(*DEFAULT_DEVICES, DeviceSpec(
-        "Synthetic wrist (dummy follows the cursor)", DummyWristSource,
-        hint="A test subject for trying Pong without hardware, not EMG. Follows the cursor during a block.",
-    )),
+    "emg",
+    selectable=True,
+    exclude=(TARGET_STREAM,),
+    show_header=False,
+    devices=(
+        *DEFAULT_DEVICES,
+        DeviceSpec(
+            "Synthetic wrist (dummy follows the cursor)",
+            DummyWristSource,
+            hint="A test subject for trying Pong without hardware, not EMG. Follows the cursor during a block.",
+        ),
+    ),
     # The picker names additional amplifiers; the app owns their geometry.
     on_add=lambda name: app.add_stream(
         Stream(name, source=DEFAULT_DEVICES[0].factory(), window_ms=WINDOW_MS)
@@ -698,11 +715,15 @@ def block_ui() -> None:
     """
     running = target.running
     seconds = int(target.elapsed)
-    _value_row(f"Recording block {block.get('number', 1)}" if running else "Ready to follow",
-               f"{seconds // 60}:{seconds % 60:02}" if running else "",
-               tone=DANGER if running else IDLE)
+    _value_row(
+        f"Recording block {block.get('number', 1)}" if running else "Ready to follow",
+        f"{seconds // 60}:{seconds % 60:02}" if running else "",
+        tone=DANGER if running else IDLE,
+    )
     if running:
-        if imgui.button(f"{fa.ICON_FA_STOP}  Stop block", imgui.ImVec2(imgui.get_content_region_avail().x, 0)):
+        if imgui.button(
+            f"{fa.ICON_FA_STOP}  Stop block", imgui.ImVec2(imgui.get_content_region_avail().x, 0)
+        ):
             _end_block()
     else:
         if primary_button("Follow the cursor", size=(imgui.get_content_region_avail().x, 0)):
@@ -785,7 +806,9 @@ def record_ui(ctx: Context) -> None:
     # operator started by hand, and `_end_block` leaves that take running.
     running = target.running
     imgui.begin_disabled(running)
-    record_protocol["index"] = _choice("protocol", "Recording protocol", PROTOCOLS, record_protocol["index"])
+    record_protocol["index"] = _choice(
+        "protocol", "Recording protocol", PROTOCOLS, record_protocol["index"]
+    )
     imgui.end_disabled()
     if running:
         imgui.text_wrapped("Stop the block to change the protocol.")
@@ -801,11 +824,15 @@ def model_ui() -> None:
     """Choose the fit and its features, train on selected takes, and read its log."""
     training_mode["index"] = _choice("mode", "Training mode", MODES, training_mode["index"])
     model = pipeline.model
-    with tinted_row(IDLE if model is None else
-                    WARNING if model[0] != MODES[training_mode["index"]] else SUCCESS):
-        _detail("No model yet — train to begin." if model is None else
-                f"Driving: {model[0].lower()}" +
-                (" — train to switch" if model[0] != MODES[training_mode["index"]] else ""))
+    with tinted_row(
+        IDLE if model is None else WARNING if model[0] != MODES[training_mode["index"]] else SUCCESS
+    ):
+        _detail(
+            "No model yet — train to begin."
+            if model is None
+            else f"Driving: {model[0].lower()}"
+            + (" — train to switch" if model[0] != MODES[training_mode["index"]] else "")
+        )
     imgui.text_colored(muted(), "Features")
     features.ui()
     imgui.spacing()
@@ -813,7 +840,9 @@ def model_ui() -> None:
     training_log.ui()
 
 
-def _value_row(caption: str, value: str, *, tone: imgui.ImVec4 | None = None, settings: bool = False) -> bool:
+def _value_row(
+    caption: str, value: str, *, tone: imgui.ImVec4 | None = None, settings: bool = False
+) -> bool:
     """A utility/state row with a fitted caption, mono value and optional settings."""
     clicked = False
     with tinted_row(tone) as width:
@@ -827,7 +856,9 @@ def _value_row(caption: str, value: str, *, tone: imgui.ImVec4 | None = None, se
         imgui.align_text_to_frame_padding()
         _detail(caption, width=caption_w)
         imgui.same_line()
-        imgui.set_cursor_pos(imgui.ImVec2(left + width - value_w - (icon_w + gap if settings else 0), top))
+        imgui.set_cursor_pos(
+            imgui.ImVec2(left + width - value_w - (icon_w + gap if settings else 0), top)
+        )
         imgui.align_text_to_frame_padding()
         _detail(value, numeric=True, width=value_w)
         if settings:
@@ -865,16 +896,32 @@ def play_ui() -> None:
     """Start prediction, adjust the court and show the hand output."""
     global pong
     running = app.ctx.state == "predicting"
-    _value_row("Predicting" if running else "Ready to play", f"{PREDICT_HZ} Hz" if running else "", tone=SUCCESS if running else IDLE)
-    reason = ("" if running else "Finish the current action to enable Predict." if app.ctx.state != "idle"
-              else "To predict, train or load a model first." if pipeline.model is None else "")
+    _value_row(
+        "Predicting" if running else "Ready to play",
+        f"{PREDICT_HZ} Hz" if running else "",
+        tone=SUCCESS if running else IDLE,
+    )
+    reason = (
+        ""
+        if running
+        else "Finish the current action to enable Predict."
+        if app.ctx.state != "idle"
+        else "To predict, train or load a model first."
+        if pipeline.model is None
+        else ""
+    )
     imgui.begin_disabled(bool(reason))
     if running:
         push_selected()
-        clicked = imgui.button(f"{fa.ICON_FA_STOP}  Stop predicting", imgui.ImVec2(imgui.get_content_region_avail().x, 0))
+        clicked = imgui.button(
+            f"{fa.ICON_FA_STOP}  Stop predicting",
+            imgui.ImVec2(imgui.get_content_region_avail().x, 0),
+        )
         pop_selected()
     else:
-        clicked = primary_button(f"{fa.ICON_FA_PLAY}  Predict", size=(imgui.get_content_region_avail().x, 0))
+        clicked = primary_button(
+            f"{fa.ICON_FA_PLAY}  Predict", size=(imgui.get_content_region_avail().x, 0)
+        )
     imgui.end_disabled()
     if clicked and not reason:
         pipeline.stop_predicting() if running else pipeline.start_predicting()
@@ -908,9 +955,15 @@ def hand_ui() -> None:
     running = processes.running(vhi.name)
     error = hand_status["error"] or binder.last_error
     tone = SUCCESS if bound else DANGER if error else WARNING if running else IDLE
-    detail = ("Bound — the wrist mirrors the paddle." if bound else
-              "Connection failed" if error else
-              "Launched — connecting…" if running else "Not connected")
+    detail = (
+        "Bound — the wrist mirrors the paddle."
+        if bound
+        else "Connection failed"
+        if error
+        else "Launched — connecting…"
+        if running
+        else "Not connected"
+    )
     if not bound and running:
         # Launch arms the background binder; an idle app never polls it.
         binder.poll()
@@ -919,8 +972,11 @@ def hand_ui() -> None:
         f"{alias} → {', '.join(ref.address for ref in binding.targets)} · {ALIAS_ROLES.get(alias, UNDRIVEN)}"
         for alias, binding in CONTROL_MAP.bindings.items()
     )
-    hint = ("Launch the Virtual Hand, or bind to one already running." if hand_processes else
-            "Start the Virtual Hand, then bind to mirror the paddle.")
+    hint = (
+        "Launch the Virtual Hand, or bind to one already running."
+        if hand_processes
+        else "Start the Virtual Hand, then bind to mirror the paddle."
+    )
     tooltip = f"{detail}\n{error or hint}\nOptional — the game plays without it.\n\n{mapping}"
     if not hand_processes:
         tooltip += f"\n\n{vhi.install_hint.strip()}"
@@ -936,8 +992,13 @@ def hand_ui() -> None:
         room = max(0.0, right - reserved - imgui.get_cursor_pos_x())
         imgui.text_colored(primary(), fit_text("Virtual Hand", room))
         imgui.set_item_tooltip(tooltip)
-        remaining = (right - reserved - imgui.get_item_rect_max().x
-                     + imgui.get_window_pos().x - style.item_spacing.x)
+        remaining = (
+            right
+            - reserved
+            - imgui.get_item_rect_max().x
+            + imgui.get_window_pos().x
+            - style.item_spacing.x
+        )
         if remaining > ui_px(60):
             imgui.same_line()
             imgui.push_font(mono_font(), style.font_size_base)
@@ -958,13 +1019,17 @@ def hand_ui() -> None:
                     except Exception as exc:
                         hand_status["error"] = str(exc)
                         app.ctx.log(f"Virtual Hand launch failed: {exc}")
-            imgui.set_item_tooltip("Stop the Virtual Hand" if running else "Launch the Virtual Hand")
+            imgui.set_item_tooltip(
+                "Stop the Virtual Hand" if running else "Launch the Virtual Hand"
+            )
         if not bound:
             imgui.same_line()
             imgui.set_cursor_pos_x(right - action_width)
             if imgui.small_button(f"{fa.ICON_FA_LINK}##bind_hand") and _bind() is None:
                 app.ctx.log("VHI did not answer. Launch it here, or start it before the app.")
-            imgui.set_item_tooltip("Retry binding the Virtual Hand" if error else "Bind the Virtual Hand")
+            imgui.set_item_tooltip(
+                "Retry binding the Virtual Hand" if error else "Bind the Virtual Hand"
+            )
 
 
 _dummy_mouse = {"up": False, "down": False}
@@ -972,8 +1037,9 @@ _dummy_mouse = {"up": False, "down": False}
 
 def _dummy_input_allowed() -> bool:
     """Only the focused app receives arrows, and never during text entry."""
-    return (not imgui.get_io().want_text_input
-            and imgui.is_window_focused(imgui.FocusedFlags_.root_and_child_windows))
+    return not imgui.get_io().want_text_input and imgui.is_window_focused(
+        imgui.FocusedFlags_.root_and_child_windows
+    )
 
 
 def _update_dummy(dummy: DummyWristSource, dt: float) -> None:
@@ -1016,8 +1082,11 @@ def simulated_ui(dummy: DummyWristSource) -> None:
         imgui.table_setup_column("drive", init_width_or_weight=0.62)
         imgui.table_next_column()
     _detail("Synthetic wrist · dummy subject")
-    caption = ("The dummy follows the cursor. Arrows come back when the block ends." if target.running
-               else "Hold ↑ or ↓ to flex. Let go to rest.")
+    caption = (
+        "The dummy follows the cursor. Arrows come back when the block ends."
+        if target.running
+        else "Hold ↑ or ↓ to flex. Let go to rest."
+    )
     if wide:
         imgui.text_wrapped(caption)
         imgui.table_next_column()
@@ -1031,7 +1100,15 @@ def simulated_ui(dummy: DummyWristSource) -> None:
     if wide:
         imgui.table_next_column()
     value = dummy.drive
-    word = "following the cursor" if target.running else "rest" if abs(value) < 0.01 else "flex up" if value > 0 else "flex down"
+    word = (
+        "following the cursor"
+        if target.running
+        else "rest"
+        if abs(value) < 0.01
+        else "flex up"
+        if value > 0
+        else "flex down"
+    )
     _detail(f"{value:+.2f} · {word}", numeric=True)
     dl = imgui.get_window_draw_list()
     origin = imgui.get_cursor_screen_pos()
@@ -1040,8 +1117,17 @@ def simulated_ui(dummy: DummyWristSource) -> None:
     dl.add_rect_filled(origin, far, imgui.get_color_u32(imgui.Col_.frame_bg), rounding=ui_px(5))
     zero = origin.x + width / 2
     tip = zero + value * width / 2
-    dl.add_rect_filled(imgui.ImVec2(min(zero, tip), origin.y), imgui.ImVec2(max(zero, tip), far.y), imgui.get_color_u32(DANGER if target.running else INFO))
-    dl.add_line(imgui.ImVec2(zero, origin.y - ui_px(2)), imgui.ImVec2(zero, far.y + ui_px(2)), imgui.get_color_u32(muted()), thickness=ui_px(1))
+    dl.add_rect_filled(
+        imgui.ImVec2(min(zero, tip), origin.y),
+        imgui.ImVec2(max(zero, tip), far.y),
+        imgui.get_color_u32(DANGER if target.running else INFO),
+    )
+    dl.add_line(
+        imgui.ImVec2(zero, origin.y - ui_px(2)),
+        imgui.ImVec2(zero, far.y + ui_px(2)),
+        imgui.get_color_u32(muted()),
+        thickness=ui_px(1),
+    )
     imgui.dummy(imgui.ImVec2(width, height))
     _detail("−1 down · rest 0 · +1 up", numeric=True)
     if wide:
@@ -1070,8 +1156,14 @@ def pong_ui(ctx: Context) -> None:
         _end_block()
 
     stream = ctx.streams.get("emg")
-    dummy = (stream._source if stream is not None and stream.status == "connected"
-             and stream.info is not None and isinstance(stream._source, DummyWristSource) else None)
+    dummy = (
+        stream._source
+        if stream is not None
+        and stream.status == "connected"
+        and stream.info is not None
+        and isinstance(stream._source, DummyWristSource)
+        else None
+    )
     view = dummy_layout if dummy is not None else layout
 
     with view["header"]:
@@ -1086,8 +1178,13 @@ def pong_ui(ctx: Context) -> None:
         pipeline.training_data = sessions.ui(participant=ctx.participant)
     with view["step"]:
         stream = ctx.streams.get("emg")
-        tone = (SUCCESS if stream is not None and stream.status == "connected" and stream.info is not None
-                else DANGER if stream is not None and stream.last_error else IDLE)
+        tone = (
+            SUCCESS
+            if stream is not None and stream.status == "connected" and stream.info is not None
+            else DANGER
+            if stream is not None and stream.last_error
+            else IDLE
+        )
         panel_header(steps.steps[active], status=tone if active == 0 else None)
         if active == 0:
             connect_ui(ctx)

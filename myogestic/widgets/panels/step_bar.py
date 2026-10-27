@@ -39,8 +39,9 @@ def _content_width(index: int, label: str, done: bool) -> float:
     suffix = f"  {label}" if label else ""
     if not done:
         return imgui.calc_text_size(f"{index + 1}{suffix}").x
-    return (imgui.calc_text_size(fa.ICON_FA_CHECK).x
-            + (imgui.calc_text_size("  ").x + imgui.calc_text_size(label).x if label else 0))
+    return imgui.calc_text_size(fa.ICON_FA_CHECK).x + (
+        imgui.calc_text_size("  ").x + imgui.calc_text_size(label).x if label else 0
+    )
 
 
 def _step_button(index: int, label: str, done: bool) -> bool:
@@ -105,22 +106,33 @@ class StepBar:
         _active_steps[self._widget_id] = index
 
     def _labels(self, compact: bool) -> list[str]:
-        return [label if not compact or i == self.active else ""
-                for i, label in enumerate(self.steps)]
+        return [
+            label if not compact or i == self.active else "" for i, label in enumerate(self.steps)
+        ]
 
-    def _width(self, done: list[bool], *, compact: bool = False,
-               padding_x: float | None = None, minimum: bool = False) -> float:
+    def _width(
+        self,
+        done: list[bool],
+        *,
+        compact: bool = False,
+        padding_x: float | None = None,
+        minimum: bool = False,
+    ) -> float:
         """Measure navigation using the same text runs as the rendered buttons."""
         labels = self._labels(compact)
         if minimum:
             labels = ["…" if i == self.active else "" for i in range(len(self.steps))]
         padding = imgui.get_style().frame_padding.x if padding_x is None else padding_x
-        return (sum(_content_width(i, label, complete)
-                    for i, (label, complete) in enumerate(zip(labels, done, strict=True)))
-                + len(labels) * 2 * padding + (0 if minimum else (len(labels) - 1) * ui_px(32)))
+        return (
+            sum(
+                _content_width(i, label, complete)
+                for i, (label, complete) in enumerate(zip(labels, done, strict=True))
+            )
+            + len(labels) * 2 * padding
+            + (0 if minimum else (len(labels) - 1) * ui_px(32))
+        )
 
-    def ui(self, done: list[bool], *, compact: bool = False,
-           max_width: float | None = None) -> int:
+    def ui(self, done: list[bool], *, compact: bool = False, max_width: float | None = None) -> int:
         """Draw the steps and return the selected index.
 
         Parameters
@@ -154,13 +166,18 @@ class StepBar:
         if compact and max_width is not None:
             natural_w = self._width(done, compact=True)
             if len(labels) > 1:
-                connector_w = max(0, math.floor(
-                    ui_px(32) - max(0, natural_w - max_width) / (len(labels) - 1),
-                ))
+                connector_w = max(
+                    0,
+                    math.floor(
+                        ui_px(32) - max(0, natural_w - max_width) / (len(labels) - 1),
+                    ),
+                )
             excess = natural_w - (len(labels) - 1) * (ui_px(32) - connector_w) - max_width
             if excess > 0:
                 label = labels[self.active]
-                labels[self.active] = fit_text(label, max(0, imgui.calc_text_size(label).x - excess))
+                labels[self.active] = fit_text(
+                    label, max(0, imgui.calc_text_size(label).x - excess)
+                )
         # Keep this frame's labels stable even if a click changes the selection.
         active = self.active
         imgui.push_id(self._widget_id)

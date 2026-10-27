@@ -35,7 +35,9 @@ def tiles(monkeypatch):
         if key.startswith("rec_gesture"):
             lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
             seen.tiles[int(key.removeprefix("rec_gesture"))] = (
-                bool(seen.depth), imgui.get_style().alpha, (lo.x, lo.y, hi.x, hi.y),
+                bool(seen.depth),
+                imgui.get_style().alpha,
+                (lo.x, lo.y, hi.x, hi.y),
             )
         return key == seen.click or result
 
@@ -87,8 +89,9 @@ def test_default_and_clicked_gesture_match_the_next_take(imgui_frame, tiles, ini
         ctx.recording = True
         ctx.session = SimpleNamespace(add_label=labels.append)
 
-    controls = RecordingControls(["Rest", "Fist"], on_record=start, on_stop=lambda: None,
-                                 on_gesture=callbacks.append)
+    controls = RecordingControls(
+        ["Rest", "Fist"], on_record=start, on_stop=lambda: None, on_gesture=callbacks.append
+    )
     imgui_frame(lambda: controls.ui(ctx))
     assert [i for i, (on, _, _) in tiles.tiles.items() if on] == [expected]
     # Showing the default does not relabel the shared context until an action.
@@ -122,8 +125,9 @@ def test_record_uses_the_visible_default_without_a_tile_click(imgui_frame, tiles
         ctx.recording = True
         ctx.session = SimpleNamespace(add_label=labels.append)
 
-    controls = RecordingControls(["Rest", "Fist"], on_record=start, on_stop=lambda: None,
-                                 take_lengths=(5,), timed=timed)
+    controls = RecordingControls(
+        ["Rest", "Fist"], on_record=start, on_stop=lambda: None, take_lengths=(5,), timed=timed
+    )
     imgui_frame(lambda: controls.ui(ctx))
     assert ctx.current_label == -1
     assert tiles.tiles[0][0] is True
@@ -139,8 +143,10 @@ def test_tile_dots_use_the_shared_palette_index_cycle(imgui_frame, tiles):
     expected = []
 
     def draw():
-        expected.extend(imgui.get_color_u32(imgui.ImVec4(*PALETTE[i % len(PALETTE)], 1.0))
-                        for i in range(len(names)))
+        expected.extend(
+            imgui.get_color_u32(imgui.ImVec4(*PALETTE[i % len(PALETTE)], 1.0))
+            for i in range(len(names))
+        )
         controls.ui(Context())
 
     imgui_frame(draw)
@@ -157,8 +163,14 @@ def test_timed_take_keeps_selected_gesture_and_explains_locked_tiles(imgui_frame
         ctx.recording = True
         ctx.session = SimpleNamespace(add_label=labels.append)
 
-    controls = RecordingControls(["Rest", "Fist"], on_record=start, on_stop=lambda: None,
-                                 timed=True, take_lengths=(5,), warmups=(2,))
+    controls = RecordingControls(
+        ["Rest", "Fist"],
+        on_record=start,
+        on_stop=lambda: None,
+        timed=True,
+        take_lengths=(5,),
+        warmups=(2,),
+    )
     now = [0.0]
     controls._machine._clock = lambda: now[0]
     controls._start(ctx)
@@ -171,23 +183,32 @@ def test_timed_take_keeps_selected_gesture_and_explains_locked_tiles(imgui_frame
     assert tiles.tiles[1][:2] == (True, 1.0)
     assert tiles.tiles[0][0] is False
     assert tiles.tiles[0][1] < tiles.tiles[1][1]
-    caption = ("Cancel the warm-up to change gestures." if phase == "warmup"
-               else "Stop the recording to change gestures.")
+    caption = (
+        "Cancel the warm-up to change gestures."
+        if phase == "warmup"
+        else "Stop the recording to change gestures."
+    )
     assert (caption, tuple(muted()), 1.0) in tiles.captions
     assert labels == ([1] if phase == "recording" else [])
 
 
 @pytest.mark.parametrize("width", [600, 320])
 def test_large_tiles_and_dot_labels_fit_light_theme_at_scale_two(
-    imgui_frame, monkeypatch, tiles, width,
+    imgui_frame,
+    monkeypatch,
+    tiles,
+    width,
 ):
     monkeypatch.setattr(_scale, "_current", 2.0)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
     imgui.get_style().scale_all_sizes(2.0)
     imgui.get_style().font_scale_main = 2.0
-    controls = RecordingControls(["Rest", "A very long gesture name that needs clipping"],
-                                 on_record=lambda: None, on_stop=lambda: None)
+    controls = RecordingControls(
+        ["Rest", "A very long gesture name that needs clipping"],
+        on_record=lambda: None,
+        on_stop=lambda: None,
+    )
     bounds = []
 
     def draw():
@@ -203,7 +224,10 @@ def test_large_tiles_and_dot_labels_fit_light_theme_at_scale_two(
         imgui_frame(draw)
     assert len(tiles.dots) == len(tiles.names) == len(tiles.tiles) == 2
     for (_, _, box), (x, y, radius, _), (_, text) in zip(
-        tiles.tiles.values(), tiles.dots, tiles.names, strict=True,
+        tiles.tiles.values(),
+        tiles.dots,
+        tiles.names,
+        strict=True,
     ):
         assert bounds[0] <= box[0] < box[2] <= bounds[1] + 1
         assert box[3] - box[1] == pytest.approx(ui_px(44))

@@ -113,13 +113,25 @@ class StreamManager:
         remove = None
         for index, name in enumerate(names):
             stream = ctx.streams[name]
-            tone = (SUCCESS if stream.status == "connected" and stream.info is not None
-                    else DANGER if stream.last_error else IDLE)
+            tone = (
+                SUCCESS
+                if stream.status == "connected" and stream.info is not None
+                else DANGER
+                if stream.last_error
+                else IDLE
+            )
             selected = name == self._selected
             clicked, removed = stream_chip(
-                name, tone, selected=selected, prefix="sm", left=left, right=right,
-                first=index == 0, removable=selected and len(names) > 1,
-                recording=recording, locked=recording,
+                name,
+                tone,
+                selected=selected,
+                prefix="sm",
+                left=left,
+                right=right,
+                first=index == 0,
+                removable=selected and len(names) > 1,
+                recording=recording,
+                locked=recording,
                 detail=stream.last_error or stream.status,
             )
             if clicked:
@@ -152,17 +164,27 @@ class StreamManager:
     def _add_row(self, ctx: Context, *, recording: bool) -> None:
         """Inline name, Add and cancel, using the existing safe-name contract."""
         style = imgui.get_style()
-        reserve = (imgui.calc_text_size("Add").x + imgui.calc_text_size(fa.ICON_FA_XMARK).x
-                   + 4 * style.frame_padding.x + 2 * style.item_spacing.x)
+        reserve = (
+            imgui.calc_text_size("Add").x
+            + imgui.calc_text_size(fa.ICON_FA_XMARK).x
+            + 4 * style.frame_padding.x
+            + 2 * style.item_spacing.x
+        )
         imgui.set_next_item_width(max(1.0, imgui.get_content_region_avail().x - reserve))
         imgui.begin_disabled(recording)
         changed, typed = imgui.input_text_with_hint("##sm_new", "e.g. force", self._typed)
         if changed:
             self._typed = typed[:_NAME_MAX]
         cleaned = _clean_name(self._typed)
-        reason = ("Stop the recording before adding a stream." if recording else
-                  "Type a name first." if not cleaned else
-                  f"A stream named {cleaned!r} already exists." if cleaned in ctx.streams else "")
+        reason = (
+            "Stop the recording before adding a stream."
+            if recording
+            else "Type a name first."
+            if not cleaned
+            else f"A stream named {cleaned!r} already exists."
+            if cleaned in ctx.streams
+            else ""
+        )
         imgui.same_line()
         imgui.begin_disabled(bool(reason))
         if imgui.button("Add##sm_add") and not reason:

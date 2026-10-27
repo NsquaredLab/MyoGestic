@@ -18,14 +18,25 @@ def toolbar(imgui_frame, monkeypatch):
     """Track submitted items, keeping real layout, popup and style-stack behavior."""
     monkeypatch.setattr(_state, "_viewers", {})
     ctx = Context()
-    stream = Stream("emg", source=SyntheticSource(n_channels=8, fs=2048), window_ms=500, buffer_ms=60000)
+    stream = Stream(
+        "emg", source=SyntheticSource(n_channels=8, fs=2048), window_ms=500, buffer_ms=60000
+    )
     assert stream.reconnect()
     stream._acquire_step()
     ctx.streams["emg"] = stream
     viewer = SignalViewer("emg", widget_id="toolbar", selectable=True)
     ui = SimpleNamespace(
-        ctx=ctx, viewer=viewer, items={}, click="", changes={}, popups=set(),
-        title_y=0.0, plot_y=0.0, texts=[], width=900, bounds={},
+        ctx=ctx,
+        viewer=viewer,
+        items={},
+        click="",
+        changes={},
+        popups=set(),
+        title_y=0.0,
+        plot_y=0.0,
+        texts=[],
+        width=900,
+        bounds={},
     )
 
     def track(name):
@@ -137,7 +148,9 @@ def test_display_popup_controls_share_label_column(toolbar, monkeypatch):
     toolbar.frame()
     controls = ["win", "detail", "gain", "transient", "lanes_seg0", "notch_seg0"]
     lefts = [
-        next(rect[0] for label, rect in toolbar.items.items() if label.endswith(f"toolbar_{control}"))
+        next(
+            rect[0] for label, rect in toolbar.items.items() if label.endswith(f"toolbar_{control}")
+        )
         for control in controls
     ]
     assert lefts == [lefts[0]] * len(controls)
@@ -168,12 +181,26 @@ def test_every_control_reachable(imgui_frame, toolbar):
     toolbar.frame(changes={"##toolbar_df": 3})
     toolbar.frame("toolbar_scale_seg1")
     expected = {
-        "toolbar_pause", "toolbar_df", "toolbar_scale_seg0", "toolbar_scale_seg1",
-        "toolbar_win", "toolbar_detail", "toolbar_one_to_one", "toolbar_gain",
-        "toolbar_transient", "toolbar_lanes_seg0", "toolbar_lanes_seg1",
-        "toolbar_rescale", "toolbar_notch_seg0", "toolbar_notch_seg1",
-        "toolbar_notch_seg2", "toolbar_diag", "toolbar_ymin", "toolbar_ymax",
-        "toolbar_rmswin", "toolbar_rmshop",
+        "toolbar_pause",
+        "toolbar_df",
+        "toolbar_scale_seg0",
+        "toolbar_scale_seg1",
+        "toolbar_win",
+        "toolbar_detail",
+        "toolbar_one_to_one",
+        "toolbar_gain",
+        "toolbar_transient",
+        "toolbar_lanes_seg0",
+        "toolbar_lanes_seg1",
+        "toolbar_rescale",
+        "toolbar_notch_seg0",
+        "toolbar_notch_seg1",
+        "toolbar_notch_seg2",
+        "toolbar_diag",
+        "toolbar_ymin",
+        "toolbar_ymax",
+        "toolbar_rmswin",
+        "toolbar_rmshop",
     }
     submitted = {label.split("##")[-1] for label in toolbar.items}
     assert expected <= submitted
@@ -192,7 +219,9 @@ def test_every_control_reachable(imgui_frame, toolbar):
     assert _controls._grid_ui["toolbar"].show_grid
 
 
-@pytest.mark.parametrize("selectable,count,expected", [(True, 1, False), (True, 2, True), (False, 2, False)])
+@pytest.mark.parametrize(
+    "selectable,count,expected", [(True, 1, False), (True, 2, True), (False, 2, False)]
+)
 def test_stream_picker_only_with_two_streams(toolbar, selectable, count, expected):
     """Picker and reconnect consume header space only for selectable multi-stream viewers."""
     toolbar.viewer._selectable = selectable
@@ -226,17 +255,20 @@ def test_display_popup_controls_fit(toolbar):
             assert rect[2] <= toolbar.bounds[label], label
 
 
-@pytest.mark.parametrize("control,value,attribute,expected", [
-    ("##toolbar_win", 2.5, "window", 2.5),
-    ("##toolbar_detail", 50.0, "detail_factor", 1.5),
-    ("##toolbar_gain", 2.0, "gain", 2.0),
-    ("##toolbar_transient", 20.0, "transient_ms", 20.0),
-    ("toolbar_notch_seg1", None, "mains_notch", 50),
-    ("toolbar_lanes_seg1", None, "per_channel_scale", True),
-    ("toolbar_one_to_one", None, "one_to_one", True),
-    ("toolbar_rescale", None, "rescale_pending", "shared"),
-    ("toolbar_diag", None, "show_diagnostics", True),
-])
+@pytest.mark.parametrize(
+    "control,value,attribute,expected",
+    [
+        ("##toolbar_win", 2.5, "window", 2.5),
+        ("##toolbar_detail", 50.0, "detail_factor", 1.5),
+        ("##toolbar_gain", 2.0, "gain", 2.0),
+        ("##toolbar_transient", 20.0, "transient_ms", 20.0),
+        ("toolbar_notch_seg1", None, "mains_notch", 50),
+        ("toolbar_lanes_seg1", None, "per_channel_scale", True),
+        ("toolbar_one_to_one", None, "one_to_one", True),
+        ("toolbar_rescale", None, "rescale_pending", "shared"),
+        ("toolbar_diag", None, "show_diagnostics", True),
+    ],
+)
 def test_display_control_changes_state(toolbar, control, value, attribute, expected):
     """Moved controls still update the state consumed by the plot."""
     toolbar.frame("toolbar_display")

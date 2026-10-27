@@ -15,12 +15,7 @@ import pathlib
 
 import pytest
 
-STUDIO = (
-    pathlib.Path(__file__).parent.parent
-    / "examples"
-    / "synthetic"
-    / "control_map_studio.py"
-)
+STUDIO = pathlib.Path(__file__).parent.parent / "examples" / "synthetic" / "control_map_studio.py"
 
 
 @pytest.fixture(scope="module")
@@ -94,16 +89,23 @@ def test_connect_reports_a_refusing_target_instead_of_taking_the_window_down(
     monkeypatch.setattr(studio, "documents", [studio._new_document(path)])
     monkeypatch.setattr(studio, "active", 0)
 
-    studio._connect()                                   # must not raise
+    studio._connect()  # must not raise
 
     assert "vocabulary 1" in studio.failure, studio.failure
     assert studio.bus is None
 
 
 @pytest.mark.parametrize("scale", [1.0, 2.0])
-@pytest.mark.parametrize("armed,refusal", [(False, ""), (True, ""), (False, "Enable Accessibility access.")])
+@pytest.mark.parametrize(
+    "armed,refusal", [(False, ""), (True, ""), (False, "Enable Accessibility access.")]
+)
 def test_keyboard_card_uses_a_state_row_and_a_balanced_chip(
-    studio, imgui_frame, monkeypatch, scale, armed, refusal,
+    studio,
+    imgui_frame,
+    monkeypatch,
+    scale,
+    armed,
+    refusal,
 ):
     from contextlib import contextmanager
     from types import SimpleNamespace
@@ -120,8 +122,11 @@ def test_keyboard_card_uses_a_state_row_and_a_balanced_chip(
     imgui.get_style().font_scale_main = scale
     actions, rows, toggles, buttons, selected = [], [], [], [], []
     keys = SimpleNamespace(
-        claims={"walk"}, armed=armed, arm_refusal=refusal,
-        arm=lambda: actions.append("arm"), disarm=lambda: actions.append("disarm"),
+        claims={"walk"},
+        armed=armed,
+        arm_refusal=refusal,
+        arm=lambda: actions.append("arm"),
+        disarm=lambda: actions.append("disarm"),
     )
     monkeypatch.setattr(studio, "keys", keys)
     monkeypatch.setattr(studio, "keyboard_error", "")
@@ -188,7 +193,11 @@ def test_map_fields_keep_labels_above_full_width_controls(studio, imgui_frame, m
     monkeypatch.setattr(studio, "levels", {"a_rather_long_control_name": 0.25, "close": 0.5})
     monkeypatch.setattr(studio, "states", {"operator_gesture": ("Rest", "Fist")})
     labels, fields, values, bounds = [], [], [], {}
-    original_text, original_slider, original_combo = imgui.text_colored, imgui.slider_float, imgui.begin_combo
+    original_text, original_slider, original_combo = (
+        imgui.text_colored,
+        imgui.slider_float,
+        imgui.begin_combo,
+    )
 
     def text(color, label):
         original_text(color, label)
@@ -206,6 +215,7 @@ def test_map_fields_keep_labels_above_full_width_controls(studio, imgui_frame, m
 
     def mono(value, *args):
         from myogestic.widgets.common import mono_text
+
         values.append(value)
         mono_text(value, *args)
 

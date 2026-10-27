@@ -23,11 +23,16 @@ def probe(imgui_frame, monkeypatch):
     def remember(color, label):
         text(color, label)
         draw = imgui.get_window_draw_list()
-        items.append(SimpleNamespace(
-            label=label, color=tuple(color),
-            lo=tuple(imgui.get_item_rect_min()), hi=tuple(imgui.get_item_rect_max()),
-            clip_lo=tuple(draw.get_clip_rect_min()), clip_hi=tuple(draw.get_clip_rect_max()),
-        ))
+        items.append(
+            SimpleNamespace(
+                label=label,
+                color=tuple(color),
+                lo=tuple(imgui.get_item_rect_min()),
+                hi=tuple(imgui.get_item_rect_max()),
+                clip_lo=tuple(draw.get_clip_rect_min()),
+                clip_hi=tuple(draw.get_clip_rect_max()),
+            )
+        )
 
     def edge(*, bottom):
         rules.append(bottom)
@@ -64,8 +69,13 @@ def probe(imgui_frame, monkeypatch):
             tooltips.clear()
             rules.clear()
             imgui_frame(draw)
-        return SimpleNamespace(items=list(items), tooltips=list(tooltips), rules=list(rules),
-                               bounds=bounds, scroll=scroll)
+        return SimpleNamespace(
+            items=list(items),
+            tooltips=list(tooltips),
+            rules=list(rules),
+            bounds=bounds,
+            scroll=scroll,
+        )
 
     return SimpleNamespace(render=render, ctx=ctx)
 
@@ -76,7 +86,8 @@ def test_stream_participant_and_folder_text(probe, connection, participant):
     probe.ctx.participant = participant
     if connection != "absent":
         probe.ctx.streams["force"] = SimpleNamespace(
-            name="force", status="connected" if connection != "disconnected" else "disconnected",
+            name="force",
+            status="connected" if connection != "disconnected" else "disconnected",
             info=None if connection == "missing_info" else SimpleNamespace(n_channels=8, fs=2048.0),
         )
     view = probe.render(StatusBar("force", sessions_dir=Path("captures")))
@@ -89,11 +100,14 @@ def test_stream_participant_and_folder_text(probe, connection, participant):
     assert view.rules == [False]
 
 
-@pytest.mark.parametrize("model,saved,expected", [
-    (None, "old.pkl", "Model: none"),
-    (object(), "sessions/P-014/classifier.pkl", "Model: classifier.pkl"),
-    (object(), None, "Model: fitted (not saved)"),
-])
+@pytest.mark.parametrize(
+    "model,saved,expected",
+    [
+        (None, "old.pkl", "Model: none"),
+        (object(), "sessions/P-014/classifier.pkl", "Model: classifier.pkl"),
+        (object(), None, "Model: fitted (not saved)"),
+    ],
+)
 def test_model_text_is_optional_and_duck_typed(probe, model, saved, expected):
     pipeline = SimpleNamespace(model=model, last_saved_model=saved)
     view = probe.render(StatusBar(pipeline=pipeline))
@@ -112,7 +126,9 @@ def test_model_text_is_optional_and_duck_typed(probe, model, saved, expected):
 def test_bare_footer_fits_in_light_theme(probe, width, scale, with_pipeline, long):
     participant = "long-participant-" * 24 if long else "P-014"
     probe.ctx.participant = participant
-    saved = "sessions/" + participant + "/" + ("long-model-" * 40 if long else "classifier") + ".pkl"
+    saved = (
+        "sessions/" + participant + "/" + ("long-model-" * 40 if long else "classifier") + ".pkl"
+    )
     pipeline = SimpleNamespace(model=object(), last_saved_model=saved)
     view = probe.render(StatusBar(pipeline=pipeline if with_pipeline else None), width, scale)
     assert view.scroll == [0, 0]

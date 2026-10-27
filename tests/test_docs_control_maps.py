@@ -33,8 +33,15 @@ DOCS = pathlib.Path(__file__).resolve().parent.parent / "docs"
 #: bends one way, an explicit axis where it does not. Kept in step by
 #: tests/test_v2_contract.py.
 ADDRESSES = (
-    "thumb.flexion", "thumb.abduction", "index", "middle", "ring", "little",
-    "wrist.flexion", "wrist.abduction", "wrist.rotation",
+    "thumb.flexion",
+    "thumb.abduction",
+    "index",
+    "middle",
+    "ring",
+    "little",
+    "wrist.flexion",
+    "wrist.abduction",
+    "wrist.rotation",
 )
 VHI_MANIFEST = [
     *(
@@ -75,7 +82,7 @@ def _dof_blocks() -> list[tuple[str, int, str]]:
                 start = number
             elif start is not None and line.strip() == "```":
                 block = "\n".join(lines[start : number - 1])
-                if "[dofs]" in block or "= \"vhi." in block:
+                if "[dofs]" in block or '= "vhi.' in block:
                     found.append((str(page.relative_to(DOCS)), start, block))
                 start = None
     return found
@@ -89,9 +96,7 @@ def test_the_docs_actually_contain_mapping_examples():
     assert BLOCKS, "no ```toml [dofs] blocks found — has the docs' TOML moved?"
 
 
-@pytest.mark.parametrize(
-    "page,line,block", BLOCKS, ids=[f"{p}:{n}" for p, n, _ in BLOCKS]
-)
+@pytest.mark.parametrize("page,line,block", BLOCKS, ids=[f"{p}:{n}" for p, n, _ in BLOCKS])
 def test_a_documented_mapping_loads_resolves_and_routes(page, line, block):
     where = f"{page}:{line}"
     raw = tomllib.loads(block)
@@ -160,7 +165,9 @@ def test_the_check_would_have_caught_the_defect_it_was_written_for():
     }
     controls = resolve(load_control_map(shipped), VHI_MANIFEST)
     with pytest.raises(ValueError, match="both map to"):
-        ControlBus(controls, targets=[RemoteTarget(client=_Client(), interface=_Interface())], hz=50)
+        ControlBus(
+            controls, targets=[RemoteTarget(client=_Client(), interface=_Interface())], hz=50
+        )
 
 
 # There used to be a second conflict case here: `vhi.prediction.thumb` and

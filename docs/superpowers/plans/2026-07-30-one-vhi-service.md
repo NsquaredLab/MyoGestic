@@ -457,9 +457,14 @@ def test_a_value_reaches_the_wire_with_the_sign_it_was_given():
     """There is one encoding now, so nothing may flip a value on the way out."""
     outlet = FakeOutlet()
     controls = build_controls(["index.flexion"])
-    target = VhiTarget(outlet, client=FakeClient(FakeReply(
-        continuous_channel_order=("index.flexion",),
-    )))
+    target = VhiTarget(
+        outlet,
+        client=FakeClient(
+            FakeReply(
+                continuous_channel_order=("index.flexion",),
+            )
+        ),
+    )
     target.bind(controls)
     target.send({"index.flexion": 1.0}, {})
 

@@ -690,6 +690,8 @@ def test_a_recording_failure_is_reported_once_and_delivery_continues():
         bus.push({"a": 0.2, "g": 0.2})
         assert len(rec.frames) == 2
         assert len([w for w in warnings if "controls not recorded" in w]) == 1
+
+
 def test_connector_finished_includes_late_stop_teardown():
     entered, release, stopping, stopped = Event(), Event(), Event(), Event()
 

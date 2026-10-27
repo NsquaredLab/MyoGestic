@@ -26,7 +26,9 @@ app = App("panel: StepBar")
 header = AppHeader("StepBar", show_state=False)
 steps = StepBar(["Connect", "Record", "Train", "Drive"], widget_id="step_bar_demo")
 done = [True, False, False, False]
-layout = Grid.areas("header\nworkflow\nselection", row_height=[Px(52), Px(90), Fr(1)], bare=("header",))
+layout = Grid.areas(
+    "header\nworkflow\nselection", row_height=[Px(52), Px(90), Fr(1)], bare=("header",)
+)
 
 
 @app.ui

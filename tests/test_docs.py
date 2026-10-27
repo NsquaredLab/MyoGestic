@@ -82,9 +82,7 @@ _ALL = [(p, d, code, ln) for p in MD_FILES for d, code, ln in _blocks(p)]
 # --- Layer 1: every non-skipped block must parse -----------------------------
 
 _PARSE = [
-    pytest.param(code, id=f"{p.relative_to(ROOT)}:{ln}")
-    for p, d, code, ln in _ALL
-    if d != "skip"
+    pytest.param(code, id=f"{p.relative_to(ROOT)}:{ln}") for p, d, code, ln in _ALL if d != "skip"
 ]
 
 
@@ -158,7 +156,9 @@ _RUN_FILES = sorted({p for p, d, _, _ in _ALL if d == "run"})
 @pytest.mark.parametrize("path", [pytest.param(p, id=str(p.relative_to(ROOT))) for p in _RUN_FILES])
 def test_doc_page_runs(path, doc_session):
     """Execute every `docs:run` block of a page in order, sharing one namespace."""
-    data = TrainingData(paths=[str(doc_session.path)], class_names=["a", "b", "c"], classes={0, 1, 2})
+    data = TrainingData(
+        paths=[str(doc_session.path)], class_names=["a", "b", "c"], classes={0, 1, 2}
+    )
     ns: dict = {
         "np": np,
         "data": data,

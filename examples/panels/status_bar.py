@@ -13,7 +13,8 @@ app.streams(Stream("emg", source=SyntheticSource(n_channels=8), window_ms=2000))
 app.ctx.participant = "P-014"
 header = AppHeader("StatusBar", show_state=False)
 layout = Grid.areas(
-    "header\nbody\nstatus", row_height=[Px(52), Fr(1), Px(26)],
+    "header\nbody\nstatus",
+    row_height=[Px(52), Fr(1), Px(26)],
     bare=("header", "status"),
 )
 viewer = SignalViewer("emg")

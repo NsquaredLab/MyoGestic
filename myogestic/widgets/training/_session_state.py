@@ -296,7 +296,10 @@ def _created(value: object) -> datetime | None:
 
 
 def group_sessions(
-    sessions: list[dict], base_path: str, *, today: date | None = None,
+    sessions: list[dict],
+    base_path: str,
+    *,
+    today: date | None = None,
 ) -> list[SessionGroup]:
     """Group local takes by recorded day, then files loaded from elsewhere."""
     today = today or date.today()
@@ -311,8 +314,13 @@ def group_sessions(
         else:
             day = created.date()
             key = day.isoformat()
-            label = ("Today" if day == today else "Yesterday" if day == today - timedelta(days=1)
-                     else day.strftime("%b %d"))
+            label = (
+                "Today"
+                if day == today
+                else "Yesterday"
+                if day == today - timedelta(days=1)
+                else day.strftime("%b %d")
+            )
         groups.setdefault(key, SessionGroup(key, label, [])).rows.append(row)
     ordered = [g for k, g in groups.items() if k not in {"loaded", "undated"}]
     ordered.extend(groups[k] for k in ("undated", "loaded") if k in groups)

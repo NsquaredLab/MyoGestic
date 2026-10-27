@@ -362,6 +362,7 @@ def test_a_target_binds_without_declaring():
     manifest sorted by channel; the verdicts were validation this target already does
     against `by_address`, raising its own error for an address no capability carries.
     """
+
     class ManifestOnlyClient:
         """A renderer that serves GetControlManifest and nothing else."""
 
@@ -428,22 +429,22 @@ Delete the now-unused `pose = self._stream == "control_pose"` line if nothing el
 That path used `reply.continuous_channel_order` for `order`. Replace the declare call and the `order` assignment with the manifest-derived equivalent:
 
 ```python
-        capabilities = self.capabilities()
-        self._answered = capabilities is not None
-        if capabilities is None:
-            return False
-        wanted = (
-            "MyoGestic_ControlPose" if self._stream == "control_pose" else "MyoGestic_Output"
-        )
-        order = tuple(
-            cap.address
-            for cap in sorted(
-                (c for c in capabilities
-                 if c.channel >= 0
-                 and (not getattr(c, "stream_name", "") or c.stream_name == wanted)),
-                key=lambda c: c.channel,
-            )
-        )
+capabilities = self.capabilities()
+self._answered = capabilities is not None
+if capabilities is None:
+    return False
+wanted = "MyoGestic_ControlPose" if self._stream == "control_pose" else "MyoGestic_Output"
+order = tuple(
+    cap.address
+    for cap in sorted(
+        (
+            c
+            for c in capabilities
+            if c.channel >= 0 and (not getattr(c, "stream_name", "") or c.stream_name == wanted)
+        ),
+        key=lambda c: c.channel,
+    )
+)
 ```
 
 - [ ] **Step 5: Delete `declare` from the client**
@@ -514,10 +515,7 @@ import time
 
 import pytest
 
-RENDERER = (
-    pathlib.Path(__file__).parent.parent
-    / "examples" / "synthetic" / "reference_renderer.py"
-)
+RENDERER = pathlib.Path(__file__).parent.parent / "examples" / "synthetic" / "reference_renderer.py"
 
 
 @pytest.fixture(scope="module")

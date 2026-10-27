@@ -3,6 +3,7 @@
 Manufacturer-verified (Muovi TCP Protocol v2.4, MuoviLite manual v1.1,
 Read_muovi.m v3.0). See docs/reference/otb/.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,10 +24,10 @@ _MUOVIPLUS_BIO_BY_MODE = {0: 64, 1: 32, 2: 64, 3: 64}
 
 @dataclass(frozen=True)
 class MuoviGeometry:
-    n_total: int          # channels per sample-instant on the wire
-    n_bio: int            # biosignal channels (first n_bio rows)
-    n_aux: int            # auxiliary channels (always 6)
-    fs: float             # 2000 (EMG) or 500 (EEG)
+    n_total: int  # channels per sample-instant on the wire
+    n_bio: int  # biosignal channels (first n_bio rows)
+    n_aux: int  # auxiliary channels (always 6)
+    fs: float  # 2000 (EMG) or 500 (EEG)
     bytes_per_sample: int  # 2 (EMG, int16) or 3 (EEG, int24)
 
 
@@ -85,9 +86,9 @@ SESSANTAQUATTRO_ACCESSORY_CANDIDATES = (4, 6, 8)
 
 @dataclass(frozen=True)
 class SessantaquattroGeometry:
-    n_total: int          # channels per sample-instant on the wire
-    n_bio: int            # biosignal channels (first n_bio rows)
-    n_accessory: int      # trailing non-bioelectrical channels
+    n_total: int  # channels per sample-instant on the wire
+    n_bio: int  # biosignal channels (first n_bio rows)
+    n_accessory: int  # trailing non-bioelectrical channels
     fs: float
     bytes_per_sample: int  # 2 (16-bit) or 3 (24-bit)
 
@@ -166,7 +167,7 @@ def sessantaquattro_channel_names(geo: SessantaquattroGeometry) -> list[str]:
     """
     names = [f"bio{i}" for i in range(geo.n_bio)]
     tail = ["imu_w", "imu_x", "imu_y", "imu_z", "buffer_trigger", "counter"]
-    tail = tail[-geo.n_accessory:] if geo.n_accessory < len(tail) else tail
+    tail = tail[-geo.n_accessory :] if geo.n_accessory < len(tail) else tail
     n_aux = geo.n_accessory - len(tail)
     names += [f"aux{i}" for i in range(n_aux)] + tail
     return names
@@ -181,11 +182,11 @@ QUATTRO_NCH_BY_MODE = {0: 120, 1: 216, 2: 312, 3: 408}
 # Biosignal grid channels per mode = streamed total minus 16 AUX IN minus 8
 # accessory (Read_Quattrocento.m: NCHsel = IN.. + MULTIPLE IN.. + AUX IN).
 QUATTRO_BIO_BY_MODE = {0: 96, 1: 192, 2: 288, 3: 384}
-QUATTRO_N_AUX_IN = 16       # back-panel analog AUX IN (scaled to V)
-QUATTRO_N_ACCESSORY = 8     # last 8: counter / trigger / buffer / reserved (raw)
+QUATTRO_N_AUX_IN = 16  # back-panel analog AUX IN (scaled to V)
+QUATTRO_N_ACCESSORY = 8  # last 8: counter / trigger / buffer / reserved (raw)
 # Read_Quattrocento.m: GainFactor = 5/2^16/150*1000 (mV); AuxGain = 5/2^16/0.5 (V)
-QUATTRO_CONV_FACTOR_MV = 5 / 2 ** 16 / 150 * 1000
-QUATTRO_AUX_FACTOR_V = 5 / 2 ** 16 / 0.5
+QUATTRO_CONV_FACTOR_MV = 5 / 2**16 / 150 * 1000
+QUATTRO_AUX_FACTOR_V = 5 / 2**16 / 0.5
 # Per-input CONF2 byte = (side<<6) | (hpf<<4) | (lpf<<2) | detection. Codes per the
 # OTB Communication Protocol / Read_Quattrocento.m. ⚠️ Verify against the manual on
 # the first hardware run (design spec §10) — the encoding supersedes bdi's.
@@ -248,8 +249,8 @@ def quattro_config(
     cfg[2] = 0  # AN_OUT_CH_SEL
     for i in range(12):  # 8 IN + 4 MULTIPLE IN, 3 bytes each: CONF0/1/2
         base = 3 + i * 3
-        cfg[base + 0] = 0          # CONF0 muscle
-        cfg[base + 1] = 0          # CONF1 sensor+adapter
+        cfg[base + 0] = 0  # CONF0 muscle
+        cfg[base + 1] = 0  # CONF1 sensor+adapter
         cfg[base + 2] = conf2 & 0xFF
     cfg[39] = crc8(bytes(cfg[:39]))
     return bytes(cfg)

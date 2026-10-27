@@ -190,7 +190,9 @@ def test_process_states_fit_narrow_cells(imgui_frame, monkeypatch, scale, dark, 
         assert primary == ["Launch"]
         assert headers == [common.IDLE]
     else:
-        tone = {"running": common.SUCCESS, "failed": common.DANGER, "stopping": common.WARNING}[status]
+        tone = {"running": common.SUCCESS, "failed": common.DANGER, "stopping": common.WARNING}[
+            status
+        ]
         assert rows == [tone] and headers == [tone]
         if status == "failed":
             assert primary == ["Launch again"]
@@ -212,8 +214,9 @@ def test_actions_launch_stop_retry_and_keep_output_open(imgui_frame, monkeypatch
     monkeypatch.setattr(module, "_popout_open", {})
     monkeypatch.setattr(module.subprocess, "Popen", lambda *a, **k: _Process())
     monkeypatch.setattr(module.threading.Thread, "start", lambda self: None)
-    launcher = module.ProcessLauncher([("worker", ["worker"]), ("other", ["other"])],
-                                      widget_id="actions")
+    launcher = module.ProcessLauncher(
+        [("worker", ["worker"]), ("other", ["other"])], widget_id="actions"
+    )
     action = ["Launch"]
     real = imgui.button
 
@@ -223,7 +226,9 @@ def test_actions_launch_stop_retry_and_keep_output_open(imgui_frame, monkeypatch
 
     monkeypatch.setattr(imgui, "button", click)
     popped = []
-    monkeypatch.setattr(module, "render_log_popout", lambda wid, *a, **k: popped.append(wid) or True)
+    monkeypatch.setattr(
+        module, "render_log_popout", lambda wid, *a, **k: popped.append(wid) or True
+    )
     imgui_frame(launcher.ui)
     assert launcher.running("worker")
     action[0] = "Stop"

@@ -145,8 +145,9 @@ class TrialPreview:
         window_started = False
         try:
             if self._as_window:
-                imgui.set_next_window_size(imgui.ImVec2(ui_px(960), ui_px(480)),
-                                           imgui.Cond_.first_use_ever)
+                imgui.set_next_window_size(
+                    imgui.ImVec2(ui_px(960), ui_px(480)), imgui.Cond_.first_use_ever
+                )
                 title_id = (self._title or "Trial preview") + f"###trial_preview_{self._widget_id}"
                 opened, _is_open = imgui.begin(title_id, True)
                 window_started = True

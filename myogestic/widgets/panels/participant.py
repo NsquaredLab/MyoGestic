@@ -147,16 +147,29 @@ def _recorded_participants(base: Path, key_file: Path) -> list[_RecordedParticip
                 continue
             classes = list(dict.fromkeys(name for take in takes for name in take["class_names"]))
             gestures = {name for take in takes for _, name, _ in row_gestures(take, None)}
-            last = max(take["created"] or datetime.fromtimestamp(Path(take["path"]).stat().st_mtime)
-                       for take in takes)
-            models = [(path.stat().st_mtime, path) for path in folder.glob("*_model.joblib")
-                      if path.is_file()]
+            last = max(
+                take["created"] or datetime.fromtimestamp(Path(take["path"]).stat().st_mtime)
+                for take in takes
+            )
+            models = [
+                (path.stat().st_mtime, path)
+                for path in folder.glob("*_model.joblib")
+                if path.is_file()
+            ]
             saved, model = max(models, default=(None, None))
-            participants.append(_RecordedParticipant(
-                folder.name, names.get(folder.name, ""), len(takes),
-                sum(take["duration_s"] for take in takes), classes, gestures, last,
-                model, datetime.fromtimestamp(saved) if saved is not None else None,
-            ))
+            participants.append(
+                _RecordedParticipant(
+                    folder.name,
+                    names.get(folder.name, ""),
+                    len(takes),
+                    sum(take["duration_s"] for take in takes),
+                    classes,
+                    gestures,
+                    last,
+                    model,
+                    datetime.fromtimestamp(saved) if saved is not None else None,
+                )
+            )
         except OSError:
             # A take or folder can disappear while the dialog is opening.
             continue
@@ -258,22 +271,27 @@ class ParticipantPanel:
         state = self._state
         state.recorded = _recorded_participants(self._sessions_dir, self._key_file)
         next_key = int(_next_id(self._key_file)[2:])
-        numbers = [int(match[1]) for row in state.recorded
-                   if (match := re.fullmatch(r"P-(\d+)", row.pid))]
+        numbers = [
+            int(match[1]) for row in state.recorded if (match := re.fullmatch(r"P-(\d+)", row.pid))
+        ]
         state.pid = f"P-{max(next_key, max(numbers, default=0) + 1):03d}"
         state.first = state.family = state.error = state.search = ""
         state.show_names = False
         state.tab = 0 if state.recorded else 1
-        state.selected = next((row.pid for row in state.recorded
-                               if row.pid == state.active_pid),
-                              state.recorded[0].pid if state.recorded else "")
+        state.selected = next(
+            (row.pid for row in state.recorded if row.pid == state.active_pid),
+            state.recorded[0].pid if state.recorded else "",
+        )
 
     def _filtered(self) -> list[_RecordedParticipant]:
         """Search IDs, adding the local names only while they are revealed."""
         state = self._state
         query = _fold(state.search)
-        return [row for row in state.recorded if query in _fold(row.pid)
-                or (state.show_names and query in _fold(row.name))]
+        return [
+            row
+            for row in state.recorded
+            if query in _fold(row.pid) or (state.show_names and query in _fold(row.name))
+        ]
 
     def _close(self) -> None:
         """Hide names immediately, including the frame an action closes the dialog."""
@@ -365,10 +383,14 @@ class ParticipantPanel:
         width = min(ui_px(700), viewport.x - 2 * margin)
         imgui.set_next_window_size(imgui.ImVec2(width, 0))
         imgui.set_next_window_size_constraints(
-            imgui.ImVec2(width, 0), imgui.ImVec2(width, viewport.y - 2 * margin),
+            imgui.ImVec2(width, 0),
+            imgui.ImVec2(width, viewport.y - 2 * margin),
         )
-        flags = (imgui.WindowFlags_.always_auto_resize | imgui.WindowFlags_.no_saved_settings
-                 | imgui.WindowFlags_.no_title_bar)
+        flags = (
+            imgui.WindowFlags_.always_auto_resize
+            | imgui.WindowFlags_.no_saved_settings
+            | imgui.WindowFlags_.no_title_bar
+        )
         opened, _ = imgui.begin_popup_modal("participant-modal", None, flags)
         state = self._state
         if not opened:
@@ -391,10 +413,18 @@ class ParticipantPanel:
                     state.search = ""
             options = [f"Recorded {len(state.recorded)}", "New participant"]
             style = imgui.get_style()
-            padding = max(0, (imgui.get_content_region_avail().x
-                             - sum(imgui.calc_text_size(label).x for label in options) - 2) / 4)
-            imgui.push_style_var(imgui.StyleVar_.frame_padding,
-                                 imgui.ImVec2(padding, style.frame_padding.y))
+            padding = max(
+                0,
+                (
+                    imgui.get_content_region_avail().x
+                    - sum(imgui.calc_text_size(label).x for label in options)
+                    - 2
+                )
+                / 4,
+            )
+            imgui.push_style_var(
+                imgui.StyleVar_.frame_padding, imgui.ImVec2(padding, style.frame_padding.y)
+            )
             state.tab = segmented("participant-tabs", options, state.tab)
             imgui.pop_style_var()
             imgui.spacing()
@@ -427,21 +457,32 @@ class ParticipantPanel:
         style = imgui.get_style()
         room = imgui.get_content_region_avail().x
         # Reserve the summary, captions and actions before sizing the scrolling list.
-        footer = (imgui.get_frame_height_with_spacing() * (4 if drive else 3)
-                  + imgui.calc_text_size(privacy, wrap_width=room).y
-                  + 2 * imgui.get_text_line_height_with_spacing() + 5 * style.item_spacing.y
-                  + 2 * style.window_padding.y)
+        footer = (
+            imgui.get_frame_height_with_spacing() * (4 if drive else 3)
+            + imgui.calc_text_size(privacy, wrap_width=room).y
+            + 2 * imgui.get_text_line_height_with_spacing()
+            + 5 * style.item_spacing.y
+            + 2 * style.window_padding.y
+        )
         if state.error:
             footer += imgui.calc_text_size(state.error, wrap_width=room).y + style.item_spacing.y
-        height = max(imgui.get_text_line_height_with_spacing(), min(
-            ui_px(260), imgui.get_main_viewport().work_size.y - 2 * ui_px(16)
-            - imgui.get_cursor_pos_y() - footer,
-        ))
+        height = max(
+            imgui.get_text_line_height_with_spacing(),
+            min(
+                ui_px(260),
+                imgui.get_main_viewport().work_size.y
+                - 2 * ui_px(16)
+                - imgui.get_cursor_pos_y()
+                - footer,
+            ),
+        )
         imgui.begin_child("recorded-participants", imgui.ImVec2(0, height))
         try:
             if not rows:
-                imgui.text_wrapped("No matching participants. Try another ID" +
-                                   (" or name." if state.show_names else "."))
+                imgui.text_wrapped(
+                    "No matching participants. Try another ID"
+                    + (" or name." if state.show_names else ".")
+                )
             for row in rows:
                 if _recorded_row(row, row.pid == state.selected, state.show_names):
                     state.selected = row.pid
@@ -450,18 +491,28 @@ class ParticipantPanel:
         chosen = next((row for row in state.recorded if row.pid == state.selected), None)
         if chosen:
             with tinted_row(primary()) as width:
-                _line(f"{chosen.pid} · {chosen.takes} takes · {_duration(chosen.duration_s)}", width,
-                      mono=True)
-            _support(f"Model saved {_when(chosen.model_time).lower()}" if chosen.model_time else
-                     "No model yet — train after Continue.")
+                _line(
+                    f"{chosen.pid} · {chosen.takes} takes · {_duration(chosen.duration_s)}",
+                    width,
+                    mono=True,
+                )
+            _support(
+                f"Model saved {_when(chosen.model_time).lower()}"
+                if chosen.model_time
+                else "No model yet — train after Continue."
+            )
         _support(privacy)
         if state.error:
             _support(state.error, DANGER)
         if imgui.button("Cancel"):
             self._close()
-        if (chosen and chosen.model is not None and self._on_drive is not None
-                and imgui.button("Drive with saved model", imgui.ImVec2(-1, 0))
-                and self._start(ctx, chosen.pid, "", "")):
+        if (
+            chosen
+            and chosen.model is not None
+            and self._on_drive is not None
+            and imgui.button("Drive with saved model", imgui.ImVec2(-1, 0))
+            and self._start(ctx, chosen.pid, "", "")
+        ):
             try:
                 self._on_drive(chosen.pid, chosen.model)
             except Exception:
@@ -471,8 +522,11 @@ class ParticipantPanel:
                 self._close()
         imgui.begin_disabled(chosen is None)
         label = f"Continue with {chosen.pid}" if chosen else "Choose a participant"
-        if (primary_button(label, size=(imgui.get_content_region_avail().x, 0)) and chosen
-                and self._start(ctx, chosen.pid, "", "")):
+        if (
+            primary_button(label, size=(imgui.get_content_region_avail().x, 0))
+            and chosen
+            and self._start(ctx, chosen.pid, "", "")
+        ):
             self._close()
         imgui.end_disabled()
 
@@ -482,21 +536,37 @@ class ParticipantPanel:
         style = imgui.get_style()
         room = imgui.get_content_region_avail().x
         name_rows = 1 if room >= ui_px(440) else 2
-        captions = ("Stays on this computer, in the key file. Never in a recording.",
-                    "Recorded before? Pick them in Recorded — their takes and model come back with them.")
-        desired = ((1 + name_rows) * (imgui.get_frame_height_with_spacing()
-                                     + imgui.get_text_line_height_with_spacing())
-                   + 3 * imgui.get_text_line_height_with_spacing() + 2 * style.window_padding.y
-                   + sum(imgui.calc_text_size(text, wrap_width=room).y for text in captions)
-                   + 5 * style.item_spacing.y)
+        captions = (
+            "Stays on this computer, in the key file. Never in a recording.",
+            "Recorded before? Pick them in Recorded — their takes and model come back with them.",
+        )
+        desired = (
+            (1 + name_rows)
+            * (imgui.get_frame_height_with_spacing() + imgui.get_text_line_height_with_spacing())
+            + 3 * imgui.get_text_line_height_with_spacing()
+            + 2 * style.window_padding.y
+            + sum(imgui.calc_text_size(text, wrap_width=room).y for text in captions)
+            + 5 * style.item_spacing.y
+        )
         footer = 2 * imgui.get_frame_height_with_spacing() + 2 * style.window_padding.y
         if state.error:
             footer += imgui.calc_text_size(state.error, wrap_width=room).y + style.item_spacing.y
-        available = (imgui.get_main_viewport().work_size.y - 2 * ui_px(16)
-                     - imgui.get_cursor_pos_y() - footer)
-        imgui.begin_child("new-participant-form", imgui.ImVec2(0, max(
-            imgui.get_frame_height(), min(desired, available),
-        )))
+        available = (
+            imgui.get_main_viewport().work_size.y
+            - 2 * ui_px(16)
+            - imgui.get_cursor_pos_y()
+            - footer
+        )
+        imgui.begin_child(
+            "new-participant-form",
+            imgui.ImVec2(
+                0,
+                max(
+                    imgui.get_frame_height(),
+                    min(desired, available),
+                ),
+            ),
+        )
         try:
             self._new_form()
         finally:
@@ -507,11 +577,11 @@ class ParticipantPanel:
         if imgui.button("Cancel"):
             self._close()
         imgui.begin_disabled(not pid)
-        if (primary_button("Start session", size=(imgui.get_content_region_avail().x, 0))
-                and self._start(ctx, pid, state.first, state.family)):
+        if primary_button(
+            "Start session", size=(imgui.get_content_region_avail().x, 0)
+        ) and self._start(ctx, pid, state.first, state.family):
             self._close()
         imgui.end_disabled()
-
 
     def _new_form(self) -> None:
         """Keep fields and path previews together in the scrollable form body."""
@@ -526,16 +596,23 @@ class ParticipantPanel:
                 setattr(state, attr, value)
                 changed.append(edited)
             imgui.end_table()
-        _support(f"{fa.ICON_FA_LOCK}  Stays on this computer, in the key file. Never in a recording.")
-        returning = (_lookup(self._key_file, state.first, state.family)
-                     if state.first.strip() and state.family.strip() else None)
+        _support(
+            f"{fa.ICON_FA_LOCK}  Stays on this computer, in the key file. Never in a recording."
+        )
+        returning = (
+            _lookup(self._key_file, state.first, state.family)
+            if state.first.strip() and state.family.strip()
+            else None
+        )
         if returning:
             if any(changed):
                 state.pid = returning
             imgui.text_colored(muted(), "Returning participant")
         pid = _slug(state.pid)
         _preview(pid, self._sessions_dir)
-        _support("Recorded before? Pick them in Recorded — their takes and model come back with them.")
+        _support(
+            "Recorded before? Pick them in Recorded — their takes and model come back with them."
+        )
 
 
 def _support(text: str, tone: imgui.ImVec4 | None = None) -> None:
@@ -545,8 +622,7 @@ def _support(text: str, tone: imgui.ImVec4 | None = None) -> None:
     imgui.pop_style_color()
 
 
-def _line(text: str, width: float, *, mono: bool = False,
-          tone: imgui.ImVec4 | None = None) -> None:
+def _line(text: str, width: float, *, mono: bool = False, tone: imgui.ImVec4 | None = None) -> None:
     """Ellipsize in the rendering font and expose full text on hover."""
     font = mono_font() if mono else None
     if font is not None:
@@ -581,14 +657,26 @@ def _recorded_row(row: _RecordedParticipant, selected: bool, show_names: bool) -
     after = imgui.get_cursor_pos()
     draw = imgui.get_window_draw_list()
     if selected:
-        draw.add_rect(lo, hi, imgui.get_color_u32(primary()), imgui.get_style().frame_rounding,
-                      thickness=ui_px(1))
+        draw.add_rect(
+            lo,
+            hi,
+            imgui.get_color_u32(primary()),
+            imgui.get_style().frame_rounding,
+            thickness=ui_px(1),
+        )
     pad = ui_px(6)
     x, y = lo.x + pad, lo.y + ui_px(5)
     inner = width - 2 * pad
 
-    def cell(text: str, left: float, top: float, room: float, *, mono: bool = False,
-             tone: imgui.ImVec4 | None = None) -> None:
+    def cell(
+        text: str,
+        left: float,
+        top: float,
+        room: float,
+        *,
+        mono: bool = False,
+        tone: imgui.ImVec4 | None = None,
+    ) -> None:
         imgui.set_cursor_screen_pos(imgui.ImVec2(left, top))
         _line(text, room, mono=mono, tone=tone)
 
@@ -599,16 +687,26 @@ def _recorded_row(row: _RecordedParticipant, selected: bool, show_names: bool) -
         cell(name, x + ui_px(76), y, max(0, inner - ui_px(102)), tone=muted())
         cell(model, hi.x - pad - ui_px(20), y, ui_px(20), tone=SUCCESS if row.model else muted())
         gesture_x, gesture_y, gesture_w = x, y + line, max(0, inner - ui_px(85))
-        cell(f"{row.takes} · {_duration(row.duration_s)}", hi.x - pad - ui_px(80), y + line,
-             ui_px(80), mono=True)
+        cell(
+            f"{row.takes} · {_duration(row.duration_s)}",
+            hi.x - pad - ui_px(80),
+            y + line,
+            ui_px(80),
+            mono=True,
+        )
         cell(_when(row.last), x, y + 2 * line, inner, mono=True, tone=muted())
     else:
         name_w = inner - ui_px(430)
         cell(row.pid, x, y, ui_px(72), mono=True)
         cell(name, x + ui_px(80), y, name_w, tone=muted())
         gesture_x, gesture_y, gesture_w = x + ui_px(88) + name_w, y, ui_px(78)
-        cell(f"{row.takes} · {_duration(row.duration_s)}", hi.x - pad - ui_px(246), y,
-             ui_px(90), mono=True)
+        cell(
+            f"{row.takes} · {_duration(row.duration_s)}",
+            hi.x - pad - ui_px(246),
+            y,
+            ui_px(90),
+            mono=True,
+        )
         cell(_when(row.last), hi.x - pad - ui_px(150), y, ui_px(124), mono=True, tone=muted())
         cell(model, hi.x - pad - ui_px(20), y, ui_px(20), tone=SUCCESS if row.model else muted())
     if not row.class_names:
@@ -619,9 +717,11 @@ def _recorded_row(row: _RecordedParticipant, selected: bool, show_names: bool) -
             offset = ordinal * ui_px(11) + ui_px(4)
             if offset + ui_px(4) > gesture_w:
                 break
-            draw.add_circle_filled(imgui.ImVec2(gesture_x + offset, gesture_y + line / 2),
-                                   ui_px(3), imgui.get_color_u32(imgui.ImVec4(
-                                       *PALETTE[index % len(PALETTE)], 1.0)))
+            draw.add_circle_filled(
+                imgui.ImVec2(gesture_x + offset, gesture_y + line / 2),
+                ui_px(3),
+                imgui.get_color_u32(imgui.ImVec4(*PALETTE[index % len(PALETTE)], 1.0)),
+            )
         imgui.set_cursor_screen_pos(imgui.ImVec2(gesture_x, gesture_y))
         imgui.dummy(imgui.ImVec2(gesture_w, line))
         imgui.set_item_tooltip(", ".join(name for _, name in dots))
@@ -655,8 +755,11 @@ def _preview(pid: str, sessions_dir: Path = Path("sessions")) -> None:
     imgui.push_style_color(imgui.Col_.child_bg, CONSOLE_BG)
     padding = imgui.get_style().window_padding
     height = imgui.get_text_line_height_with_spacing() * len(lines) + 2 * padding.y
-    imgui.begin_child("##preview", imgui.ImVec2(0, height),
-                      child_flags=imgui.ChildFlags_.always_use_window_padding)
+    imgui.begin_child(
+        "##preview",
+        imgui.ImVec2(0, height),
+        child_flags=imgui.ChildFlags_.always_use_window_padding,
+    )
     try:
         for line in lines:
             _line(line, imgui.get_content_region_avail().x, mono=True, tone=CONSOLE_TEXT)

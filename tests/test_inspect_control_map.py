@@ -34,7 +34,10 @@ MANIFEST = [
     # is a perfectly good map.
     Capability("vhi.control.pose.thumb.flexion", "continuous", -1.0, 1.0, 0.0),
     Capability(
-        "vhi.control.gesture", "discrete", states=("Rest", "Fist"), rest_state="Rest",
+        "vhi.control.gesture",
+        "discrete",
+        states=("Rest", "Fist"),
+        rest_state="Rest",
     ),
 ]
 
@@ -86,25 +89,30 @@ class TestTheVerdictIsTrustworthy:
         from myogestic.controls import load_control_map, resolve  # noqa: PLC0415
 
         body = (
-            '[dofs]\n'
+            "[dofs]\n"
             'a = "vhi.prediction.index"\n'
             'b = [{ target = "vhi.prediction.index", weight = 0.5 }]\n'
         )
         # resolve() is happy — the address is real and each alias names it once.
-        resolve(load_control_map({"dofs": {
-            "a": "vhi.prediction.index",
-            "b": [{"target": "vhi.prediction.index", "weight": 0.5}],
-        }}), MANIFEST)
+        resolve(
+            load_control_map(
+                {
+                    "dofs": {
+                        "a": "vhi.prediction.index",
+                        "b": [{"target": "vhi.prediction.index", "weight": 0.5}],
+                    }
+                }
+            ),
+            MANIFEST,
+        )
         # The validator is not.
         assert tool.main([_write(tmp_path, body)]) == 1
         assert "same control" in capsys.readouterr().err
 
-    def test_the_same_finger_on_two_different_hands_is_not_a_collision(
-        self, tmp_path, target
-    ):
+    def test_the_same_finger_on_two_different_hands_is_not_a_collision(self, tmp_path, target):
         """Two hands, two controls. Matching on anything but the address would refuse this."""
         body = (
-            '[dofs]\n'
+            "[dofs]\n"
             'predicted = "vhi.prediction.thumb.flexion"\n'
             'operator = "vhi.control.pose.thumb.flexion"\n'
         )
@@ -113,7 +121,7 @@ class TestTheVerdictIsTrustworthy:
     def test_a_discrete_alias_does_not_collide_with_a_streamed_one(self, tmp_path, target):
         """A held state travels over gRPC, so it drives no stream."""
         body = (
-            '[dofs]\n'
+            "[dofs]\n"
             'grip = "vhi.prediction.index"\n'
             'gesture = { target = "vhi.control.gesture", debounce_s = 0.1 }\n'
         )
@@ -130,9 +138,7 @@ class TestTheVerdictIsTrustworthy:
         ],
         ids=["no-dofs", "malformed", "empty", "not-an-address", "nested-key"],
     )
-    def test_an_unusable_file_fails_before_a_target_is_needed(
-        self, tmp_path, no_target, body
-    ):
+    def test_an_unusable_file_fails_before_a_target_is_needed(self, tmp_path, no_target, body):
         assert tool.main([_write(tmp_path, body)]) == 1
 
     def test_a_missing_file_fails(self, tmp_path, no_target):

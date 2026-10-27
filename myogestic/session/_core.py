@@ -287,7 +287,9 @@ def _read_session_metadata(path: Path) -> tuple[dict, list] | None:
         if path.is_dir() and (path / "meta.json").exists():
             meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
             labels_file = path / "labels.json"
-            labels = json.loads(labels_file.read_text(encoding="utf-8")) if labels_file.exists() else []
+            labels = (
+                json.loads(labels_file.read_text(encoding="utf-8")) if labels_file.exists() else []
+            )
         elif path.is_file() and path.name.endswith(".zip"):
             # Renamed archives remain discoverable by the picker and totals.
             with zipfile.ZipFile(path) as archive:

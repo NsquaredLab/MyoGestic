@@ -157,8 +157,11 @@ class Pipeline:
     """
 
     def __init__(
-        self, app: App, predict_hz: float = 50.0,
-        *, input_streams: Sequence[str] | None = None,
+        self,
+        app: App,
+        predict_hz: float = 50.0,
+        *,
+        input_streams: Sequence[str] | None = None,
     ):
         self.app = app
         self.predict_hz = predict_hz

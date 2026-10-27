@@ -172,7 +172,9 @@ def test_a_freshly_recorded_session_is_not_migrated_again():
 
     with tempfile.TemporaryDirectory() as tmp:
         session = Session(base_path=tmp)
-        session.init_stream("vhi_control", StreamInfo(n_channels=9, fs=32.0, dtype=np.dtype("float32")))
+        session.init_stream(
+            "vhi_control", StreamInfo(n_channels=9, fs=32.0, dtype=np.dtype("float32"))
+        )
         fist = np.tile(np.array([1, 0, 1, 1, 1, 1, 0, 0, 0], dtype=np.float32), (8, 1))
         session.append("vhi_control", fist, np.arange(8, dtype=np.float64))
         session.save_meta("StampTest")
@@ -184,7 +186,9 @@ def test_a_freshly_recorded_session_is_not_migrated_again():
         with zipfile.ZipFile(path) as zf:
             assert json.loads(zf.read("meta.json"))["pose_convention"] == POSE_CONVENTION
 
-        assert "already standard" in migrate(path), "the migrator did not recognise its own convention"
+        assert "already standard" in migrate(path), (
+            "the migrator did not recognise its own convention"
+        )
 
         with zipfile.ZipFile(path) as zf:
             assert not any(n.endswith(".legacy.bak") for n in zf.namelist())

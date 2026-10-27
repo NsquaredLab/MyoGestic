@@ -197,10 +197,14 @@ def test_a_bool_option_does_not_match_an_int_default():
     def factory(flag: bool = False, level: int = 1):
         return (flag, level)
 
-    dev = DeviceSpec("t", factory, (
-        DeviceOption("flag", "Flag", {"on": True, "off": False}),
-        DeviceOption("level", "Level", {"a": 0, "b": 1}),
-    ))
+    dev = DeviceSpec(
+        "t",
+        factory,
+        (
+            DeviceOption("flag", "Flag", {"on": True, "off": False}),
+            DeviceOption("level", "Level", {"a": 0, "b": 1}),
+        ),
+    )
     chosen = _chosen_kwargs(dev, _default_choices(dev))
     assert chosen == {"flag": False, "level": 1}
 
@@ -251,7 +255,9 @@ def test_reattaching_the_same_source_does_not_disconnect_it_first():
 # --- pressing Connect -------------------------------------------------------
 def test_connect_builds_the_selected_configuration_and_attaches_it():
     """End to end: the dropdown choice is what the stream ends up running."""
-    dev = DeviceSpec("fake", _FakeSource, (DeviceOption("n_channels", "Channels", {"4": 4, "9": 9}),))
+    dev = DeviceSpec(
+        "fake", _FakeSource, (DeviceOption("n_channels", "Channels", {"4": 4, "9": 9}),)
+    )
     stream = Stream("emg", source=_FakeSource(1), window_ms=100)
     picker = DevicePicker("emg", devices=(dev,))
     picker._choices[0]["n_channels"] = 1  # the user picks "9"
@@ -542,9 +548,7 @@ def test_each_stream_keeps_its_own_device_choice():
 
 def test_connecting_one_stream_does_not_mark_another_as_connected():
     """The report that started this: connecting emg appeared to connect force."""
-    picker = DevicePicker(
-        "emg", devices=(DeviceSpec("d", _FakeSource),), selectable=True
-    )
+    picker = DevicePicker("emg", devices=(DeviceSpec("d", _FakeSource),), selectable=True)
     ctx, emg, _ = _two_stream_ctx()
 
     picker._connect(ctx, emg, picker._devices[0])
@@ -568,7 +572,9 @@ def test_option_choices_do_not_leak_between_streams():
 
 
 def test_a_scan_result_belongs_to_the_stream_it_was_run_for():
-    picker = DevicePicker("emg", devices=(DeviceSpec("d", _FakeSource, scan=True),), selectable=True)
+    picker = DevicePicker(
+        "emg", devices=(DeviceSpec("d", _FakeSource, scan=True),), selectable=True
+    )
     picker._targets = [{"name": "outlet-A", "info": ""}]
 
     picker._stream_name = "force"
@@ -618,9 +624,7 @@ def test_an_attempt_in_flight_stays_with_its_own_stream():
     """
     stalled = _StalledSource()
     ctx, emg, _ = _two_stream_ctx()
-    picker = DevicePicker(
-        "emg", devices=(DeviceSpec("stalled", lambda: stalled),), selectable=True
-    )
+    picker = DevicePicker("emg", devices=(DeviceSpec("stalled", lambda: stalled),), selectable=True)
 
     picker._connect(ctx, emg, picker._devices[0])
     assert stalled.entered.wait(timeout=2.0)
@@ -811,7 +815,12 @@ def picker_buttons(monkeypatch):
 
 def test_stream_chip_selects_without_losing_per_stream_state(imgui_frame, picker_buttons):
     seen, click = picker_buttons
-    ctx = _FakeCtx({name: Stream(name, source=_FakeSource(), window_ms=100) for name in ("emg", "force", "target")})
+    ctx = _FakeCtx(
+        {
+            name: Stream(name, source=_FakeSource(), window_ms=100)
+            for name in ("emg", "force", "target")
+        }
+    )
     picker = DevicePicker("emg", selectable=True, exclude=("target",))
     picker._choices[0]["emg"] = 1
     click["id"] = "##dp_stream_force"
@@ -871,7 +880,9 @@ def test_removed_selected_stream_falls_back_to_remaining_chip(imgui_frame):
 
 @pytest.mark.parametrize("connected", [False, True])
 @pytest.mark.parametrize("recording", [False, True])
-def test_action_area_matches_attachment_and_recording(imgui_frame, picker_buttons, connected, recording):
+def test_action_area_matches_attachment_and_recording(
+    imgui_frame, picker_buttons, connected, recording
+):
     from imgui_bundle import icons_fontawesome_6 as fa
 
     seen, _ = picker_buttons
@@ -884,9 +895,19 @@ def test_action_area_matches_attachment_and_recording(imgui_frame, picker_button
     ctx.recording = recording
     picker = DevicePicker("emg")
     imgui_frame(lambda: picker.ui(ctx))
-    actions = [(label, disabled) for label, disabled in seen if "##dp_connect" in label or "##dp_disconnect" in label]
-    expected = ([f"{fa.ICON_FA_ARROWS_ROTATE}##dp_connect", f"{fa.ICON_FA_PLUG_CIRCLE_XMARK}##dp_disconnect"]
-                if connected else [f"{fa.ICON_FA_PLUG}  Connect##dp_connect"])
+    actions = [
+        (label, disabled)
+        for label, disabled in seen
+        if "##dp_connect" in label or "##dp_disconnect" in label
+    ]
+    expected = (
+        [
+            f"{fa.ICON_FA_ARROWS_ROTATE}##dp_connect",
+            f"{fa.ICON_FA_PLUG_CIRCLE_XMARK}##dp_disconnect",
+        ]
+        if connected
+        else [f"{fa.ICON_FA_PLUG}  Connect##dp_connect"]
+    )
     assert actions == [(label, recording) for label in expected]
 
 
@@ -904,7 +925,9 @@ def test_compact_controls_stay_inside_the_card(imgui_frame, monkeypatch, scale, 
     imgui.get_style().font_scale_main = scale
     stream = Stream("emg", source=_FakeSource(), window_ms=100)
     ctx = _FakeCtx({"emg": stream, "long_stream_name_to_wrap": stream, "force": stream})
-    picker = DevicePicker("emg", selectable=True, on_add=lambda name: None, on_remove=lambda name: None)
+    picker = DevicePicker(
+        "emg", selectable=True, on_add=lambda name: None, on_remove=lambda name: None
+    )
     if state == "connected":
         assert stream.reconnect()
         stream.status = "connected"
@@ -949,7 +972,9 @@ def test_add_refuses_empty_and_duplicate_names(imgui_frame, picker_buttons, monk
     assert ("Add##dp_add", True) in seen
 
 
-def test_recording_blocks_add_and_explains_every_device_action(imgui_frame, picker_buttons, monkeypatch):
+def test_recording_blocks_add_and_explains_every_device_action(
+    imgui_frame, picker_buttons, monkeypatch
+):
     from imgui_bundle import imgui
 
     seen, click = picker_buttons
@@ -962,11 +987,20 @@ def test_recording_blocks_add_and_explains_every_device_action(imgui_frame, pick
     ctx = _FakeCtx({"emg": stream, "force": stream})
     ctx.state = "recording"
     ctx.recording = True
-    picker = DevicePicker("emg", selectable=True, on_add=lambda name: pytest.fail(name), on_remove=lambda name: pytest.fail(name))
+    picker = DevicePicker(
+        "emg",
+        selectable=True,
+        on_add=lambda name: pytest.fail(name),
+        on_remove=lambda name: pytest.fail(name),
+    )
     click["id"] = "##dp_add_open"
     imgui_frame(lambda: picker.ui(ctx))
     assert not picker._adding
-    assert all(disabled for label, disabled in seen if any(key in label for key in ("dp_add", "dp_remove", "dp_connect", "dp_disconnect")))
+    assert all(
+        disabled
+        for label, disabled in seen
+        if any(key in label for key in ("dp_add", "dp_remove", "dp_connect", "dp_disconnect"))
+    )
     assert "Stop the recording before adding a stream." in tooltips
     assert "Stop the recording before removing a stream." in tooltips
     assert tooltips.count("Stop the recording before changing device.") == 2

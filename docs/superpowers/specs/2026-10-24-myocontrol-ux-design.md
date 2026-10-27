@@ -71,7 +71,7 @@ below uses `Layout`/`Grid.areas`; widgets size fixed pixels through `ui_px`.
 @dataclass
 class Context:
     ...
-    participant: str = ""   # pseudonymised ID, e.g. "P-014"; "" = none set
+    participant: str = ""  # pseudonymised ID, e.g. "P-014"; "" = none set
 ```
 
 `App(..., require_participant: bool = False)`. When `True`, `App.start_recording` refuses
@@ -140,8 +140,8 @@ selected; switch to `P-015`, the list empties; Scan finds only `P-015`'s takes.
 `Pipeline` gets an attribute hook beside `save_model`:
 
 ```python
-pipeline.save_model = save_pickle        # existing
-pipeline.autosave_dir = "sessions"       # new; None (default) = no auto-save
+pipeline.save_model = save_pickle  # existing
+pipeline.autosave_dir = "sessions"  # new; None (default) = no auto-save
 ```
 
 After a successful `train`, when both are set, the pipeline saves to

@@ -89,7 +89,7 @@ Load it and resolve it:
 import tomllib
 from myogestic.controls import load_control_map, resolve
 
-with open("hand.toml", "rb") as f:          # "rb" — tomllib requires binary
+with open("hand.toml", "rb") as f:  # "rb" — tomllib requires binary
     control_map = load_control_map(tomllib.load(f))
 
 # Resolution needs a live target: it is what declares the semantics.
@@ -208,7 +208,7 @@ client = vhi.control_client()
 # is the manifest's answer, and each one's stream is named for its own address, so both
 # facts arrive together once `bind` has something to ask.
 target = RemoteTarget(client=client, interface=vhi)
-bus = connect_controls(control_map, [target])   # None while the far side is unreachable
+bus = connect_controls(control_map, [target])  # None while the far side is unreachable
 ```
 
 An application that launches its own target binds before that target exists, so it

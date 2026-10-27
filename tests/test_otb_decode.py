@@ -26,7 +26,7 @@ def test_decode_be_int16_shape_and_order():
     # [c0t0, c1t0, c2t0, c0t1, c1t1, c2t1]
     raw = _be_int16_bytes([10, 20, 30, 11, 21, 31])
     out = decode_be_int16(raw, n_channels=3)
-    assert out.shape == (2, 3)              # sample-major
+    assert out.shape == (2, 3)  # sample-major
     assert out.dtype == np.float32
     np.testing.assert_array_equal(out[0], [10, 20, 30])
     np.testing.assert_array_equal(out[1], [11, 21, 31])
@@ -60,7 +60,7 @@ def test_muovi_control_byte_matches_matlab():
 
 def test_muovi_geometry_mode0():
     geo = C.muovi_geometry(plus=False, emg=True, mode=0)
-    assert geo.n_total == 38        # 32 bio + 6 aux
+    assert geo.n_total == 38  # 32 bio + 6 aux
     assert geo.n_bio == 32
     assert geo.fs == 2000.0
     assert geo.bytes_per_sample == 2
@@ -68,7 +68,7 @@ def test_muovi_geometry_mode0():
 
 def test_muovi_geometry_plus_eeg():
     geo = C.muovi_geometry(plus=True, emg=False, mode=0)
-    assert geo.n_total == 70        # 64 bio + 6 aux
+    assert geo.n_total == 70  # 64 bio + 6 aux
     assert geo.n_bio == 64
     assert geo.fs == 500.0
     assert geo.bytes_per_sample == 3
@@ -85,6 +85,7 @@ from myogestic.stream import StreamInfo
 
 class _FakeOTB(_OTBSource):
     """Drives the base buffering/decoding without a real socket."""
+
     def __init__(self):
         super().__init__()
         self._info = StreamInfo(n_channels=2, fs=4.0)
@@ -150,7 +151,7 @@ def test_decode_le_int16_shape_order_and_sign():
 def test_quattro_channel_counts_and_factors():
     assert C.QUATTRO_NCH_BY_MODE == {0: 120, 1: 216, 2: 312, 3: 408}
     assert C.QUATTRO_FS_BY_MODE == {0: 512.0, 1: 2048.0, 2: 5120.0, 3: 10240.0}
-    assert abs(C.QUATTRO_CONV_FACTOR_MV - (5 / 2 ** 16 / 150 * 1000)) < 1e-12
+    assert abs(C.QUATTRO_CONV_FACTOR_MV - (5 / 2**16 / 150 * 1000)) < 1e-12
 
 
 def test_quattro_config_is_40_bytes_with_valid_crc():
@@ -175,19 +176,19 @@ def test_base_read_flushes_then_signals_on_peer_close():
     the Stream marks the source disconnected instead of idling as connected."""
     a, b = socket.socketpair()
     src = _FakeOTB()
-    src.connect()          # sets _info + frame_nbytes; _sock starts None
+    src.connect()  # sets _info + frame_nbytes; _sock starts None
     a.setblocking(False)
     src._sock = a
     b.sendall(_be_int16_bytes([5, 6]))  # one complete frame (2ch x 1 sample)
     b.close()
     time.sleep(0.05)
 
-    data, ts = src.read()               # drains the buffered frame (EOF not yet seen)
+    data, ts = src.read()  # drains the buffered frame (EOF not yet seen)
     assert data is not None and data.shape == (1, 2)
     np.testing.assert_array_equal(data[0], [5, 6])
 
     with pytest.raises(ConnectionError):
-        src.read()                      # recv now returns EOF -> drop + signal
+        src.read()  # recv now returns EOF -> drop + signal
     assert src._sock is None
     a.close()
 

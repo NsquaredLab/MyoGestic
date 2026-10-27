@@ -232,9 +232,7 @@ def dump_control_map(control_map: ControlMap, *, header: str = "") -> str:
         if binding.debounce_s:
             extras.append(f"debounce_s = {_toml_number(binding.debounce_s)}")
         if binding.threshold_fraction is not None:
-            extras.append(
-                f"threshold_fraction = {_toml_number(binding.threshold_fraction)}"
-            )
+            extras.append(f"threshold_fraction = {_toml_number(binding.threshold_fraction)}")
         if binding.label:
             extras.append(f"label = {_toml_string(binding.label)}")
         weighted = any(ref.weight != 1.0 for ref in binding.targets)
@@ -258,9 +256,7 @@ def dump_control_map(control_map: ControlMap, *, header: str = "") -> str:
         else:
             lines.append(f"{key} = {{ targets = [")
             for ref in binding.targets:
-                weight = (
-                    f", weight = {_toml_number(ref.weight)}" if ref.weight != 1.0 else ""
-                )
+                weight = f", weight = {_toml_number(ref.weight)}" if ref.weight != 1.0 else ""
                 lines.append(f"  {{ target = {_toml_string(ref.address)}{weight} }},")
             lines.append(f"], {', '.join(extras)} }}" if extras else "] }")
     return "\n".join(lines) + "\n"
@@ -404,7 +400,7 @@ def _parse_binding(alias: Any, value: Any, errs: list[str]) -> Binding | None:
             f"[dofs] {alias!r}: this is a table, not a mapping — TOML read "
             f"{'.'.join([alias, *nested[:1]])} as a nested key. Quote the whole alias if "
             f'it contains a dot: "{".".join([alias, *nested[:1]])}" = "some.target.address". '
-            f"Otherwise give it a target, e.g. {alias} = \"vhi.prediction.index\"."
+            f'Otherwise give it a target, e.g. {alias} = "vhi.prediction.index".'
         )
         return None
 
@@ -412,8 +408,7 @@ def _parse_binding(alias: Any, value: Any, errs: list[str]) -> Binding | None:
         unknown = sorted(set(value) - _BINDING_KEYS)
         if unknown:
             errs.append(
-                f"[dofs] {alias!r}: unknown key(s) {unknown}. Accepted: "
-                f"{sorted(_BINDING_KEYS)}."
+                f"[dofs] {alias!r}: unknown key(s) {unknown}. Accepted: {sorted(_BINDING_KEYS)}."
             )
             return None
         raw_targets = value.get("targets", value.get("target"))
@@ -521,7 +516,7 @@ def load_control_map(config: Mapping[str, Any]) -> ControlMap:
     raw = config.get("dofs")
     if raw is None:
         raise ValueError(
-            'no [dofs] table. Map one of your model outputs to a target control, e.g.\n'
+            "no [dofs] table. Map one of your model outputs to a target control, e.g.\n"
             '  [dofs]\n  my_index = "vhi.prediction.index"'
         )
     if not isinstance(raw, dict):
@@ -562,9 +557,7 @@ def _did_you_mean(address: str, available: Sequence[str]) -> str:
     return ", ".join(sorted(best))
 
 
-def resolve(
-    control_map: ControlMap, capabilities: Sequence[Capability]
-) -> ControlSet:
+def resolve(control_map: ControlMap, capabilities: Sequence[Capability]) -> ControlSet:
     """Resolve a `ControlMap` against what a target says it can do.
 
     Each alias becomes a `myogestic.controls.Continuous` or

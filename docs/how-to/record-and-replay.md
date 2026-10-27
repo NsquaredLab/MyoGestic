@@ -241,12 +241,12 @@ from myogestic.session import open_session_store
 import numpy as np
 
 with open_session_store("sessions/2026-09-13_10-12-44_3f9a1c02.session.zip") as s:
-    print(s.event_streams)          # ('features.vec', 'prediction.pose', 'pipeline.tick', 'controls')
-    pose = np.array(s.stores["prediction.pose"])            # (n_ticks, 5)
-    t = np.array(s.ts_stores["prediction.pose"])            # data time of each tick
-    tick = np.array(s.stores["pipeline.tick"])[:, 0]        # decision clock
+    print(s.event_streams)  # ('features.vec', 'prediction.pose', 'pipeline.tick', 'controls')
+    pose = np.array(s.stores["prediction.pose"])  # (n_ticks, 5)
+    t = np.array(s.ts_stores["prediction.pose"])  # data time of each tick
+    tick = np.array(s.stores["pipeline.tick"])[:, 0]  # decision clock
     print("median latency", np.median(tick - t), "s")
-    print(s.extras["pipeline"]["model"])                    # 'model.joblib', beside the arrays
+    print(s.extras["pipeline"]["model"])  # 'model.joblib', beside the arrays
 ```
 
 The model is pickled into the session when `pipeline.save_model` is set (the ML widgets' Save button uses the same callable). Values `extract` or `predict` returned that were not recordable — text, 2-D arrays — are named in `s.extras["pipeline"]["skipped"]` with the reason.
