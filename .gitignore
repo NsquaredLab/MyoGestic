@@ -56,3 +56,6 @@ docs/playground/wheels/manifest.json
 
 # Linked worktrees for isolated feature work (superpowers:using-git-worktrees)
 .worktrees/
+
+# Agent plans and design specs: kept locally, never committed or published.
+docs/superpowers/

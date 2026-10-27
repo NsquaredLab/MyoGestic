@@ -22,8 +22,6 @@ Protocol verified against (manufacturer PDFs, not committed):
 - Quattrocento Configuration Protocol v1.7
 - Quattrocento User Manual
 
-Design spec: `docs/superpowers/specs/2026-06-03-otb-device-sources-design.md`.
-
 Key facts distilled from these references:
 - Direct Muovi: PC is **TCP server** on **54321**; control byte
   `(EMG<<3) | (Mode<<1) | GO`; stop = `byte - 1`.
