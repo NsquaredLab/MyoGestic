@@ -256,68 +256,82 @@ for headers with and without workflow steps.
 ::: myogestic.tracking.score_tracking
 
 `FollowRun` owns a dedicated recorded take and drives the operator hand on its own
-clock, independent of EMG, the GUI and `predict`. Supply `drive(index, level)` to
-push that hand's bus at `hz` (default 32). `level` is a fraction in `[0, peak]`;
-`target` exposes the latest `(gesture_index, level)`, or `None` when idle.
-`Sinusoid` holds relaxed, moves up with a half-cosine, holds at the peak, and
-moves down with a half-cosine, repeating after an optional lead-in.
+clock, independent of EMG, the GUI and `predict`. Supply `operator=`, ordered
+`aliases=`, gesture-keyed `poses=`, and `rest=` to push blended pose vectors at `hz`
+(default 32). Every gesture must have a finite pose vector with one value per alias;
+construction validates these shapes. Alternatively, supply `drive(index, level)` for
+custom delivery. Exactly one of `operator` and `drive` is required.
+
+`level` is a fraction in `[0, peak]`; `target` exposes the latest
+`(gesture_index, level)`, or `None` when idle. `Sinusoid` holds relaxed, moves up with
+a half-cosine, holds at the peak, and moves down with a half-cosine, repeating after
+an optional lead-in.
 
 Give each hand its own `ControlLink` and map. The prediction link keeps `ctx` and
 smoothing, and `predict` pushes only prediction aliases. The operator link uses
-`ctx=None`, no smoothing, and optionally `on_warn=ctx.log`. This keeps the saved
-`controls` stream and `ctx.control_space` specific to prediction. One Connect action
-binds both links; each LSL outlet resends its latest value at 32 Hz between pushes.
-Held-pose callbacks push only the operator bus and do nothing while `follow.running`.
+`ctx=app.ctx, record_as="controls.operator"` and no smoothing. Its delivered frames
+and map are saved separately as `controls.operator` and
+`meta.control_spaces["controls.operator"]`; prediction keeps `controls` and
+`meta.control_space`. One `ControlLinkConnector(link, operator)` binds both.
+Use `binder.ensure_now()` for synchronous UI binding and `binder.poll()` for
+background attempts; `binder.connected` means both hands are ready.
+
+Call `follow.hold(pose)` for manual gestures, or `follow.hold()` for rest. It returns
+what the operator bus delivered, including clipping, or `None` while running or
+unbound. Neither `hold` nor the driver binds a link. Each LSL outlet resends its latest
+value at 32 Hz between pushes.
 
 Construct the card once and call `sync` every UI frame, including hidden tabs, to
 finish expired or interrupted takes and score them. The driver records
 `follow.target` with `gesture_index`, `level`, and `phase` channels on the LSL clock,
 using the existing `PHASE_CODES`. At the deadline it drives rest until `sync` saves
-the take. `stop` signals and joins the driver **before** `on_stop`, so the callback's
-rest push cannot be overwritten by an in-flight drive. Register `stop` for cleanup;
-keep lifecycle calls on the UI thread and GUI code out of `drive`. A drive exception
-is logged once per run and later steps continue.
+the take. `stop` signals and joins the driver, then pushes rest in operator mode
+**before** `on_stop`, including after an external recording stop. A `drive=` callback
+retains responsibility for its own rest push. Register `stop` for cleanup; keep
+lifecycle calls on the UI thread and GUI code out of `drive`. A drive exception is
+logged once per run and later steps continue.
 
-This hardware-free example uses two local buses; the same callbacks can read
-`link.bus` and `operator.bus` after connecting their links:
+This hardware-free example uses a local target with two independently mapped links:
 
 <!--docs:run-->
 ```python
 from myogestic import App
-from myogestic.controls import Continuous, ControlBus, ControlSet
-from myogestic.tracking import Sinusoid, blend_pose
+from myogestic.controls import Capability, ControlLink, ControlLinkConnector, load_control_map
 from myogestic.widgets import FollowRun
 
+class Hand:
+    def capabilities(self):
+        return [Capability("hand.grasp", "continuous", lo=0, hi=1, rest=0)]
+
+    def bind(self, controls):
+        pass
+
+    def send(self, values, changed):
+        self.pose = values
+
+    def stop(self):
+        pass
+
 app = App("Follow example")
-prediction_bus = ControlBus(ControlSet({"prediction": Continuous("prediction")}), ctx=app.ctx)
-operator_bus = ControlBus(ControlSet({"control": Continuous("control")}), ctx=None)
-relaxed = [0.0]
-poses = [[1.0], [0.6]]
-
-def drive(index, level):
-    operator_bus.push({"control": float(blend_pose(relaxed, poses[index], level)[0])})
-
-def stop_recording():
-    operator_bus.push({"control": 0.0})
-    app.stop_recording()
-
-follow = FollowRun(
-    ["Fist", "Pinch"],
-    drive=drive,
-    hz=32,
-    on_record=app.start_recording,
-    on_stop=stop_recording,
-    trajectory=Sinusoid(move_s=2.0, hold_high_s=1.0, hold_low_s=1.0, reps=5),
+link = ControlLink(load_control_map({"dofs": {"prediction": "hand.grasp"}}), [Hand()], ctx=app.ctx)
+operator = ControlLink(
+    load_control_map({"dofs": {"control": "hand.grasp"}}), [Hand()],
+    ctx=app.ctx, record_as="controls.operator",
 )
+binder = ControlLinkConnector(link, operator)
+poses = {"Fist": [1.0], "Pinch": [0.6]}
+follow = FollowRun(
+    ["Fist", "Pinch"], operator=operator, aliases=("control",), poses=poses, rest=[0.0],
+    on_record=app.start_recording, on_stop=app.stop_recording,
+)
+assert binder.ensure_now() is link.bus and binder.connected
+assert follow.hold(poses["Pinch"]) == {"control": 0.6}
 
-def hold(value):
-    if not follow.running:
-        operator_bus.push({"control": value})
-
-# predict pushes prediction_bus.push({"prediction": value}).
-# On every GUI frame call follow.sync(ctx), then draw follow.ui(ctx) in its Grid cell.
+# predict pushes link.bus.push({"prediction": value}) when link.bus is bound.
+# Every GUI frame calls follow.sync(ctx), then draws follow.ui(ctx) in its Grid cell.
 app.cleanup_hooks.append(lambda _app: follow.stop(app.ctx))
 assert follow.target is None
+binder.stop()  # Teardown order: follow.stop(app.ctx), binder.stop(), transport.stop().
 ```
 
 A complete hardware-free demo is

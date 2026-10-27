@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Independent control links can record named streams with `record_as`, with their maps saved in optional `meta.control_spaces`; duplicate map names are rejected and single-link metadata stays unchanged.
+- `ControlLinkConnector(*links)` binds several links with one retry worker and stops every link, including partial and late binds.
+- `FollowRun(operator=, aliases=, poses=, rest=)` drives pose vectors directly, validates their shapes at construction, rests after joining on every run exit, and offers `hold()` for manual poses. Myocontrol uses this API and one connector for both hands, fixing concurrent binds and premature connection announcements.
+
 - `Sinusoid`, `score_tracking`, `blend_pose`, and the reusable `FollowRun` card record and score smooth control-hand following runs; Myocontrol Drive offers **Follow**, and saved Follow takes remain unticked for training. A hardware-free panel demo is included.
 
 - Myocontrol's Guided drive runs cue shuffled gesture repetitions, save prediction takes, and score match and cue reach from the saved take; Takes marks them **Guided** and leaves them unticked for training.

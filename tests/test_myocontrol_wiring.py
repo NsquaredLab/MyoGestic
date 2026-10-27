@@ -1000,7 +1000,7 @@ def test_launching_vhi_is_what_arms_the_binder(app_module, monkeypatch, implot_f
 
     monkeypatch.setattr(type(launcher), "running", lambda self, name: True)
     implot_frame(app_module["hand_ui"])
-    assert polled == [True, True], "launch must bind both hands"
+    assert polled == [True], "one connector binds both hands"
 
 
 def test_the_binder_never_blocks_a_frame(app_module):
@@ -1046,7 +1046,7 @@ def test_a_class_is_a_pose_and_goes_out_on_the_same_aliases(app_module):
     assert len(sent) == 2
     classified, regressed = sent
     assert set(classified) == set(regressed), "the modes push different aliases"
-    assert classified["prediction"] == app_module["POSES"]["Fist"]
+    assert classified["prediction"] == app_module["POSES"]["Fist"][0]
     assert regressed["prediction"] == pytest.approx(0.62)
 
 
@@ -1142,7 +1142,7 @@ def test_hand_connect_checks_before_launch_and_stop_cancels(app_module, monkeypa
     from imgui_bundle import imgui
 
     state = SimpleNamespace(
-        busy=False, finished=False, last_error=None, status="", polls=0, stops=0
+        connected=False, busy=False, finished=False, last_error=None, status="", polls=0, stops=0
     )
 
     def poll(*, force=False):
@@ -1158,18 +1158,6 @@ def test_hand_connect_checks_before_launch_and_stop_cancels(app_module, monkeypa
     state.poll, state.stop = poll, stop
     globals_ = app_module["hand_ui"].__globals__
     monkeypatch.setitem(globals_, "binder", state)
-    monkeypatch.setitem(
-        globals_,
-        "operator_binder",
-        SimpleNamespace(
-            busy=False,
-            finished=True,
-            last_error=None,
-            status="",
-            poll=lambda **kw: None,
-            stop=lambda **kw: None,
-        ),
-    )
     monkeypatch.setitem(globals_, "hand_processes", [("hand", ["hand"])])
     running = {"value": False}
     launched, stopped = [], []
@@ -1220,22 +1208,10 @@ def test_hand_bind_outcome_never_launches_a_second_target(
 
     from imgui_bundle import imgui
 
-    state = SimpleNamespace(busy=False, finished=True, last_error=None, status="")
+    state = SimpleNamespace(connected=False, busy=False, finished=True, last_error=None, status="")
     state.poll = lambda **kwargs: True
     globals_ = app_module["hand_ui"].__globals__
     monkeypatch.setitem(globals_, "binder", state)
-    monkeypatch.setitem(
-        globals_,
-        "operator_binder",
-        SimpleNamespace(
-            busy=False,
-            finished=True,
-            last_error=None,
-            status="",
-            poll=lambda **kw: None,
-            stop=lambda **kw: None,
-        ),
-    )
     missing_install = result in ("missing", "external_without_install")
     monkeypatch.setitem(globals_, "hand_processes", [] if missing_install else [("hand", ["hand"])])
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
@@ -1257,6 +1233,7 @@ def test_hand_bind_outcome_never_launches_a_second_target(
     actions.clear()
     external = result.startswith("external")
     if external:
+        state.connected = True
         app_module["link"]._bus = app_module["operator"]._bus = object()
     elif result == "incompatible":
         state.last_error = ValueError("wrong map")
@@ -1275,7 +1252,9 @@ def test_hand_missing_install_explains_idle_and_failed_connect(
 
     from imgui_bundle import imgui
 
-    state = SimpleNamespace(busy=False, finished=False, last_error=None, status="", polls=0)
+    state = SimpleNamespace(
+        connected=False, busy=False, finished=False, last_error=None, status="", polls=0
+    )
 
     def poll(*, force=False):
         assert force
@@ -1287,18 +1266,6 @@ def test_hand_missing_install_explains_idle_and_failed_connect(
     render = app_module["hand_ui"]
     globals_ = render.__globals__
     monkeypatch.setitem(globals_, "binder", state)
-    monkeypatch.setitem(
-        globals_,
-        "operator_binder",
-        SimpleNamespace(
-            busy=False,
-            finished=True,
-            last_error=None,
-            status="",
-            poll=lambda **kw: None,
-            stop=lambda **kw: None,
-        ),
-    )
     monkeypatch.setitem(globals_, "hand_processes", [])
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
     monkeypatch.setattr(
@@ -1352,6 +1319,11 @@ def test_hand_rechecks_bus_after_observing_attempt_completion(app_module, monkey
 
     class JustFinished:
         busy = False
+
+        @property
+        def connected(self):
+            return all(app_module[name].bus is not None for name in ("link", "operator"))
+
         last_error = None
         status = "controls connected"
 
@@ -1362,7 +1334,6 @@ def test_hand_rechecks_bus_after_observing_attempt_completion(app_module, monkey
 
     globals_ = app_module["hand_ui"].__globals__
     monkeypatch.setitem(globals_, "binder", JustFinished())
-    monkeypatch.setitem(globals_, "operator_binder", SimpleNamespace(finished=True))
     monkeypatch.setitem(globals_, "hand_processes", [("hand", ["hand"])])
     app_module["hand_attempt"]["phase"] = "checking"
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
@@ -1881,7 +1852,12 @@ def test_binding_adds_feedback_once_after_any_open_take(app_module, monkeypatch,
 
     app, link = app_module["app"], app_module["link"]
     bus = object()
-    monkeypatch.setattr(type(link), "ensure", lambda self: bus)
+
+    def ensure(self):
+        self._bus = bus
+        return bus
+
+    monkeypatch.setattr(type(link), "ensure", ensure)
     connections = []
     monkeypatch.setattr(
         app_module["threading"],
@@ -2540,7 +2516,9 @@ def test_follow_run_drives_and_scores_saved_control_frames(
     )
     monkeypatch.setattr(pipeline, "stop_predicting", lambda: setattr(app.ctx, "state", "idle"))
     bus = ControlBus(ControlSet({"prediction": Continuous("prediction")}), ctx=app.ctx)
-    operator_bus = ControlBus(ControlSet({"control": Continuous("control")}), ctx=None)
+    operator_bus = ControlBus(
+        ControlSet({"control": Continuous("control")}), ctx=app.ctx, record_as="controls.operator"
+    )
     monkeypatch.setattr(app_module["link"], "_bus", bus)
     monkeypatch.setattr(app_module["operator"], "_bus", operator_bus)
     monkeypatch.setattr(follow, "_run", lambda ctx: None)
@@ -2693,7 +2671,7 @@ def test_follow_stop_joins_inflight_drive_before_rest(app_module, silent_follow,
     assert not follow.running and not app.ctx.recording
 
 
-def test_follow_records_predictions_only(app_module, silent_follow, monkeypatch):
+def test_follow_records_both_hands_separately(app_module, silent_follow, monkeypatch):
     from myogestic.session import open_session_store
 
     app, pipeline, follow = silent_follow
@@ -2720,10 +2698,16 @@ def test_follow_records_predictions_only(app_module, silent_follow, monkeypatch)
         assert saved.stream_info("controls").channel_names == ["prediction"]
         values, stamps = saved.get_continuous("controls")
         np.testing.assert_allclose(values, [[0.62]])
+        operator_values, _ = saved.get_continuous("controls.operator")
+        assert saved.stream_info("controls.operator").channel_names == ["control"]
+        np.testing.assert_allclose(operator_values[:, 0], [frame["control"] for frame in frames])
+        assert operator_values[-1, 0] == 0
         target, _ = saved.get_continuous("follow.target")
         assert len(target) >= 4 and target[-1, 1] > target[0, 1]
     assert app.ctx.control_space is app_module["CONTROL_MAP"]
-    assert app_module["operator"]._ctx is None and app_module["operator"]._smoothing is None
+    assert app.ctx.control_spaces == {"controls.operator": app_module["OPERATOR_MAP"]}
+    assert app_module["operator"]._ctx is app.ctx
+    assert app_module["operator"]._smoothing is None
 
 
 @pytest.mark.parametrize("finish", ["stop", "deadline", "external_stop", "replacement", "cleanup"])
@@ -2750,3 +2734,43 @@ def test_follow_driver_is_joined_on_every_exit(app_module, silent_follow, monkey
             assert app.ctx.recording
             app.stop_recording(wait=True)
     assert not worker.is_alive() and not follow.running
+
+
+def test_manual_bind_shares_worker_and_waits_for_both_hands(app_module, monkeypatch):
+    """A UI bind cannot enter ensure alongside a worker or announce a partial bind."""
+    binder, link = app_module["binder"], app_module["link"]
+    entered, release = Event(), Event()
+    attempts, notices = [], []
+
+    def ensure(self):
+        attempts.append(self)
+        if self is link:
+            entered.set()
+            assert release.wait(3)
+            self._bus = SimpleNamespace(stop=lambda: None)
+        return self.bus
+
+    monkeypatch.setattr(ControlLink, "ensure", ensure)
+    monkeypatch.setattr(
+        type(app_module["app"].ctx), "notify", lambda self, *args: notices.append(args)
+    )
+    monkeypatch.setitem(
+        app_module["_announce_binding"].__globals__,
+        "_ensure_hand_feedback",
+        lambda: pytest.fail("a partial bind must not announce feedback"),
+    )
+    try:
+        assert binder.poll()
+        assert entered.wait(1)
+        assert app_module["_bind"]() is None
+        assert attempts == [link]
+        release.set()
+        binder._worker.join(timeout=3)
+        assert not binder._worker.is_alive()
+        assert not binder.connected and link.bus is not None
+        app_module["_announce_binding"](link.bus)
+        assert notices == []
+        assert attempts == [link, app_module["operator"]]
+    finally:
+        release.set()
+        binder.stop()

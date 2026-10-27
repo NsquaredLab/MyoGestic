@@ -327,3 +327,120 @@ def test_drive_failure_logs_once_and_keeps_running(tmp_path, monkeypatch):
     assert len(attempts) >= 4
     assert len([text for text in messages if "Follow drive failed" in text]) == 1
     assert not widget._state.worker.is_alive()
+
+
+@pytest.mark.parametrize(
+    "options, message",
+    [
+        ({}, "exactly one"),
+        ({"drive": lambda i, x: None, "operator": object()}, "exactly one"),
+        ({"operator": object()}, "aliases="),
+        ({"poses": {"Other": [1, 1]}}, "Fist"),
+        ({"poses": {"Fist": [1]}}, "same shape"),
+        ({"rest": [0]}, "same shape"),
+        ({"aliases": ["only"]}, "one value per alias"),
+        ({"poses": {"Fist": [[1, 1]]}}, "pose vectors"),
+        ({"rest": [[0, 0]], "poses": {"Fist": [[1, 1]]}}, "pose vectors"),
+        ({"poses": {"Fist": [np.nan, 1]}}, "finite pose"),
+        ({"rest": [0, np.inf]}, "finite pose"),
+    ],
+)
+def test_operator_configuration_is_validated_at_construction(options, message):
+    defaults = {
+        "operator": object(),
+        "aliases": ("x", "y"),
+        "poses": {"Fist": [1, 1]},
+        "rest": [0, 0],
+    }
+    if not options or "operator" in options:
+        defaults = {}
+    with pytest.raises(ValueError, match=message):
+        FollowRun(["Fist"], **(defaults | options), on_record=lambda: None, on_stop=lambda: None)
+
+
+def test_operator_hold_returns_delivery_and_never_binds():
+    from types import SimpleNamespace
+
+    from myogestic.controls import Continuous, ControlBus, ControlSet
+
+    link = SimpleNamespace(bus=None, ensure=lambda: pytest.fail("hold must never bind"))
+    widget = FollowRun(
+        ["Fist"],
+        operator=link,
+        aliases=("x", "y"),
+        poses={"Fist": [1, 1]},
+        rest=[0.2, -0.2],
+        on_record=lambda: None,
+        on_stop=lambda: None,
+    )
+    assert widget.hold() is None
+    widget._drive(0, 0.5)  # unbound is also a no-op on the driver thread
+    link.bus = ControlBus(ControlSet({"x": Continuous("x"), "y": Continuous("y")}))
+    assert widget.hold([2, -2]) == {"x": 1.0, "y": -1.0}
+    assert widget.hold() == {"x": 0.2, "y": -0.2}
+    widget._state.phase = "running"
+    assert widget.hold([1, 1]) is None
+
+
+@pytest.mark.parametrize("external_stop", [False, True])
+def test_operator_drives_without_prediction_and_rests_after_join(
+    tmp_path, monkeypatch, external_stop
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from types import SimpleNamespace
+
+    monkeypatch.setattr("myogestic._browser.IS_BROWSER", True)
+    app = App("operator follow")
+    frames, callbacks = [], []
+    entered, release, stopping = Event(), Event(), Event()
+    widget = None
+
+    def push(frame):
+        if not entered.is_set():
+            entered.set()
+            assert release.wait(3)
+        frames.append(dict(frame))
+        return frame
+
+    def stop_recording():
+        assert not widget._state.worker.is_alive()
+        assert frames[-1] == {"x": 0.2, "y": -0.2}
+        callbacks.append("stopped")
+        app.stop_recording(wait=True)
+
+    link = SimpleNamespace(bus=SimpleNamespace(push=push))
+    widget = FollowRun(
+        ["Fist"],
+        operator=link,
+        aliases=("x", "y"),
+        poses={"Fist": [1, 1]},
+        rest=[0.2, -0.2],
+        trajectory=Sinusoid(move_s=1, lead_s=0, hold_low_s=0),
+        hz=64,
+        on_record=lambda: app.start_recording(str(tmp_path)),
+        on_stop=stop_recording,
+    )
+    assert widget.start(app.ctx)
+    assert entered.wait(1)
+    assert widget.hold([1, 1]) is None and frames == []
+    if external_stop:
+        app.stop_recording(wait=True)
+
+    def stop():
+        stopping.set()
+        widget.stop(app.ctx)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(stop)
+        try:
+            assert stopping.wait(1)
+            assert not Event().wait(0.05) and not pending.done()
+        finally:
+            release.set()
+        pending.result(timeout=3)
+    assert not widget._state.worker.is_alive()
+    assert frames[-1] == {"x": 0.2, "y": -0.2}
+    assert len(frames) >= 2
+    assert callbacks == ([] if external_stop else ["stopped"])
+    assert not widget.running and not app.ctx.recording

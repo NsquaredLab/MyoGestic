@@ -614,6 +614,7 @@ class Session:
         app_name: str,
         class_names: list[str] | None = None,
         control_space: Mapping[str, object] | None = None,
+        control_spaces: Mapping[str, Mapping[str, object]] | None = None,
     ) -> None:
         """Write meta.json + labels.json to the session folder.
 
@@ -631,6 +632,10 @@ class Session:
             came from and the target control it drove. Carries a ``format`` tag; read
             it back with `myogestic.controls.read_control_space`, which refuses a
             pre-alias control space by name instead of reinterpreting it.
+        control_spaces
+            Additional control configurations keyed by recording stream name. Each
+            entry has the same format as ``control_space``. Omitted from metadata
+            when empty, preserving the single-link recording format.
         """
         meta: dict[str, object] = {
             "schema_version": _META_SCHEMA_VERSION,
@@ -688,6 +693,8 @@ class Session:
             meta["class_names"] = list(class_names)
         if control_space is not None:
             meta["control_space"] = dict(control_space)
+        if control_spaces:
+            meta["control_spaces"] = {name: dict(space) for name, space in control_spaces.items()}
         (self.path / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         labels = [
             {"timestamp": e.timestamp, "class_index": e.class_index} for e in self.label_track

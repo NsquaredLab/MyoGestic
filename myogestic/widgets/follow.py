@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
 from threading import Thread
 from time import monotonic
 from typing import Any
 
 from mne_lsl.lsl import local_clock
+from numpy.typing import ArrayLike
 
+from myogestic.controls import ControlLink
 from myogestic.core import Context
 from myogestic.sources.target import PHASE_CODES
-from myogestic.tracking import Sinusoid
+from myogestic.tracking import Sinusoid, blend_pose
 from myogestic.widgets._follow_state import FollowState, score_take
 
 
@@ -31,6 +33,14 @@ class FollowRun:
         Called with ``(gesture_index, level)`` on a dedicated daemon thread. Push
         the operator hand's bus here; keep it separate from prediction's bus.
         Exceptions are logged once per run and subsequent steps keep running.
+        Supply exactly one of ``drive`` and ``operator``.
+    operator
+        Link to drive directly with blended pose vectors. Its bus is read on every
+        step; an unbound link is a no-op and is never bound by this card.
+    aliases, poses, rest
+        Operator mode's ordered aliases, gesture-name-to-pose mapping, and relaxed
+        pose. Every gesture must have a finite one-dimensional pose with exactly
+        one value per alias. Shapes and values are validated at construction.
     hz
         Finite, positive drive rate in Hz; defaults to 32.
     trajectory
@@ -48,20 +58,24 @@ class FollowRun:
     Notes
     -----
     The operator hand runs on its own clock, independent of EMG, the GUI and
-    `predict`. Its link uses ``ctx=None`` and no smoothing; only the prediction
-    link records ``controls``. Held-pose pushes must no-op while `running`.
+    `predict`. Give its link ``ctx=app.ctx, record_as="controls.operator"`` and
+    no smoothing to record it separately. `hold` no-ops while `running`.
     Call `sync` every UI frame, even when hidden, to stop at the deadline and
     score after saving. `ui` also calls `sync`. Register `stop` in the app's
-    cleanup hooks. `stop` joins the driver before `on_stop`, so that callback can
-    safely push rest. Lifecycle methods belong on the UI thread; `drive` must
-    return and must not call lifecycle methods or GUI code.
+    cleanup hooks. `stop` joins the driver and, in operator mode, pushes rest before
+    `on_stop`, including after an external recording stop. Lifecycle methods belong
+    on the UI thread; `drive` must return and must not call lifecycle methods or GUI code.
     """
 
     def __init__(
         self,
         gestures: Sequence[str],
         *,
-        drive: Callable[[int, float], Any],
+        drive: Callable[[int, float], Any] | None = None,
+        operator: ControlLink | None = None,
+        aliases: Sequence[str] = (),
+        poses: Mapping[str, ArrayLike] | None = None,
+        rest: ArrayLike | None = None,
         on_record: Callable[[], None],
         on_stop: Callable[[], None],
         hz: float = 32.0,
@@ -79,8 +93,25 @@ class FollowRun:
             raise ValueError("max_lag_s: pass finite seconds >= 0")
         if isinstance(prediction_channel, int) and prediction_channel < 0:
             raise ValueError("prediction_channel: pass a channel name or non-negative index")
-        self._drive, self._hz = drive, hz
+        if (drive is None) == (operator is None):
+            raise ValueError("supply exactly one of drive= or operator=")
         self.gestures = tuple(gestures)
+        self._operator, self._aliases = operator, tuple(aliases)
+        self._poses: dict[str, ArrayLike] = {}
+        self._rest: ArrayLike = ()
+        if operator is not None:
+            if not self._aliases or poses is None or rest is None:
+                raise ValueError("operator: supply aliases=, poses= and rest=")
+            for name in self.gestures:
+                if name not in poses:
+                    raise ValueError(f"poses: supply a pose for gesture {name!r}")
+                relaxed = blend_pose(rest, poses[name], 0)
+                if len(relaxed) != len(self._aliases):
+                    raise ValueError("poses and rest: supply one value per alias")
+                self._poses[name] = blend_pose(rest, poses[name], 1)
+            self._rest = relaxed
+        self._drive = drive if drive is not None else self._drive_operator
+        self._hz = hz
         self._on_record, self._on_stop = on_record, on_stop
         self._stream, self._channel = prediction_stream, prediction_channel
         self._max_lag_s, self._widget_id = max_lag_s, widget_id
@@ -100,6 +131,24 @@ class FollowRun:
     def score(self) -> dict[str, float | None] | None:
         """Metrics read from the saved take, or None before scoring finishes."""
         return None if self._state.score is None else dict(self._state.score)
+
+    def _push_operator(self, pose: ArrayLike) -> Mapping[str, float | str] | None:
+        bus = None if self._operator is None else self._operator.bus
+        if bus is None:
+            return None
+        return bus.push(dict(zip(self._aliases, pose, strict=True)))
+
+    def _drive_operator(self, index: int, level: float) -> None:
+        self._push_operator(blend_pose(self._rest, self._poses[self.gestures[index]], level))
+
+    def hold(self, pose: ArrayLike | None = None) -> Mapping[str, float | str] | None:
+        """Push a held pose (rest by default) on the UI thread and return its delivery.
+
+        Return `None` while running, unbound, or using ``drive=``. Never binds a link.
+        """
+        if self.running:
+            return None
+        return self._push_operator(self._rest if pose is None else pose)
 
     def start(self, ctx: Context) -> bool:
         """Start a new take; return False if busy or the callback refuses recording."""
@@ -184,12 +233,13 @@ class FollowRun:
                 s.started + s.trajectory.total_duration,
             )
             s.stop_event.set()
-        # A blocked push must finish before the callback can issue the final rest.
+        # A blocked push must finish before the final rest is delivered.
         if s.worker is not None:
             s.worker.join()
         with s.lock:
             s.phase, s.target = "saving", None
             owns = ctx.recording and ctx.session is s.session
+        self.hold()
         if owns:
             self._on_stop()
 

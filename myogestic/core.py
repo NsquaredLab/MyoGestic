@@ -211,9 +211,12 @@ class Context:
         Names for the label class indices, mirrored here by the recording
         widgets so `App.stop_recording` can persist them in ``meta.json``.
     control_space
-        Optional `myogestic.controls.ControlSet` this app commands. Set once at
+        Optional `myogestic.controls.ControlMap` this app commands. Set once at
         setup (``app.ctx.control_space = CONTROLS``); every recording then
         stores the space it was made under.
+    control_spaces
+        Additional control maps keyed by recording stream name, populated by
+        `myogestic.controls.connect_controls` for names other than ``"controls"``.
     current_label
         Class index a label click would record right now; ``-1`` for rest / no
         class.
@@ -243,6 +246,7 @@ class Context:
     pending_saves: set[Path] = field(default_factory=set)
     class_names: list[str] = field(default_factory=list)
     control_space: Any = None
+    control_spaces: dict[str, Any] = field(default_factory=dict)
     current_label: int = -1
     status_message: str = ""
     logs: list[str] = field(default_factory=list)
@@ -581,6 +585,7 @@ class App:
         # that meta.json will not list.
         session.freeze()
         controls = self.ctx.control_space
+        control_spaces = dict(self.ctx.control_spaces)
         class_names = self.ctx.class_names or None
         hooks = list(self.finalize_hooks)
         self.ctx.status_message = "Finalizing…"
@@ -603,6 +608,10 @@ class App:
                     self.name,
                     class_names=class_names,
                     control_space=controls.as_control_space() if controls is not None else None,
+                    control_spaces={
+                        name: control_map.as_control_space()
+                        for name, control_map in control_spaces.items()
+                    },
                 )
                 n = len(session.label_track)
                 zip_path = session.pack_to_zip()

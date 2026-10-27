@@ -36,7 +36,6 @@ from myogestic.recipes.features import mav, rms, var, wl, zc
 from myogestic.remote import RemoteTarget
 from myogestic.session import RecordedTime, iter_labeled_windows, open_session_store, recorded_time
 from myogestic.sources import LSLSource
-from myogestic.tracking import blend_pose
 from myogestic.vhi import virtual_hand
 from myogestic.vhi.pose import POSE_WIDTH
 from myogestic.widgets import (
@@ -87,9 +86,9 @@ PREDICT_HZ = 32
 CLASSES = ["Rest", "Fist"]
 MODES = ["Classification", "Regression"]
 
-#: What each class *is*, as a control value. Add a class by adding a row; `predict`
+#: What each class *is*, as a one-channel pose vector. Add a class by adding a row; `predict`
 #: does not change.
-POSES: dict[str, float] = {"Rest": 0.0, "Fist": 1.0}
+POSES: dict[str, list[float]] = {"Rest": [0.0], "Fist": [1.0]}
 # A class with no pose would push all-rest and look like a model that never fires.
 assert set(POSES) == set(CLASSES), f"POSES and CLASSES disagree: {set(POSES) ^ set(CLASSES)}"
 
@@ -131,8 +130,8 @@ link = ControlLink(
 operator = ControlLink(
     OPERATOR_MAP,
     [RemoteTarget(client=vhi_control, interface=vhi)],
-    ctx=None,
-    on_warn=app.ctx.log,
+    ctx=app.ctx,
+    record_as="controls.operator",
 )
 # A dict, so the UI callback writes it without `global`. Read only by `train`.
 training_mode = {"index": 0}
@@ -217,7 +216,7 @@ def train(data: TrainingData) -> tuple[str, Any]:
         est = catboost_regressor(iterations=200)
         # The target is the pose table read as numbers: what `fist` would be commanded
         # for that class. One definition of what a class means, not two.
-        closed = np.array([POSES[CLASSES[i]] for i in y], dtype=np.float32)
+        closed = np.array([POSES[CLASSES[i]][0] for i in y], dtype=np.float32)
         est.fit(x, closed)
     print(f"[train] {mode.lower()} on {len(all_x)} windows from {len(data.paths)} sessions")
     training_inputs["fitted"] = fingerprint
@@ -240,7 +239,7 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
         class_idx = int(np.argmax(proba))
         # The class names a posture; the posture is what gets sent. Same wire, same
         # aliases, same units as the regressor below — a constant instead of a curve.
-        value = POSES[CLASSES[class_idx]]
+        value = POSES[CLASSES[class_idx]][0]
         out: dict[str, Any] = {"class": class_idx, "proba": proba}
     else:
         # Clamped because the alias is signed [-1, 1]: an extrapolated -0.35 would
@@ -252,14 +251,6 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
     if bus is not None:
         out["controls"] = bus.push({"prediction": value})
     return out
-
-
-def _drive_follow(index: int, level: float) -> None:
-    """Push the operator hand from FollowRun's clock, independently of prediction."""
-    bus = operator.bus
-    if bus is not None:
-        value = float(blend_pose([POSES["Rest"]], [POSES[FOLLOW_GESTURES[index]]], level)[0])
-        bus.push({"control": value})
 
 
 layout = Layout(
@@ -404,8 +395,7 @@ hand_processes = vhi.launchable()
 processes = ProcessLauncher(hand_processes)
 # VHI takes seconds to boot and `ensure()` blocks, so this retries in the background —
 # rate-limited and single-flight, safe to poll every frame.
-binder = ControlLinkConnector(link)
-operator_binder = ControlLinkConnector(operator)
+binder = ControlLinkConnector(link, operator)
 hand_attempt = {"phase": "idle"}
 sessions = SessionManager("sessions", class_names=CLASSES)
 prediction = PredictionLabel(pipeline, CLASSES, show_probability=True)
@@ -578,6 +568,8 @@ UNDRIVEN = "declared but never sent — wrong map?"
 
 def _announce_binding(bus: ControlBus | None) -> None:
     """Announce each new connection once, including a background bind."""
+    if not binder.connected:
+        return
     if bus is not None:
         hand_connection["feedback_pending"] = "vhi_control" not in app.ctx.streams
         _ensure_hand_feedback()
@@ -663,35 +655,24 @@ def _start_follow_recording() -> None:
         pipeline.stop_predicting()
 
 
-def _stop_follow_recording() -> None:
-    """Save before stopping prediction and restore the relaxed manual target."""
-    _on_control(CLASSES.index("Rest"))
-    _stop_drive()
-
-
 follow_run = FollowRun(
     FOLLOW_GESTURES,
-    drive=_drive_follow,
+    operator=operator,
+    aliases=("control",),
+    poses=POSES,
+    rest=POSES["Rest"],
     on_record=_start_follow_recording,
-    on_stop=_stop_follow_recording,
+    on_stop=_stop_drive,
 )
 app.cleanup_hooks.append(lambda _app: follow_run.stop(app.ctx))
 
 
 def _bind() -> ControlBus | None:
-    """Bind the control map to VHI, saying so when it does not work.
-
-    Both failures are silent by default and they look identical from the outside — a
-    button that does nothing. `ControlLink.ensure` returns ``None`` when VHI is simply
-    unreachable, and raises when it answered but the map does not fit its manifest.
-    """
-    try:
-        bus = link.ensure()
-        operator_bus = operator.ensure()
-    except ValueError as exc:
-        app.ctx.log(f"Control map does not fit this VHI: {exc}")
-        return None
-    if bus is None or operator_bus is None:
+    """Bind both hands through the connector's single-flight attempt."""
+    bus = binder.ensure_now()
+    if binder.last_error is not None:
+        app.ctx.log(f"Control map does not fit this VHI: {binder.last_error}")
+    elif bus is None:
         app.ctx.log("VHI is not answering — launch it in Connect, or press Bind now.")
     _announce_binding(bus)
     return bus
@@ -699,13 +680,7 @@ def _bind() -> ControlBus | None:
 
 def _on_control(index: int) -> None:
     """Push a held pose on change; FollowRun owns the operator bus while running."""
-    if follow_run.running:
-        return
-    # Binding is allowed in a UI handler, never in predict or the follow driver.
-    _bind()
-    bus = operator.bus
-    if bus is not None:
-        bus.push({"control": POSES[CLASSES[index]]})
+    follow_run.hold(POSES[CLASSES[index]])
 
 
 recording = RecordingControls(
@@ -1410,22 +1385,21 @@ def hand_ui() -> None:
     The operator's Connect arms the background binder. Stop cancels the attempt;
     a replacement connector waits for late cleanup before it can bind again.
     """
-    global binder, operator_binder
-    bound = link.bus is not None and operator.bus is not None
+    global binder
+    bound = binder.connected
     running = processes.running(vhi.name)
     phase = hand_attempt["phase"]
-    if phase == "stopping" and binder.finished and operator_binder.finished:
-        binder = ControlLinkConnector(link)
-        operator_binder = ControlLinkConnector(operator)
+    if phase == "stopping" and binder.finished:
+        binder = ControlLinkConnector(link, operator)
         phase = "stopped" if running else "idle"
-        bound = link.bus is not None and operator.bus is not None
+        bound = binder.connected
     if phase == "idle" and running and not bound:
         phase = "launched"
-    if phase == "checking" and binder.finished and operator_binder.finished:
+    if phase == "checking" and binder.finished:
         # The connection may have completed since this frame began.
-        bound = link.bus is not None and operator.bus is not None
+        bound = binder.connected
         if not bound:
-            if binder.last_error is not None or operator_binder.last_error is not None:
+            if binder.last_error is not None:
                 # A responding but incompatible target must not spawn another.
                 phase = "failed"
             elif running:
@@ -1436,11 +1410,8 @@ def hand_ui() -> None:
                 phase = "launched"
             else:
                 phase = "failed"
-    if phase == "launched" and not bound:
-        if not binder.busy:
-            binder.poll()
-        if not operator_binder.busy:
-            operator_binder.poll()
+    if phase == "launched" and not bound and not binder.busy:
+        binder.poll()
     if bound and phase != "stopping":
         phase = "bound"
     hand_attempt["phase"] = phase
@@ -1453,9 +1424,8 @@ def hand_ui() -> None:
         tone, detail = WARNING, binder.status or "Launched · waiting for the hand…"
     elif phase == "failed":
         tone = DANGER
-        failed = binder if binder.last_error is not None else operator_binder
-        detail = failed.status if failed.last_error is not None else "no Virtual Hand answered"
-        if not hand_processes and failed.last_error is None:
+        detail = binder.status if binder.last_error is not None else "no Virtual Hand answered"
+        if not hand_processes and binder.last_error is None:
             detail += " · not installed here"
     else:
         tone, detail = IDLE, "Not running" if hand_processes else "not installed here"
@@ -1496,13 +1466,11 @@ def hand_ui() -> None:
                 if action == "Stop":
                     follow_run.stop(app.ctx)
                     binder.stop(timeout_s=0.0)
-                    operator_binder.stop(timeout_s=0.0)
                     if running:
                         processes.stop(vhi.name)
                     hand_attempt["phase"] = "stopping"
                 else:
                     binder.poll(force=True)
-                    operator_binder.poll(force=True)
                     hand_attempt["phase"] = "checking"
             imgui.end_disabled()
             if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
@@ -1587,7 +1555,6 @@ def main() -> None:
     finally:
         follow_run.stop(app.ctx)
         binder.stop()
-        operator_binder.stop()
         vhi_control.stop()
 
 

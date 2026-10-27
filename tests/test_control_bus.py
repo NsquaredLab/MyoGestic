@@ -748,3 +748,213 @@ def test_control_link_warning_callback_without_recording_context(with_ctx):
     assert len(warnings) == 2
     assert not any("not reachable" in message for message in default_warnings)
     link.stop()
+
+
+def test_different_control_maps_cannot_silently_mix_streams():
+    from myogestic import Context
+
+    ctx = Context()
+    first, second = _LateTarget(), _LateTarget()
+    first.up = second.up = True
+    link = ControlLink(load_control_map({"dofs": {"aim": "cursor.x"}}), [first], ctx=ctx)
+    other = ControlLink(load_control_map({"dofs": {"aim": "cursor.x"}}), [second], ctx=ctx)
+    assert link.ensure() is not None
+    with pytest.raises(ValueError, match="two control links record as 'controls'; pass record_as="):
+        other.ensure()
+    assert second.bound == 0
+    link.stop()
+    assert link.ensure() is not None, "the same map can rebind after a stop"
+    link.stop()
+
+
+def test_named_maps_cannot_mix_and_can_rebind():
+    from myogestic import Context
+
+    ctx, target = Context(), _LateTarget()
+    target.up = True
+    control_map = load_control_map({"dofs": {"aim": "cursor.x"}})
+    link = ControlLink(control_map, [target], ctx=ctx, record_as="controls.operator")
+    assert link.ensure() is not None
+    link.stop()
+    assert link.ensure() is not None
+    other = ControlLink(
+        load_control_map({"dofs": {"aim": "cursor.x"}}),
+        [target],
+        ctx=ctx,
+        record_as="controls.operator",
+    )
+    with pytest.raises(ValueError, match="controls.operator"):
+        other.ensure()
+    assert ctx.control_space is None
+    assert ctx.control_spaces == {"controls.operator": control_map}
+    link.stop()
+
+
+def _save_control_take(tmp_path, monkeypatch, *, operator=False):
+    import time
+    import zipfile
+
+    from myogestic import App
+    from myogestic.widgets.training import _session_state
+
+    monkeypatch.setattr("myogestic._browser.IS_BROWSER", True)
+    monkeypatch.setattr(_session_state, "_states", {})
+    format_time = time.strftime
+    monkeypatch.setattr(
+        "myogestic.session._core.time.strftime",
+        lambda fmt: format_time(fmt, (2026, 10, 27, 12, 0, 0, 1, 300, -1)),
+    )
+    now = [100.0]
+    monkeypatch.setattr("mne_lsl.lsl.local_clock", lambda: now[0])
+    app = App("control recording")
+    app.ctx.class_names = ["Rest", "Fist"]
+    target = _LateTarget()
+    target.up = True
+    control_map = load_control_map({"dofs": {"aim": "cursor.x"}})
+    link = ControlLink(control_map, [target], ctx=app.ctx)
+    bus = link.ensure()
+    if operator:
+        other = ControlLink(
+            load_control_map({"dofs": {"control": "cursor.x"}}),
+            [target],
+            ctx=app.ctx,
+            record_as="controls.operator",
+        )
+        operator_bus = other.ensure()
+    app.start_recording(str(tmp_path))
+    app.ctx.session.add_label(1, timestamp=100.0)
+    bus.push({"aim": 0.25})
+    if operator:
+        operator_bus.push({"control": 0.75})
+    now[0] = 101.0
+    bus.push({"aim": 0.5})
+    if operator:
+        operator_bus.push({"control": 0.9})
+    app.stop_recording(wait=True)
+    with zipfile.ZipFile(app.ctx.session.path) as archive:
+        metadata = archive.read("meta.json")
+    return app, metadata
+
+
+def test_single_link_meta_matches_pre_change_bytes(tmp_path, monkeypatch):
+    import os
+    from pathlib import Path
+
+    _, metadata = _save_control_take(tmp_path, monkeypatch)
+    # Generated with the identical take helper against PR #25's 8afc8a1.
+    expected = Path(__file__).parent / "fixtures" / "control_meta_8afc8a1.json"
+    # save_meta has always used native text-file newlines, including CRLF on Windows.
+    baseline = expected.read_text(encoding="utf-8").replace("\n", os.linesep).encode("utf-8")
+    assert metadata == baseline
+
+
+def test_two_links_record_separate_streams_and_maps(tmp_path, monkeypatch):
+    import json
+
+    from myogestic.controls import read_control_space
+    from myogestic.session import open_session_store
+
+    app, raw = _save_control_take(tmp_path, monkeypatch, operator=True)
+    meta = json.loads(raw)
+    assert meta["schema_version"] == 3
+    assert meta["control_space"] == app.ctx.control_space.as_control_space()
+    assert meta["control_spaces"] == {
+        "controls.operator": app.ctx.control_spaces["controls.operator"].as_control_space()
+    }
+    assert read_control_space(meta["control_spaces"]["controls.operator"]).as_control_space() == (
+        app.ctx.control_spaces["controls.operator"].as_control_space()
+    )
+    with open_session_store(app.ctx.session.path) as saved:
+        predictions, _ = saved.get_continuous("controls")
+        operator, _ = saved.get_continuous("controls.operator")
+        np.testing.assert_allclose(predictions[:, 0], [0.25, 0.5])
+        np.testing.assert_allclose(operator[:, 0], [0.75, 0.9])
+        assert saved.stream_info("controls").channel_names == ["aim"]
+        assert saved.stream_info("controls.operator").channel_names == ["control"]
+
+
+def test_named_recording_failure_names_the_stream(tmp_path):
+    ctx, warnings = _recording_ctx(str(tmp_path)), []
+    bus = ControlBus(MIXED, ctx=ctx, record_as="controls.operator", on_warn=warnings.append)
+    ctx.session.append_event("controls.operator", [0], 0)
+    bus.push({"a": 0.5})
+    assert any("controls.operator not recorded" in warning for warning in warnings)
+
+
+def test_connector_requires_links():
+    with pytest.raises(ValueError, match="at least one"):
+        ControlLinkConnector()
+
+
+@pytest.mark.parametrize("failure", ["unreachable", "exception"])
+def test_connector_retries_only_unbound_links_in_order(failure):
+    targets = [_LateTarget() for _ in range(3)]
+    links = [_link(target) for target in targets]
+    targets[0].up = targets[2].up = True
+    original = targets[1].capabilities
+    if failure == "exception":
+
+        def fail():
+            raise RuntimeError("second link failed")
+
+        targets[1].capabilities = fail
+    connector = ControlLinkConnector(*links, retry_s=0)
+    try:
+        assert connector.ensure_now() is None
+        assert links[0].bus is not None and not connector.connected
+        assert targets[2].asked == 0
+        assert (connector.last_error is not None) == (failure == "exception")
+        targets[1].capabilities = original
+        targets[1].up = True
+        assert connector.poll()
+        assert _wait_until(lambda: connector.finished)
+        assert connector.connected and connector.last_error is None
+        assert [target.bound for target in targets] == [1, 1, 1]
+        assert targets[0].asked == 1
+        assert connector.ensure_now() is links[0].bus
+    finally:
+        connector.stop()
+    assert all(link.bus is None for link in links)
+    assert all(target.stopped == 1 for target in targets)
+
+
+@pytest.mark.parametrize("late_result", ["bound", "unreachable", "exception"])
+@pytest.mark.parametrize("background", [False, True])
+def test_connector_stops_every_link_during_partial_bind(late_result, background):
+    from concurrent.futures import ThreadPoolExecutor
+
+    entered, release = Event(), Event()
+    first, second = _LateTarget(), _LateTarget()
+    first.up = second.up = True
+    original = second.capabilities
+
+    def blocked():
+        entered.set()
+        assert release.wait(3)
+        if late_result == "exception":
+            raise RuntimeError("late failure")
+        return original() if late_result == "bound" else None
+
+    second.capabilities = blocked
+    links = [_link(first), _link(second)]
+    connector = ControlLinkConnector(*links)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = None
+        try:
+            if background:
+                assert connector.poll()
+            else:
+                pending = pool.submit(connector.ensure_now)
+            assert entered.wait(1)
+            assert links[0].bus is not None and not connector.connected
+            assert connector.ensure_now() is None
+            connector.stop(timeout_s=0)
+        finally:
+            release.set()
+        if pending is not None:
+            assert pending.result(timeout=3) is None
+        assert _wait_until(lambda: connector.finished)
+    assert all(link.bus is None for link in links)
+    assert first.stopped == 1
+    assert second.stopped == (1 if late_result == "bound" else 0)
+    assert not connector.poll(force=True)
