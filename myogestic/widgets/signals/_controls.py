@@ -98,7 +98,9 @@ def render_controls(
     scope = list(range(stream.info.n_channels)) if scope is None and connected else (scope or [])
     stream_names = [name for name in ctx.streams if name not in exclude]
     picker = selectable and len(stream_names) > 1
-    retarget = picker and stream is not None and getattr(stream._source, "discover", None) is not None
+    retarget = (
+        picker and stream is not None and getattr(stream._source, "discover", None) is not None
+    )
     pause = f"{fa.ICON_FA_PLAY}  Resume" if v.paused else f"{fa.ICON_FA_PAUSE}  Pause"
     channels = f"{len(enabled)}/{len(scope)} ch {fa.ICON_FA_CHEVRON_DOWN}"
     display = f"{fa.ICON_FA_SLIDERS}  Display"
@@ -112,11 +114,15 @@ def render_controls(
         if retarget:
             widths.append(_button_width(fa.ICON_FA_ARROWS_ROTATE))
         if connected:
-            widths.extend([
-                _button_width(pause), view_width,
-                _button_width("Auto") + _button_width("Manual") + ui_px(2),
-                _button_width(channels), _button_width(display),
-            ])
+            widths.extend(
+                [
+                    _button_width(pause),
+                    view_width,
+                    _button_width("Auto") + _button_width("Manual") + ui_px(2),
+                    _button_width(channels),
+                    _button_width(display),
+                ]
+            )
     if show_title:
         widths.append(_button_width(chrome))
     width = sum(widths) + sp * max(0, len(widths) - 1)
@@ -195,7 +201,9 @@ def render_controls(
             v.show_controls = not v.show_controls
         if selected:
             pop_selected()
-        imgui.set_item_tooltip("Show controls and footer" if selected else "Hide controls and footer")
+        imgui.set_item_tooltip(
+            "Show controls and footer" if selected else "Hide controls and footer"
+        )
 
     if v.show_controls and connected:
         if imgui.begin_popup(f"{stream_name}_channels_popup"):
@@ -237,8 +245,11 @@ def render_display_popup(
     _slider_label("Detail")
     imgui.set_next_item_width(-(_button_width("1:1") + imgui.get_style().item_spacing.x))
     changed, value = imgui.slider_float(
-        f"##{stream_name}_detail", v.detail_factor / _DETAIL_FULL * 100,
-        _DETAIL_MIN / _DETAIL_FULL * 100, 100.0, "%.0f%%"
+        f"##{stream_name}_detail",
+        v.detail_factor / _DETAIL_FULL * 100,
+        _DETAIL_MIN / _DETAIL_FULL * 100,
+        100.0,
+        "%.0f%%",
     )
     if changed:
         v.detail_factor = value / 100 * _DETAIL_FULL
@@ -259,7 +270,9 @@ def render_display_popup(
         v.gain = value
     imgui.end_disabled()
     _slider_label("Artifact")
-    changed, value = imgui.slider_float(f"##{stream_name}_transient", v.transient_ms, 0, 40, "< %.0f ms")
+    changed, value = imgui.slider_float(
+        f"##{stream_name}_transient", v.transient_ms, 0, 40, "< %.0f ms"
+    )
     if changed:
         v.transient_ms = value
     imgui.set_item_tooltip(
@@ -267,10 +280,12 @@ def render_display_popup(
         "0 = plain min/max; keep this below your shortest real contraction."
     )
     _slider_label("Lanes")
-    v.per_channel_scale = bool(segmented(
-        f"{stream_name}_lanes", ["Shared", "Per channel"], int(v.per_channel_scale)
-    ))
-    imgui.set_item_tooltip("Per channel normalizes each lane; trace heights are then not comparable.")
+    v.per_channel_scale = bool(
+        segmented(f"{stream_name}_lanes", ["Shared", "Per channel"], int(v.per_channel_scale))
+    )
+    imgui.set_item_tooltip(
+        "Per channel normalizes each lane; trace heights are then not comparable."
+    )
     imgui.same_line()
     if imgui.button(f"Rescale now##{stream_name}_rescale"):
         v.rescale_pending = "per_channel" if v.per_channel_scale else "shared"
@@ -303,8 +318,15 @@ def render_display_popup(
         font = mono_font()
         if font is not None:
             imgui.push_font(font, imgui.get_style().font_size_base)
-        render_footer(stream_name, stream, v, frame, enabled,
-                      stream.info.channel_names if stream.info else None, show_diagnostics)
+        render_footer(
+            stream_name,
+            stream,
+            v,
+            frame,
+            enabled,
+            stream.info.channel_names if stream.info else None,
+            show_diagnostics,
+        )
         if font is not None:
             imgui.pop_font()
     else:
@@ -341,7 +363,9 @@ def _render_one_to_one(
     showing every sample while quietly not doing so is worse than one that turns itself
     off in front of you.
     """
-    n_channels = len(enabled) if enabled is not None else (stream.info.n_channels if stream.info else 0)
+    n_channels = (
+        len(enabled) if enabled is not None else (stream.info.n_channels if stream.info else 0)
+    )
     points = int(v.window * fs * max(n_channels, 1))
     over = points > _ONE_TO_ONE_MAX_POINTS
     if over:
@@ -621,9 +645,7 @@ def render_grid_window(
         )
     cell = _grid_cell_size()
     n_cols = grid_arrangement(len(layout))
-    imgui.set_next_window_size(
-        _grid_window_size(layout, cell, n_cols), imgui.Cond_.first_use_ever
-    )
+    imgui.set_next_window_size(_grid_window_size(layout, cell, n_cols), imgui.Cond_.first_use_ever)
     visible, still_open = imgui.begin(
         f"Channel selection — {stream_name}##{stream_name}_grid_window", True
     )
@@ -888,7 +910,11 @@ def render_cell(
             # The span is numeric, but the selection must not be: a sparse scope
             # (or a grid with holes) would otherwise pick up channels between the
             # endpoints that this viewer may not show at all.
-            span = range(lo, hi + 1) if allowed is None else [c for c in range(lo, hi + 1) if c in allowed]
+            span = (
+                range(lo, hi + 1)
+                if allowed is None
+                else [c for c in range(lo, hi + 1) if c in allowed]
+            )
             new_enabled = reduce_selection(enabled, "add", span)
             enabled.clear()
             enabled.update(new_enabled)

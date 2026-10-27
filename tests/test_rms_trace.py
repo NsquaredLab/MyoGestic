@@ -120,9 +120,9 @@ def test_nan_only_poisons_its_own_window_then_recovers():
 
     rms_ts, rms_data = compute_rms_trace(ts, data, fs, window_ms, hop_ms)
     spans_bad = (rms_ts >= bad_t) & (rms_ts - window_s < bad_t)
-    assert np.all(np.isnan(rms_data[spans_bad, 0]))          # windows over the dropout
-    assert np.all(np.isfinite(rms_data[~spans_bad, 0]))      # everything else recovers
-    assert np.all(np.isfinite(rms_data[:, 1]))               # clean channel untouched
+    assert np.all(np.isnan(rms_data[spans_bad, 0]))  # windows over the dropout
+    assert np.all(np.isfinite(rms_data[~spans_bad, 0]))  # everything else recovers
+    assert np.all(np.isfinite(rms_data[:, 1]))  # clean channel untouched
 
 
 def test_float64_accumulation_is_accurate_on_a_dc_offset_signal():

@@ -377,6 +377,8 @@ def test_remove_stream_is_refused_while_a_take_is_open_under_predicting(
     assert "emg" in app.ctx.streams
     app.stop_recording(wait=True)
     assert app.remove_stream("emg") is True
+
+
 # --- Starting with a locked or sleeping display ---
 
 
@@ -421,10 +423,16 @@ def test_waits_for_display_before_starting_streams_or_hooks(
     app.run(window_size=(960, 640), fullscreen=fullscreen)
 
     assert events == [
-        "query", ("sleep", 1.0), "query", ("sleep", 1.0), "query",
-        "stream start", "before run",
+        "query",
+        ("sleep", 1.0),
+        "query",
+        ("sleep", 1.0),
+        "query",
+        "stream start",
+        "before run",
         ("gui", {"window_size": (960, 640), "fullscreen": fullscreen}),
-        "cleanup", "stream stop",
+        "cleanup",
+        "stream stop",
     ]
     assert not app._running
     lines = capsys.readouterr().out.splitlines()
@@ -480,7 +488,9 @@ def test_other_platforms_browser_and_headless_do_not_query_displays(
     monkeypatch.setattr(core.sys, "platform", platform)
     monkeypatch.setattr(_browser, "IS_BROWSER", browser)
     monkeypatch.setattr(
-        core, "_active_display_count", lambda: pytest.fail("unexpected display query"),
+        core,
+        "_active_display_count",
+        lambda: pytest.fail("unexpected display query"),
         raising=False,
     )
     app.run(mode=mode)

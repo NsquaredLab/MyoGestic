@@ -18,7 +18,9 @@ def install_roots(tmp_path, monkeypatch):
     # A worktree has a .git file rather than a directory.
     (repo / ".git").write_text("gitdir: /unused/worktree")
     user_data = tmp_path / "user_data"
-    monkeypatch.setattr(vhi_interfaces, "__file__", str(repo / "myogestic" / "vhi" / "interfaces.py"))
+    monkeypatch.setattr(
+        vhi_interfaces, "__file__", str(repo / "myogestic" / "vhi" / "interfaces.py")
+    )
     monkeypatch.setattr(vhi_interfaces, "_user_data_root", lambda: user_data)
     monkeypatch.setattr(vhi_interfaces.platform, "system", lambda: "Darwin")
     monkeypatch.delenv("GODOT_BIN", raising=False)
@@ -28,7 +30,9 @@ def install_roots(tmp_path, monkeypatch):
 
 
 def _install_at(root, kind):
-    marker = root / ("project.godot" if kind == "godot" else "VHI.app/Contents/MacOS/Virtual Hand Interface")
+    marker = root / (
+        "project.godot" if kind == "godot" else "VHI.app/Contents/MacOS/Virtual Hand Interface"
+    )
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text("")
     return marker
@@ -65,7 +69,9 @@ def test_virtual_hand_finds_existing_install(install_roots, git_kind, kind, loca
 
 
 @pytest.mark.parametrize("outside_checkout", ["no_git", "read_only"])
-def test_virtual_hand_outside_writable_checkout_uses_user_data(install_roots, monkeypatch, outside_checkout):
+def test_virtual_hand_outside_writable_checkout_uses_user_data(
+    install_roots, monkeypatch, outside_checkout
+):
     checkout, user = install_roots
     _install_at(checkout, "binary")
     if outside_checkout == "no_git":
@@ -76,7 +82,9 @@ def test_virtual_hand_outside_writable_checkout_uses_user_data(install_roots, mo
 
 
 @pytest.mark.parametrize("override", ["environment", "argument"])
-def test_virtual_hand_path_override_wins_even_when_missing(install_roots, tmp_path, monkeypatch, override):
+def test_virtual_hand_path_override_wins_even_when_missing(
+    install_roots, tmp_path, monkeypatch, override
+):
     checkout, user = install_roots
     _install_at(checkout, "binary")
     _install_at(user, "binary")

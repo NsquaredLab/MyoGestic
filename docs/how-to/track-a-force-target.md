@@ -31,7 +31,7 @@ target_stream.reconnect()
 device = DevicePicker("emg")
 task = TrackingTask(
     "emg",
-    channel=64,                       # the AUX channel the transducer is on
+    channel=64,  # the AUX channel the transducer is on
     trapezoid=Trapezoid(ramp_up_s=5.0, hold_s=15.0, level_pct=20.0),
     target=target_source,
 )
@@ -164,8 +164,8 @@ on a real load cell watches the plot and pushes.
 from myogestic import Stream
 from myogestic.sources import SyntheticForceSource, TargetSource
 
-target = TargetSource()                       # bare: `TrackingTask` owns the shape
-force = SyntheticForceSource()                # 0.30 V at rest, 2.30 V at full effort
+target = TargetSource()  # bare: `TrackingTask` owns the shape
+force = SyntheticForceSource()  # 0.30 V at rest, 2.30 V at full effort
 app.streams(Stream("force", source=force), Stream("target", source=target))
 ```
 
@@ -306,11 +306,11 @@ from myogestic.session import open_session_store
 
 sess = open_session_store("sessions/2026-05-17_14-23-05.session.zip")
 
-emg, emg_ts = sess.get_continuous("emg")        # (N, n_ch) sample-major
+emg, emg_ts = sess.get_continuous("emg")  # (N, n_ch) sample-major
 target, target_ts = sess.get_continuous("target")  # (M, 2)
 
-level = target[:, 0]        # percent of MVC
-phase = target[:, 1]        # PHASE_CODES
+level = target[:, 0]  # percent of MVC
+phase = target[:, 1]  # PHASE_CODES
 ```
 
 Because the gaps carry their own code, the blocks cut out of a session without
@@ -349,7 +349,7 @@ for window, targets, ts in iter_aligned_windows(
     hop_ms=50,
 ):
     level, phase = targets["target"]
-    if phase != 2.0:        # plateau only — the ramps are a different problem
+    if phase != 2.0:  # plateau only — the ramps are a different problem
         continue
     X.append(rms(window))
     Y.append(level)

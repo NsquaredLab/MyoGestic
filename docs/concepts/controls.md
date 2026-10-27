@@ -274,6 +274,7 @@ from myogestic.controls import ControlLinkConnector
 
 connector = ControlLinkConnector(link, retry_s=2.0)
 
+
 def update_ui():
     connector.poll()
     status_label.set_text(connector.status)

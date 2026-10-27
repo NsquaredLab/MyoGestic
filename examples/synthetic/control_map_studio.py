@@ -94,6 +94,7 @@ failure = ""
 #: alias -> why it is not being driven. These get a line of text, never a slider.
 waiting: dict[str, str] = {}
 
+
 # The picker offers every address both targets export — model hand, operator hand, keyboard —
 # because which of them this app drives is the map's answer, not this file's.
 def _new_document(path=None) -> ControlMapEditor:
@@ -120,6 +121,8 @@ caps_seen: dict[int, int] = {}
 def editor() -> ControlMapEditor:
     """The document in front of the user, and therefore the one being driven."""
     return documents[active]
+
+
 # `launchable` not `launcher`: an unlaunchable target must not stop this app from opening.
 processes = ProcessLauncher(vhi.launchable())
 header = AppHeader("Control map studio", show_state=False)
@@ -301,13 +304,9 @@ def _connect(known: tuple[list, list[str]] | None = None) -> None:
             keys.arm()
         except RuntimeError as exc:
             keyboard_error = str(exc)
-    levels = {
-        alias: 0.0 for alias, dof in controls.dofs.items() if not hasattr(dof, "states")
-    }
+    levels = {alias: 0.0 for alias, dof in controls.dofs.items() if not hasattr(dof, "states")}
     states = {
-        alias: tuple(dof.states)
-        for alias, dof in controls.dofs.items()
-        if hasattr(dof, "states")
+        alias: tuple(dof.states) for alias, dof in controls.dofs.items() if hasattr(dof, "states")
     }
     app.ctx.control_space = control_map
     held = f" and {len(states)} held state(s)" if states else ""
@@ -358,7 +357,9 @@ def _drive_ui() -> None:
     panel_header("DRIVE THE MAP", status=tone)
     with tinted_row(tone):
         imgui.align_text_to_frame_padding()
-        imgui.text_unformatted("Connection failed" if failure else "Driving" if bus else "Not connected")
+        imgui.text_unformatted(
+            "Connection failed" if failure else "Driving" if bus else "Not connected"
+        )
     _caption(editor().label)
     imgui.push_style_color(imgui.Col_.text, muted())
     imgui.text_wrapped(failure or status)
@@ -727,8 +728,7 @@ def _confirm_close_ui() -> None:
         return
     document = documents[index] if index < len(documents) else None
     imgui.text_wrapped(
-        f"{_tab_label(index) if document else 'That map'} has unsaved edits. "
-        f"Closing it loses them."
+        f"{_tab_label(index) if document else 'That map'} has unsaved edits. Closing it loses them."
     )
     imgui.spacing()
     if imgui.button("Discard and close"):
@@ -792,8 +792,8 @@ def main() -> None:
     finally:
         # Rest the hand and let that frame land before the outlet's thread dies.
         if bus is not None:
-            bus.stop()          # reaches both targets: rests the hand, lifts every key
-        keys.stop()             # and again, in case the bus was never built
+            bus.stop()  # reaches both targets: rests the hand, lifts every key
+        keys.stop()  # and again, in case the bus was never built
         vhi_control.stop()
 
 

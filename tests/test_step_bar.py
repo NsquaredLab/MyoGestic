@@ -94,7 +94,9 @@ def test_compact_active_label_fits_its_budget(imgui_frame, monkeypatch, scale, d
     config = imgui.ImFontConfig()
     config.merge_mode = True
     imgui.get_io().fonts.add_font_from_file_ttf(
-        hello_imgui.asset_file_full_path("fonts/Font_Awesome_6_Free-Solid-900.otf"), 13, config,
+        hello_imgui.asset_file_full_path("fonts/Font_Awesome_6_Free-Solid-900.otf"),
+        13,
+        config,
     )
     monkeypatch.setattr(_scale, "_current", scale)
     _theme.apply_theme()
@@ -120,9 +122,11 @@ def test_compact_active_label_fits_its_budget(imgui_frame, monkeypatch, scale, d
 
     def draw():
         marks = [fa.ICON_FA_CHECK if complete else str(i + 1) for i, complete in enumerate(done)]
-        width = (sum(imgui.calc_text_size(mark).x for mark in marks)
-                 + 8 * imgui.get_style().frame_padding.x
-                 + imgui.calc_text_size("  Co…").x)
+        width = (
+            sum(imgui.calc_text_size(mark).x for mark in marks)
+            + 8 * imgui.get_style().frame_padding.x
+            + imgui.calc_text_size("  Co…").x
+        )
         imgui.begin_group()
         assert steps.ui(done, compact=True, max_width=width) == active
         imgui.end_group()

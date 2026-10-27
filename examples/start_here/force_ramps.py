@@ -130,7 +130,8 @@ def _step_done(ctx: Context) -> list[bool]:
     return [
         all(
             (stream := ctx.streams.get(name)) is not None
-            and stream.status == "connected" and stream.info is not None
+            and stream.status == "connected"
+            and stream.info is not None
             for name in ("emg", "force")
         ),
         bool(ctx.participant)
@@ -165,7 +166,9 @@ def force_ramps_ui(ctx: Context) -> None:
     with layout["sessions"]:
         sessions.ui(participant=ctx.participant)
     with layout["step"]:
-        failed = any(ctx.streams[name].last_error for name in ("emg", "force") if name in ctx.streams)
+        failed = any(
+            ctx.streams[name].last_error for name in ("emg", "force") if name in ctx.streams
+        )
         tone = SUCCESS if done[0] else DANGER if failed else IDLE
         panel_header(steps.steps[active], status=tone if active == 0 else None)
         if active == 0:

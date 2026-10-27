@@ -52,8 +52,9 @@ def _record(tmp_path, *, names, control_space=None, n=40):
 
 def test_control_space_round_trips(tmp_path):
     """What was recorded must rebuild the exact mapping it was recorded under."""
-    path = _record(tmp_path, names=["my_index", "fist"],
-                   control_space=CONTROL_MAP.as_control_space())
+    path = _record(
+        tmp_path, names=["my_index", "fist"], control_space=CONTROL_MAP.as_control_space()
+    )
     meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
     assert meta["schema_version"] == 3
     rebuilt = read_control_space(meta["control_space"])
@@ -66,9 +67,12 @@ def test_control_space_preserves_the_routing_and_its_weights(tmp_path):
     An archived number is meaningless without this. `fist` at 1.0 meant full flexion on
     middle *and* 0.6 on the thumb — recoverable only because the mapping was persisted.
     """
-    path = _record(tmp_path, names=["my_index", "fist"],
-                   control_space=CONTROL_MAP.as_control_space())
-    rebuilt = read_control_space(json.loads((path / "meta.json").read_text(encoding="utf-8"))["control_space"])
+    path = _record(
+        tmp_path, names=["my_index", "fist"], control_space=CONTROL_MAP.as_control_space()
+    )
+    rebuilt = read_control_space(
+        json.loads((path / "meta.json").read_text(encoding="utf-8"))["control_space"]
+    )
     refs = {r.address: r.weight for r in rebuilt.bindings["fist"].targets}
     assert refs == {"vhi.prediction.thumb": 0.6, "vhi.prediction.middle": 1.0}
     assert rebuilt.bindings["my_index"].targets[0].address == "vhi.prediction.index"
@@ -78,8 +82,9 @@ def test_a_recording_says_which_control_space_format_it_used(tmp_path):
     """Legible rather than inferred — the reason the format is tagged."""
     from myogestic.controls import CONTROL_SPACE_FORMAT
 
-    path = _record(tmp_path, names=["my_index", "fist"],
-                   control_space=CONTROL_MAP.as_control_space())
+    path = _record(
+        tmp_path, names=["my_index", "fist"], control_space=CONTROL_MAP.as_control_space()
+    )
     meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
     assert meta["control_space"]["format"] == CONTROL_SPACE_FORMAT
 
@@ -109,9 +114,7 @@ def test_older_archives_without_a_schema_version_still_load():
 def test_aligned_windows_can_be_keyed_by_channel_name(tmp_path):
     """The index-free training path: select a target by name, not by position."""
     path = _record(tmp_path, names=["my_index", "fist"])
-    windows = list(
-        iter_aligned_windows([path], "emg", ["control"], 100, 100, with_names=True)
-    )
+    windows = list(iter_aligned_windows([path], "emg", ["control"], 100, 100, with_names=True))
     assert windows, "expected at least one window"
     _primary, aligned, _ts = windows[0]
     assert set(aligned["control"]) == {"my_index", "fist"}

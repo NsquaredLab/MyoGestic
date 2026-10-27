@@ -62,7 +62,9 @@ def test_autoscan_follows_participant(tmp_path, imgui_frame, monkeypatch):
     assert [s["path"] for s in state.sessions] == [second]
 
 
-def test_select_all_scopes_and_ticks_saved_takes_without_a_frame(tmp_path, imgui_frame, monkeypatch):
+def test_select_all_scopes_and_ticks_saved_takes_without_a_frame(
+    tmp_path, imgui_frame, monkeypatch
+):
     first = {_take(tmp_path, "P-014", "one"), _take(tmp_path, "P-014", "two")}
     second = _take(tmp_path, "P-015", "three")
     manager = SessionManager(str(tmp_path))
@@ -82,7 +84,9 @@ def test_select_all_scopes_and_ticks_saved_takes_without_a_frame(tmp_path, imgui
     assert data.paths == [second] and data.classes == {0}
 
 
-def test_select_all_scans_once_and_leaves_pending_takes_unselected(tmp_path, imgui_frame, monkeypatch):
+def test_select_all_scans_once_and_leaves_pending_takes_unselected(
+    tmp_path, imgui_frame, monkeypatch
+):
     from myogestic.widgets.training import session_manager as module
     from myogestic.widgets.training._session_state import set_session_saving
 
@@ -130,7 +134,9 @@ def test_no_participant_stays_empty_until_scan(tmp_path, imgui_frame, monkeypatc
 
 
 def test_recording_refreshes_participant_without_selecting_other_takes(
-    tmp_path, imgui_frame, monkeypatch,
+    tmp_path,
+    imgui_frame,
+    monkeypatch,
 ):
     previous = _take(tmp_path, "P-014", "previous")
     manager = SessionManager(str(tmp_path))
@@ -270,7 +276,11 @@ def test_empty_participant_offers_file_picker(tmp_path, imgui_frame, monkeypatch
 @pytest.mark.parametrize("participant", ["P-014", None, ""])
 @pytest.mark.parametrize("has_takes", [False, True])
 def test_participant_header_and_summary_stay_visible(
-    tmp_path, imgui_frame, monkeypatch, participant, has_takes,
+    tmp_path,
+    imgui_frame,
+    monkeypatch,
+    participant,
+    has_takes,
 ):
     manager = SessionManager(str(tmp_path))
     if has_takes:
@@ -305,10 +315,14 @@ def test_participant_header_and_summary_stay_visible(
     assert ("Load files from elsewhere…" in labels) == (bool(participant) and not has_takes)
 
 
-@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
 @pytest.mark.parametrize("width", [320, 400])
 def test_empty_participant_guidance_wraps_inside_its_card(
-    tmp_path, imgui_frame, monkeypatch, scale, width,
+    tmp_path,
+    imgui_frame,
+    monkeypatch,
+    scale,
+    width,
 ):
     """Guidance fits the session column even with a wider platform font."""
     from myogestic import _scale, _theme
@@ -325,8 +339,14 @@ def test_empty_participant_guidance_wraps_inside_its_card(
     def draw():
         imgui.begin_child("empty-takes", imgui.ImVec2(width * scale, 260 * scale))
         manager.ui(participant="P-014")
-        bounds.append((imgui.get_scroll_max_x(), imgui.get_scroll_max_y(),
-                       imgui.get_item_rect_max().y, imgui.get_window_draw_list().get_clip_rect_max().y))
+        bounds.append(
+            (
+                imgui.get_scroll_max_x(),
+                imgui.get_scroll_max_y(),
+                imgui.get_item_rect_max().y,
+                imgui.get_window_draw_list().get_clip_rect_max().y,
+            )
+        )
         imgui.end_child()
 
     for _ in range(4):
@@ -341,11 +361,18 @@ def test_session_row_shows_recorded_seconds(tmp_path, imgui_frame, monkeypatch):
 
     path = tmp_path / "P-014" / "take"
     path.mkdir(parents=True)
-    (path / "meta.json").write_text(json.dumps({
-        "participant": "P-014", "name": "Practice", "duration_s": 74.0,
-        "created": "2026-10-25T14:15:00",
-        "class_names": ["Rest", "Fist"], "class_seconds": {"Rest": 14.0, "Fist": 60.0},
-    }))
+    (path / "meta.json").write_text(
+        json.dumps(
+            {
+                "participant": "P-014",
+                "name": "Practice",
+                "duration_s": 74.0,
+                "created": "2026-10-25T14:15:00",
+                "class_names": ["Rest", "Fist"],
+                "class_seconds": {"Rest": 14.0, "Fist": 60.0},
+            }
+        )
+    )
     labels, tooltips = [], []
     monkeypatch.setattr(imgui, "set_item_tooltip", tooltips.append)
     real_mono = module.__dict__.get("mono_text")
@@ -366,10 +393,17 @@ def test_session_row_shows_recorded_seconds(tmp_path, imgui_frame, monkeypatch):
 def _dated_take(base, participant, name, created, *, seconds=None, labels=(0, 1)):
     path = base / participant / name
     path.mkdir(parents=True)
-    (path / "meta.json").write_text(json.dumps({
-        "participant": participant, "created": created, "class_names": ["Rest", "Fist"],
-        "duration_s": 30.0, "class_seconds": seconds if seconds is not None else {"Rest": 10., "Fist": 20.},
-    }))
+    (path / "meta.json").write_text(
+        json.dumps(
+            {
+                "participant": participant,
+                "created": created,
+                "class_names": ["Rest", "Fist"],
+                "duration_s": 30.0,
+                "class_seconds": seconds if seconds is not None else {"Rest": 10.0, "Fist": 20.0},
+            }
+        )
+    )
     (path / "labels.json").write_text(json.dumps([{"class_index": ci} for ci in labels]))
     return str(path.resolve())
 
@@ -393,7 +427,12 @@ def test_takes_group_by_created_newest_first_with_external_files_separate(tmp_pa
     load_session_files(state, [external])
     groups = group_sessions(state.sessions, str(base / "P-014"), today=date(2026, 10, 25))
     assert [g.label for g in groups] == ["Today", "Yesterday", "Oct 23", "Loaded"]
-    assert [[r["path"] for r in g.rows] for g in groups] == [[latest, morning], [yesterday], [old], [external]]
+    assert [[r["path"] for r in g.rows] for g in groups] == [
+        [latest, morning],
+        [yesterday],
+        [old],
+        [external],
+    ]
     assert [g.default_open for g in groups] == [True, False, False, False]
 
 
@@ -401,24 +440,26 @@ def test_selection_summary_tracks_takes_and_excluded_gestures(tmp_path):
     from myogestic.widgets.training._session_state import scan_sessions
 
     _dated_take(tmp_path, "", "one", "2026-10-25T08:00:00")
-    _dated_take(tmp_path, "", "two", "2026-10-25T09:00:00", seconds={"Rest": 7., "Fist": 23.})
+    _dated_take(tmp_path, "", "two", "2026-10-25T09:00:00", seconds={"Rest": 7.0, "Fist": 23.0})
     manager = SessionManager(str(tmp_path), class_names=["Rest", "Fist"])
     state = get_state(manager._widget_id)
     state.sessions = scan_sessions(str(tmp_path))
     state.sessions[0]["selected"] = True
     summary = manager.selection()
     assert (summary.n_selected, summary.n_total) == (1, 2)
-    assert summary.class_seconds == {"Rest": 7., "Fist": 23.}
+    assert summary.class_seconds == {"Rest": 7.0, "Fist": 23.0}
     state.deactivated_classes.add(1)
-    assert manager.selection().class_seconds == {"Rest": 7.}
+    assert manager.selection().class_seconds == {"Rest": 7.0}
     state.sessions[1]["selected"] = True
-    assert manager.selection().class_seconds == {"Rest": 17.}
+    assert manager.selection().class_seconds == {"Rest": 17.0}
     # A public read is a snapshot, not a mutable handle into widget state.
     summary.class_seconds["Rest"] = 999
-    assert manager.selection().class_seconds["Rest"] == 17.
+    assert manager.selection().class_seconds["Rest"] == 17.0
 
 
-def test_all_none_and_gesture_click_update_returned_data_in_same_frame(tmp_path, imgui_frame, monkeypatch):
+def test_all_none_and_gesture_click_update_returned_data_in_same_frame(
+    tmp_path, imgui_frame, monkeypatch
+):
     from myogestic.widgets.training._session_state import scan_sessions
 
     paths = {_dated_take(tmp_path, "", str(i), "2026-10-25T08:00:00") for i in range(3)}
@@ -444,7 +485,7 @@ def test_all_none_and_gesture_click_update_returned_data_in_same_frame(tmp_path,
     click["label"] = "_gesture1"
     imgui_frame(lambda: results.append(manager.ui()))
     assert results[-1].classes == {0}
-    assert manager.selection().class_seconds == {"Rest": 30.}
+    assert manager.selection().class_seconds == {"Rest": 30.0}
     click["label"] = "None"
     imgui_frame(lambda: results.append(manager.ui()))
     assert results[-1].paths == [] and manager.selection().n_selected == 0
@@ -453,15 +494,17 @@ def test_all_none_and_gesture_click_update_returned_data_in_same_frame(tmp_path,
     assert set(results[-1].paths) == paths and results[-1].classes == {0}
 
 
-@pytest.mark.parametrize("scale", [1., 2.])
-def test_many_takes_scroll_only_the_list_and_keep_rows_one_line(tmp_path, imgui_frame, monkeypatch, scale):
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+def test_many_takes_scroll_only_the_list_and_keep_rows_one_line(
+    tmp_path, imgui_frame, monkeypatch, scale
+):
     from myogestic import _scale, _theme
     from myogestic.widgets.training._session_state import scan_sessions
 
     for i in range(36):
         _dated_take(tmp_path, "", f"take-{i}", f"2026-10-{25 - i // 12:02d}T08:{i:02d}:00")
     _dated_take(tmp_path, "", "unlabelled", "2026-10-25T09:00:00", seconds={}, labels=())
-    _dated_take(tmp_path, "", "unknown", "2026-10-25T10:00:00", seconds={"Unfamiliar": 30.})
+    _dated_take(tmp_path, "", "unknown", "2026-10-25T10:00:00", seconds={"Unfamiliar": 30.0})
     manager = SessionManager(str(tmp_path), class_names=["Rest", "Fist"])
     get_state(manager._widget_id).sessions = scan_sessions(str(tmp_path))
     monkeypatch.setattr(_scale, "_current", scale)
@@ -483,6 +526,7 @@ def test_many_takes_scroll_only_the_list_and_keep_rows_one_line(tmp_path, imgui_
 
     monkeypatch.setattr(imgui, "end_child", end)
     monkeypatch.setattr(imgui, "checkbox", check)
+
     def draw():
         imgui.begin_child("takes-cell", imgui.ImVec2(400 * scale, 260 * scale))
         manager.ui()
@@ -530,7 +574,13 @@ def test_row_chips_keep_raw_names_and_mute_excluded_gestures(tmp_path, imgui_fra
     from myogestic.widgets.common import muted
     from myogestic.widgets.training._session_state import scan_sessions
 
-    _dated_take(tmp_path, "", "one", "2026-10-25T08:00:00", seconds={"Rest": 10., "Fist": 20., "Unknown gesture": 3.})
+    _dated_take(
+        tmp_path,
+        "",
+        "one",
+        "2026-10-25T08:00:00",
+        seconds={"Rest": 10.0, "Fist": 20.0, "Unknown gesture": 3.0},
+    )
     manager = SessionManager(str(tmp_path), class_names=["Rest", "Fist"])
     state = get_state(manager._widget_id)
     state.sessions = scan_sessions(str(tmp_path))
@@ -557,7 +607,7 @@ def test_row_chips_keep_raw_names_and_mute_excluded_gestures(tmp_path, imgui_fra
     assert any(name == "Rest" and color != muted_color for name, color, muted_color in labels)
 
 
-@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
 @pytest.mark.parametrize("labelled", [False, True])
 def test_compact_take_row_alignment_and_clicks(tmp_path, imgui_frame, monkeypatch, scale, labelled):
     from myogestic import _scale, _theme
@@ -565,8 +615,14 @@ def test_compact_take_row_alignment_and_clicks(tmp_path, imgui_frame, monkeypatc
     from myogestic.widgets.training import session_manager as module
     from myogestic.widgets.training._session_state import scan_sessions
 
-    _dated_take(tmp_path, "", "one", "2026-10-25T08:00:00",
-                seconds={"Rest": 30.} if labelled else {}, labels=(0,) if labelled else ())
+    _dated_take(
+        tmp_path,
+        "",
+        "one",
+        "2026-10-25T08:00:00",
+        seconds={"Rest": 30.0} if labelled else {},
+        labels=(0,) if labelled else (),
+    )
     row = scan_sessions(str(tmp_path))[0]
     monkeypatch.setattr(_scale, "_current", scale)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
@@ -610,7 +666,9 @@ def test_compact_take_row_alignment_and_clicks(tmp_path, imgui_frame, monkeypatc
         imgui_frame(draw)
     assert max(heights) <= ui_px(28)
     assert heights[-1] == pytest.approx(ui_px(26), abs=scale)
-    assert all(pos[1] == pytest.approx(positions["checkbox"][1], abs=1) for pos in positions.values())
+    assert all(
+        pos[1] == pytest.approx(positions["checkbox"][1], abs=1) for pos in positions.values()
+    )
 
     def click(position):
         io = imgui.get_io()

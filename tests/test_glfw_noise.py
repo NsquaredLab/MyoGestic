@@ -51,7 +51,7 @@ def test_the_warning_is_shown_once_and_the_rest_counted():
     out = _run_with_stderr_captured(body)
     assert out.count("Cannot query workarea") == 1, "shown exactly once"
     assert "199 more identical GLFW monitor warnings suppressed" in out
-        # And it says how to stop it at the source, not just that it happened.
+    # And it says how to stop it at the source, not just that it happened.
     assert "Extended" in out
 
 

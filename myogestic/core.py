@@ -39,9 +39,7 @@ def _active_display_count() -> int:
     """Query drawable macOS displays without requiring PyObjC or initializing GLFW."""
     import ctypes
 
-    core_graphics = ctypes.CDLL(
-        "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
-    )
+    core_graphics = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
     get_displays = core_graphics.CGGetActiveDisplayList
     get_displays.argtypes = [
         ctypes.c_uint32,

@@ -108,15 +108,20 @@ class PredictionLabel:
         imgui.push_id(self._widget_id or self._title)
         style = imgui.get_style()
         imgui.push_style_color(imgui.Col_.child_bg, style.color_(imgui.Col_.frame_bg))
-        imgui.begin_child("card", imgui.ImVec2(0, 0),
-                          imgui.ChildFlags_.auto_resize_y | imgui.ChildFlags_.always_use_window_padding)
+        imgui.begin_child(
+            "card",
+            imgui.ImVec2(0, 0),
+            imgui.ChildFlags_.auto_resize_y | imgui.ChildFlags_.always_use_window_padding,
+        )
         try:
             predictions = self._pipeline.predictions
             idx = predictions.get(self._class_key)
             # Static previews can still supply only the predictions mapping.
             app = getattr(self._pipeline, "app", None)
             state = app.ctx.state if app is not None else "predicting" if predictions else "idle"
-            live = state == "predicting" and isinstance(idx, int) and 0 <= idx < len(self._class_names)
+            live = (
+                state == "predicting" and isinstance(idx, int) and 0 <= idx < len(self._class_names)
+            )
             if live:
                 hz = getattr(self._pipeline, "predict_hz", 0.0)
                 detail = f"every {1000 / hz:.0f} ms" if hz > 0 else "predicting"
@@ -143,10 +148,12 @@ class PredictionLabel:
             detail_w = imgui.calc_text_size(detail).x
             if hi.x + style.item_spacing.x + detail_w <= right:
                 imgui.same_line()
-                imgui.set_cursor_screen_pos(imgui.ImVec2(
-                    right - detail_w,
-                    lo.y + (hi.y - lo.y - imgui.get_text_line_height()) / 2,
-                ))
+                imgui.set_cursor_screen_pos(
+                    imgui.ImVec2(
+                        right - detail_w,
+                        lo.y + (hi.y - lo.y - imgui.get_text_line_height()) / 2,
+                    )
+                )
             imgui.text_colored(muted(), detail)
             imgui.pop_font()
             if live and self._show_probability:
@@ -175,11 +182,15 @@ class PredictionLabel:
             width = max(ui_px(1), imgui.get_content_region_avail().x - value_w - gap)
             height = ui_px(4)
             imgui.set_cursor_pos_y(top + (imgui.get_text_line_height() - height) / 2)
-            imgui.push_style_color(imgui.Col_.plot_histogram, imgui.ImVec4(*PALETTE[index % len(PALETTE)], 1.0))
+            imgui.push_style_color(
+                imgui.Col_.plot_histogram, imgui.ImVec4(*PALETTE[index % len(PALETTE)], 1.0)
+            )
             imgui.push_style_color(imgui.Col_.frame_bg, style.color_(imgui.Col_.popup_bg))
             # A thin bar has no frame padding; charging it to the line would
             # lower the following percentage below its class label.
-            imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(style.frame_padding.x, 0))
+            imgui.push_style_var(
+                imgui.StyleVar_.frame_padding, imgui.ImVec2(style.frame_padding.x, 0)
+            )
             imgui.progress_bar(value if value is not None else 0.0, imgui.ImVec2(width, height), "")
             imgui.pop_style_var()
             imgui.pop_style_color(2)

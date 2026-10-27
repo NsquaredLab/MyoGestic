@@ -130,13 +130,11 @@ class TestHoldAndTap:
         target, rec = _target({"go": "keyboard.hold.letter.w"})
         target.send({}, {"go": "down"})
         for _ in range(5):
-            target.send({"go": "down"}, {})     # values, no edges
+            target.send({"go": "down"}, {})  # values, no edges
         assert rec.events == [("press", "w")]
 
     def test_two_controls_press_two_keys(self):
-        target, rec = _target(
-            {"go": "keyboard.hold.letter.w", "fire": "keyboard.tap.edit.space"}
-        )
+        target, rec = _target({"go": "keyboard.hold.letter.w", "fire": "keyboard.tap.edit.space"})
         target.send({}, {"go": "down", "fire": "down"})
         assert ("press", "w") in rec.events
         assert ("press", "space") in rec.events
@@ -242,24 +240,20 @@ class TestRefusals:
         # Rewrite the route to something the manifest never advertised.
         from myogestic.controls import TargetRef
 
-        object.__setattr__(
-            controls, "routes", {"go": (TargetRef("keyboard.hold.letter.nope"),)}
-        )
+        object.__setattr__(controls, "routes", {"go": (TargetRef("keyboard.hold.letter.nope"),)})
         with pytest.raises(ValueError, match="not a key this target presses"):
             target.bind(controls)
 
     def test_a_backend_failure_disarms_instead_of_raising(self):
         """`send` runs on the predict thread. Raising there takes the whole loop down."""
         target, _ = _target({"go": "keyboard.hold.letter.w"}, backend=Recorder(fail=True))
-        target.send({}, {"go": "down"})          # must not raise
+        target.send({}, {"go": "down"})  # must not raise
         assert target.armed is False
 
     def test_claims_reports_exactly_the_keyboard_aliases(self):
         """`ControlBus` refuses a map where some alias drives nowhere, and with two
         targets sharing one map that check is the only thing that catches a typo."""
-        target, _ = _target(
-            {"go": "keyboard.hold.letter.w", "fire": "keyboard.tap.edit.space"}
-        )
+        target, _ = _target({"go": "keyboard.hold.letter.w", "fire": "keyboard.tap.edit.space"})
         assert target.claims == frozenset({"go", "fire"})
 
     def test_a_bus_accepts_a_keyboard_only_map(self):
@@ -298,7 +292,7 @@ class TestItSaysWhyItCannotArm:
         assert target.armed is False
 
     def test_an_untrusted_mac_is_refused_and_told_which_binary(self, monkeypatch):
-        """"The program running MyoGestic" is the classic macOS ambiguity: the permission
+        """ "The program running MyoGestic" is the classic macOS ambiguity: the permission
         attaches to a binary, and for a virtualenv it is not the symlink you launched."""
         import os
         import sys
@@ -373,9 +367,7 @@ class TestAKeyThisPlatformLacks:
         from myogestic.controls import load_control_map, resolve
 
         caps = keyboard_capabilities()
-        controls = resolve(
-            load_control_map({"dofs": {"k": "keyboard.hold.function.f1"}}), caps
-        )
+        controls = resolve(load_control_map({"dofs": {"k": "keyboard.hold.function.f1"}}), caps)
         target = KeyboardTarget(backend=Recorder())
         target.bind(controls)
         assert target.claims == frozenset({"k"})
@@ -426,9 +418,7 @@ class TestAskingForThePermission:
         monkeypatch.setattr(kb.sys, "platform", "darwin")
         monkeypatch.setattr(kb, "_trusted", lambda: False)
         opened = []
-        monkeypatch.setattr(
-            kb.subprocess, "run", lambda cmd, **k: opened.append(cmd)
-        )
+        monkeypatch.setattr(kb.subprocess, "run", lambda cmd, **k: opened.append(cmd))
         message = kb.request_accessibility()
         assert opened and opened[0][0] == "open"
         assert "Privacy_Accessibility" in opened[0][1]
@@ -446,7 +436,7 @@ class TestAskingForThePermission:
             raise OSError("no `open` here")
 
         monkeypatch.setattr(kb.subprocess, "run", boom)
-        assert kb.request_accessibility()          # a message, not an exception
+        assert kb.request_accessibility()  # a message, not an exception
 
     def test_it_does_nothing_off_macos(self, monkeypatch):
         import myogestic.keyboard as kb
@@ -458,5 +448,5 @@ class TestAskingForThePermission:
         assert called == []
 
     def test_the_target_offers_it_too(self):
-        """"Why can I not arm" and "help me fix it" belong next to each other."""
+        """ "Why can I not arm" and "help me fix it" belong next to each other."""
         assert callable(KeyboardTarget(backend=Recorder()).request_accessibility)

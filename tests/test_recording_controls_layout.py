@@ -17,9 +17,13 @@ def test_timing_fields_fit_and_stack_when_narrow(imgui_frame, monkeypatch, scale
     imgui.get_style().scale_all_sizes(scale)
     imgui.get_style().font_scale_main = scale
     controls = RecordingControls(
-        on_record=lambda: None, on_stop=lambda: None,
-        take_lengths=(3.0, 5.0, 10.0), warmups=(0.0, 1.0, 2.0, 3.0),
-        timed=True, take_length=5.0, warmup=2.0,
+        on_record=lambda: None,
+        on_stop=lambda: None,
+        take_lengths=(3.0, 5.0, 10.0),
+        warmups=(0.0, 1.0, 2.0, 3.0),
+        timed=True,
+        take_length=5.0,
+        warmup=2.0,
     )
     captions, bounds, buttons = {}, {}, {}
     text_colored, button = imgui.text_colored, imgui.button
@@ -49,12 +53,15 @@ def test_timing_fields_fit_and_stack_when_narrow(imgui_frame, monkeypatch, scale
     # Reuse the same card to exercise both directions of a live resize. Inspect
     # settled item rectangles: a window scrollbar cannot detect column overlap.
     for width in (600, 320, 600):
+
         def draw(width=width):
             captions.clear()
             bounds.clear()
             buttons.clear()
             imgui.begin_child(
-                "timing-card", imgui.ImVec2(width, 400), child_flags=imgui.ChildFlags_.borders,
+                "timing-card",
+                imgui.ImVec2(width, 400),
+                child_flags=imgui.ChildFlags_.borders,
             )
             controls.ui(Context())
             imgui.end_child()

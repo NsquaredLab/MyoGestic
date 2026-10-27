@@ -46,8 +46,13 @@ TITLES = {
     "vhi_movements": "VhiMovementPanel",
 }
 STATE_DEMOS = {
-    "record_button", "recording_controls", "session_manager", "pipeline_panel",
-    "prediction_label", "pong", "tracking_task",
+    "record_button",
+    "recording_controls",
+    "session_manager",
+    "pipeline_panel",
+    "prediction_label",
+    "pong",
+    "tracking_task",
 }
 
 
@@ -106,8 +111,14 @@ def test_panel_header_and_body_fit_at_scale_two(name, width, monkeypatch, implot
             return result
 
         def leave_cell(cell, *args):
-            cells.append((cell._name, tuple(imgui.get_window_pos()),
-                          tuple(imgui.get_window_size()), imgui.get_scroll_max_y()))
+            cells.append(
+                (
+                    cell._name,
+                    tuple(imgui.get_window_pos()),
+                    tuple(imgui.get_window_size()),
+                    imgui.get_scroll_max_y(),
+                )
+            )
             active.pop()
             leave(cell, *args)
 
@@ -126,25 +137,49 @@ def test_panel_header_and_body_fit_at_scale_two(name, width, monkeypatch, implot
                     draw_list = imgui.get_window_draw_list()
                     lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
                     clip_lo, clip_hi = draw_list.get_clip_rect_min(), draw_list.get_clip_rect_max()
-                    if lo.x < clip_lo.x - 1 or hi.x > clip_hi.x + 1 or lo.y < clip_lo.y - 1 or hi.y > clip_hi.y + 1:
-                        clipped.append((active[-1], str(args), tuple(lo), tuple(hi),
-                                        tuple(clip_lo), tuple(clip_hi)))
+                    if (
+                        lo.x < clip_lo.x - 1
+                        or hi.x > clip_hi.x + 1
+                        or lo.y < clip_lo.y - 1
+                        or hi.y > clip_hi.y + 1
+                    ):
+                        clipped.append(
+                            (
+                                active[-1],
+                                str(args),
+                                tuple(lo),
+                                tuple(hi),
+                                tuple(clip_lo),
+                                tuple(clip_hi),
+                            )
+                        )
                 return result
+
             return draw
 
         monkeypatch.setattr(_AreaCell, "__enter__", enter_cell)
         monkeypatch.setattr(_AreaCell, "__exit__", leave_cell)
         monkeypatch.setattr(header, "ui", draw_header)
         monkeypatch.setattr(AppLogo, "ui", draw_logo)
-        for method in ("text", "text_unformatted", "text_colored", "text_disabled", "text_wrapped",
-                       "button", "small_button", "slider_float"):
+        for method in (
+            "text",
+            "text_unformatted",
+            "text_colored",
+            "text_disabled",
+            "text_wrapped",
+            "button",
+            "small_button",
+            "slider_float",
+        ):
             monkeypatch.setattr(imgui, method, track(getattr(imgui, method)))
 
         def draw():
             imgui.set_next_window_pos(imgui.ImVec2(0, 0))
             imgui.set_next_window_size(imgui.ImVec2(width, 1656))
-            imgui.begin("panel-header-probe", flags=(imgui.WindowFlags_.no_title_bar
-                                                    | imgui.WindowFlags_.no_saved_settings))
+            imgui.begin(
+                "panel-header-probe",
+                flags=(imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_saved_settings),
+            )
             app._ui_fn(app.ctx)
             imgui.end()
 

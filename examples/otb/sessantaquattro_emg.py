@@ -8,6 +8,7 @@ The accessory-channel count is probed from the device's ramp counter rather
 than configured, so the same script works on a Sessantaquattro and a
 Sessantaquattro+ without changing anything.
 """
+
 import time
 
 from myogestic import Stream

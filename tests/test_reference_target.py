@@ -8,10 +8,7 @@ import time
 
 import pytest
 
-REFERENCE = (
-    pathlib.Path(__file__).parent.parent
-    / "examples" / "synthetic" / "reference_target.py"
-)
+REFERENCE = pathlib.Path(__file__).parent.parent / "examples" / "synthetic" / "reference_target.py"
 
 
 @pytest.fixture(scope="module")
@@ -86,7 +83,7 @@ def test_a_target_reporting_an_older_vocabulary_is_refused_by_name(target_module
     class Antique(target_module.ReferenceTarget):
         """The same target, still claiming the vocabulary it served before the split."""
 
-        def GetControlManifest(self, request, context):   # noqa: N802 - gRPC's spelling
+        def GetControlManifest(self, request, context):  # noqa: N802 - gRPC's spelling
             manifest = super().GetControlManifest(request, context)
             manifest.vocabulary_version = "1"
             return manifest
@@ -185,9 +182,7 @@ def test_two_discrete_controls_are_told_apart_by_address(target_module):
             # Aliases deliberately unlike the addresses: whatever reaches the target had
             # to have been translated, and only the address translates.
             controls = resolve(
-                load_control_map(
-                    {"dofs": {"grip": "rig.mode.gripper", "twist": "rig.mode.wrist"}}
-                ),
+                load_control_map({"dofs": {"grip": "rig.mode.gripper", "twist": "rig.mode.wrist"}}),
                 client.capabilities(),
             )
             target = RemoteTarget(client=client, interface=vhi)

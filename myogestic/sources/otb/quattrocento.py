@@ -4,6 +4,7 @@ PC is the TCP client to the amplifier (default 169.254.1.10:23456). Config is
 a 40-byte CRC-8-terminated string; data is little-endian int16. See
 docs/reference/otb/Read_Quattrocento.m.
 """
+
 from __future__ import annotations
 
 import socket
@@ -116,14 +117,16 @@ class QuattrocentoSource(_OTBSource):
 
     def _send_start(self) -> None:
         assert self._sock is not None
-        cfg = C.quattro_config(fs_mode=self._fs_mode, nch_mode=self._nch_mode,
-                               acq_on=True, conf2=self._conf2)
+        cfg = C.quattro_config(
+            fs_mode=self._fs_mode, nch_mode=self._nch_mode, acq_on=True, conf2=self._conf2
+        )
         self._sock.sendall(cfg)
 
     def _send_stop(self) -> None:
         assert self._sock is not None
-        cfg = C.quattro_config(fs_mode=self._fs_mode, nch_mode=self._nch_mode,
-                               acq_on=False, conf2=self._conf2)
+        cfg = C.quattro_config(
+            fs_mode=self._fs_mode, nch_mode=self._nch_mode, acq_on=False, conf2=self._conf2
+        )
         self._sock.sendall(cfg)
 
     def _decode(self, frame: bytes) -> np.ndarray:
@@ -169,7 +172,9 @@ class QuattrocentoSource(_OTBSource):
             "conv_factor_mv": float(C.QUATTRO_CONV_FACTOR_MV),
             "aux_factor_v": float(C.QUATTRO_AUX_FACTOR_V),
             "start_packet_hex": C.quattro_config(
-                fs_mode=self._fs_mode, nch_mode=self._nch_mode,
-                acq_on=True, conf2=self._conf2,
+                fs_mode=self._fs_mode,
+                nch_mode=self._nch_mode,
+                acq_on=True,
+                conf2=self._conf2,
             ).hex(),
         }

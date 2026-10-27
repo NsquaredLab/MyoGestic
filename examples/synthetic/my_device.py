@@ -33,8 +33,7 @@ class MyDevice:
         the address name says. Use `lo=0.0` for a control that only moves one way.
         """
         return tuple(
-            Capability(address=a, kind="continuous", lo=-1.0, hi=1.0, rest=0.0)
-            for a in ADDRESSES
+            Capability(address=a, kind="continuous", lo=-1.0, hi=1.0, rest=0.0) for a in ADDRESSES
         )
 
     def bind(self, controls: ControlSet) -> None:

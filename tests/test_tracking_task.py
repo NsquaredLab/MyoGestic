@@ -194,8 +194,13 @@ def test_the_target_polyline_is_the_trapezoid_it_came_from():
     the worst kind of silent bug.
     """
     trap = Trapezoid(
-        rest_s=1.0, ramp_up_s=2.0, hold_s=3.0, ramp_down_s=2.0, recover_s=1.0,
-        level_pct=40.0, reps=2,
+        rest_s=1.0,
+        ramp_up_s=2.0,
+        hold_s=3.0,
+        ramp_down_s=2.0,
+        recover_s=1.0,
+        level_pct=40.0,
+        reps=2,
     )
     xs, ys = _target_curve(trap)
 
@@ -217,7 +222,11 @@ def test_the_target_is_only_drawn_as_far_as_the_look_ahead():
     rather than follow, which is not what the task measures.
     """
     trap = Trapezoid(
-        rest_s=1.0, ramp_up_s=2.0, hold_s=3.0, ramp_down_s=2.0, recover_s=1.0,
+        rest_s=1.0,
+        ramp_up_s=2.0,
+        hold_s=3.0,
+        ramp_down_s=2.0,
+        recover_s=1.0,
         level_pct=40.0,
     )
     xs, ys = _target_curve(trap, upto=2.5)
@@ -548,8 +557,20 @@ def tracking_card(implot_frame, monkeypatch):
     info = SimpleNamespace(n_channels=2, channel_names=["Load cell", "Auxiliary"])
     ctx.streams["force"] = SimpleNamespace(info=info)
     ui = SimpleNamespace(
-        task=task, ctx=ctx, items={}, texts=[], text_bounds=[], headers=[], sections=[], rows=[],
-        primary=[], click="", changes={}, width=600, value=0.61, now=21.0,
+        task=task,
+        ctx=ctx,
+        items={},
+        texts=[],
+        text_bounds=[],
+        headers=[],
+        sections=[],
+        rows=[],
+        primary=[],
+        click="",
+        changes={},
+        width=600,
+        value=0.61,
+        now=21.0,
     )
     monkeypatch.setattr(task, "_read", lambda stream: ui.value if stream else None)
     monkeypatch.setattr(module.time, "monotonic", lambda: ui.now)
@@ -561,9 +582,15 @@ def tracking_card(implot_frame, monkeypatch):
             result = original(label, *args, **kwargs)
             lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
             pos, size = imgui.get_window_pos(), imgui.get_window_size()
-            disabled = bool(imgui.get_current_context().current_item_flags & imgui.ItemFlags_.disabled)
+            disabled = bool(
+                imgui.get_current_context().current_item_flags & imgui.ItemFlags_.disabled
+            )
             ui.items[label] = SimpleNamespace(
-                x=lo.x, y=lo.y, right=hi.x, bottom=hi.y, disabled=disabled,
+                x=lo.x,
+                y=lo.y,
+                right=hi.x,
+                bottom=hi.y,
+                disabled=disabled,
                 fits=lo.x >= pos.x and hi.x <= pos.x + size.x,
                 identity=imgui.get_id(label),
             )
@@ -627,7 +654,15 @@ def tracking_card(implot_frame, monkeypatch):
     def frame(click="", changes=None):
         ui.click = click
         ui.changes.update(changes or {})
-        for collection in (ui.items, ui.texts, ui.text_bounds, ui.headers, ui.sections, ui.rows, ui.primary):
+        for collection in (
+            ui.items,
+            ui.texts,
+            ui.text_bounds,
+            ui.headers,
+            ui.sections,
+            ui.rows,
+            ui.primary,
+        ):
             collection.clear()
         implot_frame(draw)
 
@@ -701,9 +736,17 @@ def test_running_status_shows_signed_error_and_locks_setup_but_stop_works(tracki
     from myogestic.widgets.common import SUCCESS
 
     ui = tracking_card
-    ui.task._set_trap(Trapezoid(
-        rest_s=2, ramp_up_s=3, hold_s=5, ramp_down_s=3, recover_s=2, level_pct=58, reps=5,
-    ))
+    ui.task._set_trap(
+        Trapezoid(
+            rest_s=2,
+            ramp_up_s=3,
+            hold_s=5,
+            ramp_down_s=3,
+            recover_s=2,
+            level_pct=58,
+            reps=5,
+        )
+    )
     ui.task._zero, ui.task._mvc = 0.0, 1.0
     ui.task._started = 0.0
     ui.frame()
@@ -733,7 +776,11 @@ def test_no_stream_says_how_to_begin_and_still_renders_the_card(tracking_card):
 @pytest.mark.parametrize("scale,width", [(1.0, 320), (2.0, 320), (2.0, 800)])
 @pytest.mark.parametrize("state", ["uncalibrated", "ready", "running", "settings"])
 def test_tracking_controls_fit_narrow_light_cards_at_both_scales(
-    tracking_card, monkeypatch, scale, width, state,
+    tracking_card,
+    monkeypatch,
+    scale,
+    width,
+    state,
 ):
     from imgui_bundle import imgui
 
@@ -888,9 +935,16 @@ def test_two_tracking_legends_toggle_independently_in_one_window(tracking_card, 
 def test_zero_length_target_has_guidance_and_cannot_start(tracking_card, level):
     ui = tracking_card
     ui.task._zero, ui.task._mvc = 0.0, 1.0
-    ui.task._set_trap(Trapezoid(
-        rest_s=0, ramp_up_s=0, hold_s=0, ramp_down_s=0, recover_s=0, level_pct=level,
-    ))
+    ui.task._set_trap(
+        Trapezoid(
+            rest_s=0,
+            ramp_up_s=0,
+            hold_s=0,
+            ramp_down_s=0,
+            recover_s=0,
+            level_pct=level,
+        )
+    )
     ui.frame(click="##tt_start")
     assert ui.task._started is None
     assert "Set at least one target duration above zero." in ui.texts

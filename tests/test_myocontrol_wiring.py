@@ -31,7 +31,7 @@ def app_module(monkeypatch):
     # Binding tests use fake control buses; never resolve an unrelated real hand.
     monkeypatch.setattr(
         "myogestic.sources.lsl.LSLSource.connect",
-        lambda self: myogestic.stream.StreamInfo(n_channels=9, fs=32.),
+        lambda self: myogestic.stream.StreamInfo(n_channels=9, fs=32.0),
     )
     monkeypatch.syspath_prepend(str(_APP.parent))
     return runpy.run_path(str(_APP), run_name="__main__")
@@ -102,7 +102,9 @@ def test_timed_record_fits_real_step(app_module, monkeypatch, implot_frame, phas
 
     def tracked(ctx):
         render(ctx)
-        measurements.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y, imgui.get_scroll_max_y()))
+        measurements.append(
+            (imgui.get_cursor_pos_y(), imgui.get_window_size().y, imgui.get_scroll_max_y())
+        )
 
     monkeypatch.setitem(app_module["myocontrol_ui"].__globals__, "record_ui", tracked)
     overlay = app_module["_take_overlay"]
@@ -158,14 +160,23 @@ def test_timed_take_stops_when_another_step_is_open(app_module, monkeypatch, imp
     assert controls.take.phase == "saved"
 
 
-@pytest.mark.parametrize("state,phase,elapsed,expected", [
-    ("predicting", "setup", 4.0, "REC run · 0:04.0"),
-    ("predicting", "warmup", 1.0, "REC run · 0:01.0"),
-    ("predicting", "cue", 10.0, "REC Rest · 0:10.0"),
-    ("recording", "cue", 4.0, "REC Fist · 0:04.0"),
-])
+@pytest.mark.parametrize(
+    "state,phase,elapsed,expected",
+    [
+        ("predicting", "setup", 4.0, "REC run · 0:04.0"),
+        ("predicting", "warmup", 1.0, "REC run · 0:01.0"),
+        ("predicting", "cue", 10.0, "REC Rest · 0:10.0"),
+        ("recording", "cue", 4.0, "REC Fist · 0:04.0"),
+    ],
+)
 def test_take_overlay_names_the_active_capture(
-    app_module, monkeypatch, imgui_frame, state, phase, elapsed, expected,
+    app_module,
+    monkeypatch,
+    imgui_frame,
+    state,
+    phase,
+    elapsed,
+    expected,
 ):
     from imgui_bundle import imgui
 
@@ -218,8 +229,11 @@ def test_drive_uses_compact_smoothing_and_sent_card(app_module, monkeypatch, img
     texts, headers = [], []
     monkeypatch.setattr(imgui, "text_unformatted", texts.append)
     monkeypatch.setattr(imgui, "text_colored", lambda color, text: texts.append(text))
-    monkeypatch.setitem(app_module["drive_ui"].__globals__, "panel_header",
-                        lambda title, *a, **k: headers.append(title))
+    monkeypatch.setitem(
+        app_module["drive_ui"].__globals__,
+        "panel_header",
+        lambda title, *a, **k: headers.append(title),
+    )
     imgui_frame(app_module["drive_ui"])
     assert headers == ["Sent to the hand"]
     assert "nothing sent yet" in texts
@@ -227,7 +241,9 @@ def test_drive_uses_compact_smoothing_and_sent_card(app_module, monkeypatch, img
 
 @pytest.mark.parametrize("scale,size", [(1.0, (1280, 828)), (2.0, (2560, 1656))])
 @pytest.mark.parametrize("predicting", [False, True])
-def test_drive_fits_real_light_step_layout(app_module, monkeypatch, implot_frame, scale, size, predicting):
+def test_drive_fits_real_light_step_layout(
+    app_module, monkeypatch, implot_frame, scale, size, predicting
+):
     from imgui_bundle import imgui
 
     from myogestic import _scale, _theme
@@ -243,7 +259,9 @@ def test_drive_fits_real_light_step_layout(app_module, monkeypatch, implot_frame
         app_module["app"].ctx.state = "predicting"
         app_module["pipeline"].model = object()
         app_module["pipeline"].predictions = {
-            "class": 1, "proba": [0.2, 0.8], "controls": {"prediction": 0.8, "control": 0.0}
+            "class": 1,
+            "proba": [0.2, 0.8],
+            "controls": {"prediction": 0.8, "control": 0.0},
         }
     render = app_module["drive_ui"]
     measurements = []
@@ -261,7 +279,9 @@ def test_drive_fits_real_light_step_layout(app_module, monkeypatch, implot_frame
 
     def tracked():
         render()
-        measurements.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y, imgui.get_scroll_max_y()))
+        measurements.append(
+            (imgui.get_cursor_pos_y(), imgui.get_window_size().y, imgui.get_scroll_max_y())
+        )
 
     monkeypatch.setitem(app_module["myocontrol_ui"].__globals__, "drive_ui", tracked)
 
@@ -492,14 +512,20 @@ def test_status_stays_one_line_with_a_long_model_name(app_module, monkeypatch, i
     ctx = app_module["app"].ctx
     ctx.participant = "P-014"
     app_module["pipeline"].model = object()
-    app_module["pipeline"].last_saved_model = "sessions/P-014/" + "a_very_long_name_" * 20 + ".joblib"
+    app_module["pipeline"].last_saved_model = (
+        "sessions/P-014/" + "a_very_long_name_" * 20 + ".joblib"
+    )
     items = []
     text = imgui.text_colored
 
     def remember(color, label):
         text(color, label)
         lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        right = imgui.get_window_pos().x + imgui.get_window_size().x - imgui.get_style().window_padding.x
+        right = (
+            imgui.get_window_pos().x
+            + imgui.get_window_size().x
+            - imgui.get_style().window_padding.x
+        )
         items.append((label, lo.y, hi.x <= right + 1))
 
     monkeypatch.setattr(imgui, "text_colored", remember)
@@ -555,18 +581,27 @@ def test_connect_fits_default_step_cell(app_module, monkeypatch, imgui_frame):
     assert heights[0] <= 400 - 2 * imgui.get_style().window_padding.y
 
 
-@pytest.mark.parametrize("running,bound,launchable,expected", [
-    (False, False, True, ["Connect"]),
-    (False, False, False, ["Connect"]),
-    (False, True, True, []),
-    (True, False, True, ["Stop"]),
-    (True, True, True, ["Stop"]),
-])
-def test_hand_actions_fit_one_row(app_module, monkeypatch, imgui_frame, running, bound, launchable, expected):
+@pytest.mark.parametrize(
+    "running,bound,launchable,expected",
+    [
+        (False, False, True, ["Connect"]),
+        (False, False, False, ["Connect"]),
+        (False, True, True, []),
+        (True, False, True, ["Stop"]),
+        (True, True, True, ["Stop"]),
+    ],
+)
+def test_hand_actions_fit_one_row(
+    app_module, monkeypatch, imgui_frame, running, bound, launchable, expected
+):
     from imgui_bundle import imgui
 
     monkeypatch.setattr(type(app_module["processes"]), "running", lambda *args: running)
-    monkeypatch.setitem(app_module["hand_ui"].__globals__, "hand_processes", [("hand", ["hand"])] if launchable else [])
+    monkeypatch.setitem(
+        app_module["hand_ui"].__globals__,
+        "hand_processes",
+        [("hand", ["hand"])] if launchable else [],
+    )
     monkeypatch.setattr(type(app_module["binder"]), "poll", lambda self: None)
     if bound:
         app_module["link"]._bus = object()
@@ -588,7 +623,10 @@ def test_hand_actions_fit_one_row(app_module, monkeypatch, imgui_frame, running,
     try:
         imgui_frame(draw)
         assert actions == expected
-        assert heights[0] <= imgui.get_frame_height() + app_module["ui_px"](8) + imgui.get_style().item_spacing.y
+        assert (
+            heights[0]
+            <= imgui.get_frame_height() + app_module["ui_px"](8) + imgui.get_style().item_spacing.y
+        )
     finally:
         app_module["link"]._bus = None
 
@@ -667,10 +705,12 @@ def test_myocontrol_header_fits_the_theme_padding(app_module, monkeypatch, implo
         pos = imgui.get_window_pos()
         extent = imgui.get_window_size()
         padding = imgui.get_style().window_padding
-        bounds.append((
-            maximum.x <= pos.x + extent.x - padding.x,
-            maximum.y <= pos.y + extent.y - imgui.get_cursor_start_pos().y,
-        ))
+        bounds.append(
+            (
+                maximum.x <= pos.x + extent.x - padding.x,
+                maximum.y <= pos.y + extent.y - imgui.get_cursor_start_pos().y,
+            )
+        )
 
     text_colored = imgui.text_colored
 
@@ -758,7 +798,10 @@ def test_header_controls_share_a_row_after_resizing(app_module, monkeypatch, imp
         assert len(items) == 6
         assert all(x and y for x, y in bounds)
         # Connectors and buttons round their baseline separately at fractional scales.
-        assert max(y for _, _, y in items) - min(y for _, _, y in items) <= 2 * scale, (scale, items)
+        assert max(y for _, _, y in items) - min(y for _, _, y in items) <= 2 * scale, (
+            scale,
+            items,
+        )
         assert all(left[1] <= right[0] for left, right in zip(items, items[1:], strict=False))
 
 
@@ -768,7 +811,9 @@ def test_myocontrol_drive_toggle_balances_selected_style(app_module, monkeypatch
     pipeline = app_module["pipeline"]
     pipeline.model = ("Classification", OnlyPredictProba())
     app_module["app"].ctx.streams["emg"] = SimpleNamespace(status="connected", info=object())
-    monkeypatch.setitem(app_module["drive_ui"].__globals__, "primary_button", lambda label, **k: True)
+    monkeypatch.setitem(
+        app_module["drive_ui"].__globals__, "primary_button", lambda label, **k: True
+    )
     imgui_frame(app_module["drive_ui"])
     assert app_module["app"].ctx.state == "predicting"
     imgui_frame(app_module["drive_ui"])
@@ -800,7 +845,10 @@ def test_myocontrol_warns_when_fitted_inputs_change(app_module, monkeypatch, img
 
 
 def test_myocontrol_switches_session_selection_before_train(
-    app_module, monkeypatch, implot_frame, tmp_path,
+    app_module,
+    monkeypatch,
+    implot_frame,
+    tmp_path,
 ):
     from myogestic import TrainingData
     from myogestic.widgets.training import _session_state
@@ -817,7 +865,8 @@ def test_myocontrol_switches_session_selection_before_train(
     selections_at_train = []
     ui_globals = app_module["myocontrol_ui"].__globals__
     monkeypatch.setitem(
-        ui_globals, "model_ui",
+        ui_globals,
+        "model_ui",
         lambda: selections_at_train.append(app_module["pipeline"].training_data.paths),
     )
     implot_frame(lambda: app_module["myocontrol_ui"](ctx))
@@ -826,7 +875,7 @@ def test_myocontrol_switches_session_selection_before_train(
 
 
 def test_nothing_attaches_itself(monkeypatch):
-    """"Nothing attaches on its own" is the project's rule, and unlike force_ramps this
+    """ "Nothing attaches on its own" is the project's rule, and unlike force_ramps this
     app has no task target to except — so nothing may even *try* to connect.
 
     Asserted on the attempt, not on the outcome. ``DEFAULT_DEVICES[0]`` is a Muovi, real
@@ -922,6 +971,8 @@ def test_the_map_declares_exactly_what_the_app_pushes(app_module):
     # control hand would drop a frame after it was set, and the prediction hand would
     # twitch to rest on every button press.
     assert declared == {"prediction", "control"}
+
+
 def test_launching_vhi_is_what_arms_the_binder(app_module, monkeypatch, implot_frame):
     """Pressing Launch is the operator's intent; a second Connect press is ceremony.
 
@@ -1106,7 +1157,9 @@ def test_hand_connect_checks_before_launch_and_stop_cancels(app_module, monkeypa
 
     from imgui_bundle import imgui
 
-    state = SimpleNamespace(busy=False, finished=False, last_error=None, status="", polls=0, stops=0)
+    state = SimpleNamespace(
+        busy=False, finished=False, last_error=None, status="", polls=0, stops=0
+    )
 
     def poll(*, force=False):
         state.polls += 1
@@ -1161,8 +1214,12 @@ def test_hand_connect_checks_before_launch_and_stop_cancels(app_module, monkeypa
     assert state.polls == 2 and len(launched) == 1
 
 
-@pytest.mark.parametrize("result", ["external", "external_without_install", "missing", "incompatible"])
-def test_hand_bind_outcome_never_launches_a_second_target(app_module, monkeypatch, imgui_frame, result):
+@pytest.mark.parametrize(
+    "result", ["external", "external_without_install", "missing", "incompatible"]
+)
+def test_hand_bind_outcome_never_launches_a_second_target(
+    app_module, monkeypatch, imgui_frame, result
+):
     from types import SimpleNamespace
 
     from imgui_bundle import imgui
@@ -1174,7 +1231,9 @@ def test_hand_bind_outcome_never_launches_a_second_target(app_module, monkeypatc
     missing_install = result in ("missing", "external_without_install")
     monkeypatch.setitem(globals_, "hand_processes", [] if missing_install else [("hand", ["hand"])])
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
-    monkeypatch.setattr(app_module["processes"], "launch", lambda name: pytest.fail("duplicate launch"))
+    monkeypatch.setattr(
+        app_module["processes"], "launch", lambda name: pytest.fail("duplicate launch")
+    )
     button = imgui.small_button
     click = {"label": "Connect"}
     actions = []
@@ -1201,7 +1260,9 @@ def test_hand_bind_outcome_never_launches_a_second_target(app_module, monkeypatc
         app_module["link"]._bus = None
 
 
-def test_hand_missing_install_explains_idle_and_failed_connect(app_module, monkeypatch, imgui_frame):
+def test_hand_missing_install_explains_idle_and_failed_connect(
+    app_module, monkeypatch, imgui_frame
+):
     from types import SimpleNamespace
 
     from imgui_bundle import imgui
@@ -1220,7 +1281,9 @@ def test_hand_missing_install_explains_idle_and_failed_connect(app_module, monke
     monkeypatch.setitem(globals_, "binder", state)
     monkeypatch.setitem(globals_, "hand_processes", [])
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
-    monkeypatch.setattr(app_module["processes"], "launch", lambda name: pytest.fail("nothing installed to launch"))
+    monkeypatch.setattr(
+        app_module["processes"], "launch", lambda name: pytest.fail("nothing installed to launch")
+    )
     details, tones, tooltips = [], [], []
     ellipsize, text_colored = globals_["_ellipsize"], imgui.text_colored
 
@@ -1266,6 +1329,7 @@ def test_hand_missing_install_explains_idle_and_failed_connect(app_module, monke
 
 def test_hand_rechecks_bus_after_observing_attempt_completion(app_module, monkeypatch, imgui_frame):
     """The worker can bind between the initial bus read and its completion read."""
+
     class JustFinished:
         busy = False
         last_error = None
@@ -1281,14 +1345,20 @@ def test_hand_rechecks_bus_after_observing_attempt_completion(app_module, monkey
     monkeypatch.setitem(globals_, "hand_processes", [("hand", ["hand"])])
     app_module["hand_attempt"]["phase"] = "checking"
     monkeypatch.setattr(app_module["processes"], "running", lambda name: False)
-    monkeypatch.setattr(app_module["processes"], "launch", lambda name: pytest.fail("launched beside the bound hand"))
+    monkeypatch.setattr(
+        app_module["processes"],
+        "launch",
+        lambda name: pytest.fail("launched beside the bound hand"),
+    )
     try:
         imgui_frame(app_module["hand_ui"])
     finally:
         app_module["link"]._bus = None
 
 
-@pytest.mark.parametrize("scale,size", [(1.0, (1280, 828)), (1.0, (900, 1100)), (2.0, (2560, 1656))])
+@pytest.mark.parametrize(
+    "scale,size", [(1.0, (1280, 828)), (1.0, (900, 1100)), (2.0, (2560, 1656))]
+)
 def test_connect_card_fits_real_step_layout(app_module, monkeypatch, implot_frame, scale, size):
     from imgui_bundle import imgui
 
@@ -1319,7 +1389,9 @@ def test_connect_card_fits_real_step_layout(app_module, monkeypatch, implot_fram
 
     implot_frame(draw)
     implot_frame(draw)
-    assert all(cursor <= height and scroll == 0 for cursor, height, scroll in measurements), measurements
+    assert all(cursor <= height and scroll == 0 for cursor, height, scroll in measurements), (
+        measurements
+    )
 
 
 def test_train_card_uses_selection_and_names_missing_gesture(app_module, imgui_frame, monkeypatch):
@@ -1329,7 +1401,7 @@ def test_train_card_uses_selection_and_names_missing_gesture(app_module, imgui_f
 
     render = app_module["model_ui"]
     globals_ = render.__globals__
-    summary = SimpleNamespace(n_selected=2, n_total=3, class_seconds={"Rest": 18.})
+    summary = SimpleNamespace(n_selected=2, n_total=3, class_seconds={"Rest": 18.0})
     monkeypatch.setattr(app_module["sessions"], "selection", lambda: summary, raising=False)
     app_module["pipeline"].training_data = TrainingData(paths=["one", "two"], classes={0})
     reasons, actions, text = [], [], []
@@ -1341,8 +1413,14 @@ def test_train_card_uses_selection_and_names_missing_gesture(app_module, imgui_f
         real_mono(value, color)
 
     monkeypatch.setitem(globals_, "mono_text", mono)
-    monkeypatch.setitem(globals_, "primary_button", lambda label, size=(0, 0): actions.append((label, size)) or True)
-    monkeypatch.setattr(app_module["pipeline"], "start_training", lambda: pytest.fail("missing Fist must disable training"))
+    monkeypatch.setitem(
+        globals_, "primary_button", lambda label, size=(0, 0): actions.append((label, size)) or True
+    )
+    monkeypatch.setattr(
+        app_module["pipeline"],
+        "start_training",
+        lambda: pytest.fail("missing Fist must disable training"),
+    )
     imgui_frame(render)
     assert any("Fist" in reason for reason in reasons)
     assert actions[-1][0] == "Train classifier" and actions[-1][1][0] < 0
@@ -1358,7 +1436,7 @@ def test_train_card_starts_fit_and_shows_saved_model(app_module, imgui_frame, mo
 
     render = app_module["model_ui"]
     globals_ = render.__globals__
-    summary = SimpleNamespace(n_selected=2, n_total=2, class_seconds={"Rest": 18., "Fist": 22.})
+    summary = SimpleNamespace(n_selected=2, n_total=2, class_seconds={"Rest": 18.0, "Fist": 22.0})
     monkeypatch.setattr(app_module["sessions"], "selection", lambda: summary, raising=False)
     pipeline = app_module["pipeline"]
     pipeline.training_data = TrainingData(paths=["one", "two"], classes={0, 1})
@@ -1381,7 +1459,7 @@ def test_train_card_starts_fit_and_shows_saved_model(app_module, imgui_frame, mo
     assert any("classifier.pkl" in label for label in labels)
 
 
-@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
 @pytest.mark.parametrize("fitted", [False, True])
 def test_train_card_fits_step_cell(app_module, implot_frame, monkeypatch, scale, fitted):
     from types import SimpleNamespace
@@ -1391,22 +1469,35 @@ def test_train_card_fits_step_cell(app_module, implot_frame, monkeypatch, scale,
     from myogestic import TrainingData, _scale, _theme
 
     if fitted:
-        summary = SimpleNamespace(n_selected=12, n_total=38, class_seconds={"Rest": 180., "Fist": 220.})
+        summary = SimpleNamespace(
+            n_selected=12, n_total=38, class_seconds={"Rest": 180.0, "Fist": 220.0}
+        )
         monkeypatch.setattr(app_module["sessions"], "selection", lambda: summary)
-        monkeypatch.setattr(app_module["sessions"], "ui", lambda **kwargs: TrainingData(paths=["take"], classes={0, 1}))
+        monkeypatch.setattr(
+            app_module["sessions"],
+            "ui",
+            lambda **kwargs: TrainingData(paths=["take"], classes={0, 1}),
+        )
         app_module["pipeline"].model = object()
         app_module["pipeline"].last_saved_model = "/sessions/P-014/classifier.pkl"
         # A fitted model plus changed features keeps the warning and saved row visible.
     font_path = Path(myogestic.core.__file__).parent / "assets/fonts/IBMPlexMono-Regular.ttf"
-    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 13.)
+    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 13.0)
     monkeypatch.setattr(_theme, "_MONO_FONT", font)
     mono_bounds = []
     mono = app_module["model_ui"].__globals__["mono_text"]
 
     def measured_mono(text, color=None):
         mono(text, color)
-        mono_bounds.append((text, imgui.get_item_rect_max().x,
-                            imgui.get_window_pos().x + imgui.get_window_size().x - imgui.get_style().window_padding.x))
+        mono_bounds.append(
+            (
+                text,
+                imgui.get_item_rect_max().x,
+                imgui.get_window_pos().x
+                + imgui.get_window_size().x
+                - imgui.get_style().window_padding.x,
+            )
+        )
 
     monkeypatch.setitem(app_module["model_ui"].__globals__, "mono_text", measured_mono)
     monkeypatch.setattr(_scale, "_current", scale)
@@ -1422,7 +1513,9 @@ def test_train_card_fits_step_cell(app_module, implot_frame, monkeypatch, scale,
 
     def tracked():
         render()
-        measurements.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y, imgui.get_scroll_max_y()))
+        measurements.append(
+            (imgui.get_cursor_pos_y(), imgui.get_window_size().y, imgui.get_scroll_max_y())
+        )
 
     monkeypatch.setitem(app_module["myocontrol_ui"].__globals__, "model_ui", tracked)
 
@@ -1434,7 +1527,9 @@ def test_train_card_fits_step_cell(app_module, implot_frame, monkeypatch, scale,
 
     implot_frame(draw)
     implot_frame(draw)
-    assert all(cursor <= height and scroll == 0 for cursor, height, scroll in measurements), measurements
+    assert all(cursor <= height and scroll == 0 for cursor, height, scroll in measurements), (
+        measurements
+    )
     assert all(right <= edge + 1 for _, right, edge in mono_bounds), mono_bounds
 
 
@@ -1444,17 +1539,29 @@ def _participant_take(tmp_path, pid="P-014"):
     path = tmp_path / "sessions" / pid / f"{pid}_2026-10-25_15-47-00.session.zip"
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("meta.json", json.dumps(dict(
-            participant=pid, created="2026-10-25T15:47:00", duration_s=32.,
-            class_names=["Rest", "Fist"], class_seconds={"Rest": 16., "Fist": 16.},
-        )))
+        archive.writestr(
+            "meta.json",
+            json.dumps(
+                dict(
+                    participant=pid,
+                    created="2026-10-25T15:47:00",
+                    duration_s=32.0,
+                    class_names=["Rest", "Fist"],
+                    class_seconds={"Rest": 16.0, "Fist": 16.0},
+                )
+            ),
+        )
         archive.writestr("labels.json", json.dumps([dict(class_index=0), dict(class_index=1)]))
     return path
 
 
 @pytest.mark.parametrize("drive", [False, True])
 def test_recorded_participant_loads_newest_model_and_ticks_takes(
-    app_module, monkeypatch, implot_frame, tmp_path, drive,
+    app_module,
+    monkeypatch,
+    implot_frame,
+    tmp_path,
+    drive,
 ):
     import os
 
@@ -1505,9 +1612,17 @@ def test_recorded_participant_loads_newest_model_and_ticks_takes(
     assert "Jane" not in repr(ctx) and "Doe" not in repr(ctx)
 
 
-@pytest.mark.parametrize("has_takes,connected,expected", [(True, False, 2), (False, False, 0), (False, True, 1)])
+@pytest.mark.parametrize(
+    "has_takes,connected,expected", [(True, False, 2), (False, False, 0), (False, True, 1)]
+)
 def test_continue_lands_on_next_useful_step(
-    app_module, monkeypatch, implot_frame, tmp_path, has_takes, connected, expected,
+    app_module,
+    monkeypatch,
+    implot_frame,
+    tmp_path,
+    has_takes,
+    connected,
+    expected,
 ):
     from imgui_bundle import imgui
 
@@ -1521,7 +1636,7 @@ def test_continue_lands_on_next_useful_step(
     if connected:
         stream = app_module["app"].ctx.streams["emg"]
         stream.status = "connected"
-        stream.info = StreamInfo(n_channels=2, fs=100.)
+        stream.info = StreamInfo(n_channels=2, fs=100.0)
     panel, ctx = app_module["participant"], app_module["app"].ctx
     panel._key_file = tmp_path / "key.csv"
     button = imgui.button
@@ -1545,7 +1660,11 @@ def test_continue_lands_on_next_useful_step(
 
 @pytest.mark.parametrize("action", ["Go to Drive", "Retrain on 1 takes"])
 def test_saved_model_train_card_has_drive_and_retrain(
-    app_module, monkeypatch, imgui_frame, tmp_path, action,
+    app_module,
+    monkeypatch,
+    imgui_frame,
+    tmp_path,
+    action,
 ):
     from imgui_bundle import imgui
 
@@ -1608,7 +1727,9 @@ def test_drive_without_device_explains_and_offers_connect(app_module, monkeypatc
     app_module["steps"].active = 3
     reasons, labels = [], []
     monkeypatch.setitem(render.__globals__, "_disabled_reason", reasons.append)
-    monkeypatch.setattr(app_module["pipeline"], "start_predicting", lambda: pytest.fail("device missing"))
+    monkeypatch.setattr(
+        app_module["pipeline"], "start_predicting", lambda: pytest.fail("device missing")
+    )
     button = imgui.button
 
     def click(label, *args):
@@ -1624,7 +1745,10 @@ def test_drive_without_device_explains_and_offers_connect(app_module, monkeypatc
 
 
 def test_switching_participant_clears_old_model_and_training_selection(
-    app_module, monkeypatch, implot_frame, tmp_path,
+    app_module,
+    monkeypatch,
+    implot_frame,
+    tmp_path,
 ):
     from myogestic.ml import save_pickle
     from myogestic.widgets.training import _session_state
@@ -1650,7 +1774,10 @@ def test_switching_participant_clears_old_model_and_training_selection(
 
 
 def test_saved_model_loader_failure_does_not_disclose_exception(
-    app_module, monkeypatch, implot_frame, tmp_path,
+    app_module,
+    monkeypatch,
+    implot_frame,
+    tmp_path,
 ):
     monkeypatch.chdir(tmp_path)
     take = _participant_take(tmp_path)
@@ -1669,8 +1796,10 @@ def test_saved_model_loader_failure_does_not_disclose_exception(
     assert "Jane" not in repr(ctx) and "Doe" not in repr(ctx)
 
 
-@pytest.mark.parametrize("scale", [1., 2.])
-def test_saved_model_card_fits_light_320_cell(app_module, monkeypatch, imgui_frame, scale, tmp_path):
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+def test_saved_model_card_fits_light_320_cell(
+    app_module, monkeypatch, imgui_frame, scale, tmp_path
+):
     from imgui_bundle import imgui
 
     from myogestic import _scale, _theme
@@ -1688,13 +1817,17 @@ def test_saved_model_card_fits_light_320_cell(app_module, monkeypatch, imgui_fra
     imgui.get_style().scale_all_sizes(scale)
     imgui.get_style().font_scale_main = scale
     font_path = Path(myogestic.core.__file__).parent / "assets/fonts/IBMPlexMono-Regular.ttf"
-    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 13.)
+    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 13.0)
     monkeypatch.setattr(_theme, "_MONO_FONT", font)
     bounds = []
     button, text_unformatted = imgui.button, imgui.text_unformatted
 
     def measure():
-        right = imgui.get_window_pos().x + imgui.get_window_size().x - imgui.get_style().window_padding.x
+        right = (
+            imgui.get_window_pos().x
+            + imgui.get_window_size().x
+            - imgui.get_style().window_padding.x
+        )
         bounds.append((imgui.get_item_rect_max().x, right))
 
     def measured_button(*args, **kwargs):
@@ -1729,9 +1862,13 @@ def test_binding_adds_feedback_once_after_any_open_take(app_module, monkeypatch,
     bus = object()
     monkeypatch.setattr(type(link), "ensure", lambda self: bus)
     connections = []
-    monkeypatch.setattr(app_module["threading"], "Thread", lambda **kw: SimpleNamespace(
-        start=lambda: connections.append(kw["target"]),
-    ))
+    monkeypatch.setattr(
+        app_module["threading"],
+        "Thread",
+        lambda **kw: SimpleNamespace(
+            start=lambda: connections.append(kw["target"]),
+        ),
+    )
     original_inputs = app_module["_input_fingerprint"]()
     app.ctx.state, app.ctx.recording = "predicting", open_take
     assert app_module["_bind"]() is bus
@@ -1761,7 +1898,8 @@ def test_feedback_readout_uses_latest_pose_rate_and_reports_missing_data(app_mod
     pose = np.ones((9, 33))
     pose[6:] = np.array([0.25, -0.5, 0.0])[:, None]
     app_module["app"].ctx.streams["vhi_control"] = SimpleNamespace(
-        status="connected", get_window=lambda: (pose, timestamps),
+        status="connected",
+        get_window=lambda: (pose, timestamps),
     )
     text = summary()
     assert "flex +1.00" in text and "+0.25/-0.50/+0.00" in text and "32 Hz" in text
@@ -1780,7 +1918,10 @@ def test_drive_record_toggle_saves_without_stopping_prediction(app_module, tmp_p
     app_module["_toggle_drive_recording"]()
     session = app.ctx.session
     assert app.ctx.recording and app.ctx.state == "predicting"
-    assert session.participant == "P-014" and session.path.parent.resolve() == tmp_path / "sessions" / "P-014"
+    assert (
+        session.participant == "P-014"
+        and session.path.parent.resolve() == tmp_path / "sessions" / "P-014"
+    )
     session.append_event("pipeline.tick", [1.0], 1.0)
     pipeline._recorded_session = session
     pipeline.model = ("Classification", {"fitted": True})
@@ -1847,14 +1988,18 @@ def test_drive_narrow_dejavu_fonts(app_module, implot_frame, monkeypatch, width,
     config = imgui.ImFontConfig()
     config.merge_mode = True
     atlas.add_font_from_file_ttf(
-        hello_imgui.asset_file_full_path("fonts/Font_Awesome_6_Free-Solid-900.otf"), 14, config,
+        hello_imgui.asset_file_full_path("fonts/Font_Awesome_6_Free-Solid-900.otf"),
+        14,
+        config,
     )
     monkeypatch.setattr(_theme, "_MONO_FONT", body)
     _theme.apply_theme()
     app_module["app"].ctx.state = "predicting"
     app_module["app"].ctx.recording = recording
     app_module["pipeline"].predictions = {
-        "class": 1, "proba": [0.1, 0.9], "controls": {"prediction": 0.8, "control": 0.0},
+        "class": 1,
+        "proba": [0.1, 0.9],
+        "controls": {"prediction": 0.8, "control": 0.0},
     }
     measurements = []
     button = imgui.button
@@ -1865,8 +2010,9 @@ def test_drive_narrow_dejavu_fonts(app_module, implot_frame, monkeypatch, width,
         result = button(label, *args)
         if label.endswith("##drive_record"):
             text_width = imgui.calc_text_size(label.split("##")[0]).x
-            measurements.append((imgui.get_item_rect_max().x, right,
-                                 text_width, imgui.get_item_rect_size().x))
+            measurements.append(
+                (imgui.get_item_rect_max().x, right, text_width, imgui.get_item_rect_size().x)
+            )
         return result
 
     monkeypatch.setattr(imgui, "button", measure)
@@ -1887,7 +2033,9 @@ def test_drive_narrow_dejavu_fonts(app_module, implot_frame, monkeypatch, width,
 
 @pytest.mark.parametrize("packed", [False, True])
 def test_guided_score_uses_saved_timestamp_windows_and_excludes_repeated_reach(
-    app_module, tmp_path, packed,
+    app_module,
+    tmp_path,
+    packed,
 ):
     from myogestic.session import Session
 
@@ -1898,9 +2046,22 @@ def test_guided_score_uses_saved_timestamp_windows_and_excludes_repeated_reach(
         session.add_label(ci, timestamp)
     # Unequal row counts, out-of-order timestamps, exact boundaries, and outside rows.
     for timestamp, ci in [
-        (21, 0), (10.5, 0), (11, 0), (10, 1), (9.9, 0),
-        (12, 0), (12.25, 1), (13, 1), (14, 0), (14.1, 1), (15, 1),
-        (16, 1), (17, 1), (18, 0), (19, 1), (20, 2),
+        (21, 0),
+        (10.5, 0),
+        (11, 0),
+        (10, 1),
+        (9.9, 0),
+        (12, 0),
+        (12.25, 1),
+        (13, 1),
+        (14, 0),
+        (14.1, 1),
+        (15, 1),
+        (16, 1),
+        (17, 1),
+        (18, 0),
+        (19, 1),
+        (20, 2),
     ]:
         session.append_event("prediction.class", [ci], timestamp)
     session.freeze()
@@ -1910,7 +2071,9 @@ def test_guided_score_uses_saved_timestamp_windows_and_excludes_repeated_reach(
     assert score == {
         "match": 6 / 13,
         "per_class": {"Quiet": 2 / 5, "Grip": 4 / 6, "Open": 0.0},
-        "median_reach_s": 0.375, "reached": 2, "cues": 4,
+        "median_reach_s": 0.375,
+        "reached": 2,
+        "cues": 4,
     }
 
 
@@ -1932,7 +2095,8 @@ def test_guided_score_partial_last_cue_and_no_reached_cues(app_module, tmp_path,
         "match": 0.0 if stop == 1.5 else 0.5,
         "per_class": {"Rest": None, "Fist": 0.0 if stop == 1.5 else 0.5},
         "median_reach_s": None if stop == 1.5 else 0.75,
-        "reached": 0 if stop == 1.5 else 1, "cues": 1,
+        "reached": 0 if stop == 1.5 else 1,
+        "cues": 1,
     }
 
 
@@ -1943,18 +2107,25 @@ def test_guided_score_with_no_predictions(app_module, tmp_path, started_cue):
     session = Session(base_path=str(tmp_path))
     session.extras["guided"] = {"classes": ["Rest", "Fist"]}
     if started_cue:
-        session.add_label(0, 10.)
+        session.add_label(0, 10.0)
     session.add_label(-1, 10.5)
     session.save_meta("Empty run")
     assert app_module["score_guided_run"](session.pack_to_zip()) == {
-        "match": None, "per_class": {"Rest": None, "Fist": None},
-        "median_reach_s": None, "reached": 0, "cues": int(started_cue),
+        "match": None,
+        "per_class": {"Rest": None, "Fist": None},
+        "median_reach_s": None,
+        "reached": 0,
+        "cues": int(started_cue),
     }
 
 
 @pytest.mark.parametrize("stop_after", [0, 2, 4])
 def test_guided_run_schedule_labels_save_idle_and_unticked_tag(
-    app_module, tmp_path, monkeypatch, imgui_frame, stop_after,
+    app_module,
+    tmp_path,
+    monkeypatch,
+    imgui_frame,
+    stop_after,
 ):
     import random
 
@@ -1972,20 +2143,20 @@ def test_guided_run_schedule_labels_save_idle_and_unticked_tag(
     ctx.participant = "P-014"
     ctx.class_names = app_module["CLASSES"]
     stream = ctx.streams["emg"]
-    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100.)
+    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100.0)
     namespace = app_module["_start_guided_run"].__globals__
-    now = [100.]
+    now = [100.0]
     monkeypatch.setitem(namespace, "local_clock", lambda: now[0])
     pipeline.model = ("Classification", {"fitted": True})
     run = app_module["guided_run"]
-    run.update(reps=2, cue_s=2.)
+    run.update(reps=2, cue_s=2.0)
     app_module["_start_guided_run"]()
     session = ctx.session
     assert ctx.state == "predicting" and ctx.recording
     assert run["phase"] == "warmup" and not session.label_track
     schedule = dict(session.extras["guided"])
     assert schedule["classes"] == app_module["CLASSES"]
-    assert schedule["reps"] == 2 and schedule["cue_s"] == 2.
+    assert schedule["reps"] == 2 and schedule["cue_s"] == 2.0
     expected = [0, 1] * 2
     random.Random(schedule["seed"]).shuffle(expected)
     assert schedule["order"] == expected
@@ -1993,14 +2164,14 @@ def test_guided_run_schedule_labels_save_idle_and_unticked_tag(
     app_module["_sync_guided_run"]()
     assert not session.label_track
     for index in range(stop_after):
-        now[0] = 103. + index * 2
+        now[0] = 103.0 + index * 2
         app_module["_sync_guided_run"]()
         ci = expected[index]
         assert session.label_track[-1].timestamp == now[0]
         assert session.label_track[-1].class_index == ci
         # Exercise real pipeline recording and its saved model provenance.
-        pipeline._record_tick(app, np.zeros(4), {"class": ci, "proba": [0.5, 0.5]}, now[0] + .1)
-    now[0] = 103. + stop_after * 2 if stop_after == 4 else now[0] + .5
+        pipeline._record_tick(app, np.zeros(4), {"class": ci, "proba": [0.5, 0.5]}, now[0] + 0.1)
+    now[0] = 103.0 + stop_after * 2 if stop_after == 4 else now[0] + 0.5
     if stop_after == 4:
         app_module["_sync_guided_run"]()
     else:
@@ -2045,10 +2216,15 @@ def test_guided_run_schedule_labels_save_idle_and_unticked_tag(
 
 
 @pytest.mark.parametrize("phase", ["setup", "warmup", "cue", "saving", "results"])
-@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
 @pytest.mark.parametrize("dark", [False, True])
 def test_guided_drive_narrow_dejavu_fonts(
-    app_module, implot_frame, monkeypatch, phase, scale, dark,
+    app_module,
+    implot_frame,
+    monkeypatch,
+    phase,
+    scale,
+    dark,
 ):
     import matplotlib
     from imgui_bundle import imgui
@@ -2061,7 +2237,7 @@ def test_guided_drive_narrow_dejavu_fonts(
     imgui.get_style().scale_all_sizes(scale)
     imgui.get_style().font_scale_main = scale
     font_path = Path(matplotlib.get_data_path()) / "fonts" / "ttf" / "DejaVuSans.ttf"
-    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14.)
+    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14.0)
     imgui.get_io().font_default = font
     monkeypatch.setattr(_theme, "_MONO_FONT", font)
     monkeypatch.setattr(_theme, "_DISPLAY_FONT", font)
@@ -2069,16 +2245,26 @@ def test_guided_drive_narrow_dejavu_fonts(
     run = app_module["guided_run"]
     from types import SimpleNamespace
 
-    run.update(phase=phase, order=[0, 1] * 5, index=1, deadline=102.,
-               session=SimpleNamespace(path=Path("P-014_2026-10-26_12-00-00_Rest-Fist.session.zip")),
-               score={"match": .75, "per_class": {"Rest": .9, "Fist": .6},
-                      "median_reach_s": .25, "reached": 8, "cues": 9})
+    run.update(
+        phase=phase,
+        order=[0, 1] * 5,
+        index=1,
+        deadline=102.0,
+        session=SimpleNamespace(path=Path("P-014_2026-10-26_12-00-00_Rest-Fist.session.zip")),
+        score={
+            "match": 0.75,
+            "per_class": {"Rest": 0.9, "Fist": 0.6},
+            "median_reach_s": 0.25,
+            "reached": 8,
+            "cues": 9,
+        },
+    )
     ctx = app_module["app"].ctx
     ctx.state = "predicting" if phase in ("warmup", "cue") else "idle"
     if phase == "saving":
         ctx.pending_saves.add(Path("pending"))
     app_module["pipeline"].predictions = {"class": 1}
-    monkeypatch.setitem(app_module["drive_ui"].__globals__, "local_clock", lambda: 100.)
+    monkeypatch.setitem(app_module["drive_ui"].__globals__, "local_clock", lambda: 100.0)
     bounds, buttons, heights = [], [], []
     button, text = imgui.button, imgui.text_unformatted
 
@@ -2094,7 +2280,11 @@ def test_guided_drive_narrow_dejavu_fonts(
         return result
 
     def measure():
-        edge = imgui.get_window_pos().x + imgui.get_window_size().x - imgui.get_style().window_padding.x
+        edge = (
+            imgui.get_window_pos().x
+            + imgui.get_window_size().x
+            - imgui.get_style().window_padding.x
+        )
         bounds.append((imgui.get_item_rect_max().x, edge))
 
     monkeypatch.setattr(imgui, "button", measured_button)
@@ -2104,7 +2294,9 @@ def test_guided_drive_narrow_dejavu_fonts(
         imgui.set_next_window_size(imgui.ImVec2(320 * scale, 510 * scale))
         imgui.begin("narrow-guided")
         app_module["drive_ui"]()
-        heights.append((imgui.get_cursor_pos_y(), imgui.get_window_height(), imgui.get_scroll_max_y()))
+        heights.append(
+            (imgui.get_cursor_pos_y(), imgui.get_window_height(), imgui.get_scroll_max_y())
+        )
         imgui.end()
 
     for _ in range(3):
@@ -2115,11 +2307,16 @@ def test_guided_drive_narrow_dejavu_fonts(
     assert app_module["viewer"]._show_markers
 
 
-@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
 @pytest.mark.parametrize("dark", [False, True])
-@pytest.mark.parametrize("values", [(.9, .6), (1., None)])
+@pytest.mark.parametrize("values", [(0.9, 0.6), (1.0, None)])
 def test_guided_results_rows_share_centres_with_mono_values(
-    app_module, imgui_frame, monkeypatch, scale, dark, values,
+    app_module,
+    imgui_frame,
+    monkeypatch,
+    scale,
+    dark,
+    values,
 ):
     from types import SimpleNamespace
 
@@ -2136,15 +2333,21 @@ def test_guided_results_rows_share_centres_with_mono_values(
     style.font_scale_main = scale
     imgui.get_io().display_size = imgui.ImVec2(1280 * scale, 828 * scale)
     fonts = Path(matplotlib.get_data_path()) / "fonts" / "ttf"
-    ui = imgui.get_io().fonts.add_font_from_file_ttf(str(fonts / "DejaVuSans.ttf"), 14.)
-    mono = imgui.get_io().fonts.add_font_from_file_ttf(str(fonts / "DejaVuSansMono.ttf"), 14.)
+    ui = imgui.get_io().fonts.add_font_from_file_ttf(str(fonts / "DejaVuSans.ttf"), 14.0)
+    mono = imgui.get_io().fonts.add_font_from_file_ttf(str(fonts / "DejaVuSansMono.ttf"), 14.0)
     imgui.get_io().font_default = ui
     monkeypatch.setattr(_theme, "_MONO_FONT", mono)
     monkeypatch.setattr(_theme, "_DISPLAY_FONT", ui)
     app_module["guided_run"].update(
-        phase="results", session=SimpleNamespace(path=Path("P-014_take.session.zip")),
-        score={"match": .75, "per_class": dict(zip(["Rest", "Fist"], values, strict=True)),
-               "median_reach_s": .25, "reached": 8, "cues": 9},
+        phase="results",
+        session=SimpleNamespace(path=Path("P-014_take.session.zip")),
+        score={
+            "match": 0.75,
+            "per_class": dict(zip(["Rest", "Fist"], values, strict=True)),
+            "median_reach_s": 0.25,
+            "reached": 8,
+            "cues": 9,
+        },
     )
     positions, bars = {}, []
     text, colored, bar = imgui.text_unformatted, imgui.text_colored, imgui.progress_bar
@@ -2201,7 +2404,7 @@ def test_guided_start_uses_free_prediction_gate(app_module, monkeypatch, imgui_f
 
     ctx, pipeline = app_module["app"].ctx, app_module["pipeline"]
     stream = ctx.streams["emg"]
-    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100.)
+    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100.0)
     ctx.state = "training" if missing == "busy" else "idle"
     pipeline.model = None if missing == "model" else object()
     if missing == "device":
@@ -2256,15 +2459,26 @@ def test_guided_results_actions_keep_settings(app_module, monkeypatch, imgui_fra
     app_module["drive_mode"]["index"] = 1
     ctx, pipeline = app_module["app"].ctx, app_module["pipeline"]
     stream = ctx.streams["emg"]
-    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100.)
+    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100.0)
     pipeline.model = object()
     run = app_module["guided_run"]
-    run.update(phase="results", reps=3, cue_s=1.5,
-               session=SimpleNamespace(path=Path("P-014_take.session.zip")),
-               score={"match": 1., "per_class": {"Rest": 1., "Fist": 1.},
-                      "median_reach_s": 0., "reached": 2, "cues": 2})
+    run.update(
+        phase="results",
+        reps=3,
+        cue_s=1.5,
+        session=SimpleNamespace(path=Path("P-014_take.session.zip")),
+        score={
+            "match": 1.0,
+            "per_class": {"Rest": 1.0, "Fist": 1.0},
+            "median_reach_s": 0.0,
+            "reached": 2,
+            "cues": 2,
+        },
+    )
     starts = []
-    monkeypatch.setitem(app_module["drive_ui"].__globals__, "_start_guided_run", lambda: starts.append(True))
+    monkeypatch.setitem(
+        app_module["drive_ui"].__globals__, "_start_guided_run", lambda: starts.append(True)
+    )
     button = imgui.button
 
     def click(label, *args):

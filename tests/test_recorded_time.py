@@ -49,7 +49,12 @@ def test_meta_has_duration_and_class_seconds(tmp_path, monkeypatch):
     [
         ([], ["Rest", "Fist"], (10.0, 20.0), None),
         ([(0, 5.0), (1, 14.0)], ["Rest", "Fist"], (10.0, 20.0), {"Rest": 4.0, "Fist": 6.0}),
-        ([(0, 5.0), (-1, 12.0), (1, 18.0)], ["Rest", "Fist"], (10.0, 20.0), {"Rest": 2.0, "Fist": 2.0}),
+        (
+            [(0, 5.0), (-1, 12.0), (1, 18.0)],
+            ["Rest", "Fist"],
+            (10.0, 20.0),
+            {"Rest": 2.0, "Fist": 2.0},
+        ),
         ([(0, 2.0), (-1, 5.0), (1, 25.0)], ["Rest", "Fist"], (10.0, 20.0), {}),
         ([(0, 10.0)], [], (10.0, 20.0), None),
         ([(0, 10.0)], ["Rest"], (), {}),
@@ -108,13 +113,21 @@ def test_old_session_without_seconds(tmp_path):
 
     with _session(tmp_path, tuple(np.arange(10.0, 20.0, 0.1))) as session:
         # A legacy metadata file has no duration fields; the arrays still train.
-        (session.path / "meta.json").write_text(json.dumps({
-            "streams": {"emg": {"n_channels": 1, "fs": 10.0, "dtype": "float32"}},
-            "class_names": ["Rest"],
-        }))
-        (session.path / "labels.json").write_text(json.dumps([
-            {"timestamp": 10.0, "class_index": 0},
-        ]))
+        (session.path / "meta.json").write_text(
+            json.dumps(
+                {
+                    "streams": {"emg": {"n_channels": 1, "fs": 10.0, "dtype": "float32"}},
+                    "class_names": ["Rest"],
+                }
+            )
+        )
+        (session.path / "labels.json").write_text(
+            json.dumps(
+                [
+                    {"timestamp": 10.0, "class_index": 0},
+                ]
+            )
+        )
         rows = scan_sessions(str(tmp_path))
         assert len(rows) == 1
         assert rows[0]["duration_s"] == 0.0
@@ -127,8 +140,9 @@ def test_old_session_without_seconds(tmp_path):
 @pytest.mark.parametrize("state", ["idle", "recording"])
 def test_recording_controls_layout(imgui_frame, monkeypatch, width, n_gestures, n_cols, state):
     ctx = Context(state=state, recording=state == "recording")
-    controls = RecordingControls(["Rest", "Fist", "Open", "Pinch"][:n_gestures],
-                                 on_record=lambda: None, on_stop=lambda: None)
+    controls = RecordingControls(
+        ["Rest", "Fist", "Open", "Pinch"][:n_gestures], on_record=lambda: None, on_stop=lambda: None
+    )
     real_button = imgui.button
     boxes = {}
     available = []
@@ -153,7 +167,7 @@ def test_recording_controls_layout(imgui_frame, monkeypatch, width, n_gestures, 
     assert len({box[1] for box in gestures}) == n_gestures // n_cols
     assert len({box[0] for box in gestures}) == n_cols
     for start in range(0, n_gestures, n_cols):
-        row = gestures[start:start + n_cols]
+        row = gestures[start : start + n_cols]
         assert len({box[1] for box in row}) == 1
         assert row[-1][2] - row[0][0] == pytest.approx(available[0], abs=1)
     widths = [box[2] - box[0] for box in gestures]

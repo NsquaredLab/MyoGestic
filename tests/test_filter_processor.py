@@ -330,6 +330,7 @@ def test_compact_row_and_popover_keep_all_filter_controls(imgui_frame, monkeypat
         monkeypatch.setattr(imgui, name, slider)
     monkeypatch.setattr(imgui, "combo", combo)
     monkeypatch.setattr(imgui, "small_button", button)
+
     def draw():
         imgui.begin_child("compact-narrow", imgui.ImVec2(320, 380))
         p.ui()
@@ -363,7 +364,11 @@ def test_post_processor_defaults_to_compact():
 @pytest.mark.parametrize("scale", [1.0, 2.0])
 @pytest.mark.parametrize("width", [320, 620])
 def test_full_panel_has_captioned_sliders_and_mono_values(
-    imgui_frame, monkeypatch, factory, scale, width,
+    imgui_frame,
+    monkeypatch,
+    factory,
+    scale,
+    width,
 ):
     from imgui_bundle import imgui
 

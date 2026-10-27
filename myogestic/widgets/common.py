@@ -82,9 +82,7 @@ def status_pill(label: str, color: imgui.ImVec4) -> None:
     imgui.dummy(size)
     p0, p1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
     draw = imgui.get_window_draw_list()
-    draw.add_rect_filled(
-        p0, p1, imgui.get_color_u32(PILL_BG), size.y * 0.5
-    )
+    draw.add_rect_filled(p0, p1, imgui.get_color_u32(PILL_BG), size.y * 0.5)
     y = (p0.y + p1.y) * 0.5
     draw.add_rect_filled(
         imgui.ImVec2(p0.x + pad_x - ui_px(1), y - ui_px(3)),
@@ -104,8 +102,10 @@ def edge_rule(*, bottom: bool) -> None:
     origin, size = imgui.get_window_pos(), imgui.get_window_size()
     y = origin.y + size.y - ui_px(1) if bottom else origin.y
     imgui.get_window_draw_list().add_line(
-        imgui.ImVec2(origin.x, y), imgui.ImVec2(origin.x + size.x, y),
-        imgui.get_color_u32(hairline()), thickness=ui_px(1),
+        imgui.ImVec2(origin.x, y),
+        imgui.ImVec2(origin.x + size.x, y),
+        imgui.get_color_u32(hairline()),
+        thickness=ui_px(1),
     )
 
 
@@ -218,7 +218,10 @@ def pop_selected() -> None:
     p1 = imgui.get_item_rect_max()
     y = p1.y - 2.0
     imgui.get_window_draw_list().add_rect_filled(
-        imgui.ImVec2(p0.x + 3.0, y), imgui.ImVec2(p1.x - 3.0, p1.y), imgui.get_color_u32(_ACCENT), 1.0
+        imgui.ImVec2(p0.x + 3.0, y),
+        imgui.ImVec2(p1.x - 3.0, p1.y),
+        imgui.get_color_u32(_ACCENT),
+        1.0,
     )
 
 
@@ -255,8 +258,10 @@ def tinted_row(tone: imgui.ImVec4 | None = None, *, height: float | None = None)
     pad = ui_px(4)
     height = imgui.get_frame_height() + 2 * pad if height is None else height
     imgui.get_window_draw_list().add_rect_filled(
-        origin, imgui.ImVec2(origin.x + width, origin.y + height),
-        imgui.get_color_u32(surface), style.frame_rounding,
+        origin,
+        imgui.ImVec2(origin.x + width, origin.y + height),
+        imgui.get_color_u32(surface),
+        style.frame_rounding,
     )
     imgui.begin_group()
     imgui.indent(pad)
@@ -289,12 +294,15 @@ def primary_button(label: str, size: tuple[float, float] = (0, 0)) -> bool:
     imgui.push_style_color(imgui.Col_.text, ON_PRIMARY_TEXT)
     imgui.push_style_color(imgui.Col_.button, PRIMARY_FILL)
     for slot, amount in ((imgui.Col_.button_hovered, 0.06), (imgui.Col_.button_active, 0.10)):
-        imgui.push_style_color(slot, imgui.ImVec4(
-            PRIMARY_FILL.x + (1.0 - PRIMARY_FILL.x) * amount,
-            PRIMARY_FILL.y + (1.0 - PRIMARY_FILL.y) * amount,
-            PRIMARY_FILL.z + (1.0 - PRIMARY_FILL.z) * amount,
-            PRIMARY_FILL.w,
-        ))
+        imgui.push_style_color(
+            slot,
+            imgui.ImVec4(
+                PRIMARY_FILL.x + (1.0 - PRIMARY_FILL.x) * amount,
+                PRIMARY_FILL.y + (1.0 - PRIMARY_FILL.y) * amount,
+                PRIMARY_FILL.z + (1.0 - PRIMARY_FILL.z) * amount,
+                PRIMARY_FILL.w,
+            ),
+        )
     try:
         return imgui.button(label, imgui.ImVec2(*size))
     finally:
@@ -555,7 +563,9 @@ def _truncate_to_width(s: str, budget: float) -> str:
     return s
 
 
-def panel_header_button(title: str, icon: str | None, button_icon: str, *, tooltip: str = "") -> bool:
+def panel_header_button(
+    title: str, icon: str | None, button_icon: str, *, tooltip: str = ""
+) -> bool:
     """Render a [`panel_header`][] with a right-aligned icon-only button.
 
     Returns ``True`` on the frame the button is clicked. The button is
@@ -628,8 +638,15 @@ def stream_chip(
         caller finishes iterating its streams.
     """
     style = imgui.get_style()
-    remove_w = (imgui.calc_text_size(fa.ICON_FA_XMARK).x + 2 * style.frame_padding.x
-                + style.item_spacing.x) if removable else 0.0
+    remove_w = (
+        (
+            imgui.calc_text_size(fa.ICON_FA_XMARK).x
+            + 2 * style.frame_padding.x
+            + style.item_spacing.x
+        )
+        if removable
+        else 0.0
+    )
     font = mono_font()
     if font is not None:
         imgui.push_font(font, style.font_size_base)
@@ -654,14 +671,18 @@ def stream_chip(
         pop_selected()
     origin = imgui.get_item_rect_min()
     draw = imgui.get_window_draw_list()
-    draw.add_text(imgui.ImVec2(origin.x + style.frame_padding.x + dot_w,
-                              origin.y + style.frame_padding.y),
-                  imgui.get_color_u32(imgui.Col_.text), shown)
+    draw.add_text(
+        imgui.ImVec2(origin.x + style.frame_padding.x + dot_w, origin.y + style.frame_padding.y),
+        imgui.get_color_u32(imgui.Col_.text),
+        shown,
+    )
     if font is not None:
         imgui.pop_font()
-    draw.add_text(imgui.ImVec2(origin.x + style.frame_padding.x,
-                              origin.y + style.frame_padding.y),
-                  imgui.get_color_u32(tone), fa.ICON_FA_CIRCLE)
+    draw.add_text(
+        imgui.ImVec2(origin.x + style.frame_padding.x, origin.y + style.frame_padding.y),
+        imgui.get_color_u32(tone),
+        fa.ICON_FA_CIRCLE,
+    )
     imgui.set_item_tooltip(f"{name}: {detail}")
     remove = False
     if removable:
@@ -670,8 +691,11 @@ def stream_chip(
         remove = destructive_button(f"{fa.ICON_FA_XMARK}##{prefix}_remove_{name}")
         imgui.end_disabled()
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            imgui.set_tooltip("Stop the recording before removing a stream." if recording
-                              else f"Remove stream {name!r}.")
+            imgui.set_tooltip(
+                "Stop the recording before removing a stream."
+                if recording
+                else f"Remove stream {name!r}."
+            )
     imgui.end_disabled()
     imgui.pop_style_var()
     return clicked and not locked, remove and not recording and not locked

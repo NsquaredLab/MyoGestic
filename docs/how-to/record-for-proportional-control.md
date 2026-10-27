@@ -207,7 +207,7 @@ The property the protocol buys is monotonicity in effort, so assert it:
 probe = [-1.0, -0.5, 0.0, 0.5, 1.0]
 commands = model.predict(np.stack([features(synth(np.full(400, level)).T) for level in probe]))
 
-print([round(float(c), 2) for c in commands])   # [-1.0, -0.59, -0.0, 0.61, 1.0]
+print([round(float(c), 2) for c in commands])  # [-1.0, -0.59, -0.0, 0.61, 1.0]
 assert np.all(np.diff(commands) > 0.0), "the fit is not monotonic in effort"
 ```
 
@@ -284,11 +284,11 @@ from myogestic.session import iter_labeled_windows, iter_target_windows, split_s
 
 split = split_sessions_by_stream(paths, "target")
 
-for path in split.with_stream:                      # cursor blocks: the recorded level
+for path in split.with_stream:  # cursor blocks: the recorded level
     for window, _ts, level in iter_target_windows([path], "emg", "target", 200, 100):
         ...
 
-for path in split.without_stream:                   # cued blocks: the class as a level
+for path in split.without_stream:  # cued blocks: the class as a level
     for window, _ts, class_index in iter_labeled_windows([path], "emg", 200, 100):
         ...
 ```

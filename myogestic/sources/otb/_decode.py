@@ -5,6 +5,7 @@ when shaped (n_channels, n_samples)); we transpose to sample-major to match the
 MyoGestic Source contract. Muovi is big-endian; Quattrocento is little-endian
 (see decode_le_int16 in Task 7).
 """
+
 from __future__ import annotations
 
 import numpy as np

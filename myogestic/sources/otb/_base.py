@@ -4,6 +4,7 @@ Owns the pull-side machinery common to every OTB device: a byte accumulator
 fed from the socket, complete-frame slicing, decode dispatch, and per-frame
 timestamping. Subclasses implement the socket/protocol specifics.
 """
+
 from __future__ import annotations
 
 import socket

@@ -36,21 +36,23 @@ WIDTHS = (320, 420, 560, 720, 1000, 1600)
 
 FINGERS = ("thumb", "index", "middle", "ring", "little")
 MANIFEST = [
-    *(
-        Capability(f"vhi.prediction.{digit}", "continuous", -1.0, 1.0, 0.0)
-        for digit in FINGERS
-    ),
+    *(Capability(f"vhi.prediction.{digit}", "continuous", -1.0, 1.0, 0.0) for digit in FINGERS),
     Capability("vhi.prediction.thumb.abduction", "continuous", -1.0, 1.0, 0.0),
     Capability(
-        "vhi.control.gesture", "discrete", states=("Rest", "Fist"), rest_state="Rest",
+        "vhi.control.gesture",
+        "discrete",
+        states=("Rest", "Fist"),
+        rest_state="Rest",
     ),
 ]
 
 #: A five-way weighted fan-out plus a 1:1 — the widest thing the editor has to draw, and
 #: what `examples/controls/playground.toml` actually contains.
-BUSY = "[dofs]\ncname = [\n" + "".join(
-    f'  {{ target = "vhi.prediction.{digit}", weight = 0.6 }},\n' for digit in FINGERS
-) + ']\nthumb_spread = "vhi.prediction.thumb.abduction"\n'
+BUSY = (
+    "[dofs]\ncname = [\n"
+    + "".join(f'  {{ target = "vhi.prediction.{digit}", weight = 0.6 }},\n' for digit in FINGERS)
+    + ']\nthumb_spread = "vhi.prediction.thumb.abduction"\n'
+)
 
 
 class _Client:
@@ -152,9 +154,7 @@ class TestTheEditorFitsTheWidthItIsGiven:
         # `thumb` is already mapped by BUSY, so a second alias reaching it is the
         # collision, not an unknown address. Asserting the *reason* is what stops this
         # passing on the wrong error.
-        assert any("same control" in problem for problem in editor.problems()), (
-            editor.problems()
-        )
+        assert any("same control" in problem for problem in editor.problems()), editor.problems()
         assert _overflow(_context, width, editor.ui) == pytest.approx(0.0, abs=1.0)
 
     @pytest.mark.parametrize("width", (320, 1600))
@@ -185,9 +185,7 @@ def _widest_overhang(io, width: int, draw, watch) -> float:
     def spy(*args, **kwargs):
         result = original(*args, **kwargs)
         style = imgui.get_style()
-        limit = (
-            imgui.get_window_pos().x + imgui.get_window_width() - style.window_padding.x
-        )
+        limit = imgui.get_window_pos().x + imgui.get_window_width() - style.window_padding.x
         seen[0] = imgui.get_item_rect_max().x - limit
         return result
 
@@ -220,9 +218,7 @@ class TestTheTextViewFitsToo:
     def test_the_text_box_stays_inside_the_panel(self, _context, tmp_path, width):
         """Measured on the box's own edge, since it is the one `-1`-width item here."""
         editor = _editor(tmp_path)
-        overhang = _widest_overhang(
-            _context, width, self._open(editor), "input_text_multiline"
-        )
+        overhang = _widest_overhang(_context, width, self._open(editor), "input_text_multiline")
         assert overhang <= 0.0, f"the text box is {overhang:.0f}px past the edge"
 
     @pytest.mark.parametrize("width", (240, *WIDTHS))
@@ -255,7 +251,6 @@ class TestTheActionsStayReachable:
             drawn = [x for name, x in seen if name.endswith(label)]
             assert drawn, f"{label} was not drawn at {width} px"
             assert max(drawn) <= width + 1.0
-
 
 
 class TestAddControlSitsWithTheControls:
@@ -352,7 +347,6 @@ class TestAddControlSitsWithTheControls:
         )
 
 
-
 class TestTheProbabilityGateIsAToggle:
     """The gate is a sticky on/off, so it is the contract's toggle, not an `imgui.checkbox`.
 
@@ -402,7 +396,6 @@ class TestTheProbabilityGateIsAToggle:
         assert editor._draft[0]["threshold_fraction"] == 0.5, "one click should arm the gate"
         self._click(_context, editor, "Treat as probability")
         assert editor._draft[0]["threshold_fraction"] is None, "a second click should disarm it"
-
 
 
 class TestTheLabelColumnLinesFieldsUp:
@@ -474,7 +467,6 @@ class TestTheLabelColumnLinesFieldsUp:
         assert wide[0][1] > 100.0, "wide should put the field beside the label"
         assert narrow[0][1] < 30.0, "narrow should put the field on its own line"
         assert narrow[0][2] - narrow[0][1] > 90.0, "and it should still be usable"
-
 
 
 class TestTheHeaderActionsShareOneRow:
@@ -566,7 +558,7 @@ class TestOnlyTheGatesThatApplyAreDrawn:
     def test_a_control_with_no_address_yet_is_offered_neither(self, _context, tmp_path):
         """The state every control is in the moment it is added: nothing to gate."""
         editor = self._editor_for(tmp_path, '[dofs]\na = "vhi.control.gesture"\n')
-        editor.add_control()          # appended with no target
+        editor.add_control()  # appended with no target
         drawn = self._labels(_context, editor)
         assert drawn.count("Steady for") == 1, "the empty control was offered a debounce"
 
@@ -742,9 +734,7 @@ class TestThePlaygroundsOwnSlidersFit:
             def push(self, values):
                 return values
 
-        levels = dict.fromkeys(
-            ("close", "thumb_spread", "a_rather_long_control_name"), 0.0
-        )
+        levels = dict.fromkeys(("close", "thumb_spread", "a_rather_long_control_name"), 0.0)
         before = (playground.bus, dict(playground.levels))
         playground.bus, playground.levels = Bus(), levels
         yield playground
@@ -820,7 +810,7 @@ class TestTheStudioHoldsSeveralDocuments:
     def test_switching_disarms_the_keyboard(self, studio):
         """A map you navigated away from must not keep sending keystrokes."""
         studio.documents.append(studio._new_document())
-        studio.keys._armed = True          # as `arm()` would leave it
+        studio.keys._armed = True  # as `arm()` would leave it
         studio._switch_to(1)
         assert studio.keys.armed is False
 
@@ -857,7 +847,7 @@ class TestTheTabBarSurvivesAClose:
         """The exact crash: a snapshot longer than `documents`, as a close leaves it."""
         snapshot = [studio._new_document(), studio._new_document()]
         assert len(studio.documents) == 1 < len(snapshot)
-        assert studio._tab_label(1, snapshot)          # must not raise
+        assert studio._tab_label(1, snapshot)  # must not raise
 
     def test_rendering_the_bar_pairs_begin_and_end(self, _context, studio):
         """A frame that leaves a tab bar open is what turns a Python error into an abort, so
@@ -1004,7 +994,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
         reported undrivable controls out of the map you had just navigated away from.
         """
         studio.waiting = {"close": "vhi.prediction.index — vhi has not answered"}
-        studio._connect()          # the active document is untitled: an early return
+        studio._connect()  # the active document is untitled: an early return
         assert studio.waiting == {}, "the previous map's controls were still listed"
         assert "Untitled" in studio.status
 
@@ -1017,7 +1007,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
         monkeypatch.setattr(studio, "_connect", lambda known=None: None)
         studio.documents.append(studio._new_document())
         doomed = studio.documents[1]
-        studio._rebuild_if_the_manifest_changed()          # records the active one
+        studio._rebuild_if_the_manifest_changed()  # records the active one
         studio.caps_seen[id(doomed)] = 99
 
         studio._close_document(1)
@@ -1041,9 +1031,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
 
         assert calls, "studio_ui never reached the manifest check"
 
-    def test_an_automatic_rebuild_does_not_disarm_the_keyboard(
-        self, studio, monkeypatch, tmp_path
-    ):
+    def test_an_automatic_rebuild_does_not_disarm_the_keyboard(self, studio, monkeypatch, tmp_path):
         """`bus.stop()` lifts every key, which is right on the way out and wrong here.
 
         Rebuilding used to follow a click only, so disarming was something the user had
@@ -1070,8 +1058,9 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
 
             def capabilities(self):
                 return [
-                    Capability("keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0,
-                               states=("up", "down"))
+                    Capability(
+                        "keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0, states=("up", "down")
+                    )
                 ]
 
         class _Target:
@@ -1103,11 +1092,11 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
         studio._connect()
         assert studio.bus is not None, studio.status
 
-        studio._connect()                     # a rebuild while it was never armed
+        studio._connect()  # a rebuild while it was never armed
         assert not fake_keys.armed, "a rebuild armed a keyboard nobody had switched on"
 
-        fake_keys.arm()                       # the user ticks "Send keys to the system"
-        studio._connect()                     # a target turned up: an automatic rebuild
+        fake_keys.arm()  # the user ticks "Send keys to the system"
+        studio._connect()  # a target turned up: an automatic rebuild
 
         assert fake_keys.armed, "launching a target switched the keyboard off"
 
@@ -1130,16 +1119,12 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
 
         assert not fake_keys.armed, "a tab switch must leave the keyboard disarmed"
 
-    def test_an_automatic_rebuild_does_not_re_ask_the_targets(
-        self, studio, monkeypatch, tmp_path
-    ):
+    def test_an_automatic_rebuild_does_not_re_ask_the_targets(self, studio, monkeypatch, tmp_path):
         """No click happened, so nobody is waiting through a round trip — and the editor's
         worker already fetched the very answer that triggered this."""
         handed = []
         monkeypatch.setattr(studio, "_connect", lambda known=None: handed.append(known))
-        monkeypatch.setattr(
-            studio, "_manifests", lambda: pytest.fail("the render thread re-asked")
-        )
+        monkeypatch.setattr(studio, "_manifests", lambda: pytest.fail("the render thread re-asked"))
         studio.caps_seen.clear()
 
         studio._rebuild_if_the_manifest_changed()
@@ -1151,8 +1136,7 @@ class TestTheStudioFollowsWhatTheTargetsOffer:
         from myogestic.controls import Capability
 
         studio.documents[0]._capabilities = (
-            Capability("keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0,
-                       states=("up", "down")),
+            Capability("keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0, states=("up", "down")),
         )
         capabilities, absent = studio._editor_manifest()
         assert [c.address for c in capabilities] == ["keyboard.hold.letter.w"]

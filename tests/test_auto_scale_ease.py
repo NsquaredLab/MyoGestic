@@ -159,14 +159,18 @@ def _pc(per_channel=True):
 
 def test_per_channel_first_frame_snaps_to_raw_ranges():
     v = _pc()
-    r = update_per_channel_ranges(v, _data_cols([(-1.0, 1.0), (-0.2, 0.5)]), [0, 1], "emg", now=100.0)
+    r = update_per_channel_ranges(
+        v, _data_cols([(-1.0, 1.0), (-0.2, 0.5)]), [0, 1], "emg", now=100.0
+    )
     assert np.allclose(r[0], (-1.0, 1.0)) and np.allclose(r[1], (-0.2, 0.5))  # raw min/max, snapped
 
 
 def test_per_channel_expands_instantly_so_a_louder_channel_never_overflows():
     v = _pc()
     update_per_channel_ranges(v, _data_cols([(-0.1, 0.1)]), [0], "emg", now=100.0)  # snap small
-    r = update_per_channel_ranges(v, _data_cols([(-2.0, 2.0)]), [0], "emg", now=100.016)  # ONE frame
+    r = update_per_channel_ranges(
+        v, _data_cols([(-2.0, 2.0)]), [0], "emg", now=100.016
+    )  # ONE frame
     assert r[0][1] >= 2.0 - 1e-9 and r[0][0] <= -2.0 + 1e-9  # range snapped OUT in one frame
 
 
@@ -186,7 +190,9 @@ def test_per_channel_channel_set_change_snaps_the_new_channel():
     v = _pc()
     update_per_channel_ranges(v, _data_cols([(-1.0, 1.0)]), [0], "emg", now=100.0)
     update_per_channel_ranges(v, _data_cols([(-1.0, 1.0)]), [0], "emg", now=105.0)  # settled
-    r = update_per_channel_ranges(v, _data_cols([(-1.0, 1.0), (-3.0, 3.0)]), [0, 1], "emg", now=105.016)
+    r = update_per_channel_ranges(
+        v, _data_cols([(-1.0, 1.0), (-3.0, 3.0)]), [0, 1], "emg", now=105.016
+    )
     assert np.allclose(r[1], (-3.0, 3.0))  # newly-enabled ch1 snaps to its raw range
 
 
@@ -216,7 +222,9 @@ def test_per_channel_manual_holds_frozen_ranges():
     frozen = dict(v.pc_ranges)
     v.scale_mode = "manual"
     # Even as the signal changes wildly, Manual holds the captured ranges (no re-fit).
-    r = update_per_channel_ranges(v, _data_cols([(-9.0, 9.0), (-0.01, 0.01)]), [0, 1], "emg", now=101.0)
+    r = update_per_channel_ranges(
+        v, _data_cols([(-9.0, 9.0), (-0.01, 0.01)]), [0, 1], "emg", now=101.0
+    )
     assert r == frozen and v.pc_ranges == frozen
 
 
@@ -226,7 +234,9 @@ def test_per_channel_manual_initialises_only_a_newly_enabled_channel():
     v.scale_mode = "manual"
     ch0_frozen = v.pc_ranges[0]
     # Enable ch1 while Manual: it initialises from its own current data; ch0 stays frozen.
-    r = update_per_channel_ranges(v, _data_cols([(-1.0, 1.0), (-3.0, 3.0)]), [0, 1], "emg", now=101.0)
+    r = update_per_channel_ranges(
+        v, _data_cols([(-1.0, 1.0), (-3.0, 3.0)]), [0, 1], "emg", now=101.0
+    )
     assert r[0] == ch0_frozen
     assert np.allclose(r[1], (-3.0, 3.0))
 

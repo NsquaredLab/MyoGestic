@@ -5,9 +5,9 @@ A widget is a **class**. You construct it once with its configuration, then call
 ```python
 class EmgViewer:
     def __init__(self, stream: str = "emg") -> None:
-        self._stream = stream                       # config held on the instance
+        self._stream = stream  # config held on the instance
 
-    def ui(self, ctx: Context) -> None:             # per-frame: takes ctx
+    def ui(self, ctx: Context) -> None:  # per-frame: takes ctx
         env_min, env_max = ctx.streams[self._stream].get_display(n_pixels=800)
         if implot.begin_plot("EMG", imgui.ImVec2(-1, 300)):
             for ch in range(env_min.shape[1]):
@@ -19,11 +19,12 @@ class EmgViewer:
 Construct it once, then drop `.ui(ctx)` inside `@app.ui`:
 
 ```python
-viewer = EmgViewer("emg")           # once, at module/app scope
+viewer = EmgViewer("emg")  # once, at module/app scope
+
 
 @app.ui
 def ui(ctx):
-    viewer.ui(ctx)                   # every frame
+    viewer.ui(ctx)  # every frame
 ```
 
 Every widget follows this shape — `SignalViewer("emg").ui(ctx)`, `Heatmap("Confusion").ui(cm)`, `PipelinePanel(pipeline).ui()`. One convention, no exceptions.
@@ -58,9 +59,9 @@ Dear ImGui is *immediate mode*: the UI is described by code that runs every fram
 ```python
 @app.ui
 def ui(ctx):
-    viewer.ui(ctx)                 # draws this frame
+    viewer.ui(ctx)  # draws this frame
     if imgui.button("Click me"):
-        print("clicked")           # only true on the frame the click landed
+        print("clicked")  # only true on the frame the click landed
 ```
 
 The widget is a class only so it has somewhere to keep state between frames — the *rendering* is still immediate-mode draw calls issued fresh each frame from `.ui()`.
@@ -99,13 +100,13 @@ save = SaveModelButton(pipeline, "model.pkl")
 
 @app.ui
 def ui(ctx):
-    with grid[0:8, 1:3]:      # right two columns
+    with grid[0:8, 1:3]:  # right two columns
         viewer.ui(ctx)
     with grid[0, 0]:
         launcher.ui()
     with grid[1, 0]:
         recording.ui(ctx)
-    with grid[2:6, 0]:        # rows 2–5, column 0
+    with grid[2:6, 0]:  # rows 2–5, column 0
         pipeline.training_data = sessions.ui()
     with grid[6, 0]:
         panel.ui()

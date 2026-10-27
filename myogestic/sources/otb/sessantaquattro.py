@@ -10,6 +10,7 @@ say "2 AUX + 2 accessory" but a Sessantaquattro+ sends eight. A wrong count
 does not fail, it silently de-interleaves, so the width is recovered from the
 ramp counter in the last channel.
 """
+
 from __future__ import annotations
 
 import logging
@@ -182,9 +183,7 @@ class SessantaquattroSource(_OTBSource):
         # `_identify_from_stream`, which runs before any StreamInfo is returned.
         self._set_geometry(max(C.SESSANTAQUATTRO_ACCESSORY_CANDIDATES))
         assert self._geo is not None
-        self._probe_nbytes = (
-            _PROBE_SAMPLES * self._geo.n_total * self._geo.bytes_per_sample
-        )
+        self._probe_nbytes = _PROBE_SAMPLES * self._geo.n_total * self._geo.bytes_per_sample
         n_out = self._geo.n_total if self._include_aux else self._geo.n_bio
         return StreamInfo(
             n_channels=n_out,

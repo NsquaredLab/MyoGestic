@@ -81,7 +81,10 @@ def _disabled_caption(reason: str) -> None:
 
 
 def _render_train_button(
-    pipeline: Pipeline, size: tuple[float, float] = (92, 0), *, full_width: bool = False,
+    pipeline: Pipeline,
+    size: tuple[float, float] = (92, 0),
+    *,
+    full_width: bool = False,
 ) -> None:
     state = pipeline.app.ctx.state
     if state == PipelineState.PREDICTING:
@@ -208,8 +211,7 @@ def _render_state_row(tone: imgui.ImVec4, label: str, detail: str) -> None:
     """Draw pipeline status with clipped details available on hover."""
     height = None
     if detail:
-        height = (2 * imgui.get_text_line_height() + imgui.get_style().item_spacing.y
-                  + ui_px(8))
+        height = 2 * imgui.get_text_line_height() + imgui.get_style().item_spacing.y + ui_px(8)
     with tinted_row(tone, height=height) as width:
         if not detail:
             imgui.align_text_to_frame_padding()
@@ -247,16 +249,23 @@ def _render_pipeline_panel(
         popped = _popout_open.get(widget_id, False)
         show_log_action = bool(pipeline.train_log) or popped
         style = imgui.get_style()
-        icon = (fa.ICON_FA_DOWN_LEFT_AND_UP_RIGHT_TO_CENTER if popped
-                else fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER)
+        icon = (
+            fa.ICON_FA_DOWN_LEFT_AND_UP_RIGHT_TO_CENTER
+            if popped
+            else fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER
+        )
         action_width = imgui.calc_text_size(icon).x + 2 * style.frame_padding.x
         reserve = action_width + style.item_spacing.x if show_log_action else 0.0
         panel_header("MODEL", fa.ICON_FA_BRAIN, status=tone, reserve=reserve)
         if show_log_action:
             imgui.same_line()
-            imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
-                0.0, imgui.get_content_region_avail().x - action_width,
-            ))
+            imgui.set_cursor_pos_x(
+                imgui.get_cursor_pos_x()
+                + max(
+                    0.0,
+                    imgui.get_content_region_avail().x - action_width,
+                )
+            )
             _popout_open[widget_id] = render_log_buttons(widget_id, popped_out=popped)
 
         _render_state_row(tone, label, detail)

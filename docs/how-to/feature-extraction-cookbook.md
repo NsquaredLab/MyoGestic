@@ -11,13 +11,13 @@ Each recipe slots into `@pipeline.extract` (section 1 also shows the `FeatureSel
 `examples/synthetic/emg_classification.py` registers a menu of reference features via [`FeatureSelector`][myogestic.widgets.FeatureSelector] and lets the user toggle them live in the GUI:
 
 ```python
---8<-- "examples/synthetic/emg_classification.py:features"
+--8 < --"examples/synthetic/emg_classification.py:features"
 ```
 
 `extract` just calls it — the active features are stacked into one flat vector, identical for training and live predict:
 
 ```python
---8<-- "examples/synthetic/emg_classification.py:extract"
+--8 < --"examples/synthetic/emg_classification.py:extract"
 ```
 
 The reference `rms`/`mav`/`wl`/`var`/`zc` live in [`myogestic.recipes.features`][myogestic.recipes.features] — plain numpy, channels-first `(n_channels, n_samples)` in, one scalar per channel out. Mix your own callables into the same dict; feature engineering is user code.

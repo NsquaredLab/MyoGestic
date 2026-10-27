@@ -105,7 +105,7 @@ def test_force_ramps_sessions_follow_participant(app_module, implot_frame, monke
 
 
 def test_nothing_but_the_target_attaches_itself(app_module):
-    """"Nothing attaches on its own" is the project's rule, and a green stream
+    """ "Nothing attaches on its own" is the project's rule, and a green stream
     the operator never connected reads as the app having done something behind
     them.
 

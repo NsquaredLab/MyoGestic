@@ -21,7 +21,10 @@ grid = Grid.areas(
 )
 steps = StepBar(["Connect", "Record", "Train", "Drive"], widget_id="demo-steps")
 workflow = AppHeader(
-    "Myocontrol", steps=steps, participant=ParticipantPanel(), widget_id="workflow-header",
+    "Myocontrol",
+    steps=steps,
+    participant=ParticipantPanel(),
+    widget_id="workflow-header",
 )
 viewer = AppHeader("Signal acquisition and analysis viewer", widget_id="viewer-header")
 done = [True, False, False, False]
@@ -36,7 +39,9 @@ def ui(ctx: Context) -> None:
     with grid.area("body"):
         panel_header("App headers")
         imgui.text_colored(muted(), f"Selected step: {steps.steps[active]}")
-        imgui.text_wrapped("Resize the window to see the title shorten. Hover over it to read the full title.")
+        imgui.text_wrapped(
+            "Resize the window to see the title shorten. Hover over it to read the full title."
+        )
 
 
 def main() -> None:

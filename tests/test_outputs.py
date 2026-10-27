@@ -236,4 +236,4 @@ def test_sending_after_stop_does_not_raise():
 
     outlet = LSLOutlet(name="test_after_stop", n_channels=3, hz=32.0)
     outlet.stop()
-    outlet._send(np.zeros(3, dtype=np.float32))     # must be a no-op, not a traceback
+    outlet._send(np.zeros(3, dtype=np.float32))  # must be a no-op, not a traceback

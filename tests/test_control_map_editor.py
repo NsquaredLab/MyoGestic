@@ -46,7 +46,9 @@ MANIFEST = [
         for dof in _DOFS
     ),
     Capability(
-        "vhi.control.gesture", "discrete", states=("Rest", "Fist", "Pointing"),
+        "vhi.control.gesture",
+        "discrete",
+        states=("Rest", "Fist", "Pointing"),
         rest_state="Rest",
     ),
 ]
@@ -234,7 +236,7 @@ class TestSaveIsBlockedWhileTheMapIsWrong:
         editor = _editor(tmp_path, GOOD)
         original = editor.path.read_text(encoding="utf-8")
         editor.add_control("a", "vhi.prediction.thumb.flexion")
-        editor.add_control("b", "vhi.prediction.thumb.flexion")   # the same control twice
+        editor.add_control("b", "vhi.prediction.thumb.flexion")  # the same control twice
         assert editor.save() is False
         assert editor.path.read_text(encoding="utf-8") == original
 
@@ -327,7 +329,7 @@ class TestItExplainsWhatTheTargetWouldMakeOfIt:
 
     def test_it_points_at_the_problems_rather_than_resolving_a_bad_map(self, tmp_path):
         editor = _editor(tmp_path, None)
-        editor.add_control("a")           # no target
+        editor.add_control("a")  # no target
         assert "problems" in editor.resolved_summary()
 
 
@@ -358,7 +360,7 @@ class TestItWorksWithoutATarget:
 
         editor = ControlMapEditor(tmp_path / "c.toml", client=Silent())
         editor.load()
-        editor._asked = True          # what the button sets
+        editor._asked = True  # what the button sets
         editor._connect()
         assert editor.capabilities == ()
         assert "did not answer" in editor._message
@@ -380,7 +382,7 @@ class TestItWorksWithoutATarget:
         editor = ControlMapEditor(tmp_path / "c.toml", client=TooOld())
         editor.load()
         editor._asked = True
-        editor._connect()                       # the press must not raise
+        editor._connect()  # the press must not raise
         assert "vocabulary 1" in editor._refusal, editor._refusal
         assert "did not answer" not in editor._refusal
 
@@ -394,14 +396,13 @@ class TestItWorksWithoutATarget:
 
         editor = ControlMapEditor(tmp_path / "c.toml", client=TooOld())
         editor.load()
-        editor._refetch = True                  # what pressing Connect sets
+        editor._refetch = True  # what pressing Connect sets
         editor.poll_connect()
         deadline = time.monotonic() + 5.0
         while editor._fetching and time.monotonic() < deadline:
             time.sleep(0.01)
-        editor.poll_connect()                   # adopts what the worker published
+        editor.poll_connect()  # adopts what the worker published
         assert "vocabulary 1" in editor._refusal, editor._refusal
-
 
     def test_a_refusal_stops_being_said_once_the_target_is_updated(self, tmp_path):
         """Otherwise the panel tells someone who has just updated VHI to update VHI.
@@ -463,8 +464,8 @@ class TestItWorksWithoutATarget:
 
         editor = ControlMapEditor(tmp_path / "c.toml", client=Silent())
         editor.load()
-        editor._message = ""          # `load` says the file is new; that is not this
-        editor._connect()             # no `_asked`: this is the timer
+        editor._message = ""  # `load` says the file is new; that is not this
+        editor._connect()  # no `_asked`: this is the timer
         assert editor._message == "", "the timer wrote a line nobody asked for"
 
 
@@ -479,7 +480,7 @@ class TestTheFileCanBeEditedAsText:
     def test_the_text_is_the_file_verbatim_when_nothing_has_changed(self, tmp_path):
         """Comments included — opening the text view must not silently eat them."""
         path = tmp_path / "controls.toml"
-        path.write_text("# my notes\n[dofs]\nclose = \"vhi.prediction.index\"\n")
+        path.write_text('# my notes\n[dofs]\nclose = "vhi.prediction.index"\n')
         editor = ControlMapEditor(path, client=_Client())
         editor.load()
         assert editor.raw_text().startswith("# my notes")
@@ -504,8 +505,10 @@ class TestTheFileCanBeEditedAsText:
             ("[dofs", "Not valid TOML"),
             ("[settings]\nx = 1\n", "No [dofs] table"),
             ('[dofs]\nx = "nope"\n', "is not a target address"),
-            ('[dofs]\nx = { target = "vhi.prediction.index", threshold_fraction = 7 }\n',
-             "threshold_fraction"),
+            (
+                '[dofs]\nx = { target = "vhi.prediction.index", threshold_fraction = 7 }\n',
+                "threshold_fraction",
+            ),
         ],
         ids=["malformed", "no-dofs", "bad-address", "bad-fraction"],
     )
@@ -788,7 +791,7 @@ class TestAGateIsOnlyOfferedWhereItApplies:
         """Offline, or an address the target does not export, is unknowable — allow it."""
         path = tmp_path / "controls.toml"
         path.write_text('[dofs]\nmine = { target = "some.other.thing", debounce_s = 0.2 }\n')
-        editor = ControlMapEditor(path)   # no client at all
+        editor = ControlMapEditor(path)  # no client at all
         editor.load()
         assert editor._gate_rules(editor._draft[0]) == ("", "")
 
@@ -848,8 +851,7 @@ class TestAHeldStateDrivesNoStream:
         editor = self._editor_with(
             tmp_path,
             client,
-            '[dofs]\na = "vhi.prediction.thumb.flexion"\n'
-            'b = "vhi.prediction.thumb.flexion"\n',
+            '[dofs]\na = "vhi.prediction.thumb.flexion"\nb = "vhi.prediction.thumb.flexion"\n',
         )
         assert any("same control" in p for p in editor.problems())
 
@@ -1086,7 +1088,7 @@ class TestSaveAs:
         """Save As shares Save's rule: it must not write a file that will not load."""
         editor = _editor(tmp_path, GOOD)
         original = editor.path
-        editor._draft[0]["alias"] = ""          # invalid: an alias is required
+        editor._draft[0]["alias"] = ""  # invalid: an alias is required
         assert editor.save_as(tmp_path / "never.toml") is False
         assert editor.path == original
         assert not (tmp_path / "never.toml").exists()
@@ -1161,9 +1163,7 @@ class TestSeveralManifests:
             def capabilities(self):
                 return MANIFEST
 
-        editor = ControlMapEditor(
-            pathlib.Path("unused.toml"), clients=[Fake(), KeyboardTarget()]
-        )
+        editor = ControlMapEditor(pathlib.Path("unused.toml"), clients=[Fake(), KeyboardTarget()])
         editor._connect()
         roots = {c.address.split(".")[0] for c in editor.capabilities}
         assert roots == {"vhi", "keyboard"}
@@ -1272,8 +1272,10 @@ class TestARowSaysWhatTheControlAccepts:
     def test_many_states_are_counted(self, tmp_path):
         """Seventeen names would push the row off the edge, so the count is right there."""
         gesture = Capability(
-            "vhi.control.gesture", "discrete",
-            states=tuple(f"s{i}" for i in range(17)), rest_state="s0",
+            "vhi.control.gesture",
+            "discrete",
+            states=tuple(f"s{i}" for i in range(17)),
+            rest_state="s0",
         )
         assert self._editor(tmp_path)._detail(gesture).strip() == "17 states"
 
@@ -1354,9 +1356,7 @@ walk = "keyboard.hold.letter.w"
 
     def test_the_answered_targets_controls_are_still_checked(self, tmp_path):
         """The keyboard *did* answer, so a bad keyboard address is still a problem."""
-        editor = self._keyboard_only(
-            tmp_path, '[dofs]\nwalk = "keyboard.hold.letter.nonesuch"\n'
-        )
+        editor = self._keyboard_only(tmp_path, '[dofs]\nwalk = "keyboard.hold.letter.nonesuch"\n')
         assert any("does not export" in p for p in editor.problems())
         assert editor.warnings() == []
 
@@ -1366,8 +1366,8 @@ walk = "keyboard.hold.letter.w"
         path.write_text('[dofs]\na = "vhi.prediction.index"\n')
         editor = ControlMapEditor(path)
         editor.load()
-        editor._draft.append(dict(editor._draft[0]))          # duplicate name
-        editor._draft[1]["targets"] = [["vhi.prediction.middle", 0.0]]   # zero weight
+        editor._draft.append(dict(editor._draft[0]))  # duplicate name
+        editor._draft[1]["targets"] = [["vhi.prediction.middle", 0.0]]  # zero weight
         found = " ".join(editor.problems())
         assert "used twice" in found
         assert "outside [-1, 1] or zero" in found
@@ -1487,7 +1487,7 @@ class TestTheHeaderDotReportsTheMapNotTheTarget:
         from myogestic.widgets.common import WARNING
 
         editor = self._editor(tmp_path)
-        editor.add_control()                      # a control pointing at nothing yet
+        editor.add_control()  # a control pointing at nothing yet
         colour, detail = editor._status()
         assert colour is WARNING
         assert "Cannot save yet" in detail
@@ -1556,9 +1556,7 @@ class TestConnectingHappensOnItsOwn:
 
             self.asked += 1
             _t.sleep(self.delay)
-            return [
-                Capability(self.address, "continuous", -1.0, 1.0, 0.0)
-            ]
+            return [Capability(self.address, "continuous", -1.0, 1.0, 0.0)]
 
     class _Silent:
         """A target that is not running yet: asked, and says nothing."""
@@ -1581,9 +1579,7 @@ class TestConnectingHappensOnItsOwn:
             self.asked += 1
             if not self.up:
                 return None
-            return [
-                Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0)
-            ]
+            return [Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0)]
 
     @staticmethod
     def _settle(editor, tries: int = 200):
@@ -1607,8 +1603,8 @@ class TestConnectingHappensOnItsOwn:
         client = self._Slow()
         editor = self._editor(tmp_path, client)
         assert editor.capabilities == ()
-        editor.poll_connect()          # starts the worker
-        self._settle(editor)           # adopts its answer
+        editor.poll_connect()  # starts the worker
+        self._settle(editor)  # adopts its answer
         assert editor._answered == frozenset({"vhi"})
         assert len(editor.capabilities) == 1
 
@@ -1637,8 +1633,8 @@ class TestConnectingHappensOnItsOwn:
         filled `_answered` on the first frame, the retry read that as done, and VHI was never
         asked again however long it ran.
         """
-        vhi = self._Silent()                                  # not up yet
-        keys = self._Slow(address="keyboard.hold.letter.w")    # answers off a local list
+        vhi = self._Silent()  # not up yet
+        keys = self._Slow(address="keyboard.hold.letter.w")  # answers off a local list
         editor = self._editor(tmp_path, vhi, keys)
         editor.poll_connect()
         self._settle(editor)
@@ -1670,7 +1666,7 @@ class TestConnectingHappensOnItsOwn:
         assert editor._all_answered
         assert len(editor.capabilities) == 2
 
-        vhi.up = False                                   # the target is closed
+        vhi.up = False  # the target is closed
         editor._last_attempt -= editor._RETRY_EVERY_S + 1
         editor.poll_connect()
         self._settle(editor)
@@ -1689,7 +1685,7 @@ class TestConnectingHappensOnItsOwn:
         vhi = self._Silent()
         keys = self._Slow(address="keyboard.hold.letter.w")
         editor = self._editor(tmp_path, vhi, keys)
-        editor._refetch = True          # what pressing Connect sets
+        editor._refetch = True  # what pressing Connect sets
         editor.poll_connect()
         self._settle(editor)
 
@@ -1708,7 +1704,7 @@ class TestConnectingHappensOnItsOwn:
 
         angry = _Angry()
         keys = self._Slow(address="keyboard.hold.letter.w")
-        editor = self._editor(tmp_path, angry, keys)     # the raiser is asked FIRST
+        editor = self._editor(tmp_path, angry, keys)  # the raiser is asked FIRST
         editor.poll_connect()
         self._settle(editor)
 
@@ -1740,15 +1736,16 @@ class TestConnectingHappensOnItsOwn:
         editor.poll_connect()
         self._settle(editor)
         for _ in range(20):
-            editor.poll_connect()          # inside the retry gap
+            editor.poll_connect()  # inside the retry gap
         assert client.asked == 1
-        editor._last_attempt -= editor._RETRY_EVERY_S + 1     # gap elapsed
+        editor._last_attempt -= editor._RETRY_EVERY_S + 1  # gap elapsed
         editor.poll_connect()
         self._settle(editor)
         assert client.asked == 2
 
     def test_the_button_skips_the_gap(self, tmp_path):
         """Its whole use: you just launched the thing, do not make me wait five seconds."""
+
         class Silent:
             def __init__(self):
                 self.asked = 0
@@ -1768,6 +1765,7 @@ class TestConnectingHappensOnItsOwn:
 
     def test_a_client_that_raises_does_not_take_the_app_down(self, tmp_path):
         """It runs on a worker, so an exception there would be lost, not caught."""
+
         class Angry:
             def capabilities(self):
                 raise RuntimeError("no")
@@ -1783,7 +1781,6 @@ class TestConnectingHappensOnItsOwn:
         editor = self._editor(tmp_path, self._Slow())
         editor._connect()
         assert len(editor.capabilities) == 1
-
 
 
 class TestTheSearchSurvivesTheOtherPickers:
@@ -1812,9 +1809,9 @@ class TestTheSearchSurvivesTheOtherPickers:
 
     def test_a_search_typed_into_the_open_picker_is_not_cleared(self, tmp_path):
         editor = self._editor(tmp_path)
-        self._frame(editor, open_index=2)          # the user opens the third row's picker
-        editor._filter = "ind"                     # ...and types
-        for _ in range(10):                        # ten more frames go by
+        self._frame(editor, open_index=2)  # the user opens the third row's picker
+        editor._filter = "ind"  # ...and types
+        for _ in range(10):  # ten more frames go by
             self._frame(editor, open_index=2)
         assert editor._filter == "ind", "the search was cleared while the popup stayed open"
 
@@ -1831,7 +1828,7 @@ class TestTheSearchSurvivesTheOtherPickers:
         editor = self._editor(tmp_path)
         self._frame(editor, open_index=2)
         editor._filter = "ind"
-        opened = self._frame(editor, open_index=4)   # a different row's picker
+        opened = self._frame(editor, open_index=4)  # a different row's picker
         assert opened.count(True) == 1
         assert editor._filter == "", "a different picker inherited the last one's search"
 
@@ -1839,7 +1836,7 @@ class TestTheSearchSurvivesTheOtherPickers:
         editor = self._editor(tmp_path)
         self._frame(editor, open_index=0)
         editor._filter = "ind"
-        self._frame(editor, open_index=None)         # all closed
+        self._frame(editor, open_index=None)  # all closed
         assert self._frame(editor, open_index=0).count(True) == 1, "reopening is a fresh open"
         assert editor._filter == ""
 
@@ -1859,9 +1856,7 @@ class TestASilentTargetIsSaidOutLoud:
             self.address = address
 
         def capabilities(self):
-            return [
-                Capability(self.address, "continuous", -1.0, 1.0, 0.0)
-            ]
+            return [Capability(self.address, "continuous", -1.0, 1.0, 0.0)]
 
     class _Silent:
         def capabilities(self):
@@ -1880,7 +1875,7 @@ class TestASilentTargetIsSaidOutLoud:
         imgui_frame(editor.ui)
         return lines
 
-    def _editor(self, tmp_path, *clients, body='[dofs]\n'):
+    def _editor(self, tmp_path, *clients, body="[dofs]\n"):
         path = tmp_path / "m.toml"
         path.write_text(body)
         editor = ControlMapEditor(path, clients=list(clients))
@@ -1889,9 +1884,7 @@ class TestASilentTargetIsSaidOutLoud:
         return editor
 
     def test_a_blank_map_still_reports_the_silent_target(self, imgui_frame, monkeypatch, tmp_path):
-        editor = self._editor(
-            tmp_path, self._Silent(), self._Answers("keyboard.hold.letter.w")
-        )
+        editor = self._editor(tmp_path, self._Silent(), self._Answers("keyboard.hold.letter.w"))
         assert editor.unanswered() == {}, "the map names nothing, so nothing is per-address"
         assert not editor._all_answered
 
@@ -1915,9 +1908,7 @@ class TestASilentTargetIsSaidOutLoud:
         assert sum("has not answered" in line for line in said) == 1, said
         assert not any("search box" in line for line in said)
 
-    def test_nothing_is_said_when_every_target_answered(
-        self, imgui_frame, monkeypatch, tmp_path
-    ):
+    def test_nothing_is_said_when_every_target_answered(self, imgui_frame, monkeypatch, tmp_path):
         editor = self._editor(tmp_path, self._Answers(), self._Answers("keyboard.tap.edit.space"))
         assert editor._all_answered
 
@@ -1941,15 +1932,17 @@ class TestTheConnectMessageExpires:
         def capabilities(self):
             if not self.up:
                 return None
-            return [
-                Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0)
-            ]
+            return [Capability("vhi.prediction.index", "continuous", -1.0, 1.0, 0.0)]
 
     class _Answers:
         def capabilities(self):
             return [
                 Capability(
-                    "keyboard.hold.letter.w", "discrete", 0.0, 1.0, 0.0,
+                    "keyboard.hold.letter.w",
+                    "discrete",
+                    0.0,
+                    1.0,
+                    0.0,
                     states=("up", "down"),
                 )
             ]
@@ -1965,12 +1958,12 @@ class TestTheConnectMessageExpires:
         vhi = self._Togglable()
         editor = self._editor(tmp_path, vhi, self._Answers())
 
-        editor._asked = True                       # the press
+        editor._asked = True  # the press
         editor._connect()
         assert editor._message, "a press that reached nothing must say so"
 
-        vhi.up = True                              # the target starts
-        editor._connect()                          # what the timer's round does
+        vhi.up = True  # the target starts
+        editor._connect()  # what the timer's round does
 
         assert editor._all_answered
         assert not editor._message, "the panel still called a running target absent"
@@ -1979,7 +1972,7 @@ class TestTheConnectMessageExpires:
         """`_message` is shared, so the retry may only retire the line it is about."""
         editor = self._editor(tmp_path, self._Answers())
         editor._message = "Saved 3 control(s) to m.toml"
-        editor._connect()                          # everything answers; no press
+        editor._connect()  # everything answers; no press
         assert editor._message == "Saved 3 control(s) to m.toml"
 
 

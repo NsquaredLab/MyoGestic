@@ -153,10 +153,13 @@ def test_an_unknown_area_lists_the_ones_that_exist():
 
 def _layout(breakpoint: float = 500) -> Layout:
     return Layout(
-        wide=Grid.areas("""
+        wide=Grid.areas(
+            """
             record  signal
             train   signal
-        """, col_width=[Px(200), Fr(1)]),
+        """,
+            col_width=[Px(200), Fr(1)],
+        ),
         narrow=Grid.areas("""
             signal
             record | train
@@ -197,8 +200,11 @@ def test_the_breakpoint_splits_wide_from_narrow():
 def test_grid_uses_parent_content_region_when_child_padding_changes(imgui_frame, title_bar):
     from imgui_bundle import imgui
 
-    grid = Grid.areas("header header\nleft right\nstatus status",
-                      row_height=[Px(52), Fr(1), Px(26)], bare=("header", "status"))
+    grid = Grid.areas(
+        "header header\nleft right\nstatus status",
+        row_height=[Px(52), Fr(1), Px(26)],
+        bare=("header", "status"),
+    )
     scroll = []
 
     def draw():
@@ -309,10 +315,13 @@ def _probe_window():
 
 
 def test_named_cells_do_not_overlap_and_fill_their_track(imgui_frame):
-    grid = Grid.areas("""
+    grid = Grid.areas(
+        """
         record  signal
         train   signal
-    """, col_width=[Px(200), Fr(1)])
+    """,
+        col_width=[Px(200), Fr(1)],
+    )
     seen = {}
 
     def draw():

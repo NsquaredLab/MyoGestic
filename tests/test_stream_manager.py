@@ -141,6 +141,7 @@ def test_removing_from_the_row_list_does_not_mutate_during_iteration(implot_fram
     # Stand in for simultaneous chip events; apply only one deferred removal.
     monkeypatch.setattr(module, "stream_chip", lambda *args, **kwargs: (False, True))
     try:
+
         def draw() -> None:
             imgui.begin_child("cell", imgui.ImVec2(500, 300))
             manager.ui(app.ctx)
@@ -199,9 +200,13 @@ def test_chips_select_then_remove_after_iteration(imgui_frame, manager_actions):
     assert len([label for label, _ in seen if "sm_remove" in label]) == 1
 
 
-def test_plus_opens_name_field_and_add_cleans_then_selects(imgui_frame, manager_actions, monkeypatch):
+def test_plus_opens_name_field_and_add_cleans_then_selects(
+    imgui_frame, manager_actions, monkeypatch
+):
     app = App("test")
-    manager = StreamManager(on_add=lambda name: app.add_stream(_stream(name)), on_remove=app.remove_stream)
+    manager = StreamManager(
+        on_add=lambda name: app.add_stream(_stream(name)), on_remove=app.remove_stream
+    )
     _, click = manager_actions
     click["id"] = "##sm_add_open"
     imgui_frame(lambda: manager.ui(app.ctx))
@@ -221,7 +226,9 @@ def test_recording_dims_chips_and_explains_lock(imgui_frame, manager_actions, mo
     app.streams(_stream("emg"), _stream("force"))
     app.ctx.state = AppState.RECORDING
     app.ctx.recording = True
-    manager = StreamManager(on_add=lambda name: pytest.fail(name), on_remove=lambda name: pytest.fail(name))
+    manager = StreamManager(
+        on_add=lambda name: pytest.fail(name), on_remove=lambda name: pytest.fail(name)
+    )
     words = []
     text = imgui.text_wrapped
 
@@ -239,7 +246,9 @@ def test_recording_dims_chips_and_explains_lock(imgui_frame, manager_actions, mo
 
 
 @pytest.mark.parametrize("scale,width", [(1, 320), (2, 320), (2, 640)])
-def test_manager_chips_and_inline_add_fit_light_narrow_cells(imgui_frame, monkeypatch, scale, width):
+def test_manager_chips_and_inline_add_fit_light_narrow_cells(
+    imgui_frame, monkeypatch, scale, width
+):
     from myogestic import _scale, _theme
 
     monkeypatch.setattr(_scale, "_current", scale)

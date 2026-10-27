@@ -189,8 +189,12 @@ Set `scan=True` and the picker draws a Scan button and a list of what
 from myogestic.sources import LSLSource
 from myogestic.widgets import DeviceSpec
 
-LSL = DeviceSpec("LSL stream", lambda: LSLSource(""), scan=True,
-             hint="Scan for outlets advertised on this network.")
+LSL = DeviceSpec(
+    "LSL stream",
+    lambda: LSLSource(""),
+    scan=True,
+    hint="Scan for outlets advertised on this network.",
+)
 ```
 
 This is declared, not detected. A source can implement `discover()` and still
@@ -262,7 +266,8 @@ rendering a separate manager:
 from myogestic.widgets import DEFAULT_DEVICES, DevicePicker
 
 picker = DevicePicker(
-    "emg", selectable=True,
+    "emg",
+    selectable=True,
     on_add=lambda name: app.add_stream(
         Stream(name, source=DEFAULT_DEVICES[0].factory(), window_ms=200)
     ),

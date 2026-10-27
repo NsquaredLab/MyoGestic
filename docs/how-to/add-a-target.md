@@ -69,8 +69,9 @@ class Target(Protocol):
     def send(self, values, changed) -> None: ...
     def stop(self) -> None: ...
 
-    claims: frozenset[str]                      # optional
-    def capabilities(self) -> Sequence | None: ...   # optional
+    claims: frozenset[str]  # optional
+
+    def capabilities(self) -> Sequence | None: ...  # optional
 ```
 
 `bind` runs once, on the main thread, and **may raise**. Refuse a configuration you cannot
@@ -179,13 +180,15 @@ from myogestic.controls import ControlLink
 
 link = ControlLink(control_map, [CursorTarget()], hz=32)
 
-def on_click():                 # a button handler, or a training thread
-    if link.ensure():           # idempotent, and cheap once it has bound
+
+def on_click():  # a button handler, or a training thread
+    if link.ensure():  # idempotent, and cheap once it has bound
         link.bus.push({"aim_x": 0.5, "aim_y": -0.25})
 
+
 on_click()
-assert link.bus is not None     # this target answers immediately; a remote one would not
-link.stop()                     # rests every target and clears the bus
+assert link.bus is not None  # this target answers immediately; a remote one would not
+link.stop()  # rests every target and clears the bus
 ```
 
 Call `ensure()` from anywhere that can afford to block: a UI handler, a training thread. Never
@@ -231,7 +234,7 @@ uv run python examples/synthetic/servo_hand.py
 ```
 
 ```python
---8<-- "examples/synthetic/servo_hand.py"
+--8 < --"examples/synthetic/servo_hand.py"
 ```
 
 Three things in it carry the weight: `hand.thumb` drives **two** servos, so the coupling stays

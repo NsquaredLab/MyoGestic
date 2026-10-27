@@ -34,7 +34,9 @@ def _read_jsonc(path: pathlib.Path) -> dict:
     mangling a `//` inside one.
     """
     kept = [
-        line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("//")
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if not line.lstrip().startswith("//")
     ]
     return json.loads("\n".join(kept))
 
@@ -151,9 +153,7 @@ def test_a_cwd_is_always_set_and_follows_the_right_thing(launch):
     """
     for config in _configs(launch):
         cwd = config.get("cwd")
-        assert cwd in {"${workspaceFolder}", "${fileDirname}"}, (
-            f"{config['name']}: cwd is {cwd!r}"
-        )
+        assert cwd in {"${workspaceFolder}", "${fileDirname}"}, f"{config['name']}: cwd is {cwd!r}"
         program = config.get("program", "")
         if "${file}" in program or "inspect_control_map" in program:
             assert cwd == "${fileDirname}", (
@@ -213,9 +213,7 @@ def test_the_names_say_what_needs_a_live_vhi(launch):
         "one-shot command that failed to exit"
     )
     rig_check = [
-        config
-        for config in _configs(launch)
-        if "check_vhi_bridge" in config.get("program", "")
+        config for config in _configs(launch) if "check_vhi_bridge" in config.get("program", "")
     ]
     assert rig_check, "the rig check is not reachable from the picker"
     assert "watch" in rig_check[0]["name"], (
@@ -227,9 +225,7 @@ def test_the_names_say_what_needs_a_live_vhi(launch):
 def test_no_absolute_machine_specific_paths(launch, tasks):
     """A committed file with someone's home directory in it works on one machine."""
     blob = LAUNCH.read_text(encoding="utf-8") + TASKS.read_text(encoding="utf-8")
-    active = [
-        line for line in blob.splitlines() if not line.lstrip().startswith("//")
-    ]
+    active = [line for line in blob.splitlines() if not line.lstrip().startswith("//")]
     for line in active:
         assert not re.search(r'"/(Users|home)/', line), f"machine-specific path: {line}"
 
@@ -267,9 +263,7 @@ class TestTheGenericEntriesComeFirstAndWork:
         assert any(not c.get("noDebug") for c in generic), "one must run under it"
 
     def test_the_debug_entry_steps_into_myogestic(self, configs):
-        debug = next(
-            c for c in configs if c.get("program") == "${file}" and not c.get("noDebug")
-        )
+        debug = next(c for c in configs if c.get("program") == "${file}" and not c.get("noDebug"))
         assert debug.get("justMyCode") is False, (
             "resolving a control map happens inside the library; stepping has to reach it"
         )
@@ -313,7 +307,9 @@ class TestTheGenericEntriesComeFirstAndWork:
         """An undeclared ${input:...} fails the launch with a variable-resolution error."""
         launch = _read_jsonc(LAUNCH)
         declared = {entry["id"] for entry in launch.get("inputs", [])}
-        referenced = set(re.findall(r"\$\{input:([A-Za-z0-9_]+)\}", LAUNCH.read_text(encoding="utf-8")))
+        referenced = set(
+            re.findall(r"\$\{input:([A-Za-z0-9_]+)\}", LAUNCH.read_text(encoding="utf-8"))
+        )
         assert referenced, "the prompt entry is gone"
         assert referenced <= declared, f"undeclared inputs: {referenced - declared}"
 

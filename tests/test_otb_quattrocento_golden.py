@@ -9,6 +9,7 @@ repo's bit-serial ``crc8`` — so a refactor that changes the packing OR the CRC
 fails here. ⚠️ Still validate against the amplifier on the first hardware run
 (design spec §10): these lock our encoding, not the manufacturer's acceptance.
 """
+
 from myogestic.sources.otb import _constants as C
 from myogestic.sources.otb.quattrocento import QuattrocentoSource
 
@@ -23,7 +24,10 @@ _GOLDEN_2048_408_MONO = bytes.fromhex(
 
 
 def test_quattro_config_matches_golden_vectors():
-    assert C.quattro_config(fs_mode=3, nch_mode=0, acq_on=True, conf2=0x1E) == _GOLDEN_10240_120_BIPOLAR
+    assert (
+        C.quattro_config(fs_mode=3, nch_mode=0, acq_on=True, conf2=0x1E)
+        == _GOLDEN_10240_120_BIPOLAR
+    )
     assert C.quattro_config(fs_mode=1, nch_mode=3, acq_on=True, conf2=0x14) == _GOLDEN_2048_408_MONO
 
 

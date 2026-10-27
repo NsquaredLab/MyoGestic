@@ -28,7 +28,9 @@ def _rows(key):
 
 def _panel(tmp_path, widget_id="test-participant"):
     return _api().ParticipantPanel(
-        key_file=tmp_path / "key.csv", sessions_dir=tmp_path / "sessions", widget_id=widget_id,
+        key_file=tmp_path / "key.csv",
+        sessions_dir=tmp_path / "sessions",
+        widget_id=widget_id,
     )
 
 
@@ -247,7 +249,9 @@ def test_dialog_captions_above(tmp_path, imgui_frame, monkeypatch):
         assert color == tuple(muted())
         assert inputs[f"##{label}"][0] == pytest.approx(origin[0])
         assert origin[1] < inputs[f"##{label}"][1]
-    assert any("Stays on this computer, in the key file. Never in a recording." in text for text in labels)
+    assert any(
+        "Stays on this computer, in the key file. Never in a recording." in text for text in labels
+    )
     assert positions["Cancel"][1] < positions["Start session"][1]
 
 

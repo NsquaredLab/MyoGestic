@@ -155,9 +155,7 @@ def producers(monkeypatch):
 
         monkeypatch.setattr(verify, "_negotiated_bus", negotiated_bus)
         monkeypatch.setattr(verify, "_await_binding", lambda *a, **k: None)
-        monkeypatch.setattr(
-            verify, "_hold", lambda *a, **k: frames.pop(0) if frames else []
-        )
+        monkeypatch.setattr(verify, "_hold", lambda *a, **k: frames.pop(0) if frames else [])
         return verify.check_round_trip(None, None, run.raw, None)
 
     run.events = []

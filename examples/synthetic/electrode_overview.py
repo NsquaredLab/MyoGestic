@@ -82,9 +82,7 @@ class _SyntheticArraySource:
         self._scale[CHANNELS_PER_GRID * 2 + 27] = 0.0  # a dead contact on IN3
 
     def connect(self) -> StreamInfo:
-        return StreamInfo(
-            n_channels=N_CHANNELS, fs=FS, dtype=np.float32, channel_grids=GRIDS
-        )
+        return StreamInfo(n_channels=N_CHANNELS, fs=FS, dtype=np.float32, channel_grids=GRIDS)
 
     def read(self) -> tuple[np.ndarray | None, np.ndarray | None]:
         now = time.perf_counter()
@@ -148,10 +146,12 @@ def demo_ui(ctx):
                 # Leave a small inner gutter: ImGui rounds wrapped glyph advances
                 # up, which can put the last word just past the content edge.
                 imgui.push_text_wrap_pos(
-                    imgui.get_cursor_pos_x() + max(1.0, imgui.get_content_region_avail().x - ui_px(4))
+                    imgui.get_cursor_pos_x()
+                    + max(1.0, imgui.get_content_region_avail().x - ui_px(4))
                 )
                 imgui.text_wrapped(
-                    "The array will appear when samples arrive." if connected
+                    "The array will appear when samples arrive."
+                    if connected
                     else "Connect the signal viewer to see this array."
                 )
                 imgui.pop_text_wrap_pos()

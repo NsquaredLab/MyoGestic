@@ -47,7 +47,7 @@ def test_muovi_loopback_emg_mode0():
     t.start()
 
     stream_info = src.accept_and_start()  # accept probe, send control byte
-    assert stream_info.n_channels == 32   # biosignal-only by default
+    assert stream_info.n_channels == 32  # biosignal-only by default
     assert stream_info.fs == 2000.0
 
     # pull a few times
@@ -73,4 +73,5 @@ def test_muovi_loopback_emg_mode0():
 
 def test_muovi_source_importable_from_package():
     from myogestic.sources.otb import MuoviSource as M
+
     assert M is MuoviSource

@@ -166,7 +166,10 @@ class FeatureSelector:
                 previous_right = None
                 for name, active in self._active.items():
                     width = imgui.calc_text_size(name).x + 2 * style.frame_padding.x
-                    if previous_right is not None and previous_right + style.item_spacing.x + width <= right:
+                    if (
+                        previous_right is not None
+                        and previous_right + style.item_spacing.x + width <= right
+                    ):
                         imgui.same_line()
                     if active:
                         push_selected()

@@ -27,7 +27,9 @@ TRAPEZOID = Trapezoid(rest_s=2.0, ramp_up_s=3.0, hold_s=5.0, ramp_down_s=3.0, re
 
 app = App("panel: tracking_task")
 header = AppHeader("TrackingTask", show_state=True)
-layout = Grid.areas("header\ninput\ntracking", row_height=[Px(52), Px(115), Fr(1)], bare=("header",))
+layout = Grid.areas(
+    "header\ninput\ntracking", row_height=[Px(52), Px(115), Fr(1)], bare=("header",)
+)
 # A fake load cell, not `SyntheticSource`: fixed sine channels have no resting level to
 # zero and no peak to calibrate against.
 target = TargetSource(trajectory=TRAPEZOID)

@@ -154,9 +154,9 @@ class TemplateInspector:
                 return selected
             labels = sorted({row.label for row in rows})
             colors = {
-                label: imgui.ImVec4(*(self._label_colors or {}).get(
-                    label, (*PALETTE[i % len(PALETTE)], 1.0)
-                ))
+                label: imgui.ImVec4(
+                    *(self._label_colors or {}).get(label, (*PALETTE[i % len(PALETTE)], 1.0))
+                )
                 for i, label in enumerate(labels)
             }
             active = _FILTER.get(widget_id)
@@ -168,8 +168,12 @@ class TemplateInspector:
             e_max = max((_energy(row) for row in rows), default=0.0) or 1.0
             imgui.push_style_var(imgui.StyleVar_.cell_padding, imgui.ImVec2(ui_px(3), ui_px(4)))
             try:
-                if imgui.begin_table("##templates", 5, imgui.TableFlags_.scroll_y,
-                                     imgui.ImVec2(-1, ui_px(self._height))):
+                if imgui.begin_table(
+                    "##templates",
+                    5,
+                    imgui.TableFlags_.scroll_y,
+                    imgui.ImVec2(-1, ui_px(self._height)),
+                ):
                     _columns(rows)
                     for row in visible:
                         if _row(row, colors[row.label], e_max, selected):
@@ -214,8 +218,9 @@ def _header(title: str, rows: list[TemplateInspectorRow]) -> None:
         panel_header(title, reserve=detail_w + style.item_spacing.x if inline else 0)
         if inline:
             imgui.same_line()
-            imgui.set_cursor_pos_x(imgui.get_cursor_pos_x()
-                                   + max(0, imgui.get_content_region_avail().x - detail_w))
+            imgui.set_cursor_pos_x(
+                imgui.get_cursor_pos_x() + max(0, imgui.get_content_region_avail().x - detail_w)
+            )
     mono_text(count, muted())
     imgui.same_line()
     if imgui.get_content_region_avail().x < actions_w:
@@ -229,8 +234,9 @@ def _header(title: str, rows: list[TemplateInspectorRow]) -> None:
             row.accepted = False
 
 
-def _filters(rows: list[TemplateInspectorRow], colors: dict[str, imgui.ImVec4],
-             active: str | None) -> str | None:
+def _filters(
+    rows: list[TemplateInspectorRow], colors: dict[str, imgui.ImVec4], active: str | None
+) -> str | None:
     """Wrap gesture-count chips, with a categorical dot and selected cue."""
     style = imgui.get_style()
     width = imgui.get_content_region_avail().x
@@ -254,7 +260,8 @@ def _filters(rows: list[TemplateInspectorRow], colors: dict[str, imgui.ImVec4],
         lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         imgui.get_window_draw_list().add_circle_filled(
             imgui.ImVec2(lo.x + style.frame_padding.x + ui_px(3), (lo.y + hi.y) / 2),
-            ui_px(3), imgui.get_color_u32(color),
+            ui_px(3),
+            imgui.get_color_u32(color),
         )
         if imgui.is_item_hovered():
             imgui.set_tooltip(f"{label}: {count} templates. Click again to show all gestures.")
@@ -271,10 +278,18 @@ def _columns(rows: list[TemplateInspectorRow]) -> None:
     imgui.pop_font()
     available = imgui.get_content_region_avail().x - style.scrollbar_size
     remaining = max(ui_px(12), available - keep_w - trial_w - 10 * style.cell_padding.x)
-    for name, width in (("Use", keep_w), ("Label", remaining * 0.35),
-                        ("Source", 0), ("Energy", min(ui_px(60), remaining * 0.2)),
-                        ("Trial", trial_w)):
-        flags = imgui.TableColumnFlags_.width_stretch if name == "Source" else imgui.TableColumnFlags_.width_fixed
+    for name, width in (
+        ("Use", keep_w),
+        ("Label", remaining * 0.35),
+        ("Source", 0),
+        ("Energy", min(ui_px(60), remaining * 0.2)),
+        ("Trial", trial_w),
+    ):
+        flags = (
+            imgui.TableColumnFlags_.width_stretch
+            if name == "Source"
+            else imgui.TableColumnFlags_.width_fixed
+        )
         imgui.table_setup_column(name, flags, width)
 
 
@@ -288,14 +303,16 @@ def _energy(row: TemplateInspectorRow) -> float:
     return max(0.0, row.energy) if row.energy is not None and isfinite(row.energy) else 0.0
 
 
-def _row(row: TemplateInspectorRow, color: imgui.ImVec4, e_max: float,
-         selected: str | None) -> bool:
+def _row(
+    row: TemplateInspectorRow, color: imgui.ImVec4, e_max: float, selected: str | None
+) -> bool:
     """Render one compact row; only its source selection changes the preview."""
     imgui.push_id(row.key)
     imgui.table_next_row(min_row_height=ui_px(26))
     if row.key == selected:
-        imgui.table_set_bg_color(imgui.TableBgTarget_.row_bg0,
-                                imgui.get_color_u32(imgui.Col_.text_selected_bg))
+        imgui.table_set_bg_color(
+            imgui.TableBgTarget_.row_bg0, imgui.get_color_u32(imgui.Col_.text_selected_bg)
+        )
     imgui.table_next_column()
     kept = row.accepted
     if kept:
@@ -308,8 +325,10 @@ def _row(row: TemplateInspectorRow, color: imgui.ImVec4, e_max: float,
     pos = imgui.get_cursor_screen_pos()
     width = imgui.get_content_region_avail().x
     imgui.get_window_draw_list().add_rect_filled(
-        pos, imgui.ImVec2(pos.x + width, pos.y + imgui.get_text_line_height()),
-        imgui.get_color_u32(imgui.ImVec4(color.x, color.y, color.z, color.w * 0.18)), ui_px(3),
+        pos,
+        imgui.ImVec2(pos.x + width, pos.y + imgui.get_text_line_height()),
+        imgui.get_color_u32(imgui.ImVec4(color.x, color.y, color.z, color.w * 0.18)),
+        ui_px(3),
     )
     imgui.text_colored(primary(), _fit(row.label, width))
     if imgui.is_item_hovered():
@@ -324,16 +343,23 @@ def _row(row: TemplateInspectorRow, color: imgui.ImVec4, e_max: float,
         imgui.set_tooltip(source)
     imgui.table_next_column()
     if row.energy is not None:
-        imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + (imgui.get_text_line_height() - ui_px(3)) / 2)
-        imgui.progress_bar(_energy(row) / e_max,
-                           imgui.ImVec2(max(ui_px(1), imgui.get_content_region_avail().x), ui_px(3)), "")
+        imgui.set_cursor_pos_y(
+            imgui.get_cursor_pos_y() + (imgui.get_text_line_height() - ui_px(3)) / 2
+        )
+        imgui.progress_bar(
+            _energy(row) / e_max,
+            imgui.ImVec2(max(ui_px(1), imgui.get_content_region_avail().x), ui_px(3)),
+            "",
+        )
     else:
         mono_text("—", muted())
     imgui.table_next_column()
     imgui.push_font(mono_font(), imgui.get_style().font_size_base)
     trial = _fit(_trial(row), imgui.get_content_region_avail().x)
-    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
-        0, imgui.get_content_region_avail().x - imgui.calc_text_size(trial).x))
+    imgui.set_cursor_pos_x(
+        imgui.get_cursor_pos_x()
+        + max(0, imgui.get_content_region_avail().x - imgui.calc_text_size(trial).x)
+    )
     imgui.text_unformatted(trial)
     imgui.pop_font()
     if imgui.is_item_hovered():

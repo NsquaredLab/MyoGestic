@@ -548,20 +548,31 @@ def connect_ui(ctx: Context) -> None:
     busy = connection["busy"]
     tone = SUCCESS if connected else WARNING if busy else DANGER if stream.last_error else IDLE
     with tinted_row(tone):
-        imgui.text_unformatted("Connected" if connected else "Connecting…" if busy else
-                               "Connection failed" if stream.last_error else "Not connected")
+        imgui.text_unformatted(
+            "Connected"
+            if connected
+            else "Connecting…"
+            if busy
+            else "Connection failed"
+            if stream.last_error
+            else "Not connected"
+        )
     if stream.last_error and not busy and not connected:
         imgui.push_style_color(imgui.Col_.text, muted())
         imgui.text_wrapped(stream.last_error)
         imgui.pop_style_color()
     imgui.begin_disabled(ctx.state != "idle" or busy)
-    if primary_button("Reconnect" if connected else "Retry" if stream.last_error else "Connect",
-                      size=(-1, 0)):
+    if primary_button(
+        "Reconnect" if connected else "Retry" if stream.last_error else "Connect", size=(-1, 0)
+    ):
         _connect()
     imgui.end_disabled()
     imgui.push_style_color(imgui.Col_.text, muted())
-    imgui.text_wrapped("Return to idle before changing the generator or connection." if ctx.state != "idle"
-                       else "Launch the generator, then connect to see the signal.")
+    imgui.text_wrapped(
+        "Return to idle before changing the generator or connection."
+        if ctx.state != "idle"
+        else "Launch the generator, then connect to see the signal."
+    )
     imgui.pop_style_color()
 
 
@@ -570,10 +581,25 @@ def model_ui() -> None:
     ctx = app.ctx
     training = ctx.state == "training"
     failed = ctx.status_message.startswith("Training failed: ")
-    tone = WARNING if training else DANGER if failed else SUCCESS if pipeline.model is not None else IDLE
+    tone = (
+        WARNING
+        if training
+        else DANGER
+        if failed
+        else SUCCESS
+        if pipeline.model is not None
+        else IDLE
+    )
     with tinted_row(tone):
-        imgui.text_unformatted("Training…" if training else "Training failed" if failed else
-                               "Trained" if pipeline.model is not None else "Not trained")
+        imgui.text_unformatted(
+            "Training…"
+            if training
+            else "Training failed"
+            if failed
+            else "Trained"
+            if pipeline.model is not None
+            else "Not trained"
+        )
     imgui.push_style_color(imgui.Col_.text, muted())
     imgui.text_wrapped("RaulNet V17 · sliding RMS input. Training can take several minutes.")
     if failed and not training:
