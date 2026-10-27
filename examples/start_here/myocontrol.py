@@ -24,7 +24,13 @@ from mne_lsl.lsl import local_clock
 
 from myogestic import App, Context, Fr, Grid, Layout, Px, Stream, TrainingData
 from myogestic._theme import display_font, mono_font
-from myogestic.controls import ControlBus, ControlLink, ControlLinkConnector, load_control_map
+from myogestic.controls import (
+    ControlBus,
+    ControlLink,
+    ControlLinkConnector,
+    ControlTicker,
+    load_control_map,
+)
 from myogestic.ml import Pipeline, load_pickle, save_pickle
 from myogestic.recipes.estimators import catboost_classifier, catboost_regressor
 from myogestic.recipes.features import mav, rms, var, wl, zc
@@ -74,7 +80,7 @@ from myogestic.widgets.panels.recording import TakeStatus
 # signal is fed 200 ms at predict time or it sees a distribution it never met.
 WINDOW_MS = 200
 HOP_MS = 100
-# One rate for the predict loop, the smoother and the control bus. Let them drift and
+# One rate for prediction, the output ticker, the smoother and the control bus. Let them drift and
 # the post-processor's time constants are tuned for a timebase nothing runs on.
 PREDICT_HZ = 32
 # The names are yours: nothing downstream matches them against VHI's vocabulary. They
@@ -121,9 +127,11 @@ link = ControlLink(
 )
 # A dict, so the UI callback writes it without `global`. Read only by `train`.
 training_mode = {"index": 0}
-#: What the control hand is showing. Set by the class buttons and re-sent every frame,
-#: because VHI drops a control pose whose streams go quiet for 5 s.
+#: Explicit operator commands, never overwritten by a frame's follow blend.
 held_control = 0.0
+#: Keep both hands alive even when acquisition or model inference stalls.
+last_prediction = 0.0
+control_ticker = ControlTicker(PREDICT_HZ)
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
     default=["RMS", "MAV"],
@@ -236,17 +244,34 @@ def predict(model: tuple[str, Any], feats: np.ndarray | None) -> dict | None:
         value = min(max(float(est.predict(feats.reshape(1, -1))[0]), 0.0), 1.0)
         out = {"class": int(value >= 0.5), "proba": [1.0 - value, value]}
 
-    target = follow_run.tick(app.ctx)
-    control = held_control
-    if target is not None:
-        index, level = target
-        control = float(blend_pose([POSES["Rest"]], [POSES[FOLLOW_GESTURES[index]]], level)[0])
-    bus = link.bus
-    if bus is not None:
-        # `link.bus`, never `ensure()`: that blocks on an RPC and this is the predict
-        # thread. `control` must be included or `push` completes it to rest every tick.
-        out["controls"] = bus.push({"prediction": value, "control": control})
+    sent = _push_controls(prediction=value)
+    if sent is not None:
+        out["controls"] = sent
     return out
+
+
+def _push_controls(*, prediction: float | None = None) -> dict | None:
+    """Send complete frames on the output clock, independently of EMG availability."""
+    global last_prediction
+    if prediction is not None:
+        # Retain fresh predictions even when another delivery owns the ticker.
+        last_prediction = prediction
+
+    def send(now: float) -> dict | None:
+        target = follow_run.tick(app.ctx, timestamp=now)
+        control = held_control
+        if target is not None:
+            index, level = target
+            # A derived frame must never overwrite a concurrent Stop/held command.
+            control = float(blend_pose([POSES["Rest"]], [POSES[FOLLOW_GESTURES[index]]], level)[0])
+        # Never ensure() here: connecting blocks on an RPC. Every alias is required
+        # because push() completes missing values to rest, including prediction.
+        bus = link.bus
+        if bus is not None:
+            return bus.push({"prediction": last_prediction, "control": control})
+        return None
+
+    return control_ticker.run(send, now=local_clock(), immediate=prediction is not None)
 
 
 layout = Layout(
@@ -685,10 +710,8 @@ def _bind() -> ControlBus | None:
 def _on_control(index: int) -> None:
     """Put the selected class on the control hand.
 
-    Remembering is the whole job: the frame that carries it is sent by `myocontrol_ui`
-    while recording, and by the predict loop while predicting. Pushing here too would
-    only add a frame in which `prediction` is completed to rest, twitching the other hand
-    on every class press.
+    Remembering is the whole job: the shared output ticker sends it with the cached
+    prediction on the next GUI frame, including while predicting.
 
     It does bind, though. A UI handler is where that is affordable — `predict` must never
     call it — and binding on first press is what lets the buttons work without visiting
@@ -1561,12 +1584,10 @@ def myocontrol_ui(ctx: Context) -> None:
     with layout["status"]:
         status.ui(ctx)
 
-    # Stream it, do not fire it once: VHI holds a pose only while samples keep arriving
-    # (5 s, then `StopToRest()`). While predicting the predict loop is already doing that.
-    bus = link.bus
-    _announce_binding(bus)
-    if bus is not None and ctx.state != "predicting":
-        bus.push({"control": held_control, "prediction": 0.0})
+    # GUI frames sustain both hands even when EMG or inference stops producing.
+    # Fresh predictions use this same ticker, so deliveries never overlap.
+    _announce_binding(link.bus)
+    _push_controls()
 
 
 def main() -> None:

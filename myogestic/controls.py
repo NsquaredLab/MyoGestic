@@ -34,6 +34,7 @@ here decides that.
 
 from __future__ import annotations
 
+from myogestic._control_tick import ControlTicker
 from myogestic._controls_bus import (
     ControlBus,
     ControlLink,
@@ -77,6 +78,7 @@ __all__ = [
     "ControlLinkConnector",
     "connect_controls",
     "ControlSet",
+    "ControlTicker",
     "Discrete",
     "Dof",
     "Target",

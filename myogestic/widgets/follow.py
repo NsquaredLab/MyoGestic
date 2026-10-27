@@ -38,11 +38,14 @@ class FollowRun:
 
     Notes
     -----
-    Call `tick` on each control update, then send its target via the app's bus.
+    Drive `tick` from a `ControlTicker` on the GUI or output clock, then send a
+    complete frame with its target and the cached prediction via the app's bus.
+    Keep that clock running without EMG; `predict` must not be its sole driver.
     Call `sync` every UI frame, even when the card is hidden, to stop at the deadline
     and score after saving. `ui` also calls `sync`. Call `stop` before app shutdown.
     Neither `tick` nor `target` performs GUI work. Setup and lifecycle methods belong
-    on the UI thread; `tick` may run on the prediction thread.
+    on the UI thread. Fresh predictions may request immediate delivery through
+    the same ticker, which serialises them with GUI/output-clock deliveries.
     """
 
     def __init__(

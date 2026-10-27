@@ -172,6 +172,8 @@ an ordering that is easy to get subtly wrong per-application.
 
 ::: myogestic.controls.ControlBus
 
+::: myogestic.controls.ControlTicker
+
 ::: myogestic.controls.connect_controls
 
 ::: myogestic.controls.ControlLink

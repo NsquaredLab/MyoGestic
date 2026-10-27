@@ -261,8 +261,14 @@ for headers with and without workflow steps.
 holds at the peak, and moves down with a half-cosine, repeating after an optional lead-in.
 The shape uses the existing `PHASE_CODES` without changing the recorded vocabulary.
 
-Construct the card once, call `sync` on every GUI frame (including hidden tabs), and call
-`tick` immediately before delivering each control frame. The widget records those targets
+Construct the card once, call `sync` on every GUI frame (including hidden tabs), and drive
+`tick` from a [`ControlTicker`][myogestic.controls.ControlTicker] on the GUI or output
+clock, immediately before delivering each complete `{prediction, control}` frame. Cache
+the latest prediction and include it in every frame: the bus fills omitted aliases with
+rest. Keep this clock running without EMG; do not drive Follow solely from `predict`.
+Fresh predictions can request immediate delivery through the same ticker. Compute each
+frame's blended control locally, without writing it into the cache that Stop or held
+control commands update. The widget records those targets
 as `follow.target` with `gesture_index`, `level`, and `phase` channels, on the LSL clock.
 Use the app's relaxed and gesture poses with `blend_pose`. A complete hardware-free demo
 is [`examples/panels/follow_run.py`](https://github.com/NsquaredLab/MyoGestic/blob/main/examples/panels/follow_run.py).
@@ -270,6 +276,7 @@ is [`examples/panels/follow_run.py`](https://github.com/NsquaredLab/MyoGestic/bl
 <!--docs:run-->
 ```python
 from myogestic import App
+from myogestic.controls import ControlTicker
 from myogestic.tracking import Sinusoid, blend_pose
 from myogestic.widgets import FollowRun
 
@@ -282,18 +289,22 @@ follow = FollowRun(
 )
 relaxed = [0.0, 0.0]
 poses = [[1.0, 1.0], [1.0, 0.0]]
+ticker = ControlTicker(32)
 
-def control_tick(ctx):
-    target = follow.tick(ctx)
+def control_tick(now):
+    target = follow.tick(app.ctx, timestamp=now)
     if target is not None:
         index, level = target
         return blend_pose(relaxed, poses[index], level)
     return None
 
-# In the GUI callback: follow.sync(ctx), then follow.ui(ctx) inside its Grid cell.
+# On every GUI frame, including while predicting:
+# follow.sync(ctx), then ticker.run(control_tick, now=local_clock()).
+# The delivery callback sends the blended pose with the cached prediction.
+# Draw follow.ui(ctx) inside its Grid cell.
 # Before shutdown, close the take while the recording callback is still available.
 app.cleanup_hooks.append(lambda _app: follow.stop(app.ctx))
-assert control_tick(app.ctx) is None
+assert ticker.run(control_tick, now=0.0) is None
 ```
 
 The default score compares `follow.target.level` to the saved `controls` stream's

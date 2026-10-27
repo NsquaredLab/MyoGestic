@@ -9,7 +9,9 @@ import ast
 import inspect
 import json
 import runpy
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 
 import numpy as np
 import pytest
@@ -1084,28 +1086,33 @@ def test_the_cue_survives_a_prediction_that_disagrees_with_it(app_module):
     assert predicted["prediction"] == app_module["POSES"]["Rest"]
 
 
-def test_the_ui_streams_the_frame_while_the_predict_loop_is_not(app_module):
-    """VHI drops a control pose whose streams go quiet, so a command has to be sustained.
+@pytest.mark.parametrize("state", ["idle", "recording", "predicting"])
+def test_the_ui_paces_complete_held_frames_in_every_state(
+    app_module, monkeypatch, implot_frame, state
+):
+    """GUI keep-alives share prediction's rate and retain both cached hand commands."""
+    frames, now = [], [100.0]
+    namespace = app_module["myocontrol_ui"].__globals__
 
-    `ControlHandSkeleton._Process` follows the pose only while `ControlPoseLive` — five
-    seconds since the last sample — and on the falling edge calls `StopToRest()`, giving
-    the rig back to its own movement animation. Fire once and the hand closes, then opens
-    again five seconds later. The predict loop is that producer while predicting; the
-    class buttons are used while *recording*, when it is not running, so the UI has to be.
+    class Bus:
+        def push(self, values):
+            frames.append(dict(values))
+            return values
 
-    Not the same question as whether the outlet repeats its last value — it does, forever.
-    That keeps a value on the wire, while VHI's liveness test is on samples *arriving*.
-    Conflating the two is what made this take so long to find.
-
-    Asserted on the source: the push sits at the tail of `@app.ui`, and reaching it in a
-    layout pass would mean standing up the whole grid.
-    """
-    source = inspect.getsource(app_module["myocontrol_ui"])
-
-    assert "bus.push" in source, "nothing drives the hands while recording"
-    assert 'ctx.state != "predicting"' in source, (
-        "the UI would drive the same outlets as the predict loop, at a different rate"
-    )
+    monkeypatch.setattr(ControlLink, "bus", property(lambda self: Bus()))
+    monkeypatch.setitem(namespace, "_announce_binding", lambda bus: None)
+    monkeypatch.setitem(namespace, "local_clock", lambda: now[0])
+    monkeypatch.setitem(namespace, "held_control", 1.0)
+    estimator = FollowEstimator()
+    estimator.value = 0.62
+    app_module["predict"](("Regression", estimator), np.zeros(4))
+    frames.clear()
+    ctx = app_module["app"].ctx
+    ctx.state = state
+    for offset in (0.01, 0.04, 0.05, 0.08):
+        now[0] = 100 + offset
+        implot_frame(lambda: app_module["myocontrol_ui"](ctx))
+    assert frames == [{"prediction": 0.62, "control": 1.0}] * 2
 
 
 def test_train_refuses_a_take_conditioned_differently_from_the_switch(app_module, tmp_path):
@@ -2512,6 +2519,7 @@ def test_follow_run_drives_and_scores_saved_control_frames(
     now = [100.0]
     monkeypatch.setattr("mne_lsl.lsl.local_clock", lambda: now[0])
     monkeypatch.setattr("myogestic.widgets.follow.local_clock", lambda: now[0])
+    monkeypatch.setitem(app_module["predict"].__globals__, "local_clock", lambda: now[0])
     # Keep the real predict callback, recorder, delivered bus and finalizer, with a
     # deterministic clock and estimator in place of an acquisition thread.
     monkeypatch.setattr(
@@ -2562,3 +2570,108 @@ class FollowEstimator:
 
     def predict(self, x):
         return [self.value]
+
+
+@pytest.fixture
+def silent_follow(app_module, tmp_path, monkeypatch):
+    """Run the real follow lifecycle and GUI without acquisition or a remote hand."""
+    from myogestic.stream import StreamInfo
+    from myogestic.tracking import Sinusoid
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("myogestic._browser.IS_BROWSER", True)
+    app, pipeline, follow = app_module["app"], app_module["pipeline"], app_module["follow_run"]
+    app.ctx.participant = "P-014"
+    stream = app.ctx.streams["emg"]
+    stream.status, stream.info = "connected", StreamInfo(n_channels=2, fs=100)
+    # No acquired window, ever: the pipeline must not call predict in this state.
+    monkeypatch.setattr(stream, "get_window", lambda: (np.empty((2, 0)), np.empty(0)))
+    now = [100.0]
+    monkeypatch.setattr("mne_lsl.lsl.local_clock", lambda: now[0])
+    monkeypatch.setattr("myogestic.widgets.follow.local_clock", lambda: now[0])
+    monkeypatch.setitem(app_module["predict"].__globals__, "local_clock", lambda: now[0])
+    # Binding feedback is unrelated to output pacing and must not start an LSL inlet.
+    monkeypatch.setitem(
+        app_module["myocontrol_ui"].__globals__, "_announce_binding", lambda bus: None
+    )
+    pipeline.model = ("Regression", FollowEstimator())
+    follow._state.trajectory = Sinusoid(move_s=1, hold_high_s=1, hold_low_s=0, lead_s=0, reps=2)
+    assert follow.start(app.ctx)
+    try:
+        yield app, pipeline, follow, now
+    finally:
+        follow.stop(app.ctx)
+
+
+@pytest.mark.parametrize("fresh_prediction", [False, True])
+def test_follow_advances_on_gui_frames_with_empty_emg(
+    app_module, silent_follow, monkeypatch, implot_frame, fresh_prediction
+):
+    app, pipeline, follow, now = silent_follow
+    frames, predictions = [], []
+
+    class Bus:
+        def push(self, values):
+            frames.append(dict(values))
+            return values
+
+    monkeypatch.setattr(ControlLink, "bus", property(lambda self: Bus()))
+    expected_prediction = 0.0
+    if fresh_prediction:
+        expected_prediction = pipeline.model[1].value = 0.62
+        app_module["predict"](pipeline.model, np.zeros(4))
+        frames.clear()
+    monkeypatch.setattr(pipeline, "on_predict", lambda *args: predictions.append(args))
+    levels = []
+    for offset in (0.1, 0.5, 0.9):
+        now[0] = 100 + offset
+        pipeline._predict_step(app)
+        implot_frame(lambda: app_module["myocontrol_ui"](app.ctx))
+        levels.append(follow.target[1])
+    assert predictions == []
+    assert len(frames) == 3, "empty EMG must not stop complete output frames"
+    assert levels[0] < levels[1] < levels[2]
+    assert [frame["control"] for frame in frames] == pytest.approx(levels)
+    assert all(frame["prediction"] == expected_prediction for frame in frames)
+
+
+def test_follow_stop_survives_an_inflight_send(
+    app_module, silent_follow, monkeypatch, implot_frame
+):
+    app, pipeline, follow, now = silent_follow
+    entered, release = Event(), Event()
+    frames = []
+
+    class Bus:
+        def push(self, values):
+            frames.append(dict(values))
+            if len(frames) == 1:
+                entered.set()
+                assert release.wait(5), "test did not release the in-flight delivery"
+            return values
+
+    monkeypatch.setattr(ControlLink, "bus", property(lambda self: Bus()))
+    namespace = app_module["predict"].__globals__
+    monkeypatch.setitem(namespace, "held_control", 1.0)
+    pipeline.model[1].value = 0.62
+    now[0] = 100.5
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(app_module["predict"], pipeline.model, np.zeros(4))
+        try:
+            assert entered.wait(5)
+            assert frames[0]["control"] == pytest.approx(0.5)
+            assert namespace["held_control"] == 1.0
+            follow.stop(app.ctx)
+            assert not follow.running and not app.ctx.recording
+            now[0] = 100.6
+            # Stop and the GUI remain usable while prediction owns the ticker.
+            implot_frame(lambda: app_module["myocontrol_ui"](app.ctx))
+            assert len(frames) == 1, "the busy ticker must not start a concurrent send"
+        finally:
+            release.set()
+        pending.result(timeout=5)
+    for offset in (0.7, 0.8):
+        now[0] = 100 + offset
+        implot_frame(lambda: app_module["myocontrol_ui"](app.ctx))
+    assert len(frames) == 3
+    assert all(frame == {"prediction": 0.62, "control": 0.0} for frame in frames[1:])

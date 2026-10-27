@@ -111,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ControlTicker(hz)` keeps Myocontrol's complete prediction/control frames flowing on the GUI clock when EMG or inference stalls; Stop and held-control commands survive in-flight follow deliveries.
 - App shutdown waits for pending recording saves, including takes stopped by cleanup hooks, before stopping streams; unfinished saves are logged after a 30-second timeout.
 - A take selected while saving remains selected and trainable after its folder becomes an archive; scans skip incomplete saves.
 - Live UI rescaling starts from base style sizes, preventing compounded sizes and crashes; unknown display scale keeps the last scale or styles once at 1.0.
