@@ -10,6 +10,7 @@ target is torn down.
 from __future__ import annotations
 
 import math
+import tempfile
 import types
 from threading import Event
 from time import monotonic, sleep
@@ -27,6 +28,7 @@ from myogestic.controls import (
     Discrete,
     load_control_map,
 )
+from myogestic.session import Session
 
 #: Aliases with the three shapes that exercise every branch. Built directly: a resolved
 #: set is what the bus operates on, and its keys are the user's own names.
@@ -632,6 +634,62 @@ def test_connector_tears_down_a_bus_that_resolves_during_stop():
     assert link.bus is None
     assert target.stopped == 1
     assert connector.status == "control connection stopped"
+
+
+# --- recording what was delivered -------------------------------------------------
+
+
+def _recording_ctx(tmp: str) -> types.SimpleNamespace:
+    return types.SimpleNamespace(recording=True, session=Session(base_path=tmp), log=lambda m: None)
+
+
+def test_push_records_the_delivered_continuous_frame():
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = _recording_ctx(tmp)
+        bus = ControlBus(MIXED, targets=[Recorder()], hz=32.0, ctx=ctx)
+        bus.push({"a": -0.5, "g": 0.25, "hand.grasp": "fist"})
+        bus.push({"a": 2.0, "g": -1.0})  # clipped to [-1, 1] and [0, 1] before delivery
+        ctx.session.freeze()
+        rows = np.array(ctx.session.stores["controls"])
+        assert rows.tolist() == [pytest.approx([-0.5, 0.25]), pytest.approx([1.0, 0.0])]
+        info = ctx.session.stream_info("controls")
+        assert (info.channel_names, info.fs) == (["a", "g"], 32.0)
+        assert ctx.session.event_streams == ("controls",)
+
+
+def test_the_rest_frame_of_the_failure_path_is_recorded_too():
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = _recording_ctx(tmp)
+
+        def boom(vec):
+            raise RuntimeError("filter boom")
+
+        bus = ControlBus(MIXED, targets=[Recorder()], smoothing=boom, ctx=ctx)
+        out = bus.push({"a": 0.7, "g": 0.7})
+        ctx.session.freeze()
+        assert out["a"] == 0.0
+        assert np.array(ctx.session.stores["controls"]).tolist() == [[0.0, 0.0]]
+
+
+def test_nothing_is_recorded_without_a_context_or_with_the_flag_off():
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = _recording_ctx(tmp)
+        ctx.recording = False
+        ControlBus(MIXED, targets=[Recorder()], ctx=ctx).push({"a": 0.1, "g": 0.1})
+        ControlBus(MIXED, targets=[Recorder()]).push({"a": 0.1, "g": 0.1})
+        assert ctx.session.event_streams == ()
+
+
+def test_a_recording_failure_is_reported_once_and_delivery_continues():
+    with tempfile.TemporaryDirectory() as tmp:
+        ctx = _recording_ctx(tmp)
+        warnings: list[str] = []
+        bus = ControlBus(MIXED, targets=[rec := Recorder()], ctx=ctx, on_warn=warnings.append)
+        ctx.session.append_event("controls", [1.0, 2.0, 3.0], 0.0)  # wrong width, declared first
+        bus.push({"a": 0.1, "g": 0.1})
+        bus.push({"a": 0.2, "g": 0.2})
+        assert len(rec.frames) == 2
+        assert len([w for w in warnings if "controls not recorded" in w]) == 1
 
 
 def test_connector_finished_includes_late_stop_teardown():

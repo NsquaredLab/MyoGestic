@@ -39,9 +39,7 @@ def _active_display_count() -> int:
     """Query drawable macOS displays without requiring PyObjC or initializing GLFW."""
     import ctypes
 
-    core_graphics = ctypes.CDLL(
-        "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
-    )
+    core_graphics = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
     get_displays = core_graphics.CGGetActiveDisplayList
     get_displays.argtypes = [
         ctypes.c_uint32,
@@ -142,6 +140,13 @@ TRANSITIONS: dict[str, set[str]] = {
     AppState.RECORDING: {AppState.IDLE},
 }
 
+#: States a recording may start in. Core knows only ``idle``; an extension whose state is
+#: compatible with a take registers it here — ``myogestic.ml`` adds ``"predicting"`` when a
+#: `Pipeline` is constructed, the same way it registers its pill colours. Process-global,
+#: like that registry: a test asserting refusal from a registered state must snapshot and
+#: restore this set.
+RECORDABLE_STATES: set[str] = {AppState.IDLE}
+
 
 # --- Docking integration (experimental) -----------------------------------
 #
@@ -180,11 +185,18 @@ class Context:
         not started for you — see `App.bridges`.
     state
         The recording state machine: ``"idle"`` or ``"recording"``. Extensions
-        add their own states (``myogestic.ml`` adds ``"training"``). Check it
-        rather than tracking recording yourself.
+        add their own states (``myogestic.ml`` adds ``"training"``). Whether a
+        take is open is `recording`, not this.
     session
-        The `Session` being written while ``state == "recording"``, else
-        ``None``. Set its ``name`` before `App.stop_recording` to label the take.
+        The `Session` of the current or most recent take. Set by `App.start_recording`
+        and kept after `stop_recording` so the signal viewer can go on drawing that
+        take's label markers; `discard_recording` clears it. Whether a take is *open*
+        is `recording`, not this.
+    recording
+        ``True`` while a `Session` is open and the streams append to it. Independent of
+        `state`: a take can run under ``"predicting"``. This is what to check to know
+        whether a recording is on; ``session`` stays set after a stop so the viewer can
+        keep drawing the last take's markers.
     pending_saves
         Source folders still being finalized. Nonempty until every pending
         pack has registered its saved take or reported failure.
@@ -225,6 +237,7 @@ class Context:
     bridges: dict[str, Any] = field(default_factory=dict)
     state: str = AppState.IDLE
     session: Session | None = None
+    recording: bool = False
     pending_saves: set[Path] = field(default_factory=set)
     class_names: list[str] = field(default_factory=list)
     control_space: Any = None
@@ -346,6 +359,11 @@ class App:
         # cleanup: in finally - always runs, each wrapped in try/except.
         self.before_run_hooks: list[Callable[[App], None]] = []
         self.cleanup_hooks: list[Callable[[App], None]] = []
+        #: Called with the `Session` when a recording stops, on the finalize thread, after
+        #: `Session.freeze` and before ``meta.json`` is written — so a hook can add to
+        #: ``session.extras`` or drop a file into ``session.path``. `myogestic.ml.Pipeline`
+        #: saves the running model here. Not called on `discard_recording`.
+        self.finalize_hooks: list[Callable[[Session], None]] = []
         self._popout_specs: list[tuple[str, Callable[[], None], bool, bool, bool | None]] = []
 
     def streams(self, *streams: Stream) -> None:
@@ -384,7 +402,7 @@ class App:
             ``False`` if the stream was refused, with the reason in
             ``ctx.status_message``.
         """
-        if self.ctx.state == AppState.RECORDING:
+        if self.ctx.recording:
             self.ctx.status_message = "Cannot add a stream while recording"
             return False
         if stream.name in self.ctx.streams:
@@ -413,7 +431,7 @@ class App:
         bool
             ``False`` if the stream was refused or was not registered.
         """
-        if self.ctx.state == AppState.RECORDING:
+        if self.ctx.recording:
             self.ctx.status_message = "Cannot remove a stream while recording"
             return False
         stream = self.ctx.streams.pop(name, None)
@@ -480,8 +498,9 @@ class App:
         stream's data + timestamps to per-stream Zarr arrays. Streams
         whose ``info`` is still ``None`` (disconnected) are skipped -
         they won't be retroactively captured if they connect later in
-        the recording. Refuses to start if ``ctx.state`` isn't
-        ``"idle"``; updates ``ctx.status_message`` with the result.
+        the recording. Refuses to start while a take is already open or
+        when ``ctx.state`` is not in `RECORDABLE_STATES`; updates
+        ``ctx.status_message`` with the result.
 
         Parameters
         ----------
@@ -489,9 +508,13 @@ class App:
             Directory where the per-session subfolder is
             created. Defaults to ``"sessions"``.
         """
-        if not can_transition(self.ctx.state, AppState.RECORDING):
+        if self.ctx.recording:
+            self.ctx.status_message = "Cannot start recording: already recording."
+            return
+        if self.ctx.state not in RECORDABLE_STATES:
+            allowed = ", ".join(repr(str(s)) for s in sorted(RECORDABLE_STATES))
             self.ctx.status_message = (
-                f"Cannot start recording: state is {self.ctx.state!r}, expected 'idle'."
+                f"Cannot start recording: state is {str(self.ctx.state)!r}, expected {allowed}."
             )
             return
         if self.ctx.require_participant and not self.ctx.participant:
@@ -499,7 +522,9 @@ class App:
             self.ctx.notify("Recording refused", "Set a participant ID first.", "warning")
             return
         # A stream with info=None has no zarr schema and would fail on append.
-        self.ctx.state = AppState.RECORDING
+        self.ctx.recording = True
+        if self.ctx.state == AppState.IDLE:
+            self.ctx.state = AppState.RECORDING
         self.ctx.session = Session(base_path=base_path, participant=self.ctx.participant)
         n_ready = 0
         for name, stream in self.ctx.streams.items():
@@ -523,102 +548,114 @@ class App:
             self.ctx.status_message = f"Recording to {self.ctx.session.path}"
             self.ctx.log(f"Recording → {self.ctx.session.path}")
 
-    def stop_recording(self) -> None:
+    def stop_recording(self, *, wait: bool = False) -> None:
         """Stop the active recording and pack the session to a ``.session.zip``.
 
-        Finalises the per-stream Zarr arrays, writes the label track to
-        ``labels.json``, and kicks off a daemon thread that packs the
-        session folder into a single ``<timestamp>.session.zip`` archive
-        (the original folder is kept until the pack succeeds). Refuses
-        to stop if ``ctx.state`` isn't ``"recording"``.
+        Detaches every stream and freezes the session on the calling thread, then on a
+        daemon thread runs `finalize_hooks`, writes ``meta.json`` and ``labels.json``,
+        packs the folder into ``<timestamp>.session.zip`` (the folder is kept until the
+        pack succeeds) and registers the archive with the session browser. ``wait=True``
+        does that work inline instead — for tests, and for shutdown, where a daemon would
+        die with the archive half written. Refuses if no recording is open.
         """
         self.ctx._recording_stop_revision += 1
-        if not can_transition(self.ctx.state, AppState.IDLE):
+        if not self.ctx.recording:
             self.ctx.status_message = (
-                f"Cannot stop recording: state is {self.ctx.state!r}, expected 'recording'."
+                f"Cannot stop recording: state is {str(self.ctx.state)!r}, no recording is open."
             )
             return
-        self.ctx.state = AppState.IDLE
+        self.ctx.recording = False
+        if self.ctx.state == AppState.RECORDING:
+            self.ctx.state = AppState.IDLE
         # Detach every stream *before* finalising/packing. detach_session() waits for
-        # any in-flight append on the acquire thread, so the daemon pack thread below
-        # can clear the Zarr stores without racing the acquire loop.
+        # any in-flight append on the acquire thread, so the finalize thread below can
+        # clear the Zarr stores without racing the acquire loop.
         for stream in self.ctx.streams.values():
             stream.detach_session()
-        if self.ctx.session is not None:
-            session = self.ctx.session
-            controls = self.ctx.control_space
-            session.save_meta(
-                self.name,
-                class_names=self.ctx.class_names or None,
-                control_space=controls.as_control_space() if controls is not None else None,
-            )
-            n = len(session.label_track)
-            self.ctx.status_message = f"Saved {n} labels - finalizing…"
+        session = self.ctx.session
+        if session is None:
+            return
+        # Freeze before anything is written: a late event row cannot declare a stream
+        # that meta.json will not list.
+        session.freeze()
+        controls = self.ctx.control_space
+        class_names = self.ctx.class_names or None
+        hooks = list(self.finalize_hooks)
+        self.ctx.status_message = "Finalizing…"
 
-            from myogestic._browser import IS_BROWSER
-            from myogestic.widgets.training._session_state import set_session_saving
+        from myogestic.widgets.training._session_state import set_session_saving
 
-            source_path = session.path.resolve()
-            self.ctx.pending_saves.add(source_path)
-            set_session_saving(source_path, True)
+        source_path = session.path.resolve()
+        self.ctx.pending_saves.add(source_path)
+        set_session_saving(source_path, True)
 
-            # Pack session folder → .session.zip in a daemon thread so the
-            # UI stays responsive during finalization. Register with
-            # session_manager only after pack succeeds.
-            def _finalize() -> None:
+        def _finalize() -> None:
+            for hook in hooks:
                 try:
-                    zip_path = session.pack_to_zip()
-                    self.ctx.status_message = f"Saved {n} labels"
-                    self.ctx.notify("Recording saved", zip_path.name, "success")
-                    from myogestic.widgets.training.session_manager import (
-                        add_recorded_session,
-                    )
-
-                    add_recorded_session(str(zip_path))
-                    log.info("packed session to %s", zip_path)
+                    hook(session)
                 except Exception as e:
-                    log.exception("pack_to_zip failed: %s", e)
-                    self.ctx.status_message = f"Pack failed: {e} - folder kept"
-                    self.ctx.notify("Recording not packed", f"{e} — folder kept", "danger")
-                    # Fall back: register the folder so user doesn't lose it
-                    try:
-                        from myogestic.widgets.training.session_manager import (
-                            add_recorded_session,
-                        )
+                    log.exception("finalize hook %r failed: %s", hook, e)
+                    self.ctx.log(f"Finalize hook failed: {e}")
+            try:
+                session.save_meta(
+                    self.name,
+                    class_names=class_names,
+                    control_space=controls.as_control_space() if controls is not None else None,
+                )
+                n = len(session.label_track)
+                zip_path = session.pack_to_zip()
+                self.ctx.status_message = f"Saved {n} labels"
+                self.ctx.notify("Recording saved", zip_path.name, "success")
+                from myogestic.widgets.training.session_manager import add_recorded_session
 
-                        add_recorded_session(str(session.path))
-                    except Exception:
-                        pass
-                finally:
-                    set_session_saving(source_path, False)
-                    self.ctx.pending_saves.discard(source_path)
+                add_recorded_session(str(zip_path))
+                log.info("packed session to %s", zip_path)
+            except Exception as e:
+                log.exception("finalize failed: %s", e)
+                self.ctx.status_message = f"Pack failed: {e} - folder kept"
+                self.ctx.notify("Recording not packed", f"{e} — folder kept", "danger")
+                # Fall back: register the folder so user doesn't lose it
+                try:
+                    from myogestic.widgets.training.session_manager import add_recorded_session
 
-            if IS_BROWSER:
-                # Pyodide is single-threaded. Zipping inline blocks the frame, which for a
-                # short recording is a hitch rather than a hang — and the alternative is
-                # `RuntimeError: can't start new thread` and a session left unpacked.
-                _finalize()
-            else:
-                threading.Thread(target=_finalize, daemon=True).start()
+                    add_recorded_session(str(session.path))
+                except Exception:
+                    pass
+            finally:
+                set_session_saving(source_path, False)
+                self.ctx.pending_saves.discard(source_path)
+
+        from myogestic._browser import IS_BROWSER
+
+        if IS_BROWSER or wait:
+            # Pyodide is single-threaded, and at shutdown a daemon would be killed
+            # mid-pack. Inline blocks the frame for a short recording's pack — a hitch,
+            # not a hang.
+            _finalize()
+        else:
+            threading.Thread(target=_finalize, daemon=True).start()
 
     def discard_recording(self) -> None:
         """Stop the active recording and delete it, unsaved and unpacked.
 
         The counterpart to [`stop_recording`][myogestic.App.stop_recording] for a
         take the operator threw away — a false start, a bad trial. Detaches every
-        stream, removes the session folder, and returns to ``"idle"``. Nothing is
-        written to ``meta.json`` and no archive is produced, so a discarded
-        recording leaves no trace to clean up later.
+        stream, removes the session folder, and returns the state to ``"idle"`` when
+        the take was started from idle (a take under ``"predicting"`` leaves the state
+        alone). Nothing is written to ``meta.json`` and no archive is produced, so a
+        discarded recording leaves no trace to clean up later.
 
-        Refuses to run if ``ctx.state`` isn't ``"recording"``.
+        Refuses if no recording is open.
         """
         self.ctx._recording_stop_revision += 1
-        if not can_transition(self.ctx.state, AppState.IDLE):
+        if not self.ctx.recording:
             self.ctx.status_message = (
-                f"Cannot discard recording: state is {self.ctx.state!r}, expected 'recording'."
+                f"Cannot discard recording: state is {str(self.ctx.state)!r}, no recording is open."
             )
             return
-        self.ctx.state = AppState.IDLE
+        self.ctx.recording = False
+        if self.ctx.state == AppState.RECORDING:
+            self.ctx.state = AppState.IDLE
         # Before touching the folder: detach_session() waits for any in-flight
         # append, so the rmtree below cannot race the acquire thread.
         for stream in self.ctx.streams.values():
@@ -660,6 +697,7 @@ class App:
             │    └─ immapp.run → per frame: self._ui_fn(self.ctx)  (your @app.ui)
             └─ 4. [finally] cleanup - always runs, even on startup failure
                  ├─ cleanup_hooks(app)   each wrapped in try/except
+                 ├─ stop_recording(wait=True) if a take is open
                  ├─ Stream.stop()         per stream
                  ├─ Bridge.stop()         per bridge
                  └─ process_launcher._cleanup_all()
@@ -698,30 +736,7 @@ class App:
 
         log.info("run() - streams=%s mode=%s", list(self.ctx.streams), mode)
 
-        def _do_cleanup() -> None:
-            log.info("run() - cleanup")
-            for hook in self.cleanup_hooks:
-                try:
-                    hook(self)
-                except Exception as e:
-                    log.exception("cleanup hook %r failed: %s", hook, e)
-            for stream in self.ctx.streams.values():
-                try:
-                    stream.stop()
-                except Exception as e:
-                    log.exception("stream stop failed: %s", e)
-            for bridge in self.ctx.bridges.values():
-                try:
-                    bridge.stop()
-                except Exception as e:
-                    log.exception("bridge stop failed: %s", e)
-            try:
-                from myogestic.widgets.panels.process_launcher import _cleanup_all
-
-                _cleanup_all()
-            except Exception as e:
-                log.exception("process cleanup failed: %s", e)
-            self._running = False
+        from myogestic._browser import IS_BROWSER
 
         try:
             for name, stream in self.ctx.streams.items():
@@ -741,7 +756,7 @@ class App:
             # Always tear down on error - half-started state must not
             # leak (orphan threads on desktop, orphan scheduler entries
             # in browser).
-            _do_cleanup()
+            self._cleanup()
             raise
 
         if IS_BROWSER:
@@ -750,7 +765,43 @@ class App:
             # this function returns; tab unload is the implicit teardown.
             return
 
-        _do_cleanup()
+        self._cleanup()
+
+    def _cleanup(self) -> None:
+        """Teardown for `run`: hooks, an open take, streams, bridges, child processes.
+
+        An open recording is stopped *after* the cleanup hooks (the pipeline's hook stops
+        the predict thread, so no tick appends during the flush) and *before* the streams
+        stop, inline, so the archive is complete when the interpreter exits.
+        """
+        log.info("run() - cleanup")
+        for hook in self.cleanup_hooks:
+            try:
+                hook(self)
+            except Exception as e:
+                log.exception("cleanup hook %r failed: %s", hook, e)
+        if self.ctx.recording:
+            try:
+                self.stop_recording(wait=True)
+            except Exception as e:
+                log.exception("stop_recording at exit failed: %s", e)
+        for stream in self.ctx.streams.values():
+            try:
+                stream.stop()
+            except Exception as e:
+                log.exception("stream stop failed: %s", e)
+        for bridge in self.ctx.bridges.values():
+            try:
+                bridge.stop()
+            except Exception as e:
+                log.exception("bridge stop failed: %s", e)
+        try:
+            from myogestic.widgets.panels.process_launcher import _cleanup_all
+
+            _cleanup_all()
+        except Exception as e:
+            log.exception("process cleanup failed: %s", e)
+        self._running = False
 
     def _gui_loop(
         self,

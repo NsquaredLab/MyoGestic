@@ -22,16 +22,23 @@ def timed_controls():
     def start():
         calls.append("record")
         ctx.state = "recording"
+        ctx.recording = True
         ctx.session = SimpleNamespace(add_label=labels.append)
 
     def stop():
         calls.append("stop")
         ctx.state = "idle"
+        ctx.recording = False
 
     controls = recording.RecordingControls(
-        ["Rest", "Fist"], on_record=start, on_stop=stop,
-        take_lengths=(3.0, 5.0, 10.0), warmups=(0.0, 1.0, 2.0, 3.0),
-        timed=True, take_length=5.0, warmup=2.0,
+        ["Rest", "Fist"],
+        on_record=start,
+        on_stop=stop,
+        take_lengths=(3.0, 5.0, 10.0),
+        warmups=(0.0, 1.0, 2.0, 3.0),
+        timed=True,
+        take_length=5.0,
+        warmup=2.0,
     )
     controls._machine._clock = lambda: now[0]
     return controls, ctx, now, calls, labels
@@ -42,8 +49,10 @@ def test_initial_timing_defaults_to_first_choices_and_start_stop(options):
     from myogestic.widgets import RecordingControls
 
     controls = RecordingControls(
-        on_record=lambda: None, on_stop=lambda: None,
-        take_lengths=(3.0, 5.0, 10.0), warmups=(0.0, 1.0, 2.0, 3.0),
+        on_record=lambda: None,
+        on_stop=lambda: None,
+        take_lengths=(3.0, 5.0, 10.0),
+        warmups=(0.0, 1.0, 2.0, 3.0),
         **options,
     )
     assert controls._timed is False
@@ -65,9 +74,12 @@ def test_initial_timing_selects_explicit_choices(take_length, warmup):
     from myogestic.widgets import RecordingControls
 
     controls = RecordingControls(
-        on_record=lambda: None, on_stop=lambda: None,
-        take_lengths=(3.0, 5.0, 10.0), warmups=(0.0, 1.0, 2.0, 3.0),
-        take_length=take_length, warmup=warmup,
+        on_record=lambda: None,
+        on_stop=lambda: None,
+        take_lengths=(3.0, 5.0, 10.0),
+        warmups=(0.0, 1.0, 2.0, 3.0),
+        take_length=take_length,
+        warmup=warmup,
     )
     assert controls._timed is False
     assert controls._take_lengths[controls._length_index] == take_length
@@ -80,9 +92,13 @@ def test_initial_timed_mode_renders_selected_choices(imgui_frame, monkeypatch):
     from myogestic.widgets.panels import _recording_controls
 
     controls = RecordingControls(
-        on_record=lambda: None, on_stop=lambda: None,
-        take_lengths=(3.0, 5.0, 10.0), warmups=(0.0, 1.0, 2.0, 3.0),
-        timed=True, take_length=10.0, warmup=3.0,
+        on_record=lambda: None,
+        on_stop=lambda: None,
+        take_lengths=(3.0, 5.0, 10.0),
+        warmups=(0.0, 1.0, 2.0, 3.0),
+        timed=True,
+        take_length=10.0,
+        warmup=3.0,
     )
     selections = {}
     original = _recording_controls.segmented
@@ -104,20 +120,24 @@ def test_initial_timed_mode_requires_take_lengths(options):
         RecordingControls(on_record=lambda: None, on_stop=lambda: None, **options)
 
 
-@pytest.mark.parametrize("name,value,choices", [
-    ("take_length", 5.0, (3.0, 10.0)),
-    ("take_length", 5.0, ()),
-    ("take_length", float("nan"), (3.0, 10.0)),
-    ("warmup", 2.0, (0.0, 3.0)),
-    ("warmup", float("inf"), (0.0, 3.0)),
-])
+@pytest.mark.parametrize(
+    "name,value,choices",
+    [
+        ("take_length", 5.0, (3.0, 10.0)),
+        ("take_length", 5.0, ()),
+        ("take_length", float("nan"), (3.0, 10.0)),
+        ("warmup", 2.0, (0.0, 3.0)),
+        ("warmup", float("inf"), (0.0, 3.0)),
+    ],
+)
 def test_invalid_initial_timing_names_allowed_choices(name, value, choices):
     from myogestic.widgets import RecordingControls
 
     sequence = "take_lengths" if name == "take_length" else "warmups"
     with pytest.raises(ValueError, match=name) as exc:
         RecordingControls(
-            on_record=lambda: None, on_stop=lambda: None,
+            on_record=lambda: None,
+            on_stop=lambda: None,
             **{name: value, sequence: choices},
         )
     assert str(choices) in str(exc.value)
@@ -175,12 +195,18 @@ def test_external_changes_cancel_pending_work(timed_controls, imgui_frame, phase
     elif change == "session":
         ctx.session = object()
     else:
-        ctx.state = "predicting" if phase == "warmup" else "idle"
+        ctx.state = "training" if phase == "warmup" else "idle"
+        ctx.recording = False
     now[0] = 20.0
     imgui_frame(lambda: controls.ui(ctx, visible=False))
     assert controls.take.phase == "idle"
-    assert calls == ([] if phase == "warmup" else
-                     ["record", "stop"] if change in ("participant", "stream") else ["record"])
+    assert calls == (
+        []
+        if phase == "warmup"
+        else ["record", "stop"]
+        if change in ("participant", "stream")
+        else ["record"]
+    )
 
 
 def test_outside_stop_during_warmup_cancels(timed_controls, imgui_frame):
@@ -221,10 +247,15 @@ def test_only_timed_takes_lock_gestures(timed_controls, imgui_frame, monkeypatch
     assert controls.take.gesture == ("Fist" if timed else "Rest")
 
 
-@pytest.mark.parametrize("options", [
-    {"take_lengths": (0.0,)}, {"take_lengths": (float("nan"),)},
-    {"warmups": (-1.0,)}, {"warmups": ()},
-])
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"take_lengths": (0.0,)},
+        {"take_lengths": (float("nan"),)},
+        {"warmups": (-1.0,)},
+        {"warmups": ()},
+    ],
+)
 def test_invalid_timing_choices_are_rejected(options):
     from myogestic.widgets import RecordingControls
 
@@ -252,7 +283,9 @@ def test_action_row_height_is_constant(timed_controls, imgui_frame):
     assert heights == pytest.approx([heights[0]] * 4)
 
 
-def test_timing_columns_share_caption_and_control_baselines(timed_controls, imgui_frame, monkeypatch):
+def test_timing_columns_share_caption_and_control_baselines(
+    timed_controls, imgui_frame, monkeypatch
+):
     from imgui_bundle import imgui
 
     from myogestic import _theme
@@ -302,11 +335,13 @@ def test_timed_save_duration_is_within_one_frame(tmp_path, monkeypatch):
     def start():
         starts.append(now[0])
         app.ctx.state = "recording"
+        app.ctx.recording = True
         app.ctx.session = Session(str(tmp_path))
         app.ctx.session.init_stream("emg", StreamInfo(n_channels=1, fs=1000.0))
 
-    controls = RecordingControls(["Fist"], on_record=start, on_stop=app.stop_recording,
-                                 take_lengths=(5.0,), warmups=(2.0,))
+    controls = RecordingControls(
+        ["Fist"], on_record=start, on_stop=app.stop_recording, take_lengths=(5.0,), warmups=(2.0,)
+    )
     controls._timed = True
     controls._machine._clock = lambda: now[0]
     controls._start(app.ctx)
@@ -337,10 +372,14 @@ def test_recording_controls_optional_header(imgui_frame, monkeypatch):
     from myogestic.widgets.panels import _recording_controls, recording
 
     headers = []
-    monkeypatch.setattr(_recording_controls, "panel_header", lambda title, *a: headers.append(title))
+    monkeypatch.setattr(
+        _recording_controls, "panel_header", lambda title, *a: headers.append(title)
+    )
     for options, expected in [({}, ["RECORDING"]), ({"show_header": False}, [])]:
         headers.clear()
-        controls = recording.RecordingControls(on_record=lambda: None, on_stop=lambda: None, **options)
+        controls = recording.RecordingControls(
+            on_record=lambda: None, on_stop=lambda: None, **options
+        )
         imgui_frame(lambda controls=controls: controls.ui(Context()))
         assert headers == expected
 
@@ -379,3 +418,70 @@ def test_state_colors_default_entries():
 
     assert AppState.IDLE in STATE_COLORS
     assert AppState.RECORDING in STATE_COLORS
+
+
+from myogestic.core import Context
+from myogestic.widgets.panels.recording import _transport
+
+
+def test_transport_offers_record_from_idle_and_stop_while_recording():
+    ctx = Context()
+    assert _transport(ctx) == "record"
+    ctx.recording = True
+    ctx.state = "recording"
+    ctx.recording = True
+    assert _transport(ctx) == "stop"
+
+
+def test_transport_offers_nothing_from_an_unregistered_state():
+    # Only "training" is safe to assert on: any earlier test module that built a
+    # Pipeline has registered "predicting" in the process-global set for good.
+    ctx = Context()
+    ctx.state = "training"
+    assert _transport(ctx) == ""
+
+
+def test_transport_offers_record_from_a_registered_state(recordable_predicting):
+    ctx = Context()
+    ctx.state = "predicting"
+    assert _transport(ctx) == "record"
+    ctx.recording = True
+    assert _transport(ctx) == "stop"  # state still predicting, take open
+
+
+def test_recording_controls_predicting_uses_flag_for_tiles_and_stop(
+    tmp_path,
+    imgui_frame,
+    monkeypatch,
+    recordable_predicting,
+):
+    from imgui_bundle import imgui
+
+    from myogestic.core import App
+    from myogestic.widgets import RecordingControls
+
+    app = App("predicting take")
+    app.ctx.state = "predicting"
+    controls = RecordingControls(
+        ["Rest", "Fist"],
+        on_record=lambda: app.start_recording(str(tmp_path)),
+        on_stop=lambda: app.stop_recording(wait=True),
+    )
+    button = imgui.button
+    pressed = ["rec_btn"]
+
+    def click(label, *args):
+        result = button(label, *args)
+        return label.endswith("##" + pressed[0]) or result
+
+    monkeypatch.setattr(imgui, "button", click)
+    imgui_frame(lambda: controls.ui(app.ctx))
+    assert app.ctx.recording and app.ctx.state == "predicting"
+    assert app.ctx.session.label_track[0].class_index == 0
+    pressed[0] = "rec_gesture1"
+    imgui_frame(lambda: controls.ui(app.ctx))
+    assert app.ctx.session.label_track[-1].class_index == 1
+    pressed[0] = "rec_btn"
+    imgui_frame(lambda: controls.ui(app.ctx))
+    assert not app.ctx.recording and app.ctx.state == "predicting"
+    assert app.ctx.session.path.is_file()

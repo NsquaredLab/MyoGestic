@@ -39,8 +39,12 @@ class StatusBar:
     """
 
     def __init__(
-        self, stream: str = "emg", *, sessions_dir: str | Path = "sessions",
-        pipeline: Pipeline | None = None, widget_id: str = "status_bar",
+        self,
+        stream: str = "emg",
+        *,
+        sessions_dir: str | Path = "sessions",
+        pipeline: Pipeline | None = None,
+        widget_id: str = "status_bar",
     ) -> None:
         self.stream = stream
         self.sessions_dir = Path(sessions_dir)
@@ -81,9 +85,13 @@ class StatusBar:
                 model = "Model: fitted (not saved)"
 
         edge_rule(bottom=False)
-        imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + max(
-            0.0, (imgui.get_content_region_avail().y - imgui.get_text_line_height()) / 2,
-        ))
+        imgui.set_cursor_pos_y(
+            imgui.get_cursor_pos_y()
+            + max(
+                0.0,
+                (imgui.get_content_region_avail().y - imgui.get_text_line_height()) / 2,
+            )
+        )
         imgui.text_colored(SUCCESS if connected else IDLE, fa.ICON_FA_CIRCLE)
         imgui.same_line()
         available = imgui.get_content_region_avail().x

@@ -122,7 +122,9 @@ class _ProcState:
             raise
         # Capture this launch so an old reader cannot finish a later run's timer.
         self._reader_thread = threading.Thread(
-            target=self._read_output, args=(self.process,), daemon=True,
+            target=self._read_output,
+            args=(self.process,),
+            daemon=True,
         )
         self._reader_thread.start()
 
@@ -356,16 +358,24 @@ def _render_process_launcher(
     style = imgui.get_style()
     pop_key = (widget_id, name)
     popped = _popout_open.get(pop_key, False)
-    icon = (fa.ICON_FA_DOWN_LEFT_AND_UP_RIGHT_TO_CENTER if popped
-            else fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER)
+    icon = (
+        fa.ICON_FA_DOWN_LEFT_AND_UP_RIGHT_TO_CENTER
+        if popped
+        else fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER
+    )
     action_w = imgui.calc_text_size(icon).x + 2 * style.frame_padding.x
-    panel_header("Process", fa.ICON_FA_TERMINAL, status=dot,
-                 reserve=action_w + style.item_spacing.x)
+    panel_header(
+        "Process", fa.ICON_FA_TERMINAL, status=dot, reserve=action_w + style.item_spacing.x
+    )
     imgui.set_item_tooltip(detail)
     imgui.same_line()
-    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
-        0.0, imgui.get_content_region_avail().x - action_w,
-    ))
+    imgui.set_cursor_pos_x(
+        imgui.get_cursor_pos_x()
+        + max(
+            0.0,
+            imgui.get_content_region_avail().x - action_w,
+        )
+    )
     _popout_open[pop_key] = render_log_buttons(f"{widget_id}_{name}", popped_out=popped)
 
     imgui.set_next_item_width(-1.0)
@@ -386,8 +396,11 @@ def _render_process_launcher(
     else:
         failed = tone is DANGER
         if failed:
-            text = (f"launch failed · {state._launch_error}" if state._launch_error else
-                    f"exited with code {state.process.poll()} · {duration}")
+            text = (
+                f"launch failed · {state._launch_error}"
+                if state._launch_error
+                else f"exited with code {state.process.poll()} · {duration}"
+            )
             if _render_state_row(text, DANGER, f"Show output##{widget_id}"):
                 _popout_open[pop_key] = True
         label = "Launch again" if failed else "Launch"
@@ -403,7 +416,11 @@ def _render_process_launcher(
 
 
 def _render_state_row(
-    text: str, tone: imgui.ImVec4, action: str, *, destructive: bool = False,
+    text: str,
+    tone: imgui.ImVec4,
+    action: str,
+    *,
+    destructive: bool = False,
 ) -> bool:
     """Keep a mono state and its action on one line, with full detail on hover."""
     style = imgui.get_style()

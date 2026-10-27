@@ -68,10 +68,17 @@ def test_custom_band_samples_first_and_manual_range_still_work(implot_frame, mon
 
     monkeypatch.setattr(implot, "plot_line", capture_line)
     monkeypatch.setattr(implot, "plot_shaded", capture_band)
-    preview = TrialPreview(widget_id="custom", data_layout="samples_first", title="Custom",
-                           band=(0, 0.1), band_color=(0.1, 0.2, 0.3, 0.4), gain=2,
-                           scale_mode="manual", y_range=(-1, 1))
-    implot_frame(lambda: preview.ui(np.array([[1., 2.], [3., 4.]]), 10))
+    preview = TrialPreview(
+        widget_id="custom",
+        data_layout="samples_first",
+        title="Custom",
+        band=(0, 0.1),
+        band_color=(0.1, 0.2, 0.3, 0.4),
+        gain=2,
+        scale_mode="manual",
+        y_range=(-1, 1),
+    )
+    implot_frame(lambda: preview.ui(np.array([[1.0, 2.0], [3.0, 4.0]]), 10))
     np.testing.assert_allclose(lines[0][1], [2, 6])
     np.testing.assert_allclose(lines[1][1], [2, 6])
     np.testing.assert_allclose(bands[0][0], [1.2, 1.2])
@@ -95,7 +102,7 @@ def test_empty_preview_still_shows_header_and_next_step(implot_frame, monkeypatc
     assert any("Select a template" in label for label in seen)
 
 
-@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
 def test_preview_readout_fits_narrow_panel_in_mono(implot_frame, monkeypatch, scale):
     monkeypatch.setattr(_scale, "_current", scale)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)

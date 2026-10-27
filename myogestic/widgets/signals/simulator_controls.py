@@ -78,7 +78,7 @@ class SimulatorControls:
         # Advertise before the first click so the generator can discover the stream.
         self._ensure_outlet()
         imgui.push_id(self._widget_id)
-        recording = ctx.state == "recording"
+        recording = ctx.recording
         panel_header("Simulated EMG", status=SUCCESS if self._value else IDLE)
         imgui.set_item_tooltip("Active signal" if self._value else "Rest signal")
         imgui.begin_disabled(recording)

@@ -72,7 +72,7 @@ Persistent UI state — selected channels, scroll offset, popup open/closed — 
 class ChannelPicker:
     def __init__(self, stream: str = "emg") -> None:
         self._stream = stream
-        self._visible: set[int] = set()   # persists across frames
+        self._visible: set[int] = set()  # persists across frames
 
     def ui(self, ctx) -> None:
         s = ctx.streams.get(self._stream)

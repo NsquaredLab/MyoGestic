@@ -103,7 +103,7 @@ def test_a_refused_attempt_leaves_the_running_connection_alone():
     assert stream.reconnect()
     info_before = stream.info
 
-    stream._connect_lock.acquire()          # stand in for an attempt in flight
+    stream._connect_lock.acquire()  # stand in for an attempt in flight
     try:
         assert stream.reconnect() is False
     finally:

@@ -10,6 +10,7 @@ from imgui_bundle import icons_fontawesome_6 as fa
 from imgui_bundle import imgui
 
 from myogestic._theme import display_font
+from myogestic.core import RECORDABLE_STATES
 from myogestic.widgets.common import (
     DANGER,
     ON_PRIMARY_TEXT,
@@ -30,7 +31,7 @@ from myogestic.widgets.common import (
 from .recording import _record_button
 
 if TYPE_CHECKING:
-    from myogestic.core import Context
+    from myogestic.core import RECORDABLE_STATES, Context
 
     from .recording import RecordingControls
 
@@ -70,8 +71,12 @@ def _timing_choices(controls: RecordingControls) -> None:
     active = controls.take.phase in ("warmup", "recording")
     imgui.begin_disabled(active)
     try:
-        selected = _segments("take-mode", ["Start / stop", "Timed"], int(controls._timed),
-                             imgui.get_content_region_avail().x)
+        selected = _segments(
+            "take-mode",
+            ["Start / stop", "Timed"],
+            int(controls._timed),
+            imgui.get_content_region_avail().x,
+        )
         if not active:
             controls._timed = bool(selected)
         if not controls._timed:
@@ -94,13 +99,15 @@ def _timing_choices(controls: RecordingControls) -> None:
         if imgui.begin_table("take-options", columns, imgui.TableFlags_.sizing_stretch_same):
             try:
                 for start in range(0, len(fields), columns):
-                    row = fields[start:start + columns]
+                    row = fields[start : start + columns]
                     for caption, _, _, _ in row:
                         imgui.table_next_column()
                         imgui.text_colored(muted(), caption)
                     for _, key, options, index in row:
                         imgui.table_next_column()
-                        selected = _segments(key, options, index, imgui.get_content_region_avail().x)
+                        selected = _segments(
+                            key, options, index, imgui.get_content_region_avail().x
+                        )
                         if not active:
                             if key == "length":
                                 controls._length_index = selected
@@ -143,18 +150,20 @@ def _gesture_tiles(ctx: Context, controls: RecordingControls) -> None:
             draw = imgui.get_window_draw_list()
             color = PALETTE[i % len(PALETTE)]
             draw.add_circle_filled(
-                imgui.ImVec2(left + dot / 2, lo.y + height / 2), dot / 2,
+                imgui.ImVec2(left + dot / 2, lo.y + height / 2),
+                dot / 2,
                 imgui.get_color_u32(imgui.ImVec4(*color, 1.0)),
             )
             draw.add_text(
                 imgui.ImVec2(left + dot + gap, lo.y + (height - size.y) / 2),
-                imgui.get_color_u32(primary()), label,
+                imgui.get_color_u32(primary()),
+                label,
             )
             if label != name:
                 imgui.set_item_tooltip(name)
             if clicked and not locked:
                 ctx.current_label = i
-                if ctx.state == "recording" and ctx.session is not None and not locked:
+                if ctx.recording and ctx.session is not None and not locked:
                     ctx.session.add_label(i)
                     controls._machine.status = replace(controls.take, gesture=name)
                 if controls._on_gesture is not None:
@@ -164,8 +173,11 @@ def _gesture_tiles(ctx: Context, controls: RecordingControls) -> None:
                 pop_selected()
             imgui.end_disabled()
     if locked:
-        caption = ("Cancel the warm-up to change gestures." if controls.take.phase == "warmup"
-                   else "Stop the recording to change gestures.")
+        caption = (
+            "Cancel the warm-up to change gestures."
+            if controls.take.phase == "warmup"
+            else "Stop the recording to change gestures."
+        )
         imgui.push_text_wrap_pos(0.0)
         imgui.text_colored(muted(), caption)
         imgui.pop_text_wrap_pos()
@@ -180,12 +192,18 @@ def _action(ctx: Context, controls: RecordingControls) -> None:
         if controls._timed:
             label += f" · {controls._take_lengths[controls._length_index]:g} s"
         needs_gesture = controls._timed and bool(controls._class_names) and gesture is None
-        imgui.begin_disabled(ctx.state != "idle" or needs_gesture)
-        for slot, color in ((imgui.Col_.button, DANGER), (imgui.Col_.button_hovered, DANGER),
-                            (imgui.Col_.button_active, DANGER), (imgui.Col_.text, ON_PRIMARY_TEXT)):
+        imgui.begin_disabled(ctx.recording or ctx.state not in RECORDABLE_STATES or needs_gesture)
+        for slot, color in (
+            (imgui.Col_.button, DANGER),
+            (imgui.Col_.button_hovered, DANGER),
+            (imgui.Col_.button_active, DANGER),
+            (imgui.Col_.text, ON_PRIMARY_TEXT),
+        ):
             imgui.push_style_color(slot, color)
         try:
-            if _record_button(ctx, f"{fa.ICON_FA_CIRCLE}  {label}##rec_btn", imgui.ImVec2(-1, height)):
+            if _record_button(
+                ctx, f"{fa.ICON_FA_CIRCLE}  {label}##rec_btn", imgui.ImVec2(-1, height)
+            ):
                 controls._start(ctx)
         finally:
             imgui.pop_style_color(4)
@@ -203,7 +221,9 @@ def _action(ctx: Context, controls: RecordingControls) -> None:
         left, top = imgui.get_cursor_pos()
         right = left + inner
         action = "Cancel" if warmup else "Stop early" if take.timed else "Stop"
-        action_w = 0 if saved else imgui.calc_text_size(action).x + 2 * imgui.get_style().frame_padding.x
+        action_w = (
+            0 if saved else imgui.calc_text_size(action).x + 2 * imgui.get_style().frame_padding.x
+        )
         text_right = right - action_w - ui_px(8)
         if saved:
             imgui.set_cursor_pos_y(top + (height - ui_px(8) - imgui.get_text_line_height()) / 2)
@@ -211,7 +231,10 @@ def _action(ctx: Context, controls: RecordingControls) -> None:
             suffix = " (stopped early)"
             text = take.saved_text
             if text.endswith(suffix):
-                text = _fit(text[:-len(suffix)], inner - imgui.calc_text_size(suffix).x - ui_px(20)) + suffix
+                text = (
+                    _fit(text[: -len(suffix)], inner - imgui.calc_text_size(suffix).x - ui_px(20))
+                    + suffix
+                )
             imgui.text_colored(SUCCESS, _fit(f"{fa.ICON_FA_CHECK}  {text}", inner))
             imgui.set_item_tooltip(take.saved_text)
         else:
@@ -231,19 +254,31 @@ def _action(ctx: Context, controls: RecordingControls) -> None:
             imgui.text_unformatted(_fit(title, text_right - text_left))
             imgui.set_item_tooltip(title)
             imgui.set_cursor_pos_y(top + imgui.get_text_line_height() + ui_px(2))
-            detail = "nothing recorded yet" if warmup else (
-                f"{_clock(take.elapsed_s)} / {_clock(take.length_s)}" if take.timed
-                else f"{_clock(take.elapsed_s)} elapsed"
+            detail = (
+                "nothing recorded yet"
+                if warmup
+                else (
+                    f"{_clock(take.elapsed_s)} / {_clock(take.length_s)}"
+                    if take.timed
+                    else f"{_clock(take.elapsed_s)} elapsed"
+                )
             )
             mono_text(_fit(detail, text_right - text_left), muted())
             imgui.end_group()
             imgui.same_line()
-            imgui.set_cursor_pos(imgui.ImVec2(right - action_w, top + (height - ui_px(8) - imgui.get_frame_height()) / 2))
+            imgui.set_cursor_pos(
+                imgui.ImVec2(
+                    right - action_w, top + (height - ui_px(8) - imgui.get_frame_height()) / 2
+                )
+            )
             if imgui.button(f"{action}##rec_btn"):
                 controls._machine.stop()
     if warmup or (take.phase == "recording" and take.timed):
-        fraction = (1 - take.warmup_left_s / controls._warmups[controls._warmup_index]
-                    if warmup else take.elapsed_s / take.length_s)
+        fraction = (
+            1 - take.warmup_left_s / controls._warmups[controls._warmup_index]
+            if warmup
+            else take.elapsed_s / take.length_s
+        )
         imgui.get_window_draw_list().add_rect_filled(
             imgui.ImVec2(origin.x, origin.y + height - ui_px(2)),
             imgui.ImVec2(origin.x + width * min(1.0, max(0.0, fraction)), origin.y + height),

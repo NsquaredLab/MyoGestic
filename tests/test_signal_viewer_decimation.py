@@ -769,7 +769,9 @@ class _HumSource:
         i = np.arange(self._next, self._next + n)
         self._next += n
         t = i / self._info.fs
-        sig = (4.0 * np.sin(2 * np.pi * 50 * t) + 2.0 * np.sin(2 * np.pi * 23 * t)).astype(np.float32)
+        sig = (4.0 * np.sin(2 * np.pi * 50 * t) + 2.0 * np.sin(2 * np.pi * 23 * t)).astype(
+            np.float32
+        )
         data = np.repeat(sig[:, None], self._info.n_channels, axis=1)
         return data, t.astype(np.float64)
 
@@ -1066,17 +1068,13 @@ def test_the_stream_picker_appears_only_when_there_is_another_stream_to_reach(
 def test_stream_picker_selects_another_stream_and_can_return(implot_frame, monkeypatch):
     """Changing streams clears the old stream's paused samples in either direction."""
     names = ["emg", "target"]
-    v, _ = _header_frame(
-        implot_frame, monkeypatch, names, widget_id="thdr_next", select_index=1
-    )
+    v, _ = _header_frame(implot_frame, monkeypatch, names, widget_id="thdr_next", select_index=1)
     assert v.selected_stream == "target"
 
     v.paused = True
     v.frozen_data = np.zeros((4, 4))
     v.frozen_ts = np.zeros(4)
-    v, _ = _header_frame(
-        implot_frame, monkeypatch, names, widget_id="thdr_next", select_index=0
-    )
+    v, _ = _header_frame(implot_frame, monkeypatch, names, widget_id="thdr_next", select_index=0)
     assert v.selected_stream == "emg"
     assert not v.paused and v.frozen_data is None and v.frozen_ts is None
 
@@ -1084,8 +1082,11 @@ def test_stream_picker_selects_another_stream_and_can_return(implot_frame, monke
 def test_stream_picker_can_reach_the_last_stream(implot_frame, monkeypatch):
     """A viewer with several streams can select the final entry directly."""
     v, _ = _header_frame(
-        implot_frame, monkeypatch, ["emg", "target", "aux"],
-        widget_id="thdr_prev", select_index=2,
+        implot_frame,
+        monkeypatch,
+        ["emg", "target", "aux"],
+        widget_id="thdr_prev",
+        select_index=2,
     )
     assert v.selected_stream == "aux"
 
@@ -1219,6 +1220,7 @@ def test_clicking_one_to_one_leaves_the_style_stack_balanced(implot_frame, start
         True if label.startswith("1:1##") else real(label, *a, **k)
     )
     try:
+
         def inner() -> None:
             imgui.begin_child("cell", imgui.ImVec2(900, 400))
             imgui.open_popup("emg_display_popup")

@@ -63,7 +63,9 @@ class _TrailRecorder:
         self.clips = []
 
     def add_line(self, a, b, color, **kwargs):
-        self.lines.append((a.x, a.y, b.x, b.y, color, kwargs["thickness"], self.clips[-1] if self.clips else None))
+        self.lines.append(
+            (a.x, a.y, b.x, b.y, color, kwargs["thickness"], self.clips[-1] if self.clips else None)
+        )
         self.get_draw_list().add_line(a, b, color, **kwargs)
 
     def add_rect_filled(self, a, b, color, **kwargs):
@@ -110,7 +112,9 @@ def test_cursor_trail_runs_from_the_ghost_into_observed_history(imgui_frame, mon
     width, height = x1 - x0, y1 - y0
     assert lines[0][:2] == pytest.approx((x1, y0 + (1 - task._ghost_y(targets[-1])) * height / 2))
     assert x0 + width * 0.5 <= min(line[2] for line in lines) <= x0 + width * 0.5 + ui_px(11)
-    assert all(x0 <= line[2] < line[0] <= x1 for line in lines), "the trail anticipated a future position"
+    assert all(x0 <= line[2] < line[0] <= x1 for line in lines), (
+        "the trail anticipated a future position"
+    )
     assert all(line[6] == court for line in lines), "the trail was not clipped to the court"
     assert not rec.clips, "the trail left its clip rect pushed"
 

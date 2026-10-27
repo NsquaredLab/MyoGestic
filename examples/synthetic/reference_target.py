@@ -116,7 +116,9 @@ class ReferenceTarget(pb2_grpc.RemoteControlServicer):
                         self.pose[address] = float(chunk[-1][0])
                 self._stop.wait(0.005)
             except Exception as exc:
-                print(f"reference target: lost an inlet ({type(exc).__name__}: {exc}), re-resolving")
+                print(
+                    f"reference target: lost an inlet ({type(exc).__name__}: {exc}), re-resolving"
+                )
                 for inlet in inlets.values():
                     # Closing a *broken* inlet is exactly the case that raises, and a raise
                     # here would kill the thread this handler exists to keep alive.

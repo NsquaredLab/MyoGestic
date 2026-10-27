@@ -64,8 +64,10 @@ Give the PC NIC a `169.254.x.x` address on that segment.
 
 ```python
 from myogestic.sources.otb import QuattrocentoSource
-stream = Stream("emg", source=QuattrocentoSource(fs_mode=1, nch_mode=1),
-                window_ms=1000)  # 2048 Hz, 216 streamed ch
+
+stream = Stream(
+    "emg", source=QuattrocentoSource(fs_mode=1, nch_mode=1), window_ms=1000
+)  # 2048 Hz, 216 streamed ch
 stream.start()
 ```
 

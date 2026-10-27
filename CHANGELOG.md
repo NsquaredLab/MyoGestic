@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Myocontrol's Guided drive runs cue shuffled gesture repetitions, save prediction takes, and score match and cue reach from the saved take; Takes marks them **Guided** and leaves them unticked for training.
+- Myocontrol records the hand’s LSL feedback with the EMG and offers **Record this run** in Drive. Stopping prediction saves an open run first; Drive takes carry the running model and stay unticked for training unless selected.
+- `Pipeline(input_streams=...)` selects model inputs and their tick clock independently of recording-only feedback; `SignalViewer(exclude=...)` keeps those streams out of the EMG viewer.
+- **Record while predicting.** `App.start_recording` works from any state in
+  `myogestic.core.RECORDABLE_STATES` — core registers `idle`, `myogestic.ml` registers
+  `predicting` — and `ctx.recording` says whether a take is open, independent of
+  `ctx.state`. A take from `idle` still shows the `recording` state; a take under
+  `predicting` leaves the state alone and adds a `REC` pill beside it.
+- **Event streams.** `Session.append_event(name, values, timestamp, channel_names=, fs=, dtype=)`
+  declares a per-tick zarr stream on first use and appends one float32 row, buffered and
+  written 1024 rows or one second at a time (a single-row zarr append rewrites its chunk:
+  1.46 ms each on zarr 3.2.1, 0.04 ms per row batched). `Session.freeze()` flushes and
+  closes the session; `meta.json` lists the names under `event_streams`.
+- **The pipeline records its tick.** With a take open, `Pipeline` appends what `extract`
+  returned as `features` / `features.<key>` and what `predict` returned as
+  `prediction.<key>`, stamped with the newest sample the tick consumed, plus `pipeline.tick`
+  with the decision clock. Text, nested mappings and 2-D arrays are skipped once, with a log
+  line and an entry under `extras.pipeline.skipped`.
+- **The control bus records the frame it delivered** as `controls`, DOF names as channels,
+  when built with a `ctx` (`connect_controls` and `ControlLink` pass theirs).
+- **The model rides along.** `App.finalize_hooks` run on the finalize thread before
+  `meta.json` is written; the pipeline's hook saves the running model as `model.joblib`
+  beside the arrays when `pipeline.save_model` is set, and writes `extras.pipeline`.
+- `App.stop_recording(wait=True)` finalises inline; `App` uses it to save an open take at
+  exit instead of leaving a folder without `meta.json`.
+
 - `AppHeader` shares the line logo, title, state pill, workflow steps and optional participant chip across apps.
 - `StatusBar` shows acquisition details, participant, session folder and an optional fitted or saved model readout.
 - `SimulatorControls` provides synthetic EMG presets on every workflow step and follows the selected gesture during recording.
@@ -53,6 +79,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drift; a `BACKPRESSURE` line prints when the app stops draining the socket.
 
 ### Changed
+
+- `RecordingControls` and `RecordButton` offer Record while predicting and Stop under any
+  state with a take open; `RecordButton` freezes the session at the Stop click, so rows
+  produced over the naming dialog are not part of the take. The ML Predict button starts
+  from `recording` as well as `idle`.
+- `Pipeline.stop_predicting` returns to `recording` when a take is open, `idle` otherwise.
+- `save_meta` runs on the finalize thread rather than on the Stop click; a caller that read
+  `meta.json` synchronously after `stop_recording()` should pass `wait=True`.
 
 - The 2.0 widget kit uses one header per card, state rows, selectable chips, captioned fields and settings popovers across device, stream, recording, process, training and hand controls.
 - `force_ramps`, `pong`, the synthetic EMG examples and `sessantaquattro_app` use the shared session shell with workflow steps, persistent signals and participant sessions.
@@ -925,8 +959,10 @@ plus native pop-out windows.
   def ui(ctx):
       signal_viewer(ctx, "emg", selectable=True)
 
+
   # after — construct once, render each frame
   viewer = SignalViewer("emg", selectable=True)
+
 
   @app.ui
   def ui(ctx):

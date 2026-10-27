@@ -270,9 +270,7 @@ def _step(
         # The subject's paddle where it actually was at this instant, not where the
         # frame left it. Motion inside a frame is linear and the clamp is monotone, so
         # this reproduces `_aim` exactly at ``elapsed == dt``.
-        plane = (
-            min(max(paddle_y + paddle_vy * elapsed, -limit), limit) if mine else opponent_y
-        )
+        plane = min(max(paddle_y + paddle_vy * elapsed, -limit), limit) if mine else opponent_y
         if plane is None:
             vx = -vx  # a plain far wall, which has nothing to miss
             continue
@@ -432,7 +430,8 @@ class PongTask:
         # by, and capped so a paddle cannot be taller than the court it defends.
         self._half = min(max(paddle_size, 0.02), 2.0) * 0.5
         self._opponent_half = (
-            self._half if opponent_paddle_size is None
+            self._half
+            if opponent_paddle_size is None
             else min(max(opponent_paddle_size, 0.02), 2.0) * 0.5
         )
         # How far the paddle's *centre* may go: half a paddle from each wall, so a
@@ -618,7 +617,9 @@ class PongTask:
                 paddle = min(max(started + paddle_vy * travel, -self._limit), self._limit)
                 gap = max(abs(ball.y - paddle) - self._half, 0.0)
                 self._miss_at = now
-                self._miss_detail = f"missed by {gap:.2f} · paddle {paddle:+.2f}, ball {ball.y:+.2f}"
+                self._miss_detail = (
+                    f"missed by {gap:.2f} · paddle {paddle:+.2f}, ball {ball.y:+.2f}"
+                )
                 if self._finish(now):
                     return
                 self._serve_sign = -self._serve_sign
@@ -699,9 +700,7 @@ class PongTask:
         del history[:-_CURSOR_HISTORY_POINTS]
 
     # --- render --------------------------------------------------------------
-    def ui(
-        self, command: float, target: float | None = None, effort: float | None = None
-    ) -> None:
+    def ui(self, command: float, target: float | None = None, effort: float | None = None) -> None:
         """Render the game. Call once per frame.
 
         Parameters
@@ -737,10 +736,14 @@ class PongTask:
             self._remember_cursor(now, ghost)
             self._tick(now, command)
             self._header_ui()
-            if (target is None and not self.game_over and self._ball is None
-                    and not imgui.get_io().want_text_input
-                    and imgui.is_window_focused(imgui.FocusedFlags_.root_and_child_windows)
-                    and imgui.is_key_pressed(imgui.Key.space, False)):
+            if (
+                target is None
+                and not self.game_over
+                and self._ball is None
+                and not imgui.get_io().want_text_input
+                and imgui.is_window_focused(imgui.FocusedFlags_.root_and_child_windows)
+                and imgui.is_key_pressed(imgui.Key.space, False)
+            ):
                 self._restart()
             origin, size = self._court_ui(ghost, effort, command=command)
             if self.game_over or (self._ball is None and target is None):
@@ -756,7 +759,8 @@ class PongTask:
         origin = imgui.get_cursor_screen_pos()
         avail = imgui.get_content_region_avail()
         height = (
-            ui_px(self._court_height) if self._court_height > 0.0
+            ui_px(self._court_height)
+            if self._court_height > 0.0
             else max(avail.y - imgui.get_style().item_spacing.y, ui_px(_MIN_COURT_H))
         )
         meter_w = min(ui_px(58), avail.x * 0.27) if command is not None else 0.0
@@ -779,8 +783,10 @@ class PongTask:
         dashes = 9
         for i in range(0, dashes, 2):
             dl.add_line(
-                at(0.5, 1.0 - 2.0 * i / dashes), at(0.5, 1.0 - 2.0 * (i + 1) / dashes),
-                faint, thickness=ui_px(1),
+                at(0.5, 1.0 - 2.0 * i / dashes),
+                at(0.5, 1.0 - 2.0 * (i + 1) / dashes),
+                faint,
+                thickness=ui_px(1),
             )
 
         if ghost is not None:
@@ -831,8 +837,13 @@ class PongTask:
             self._court_text(
                 f"cursor {ghost / max(self._limit, _EPS_LIMIT):+.2f}",
                 origin.x + size.x * 0.68,
-                min(max(crown.y - imgui.get_text_line_height() - ui_px(4), origin.y), far.y - imgui.get_text_line_height()),
-                DANGER, mono=True, width=size.x * 0.55,
+                min(
+                    max(crown.y - imgui.get_text_line_height() - ui_px(4), origin.y),
+                    far.y - imgui.get_text_line_height(),
+                ),
+                DANGER,
+                mono=True,
+                width=size.x * 0.55,
             )
 
         if command is None and effort is not None and math.isfinite(effort):
@@ -863,16 +874,42 @@ class PongTask:
             for i, dot in enumerate(self._trail):
                 tone = imgui.ImVec4(*ON_PRIMARY_TEXT)
                 tone.w = 0.12 + i * 0.10
-                dl.add_circle_filled(at(dot.x, dot.y), max(frame * _BALL_EM, ui_px(3)) * (0.5 + i * 0.15), imgui.get_color_u32(tone))
-            dl.add_circle_filled(at(self._ball.x, self._ball.y), max(frame * _BALL_EM, ui_px(3)), imgui.get_color_u32(ON_PRIMARY_TEXT))
+                dl.add_circle_filled(
+                    at(dot.x, dot.y),
+                    max(frame * _BALL_EM, ui_px(3)) * (0.5 + i * 0.15),
+                    imgui.get_color_u32(tone),
+                )
+            dl.add_circle_filled(
+                at(self._ball.x, self._ball.y),
+                max(frame * _BALL_EM, ui_px(3)),
+                imgui.get_color_u32(ON_PRIMARY_TEXT),
+            )
 
         if not self.game_over:
             left = self._misses
             right = self._opponent_misses if self._opponent is not None else self._hits
             score_h = min(ui_px(64), size.x * 0.25, size.y * 0.22)
-            self._court_text(str(left), origin.x + size.x * 0.35, origin.y + ui_px(8), IDLE, display=True, height=score_h)
-            self._court_text(str(right), origin.x + size.x * 0.65, origin.y + ui_px(8), ON_PRIMARY_TEXT, display=True, height=score_h)
-            label = "WALL" if self._opponent is None else "CPU" + (f" · {self._opponent_name.upper()}" if self._opponent_name else "")
+            self._court_text(
+                str(left),
+                origin.x + size.x * 0.35,
+                origin.y + ui_px(8),
+                IDLE,
+                display=True,
+                height=score_h,
+            )
+            self._court_text(
+                str(right),
+                origin.x + size.x * 0.65,
+                origin.y + ui_px(8),
+                ON_PRIMARY_TEXT,
+                display=True,
+                height=score_h,
+            )
+            label = (
+                "WALL"
+                if self._opponent is None
+                else "CPU" + (f" · {self._opponent_name.upper()}" if self._opponent_name else "")
+            )
             label_y = origin.y + ui_px(8) + score_h
             self._court_text(label, origin.x + size.x * 0.30, label_y, IDLE, width=size.x * 0.48)
             self._court_text("YOU", origin.x + size.x * 0.75, label_y, INFO, width=size.x * 0.35)
@@ -883,9 +920,22 @@ class PongTask:
             tone.w *= max(0.0, 1.0 - age / 0.45)
             dl.add_line(at(1.0, -1.0), at(1.0, 1.0), imgui.get_color_u32(tone), thickness=ui_px(4))
         if age < 2.0 and not self.game_over:
-            self._court_text(self._miss_detail, origin.x + size.x / 2, far.y - imgui.get_text_line_height() - ui_px(8), IDLE, mono=True, width=size.x - ui_px(12))
+            self._court_text(
+                self._miss_detail,
+                origin.x + size.x / 2,
+                far.y - imgui.get_text_line_height() - ui_px(8),
+                IDLE,
+                mono=True,
+                width=size.x - ui_px(12),
+            )
         if command is not None:
-            self._meter_ui(imgui.ImVec2(far.x + gap, origin.y), imgui.ImVec2(meter_w, height), command, ghost, effort)
+            self._meter_ui(
+                imgui.ImVec2(far.x + gap, origin.y),
+                imgui.ImVec2(meter_w, height),
+                command,
+                ghost,
+                effort,
+            )
         return origin, size
 
     def _cursor_trail_ui(self, at: Callable[[float, float], imgui.ImVec2]) -> None:
@@ -916,7 +966,8 @@ class PongTask:
                         dl.add_line(
                             imgui.ImVec2(a.x + dx * start, a.y + dy * start),
                             imgui.ImVec2(a.x + dx * end, a.y + dy * end),
-                            imgui.get_color_u32(tone), thickness=ui_px(2),
+                            imgui.get_color_u32(tone),
+                            thickness=ui_px(2),
                         )
                     travel += step
                     remaining -= step
@@ -929,7 +980,17 @@ class PongTask:
             dl.pop_clip_rect()
 
     @staticmethod
-    def _court_text(text: str, x: float, y: float, tone: imgui.ImVec4, *, display: bool = False, mono: bool = False, height: float | None = None, width: float | None = None) -> None:
+    def _court_text(
+        text: str,
+        x: float,
+        y: float,
+        tone: imgui.ImVec4,
+        *,
+        display: bool = False,
+        mono: bool = False,
+        height: float | None = None,
+        width: float | None = None,
+    ) -> None:
         """Centred court text, measured in its own face and fitted to its region."""
         font = display_font() if display else mono_font() if mono else None
         # PushFont sizes are before ImGui's global font scale; our geometry is in
@@ -945,36 +1006,85 @@ class PongTask:
                 text = _truncate_to_width(text, max(0.0, width - imgui.calc_text_size("…").x)) + "…"
                 if imgui.calc_text_size(text).x > width:
                     text = ""
-            imgui.get_window_draw_list().add_text(imgui.ImVec2(x - imgui.calc_text_size(text).x / 2, y), imgui.get_color_u32(tone), text)
+            imgui.get_window_draw_list().add_text(
+                imgui.ImVec2(x - imgui.calc_text_size(text).x / 2, y),
+                imgui.get_color_u32(tone),
+                text,
+            )
         finally:
             imgui.pop_font()
 
-    def _meter_ui(self, origin: imgui.ImVec2, size: imgui.ImVec2, command: float, target: float | None, effort: float | None) -> None:
+    def _meter_ui(
+        self,
+        origin: imgui.ImVec2,
+        size: imgui.ImVec2,
+        command: float,
+        target: float | None,
+        effort: float | None,
+    ) -> None:
         """Signed decoded command outside a block, unsigned measured effort inside."""
         signed = target is None
         value = command if signed else effort
-        value = min(max(value, -1.0 if signed else 0.0), 1.0) if value is not None and math.isfinite(value) else 0.0
+        value = (
+            min(max(value, -1.0 if signed else 0.0), 1.0)
+            if value is not None and math.isfinite(value)
+            else 0.0
+        )
         line = imgui.get_text_line_height()
         x = origin.x + size.x / 2
         self._court_text("CMD" if signed else "EFFORT", x, origin.y, muted(), width=size.x)
-        self._court_text("+1" if signed else "1", x, origin.y + line, muted(), mono=True, width=size.x)
+        self._court_text(
+            "+1" if signed else "1", x, origin.y + line, muted(), mono=True, width=size.x
+        )
         top, bottom = origin.y + 2 * line + ui_px(4), origin.y + size.y - 2 * line - ui_px(4)
         bottom = max(top + ui_px(4), bottom)
         w = min(ui_px(14), size.x * 0.3)
         dl = imgui.get_window_draw_list()
-        dl.add_rect_filled(imgui.ImVec2(x - w / 2, top), imgui.ImVec2(x + w / 2, bottom), imgui.get_color_u32(imgui.Col_.frame_bg), rounding=w / 2)
+        dl.add_rect_filled(
+            imgui.ImVec2(x - w / 2, top),
+            imgui.ImVec2(x + w / 2, bottom),
+            imgui.get_color_u32(imgui.Col_.frame_bg),
+            rounding=w / 2,
+        )
         zero = (top + bottom) / 2 if signed else bottom
         unit = (bottom - top) / 2 if signed else bottom - top
         if signed and self._control == "velocity":
-            dl.add_rect_filled(imgui.ImVec2(x - w, zero - unit * _DEAD_ZONE), imgui.ImVec2(x + w, zero + unit * _DEAD_ZONE), imgui.get_color_u32(hairline()))
+            dl.add_rect_filled(
+                imgui.ImVec2(x - w, zero - unit * _DEAD_ZONE),
+                imgui.ImVec2(x + w, zero + unit * _DEAD_ZONE),
+                imgui.get_color_u32(hairline()),
+            )
         tip = zero - value * unit
-        dl.add_rect_filled(imgui.ImVec2(x - w / 2, min(tip, zero)), imgui.ImVec2(x + w / 2, max(tip, zero)), imgui.get_color_u32(INFO))
-        dl.add_line(imgui.ImVec2(x - w, zero), imgui.ImVec2(x + w, zero), imgui.get_color_u32(muted()), thickness=ui_px(1))
+        dl.add_rect_filled(
+            imgui.ImVec2(x - w / 2, min(tip, zero)),
+            imgui.ImVec2(x + w / 2, max(tip, zero)),
+            imgui.get_color_u32(INFO),
+        )
+        dl.add_line(
+            imgui.ImVec2(x - w, zero),
+            imgui.ImVec2(x + w, zero),
+            imgui.get_color_u32(muted()),
+            thickness=ui_px(1),
+        )
         if not signed:
             mark = bottom - min(abs(target) / max(self._limit, _EPS_LIMIT), 1.0) * unit
-            dl.add_line(imgui.ImVec2(x - w, mark), imgui.ImVec2(x + w, mark), imgui.get_color_u32(DANGER), thickness=ui_px(2))
-        self._court_text("−1" if signed else "0", x, bottom + ui_px(2), muted(), mono=True, width=size.x)
-        self._court_text(f"{value:+.2f}" if signed else f"{value:.2f}", x, bottom + line + ui_px(4), INFO, mono=True, width=size.x)
+            dl.add_line(
+                imgui.ImVec2(x - w, mark),
+                imgui.ImVec2(x + w, mark),
+                imgui.get_color_u32(DANGER),
+                thickness=ui_px(2),
+            )
+        self._court_text(
+            "−1" if signed else "0", x, bottom + ui_px(2), muted(), mono=True, width=size.x
+        )
+        self._court_text(
+            f"{value:+.2f}" if signed else f"{value:.2f}",
+            x,
+            bottom + line + ui_px(4),
+            INFO,
+            mono=True,
+            width=size.x,
+        )
 
     def _header_ui(self) -> None:
         """One panel title, rally readout, Space hint and quiet icon stop."""
@@ -983,13 +1093,20 @@ class PongTask:
         wide = imgui.get_content_region_avail().x >= ui_px(440)
         detail = f"rally {self._rally} · best {self._best}"
         reserve = stop_w + ui_px(8) + (ui_px(290) if wide else 0)
-        panel_header("Pong", fa.ICON_FA_TABLE_TENNIS_PADDLE_BALL, reserve=reserve, status=SUCCESS if self._ball is not None else IDLE)
+        panel_header(
+            "Pong",
+            fa.ICON_FA_TABLE_TENNIS_PADDLE_BALL,
+            reserve=reserve,
+            status=SUCCESS if self._ball is not None else IDLE,
+        )
         if wide:
             imgui.same_line()
             imgui.set_cursor_pos_x(left + ui_px(110))
             mono_text(detail + " · Space to serve", muted())
         imgui.same_line()
-        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0, imgui.get_content_region_avail().x - stop_w))
+        imgui.set_cursor_pos_x(
+            imgui.get_cursor_pos_x() + max(0, imgui.get_content_region_avail().x - stop_w)
+        )
         if imgui.button(f"{fa.ICON_FA_STOP}##pong_stop", imgui.ImVec2(stop_w, 0)):
             self._ball = None
             self._trail.clear()
@@ -1012,10 +1129,31 @@ class PongTask:
             winner = "YOU WIN" if points > self._misses else "CPU WINS"
             self._court_text(winner, centre, y, INFO, width=width)
             y += line
-            self._court_text(f"{points} : {self._misses}", centre, y, ON_PRIMARY_TEXT, display=True, height=score_h, width=width)
+            self._court_text(
+                f"{points} : {self._misses}",
+                centre,
+                y,
+                ON_PRIMARY_TEXT,
+                display=True,
+                height=score_h,
+                width=width,
+            )
             y += score_h + ui_px(4)
-            elapsed = max(0, int((self._finished or time.monotonic()) - (self._started or self._finished or time.monotonic())))
-            self._court_text(f"longest rally {self._best} · {elapsed // 60}:{elapsed % 60:02}", centre, y, IDLE, mono=True, width=width)
+            elapsed = max(
+                0,
+                int(
+                    (self._finished or time.monotonic())
+                    - (self._started or self._finished or time.monotonic())
+                ),
+            )
+            self._court_text(
+                f"longest rally {self._best} · {elapsed // 60}:{elapsed % 60:02}",
+                centre,
+                y,
+                IDLE,
+                mono=True,
+                width=width,
+            )
             y += line
         label = "Play again" if self.game_over else f"{fa.ICON_FA_PLAY}  Serve"
         needed = imgui.calc_text_size(label).x + 2 * imgui.get_style().frame_padding.x
@@ -1024,7 +1162,9 @@ class PongTask:
         if primary_button(label + "##pong_serve", (button_w, 0)):
             self._restart()
         if self.game_over and self._on_harder is not None:
-            imgui.set_cursor_screen_pos(imgui.ImVec2(centre - button_w / 2, y + button_h + ui_px(4)))
+            imgui.set_cursor_screen_pos(
+                imgui.ImVec2(centre - button_w / 2, y + button_h + ui_px(4))
+            )
             if imgui.button("Harder##pong_harder", imgui.ImVec2(button_w, 0)):
                 self._on_harder()
         elif not self.game_over:
@@ -1042,7 +1182,9 @@ class PongTask:
             shown = detail
             if imgui.calc_text_size(detail).x > width:
                 ellipsis = "…" if imgui.calc_text_size("…").x <= width else ""
-                shown = _truncate_to_width(detail, width - imgui.calc_text_size(ellipsis).x) + ellipsis
+                shown = (
+                    _truncate_to_width(detail, width - imgui.calc_text_size(ellipsis).x) + ellipsis
+                )
             mono_text(shown, muted())
         finally:
             if font is not None:

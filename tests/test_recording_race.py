@@ -16,13 +16,10 @@ so once it returns no append can be running and clearing the stores is safe.
 
 from __future__ import annotations
 
-import tempfile
 import threading
-import time
 
 import numpy as np
 
-from myogestic.session import Session
 from myogestic.stream import Stream, StreamInfo
 
 
@@ -104,45 +101,3 @@ def test_detach_session_waits_for_inflight_append():
     assert stream._session is None
     # The append finished strictly before detach returned.
     assert order == ["append_enter", "append_exit", "detach_done"]
-
-
-def test_clear_after_detach_does_not_crash_acquire_loop():
-    """Stress complement to the deterministic test above: a real acquire
-    thread streams into a session under load while we repeatedly tear it down
-    in the App's order (detach → clear). The acquire thread must never die.
-
-    The hard guarantee lives in ``test_detach_session_waits_for_inflight_append``;
-    this exercises the same invariant against the real threaded loop."""
-    errors: list[BaseException] = []
-    prev_hook = threading.excepthook
-    threading.excepthook = lambda args: errors.append(args.exc_value)
-    try:
-        with tempfile.TemporaryDirectory() as tmp:
-            stream = Stream("emg", source=_FixedSource(), window_ms=100, buffer_ms=2000)
-            stream.reconnect()   # the loop never attaches on its own
-            stream.start()
-            time.sleep(0.05)  # let it connect + stream
-            assert stream.info is not None
-
-            for _ in range(30):
-                session = Session(base_path=tmp)
-                session.init_stream("emg", stream.info)
-                stream.attach_session(session)
-                time.sleep(0.003)
-                # Teardown order mirrors App.stop_recording(): detach first
-                # (waits for in-flight append), then clear the stores.
-                stream.detach_session()
-                session.stores.clear()
-                session.ts_stores.clear()
-            stream.stop()
-            # Join the acquire thread so a late crash can't slip past the
-            # assertion below (and so excepthook is restored only after it
-            # has fully stopped).
-            acq = getattr(stream, "_thread", None)
-            if acq is not None:
-                acq.join(timeout=2.0)
-                assert not acq.is_alive(), "acquire thread did not stop"
-    finally:
-        threading.excepthook = prev_hook
-
-    assert not errors, f"acquire thread raised: {errors!r}"

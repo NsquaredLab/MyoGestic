@@ -23,6 +23,7 @@ from myogestic.outputs import EdgeTrigger
 
 trigger = EdgeTrigger(callback=send_gesture_to_device)
 
+
 @pipeline.predict
 def predict(model, features):
     class_idx = int(np.argmax(model.predict_proba(features)))
@@ -40,8 +41,8 @@ the trigger would, sync the trigger so it doesn't re-fire on the next tick:
 
 ```python
 def _on_gesture_button(class_idx: int) -> None:
-    send_gesture_to_device(CLASSES[class_idx])      # do the action
-    trigger.rebase(CLASSES[class_idx])              # baseline matches
+    send_gesture_to_device(CLASSES[class_idx])  # do the action
+    trigger.rebase(CLASSES[class_idx])  # baseline matches
 ```
 
 Without the `rebase`, the next `predict` tick would see the predicted class

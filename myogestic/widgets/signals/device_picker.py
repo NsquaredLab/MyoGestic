@@ -182,7 +182,7 @@ _MUOVI_STEPS = (
 )
 _SESSANTAQUATTRO_HINT = "This PC is the server on port 45454; the device dials in."
 _SESSANTAQUATTRO_STEPS = (
-    'Join the device\'s Wi-Fi access point — or set this PC\'s IP as "Server IP address" '
+    "Join the device's Wi-Fi access point — or set this PC's IP as \"Server IP address\" "
     "on the device's own web page.",
     "Power the device on and wait for it to reach the network.",
     "Press Connect.",
@@ -672,20 +672,32 @@ class DevicePicker:
     def _stream_row(self, ctx: Context) -> None:
         """Stream chips, with inline add and selected-stream removal."""
         names = sorted(n for n in ctx.streams if n not in self._excluded)
-        recording = getattr(ctx, "state", "") == "recording"
+        recording = bool(getattr(ctx, "recording", False))
         style = imgui.get_style()
         left = imgui.get_cursor_pos_x()
         right = left + imgui.get_content_region_avail().x
         remove = None
         for index, name in enumerate(names):
             stream = ctx.streams[name]
-            tone = (SUCCESS if stream.status == "connected" and stream.info is not None
-                    else DANGER if stream.last_error else IDLE)
+            tone = (
+                SUCCESS
+                if stream.status == "connected" and stream.info is not None
+                else DANGER
+                if stream.last_error
+                else IDLE
+            )
             selected = name == self._stream_name
             removable = selected and self._on_remove is not None and len(names) > 1
             clicked, removed = stream_chip(
-                name, tone, selected=selected, prefix="dp", left=left, right=right,
-                first=index == 0, removable=removable, recording=recording,
+                name,
+                tone,
+                selected=selected,
+                prefix="dp",
+                left=left,
+                right=right,
+                first=index == 0,
+                removable=removable,
+                recording=recording,
                 detail=stream.last_error or stream.status,
             )
             if clicked:
@@ -707,8 +719,9 @@ class DevicePicker:
             if imgui.button(f"{fa.ICON_FA_PLUS}##dp_add_open") and not recording:
                 self._adding = True
             imgui.end_disabled()
-            self._action_tooltip("Stop the recording before adding a stream." if recording else "",
-                                 "Add a stream.")
+            self._action_tooltip(
+                "Stop the recording before adding a stream." if recording else "", "Add a stream."
+            )
             if self._adding:
                 self._add_row(ctx, recording=recording)
 
@@ -718,8 +731,12 @@ class DevicePicker:
         from myogestic.widgets.panels.stream_manager import _NAME_MAX, _clean_name
 
         style = imgui.get_style()
-        reserve = (imgui.calc_text_size("Add").x + imgui.calc_text_size(fa.ICON_FA_XMARK).x
-                   + 4 * style.frame_padding.x + 2 * style.item_spacing.x)
+        reserve = (
+            imgui.calc_text_size("Add").x
+            + imgui.calc_text_size(fa.ICON_FA_XMARK).x
+            + 4 * style.frame_padding.x
+            + 2 * style.item_spacing.x
+        )
         imgui.set_next_item_width(max(1.0, imgui.get_content_region_avail().x - reserve))
         imgui.begin_disabled(recording)
         changed, typed = imgui.input_text_with_hint("##dp_new", "e.g. force", self._typed)
@@ -823,7 +840,8 @@ class DevicePicker:
         cell = (width - style.item_spacing.x) * 0.5
         minimum = max(
             max(imgui.calc_text_size(label).x for label in opt.choices)
-            + imgui.get_frame_height() + 2 * style.frame_padding.x
+            + imgui.get_frame_height()
+            + 2 * style.frame_padding.x
             for opt in options
         )
         columns = 2 if len(options) > 1 and cell >= max(ui_px(90), minimum) else 1
@@ -857,7 +875,9 @@ class DevicePicker:
         style = imgui.get_style()
         rescan_w = imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x + style.frame_padding.x * 2
         right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
-        imgui.set_next_item_width(max(1.0, imgui.get_content_region_avail().x - rescan_w - style.item_spacing.x))
+        imgui.set_next_item_width(
+            max(1.0, imgui.get_content_region_avail().x - rescan_w - style.item_spacing.x)
+        )
         labels = [f"{t.get('name', '?')} ({t.get('info', '')})" for t in self._targets]
         if labels and not self._scanning:
             self._target_selected = min(self._target_selected, len(labels) - 1)
@@ -874,7 +894,9 @@ class DevicePicker:
         if imgui.button(f"{fa.ICON_FA_ARROWS_ROTATE}##dp_scan"):
             self._start_scan(dev)
         imgui.end_disabled()
-        self._action_tooltip("Scanning for outlets…" if self._scanning else "", "Rescan for outlets")
+        self._action_tooltip(
+            "Scanning for outlets…" if self._scanning else "", "Rescan for outlets"
+        )
 
     def _start_scan(self, dev: DeviceSpec) -> None:
         """Run ``discover()`` off-thread on a throwaway source.
@@ -955,15 +977,21 @@ class DevicePicker:
             imgui.set_item_tooltip("Stop waiting for the device.")
             return
 
-        recording = getattr(ctx, "state", "") == "recording"
+        recording = bool(getattr(ctx, "recording", False))
         reason = "Stop the recording before changing device." if recording else ""
-        connect_reason = reason or ("No target to connect to yet." if dev.scan and not self._targets else "")
+        connect_reason = reason or (
+            "No target to connect to yet." if dev.scan and not self._targets else ""
+        )
         attached = stream.status == "connected" and stream.info is not None
         if attached:
             with tinted_row(SUCCESS) as width:
                 right = imgui.get_cursor_pos_x() + width
-                reconnect_w = imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x + 2 * style.frame_padding.x
-                disconnect_w = imgui.calc_text_size(fa.ICON_FA_PLUG_CIRCLE_XMARK).x + 2 * style.frame_padding.x
+                reconnect_w = (
+                    imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x + 2 * style.frame_padding.x
+                )
+                disconnect_w = (
+                    imgui.calc_text_size(fa.ICON_FA_PLUG_CIRCLE_XMARK).x + 2 * style.frame_padding.x
+                )
                 actions_x = right - reconnect_w - disconnect_w - style.item_spacing.x
                 imgui.align_text_to_frame_padding()
                 imgui.text_colored(SUCCESS, fa.ICON_FA_CIRCLE)
@@ -988,16 +1016,23 @@ class DevicePicker:
                 if imgui.button(f"{fa.ICON_FA_ARROWS_ROTATE}##dp_connect") and not connect_reason:
                     self._connect(ctx, stream, dev)
                 imgui.end_disabled()
-                self._action_tooltip(connect_reason, "Reconnect: build this device again and re-attach the stream.")
+                self._action_tooltip(
+                    connect_reason, "Reconnect: build this device again and re-attach the stream."
+                )
                 imgui.same_line()
                 imgui.begin_disabled(bool(reason))
                 if imgui.button(f"{fa.ICON_FA_PLUG_CIRCLE_XMARK}##dp_disconnect") and not reason:
                     self._disconnect(ctx, stream)
                 imgui.end_disabled()
-                self._action_tooltip(reason, "Disconnect: close the device and leave the stream detached.")
+                self._action_tooltip(
+                    reason, "Disconnect: close the device and leave the stream detached."
+                )
         else:
             imgui.begin_disabled(bool(connect_reason))
-            if primary_button(f"{fa.ICON_FA_PLUG}  Connect##dp_connect", (-1, 0)) and not connect_reason:
+            if (
+                primary_button(f"{fa.ICON_FA_PLUG}  Connect##dp_connect", (-1, 0))
+                and not connect_reason
+            ):
                 self._connect(ctx, stream, dev)
             imgui.end_disabled()
             self._action_tooltip(connect_reason, "Build this device and attach the stream to it.")
@@ -1053,9 +1088,7 @@ class DevicePicker:
 
         kwargs = _chosen_kwargs(dev, self._choices[self._selected])
         target = (
-            self._targets[self._target_selected].get("name")
-            if dev.scan and self._targets
-            else None
+            self._targets[self._target_selected].get("name") if dev.scan and self._targets else None
         )
         index = self._selected
         # Held, not re-resolved: the operator can switch the panel to another

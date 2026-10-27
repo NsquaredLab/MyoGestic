@@ -38,15 +38,20 @@ def test_hand_header_and_idle_refresh(imgui_frame, monkeypatch, connected, tone)
     headers = []
     original = palette.panel_header
     monkeypatch.setattr(
-        palette, "panel_header",
+        palette,
+        "panel_header",
         lambda *a, **kw: (headers.append((a, kw)), original(*a, **kw))[1],
     )
     seen = _buttons(monkeypatch, "Refresh")
     refreshed = []
-    imgui_frame(lambda: palette.vhi_movement_palette(
-        ["Rest", "Fist"], connected=connected, on_movement=lambda _: None,
-        on_refresh=lambda: refreshed.append(True),
-    ))
+    imgui_frame(
+        lambda: palette.vhi_movement_palette(
+            ["Rest", "Fist"],
+            connected=connected,
+            on_movement=lambda _: None,
+            on_refresh=lambda: refreshed.append(True),
+        )
+    )
     assert headers[0][0][0] == "Hand movements"
     assert headers[0][1]["status"] == tone
     assert refreshed == ([] if connected else [True])
@@ -65,10 +70,14 @@ def test_movement_chips_fit_their_names(imgui_frame, monkeypatch):
 
     monkeypatch.setattr(imgui, "button", spy)
     picked = []
-    imgui_frame(lambda: palette.vhi_movement_palette(
-        ["Rest", "ThreeFingerPinch", "Fist"], connected=True,
-        current_movement="Fist", on_movement=picked.append,
-    ))
+    imgui_frame(
+        lambda: palette.vhi_movement_palette(
+            ["Rest", "ThreeFingerPinch", "Fist"],
+            connected=True,
+            current_movement="Fist",
+            on_movement=picked.append,
+        )
+    )
     assert picked == ["Fist"]
     assert widths[0] < widths[1]
 
@@ -265,7 +274,14 @@ def test_state_actions_stay_in_their_tinted_rows(imgui_frame, monkeypatch, tmp_p
 @pytest.mark.parametrize("raw", [False, True])
 @pytest.mark.parametrize("state", ["edited", "conflict", "invalid"])
 def test_scaled_widgets_keep_controls_inside_their_cells(
-    imgui_frame, monkeypatch, tmp_path, width, scale, dark, raw, state,
+    imgui_frame,
+    monkeypatch,
+    tmp_path,
+    width,
+    scale,
+    dark,
+    raw,
+    state,
 ):
     from myogestic import _scale, _theme
 
@@ -305,7 +321,9 @@ def test_scaled_widgets_keep_controls_inside_their_cells(
         editor.ui()
         palette.vhi_movement_palette(
             ["Rest", "ThreeFingerPinch", "A very long movement name that needs truncating"],
-            connected=True, on_movement=lambda _: None, on_refresh=lambda: None,
+            connected=True,
+            on_movement=lambda _: None,
+            on_refresh=lambda: None,
         )
         imgui.end()
         imgui.end_frame()

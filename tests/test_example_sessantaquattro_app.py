@@ -20,7 +20,9 @@ def otb_app(monkeypatch, tmp_path):
     from myogestic.widgets.training._session_state import _states
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(SessantaquattroSource, "connect", lambda self: pytest.fail("unexpected hardware connection"))
+    monkeypatch.setattr(
+        SessantaquattroSource, "connect", lambda self: pytest.fail("unexpected hardware connection")
+    )
     _states.clear()
     _viewers.clear()
     namespace = runpy.run_path(str(_ROOT / "examples/otb/sessantaquattro_app.py"))
@@ -60,9 +62,12 @@ def test_sessantaquattro_uses_the_session_shell(otb_app):
     assert layout._breakpoint == Px(1100)
     assert layout._wide._col_tracks == [Fr(1), Px(400)]
     assert layout._wide._areas == {
-        "header": (0, 1, 0, 2), "signal": (1, 3, 0, 1),
-        "step": (1, 2, 1, 2), "sessions": (2, 4, 1, 2),
-        "log": (3, 4, 0, 1), "status": (4, 5, 0, 2),
+        "header": (0, 1, 0, 2),
+        "signal": (1, 3, 0, 1),
+        "step": (1, 2, 1, 2),
+        "sessions": (2, 4, 1, 2),
+        "log": (3, 4, 0, 1),
+        "status": (4, 5, 0, 2),
     }
     assert list(layout._narrow._areas) == ["header", "signal", "step", "sessions", "log", "status"]
     for grid in (layout._wide, layout._narrow):
@@ -70,7 +75,9 @@ def test_sessantaquattro_uses_the_session_shell(otb_app):
         assert grid._row_tracks[0] == Px(52) and grid._row_tracks[-1] == Px(26)
 
 
-def test_sessantaquattro_completion_tracks_connection_and_participant_takes(otb_app, monkeypatch, tmp_path):
+def test_sessantaquattro_completion_tracks_connection_and_participant_takes(
+    otb_app, monkeypatch, tmp_path
+):
     """An unattached stream or another participant's take never completes a step."""
     ctx, done = otb_app["app"].ctx, otb_app["_step_done"]
     assert done(ctx) == [False, False]
@@ -96,7 +103,13 @@ def test_sessantaquattro_completion_tracks_connection_and_participant_takes(otb_
 @pytest.mark.parametrize("participant", ["", "P-014"])
 @pytest.mark.parametrize("state", ["idle", "recording", "failed", "connected"])
 def test_sessantaquattro_shell_fits_light_theme(
-    otb_app, monkeypatch, implot_frame, step, width, participant, state,
+    otb_app,
+    monkeypatch,
+    implot_frame,
+    step,
+    width,
+    participant,
+    state,
 ):
     """Render every step at scale two and measure cards, text and actions."""
     import numpy as np
@@ -110,12 +123,17 @@ def test_sessantaquattro_shell_fits_light_theme(
     ns, ctx = otb_app, otb_app["app"].ctx
     ctx.participant = participant
     ctx.state = "recording" if state == "recording" else "idle"
+    ctx.recording = state == "recording"
     ns["steps"].active = step
     stream = ctx.streams["emg"]
     if state == "failed":
-        stream.last_error = "Accept timed out: the device did not connect to this PC. Check its server IP address."
+        stream.last_error = (
+            "Accept timed out: the device did not connect to this PC. Check its server IP address."
+        )
     elif state == "connected":
-        stream.info = StreamInfo(fs=2000, n_channels=64, channel_names=[f"EMG {i}" for i in range(64)])
+        stream.info = StreamInfo(
+            fs=2000, n_channels=64, channel_names=[f"EMG {i}" for i in range(64)]
+        )
         stream.status = "connected"
         stream._allocate_buffers()
         stream._data.extend(np.zeros((2000, 64), dtype=np.float32))
@@ -128,9 +146,13 @@ def test_sessantaquattro_shell_fits_light_theme(
     if not font_path.is_file():
         font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
     imgui.get_io().font_default = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14)
-    for attr, filename, size in (("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
-                                 ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28)):
-        font = imgui.get_io().fonts.add_font_from_file_ttf(str(_ROOT / "myogestic/assets/fonts" / filename), size)
+    for attr, filename, size in (
+        ("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
+        ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28),
+    ):
+        font = imgui.get_io().fonts.add_font_from_file_ttf(
+            str(_ROOT / "myogestic/assets/fonts" / filename), size
+        )
         monkeypatch.setattr(_theme, attr, font)
     imgui.get_style().scale_all_sizes(2.0)
     imgui.get_style().font_scale_main = 2.0
@@ -145,9 +167,18 @@ def test_sessantaquattro_shell_fits_light_theme(
     monkeypatch.setitem(ns["app"]._ui_fn.__globals__, "panel_header", header)
     monkeypatch.setattr(recording, "panel_header", header)
     monkeypatch.setattr(stream_panel, "panel_header", header)
-    monkeypatch.setattr(imgui, "begin_tab_bar", lambda *a: pytest.fail("the session shell has no tabs"))
+    monkeypatch.setattr(
+        imgui, "begin_tab_bar", lambda *a: pytest.fail("the session shell has no tabs")
+    )
 
-    for method in ("button", "small_button", "text", "text_unformatted", "text_wrapped", "text_colored"):
+    for method in (
+        "button",
+        "small_button",
+        "text",
+        "text_unformatted",
+        "text_wrapped",
+        "text_colored",
+    ):
         render = getattr(imgui, method)
 
         def item(*args, render=render, method=method, **kwargs):
@@ -171,8 +202,15 @@ def test_sessantaquattro_shell_fits_light_theme(
     exit_cell = _AreaCell.__exit__
 
     def measure_cell(self, *args):
-        cells.append((self._name, imgui.get_cursor_pos_y(), imgui.get_window_size().y,
-                      imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+        cells.append(
+            (
+                self._name,
+                imgui.get_cursor_pos_y(),
+                imgui.get_window_size().y,
+                imgui.get_scroll_max_x(),
+                imgui.get_scroll_max_y(),
+            )
+        )
         return exit_cell(self, *args)
 
     monkeypatch.setattr(_AreaCell, "__exit__", measure_cell)
@@ -194,11 +232,17 @@ def test_sessantaquattro_shell_fits_light_theme(
     assert headers == [ns["steps"].steps[step]]
     expected = {"header", "viewer", "recording", "sessions", "log", "status"}
     assert {name for name, _ in views} == expected | ({"streams"} if step == 0 else set())
-    assert [kwargs for name, kwargs in views if name == "recording"] == ([{}] if step == 1 else [{"visible": False}])
-    assert next(kwargs for name, kwargs in views if name == "sessions") == {"participant": participant}
+    assert [kwargs for name, kwargs in views if name == "recording"] == (
+        [{}] if step == 1 else [{"visible": False}]
+    )
+    assert next(kwargs for name, kwargs in views if name == "sessions") == {
+        "participant": participant
+    }
     assert all(overhang <= 1 for _, _, overhang in items), items
-    assert all(horizontal == vertical == 0 and cursor - imgui.get_style().item_spacing.y <= height
-               for _, cursor, height, horizontal, vertical in cells), cells
+    assert all(
+        horizontal == vertical == 0 and cursor - imgui.get_style().item_spacing.y <= height
+        for _, cursor, height, horizontal, vertical in cells
+    ), cells
     assert ns["layout"]._active is (ns["layout"]._wide if width == 2560 else ns["layout"]._narrow)
 
 
@@ -213,13 +257,21 @@ def test_sessantaquattro_recording_advances_off_step(otb_app, monkeypatch, implo
     def start():
         calls.append("start")
         ctx.state = "recording"
+        ctx.recording = True
 
     def stop():
         calls.append("stop")
         ctx.state = "idle"
+        ctx.recording = False
 
-    recording = RecordingControls(ns["CLASSES"], on_record=start, on_stop=stop,
-                                  timed=True, take_lengths=(1.0,), warmups=(1.0,))
+    recording = RecordingControls(
+        ns["CLASSES"],
+        on_record=start,
+        on_stop=stop,
+        timed=True,
+        take_lengths=(1.0,),
+        warmups=(1.0,),
+    )
     monkeypatch.setattr(recording._machine, "_clock", lambda: now[0])
     monkeypatch.setitem(ns["app"]._ui_fn.__globals__, "recording", recording)
     ns["steps"].active = 0
@@ -236,7 +288,10 @@ def test_sessantaquattro_recording_advances_off_step(otb_app, monkeypatch, implo
 
 @pytest.mark.parametrize("recording", [False, True])
 def test_sessantaquattro_connect_button_reaches_device_only_while_idle(
-    otb_app, monkeypatch, implot_frame, recording,
+    otb_app,
+    monkeypatch,
+    implot_frame,
+    recording,
 ):
     """The step uses the existing source connection and locks it during a take."""
     from imgui_bundle import imgui
@@ -245,6 +300,7 @@ def test_sessantaquattro_connect_button_reaches_device_only_while_idle(
 
     ns, ctx = otb_app, otb_app["app"].ctx
     ctx.state = "recording" if recording else "idle"
+    ctx.recording = recording
     calls = []
 
     def reconnect(target=None):
@@ -252,7 +308,9 @@ def test_sessantaquattro_connect_button_reaches_device_only_while_idle(
         return False
 
     monkeypatch.setattr(ctx.streams["emg"], "reconnect", reconnect)
-    monkeypatch.setattr(stream_panel._threading, "Thread", lambda target, daemon: SimpleNamespace(start=target))
+    monkeypatch.setattr(
+        stream_panel._threading, "Thread", lambda target, daemon: SimpleNamespace(start=target)
+    )
     render_button = imgui.button
 
     def click(label, *args, **kwargs):

@@ -128,6 +128,7 @@ rms_transform = RMS(window_size=32)
 mav_transform = MAV(window_size=32)
 wl_transform = WaveformLength(window_size=32)
 
+
 def extract_features(emg: np.ndarray) -> np.ndarray:
     """RMS + MAV + WL on a (n_channels, n_samples) window."""
     tensor = torch.from_numpy(emg).float()
@@ -219,15 +220,18 @@ train_button = TrainButton(pipeline, size=(-1, 0))
 predict_button = PredictButton(pipeline, size=(-1, 0))
 training_log = TrainingLog(pipeline, height=80.0, widget_id=_MODEL_WIDGET_ID)
 
+
 def _slug(name: str) -> str:
     """Filesystem-safe recipe slug — strip everything outside [A-Za-z0-9_-]."""
     return re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_") or "model"
+
 
 def _list_saved_models() -> list[Path]:
     """Saved models, newest first. Empty if the directory does not exist yet."""
     if not MODELS_DIR.is_dir():
         return []
     return sorted(MODELS_DIR.glob("*.joblib"), key=lambda p: p.stat().st_mtime, reverse=True)
+
 
 def _save_current() -> Path | None:
     """Save `pipeline.model` under `models/<recipe>_<timestamp>.joblib`."""
@@ -239,6 +243,7 @@ def _save_current() -> Path | None:
     path = MODELS_DIR / f"{slug}_{ts}.joblib"
     save_pickle(pipeline.model, str(path))
     return path
+
 
 def model_actions_ui() -> None:
     """Save with an automatic name, open a model, or pop out the training log."""
@@ -260,6 +265,7 @@ def model_actions_ui() -> None:
     imgui.same_line()
     _popout_open = render_log_buttons(_MODEL_WIDGET_ID, popped_out=_popout_open)
 
+
 def model_ui() -> None:
     """Choose a classifier and train it on the selected takes."""
     global selected_model_idx
@@ -267,8 +273,11 @@ def model_ui() -> None:
     imgui.set_next_item_width(-1)
     _, selected_model_idx = imgui.combo("##model_selector", selected_model_idx, MODEL_NAMES)
     with tinted_row(SUCCESS if pipeline.model is not None else IDLE):
-        imgui.text_wrapped("Model ready" if pipeline.model is not None else
-                           "No model yet — train or load to enable Save.")
+        imgui.text_wrapped(
+            "Model ready"
+            if pipeline.model is not None
+            else "No model yet — train or load to enable Save."
+        )
     imgui.text_colored(muted(), "Features")
     mono_text("RMS · MAV · WL", muted())
     imgui.spacing()
@@ -280,12 +289,15 @@ def model_ui() -> None:
     else:
         training_log.ui()
 
+
 def _poll_model_ui() -> None:
     """Keep the open log and model picker alive when the Train step is hidden."""
     global _load_dialog, _popout_open
     if _popout_open:
         _popout_open = render_log_popout(
-            _MODEL_WIDGET_ID, pipeline.train_log, title="Model training log",
+            _MODEL_WIDGET_ID,
+            pipeline.train_log,
+            title="Model training log",
         )
     # Poll the in-flight dialog (if any). pfd's open_file returns list[str];
     # cancel produces an empty list.
@@ -423,9 +435,11 @@ participant = ParticipantPanel()
 header = AppHeader("EMG · 32 ch multi-model", steps=steps, participant=participant)
 status = StatusBar("emg", pipeline=pipeline)
 
+
 def _on_gesture(i: int) -> None:
     link.ensure()
     simulator.set(CTRL_VALUES[i])
+
 
 def _on_record() -> None:
     link.ensure()
@@ -475,21 +489,30 @@ def _show_panel(title: str) -> None:
 
 
 def _card_header(
-    title: str, *, panel: str | None = None, status: imgui.ImVec4 | None = None,
-    training: bool = False, clear_log: bool = False,
+    title: str,
+    *,
+    panel: str | None = None,
+    status: imgui.ImVec4 | None = None,
+    training: bool = False,
+    clear_log: bool = False,
 ) -> None:
     """Keep window, model and log actions on one icon-only header line."""
     style = imgui.get_style()
     icon = fa.ICON_FA_UP_RIGHT_FROM_SQUARE
     icons = [icon]
     if training:
-        log_icon = (fa.ICON_FA_DOWN_LEFT_AND_UP_RIGHT_TO_CENTER if _popout_open
-                    else fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER)
+        log_icon = (
+            fa.ICON_FA_DOWN_LEFT_AND_UP_RIGHT_TO_CENTER
+            if _popout_open
+            else fa.ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER
+        )
         icons += [fa.ICON_FA_FLOPPY_DISK, fa.ICON_FA_FOLDER_OPEN, log_icon]
     if clear_log:
         icons.append(fa.ICON_FA_BROOM)
-    actions_width = sum(imgui.calc_text_size(action).x + 2 * style.frame_padding.x
-                        for action in icons) + (len(icons) - 1) * style.item_spacing.x
+    actions_width = (
+        sum(imgui.calc_text_size(action).x + 2 * style.frame_padding.x for action in icons)
+        + (len(icons) - 1) * style.item_spacing.x
+    )
     right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
     panel_header(title, reserve=actions_width + style.item_spacing.x, status=status)
     imgui.same_line()
@@ -499,8 +522,9 @@ def _card_header(
             _show_panel(panel)
         else:
             imgui.open_popup("detachable_panels")
-    imgui.set_item_tooltip(f"Open {panel} in its own window" if panel else
-                           "Open a panel in its own window")
+    imgui.set_item_tooltip(
+        f"Open {panel} in its own window" if panel else "Open a panel in its own window"
+    )
     if training:
         imgui.same_line()
         model_actions_ui()
@@ -529,6 +553,7 @@ def _connect() -> None:
             connection["busy"] = False
 
     threading.Thread(target=connect, daemon=True).start()
+
 
 def _process_ui(ctx: Context, name: str) -> None:
     """Show a process's status and launch action."""
@@ -575,20 +600,31 @@ def connect_ui(ctx: Context) -> None:
     busy = connection["busy"]
     tone = SUCCESS if connected else WARNING if busy else DANGER if stream.last_error else IDLE
     with tinted_row(tone):
-        imgui.text_unformatted("Connected" if connected else "Connecting…" if busy else
-                               "Connection failed" if stream.last_error else "Not connected")
+        imgui.text_unformatted(
+            "Connected"
+            if connected
+            else "Connecting…"
+            if busy
+            else "Connection failed"
+            if stream.last_error
+            else "Not connected"
+        )
     if stream.last_error and not busy and not connected:
         imgui.push_style_color(imgui.Col_.text, muted())
         imgui.text_wrapped(stream.last_error)
         imgui.pop_style_color()
     imgui.begin_disabled(ctx.state != "idle" or busy)
-    if primary_button("Reconnect" if connected else "Retry" if stream.last_error else "Connect",
-                      size=(-1, 0)):
+    if primary_button(
+        "Reconnect" if connected else "Retry" if stream.last_error else "Connect", size=(-1, 0)
+    ):
         _connect()
     imgui.end_disabled()
     imgui.push_style_color(imgui.Col_.text, muted())
-    imgui.text_wrapped("Return to idle before changing the generator or connection." if ctx.state != "idle"
-                       else "Launch the generator, then connect to see the signal.")
+    imgui.text_wrapped(
+        "Return to idle before changing the generator or connection."
+        if ctx.state != "idle"
+        else "Launch the generator, then connect to see the signal."
+    )
     imgui.pop_style_color()
 
 
@@ -642,14 +678,17 @@ def demo_ui(ctx: Context) -> None:
     with layout["step"]:
         stream = ctx.streams.get("emg")
         tone = SUCCESS if done[0] else DANGER if stream is not None and stream.last_error else IDLE
-        _card_header(steps.steps[active], status=tone if active == 0 else None,
-                     training=active == 2)
+        _card_header(
+            steps.steps[active], status=tone if active == 0 else None, training=active == 2
+        )
         if active == 0:
             connect_ui(ctx)
         elif active == 1:
             if detached_recording:
                 imgui.push_style_color(imgui.Col_.text, muted())
-                imgui.text_wrapped("Recording controls are open in their own window. Close it to return here.")
+                imgui.text_wrapped(
+                    "Recording controls are open in their own window. Close it to return here."
+                )
                 imgui.pop_style_color()
             else:
                 recording.ui(ctx)

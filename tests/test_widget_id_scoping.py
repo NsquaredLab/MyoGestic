@@ -39,9 +39,7 @@ def _with_ctx(widget, ctx) -> None:
             lambda i: TrackingTask("emg", widget_id=f"t{i}"), _with_ctx, id="TrackingTask"
         ),
         pytest.param(
-            lambda i: RecordButton(
-                on_record=lambda: None, on_stop=lambda: None, widget_id=f"r{i}"
-            ),
+            lambda i: RecordButton(on_record=lambda: None, on_stop=lambda: None, widget_id=f"r{i}"),
             _with_ctx,
             id="RecordButton",
         ),

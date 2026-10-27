@@ -61,9 +61,7 @@ def test_labelled_path_with_and_without_id(tmp_path, frozen_clock):
     assert list(tmp_path.iterdir()) == [], "a preview must not reserve a folder"
 
 
-@pytest.mark.parametrize(
-    ("typed", "slug"), [(" p/014 ", "p-014"), ("../x", "x"), ("Jörg", "J-rg")]
-)
+@pytest.mark.parametrize(("typed", "slug"), [(" p/014 ", "p-014"), ("../x", "x"), ("Jörg", "J-rg")])
 def test_labelled_path_slugs_the_id(typed, slug, frozen_clock):
     path = session_api.labelled_path("sessions", typed)
     assert path == Path("sessions") / slug / f"{slug}_{_TIMESTAMP}"
@@ -73,7 +71,9 @@ def test_labelled_path_slugs_the_id(typed, slug, frozen_clock):
 
 @pytest.mark.parametrize("participant", ["", " ... / "])
 def test_session_without_participant_keeps_legacy_layout(tmp_path, participant):
-    session = Session(str(tmp_path), participant=participant) if participant else Session(str(tmp_path))
+    session = (
+        Session(str(tmp_path), participant=participant) if participant else Session(str(tmp_path))
+    )
     assert session.path.parent == tmp_path
     assert re.fullmatch(r"\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d_[0-9a-f]{8}", session.path.name)
 
@@ -218,6 +218,7 @@ def test_record_button_disabled_when_gated(imgui_frame, monkeypatch, widget_clas
         return clicked
 
     monkeypatch.setattr(imgui, "button", capture_button)
+
     def draw():
         widget.ui(ctx)
 

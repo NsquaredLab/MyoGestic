@@ -4,6 +4,7 @@ The golden fixture is 128 samples of real Sessantaquattro+ wire bytes,
 reconstructed from a hardware recording (64 bioelectrical + 8 accessory
 channels, 2000 Hz, 16-bit, monopolar) over a stretch with no dropouts.
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -85,8 +86,14 @@ def test_channel_names_end_in_the_counter():
     assert len(names) == 72
     assert names[:2] == ["bio0", "bio1"]
     assert names[64:] == [
-        "aux0", "aux1", "imu_w", "imu_x", "imu_y", "imu_z",
-        "buffer_trigger", "counter",
+        "aux0",
+        "aux1",
+        "imu_w",
+        "imu_x",
+        "imu_y",
+        "imu_z",
+        "buffer_trigger",
+        "counter",
     ]
 
 

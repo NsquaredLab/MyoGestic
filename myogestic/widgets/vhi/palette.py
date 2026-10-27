@@ -64,6 +64,7 @@ from myogestic.widgets.common import (
 if TYPE_CHECKING:
     from myogestic.remote._recording import RecordingClient
 
+
 @dataclass(frozen=True)
 class VhiStateSnapshot:
     """An immutable, lock-free view of ``VhiStateCache`` for one UI frame.
@@ -226,7 +227,9 @@ def vhi_movement_palette(
         style = imgui.get_style()
         refresh_w = imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x + 2 * style.frame_padding.x
         panel_header(
-            title, fa.ICON_FA_HAND, status=SUCCESS if connected else IDLE,
+            title,
+            fa.ICON_FA_HAND,
+            status=SUCCESS if connected else IDLE,
             reserve=refresh_w + style.item_spacing.x if on_refresh else 0.0,
         )
         if connected:
@@ -242,11 +245,13 @@ def vhi_movement_palette(
         if not connected or not movements:
             lines = (
                 ("The hand is not running", "Launch it, then refresh to load its movements.")
-                if not connected else
-                ("No movements available", "Refresh to load the hand's movements.")
+                if not connected
+                else ("No movements available", "Refresh to load the hand's movements.")
             )
             available = imgui.get_content_region_avail()
-            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + max(0.0, (available.y - ui_px(140)) / 2))
+            imgui.set_cursor_pos_y(
+                imgui.get_cursor_pos_y() + max(0.0, (available.y - ui_px(140)) / 2)
+            )
             for line in lines:
                 left = imgui.get_cursor_pos_x()
                 width = imgui.get_content_region_avail().x
@@ -256,9 +261,10 @@ def vhi_movement_palette(
                 imgui.pop_style_color()
             if on_refresh is not None:
                 width = imgui.calc_text_size("Refresh").x + 2 * style.frame_padding.x
-                imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(
-                    0.0, (imgui.get_content_region_avail().x - width) / 2
-                ))
+                imgui.set_cursor_pos_x(
+                    imgui.get_cursor_pos_x()
+                    + max(0.0, (imgui.get_content_region_avail().x - width) / 2)
+                )
                 if imgui.button("Refresh"):
                     on_refresh()
             return

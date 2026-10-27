@@ -18,12 +18,13 @@ list is omitted entirely, every row/column is `Fr(1)` - i.e. shared equally.
 ```python
 from myogestic.grid import Grid, Px, Fr
 
-grid = Grid(3, 4)                   # 3 rows × 4 cols, every track Fr(1)
+grid = Grid(3, 4)  # 3 rows × 4 cols, every track Fr(1)
 
 grid = Grid(
-    8, 3,
+    8,
+    3,
     row_height=[Px(200), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1), Fr(1)],
-    col_width =[Px(300), Fr(1), Fr(1)],
+    col_width=[Px(300), Fr(1), Fr(1)],
 )
 ```
 
@@ -42,11 +43,11 @@ umap = Scatter2D("UMAP")
 
 @app.ui
 def my_ui(ctx):
-    with grid[0, 0:4]:        # row 0, full width (4-column span)
+    with grid[0, 0:4]:  # row 0, full width (4-column span)
         emg_viewer.ui(ctx)
-    with grid[1, 0:2]:        # row 1, left half
+    with grid[1, 0:2]:  # row 1, left half
         umap.ui(pts)
-    with grid[2, 0]:          # single cell
+    with grid[2, 0]:  # single cell
         imgui.button("Record")
 ```
 
@@ -203,11 +204,15 @@ with grid[0, 1:3]:
 **Equal split - no track list:**
 
 ```python
-grid = Grid(2, 2)        # four equal cells
-with grid[0, 0]: imgui.text("top left")
-with grid[0, 1]: imgui.text("top right")
-with grid[1, 0]: imgui.text("bottom left")
-with grid[1, 1]: imgui.text("bottom right")
+grid = Grid(2, 2)  # four equal cells
+with grid[0, 0]:
+    imgui.text("top left")
+with grid[0, 1]:
+    imgui.text("top right")
+with grid[1, 0]:
+    imgui.text("bottom left")
+with grid[1, 1]:
+    imgui.text("bottom right")
 ```
 
 ## Validation

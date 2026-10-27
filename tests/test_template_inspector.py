@@ -116,9 +116,16 @@ def test_review_rows_fit_narrow_panels(imgui_frame, monkeypatch, scale, dark):
     font_path = Path(_theme.__file__).parent / "assets/fonts/IBMPlexMono-Regular.ttf"
     mono_font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 13)
     monkeypatch.setattr(_theme, "_MONO_FONT", mono_font)
-    rows = [TemplateInspectorRow("session#123", "A very long gesture name", True,
-                                 "a very long source path / recording / trial", 0.8)]
-    inspector = TemplateInspector("narrow", label_colors={rows[0].label: (1., 1., 1., 1.)})
+    rows = [
+        TemplateInspectorRow(
+            "session#123",
+            "A very long gesture name",
+            True,
+            "a very long source path / recording / trial",
+            0.8,
+        )
+    ]
+    inspector = TemplateInspector("narrow", label_colors={rows[0].label: (1.0, 1.0, 1.0, 1.0)})
     boxes, sources, bars, heights, colors = [], [], [], [], []
     button, select, progress = imgui.small_button, imgui.selectable, imgui.progress_bar
     begin, colored, plain = imgui.begin_table, imgui.text_colored, imgui.text_unformatted
@@ -180,7 +187,7 @@ def test_review_rows_fit_narrow_panels(imgui_frame, monkeypatch, scale, dark):
     assert mono_items[-1] == ("#123", mono_font)
     # Caller white remains an identity tint; it cannot turn label text white on light.
     if not dark:
-        assert (1., 1., 1.) not in colors
+        assert (1.0, 1.0, 1.0) not in colors
 
 
 def test_empty_review_gives_next_step(imgui_frame, monkeypatch):
@@ -200,7 +207,7 @@ def test_gesture_tints_and_selection_use_the_theme(imgui_frame, monkeypatch):
     from myogestic.widgets.common import PALETTE
 
     rows = _rows()
-    inspector = TemplateInspector("tints", label_colors={"OPEN": (0.1, 0.2, 0.3, 1.)})
+    inspector = TemplateInspector("tints", label_colors={"OPEN": (0.1, 0.2, 0.3, 1.0)})
     select, convert, background = imgui.selectable, imgui.get_color_u32, imgui.table_set_bg_color
     colors, backgrounds = [], []
 

@@ -137,6 +137,11 @@ class ControlBus:
         target, a failed frame. Deliberately once per condition rather than per
         tick: at ``predict_hz`` a repeated warning erases the log that would explain
         it. Pass ``ctx.log`` to surface these in the app.
+    ctx
+        Optional `myogestic.Context`. Given one, every delivered continuous frame is
+        appended to the open recording as the ``controls`` event stream — DOF names as
+        channels, in wire order, stamped with the delivery clock — while
+        ``ctx.recording`` is set. `connect_controls` passes its ``ctx`` through.
 
     Notes
     -----
@@ -162,6 +167,7 @@ class ControlBus:
         "_sign",
         "_reported",
         "_on_warn",
+        "_ctx",
     )
 
     def __init__(
@@ -174,6 +180,7 @@ class ControlBus:
         dead_zone: float | None = None,
         hysteresis: float | None = None,
         on_warn: Callable[[str], None] | None = None,
+        ctx: Any = None,
     ) -> None:
         if hz <= 0 or not math.isfinite(hz):
             raise ValueError(f"hz must be > 0 (got {hz})")
@@ -188,6 +195,7 @@ class ControlBus:
         self._dead_zone = dead_zone
         self._hysteresis = hysteresis
         self._on_warn = on_warn
+        self._ctx = ctx
         self._reported: set[str] = set()
 
         cont = controls.continuous
@@ -308,7 +316,7 @@ class ControlBus:
         return values
 
     def _deliver(self, values: Mapping[str, float | str], changed: Mapping[str, str]) -> None:
-        """Hand the frame to every target, surviving a target that misbehaves."""
+        """Hand the frame to every target, surviving a target that misbehaves — then record it."""
         for target in self._targets:
             try:
                 target.send(values, changed)
@@ -317,6 +325,23 @@ class ControlBus:
                     f"send:{type(target).__name__}",
                     f"{type(target).__name__}.send failed, skipping it: {exc!r}",
                 )
+        ctx = self._ctx
+        if ctx is None or not getattr(ctx, "recording", False) or ctx.session is None:
+            return
+        if not self._names:
+            return  # no continuous DOF: nothing frame-shaped to record
+        try:
+            from mne_lsl.lsl import local_clock
+
+            ctx.session.append_event(
+                "controls",
+                encode(self._controls, values),
+                local_clock(),
+                channel_names=self._names,
+                fs=self._hz,
+            )
+        except Exception as exc:  # noqa: BLE001 - recording must never affect delivery
+            self._warn_once("record", f"controls not recorded: {exc!r}")
 
     def select(self, name: str, state: str) -> bool:
         """Command a discrete DOF from the UI, bypassing the debounce.
@@ -440,6 +465,7 @@ def connect_controls(
         smoothing=smoothing,
         hz=hz,
         on_warn=None if ctx is None else ctx.log,
+        ctx=ctx,
     )
     if ctx is not None:
         ctx.control_space = control_map

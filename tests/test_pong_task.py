@@ -324,7 +324,9 @@ def test_a_larger_player_paddle_returns_a_ball_without_enlarging_the_opponent():
 @pytest.mark.parametrize("opponent_size,misses", [(0.2, 1), (0.6, 0)])
 def test_opponent_returns_and_spins_the_ball_using_its_own_half(player_size, opponent_size, misses):
     task = PongTask(
-        ball_speed=0.5, paddle_size=player_size, opponent_paddle_size=opponent_size,
+        ball_speed=0.5,
+        paddle_size=player_size,
+        opponent_paddle_size=opponent_size,
         opponent=0.6,
     )
     task._ball = Ball(0.02, 0.25, -0.5, 0.0)
@@ -342,7 +344,10 @@ def test_opponent_returns_and_spins_the_ball_using_its_own_half(player_size, opp
 @pytest.mark.parametrize("x,dt", [(0.02, 0.04), (0.5, 0.1)])
 def test_opponent_tracking_clamps_to_its_own_half_at_and_between_crossings(x, dt):
     task = PongTask(
-        ball_speed=0.5, paddle_size=0.6, opponent_paddle_size=0.2, opponent=0.6,
+        ball_speed=0.5,
+        paddle_size=0.6,
+        opponent_paddle_size=0.2,
+        opponent=0.6,
     )
     task._opponent_y = 0.9
     task._ball = Ball(x, 0.95, -0.5, 0.0)
@@ -961,7 +966,9 @@ class _RectRecorder:
         return lambda *a, **k: None
 
 
-def test_each_paddle_draws_at_its_own_height_and_the_ghost_matches_the_player(imgui_frame, monkeypatch):
+def test_each_paddle_draws_at_its_own_height_and_the_ghost_matches_the_player(
+    imgui_frame, monkeypatch
+):
     task = PongTask(paddle_size=0.6, opponent_paddle_size=0.36, opponent=0.6)
     rec = _RectRecorder()
     monkeypatch.setattr(imgui, "get_window_draw_list", lambda: rec)
@@ -1069,8 +1076,12 @@ def test_a_ghost_renders_through_the_public_call_and_leaves_the_id_stack_alone(i
     assert len(set(probes)) == 1, "the ghost left the id stack pushed"
 
 
-@pytest.mark.parametrize("typing,focused,serves", [(False, True, True), (True, True, False), (False, False, False)])
-def test_space_serves_only_with_window_focus_and_no_text_input(imgui_frame, monkeypatch, typing, focused, serves):
+@pytest.mark.parametrize(
+    "typing,focused,serves", [(False, True, True), (True, True, False), (False, False, False)]
+)
+def test_space_serves_only_with_window_focus_and_no_text_input(
+    imgui_frame, monkeypatch, typing, focused, serves
+):
     task = PongTask()
     monkeypatch.setattr(imgui, "is_window_focused", lambda *a: focused)
     monkeypatch.setattr(imgui, "is_key_pressed", lambda key, *a, **kw: key == imgui.Key.space)
@@ -1109,7 +1120,11 @@ def test_endless_game_and_play_again(imgui_frame, monkeypatch):
     task._misses = 1
     task._best = 12
     button = imgui.button
-    monkeypatch.setattr(imgui, "button", lambda label, *a, **kw: True if "Play again" in label else button(label, *a, **kw))
+    monkeypatch.setattr(
+        imgui,
+        "button",
+        lambda label, *a, **kw: True if "Play again" in label else button(label, *a, **kw),
+    )
     imgui_frame(lambda: task.ui(0.0))
     assert not task.game_over
     assert (task._misses, task._opponent_misses, task._hits, task._best) == (0, 0, 0, 0)
@@ -1152,7 +1167,11 @@ def test_signed_meter_shows_both_signs_and_velocity_dead_band(imgui_frame, monke
         rec = _RectRecorder()
         monkeypatch.setattr(imgui, "get_window_draw_list", lambda rec=rec: rec)
         task = PongTask(control=control)
-        imgui_frame(lambda task=task, value=value: task._meter_ui(imgui.ImVec2(20, 20), imgui.ImVec2(60, 300), value, None, None))
+        imgui_frame(
+            lambda task=task, value=value: task._meter_ui(
+                imgui.ImVec2(20, 20), imgui.ImVec2(60, 300), value, None, None
+            )
+        )
         records.append(rec)
     up, down, position = records
     assert up.fills[-1][1] < up.fills[-1][3]
@@ -1166,7 +1185,11 @@ def test_training_side_meter_is_unsigned_and_tick_uses_target_magnitude(imgui_fr
     for target in (0.5, -0.5):
         rec = _RectRecorder()
         monkeypatch.setattr(imgui, "get_window_draw_list", lambda rec=rec: rec)
-        imgui_frame(lambda target=target: task._meter_ui(imgui.ImVec2(20, 20), imgui.ImVec2(60, 300), -0.9, task._ghost_y(target), 0.4))
+        imgui_frame(
+            lambda target=target: task._meter_ui(
+                imgui.ImVec2(20, 20), imgui.ImVec2(60, 300), -0.9, task._ghost_y(target), 0.4
+            )
+        )
         records.append(rec)
     assert records[0].fills == records[1].fills
     assert records[0].lines == records[1].lines

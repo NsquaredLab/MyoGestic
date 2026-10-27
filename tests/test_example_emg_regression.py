@@ -21,7 +21,9 @@ def regression_app(monkeypatch, tmp_path):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(InterfaceSpec, "launcher", lambda self: [(self.name, ["virtual-hand"])])
-    monkeypatch.setattr(emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None))
+    monkeypatch.setattr(
+        emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None)
+    )
     ns = runpy.run_path(str(ROOT / "examples/synthetic/emg_regression.py"))
     streams = tuple(ns["app"].ctx.streams.values())
     try:
@@ -51,13 +53,25 @@ def test_regression_uses_the_session_shell(regression_app):
     assert not ns["recording"]._show_header and not ns["streams"]._show_header
     assert set(ns["app"].ctx.streams) == {"emg", "vhi_control"}
     assert ns["processes"]._processes == ns["PROCESSES"]
-    assert layout.panel_names == {"header", "signal", "simulator", "step", "sessions", "log", "status"}
+    assert layout.panel_names == {
+        "header",
+        "signal",
+        "simulator",
+        "step",
+        "sessions",
+        "log",
+        "status",
+    }
     assert layout._breakpoint == Px(1100)
     assert layout._wide._col_tracks == [Fr(1), Px(400)]
     assert layout._wide._areas == {
-        "header": (0, 1, 0, 2), "signal": (1, 3, 0, 1),
-        "step": (1, 2, 1, 2), "sessions": (2, 5, 1, 2),
-        "simulator": (3, 4, 0, 1), "log": (4, 5, 0, 1), "status": (5, 6, 0, 2),
+        "header": (0, 1, 0, 2),
+        "signal": (1, 3, 0, 1),
+        "step": (1, 2, 1, 2),
+        "sessions": (2, 5, 1, 2),
+        "simulator": (3, 4, 0, 1),
+        "log": (4, 5, 0, 1),
+        "status": (5, 6, 0, 2),
     }
     for grid in (layout._wide, layout._narrow):
         assert grid._bare == {"header", "status"}
@@ -91,7 +105,12 @@ def test_regression_completion_tracks_the_participants_takes(regression_app, mon
 @pytest.mark.parametrize("width", [2560, 1800])
 @pytest.mark.parametrize("scenario", ["empty", "participant", "recording", "trained", "failure"])
 def test_regression_shell_fits_light_theme(
-    regression_app, monkeypatch, implot_frame, step, width, scenario,
+    regression_app,
+    monkeypatch,
+    implot_frame,
+    step,
+    width,
+    scenario,
 ):
     """Measure all real cards at scale two, including their visible text and actions."""
     from imgui_bundle import hello_imgui, imgui
@@ -112,8 +131,11 @@ def test_regression_shell_fits_light_theme(
         app.ctx.state = "predicting" if step == 3 else "idle"
     elif scenario == "recording":
         app.ctx.state = "recording"
+        app.ctx.recording = True
     elif scenario == "failure":
-        ns["launch_errors"].update(dict.fromkeys((name for name, _ in ns["PROCESSES"]), "Executable not found"))
+        ns["launch_errors"].update(
+            dict.fromkeys((name for name, _ in ns["PROCESSES"]), "Executable not found")
+        )
         for stream in app.ctx.streams.values():
             stream.last_error = "No matching outlet found; start the source and retry."
     monkeypatch.setattr(_scale, "_current", 2.0)
@@ -123,9 +145,13 @@ def test_regression_shell_fits_light_theme(
     if not font_path.is_file():
         font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
     imgui.get_io().font_default = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14)
-    for attr, filename, size in (("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
-                                 ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28)):
-        font = imgui.get_io().fonts.add_font_from_file_ttf(str(ROOT / "myogestic/assets/fonts" / filename), size)
+    for attr, filename, size in (
+        ("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
+        ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28),
+    ):
+        font = imgui.get_io().fonts.add_font_from_file_ttf(
+            str(ROOT / "myogestic/assets/fonts" / filename), size
+        )
         monkeypatch.setattr(_theme, attr, font)
     imgui.get_style().scale_all_sizes(2.0)
     imgui.get_style().font_scale_main = 2.0
@@ -156,12 +182,30 @@ def test_regression_shell_fits_light_theme(
 
         def card(*args, name=name, render=render, **kwargs):
             render(*args, **kwargs)
-            cells.append((name, imgui.get_cursor_pos_y(), imgui.get_window_size().y,
-                          imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+            cells.append(
+                (
+                    name,
+                    imgui.get_cursor_pos_y(),
+                    imgui.get_window_size().y,
+                    imgui.get_scroll_max_x(),
+                    imgui.get_scroll_max_y(),
+                )
+            )
 
         monkeypatch.setitem(app._ui_fn.__globals__, name, card)
-    for name in ("viewer", "simulator", "recording", "streams", "train_button", "training_log",
-                 "predict_button", "output_filter", "sessions", "log", "status"):
+    for name in (
+        "viewer",
+        "simulator",
+        "recording",
+        "streams",
+        "train_button",
+        "training_log",
+        "predict_button",
+        "output_filter",
+        "sessions",
+        "log",
+        "status",
+    ):
         widget = ns[name]
         render = type(widget).ui
 
@@ -169,8 +213,15 @@ def test_regression_shell_fits_light_theme(
             views.append((name, kwargs))
             result = render(self, *args, **kwargs)
             if kwargs.get("visible", True) and name != "status":
-                cells.append((name, imgui.get_cursor_pos_y(), imgui.get_window_size().y,
-                              imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+                cells.append(
+                    (
+                        name,
+                        imgui.get_cursor_pos_y(),
+                        imgui.get_window_size().y,
+                        imgui.get_scroll_max_x(),
+                        imgui.get_scroll_max_y(),
+                    )
+                )
             return result
 
         monkeypatch.setattr(type(widget), "ui", view)
@@ -191,18 +242,25 @@ def test_regression_shell_fits_light_theme(
         implot_frame(draw)
     assert headers == [ns["steps"].steps[step], "Simulated EMG"]
     expected = {"viewer", "simulator", "recording", "sessions", "log", "status"}
-    expected |= {0: {"streams"}, 2: {"train_button", "training_log"},
-                 3: {"predict_button", "output_filter"}}.get(step, set())
+    expected |= {
+        0: {"streams"},
+        2: {"train_button", "training_log"},
+        3: {"predict_button", "output_filter"},
+    }.get(step, set())
     assert {name for name, _ in views} == expected
     record_calls = [kwargs for name, kwargs in views if name == "recording"]
     assert len(record_calls) == 1
     assert record_calls[0].get("visible", True) == (step == 1)
-    assert next(kwargs for name, kwargs in views if name == "sessions") == {"participant": app.ctx.participant}
+    assert next(kwargs for name, kwargs in views if name == "sessions") == {
+        "participant": app.ctx.participant
+    }
     assert all(overhang <= 1 for _, _, overhang in items), [item for item in items if item[2] > 1]
     assert all(horizontal == 0 for _, _, _, horizontal, _ in cells), cells
     if width == 2560:
-        assert all(cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
-                   for _, cursor, height, _, vertical in cells), cells
+        assert all(
+            cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
+            for _, cursor, height, _, vertical in cells
+        ), cells
     assert ns["layout"]._active is (ns["layout"]._wide if width == 2560 else ns["layout"]._narrow)
 
 
@@ -212,11 +270,16 @@ def test_regression_recording_preserves_pose_and_keyboard_gate(regression_app, m
     bus = SimpleNamespace(select=lambda *args: calls.append(("select", *args)))
     monkeypatch.setattr(type(ns["link"]), "ensure", lambda self: calls.append("bind") or bus)
     ns["simulator"].set(0.0)
-    monkeypatch.setattr(ns["simulator"]._outlet, "push_sample", lambda value: calls.append(float(value[0])))
+    monkeypatch.setattr(
+        ns["simulator"]._outlet, "push_sample", lambda value: calls.append(float(value[0]))
+    )
     monkeypatch.setattr(ns["app"], "start_recording", lambda: calls.append("record"))
     monkeypatch.setattr(ns["app"], "stop_recording", lambda: calls.append("stop"))
-    monkeypatch.setattr(type(ns["recording_aid"]), "set_recording_session",
-                        lambda self, enabled: calls.append(("gate", enabled)) or True)
+    monkeypatch.setattr(
+        type(ns["recording_aid"]),
+        "set_recording_session",
+        lambda self, enabled: calls.append(("gate", enabled)) or True,
+    )
     ns["_on_gesture"](1)
     assert calls == ["bind", 1.0, ("select", "gesture", "Fist")]
     ns["app"].ctx.current_label = 0
@@ -235,7 +298,9 @@ def test_regression_predict_still_pushes_continuous_aliases(regression_app, monk
     values = np.linspace(-0.5, 0.9, len(ns["DOF_NAMES"]))
     bus = SimpleNamespace(push=lambda frame: pushed.append(frame) or frame)
     monkeypatch.setattr(type(ns["link"]), "bus", property(lambda self: bus))
-    monkeypatch.setattr(type(ns["link"]), "ensure", lambda self: pytest.fail("predict must not bind"))
+    monkeypatch.setattr(
+        type(ns["link"]), "ensure", lambda self: pytest.fail("predict must not bind")
+    )
     model = SimpleNamespace(predict=lambda features: np.array([values]))
     result = ns["predict"](model, np.ones(3))
     assert result == {"dof": dict(zip(ns["DOF_NAMES"], values, strict=True))}
@@ -245,7 +310,11 @@ def test_regression_predict_still_pushes_continuous_aliases(regression_app, monk
 @pytest.mark.parametrize("step", range(4))
 @pytest.mark.parametrize("state", ["idle", "recording", "predicting"])
 def test_regression_simulator_is_available_on_each_step(
-    regression_app, monkeypatch, implot_frame, step, state,
+    regression_app,
+    monkeypatch,
+    implot_frame,
+    step,
+    state,
 ):
     """Preview changes only the signal; the recording gesture remains authoritative."""
     from imgui_bundle import imgui
@@ -253,6 +322,7 @@ def test_regression_simulator_is_available_on_each_step(
     ns = regression_app
     ns["steps"].active = step
     ns["app"].ctx.state = state
+    ns["app"].ctx.recording = state == "recording"
     ns["simulator"].set(0.0)
     samples, chips = [], []
     monkeypatch.setattr(ns["simulator"]._outlet, "push_sample", lambda value: samples.append(value))
@@ -277,7 +347,9 @@ def test_regression_simulator_is_available_on_each_step(
     assert ns["simulator"].value == 1.0
 
 
-def test_regression_connect_launches_each_configured_process(regression_app, monkeypatch, implot_frame):
+def test_regression_connect_launches_each_configured_process(
+    regression_app, monkeypatch, implot_frame
+):
     """Connect retains both launcher actions and reports an unlaunchable target."""
     from imgui_bundle import imgui
 

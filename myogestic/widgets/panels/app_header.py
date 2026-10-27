@@ -20,6 +20,7 @@ from myogestic.widgets.common import (
 )
 from myogestic.widgets.panels.app_logo import AppLogo
 from myogestic.widgets.panels.participant import ParticipantPanel
+from myogestic.widgets.panels.recording import STATE_COLORS
 from myogestic.widgets.panels.step_bar import StepBar
 
 __all__ = ["AppHeader"]
@@ -49,8 +50,12 @@ class AppHeader:
     """
 
     def __init__(
-        self, title: str, *, steps: StepBar | None = None,
-        participant: ParticipantPanel | None = None, show_state: bool = True,
+        self,
+        title: str,
+        *,
+        steps: StepBar | None = None,
+        participant: ParticipantPanel | None = None,
+        show_state: bool = True,
         widget_id: str = "app_header",
     ) -> None:
         self.title = title
@@ -93,6 +98,9 @@ class AppHeader:
         state = ctx.state.upper()
         pill_w = imgui.calc_text_size(state).x + ui_px(32) if self.show_state else 0
         gap = style.item_spacing.x
+        rec = self.show_state and ctx.recording and ctx.state != "recording"
+        rec_w = imgui.calc_text_size("REC").x + ui_px(32) + gap if rec else 0
+        pill_w += rec_w
         state_w = pill_w + (gap if self.show_state else 0)
         minimum_nav = self.steps._width(done, padding_x=ui_px(4), minimum=True) if self.steps else 0
         logo_budget = imgui.get_content_region_avail().x - state_w - minimum_nav - ui_px(14)
@@ -107,8 +115,14 @@ class AppHeader:
         font = mono_font() if ctx.participant else None
         if font is not None:
             imgui.push_font(font, style.font_size_base)
-        chip_w = (imgui.calc_text_size(ctx.participant or "Set participant").x
-                  + 2 * style.frame_padding.x) if self.participant else 0
+        chip_w = (
+            (
+                imgui.calc_text_size(ctx.participant or "Set participant").x
+                + 2 * style.frame_padding.x
+            )
+            if self.participant
+            else 0
+        )
         if font is not None:
             imgui.pop_font()
         padding = imgui.ImVec2(style.frame_padding.x, style.frame_padding.y)
@@ -119,7 +133,9 @@ class AppHeader:
             imgui.get_window_size().x >= ui_px(1100) and available >= title_w + nav_w + state_w
         )
         if show_title:
-            self._title(left - ui_px(14) + gap, center, available - state_w - nav_w - 2 * gap - ui_px(1))
+            self._title(
+                left - ui_px(14) + gap, center, available - state_w - nav_w - 2 * gap - ui_px(1)
+            )
             imgui.same_line(0.0, ui_px(14))
             left = imgui.get_cursor_pos_x()
             available = right - left
@@ -139,18 +155,33 @@ class AppHeader:
                 nav_w = imgui.get_item_rect_size().x
             finally:
                 imgui.pop_style_var()
-        participant_w = max(0.0, min(
-            max(chip_w, widths.get("participant", chip_w)), available - nav_w - state_w - gap,
-        )) if self.participant else 0
+        participant_w = (
+            max(
+                0.0,
+                min(
+                    max(chip_w, widths.get("participant", chip_w)),
+                    available - nav_w - state_w - gap,
+                ),
+            )
+            if self.participant
+            else 0
+        )
         if participant_w:
-            imgui.set_cursor_pos(imgui.ImVec2(
-                right - pill_w - (gap if self.show_state else 0) - participant_w,
-                center - imgui.get_frame_height() / 2,
-            ))
-            imgui.begin_child("participant", imgui.ImVec2(participant_w, imgui.get_frame_height()),
-                              window_flags=(imgui.WindowFlags_.no_background
-                                            | imgui.WindowFlags_.no_scrollbar
-                                            | imgui.WindowFlags_.no_scroll_with_mouse))
+            imgui.set_cursor_pos(
+                imgui.ImVec2(
+                    right - pill_w - (gap if self.show_state else 0) - participant_w,
+                    center - imgui.get_frame_height() / 2,
+                )
+            )
+            imgui.begin_child(
+                "participant",
+                imgui.ImVec2(participant_w, imgui.get_frame_height()),
+                window_flags=(
+                    imgui.WindowFlags_.no_background
+                    | imgui.WindowFlags_.no_scrollbar
+                    | imgui.WindowFlags_.no_scroll_with_mouse
+                ),
+            )
             try:
                 imgui.begin_group()
                 self.participant.ui(ctx)
@@ -159,10 +190,17 @@ class AppHeader:
             finally:
                 imgui.end_child()
         if self.show_state:
-            imgui.set_cursor_pos(imgui.ImVec2(right - pill_w, center - (imgui.get_text_line_height() + ui_px(8)) / 2))
-            tone = {"recording": DANGER, "training": WARNING, "predicting": INFO}.get(ctx.state, IDLE)
+            imgui.set_cursor_pos(
+                imgui.ImVec2(right - pill_w, center - (imgui.get_text_line_height() + ui_px(8)) / 2)
+            )
+            tone = {"recording": DANGER, "training": WARNING, "predicting": INFO}.get(
+                ctx.state, IDLE
+            )
             status_pill(state, tone)
             widths[state] = imgui.get_item_rect_size().x
+            if rec:
+                imgui.same_line()
+                status_pill("REC", STATE_COLORS["recording"])
         return active
 
     def _logo(self, center: float, width: float) -> None:
@@ -185,7 +223,10 @@ class AppHeader:
         imgui.dummy(imgui.ImVec2(ui_px(1), ui_px(20)))
         lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         imgui.get_window_draw_list().add_line(
-            lo, imgui.ImVec2(lo.x, hi.y), imgui.get_color_u32(hairline()), thickness=ui_px(1),
+            lo,
+            imgui.ImVec2(lo.x, hi.y),
+            imgui.get_color_u32(hairline()),
+            thickness=ui_px(1),
         )
         imgui.same_line(0.0, imgui.get_style().item_spacing.x)
         imgui.set_cursor_pos_y(center - imgui.get_text_line_height() / 2)

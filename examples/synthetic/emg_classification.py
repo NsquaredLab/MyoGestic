@@ -67,7 +67,9 @@ vhi = virtual_hand()
 
 # The left side is ours (`fist` and `gesture`), the right side is VHI's.
 # Parsing needs no VHI or gRPC; resolving waits for an explicit Connect.
-CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification_grpc.toml"
+CONTROL_FILE = (
+    pathlib.Path(__file__).resolve().parent.parent / "controls" / "classification_grpc.toml"
+)
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
 
@@ -89,7 +91,8 @@ vhi_panel = None
 # --8<-- [start:features]
 features = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
-    default=["RMS", "MAV"], show_header=False,
+    default=["RMS", "MAV"],
+    show_header=False,
 )
 # --8<-- [end:features]
 
@@ -126,6 +129,7 @@ app = App("EMG classification", require_participant=True)
 app.streams(Stream("emg", source=LSLSource("TestEMG1"), window_ms=WINDOW_MS, buffer_ms=60000))
 pipeline = Pipeline(app)
 # --8<-- [end:setup]
+
 
 # --8<-- [start:extract]
 @pipeline.extract
@@ -268,8 +272,12 @@ def _on_record() -> None:
         simulator.set(CTRL_VALUES[app.ctx.current_label])
     app.start_recording()
     # No hand means no RPC or delay: acquisition is independent of this optional aid.
-    if (link is not None and link.bus is not None and recording_aid is not None
-            and not recording_aid.set_recording_session(True)):
+    if (
+        link is not None
+        and link.bus is not None
+        and recording_aid is not None
+        and not recording_aid.set_recording_session(True)
+    ):
         app.ctx.log("VHI recording-session gate unavailable — keyboard is not blocked")
 
 
@@ -380,20 +388,31 @@ def connect_ui(ctx: Context) -> None:
     busy = connection["busy"]
     tone = SUCCESS if connected else WARNING if busy else DANGER if stream.last_error else IDLE
     with tinted_row(tone):
-        imgui.text_unformatted("Connected" if connected else "Connecting…" if busy else
-                               "Connection failed" if stream.last_error else "Not connected")
+        imgui.text_unformatted(
+            "Connected"
+            if connected
+            else "Connecting…"
+            if busy
+            else "Connection failed"
+            if stream.last_error
+            else "Not connected"
+        )
     if stream.last_error and not busy and not connected:
         imgui.push_style_color(imgui.Col_.text, muted())
         imgui.text_wrapped(stream.last_error)
         imgui.pop_style_color()
     imgui.begin_disabled(ctx.state != "idle" or busy)
-    if primary_button("Reconnect" if connected else "Retry" if stream.last_error else "Connect",
-                      size=(-1, 0)):
+    if primary_button(
+        "Reconnect" if connected else "Retry" if stream.last_error else "Connect", size=(-1, 0)
+    ):
         _connect()
     imgui.end_disabled()
     imgui.push_style_color(imgui.Col_.text, muted())
-    imgui.text_wrapped("Return to idle before changing the generator or connection." if ctx.state != "idle"
-                       else "Launch the generator, then connect to see the signal.")
+    imgui.text_wrapped(
+        "Return to idle before changing the generator or connection."
+        if ctx.state != "idle"
+        else "Launch the generator, then connect to see the signal."
+    )
     imgui.pop_style_color()
     imgui.spacing()
     hand_ui()
@@ -458,8 +477,9 @@ def hand_ui() -> None:
         tone, detail = WARNING, binder.status or "Launched · waiting for the hand…"
     elif phase == "failed" and binder is not None:
         tone = DANGER
-        detail = hand_attempt["error"] or (binder.status if binder.last_error is not None
-                                           else "No Virtual Hand answered")
+        detail = hand_attempt["error"] or (
+            binder.status if binder.last_error is not None else "No Virtual Hand answered"
+        )
         if not hand_processes and binder.last_error is None:
             detail += " · not installed here"
     elif phase == "failed":
@@ -517,15 +537,18 @@ def hand_ui() -> None:
             imgui.end_disabled()
             if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
                 imgui.set_tooltip(
-                    "Wait for the connection attempt to stop." if phase == "stopping"
-                    else "Stop connecting and close the hand launched here." if action == "Stop"
+                    "Wait for the connection attempt to stop."
+                    if phase == "stopping"
+                    else "Stop connecting and close the hand launched here."
+                    if action == "Stop"
                     else "Bind to a running Virtual Hand, or launch one if none answers."
                 )
 
-
     # Keep the complete movement palette available without nesting its card header.
-    label = fit_text(f"{fa.ICON_FA_HAND}  Hand movements…",
-                     imgui.get_content_region_avail().x - 2 * style.frame_padding.x)
+    label = fit_text(
+        f"{fa.ICON_FA_HAND}  Hand movements…",
+        imgui.get_content_region_avail().x - 2 * style.frame_padding.x,
+    )
     if imgui.small_button(f"{label}##hand_movements"):
         imgui.open_popup("hand_movements")
     imgui.set_item_tooltip("Manually command the control hand through the gesture output.")
@@ -548,7 +571,9 @@ def _pushed() -> list[tuple[str, str, str]]:
     for alias, value in values.items():
         binding = CONTROL_MAP.bindings.get(alias)
         targets = ", ".join(target.address for target in binding.targets) if binding else "unmapped"
-        label = "fist · predicted hand (LSL)" if alias == "fist" else "gesture · control hand (gRPC)"
+        label = (
+            "fist · predicted hand (LSL)" if alias == "fist" else "gesture · control hand (gRPC)"
+        )
         rows.append((label, value if isinstance(value, str) else f"{value:+.2f}", targets))
     return rows
 

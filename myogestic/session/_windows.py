@@ -46,9 +46,7 @@ class SessionSplit[P: str | Path](NamedTuple):
     unreadable: list[tuple[P, Exception]]
 
 
-def split_sessions_by_stream[P: str | Path](
-    paths: Iterable[P], stream: str
-) -> SessionSplit[P]:
+def split_sessions_by_stream[P: str | Path](paths: Iterable[P], stream: str) -> SessionSplit[P]:
     """Sort session paths by whether they recorded ``stream``, without holding them open.
 
     The question every mixed training callback asks first: sessions with a kinematics

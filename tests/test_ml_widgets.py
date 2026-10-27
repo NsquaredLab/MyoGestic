@@ -16,23 +16,38 @@ from myogestic.widgets import common
 def pipeline():
     return SimpleNamespace(
         app=SimpleNamespace(ctx=SimpleNamespace(state="idle", status_message="", log=Mock())),
-        model=None, train_log=[], predict_hz=50,
-        on_train=Mock(), on_extract=Mock(), on_predict=Mock(),
+        model=None,
+        train_log=[],
+        predict_hz=50,
+        on_train=Mock(),
+        on_extract=Mock(),
+        on_predict=Mock(),
         training_data=SimpleNamespace(is_empty=False, paths=["take.zarr"]),
-        save_model=Mock(), load_model=Mock(),
-        start_training=Mock(), start_predicting=Mock(), stop_predicting=Mock(),
+        save_model=Mock(),
+        load_model=Mock(),
+        start_training=Mock(),
+        start_predicting=Mock(),
+        stop_predicting=Mock(),
     )
 
 
-@pytest.mark.parametrize("status, expected, tone", [
-    ("idle", "Not trained", common.IDLE),
-    ("training", "Training…", common.WARNING),
-    ("trained", "Trained", common.IDLE),
-    ("predicting", "Predicting", common.SUCCESS),
-    ("failed", "Training failed", common.DANGER),
-])
+@pytest.mark.parametrize(
+    "status, expected, tone",
+    [
+        ("idle", "Not trained", common.IDLE),
+        ("training", "Training…", common.WARNING),
+        ("trained", "Trained", common.IDLE),
+        ("predicting", "Predicting", common.SUCCESS),
+        ("failed", "Training failed", common.DANGER),
+    ],
+)
 def test_pipeline_state_is_in_one_tinted_row(
-    imgui_frame, monkeypatch, pipeline, status, expected, tone,
+    imgui_frame,
+    monkeypatch,
+    pipeline,
+    status,
+    expected,
+    tone,
 ):
     pipeline.app.ctx.state = status if status in ("training", "predicting") else "idle"
     if status in ("trained", "predicting", "failed"):
@@ -114,17 +129,25 @@ def test_predict_chip_pairs_selection_even_when_clicked(imgui_frame, monkeypatch
     pipeline.stop_predicting.assert_called_once()
 
 
-@pytest.mark.parametrize("action, change, reason", [
-    ("TrainButton", {"on_train": None}, "@pipeline.train"),
-    ("TrainButton", {"training_data": None}, "select"),
-    ("PredictButton", {}, "train or load"),
-    ("PredictButton", {"model": object(), "on_extract": None}, "@pipeline.extract"),
-    ("SaveModelButton", {}, "train or load"),
-    ("SaveModelButton", {"model": object(), "save_model": None}, "pipeline.save_model"),
-    ("LoadModelButton", {"load_model": None}, "pipeline.load_model"),
-])
+@pytest.mark.parametrize(
+    "action, change, reason",
+    [
+        ("TrainButton", {"on_train": None}, "@pipeline.train"),
+        ("TrainButton", {"training_data": None}, "select"),
+        ("PredictButton", {}, "train or load"),
+        ("PredictButton", {"model": object(), "on_extract": None}, "@pipeline.extract"),
+        ("SaveModelButton", {}, "train or load"),
+        ("SaveModelButton", {"model": object(), "save_model": None}, "pipeline.save_model"),
+        ("LoadModelButton", {"load_model": None}, "pipeline.load_model"),
+    ],
+)
 def test_disabled_action_has_a_visible_caption_outside_disabled_block(
-    imgui_frame, monkeypatch, pipeline, action, change, reason,
+    imgui_frame,
+    monkeypatch,
+    pipeline,
+    action,
+    change,
+    reason,
 ):
     for name, value in change.items():
         setattr(pipeline, name, value)
@@ -152,7 +175,11 @@ def test_disabled_action_has_a_visible_caption_outside_disabled_block(
     monkeypatch.setattr(imgui, "end_disabled", end)
     monkeypatch.setattr(imgui, "text_wrapped", text)
     monkeypatch.setattr(imgui, "button", button)
-    args = (pipeline, "model.joblib") if action in ("SaveModelButton", "LoadModelButton") else (pipeline,)
+    args = (
+        (pipeline, "model.joblib")
+        if action in ("SaveModelButton", "LoadModelButton")
+        else (pipeline,)
+    )
     imgui_frame(getattr(widgets, action)(*args).ui)
     assert buttons == [True]
     assert any(reason in label and not dimmed for label, dimmed in captions)
@@ -187,8 +214,9 @@ def test_pipeline_fits_a_320_pixel_cell(imgui_frame, monkeypatch, pipeline, scal
     monkeypatch.setattr(imgui, "button", button)
 
     def draw():
-        imgui.begin_child("cell", imgui.ImVec2(320, 400),
-                          window_flags=imgui.WindowFlags_.horizontal_scrollbar)
+        imgui.begin_child(
+            "cell", imgui.ImVec2(320, 400), window_flags=imgui.WindowFlags_.horizontal_scrollbar
+        )
         bounds["right"] = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
         panel.ui()
         overflow.append(imgui.get_scroll_max_x())
@@ -200,14 +228,22 @@ def test_pipeline_fits_a_320_pixel_cell(imgui_frame, monkeypatch, pipeline, scal
     assert max(overhang) <= 1.0
 
 
-@pytest.mark.parametrize("action, suffix, callback", [
-    ("TrainButton", "ml_train", "start_training"),
-    ("PredictButton", "ml_pred", "start_predicting"),
-    ("SaveModelButton", "ml_save", "save_model"),
-    ("LoadModelButton", "ml_load", "load_model"),
-])
+@pytest.mark.parametrize(
+    "action, suffix, callback",
+    [
+        ("TrainButton", "ml_train", "start_training"),
+        ("PredictButton", "ml_pred", "start_predicting"),
+        ("SaveModelButton", "ml_save", "save_model"),
+        ("LoadModelButton", "ml_load", "load_model"),
+    ],
+)
 def test_standalone_actions_keep_callbacks_and_scaled_size(
-    imgui_frame, monkeypatch, pipeline, action, suffix, callback,
+    imgui_frame,
+    monkeypatch,
+    pipeline,
+    action,
+    suffix,
+    callback,
 ):
     monkeypatch.setattr(_scale, "_current", 2.0)
     pipeline.model = object()
@@ -222,7 +258,11 @@ def test_standalone_actions_keep_callbacks_and_scaled_size(
         return label.endswith(suffix)
 
     monkeypatch.setattr(imgui, "button", click)
-    args = (pipeline, "model.joblib") if action in ("SaveModelButton", "LoadModelButton") else (pipeline,)
+    args = (
+        (pipeline, "model.joblib")
+        if action in ("SaveModelButton", "LoadModelButton")
+        else (pipeline,)
+    )
     imgui_frame(getattr(widgets, action)(*args, size=(70, 24)).ui)
     assert sizes == [(140, 48)]
     if action == "SaveModelButton":
@@ -238,11 +278,16 @@ def test_standalone_actions_keep_callbacks_and_scaled_size(
         getattr(pipeline, callback).assert_called_once_with()
 
 
-@pytest.mark.parametrize("action, callback, message", [
-    ("SaveModelButton", "save_model", "Save failed: unavailable"),
-    ("LoadModelButton", "load_model", "Load failed: unavailable"),
-])
-def test_file_action_errors_remain_reported(imgui_frame, monkeypatch, pipeline, action, callback, message):
+@pytest.mark.parametrize(
+    "action, callback, message",
+    [
+        ("SaveModelButton", "save_model", "Save failed: unavailable"),
+        ("LoadModelButton", "load_model", "Load failed: unavailable"),
+    ],
+)
+def test_file_action_errors_remain_reported(
+    imgui_frame, monkeypatch, pipeline, action, callback, message
+):
     pipeline.model = object()
     old_model = pipeline.model
     getattr(pipeline, callback).side_effect = OSError("unavailable")
@@ -259,7 +304,9 @@ def test_file_action_errors_remain_reported(imgui_frame, monkeypatch, pipeline, 
     pipeline.app.ctx.log.assert_called_once()
 
 
-def test_panel_ids_are_independent_and_log_action_is_in_the_header(imgui_frame, monkeypatch, pipeline):
+def test_panel_ids_are_independent_and_log_action_is_in_the_header(
+    imgui_frame, monkeypatch, pipeline
+):
     pipeline.train_log = ["Training complete"]
     ids, actions = [], []
     real = imgui.button
@@ -298,5 +345,7 @@ def test_inline_log_is_scaled_and_monospaced(imgui_frame, monkeypatch, pipeline)
     monkeypatch.setattr(imgui, "input_text_multiline", box)
     imgui_frame(widgets.PipelinePanel(pipeline, log_height=60).ui)
     imgui_frame(widgets.TrainingLog(pipeline, height=50).ui)
-    assert boxes == [("fitting\nTraining complete", 120, True),
-                     ("fitting\nTraining complete", 100, True)]
+    assert boxes == [
+        ("fitting\nTraining complete", 120, True),
+        ("fitting\nTraining complete", 100, True),
+    ]

@@ -139,8 +139,7 @@ class LSLSource:
         data, timestamps = self._inlet.pull_chunk(timeout=0.0)
         if timestamps is None or len(timestamps) == 0:
             return None, None
-        return (np.asarray(data, dtype=self._dtype), np.asarray(timestamps, dtype=np.float64)
-        )
+        return (np.asarray(data, dtype=self._dtype), np.asarray(timestamps, dtype=np.float64))
 
     def disconnect(self) -> None:
         """Close the inlet. Safe to call multiple times."""

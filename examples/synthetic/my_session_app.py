@@ -63,7 +63,11 @@ def train(data: TrainingData) -> dict[int, np.ndarray]:
     """Fit a nearest-centroid model with one mean feature vector per class."""
     grouped: dict[int, list[np.ndarray]] = {}
     for window, _ts, label in iter_labeled_windows(
-        data.paths, "emg", WINDOW_MS, HOP_MS, classes=data.classes,
+        data.paths,
+        "emg",
+        WINDOW_MS,
+        HOP_MS,
+        classes=data.classes,
     ):
         grouped.setdefault(label, []).append(extract({"emg": window}))
     if len(grouped) < 2:
@@ -79,10 +83,26 @@ def predict(model: dict[int, np.ndarray], features: np.ndarray) -> dict[str, int
 
 
 # The rest is the reusable session shell: acquisition and widgets, with no model logic.
-processes = ProcessLauncher([("EMG Generator", [
-    sys.executable, "-m", "myogestic.tools.emg_generator", "--name", "MySessionEMG",
-    "--channels", "8", "--fs", "2048", "--classes", str(len(CLASSES)),
-])])
+processes = ProcessLauncher(
+    [
+        (
+            "EMG Generator",
+            [
+                sys.executable,
+                "-m",
+                "myogestic.tools.emg_generator",
+                "--name",
+                "MySessionEMG",
+                "--channels",
+                "8",
+                "--fs",
+                "2048",
+                "--classes",
+                str(len(CLASSES)),
+            ],
+        )
+    ]
+)
 connection = {"busy": False, "error": ""}
 simulator = SimulatorControls([(name, float(i)) for i, name in enumerate(CLASSES)])
 
@@ -117,11 +137,17 @@ participant = ParticipantPanel()
 header = AppHeader("My session app", steps=steps, participant=participant)
 viewer = SignalViewer("emg", show_connect=False)
 recording = RecordingControls(
-    CLASSES, on_record=_on_record, on_stop=app.stop_recording,
-    on_gesture=lambda i: simulator.set(float(i)), show_header=False,
+    CLASSES,
+    on_record=_on_record,
+    on_stop=app.stop_recording,
+    on_gesture=lambda i: simulator.set(float(i)),
+    show_header=False,
 )
 sessions = SessionManager("sessions", class_names=CLASSES)
-train_button, predict_button = TrainButton(pipeline, size=(-1, 0)), PredictButton(pipeline, size=(-1, 0))
+train_button, predict_button = (
+    TrainButton(pipeline, size=(-1, 0)),
+    PredictButton(pipeline, size=(-1, 0)),
+)
 training_log = TrainingLog(pipeline, height=100)
 prediction = PredictionLabel(pipeline, CLASSES)
 log, status = LogPanel(title="Activity log"), StatusBar("emg", pipeline=pipeline)
@@ -129,7 +155,8 @@ layout = Layout(
     wide=Grid.areas(
         "header header\nsignal step\nsignal sessions\nsimulator sessions\nlog sessions\nstatus status",
         row_height=[Px(52), Fr(3), Fr(1), Px(76), Px(110), Px(26)],
-        col_width=[Fr(1), Px(400)], bare=("header", "status"),
+        col_width=[Fr(1), Px(400)],
+        bare=("header", "status"),
     ),
     narrow=Grid.areas(
         "header\nsignal\nsimulator\nstep\nsessions\nlog\nstatus",
@@ -145,8 +172,10 @@ def _step_done(ctx: Context) -> list[bool]:
     stream = ctx.streams["emg"]
     return [
         stream.status == "connected" and stream.info is not None,
-        bool(ctx.participant) and any(Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
-        pipeline.model is not None, ctx.state == "predicting",
+        bool(ctx.participant)
+        and any(Path("sessions", ctx.participant).glob(f"{ctx.participant}_*")),
+        pipeline.model is not None,
+        ctx.state == "predicting",
     ]
 
 
@@ -168,17 +197,28 @@ def ui(ctx: Context) -> None:
             busy = connection["busy"]
             tone = SUCCESS if done[0] else WARNING if busy else DANGER if error else IDLE
             with tinted_row(tone):
-                imgui.text_unformatted("Connected" if done[0] else "Connecting…" if busy else
-                                       "Connection failed" if error else "Not connected")
+                imgui.text_unformatted(
+                    "Connected"
+                    if done[0]
+                    else "Connecting…"
+                    if busy
+                    else "Connection failed"
+                    if error
+                    else "Not connected"
+                )
             if error:
                 imgui.text_wrapped(error)
             imgui.begin_disabled(ctx.state != "idle" or busy)
-            if primary_button("Reconnect" if done[0] else "Retry" if error else "Launch & connect",
-                              size=(-1, 0)):
+            if primary_button(
+                "Reconnect" if done[0] else "Retry" if error else "Launch & connect", size=(-1, 0)
+            ):
                 _connect()
             imgui.end_disabled()
-            imgui.text_wrapped("Return to idle to reconnect." if ctx.state != "idle" else
-                               "Launch the generator, then try Rest/Fist under the signal.")
+            imgui.text_wrapped(
+                "Return to idle to reconnect."
+                if ctx.state != "idle"
+                else "Launch the generator, then try Rest/Fist under the signal."
+            )
         elif active == 1:
             recording.ui(ctx)
         elif active == 2:

@@ -1,24 +1,28 @@
 """Core tests — only idle ↔ recording. ML pipeline tests live in test_ml.py."""
 
 import ctypes
+import json
 import shutil
 import threading
 import time
+import zipfile
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from mne_lsl.lsl import StreamInfo, StreamOutlet, local_clock
+from mne_lsl.lsl import StreamInfo as LSLStreamInfo
+from mne_lsl.lsl import StreamOutlet, local_clock
 
 from myogestic import _browser, core
 from myogestic.core import App, can_transition
 from myogestic.sources.lsl import LSLSource
-from myogestic.stream import Stream
+from myogestic.stream import Stream, StreamInfo
 
 
 def start_synthetic_stream(name="CoreTestEMG", n_channels=8, fs=256):
     """Start a fake LSL stream in a background thread. Returns stop function."""
-    info = StreamInfo(name, "EMG", n_channels, fs, "float32", "")
+    info = LSLStreamInfo(name, "EMG", n_channels, fs, "float32", "")
     outlet = StreamOutlet(info)
     running = [True]
 
@@ -54,7 +58,7 @@ def test_recording_transitions():
     app = App("TestApp")
     app.streams(stream)
 
-    stream.reconnect()   # the loop never attaches on its own
+    stream.reconnect()  # the loop never attaches on its own
     stream.start()
     time.sleep(1.0)
 
@@ -241,6 +245,140 @@ def test_the_glfw_stderr_filter_starts_no_thread_in_the_browser(monkeypatch):
         pass  # must enter and exit cleanly
 
 
+# --- recording as a flag beside the state ------------------------------------------
+
+
+class _FakeSource:
+    def connect(self) -> StreamInfo:
+        return StreamInfo(n_channels=4, fs=100.0)
+
+    def read(self):
+        return None, None
+
+    def disconnect(self) -> None:
+        pass
+
+
+def _connected_app() -> tuple[App, Stream]:
+    app = App("flag-test")
+    stream = Stream("emg", source=_FakeSource(), window_ms=100)
+    app.streams(stream)
+    assert stream.reconnect()
+    return app, stream
+
+
+def _only_zip(folder: Path) -> Path:
+    zips = list(folder.glob("*.session.zip"))
+    assert len(zips) == 1, zips
+    return zips[0]
+
+
+def test_recording_while_predicting_leaves_the_state_alone(tmp_path, recordable_predicting):
+    app, stream = _connected_app()
+    app.ctx.state = "predicting"
+    app.start_recording(str(tmp_path))
+    assert app.ctx.recording is True
+    assert app.ctx.state == "predicting"
+    assert stream._session is app.ctx.session
+    app.stop_recording(wait=True)
+    assert app.ctx.recording is False
+    assert app.ctx.state == "predicting"
+    assert stream._session is None
+    assert _only_zip(tmp_path).exists()
+
+
+def test_recording_from_idle_still_shows_the_recording_state(tmp_path):
+    app, _ = _connected_app()
+    app.start_recording(str(tmp_path))
+    assert (app.ctx.recording, app.ctx.state) == (True, "recording")
+    app.stop_recording(wait=True)
+    assert (app.ctx.recording, app.ctx.state) == (False, "idle")
+
+
+def test_start_recording_is_refused_outside_recordable_states(tmp_path):
+    app, _ = _connected_app()
+    app.ctx.state = "training"
+    app.start_recording(str(tmp_path))
+    assert app.ctx.recording is False
+    assert "Cannot start recording" in app.ctx.status_message
+    assert not list(tmp_path.iterdir())
+    # Plain state names, not enum reprs (StrEnum's repr is "<AppState.IDLE: 'idle'>").
+    assert "'idle'" in app.ctx.status_message and "<" not in app.ctx.status_message
+
+
+def test_finalize_hooks_run_after_freeze_and_before_meta(tmp_path):
+    app, _ = _connected_app()
+    seen = {}
+
+    def hook(session):
+        seen["event_streams"] = session.event_streams
+        session.extras["hook"] = "ran"
+        session.append_event("late", [1.0], 0.0)  # must be dropped: the session is frozen
+
+    app.finalize_hooks.append(hook)
+    app.start_recording(str(tmp_path))
+    app.ctx.session.append_event("prediction.x", [1.0], 0.0)
+    app.stop_recording(wait=True)
+    with zipfile.ZipFile(_only_zip(tmp_path)) as zf:
+        meta = json.loads(zf.read("meta.json"))
+        names = zf.namelist()
+    assert seen["event_streams"] == ("prediction.x",)
+    assert meta["extras"]["hook"] == "ran"
+    assert "late" not in meta["streams"] and not any(n.startswith("late.zarr") for n in names)
+
+
+def test_a_failing_finalize_hook_does_not_lose_the_take(tmp_path):
+    app, _ = _connected_app()
+    app.finalize_hooks.append(lambda session: 1 / 0)
+    app.start_recording(str(tmp_path))
+    app.stop_recording(wait=True)
+    assert _only_zip(tmp_path).exists()
+    assert any("Finalize hook failed" in line for line in app.ctx.logs)
+
+
+def test_discard_while_predicting_runs_no_hook(tmp_path, recordable_predicting):
+    app, _ = _connected_app()
+    app.finalize_hooks.append(lambda session: pytest.fail("hook ran on discard"))
+    app.ctx.state = "predicting"
+    app.start_recording(str(tmp_path))
+    app.discard_recording()
+    assert (app.ctx.recording, app.ctx.state, app.ctx.session) == (False, "predicting", None)
+    assert not list(tmp_path.iterdir())
+
+
+def test_cleanup_finalises_an_open_take(tmp_path):
+    app, _ = _connected_app()
+    app.start_recording(str(tmp_path))
+    app._cleanup()
+    assert app.ctx.recording is False
+    assert _only_zip(tmp_path).exists()
+
+
+def test_add_stream_is_refused_while_a_take_is_open_under_predicting(
+    tmp_path, recordable_predicting
+):
+    app, _ = _connected_app()
+    app.ctx.state = "predicting"
+    app.start_recording(str(tmp_path))
+    assert app.add_stream(Stream("imu", source=_FakeSource(), window_ms=100)) is False
+    assert "Cannot add a stream while recording" in app.ctx.status_message
+    assert "imu" not in app.ctx.streams
+    app.stop_recording(wait=True)
+    assert app.add_stream(Stream("imu", source=_FakeSource(), window_ms=100)) is True
+
+
+def test_remove_stream_is_refused_while_a_take_is_open_under_predicting(
+    tmp_path, recordable_predicting
+):
+    app, _ = _connected_app()
+    app.ctx.state = "predicting"
+    app.start_recording(str(tmp_path))
+    assert app.remove_stream("emg") is False
+    assert "emg" in app.ctx.streams
+    app.stop_recording(wait=True)
+    assert app.remove_stream("emg") is True
+
+
 # --- Starting with a locked or sleeping display ---
 
 
@@ -285,10 +423,16 @@ def test_waits_for_display_before_starting_streams_or_hooks(
     app.run(window_size=(960, 640), fullscreen=fullscreen)
 
     assert events == [
-        "query", ("sleep", 1.0), "query", ("sleep", 1.0), "query",
-        "stream start", "before run",
+        "query",
+        ("sleep", 1.0),
+        "query",
+        ("sleep", 1.0),
+        "query",
+        "stream start",
+        "before run",
         ("gui", {"window_size": (960, 640), "fullscreen": fullscreen}),
-        "cleanup", "stream stop",
+        "cleanup",
+        "stream stop",
     ]
     assert not app._running
     lines = capsys.readouterr().out.splitlines()
@@ -344,7 +488,9 @@ def test_other_platforms_browser_and_headless_do_not_query_displays(
     monkeypatch.setattr(core.sys, "platform", platform)
     monkeypatch.setattr(_browser, "IS_BROWSER", browser)
     monkeypatch.setattr(
-        core, "_active_display_count", lambda: pytest.fail("unexpected display query"),
+        core,
+        "_active_display_count",
+        lambda: pytest.fail("unexpected display query"),
         raising=False,
     )
     app.run(mode=mode)

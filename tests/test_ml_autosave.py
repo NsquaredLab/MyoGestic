@@ -41,7 +41,9 @@ def test_autosave_writes_labelled_model(tmp_path):
     assert load_pickle(files[0]) == pipeline.model == {"classes": [0, 1]}
     notice = pipeline.app.ctx.notifications[-1]
     assert (notice.title, notice.detail, notice.kind) == (
-        "Training finished", files[0].name, "success"
+        "Training finished",
+        files[0].name,
+        "success",
     )
     assert pipeline.app.ctx.logs[-1].endswith(f"Training finished — {files[0].name}")
 
@@ -107,7 +109,9 @@ def test_training_failure_notifies_danger(tmp_path):
     assert list(tmp_path.iterdir()) == []
     notice = pipeline.app.ctx.notifications[-1]
     assert (notice.title, notice.detail, notice.kind) == (
-        "Training failed", "no usable windows", "danger"
+        "Training failed",
+        "no usable windows",
+        "danger",
     )
 
 

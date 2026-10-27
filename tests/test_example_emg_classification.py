@@ -20,7 +20,9 @@ def classification_app(monkeypatch, tmp_path):
     from myogestic.tools import emg_generator
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None))
+    monkeypatch.setattr(
+        emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None)
+    )
     monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [])
     namespace = runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / "emg_classification.py"))
     namespace = namespace["demo_ui"].__globals__
@@ -53,13 +55,25 @@ def test_classification_uses_the_session_shell(classification_app):
     assert "ctrl_outlet" not in ns
     assert ns["app"].ctx.require_participant
     assert not ns["recording"]._show_header and not ns["features"]._show_header
-    assert layout.panel_names == {"header", "signal", "simulator", "step", "sessions", "log", "status"}
+    assert layout.panel_names == {
+        "header",
+        "signal",
+        "simulator",
+        "step",
+        "sessions",
+        "log",
+        "status",
+    }
     assert layout._breakpoint == Px(1100)
     assert layout._wide._col_tracks == [Fr(1), Px(400)]
     assert layout._wide._areas == {
-        "header": (0, 1, 0, 2), "signal": (1, 3, 0, 1),
-        "step": (1, 2, 1, 2), "sessions": (2, 5, 1, 2),
-        "simulator": (3, 4, 0, 1), "log": (4, 5, 0, 1), "status": (5, 6, 0, 2),
+        "header": (0, 1, 0, 2),
+        "signal": (1, 3, 0, 1),
+        "step": (1, 2, 1, 2),
+        "sessions": (2, 5, 1, 2),
+        "simulator": (3, 4, 0, 1),
+        "log": (4, 5, 0, 1),
+        "status": (5, 6, 0, 2),
     }
     for grid in (layout._wide, layout._narrow):
         assert grid._bare == {"header", "status"}
@@ -69,7 +83,9 @@ def test_classification_uses_the_session_shell(classification_app):
         assert grid._row_tracks[simulator[0]] == Px(76)
 
 
-def test_classification_completion_tracks_the_participants_takes(classification_app, monkeypatch, tmp_path):
+def test_classification_completion_tracks_the_participants_takes(
+    classification_app, monkeypatch, tmp_path
+):
     from types import SimpleNamespace
 
     ns = classification_app
@@ -96,7 +112,14 @@ def test_classification_completion_tracks_the_participants_takes(classification_
 @pytest.mark.parametrize("trained", [False, True])
 @pytest.mark.parametrize("recording_active", [False, True])
 def test_classification_shell_fits_light_theme(
-    classification_app, monkeypatch, implot_frame, step, width, participant, trained, recording_active,
+    classification_app,
+    monkeypatch,
+    implot_frame,
+    step,
+    width,
+    participant,
+    trained,
+    recording_active,
 ):
     """Every active card fits the default window; narrow cards remain reachable."""
     import platform
@@ -116,10 +139,13 @@ def test_classification_shell_fits_light_theme(
     if trained:
         ns["pipeline"].model = object()
         ns["pipeline"].train_log.append("Trained on 100 windows from 2 sessions.")
-        ns["pipeline"].predictions.update({"class": 1, "proba": [0.1, 0.9], "hand": {"fist": 1.0, "gesture": "Fist"}})
+        ns["pipeline"].predictions.update(
+            {"class": 1, "proba": [0.1, 0.9], "hand": {"fist": 1.0, "gesture": "Fist"}}
+        )
         app.ctx.state = "predicting" if step == 3 else "idle"
     if recording_active:
         app.ctx.state = "recording"
+        app.ctx.recording = True
     monkeypatch.setattr(_scale, "_current", 2.0)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
@@ -130,8 +156,10 @@ def test_classification_shell_fits_light_theme(
         font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
     imgui.get_io().font_default = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14)
     font_dir = _EXAMPLES_ROOT.parent / "myogestic" / "assets" / "fonts"
-    for attr, filename, size in (("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
-                                 ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28)):
+    for attr, filename, size in (
+        ("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
+        ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28),
+    ):
         font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_dir / filename), size)
         monkeypatch.setattr(_theme, attr, font)
     imgui.get_style().scale_all_sizes(2.0)
@@ -182,12 +210,31 @@ def test_classification_shell_fits_light_theme(
 
         def draw_step(*args, render=render_step, name=name):
             render(*args)
-            cells.append((name, imgui.get_cursor_pos_y(), imgui.get_window_size().y,
-                          imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+            cells.append(
+                (
+                    name,
+                    imgui.get_cursor_pos_y(),
+                    imgui.get_window_size().y,
+                    imgui.get_scroll_max_x(),
+                    imgui.get_scroll_max_y(),
+                )
+            )
 
         monkeypatch.setitem(app._ui_fn.__globals__, name, draw_step)
-    for name in ("viewer", "simulator", "recording", "features", "train_button", "training_log",
-                 "prediction", "predict_button", "output_filter", "sessions", "log", "status"):
+    for name in (
+        "viewer",
+        "simulator",
+        "recording",
+        "features",
+        "train_button",
+        "training_log",
+        "prediction",
+        "predict_button",
+        "output_filter",
+        "sessions",
+        "log",
+        "status",
+    ):
         widget = ns[name]
         render = type(widget).ui
 
@@ -196,8 +243,15 @@ def test_classification_shell_fits_light_theme(
             result = render(self, *args, **kwargs)
             if kwargs.get("visible", True) and name != "status":
                 heights[name] = imgui.get_window_size().y
-                cells.append((name, imgui.get_cursor_pos_y(), imgui.get_window_size().y,
-                              imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+                cells.append(
+                    (
+                        name,
+                        imgui.get_cursor_pos_y(),
+                        imgui.get_window_size().y,
+                        imgui.get_scroll_max_x(),
+                        imgui.get_scroll_max_y(),
+                    )
+                )
             return result
 
         monkeypatch.setattr(type(widget), "ui", view)
@@ -219,41 +273,59 @@ def test_classification_shell_fits_light_theme(
         implot_frame(draw)
     assert headers == [ns["steps"].steps[step], "Simulated EMG"]
     expected = {"viewer", "simulator", "recording", "sessions", "log", "status"}
-    expected |= {2: {"features", "train_button", "training_log"},
-                 3: {"prediction", "predict_button", "output_filter"}}.get(step, set())
+    expected |= {
+        2: {"features", "train_button", "training_log"},
+        3: {"prediction", "predict_button", "output_filter"},
+    }.get(step, set())
     assert {name for name, _ in views} == expected
     record_calls = [kwargs for name, kwargs in views if name == "recording"]
     assert len(record_calls) == 1
     assert record_calls[0].get("visible", True) == (step == 1)
-    assert next(kwargs for name, kwargs in views if name == "sessions") == {"participant": participant}
+    assert next(kwargs for name, kwargs in views if name == "sessions") == {
+        "participant": participant
+    }
     assert all(overhang <= 1 for _, overhang in buttons), buttons
     assert all(overhang <= 1 for _, overhang in texts), texts
     assert all(horizontal == 0 for _, _, _, horizontal, _ in cells), cells
     assert heights["viewer"] > heights["simulator"]
-    assert all(cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
-               for name, cursor, height, _, vertical in cells if name == "simulator"), cells
+    assert all(
+        cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
+        for name, cursor, height, _, vertical in cells
+        if name == "simulator"
+    ), cells
     if width == 2560:
-        assert all(cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
-                   for _, cursor, height, _, vertical in cells), cells
+        assert all(
+            cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
+            for _, cursor, height, _, vertical in cells
+        ), cells
     assert ns["layout"]._active is (ns["layout"]._wide if width == 2560 else ns["layout"]._narrow)
 
 
-def test_gesture_and_take_keep_the_generator_hand_and_recording_gate(classification_app, monkeypatch):
+def test_gesture_and_take_keep_the_generator_hand_and_recording_gate(
+    classification_app, monkeypatch
+):
     """Preview can change the signal; recording restores its selected label first."""
     from types import SimpleNamespace
 
     ns = classification_app
     calls = []
     bus = SimpleNamespace(select=lambda alias, state: calls.append((alias, state)))
-    monkeypatch.setattr(type(ns["link"]), "ensure", lambda self: pytest.fail("callbacks must not probe the hand"))
+    monkeypatch.setattr(
+        type(ns["link"]), "ensure", lambda self: pytest.fail("callbacks must not probe the hand")
+    )
     ns["link"]._bus = bus
     bus.stop = lambda: None
     ns["recording_aid"].available = True
-    monkeypatch.setattr(type(ns["simulator"]), "set", lambda self, value: calls.append(("signal", value)))
+    monkeypatch.setattr(
+        type(ns["simulator"]), "set", lambda self, value: calls.append(("signal", value))
+    )
     monkeypatch.setattr(ns["app"], "start_recording", lambda: calls.append("record"))
     monkeypatch.setattr(ns["app"], "stop_recording", lambda: calls.append("stop"))
-    monkeypatch.setattr(type(ns["recording_aid"]), "set_recording_session",
-                        lambda self, active: calls.append(("gate", active)) or True)
+    monkeypatch.setattr(
+        type(ns["recording_aid"]),
+        "set_recording_session",
+        lambda self, active: calls.append(("gate", active)) or True,
+    )
     ns["_on_gesture"](1)
     assert calls == [("signal", 1.0), ("gesture", "Fist")]
     calls.clear()
@@ -272,8 +344,12 @@ def test_prediction_still_pushes_the_two_outputs_without_binding(classification_
 
     ns = classification_app
     calls = []
-    monkeypatch.setattr(type(ns["link"]), "ensure", lambda self: pytest.fail("predict must not bind"))
-    ns["link"]._bus = SimpleNamespace(push=lambda values: calls.append(values) or values, stop=lambda: None)
+    monkeypatch.setattr(
+        type(ns["link"]), "ensure", lambda self: pytest.fail("predict must not bind")
+    )
+    ns["link"]._bus = SimpleNamespace(
+        push=lambda values: calls.append(values) or values, stop=lambda: None
+    )
     model = SimpleNamespace(predict_proba=lambda values: np.array([[0.1, 0.9]]))
     result = ns["predict"](model, np.array([1.0, 2.0]))
     assert result["class"] == 1
@@ -281,7 +357,8 @@ def test_prediction_still_pushes_the_two_outputs_without_binding(classification_
     assert result["hand"] == calls[0]
     ns["pipeline"].predictions = result
     assert [(label, value) for label, value, _targets in ns["_pushed"]()] == [
-        ("fist · predicted hand (LSL)", "+1.00"), ("gesture · control hand (gRPC)", "Fist"),
+        ("fist · predicted hand (LSL)", "+1.00"),
+        ("gesture · control hand (gRPC)", "Fist"),
     ]
     ns["link"]._bus = None
     assert "hand" not in ns["predict"](model, np.array([1.0, 2.0]))
@@ -289,13 +366,16 @@ def test_prediction_still_pushes_the_two_outputs_without_binding(classification_
 
 @pytest.mark.parametrize("step", range(4))
 @pytest.mark.parametrize("state", ["idle", "recording", "predicting"])
-def test_simulator_is_available_on_each_step(classification_app, monkeypatch, implot_frame, step, state):
+def test_simulator_is_available_on_each_step(
+    classification_app, monkeypatch, implot_frame, step, state
+):
     """Manual simulator changes never relabel a take or bypass the hand callbacks."""
     from imgui_bundle import imgui
 
     ns = classification_app
     ns["steps"].active = step
     ns["app"].ctx.state = state
+    ns["app"].ctx.recording = state == "recording"
     ns["simulator"].set(0.0)
     samples, chips = [], []
     monkeypatch.setattr(ns["simulator"]._outlet, "push_sample", samples.append)
@@ -318,7 +398,9 @@ def test_simulator_is_available_on_each_step(classification_app, monkeypatch, im
 
 
 @pytest.mark.parametrize("failure", [False, True])
-def test_hand_connect_checks_existing_service_before_launch(classification_app, monkeypatch, implot_frame, failure):
+def test_hand_connect_checks_existing_service_before_launch(
+    classification_app, monkeypatch, implot_frame, failure
+):
     """The compact row connects off-thread, launches if absent and reports errors."""
     from types import SimpleNamespace
 
@@ -326,8 +408,13 @@ def test_hand_connect_checks_existing_service_before_launch(classification_app, 
 
     ns = classification_app
     calls = []
-    binder = SimpleNamespace(busy=False, finished=False, last_error=None, status="Connecting…",
-                             poll=lambda **kwargs: calls.append(("bind", kwargs)))
+    binder = SimpleNamespace(
+        busy=False,
+        finished=False,
+        last_error=None,
+        status="Connecting…",
+        poll=lambda **kwargs: calls.append(("bind", kwargs)),
+    )
     monkeypatch.setitem(ns["hand_ui"].__globals__, "binder", binder)
     monkeypatch.setitem(ns["hand_ui"].__globals__, "hand_processes", [(ns["vhi"].name, ["vhi"])])
     original = imgui.small_button
@@ -376,7 +463,9 @@ def test_hand_movement_palette_remains_accessible(classification_app, monkeypatc
 
 
 @pytest.mark.parametrize("width", [320, 800])
-def test_hand_connection_words_and_actions_do_not_overlap(classification_app, monkeypatch, implot_frame, width):
+def test_hand_connection_words_and_actions_do_not_overlap(
+    classification_app, monkeypatch, implot_frame, width
+):
     """The connection remains readable even in a small scale-two card."""
     from imgui_bundle import imgui
 
@@ -403,7 +492,10 @@ def test_hand_connection_words_and_actions_do_not_overlap(classification_app, mo
     def draw():
         imgui.set_next_window_pos(imgui.ImVec2(0, 0))
         imgui.set_next_window_size(imgui.ImVec2(width, 1200))
-        imgui.begin("hand-width", flags=imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.horizontal_scrollbar)
+        imgui.begin(
+            "hand-width",
+            flags=imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.horizontal_scrollbar,
+        )
         classification_app["hand_ui"]()
         assert imgui.get_scroll_max_x() == 0
         imgui.end()
@@ -412,13 +504,12 @@ def test_hand_connection_words_and_actions_do_not_overlap(classification_app, mo
         items.clear()
         implot_frame(draw)
     for index, first in enumerate(items):
-        for second in items[index + 1:]:
+        for second in items[index + 1 :]:
             if not first[0] or not second[0]:
                 continue
             overlap_x = min(first[3], second[3]) - max(first[1], second[1])
             overlap_y = min(first[4], second[4]) - max(first[2], second[2])
             assert overlap_x <= 1 or overlap_y <= 1, (first, second)
-
 
 
 def test_hand_map_keeps_the_lsl_pose_and_debounced_grpc_gesture(classification_app):
@@ -428,8 +519,12 @@ def test_hand_map_keeps_the_lsl_pose_and_debounced_grpc_gesture(classification_a
     assert ns["CONTROL_FILE"].name == "classification_grpc.toml"
     assert set(bindings) == {"fist", "gesture"}
     assert {ref.address for ref in bindings["fist"].targets} == {
-        "vhi.prediction.thumb.flexion", "vhi.prediction.thumb.abduction",
-        "vhi.prediction.index", "vhi.prediction.middle", "vhi.prediction.ring", "vhi.prediction.little",
+        "vhi.prediction.thumb.flexion",
+        "vhi.prediction.thumb.abduction",
+        "vhi.prediction.index",
+        "vhi.prediction.middle",
+        "vhi.prediction.ring",
+        "vhi.prediction.little",
     }
     assert [ref.address for ref in bindings["gesture"].targets] == ["vhi.control.gesture"]
     assert bindings["gesture"].debounce_s == 0.1
@@ -447,7 +542,9 @@ def test_all_steps_run_without_loading_grpc(monkeypatch, tmp_path, implot_frame,
     from myogestic.tools import emg_generator
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(InterfaceSpec, "launcher", lambda self: (_ for _ in ()).throw(FileNotFoundError()))
+    monkeypatch.setattr(
+        InterfaceSpec, "launcher", lambda self: (_ for _ in ()).throw(FileNotFoundError())
+    )
     calls = []
 
     def missing_grpc(self):
@@ -456,7 +553,9 @@ def test_all_steps_run_without_loading_grpc(monkeypatch, tmp_path, implot_frame,
 
     monkeypatch.setattr(InterfaceSpec, "control_client", missing_grpc)
     monkeypatch.setattr(InterfaceSpec, "recording_client", missing_grpc)
-    monkeypatch.setattr(emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None))
+    monkeypatch.setattr(
+        emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None)
+    )
     ns = runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / "emg_classification.py"))
     ns = ns["demo_ui"].__globals__
     streams = tuple(ns["app"].ctx.streams.values())
@@ -517,6 +616,11 @@ assert ns["link"] is None
 assert ns["header"].title == "EMG classification"
 assert "grpc" not in sys.modules
 """
-    result = subprocess.run([sys.executable, "-c", script, str(example)], cwd=tmp_path,
-                            capture_output=True, text=True, timeout=30)
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(example)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
     assert result.returncode == 0, result.stderr

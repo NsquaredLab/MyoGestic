@@ -14,12 +14,19 @@ from myogestic.widgets.panels import participant as api
 from myogestic.widgets.training import _session_state as session_state
 
 
-def _take(base, pid="P-003", *, stamp="2026-10-25T15:47:00", classes=("Rest", "Fist"), folder=False):
+def _take(
+    base, pid="P-003", *, stamp="2026-10-25T15:47:00", classes=("Rest", "Fist"), folder=False
+):
     parent = base / pid
     parent.mkdir(parents=True, exist_ok=True)
     path = parent / f"{pid}_{stamp.replace(':', '-')}"
-    meta = dict(participant=pid, created=stamp, class_names=list(classes), duration_s=32,
-                class_seconds={name: 16 for name in classes})
+    meta = dict(
+        participant=pid,
+        created=stamp,
+        class_names=list(classes),
+        duration_s=32,
+        class_seconds={name: 16 for name in classes},
+    )
     labels = [dict(class_index=i) for i in range(len(classes))]
     if folder:
         path.mkdir()
@@ -34,8 +41,12 @@ def _take(base, pid="P-003", *, stamp="2026-10-25T15:47:00", classes=("Rest", "F
 
 
 def _panel(tmp_path, **kwargs):
-    return api.ParticipantPanel(key_file=tmp_path / "key.csv", sessions_dir=tmp_path / "sessions",
-                                widget_id=str(tmp_path), **kwargs)
+    return api.ParticipantPanel(
+        key_file=tmp_path / "key.csv",
+        sessions_dir=tmp_path / "sessions",
+        widget_id=str(tmp_path),
+        **kwargs,
+    )
 
 
 def _capture(monkeypatch):
@@ -107,8 +118,10 @@ def test_scan_once_per_open_and_names_reset_on_cancel(tmp_path, imgui_frame, mon
     monkeypatch.setattr(imgui, "text_colored", colored)
     _, clicks = _capture(monkeypatch)
     panel.open()
+
     def draw():
         panel.ui(ctx)
+
     imgui_frame(draw)
     imgui_frame(draw)
     assert len(reads) == 1
@@ -146,8 +159,10 @@ def test_continue_and_drive_keep_key_unchanged(tmp_path, imgui_frame, monkeypatc
     panel = _panel(tmp_path, on_drive=lambda pid, path: calls.append((ctx.participant, pid, path)))
     labels, clicks = _capture(monkeypatch)
     panel.open()
+
     def draw():
         panel.ui(ctx)
+
     imgui_frame(draw)
     assert "Drive with saved model" in labels
     clicks.add("Drive with saved model" if drive else "Continue with P-003")
@@ -190,7 +205,9 @@ def test_missing_or_edited_key_still_lists_ids(tmp_path, content):
 
 
 @pytest.mark.parametrize("callback,model", [(False, True), (True, False), (False, False)])
-def test_drive_action_requires_both_callback_and_model(tmp_path, imgui_frame, monkeypatch, callback, model):
+def test_drive_action_requires_both_callback_and_model(
+    tmp_path, imgui_frame, monkeypatch, callback, model
+):
     _take(tmp_path / "sessions")
     if model:
         (tmp_path / "sessions/P-003/a_model.joblib").touch()
@@ -242,11 +259,13 @@ def test_last_recorded_labels():
     assert api._when(today - timedelta(days=2)) == (today - timedelta(days=2)).strftime("%Y-%m-%d")
 
 
-@pytest.mark.parametrize("scale", [1., 2.])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
 @pytest.mark.parametrize("width", [320, 700])
 @pytest.mark.parametrize("height", [500, 900])
 @pytest.mark.parametrize("tab", [0, 1])
-def test_light_dialog_fits_narrow_viewport(tmp_path, imgui_frame, monkeypatch, scale, width, height, tab):
+def test_light_dialog_fits_narrow_viewport(
+    tmp_path, imgui_frame, monkeypatch, scale, width, height, tab
+):
     _take(tmp_path / "sessions")
     panel, ctx = _panel(tmp_path, on_drive=lambda *_: None), Context()
     (tmp_path / "sessions/P-003/a_model.joblib").touch()
@@ -256,7 +275,7 @@ def test_light_dialog_fits_narrow_viewport(tmp_path, imgui_frame, monkeypatch, s
     imgui.get_style().scale_all_sizes(scale)
     imgui.get_style().font_scale_main = scale
     font_path = Path(_theme.__file__).parent / "assets/fonts/IBMPlexMono-Regular.ttf"
-    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 13.)
+    font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 13.0)
     monkeypatch.setattr(_theme, "_MONO_FONT", font)
     imgui.get_io().display_size = imgui.ImVec2(width * scale, height * scale)
     bounds = []
@@ -280,8 +299,10 @@ def test_light_dialog_fits_narrow_viewport(tmp_path, imgui_frame, monkeypatch, s
     monkeypatch.setattr(imgui, "button", measured_button)
     monkeypatch.setattr(imgui, "input_text", measured_input)
     panel.open()
+
     def draw():
         panel.ui(ctx)
+
     imgui_frame(draw)
     panel._state.tab = tab
     imgui_frame(draw)

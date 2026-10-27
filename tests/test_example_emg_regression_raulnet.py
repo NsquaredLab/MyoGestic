@@ -23,7 +23,9 @@ def example(monkeypatch, tmp_path):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(InterfaceSpec, "launchable", lambda self: [(self.name, ["vhi"])])
-    monkeypatch.setattr(emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None))
+    monkeypatch.setattr(
+        emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None)
+    )
     ns = runpy.run_path(str(ROOT / "examples/synthetic/emg_regression_raulnet.py"))
     streams = tuple(ns["app"].ctx.streams.values())
     try:
@@ -54,7 +56,13 @@ def test_session_shell_and_model_wiring(example):
     assert "ctrl_outlet" not in ns and "logo" not in ns
     assert not ns["recording"]._show_header
     assert ns["layout"].panel_names == {
-        "header", "signal", "simulator", "step", "sessions", "log", "status",
+        "header",
+        "signal",
+        "simulator",
+        "step",
+        "sessions",
+        "log",
+        "status",
     }
     for grid in (ns["layout"]._wide, ns["layout"]._narrow):
         assert grid._bare == {"header", "status"}
@@ -95,8 +103,11 @@ def test_recording_resyncs_simulator_and_preserves_hand_gate(example, monkeypatc
     monkeypatch.setattr(ns["simulator"], "set", lambda value: calls.append(("signal", value)))
     monkeypatch.setattr(ns["app"], "start_recording", lambda: calls.append("record"))
     monkeypatch.setattr(ns["app"], "stop_recording", lambda: calls.append("stop"))
-    monkeypatch.setattr(type(ns["recording_aid"]), "set_recording_session",
-                        lambda self, active: (calls.append(("gate", active)), True)[1])
+    monkeypatch.setattr(
+        type(ns["recording_aid"]),
+        "set_recording_session",
+        lambda self, active: (calls.append(("gate", active)), True)[1],
+    )
     ns["_on_gesture"](1)
     assert calls == ["bind", ("signal", 1.0), ("select", "gesture", "Fist")]
     calls.clear()
@@ -112,7 +123,12 @@ def test_recording_resyncs_simulator_and_preserves_hand_gate(example, monkeypatc
 @pytest.mark.parametrize("width", [2560, 1800])
 @pytest.mark.parametrize("state", ["idle", "recording", "training", "predicting", "failed"])
 def test_shell_fits_and_keeps_each_steps_controls_visible(
-    example, monkeypatch, implot_frame, step, width, state,
+    example,
+    monkeypatch,
+    implot_frame,
+    step,
+    width,
+    state,
 ):
     """Measure real cards at scale two in light theme, including a long-running fit."""
     from imgui_bundle import hello_imgui, imgui
@@ -143,9 +159,13 @@ def test_shell_fits_and_keeps_each_steps_controls_visible(
     if not font_path.is_file():
         font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
     imgui.get_io().font_default = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14)
-    for attr, filename, size in (("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
-                                 ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28)):
-        font = imgui.get_io().fonts.add_font_from_file_ttf(str(ROOT / "myogestic/assets/fonts" / filename), size)
+    for attr, filename, size in (
+        ("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
+        ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28),
+    ):
+        font = imgui.get_io().fonts.add_font_from_file_ttf(
+            str(ROOT / "myogestic/assets/fonts" / filename), size
+        )
         monkeypatch.setattr(_theme, attr, font)
     imgui.get_style().scale_all_sizes(2.0)
     imgui.get_style().font_scale_main = 2.0
@@ -183,8 +203,18 @@ def test_shell_fits_and_keeps_each_steps_controls_visible(
         return result
 
     monkeypatch.setattr(imgui, "input_text_multiline", log)
-    for name in ("viewer", "simulator", "recording", "train_button", "training_log",
-                 "predict_button", "output_filter", "sessions", "log", "status"):
+    for name in (
+        "viewer",
+        "simulator",
+        "recording",
+        "train_button",
+        "training_log",
+        "predict_button",
+        "output_filter",
+        "sessions",
+        "log",
+        "status",
+    ):
         widget = ns[name]
         render = type(widget).ui
 
@@ -192,8 +222,14 @@ def test_shell_fits_and_keeps_each_steps_controls_visible(
             views.append((name, kwargs))
             result = render(self, *args, **kwargs)
             if kwargs.get("visible", True) and name != "status":
-                cells.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y,
-                              imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+                cells.append(
+                    (
+                        imgui.get_cursor_pos_y(),
+                        imgui.get_window_size().y,
+                        imgui.get_scroll_max_x(),
+                        imgui.get_scroll_max_y(),
+                    )
+                )
             return result
 
         monkeypatch.setattr(type(widget), "ui", view)
@@ -202,8 +238,14 @@ def test_shell_fits_and_keeps_each_steps_controls_visible(
 
         def card(*args, render=render):
             render(*args)
-            cells.append((imgui.get_cursor_pos_y(), imgui.get_window_size().y,
-                          imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+            cells.append(
+                (
+                    imgui.get_cursor_pos_y(),
+                    imgui.get_window_size().y,
+                    imgui.get_scroll_max_x(),
+                    imgui.get_scroll_max_y(),
+                )
+            )
 
         monkeypatch.setitem(app._ui_fn.__globals__, name, card)
 
@@ -221,15 +263,21 @@ def test_shell_fits_and_keeps_each_steps_controls_visible(
         implot_frame(draw)
     assert headers == [ns["steps"].steps[step], "Simulated EMG"]
     expected = {"viewer", "simulator", "recording", "sessions", "log", "status"}
-    expected |= {2: {"train_button", "training_log"}, 3: {"predict_button", "output_filter"}}.get(step, set())
+    expected |= {2: {"train_button", "training_log"}, 3: {"predict_button", "output_filter"}}.get(
+        step, set()
+    )
     assert {name for name, _ in views} == expected
     assert [kw.get("visible", True) for name, kw in views if name == "recording"] == [step == 1]
-    assert next(kw for name, kw in views if name == "sessions") == {"participant": app.ctx.participant}
+    assert next(kw for name, kw in views if name == "sessions") == {
+        "participant": app.ctx.participant
+    }
     assert all(overhang <= 1 for _, overhang in buttons), buttons
     assert all(horizontal == 0 for _, _, horizontal, _ in cells), cells
     if width == 2560:
-        assert all(cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
-                   for cursor, height, _, vertical in cells), cells
+        assert all(
+            cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
+            for cursor, height, _, vertical in cells
+        ), cells
         assert all(overhang <= 1 for _, overhang in text_extents), text_extents
     if step == 2 and state == "training":
         assert "Training…" in words
@@ -244,13 +292,18 @@ def test_shell_fits_and_keeps_each_steps_controls_visible(
 @pytest.mark.parametrize("step", range(4))
 @pytest.mark.parametrize("state", ["idle", "recording", "predicting"])
 def test_simulator_is_available_on_each_step_except_during_capture(
-    example, monkeypatch, implot_frame, step, state,
+    example,
+    monkeypatch,
+    implot_frame,
+    step,
+    state,
 ):
     from imgui_bundle import imgui
 
     ns = example
     ns["steps"].active = step
     ns["app"].ctx.state = state
+    ns["app"].ctx.recording = state == "recording"
     ns["simulator"].set(0.0)
     samples, chips = [], []
     monkeypatch.setattr(ns["simulator"]._outlet, "push_sample", lambda value: samples.append(value))

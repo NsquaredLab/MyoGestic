@@ -63,7 +63,10 @@ def _game(speed: float, control: int) -> PongTask:
     # `speed or None` — the constructor rejects 0.0 on purpose, because a zero-speed
     # paddle is a paddle that never moves, which is not the same thing as no paddle.
     return PongTask(
-        paddle_size=PADDLE, control=CONTROLS[control], opponent=speed or None, court_height=0,
+        paddle_size=PADDLE,
+        control=CONTROLS[control],
+        opponent=speed or None,
+        court_height=0,
     )
 
 
@@ -71,7 +74,9 @@ app = App("panel: pong")
 header = AppHeader("PongTask", show_state=True)
 layout = Layout(
     wide=Grid.areas("header\ninputs\ncourt", row_height=[Px(52), Px(220), Fr(1)], bare=("header",)),
-    narrow=Grid.areas("header\ninputs\ncourt", row_height=[Px(52), Px(360), Fr(1)], bare=("header",)),
+    narrow=Grid.areas(
+        "header\ninputs\ncourt", row_height=[Px(52), Px(360), Fr(1)], bare=("header",)
+    ),
     breakpoint=Px(460),
 )
 command = 0.0

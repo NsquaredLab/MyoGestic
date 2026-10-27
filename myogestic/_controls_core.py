@@ -21,7 +21,6 @@ import numpy as np
 STANDARD_VERSION = "1"
 
 
-
 @dataclass(frozen=True, slots=True)
 class Continuous:
     """A signed, normalized DOF. ``+1`` is the direction the name denotes.
@@ -164,9 +163,6 @@ class ControlSet:
         return {d.name: d.rest for d in self.dofs.values()}
 
 
-
-
-
 def _as_float(v: Any, rest: float) -> tuple[float, bool]:
     """Coerce a runtime value to a finite float, falling back to ``rest``.
 
@@ -217,9 +213,7 @@ def substitute_rest(controls: ControlSet, values: Mapping[str, Any]) -> dict[str
                 # into one *here*, so the debounce gate, the target and the recording all
                 # see a named state and never a bare 0.73.
                 level, bad = _as_float(v, float("nan"))
-                out[name] = (
-                    dof.rest if bad or level < dof.threshold_fraction else dof.activates
-                )
+                out[name] = dof.rest if bad or level < dof.threshold_fraction else dof.activates
             else:
                 out[name] = dof.rest
         else:
@@ -315,4 +309,3 @@ def decode(controls: ControlSet, frame: Sequence[float]) -> dict[str, float]:
             f"of `encode`; a wider pose frame is a target concern, not a control-standard one."
         )
     return {dof.name: float(frame[i]) for i, dof in enumerate(cont)}
-

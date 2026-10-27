@@ -230,6 +230,44 @@ The replay loops back to the start when it reaches the end. `speed` scales the p
 wall-clock time; `speed=0` halts it after the first chunk rather than stepping, since there is
 no manual-advance call.
 
+## Record a prediction run
+
+Load or train a model, press **Predict**, then press **Record**. The pill row reads `PREDICTING REC`. In Myocontrol’s Drive step, use **Record this run** while predicting. Press it again to save; predicting continues. **Stop predicting** saves an open run first, then returns to idle. Drive runs appear in Takes with a **Drive** tag and stay unticked for training until selected.
+
+Stop when done; the archive holds the raw streams *and* what the model saw and did:
+
+```python
+from myogestic.session import open_session_store
+import numpy as np
+
+with open_session_store("sessions/2026-09-13_10-12-44_3f9a1c02.session.zip") as s:
+    print(s.event_streams)  # ('features.vec', 'prediction.pose', 'pipeline.tick', 'controls')
+    pose = np.array(s.stores["prediction.pose"])  # (n_ticks, 5)
+    t = np.array(s.ts_stores["prediction.pose"])  # data time of each tick
+    tick = np.array(s.stores["pipeline.tick"])[:, 0]  # decision clock
+    print("median latency", np.median(tick - t), "s")
+    print(s.extras["pipeline"]["model"])  # 'model.joblib', beside the arrays
+```
+
+The model is pickled into the session when `pipeline.save_model` is set (the ML widgets' Save button uses the same callable). Values `extract` or `predict` returned that were not recordable — text, 2-D arrays — are named in `s.extras["pipeline"]["skipped"]` with the reason.
+
+## Check a replay against the live run
+
+Run the same app on the recording with `ReplaySource(path, "emg")` in place of the device, press Predict, press Record, and stop after the replay has looped once. `ReplaySource` returns the recorded timestamps, so both sessions are in the same clock. The ticks do **not** fall on the same samples: the predict loop is paced by wall time, and an app whose feature frames are anchored to ring position shifts phase too. Compare by nearest timestamp within half a tick:
+
+```python
+live = open_session_store("live.session.zip")
+replay = open_session_store("replay.session.zip")
+tl, pl = np.array(live.ts_stores["prediction.pose"]), np.array(live.stores["prediction.pose"])
+tr, pr = np.array(replay.ts_stores["prediction.pose"]), np.array(replay.stores["prediction.pose"])
+j = np.searchsorted(tr, tl).clip(1, len(tr) - 1)
+j = np.where(np.abs(tr[j - 1] - tl) < np.abs(tr[j] - tl), j - 1, j)
+close = np.abs(tr[j] - tl) < 0.5 / live.extras["pipeline"]["predict_hz"]
+print("matched", close.mean(), "max |Δpose|", np.abs(pr[j][close] - pl[close]).max())
+```
+
+Exact matches need an `extract` whose frame grid is anchored to data timestamps rather than to the ring; that is the app's choice.
+
 ## Common mistakes
 
 See also: full **[Troubleshooting](../troubleshooting.md)** index, organised by symptom across every subsystem.

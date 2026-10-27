@@ -8,8 +8,19 @@ import pytest
 import myogestic.remote
 
 _EXAMPLES_ROOT = Path(__file__).resolve().parent.parent / "examples"
-PANELS = {"Signal", "Streams", "Log", "Processes", "Connect", "Recording", "Model",
-          "Post-processing", "Sessions", "Prediction", "Simulated EMG"}
+PANELS = {
+    "Signal",
+    "Streams",
+    "Log",
+    "Processes",
+    "Connect",
+    "Recording",
+    "Model",
+    "Post-processing",
+    "Sessions",
+    "Prediction",
+    "Simulated EMG",
+}
 
 
 @pytest.fixture
@@ -20,8 +31,12 @@ def multi_model_app(monkeypatch, tmp_path):
     from myogestic.tools import emg_generator
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None))
-    monkeypatch.setattr(myogestic.remote.InterfaceSpec, "launcher", lambda self: [("Virtual Hand", ["unused"])])
+    monkeypatch.setattr(
+        emg_generator, "control_outlet", lambda: SimpleNamespace(push_sample=lambda x: None)
+    )
+    monkeypatch.setattr(
+        myogestic.remote.InterfaceSpec, "launcher", lambda self: [("Virtual Hand", ["unused"])]
+    )
     namespace = runpy.run_path(str(_EXAMPLES_ROOT / "synthetic" / "emg_32ch_multi_model.py"))
     streams = tuple(namespace["app"].ctx.streams.values())
     try:
@@ -53,13 +68,25 @@ def test_multi_model_uses_the_session_shell(multi_model_app):
     specs = ns["app"]._popout_specs
     assert {title for title, *_ in specs} == PANELS
     assert all(spec[2:] == (False, True, False) for spec in specs)
-    assert layout.panel_names == {"header", "signal", "simulator", "step", "sessions", "log", "status"}
+    assert layout.panel_names == {
+        "header",
+        "signal",
+        "simulator",
+        "step",
+        "sessions",
+        "log",
+        "status",
+    }
     assert layout._breakpoint == Px(1100)
     assert layout._wide._col_tracks == [Fr(1), Px(400)]
     assert layout._wide._areas == {
-        "header": (0, 1, 0, 2), "signal": (1, 3, 0, 1),
-        "step": (1, 2, 1, 2), "sessions": (2, 5, 1, 2),
-        "simulator": (3, 4, 0, 1), "log": (4, 5, 0, 1), "status": (5, 6, 0, 2),
+        "header": (0, 1, 0, 2),
+        "signal": (1, 3, 0, 1),
+        "step": (1, 2, 1, 2),
+        "sessions": (2, 5, 1, 2),
+        "simulator": (3, 4, 0, 1),
+        "log": (4, 5, 0, 1),
+        "status": (5, 6, 0, 2),
     }
     for grid in (layout._wide, layout._narrow):
         assert grid._bare == {"header", "status"}
@@ -69,7 +96,9 @@ def test_multi_model_uses_the_session_shell(multi_model_app):
         assert grid._row_tracks[simulator[0]] == Px(76)
 
 
-def test_multi_model_completion_tracks_the_participants_takes(multi_model_app, monkeypatch, tmp_path):
+def test_multi_model_completion_tracks_the_participants_takes(
+    multi_model_app, monkeypatch, tmp_path
+):
     from types import SimpleNamespace
 
     ns = multi_model_app
@@ -96,7 +125,14 @@ def test_multi_model_completion_tracks_the_participants_takes(multi_model_app, m
 @pytest.mark.parametrize("trained", [False, True])
 @pytest.mark.parametrize("state", ["idle", "recording", "training"])
 def test_multi_model_shell_fits_light_theme(
-    multi_model_app, monkeypatch, implot_frame, step, width, participant, trained, state,
+    multi_model_app,
+    monkeypatch,
+    implot_frame,
+    step,
+    width,
+    participant,
+    trained,
+    state,
 ):
     """Every active card fits the default window; narrow cards remain reachable."""
     import platform
@@ -119,6 +155,7 @@ def test_multi_model_shell_fits_light_theme(
         app.ctx.state = "predicting" if step == 3 else "idle"
     if state != "idle":
         app.ctx.state = state
+        app.ctx.recording = state == "recording"
     monkeypatch.setattr(_scale, "_current", 2.0)
     monkeypatch.setattr(_theme, "_is_mac_dark", lambda: False)
     _theme.apply_theme()
@@ -129,8 +166,10 @@ def test_multi_model_shell_fits_light_theme(
         font_path = Path(hello_imgui.asset_file_full_path("fonts/Roboto/Roboto-Regular.ttf"))
     imgui.get_io().font_default = imgui.get_io().fonts.add_font_from_file_ttf(str(font_path), 14)
     font_dir = _EXAMPLES_ROOT.parent / "myogestic" / "assets" / "fonts"
-    for attr, filename, size in (("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
-                                 ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28)):
+    for attr, filename, size in (
+        ("_MONO_FONT", "IBMPlexMono-Regular.ttf", 13),
+        ("_DISPLAY_FONT", "InstrumentSerif-Regular.ttf", 28),
+    ):
         font = imgui.get_io().fonts.add_font_from_file_ttf(str(font_dir / filename), size)
         monkeypatch.setattr(_theme, attr, font)
     imgui.get_style().scale_all_sizes(2.0)
@@ -146,8 +185,9 @@ def test_multi_model_shell_fits_light_theme(
             lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
             draw = imgui.get_window_draw_list()
             clip_lo, clip_hi = draw.get_clip_rect_min(), draw.get_clip_rect_max()
-            text_bounds.append((str(args), lo.x - clip_lo.x, clip_hi.x - hi.x,
-                                lo.y - clip_lo.y, clip_hi.y - hi.y))
+            text_bounds.append(
+                (str(args), lo.x - clip_lo.x, clip_hi.x - hi.x, lo.y - clip_lo.y, clip_hi.y - hi.y)
+            )
             return result
 
         monkeypatch.setattr(imgui, method, text_item)
@@ -183,12 +223,29 @@ def test_multi_model_shell_fits_light_theme(
 
     def connect(ctx):
         render_connect(ctx)
-        cells.append(("connect", imgui.get_cursor_pos_y(), imgui.get_window_size().y,
-                      imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+        cells.append(
+            (
+                "connect",
+                imgui.get_cursor_pos_y(),
+                imgui.get_window_size().y,
+                imgui.get_scroll_max_x(),
+                imgui.get_scroll_max_y(),
+            )
+        )
 
     monkeypatch.setitem(app._ui_fn.__globals__, "connect_ui", connect)
-    for name in ("viewer", "simulator", "recording", "train_button", "training_log",
-                 "prediction", "predict_button", "output_filter", "sessions", "status"):
+    for name in (
+        "viewer",
+        "simulator",
+        "recording",
+        "train_button",
+        "training_log",
+        "prediction",
+        "predict_button",
+        "output_filter",
+        "sessions",
+        "status",
+    ):
         widget = ns[name]
         render = type(widget).ui
 
@@ -197,8 +254,15 @@ def test_multi_model_shell_fits_light_theme(
             result = render(self, *args, **kwargs)
             if kwargs.get("visible", True) and name != "status":
                 heights[name] = imgui.get_window_size().y
-                cells.append((name, imgui.get_cursor_pos_y(), imgui.get_window_size().y,
-                              imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+                cells.append(
+                    (
+                        name,
+                        imgui.get_cursor_pos_y(),
+                        imgui.get_window_size().y,
+                        imgui.get_scroll_max_x(),
+                        imgui.get_scroll_max_y(),
+                    )
+                )
             return result
 
         monkeypatch.setattr(type(widget), "ui", view)
@@ -208,8 +272,15 @@ def test_multi_model_shell_fits_light_theme(
     def log():
         views.append(("log", {}))
         render_log()
-        cells.append(("log", imgui.get_cursor_pos_y(), imgui.get_window_size().y,
-                      imgui.get_scroll_max_x(), imgui.get_scroll_max_y()))
+        cells.append(
+            (
+                "log",
+                imgui.get_cursor_pos_y(),
+                imgui.get_window_size().y,
+                imgui.get_scroll_max_x(),
+                imgui.get_scroll_max_y(),
+            )
+        )
 
     monkeypatch.setitem(app._ui_fn.__globals__, "log_ui", log)
 
@@ -230,26 +301,37 @@ def test_multi_model_shell_fits_light_theme(
         implot_frame(draw)
     assert headers == [ns["steps"].steps[step], "Signal", "Simulated EMG", "Activity log"]
     expected = {"viewer", "simulator", "recording", "sessions", "log", "status"}
-    expected |= {2: {"train_button", "training_log"},
-                 3: {"prediction", "predict_button", "output_filter"}}.get(step, set())
+    expected |= {
+        2: {"train_button", "training_log"},
+        3: {"prediction", "predict_button", "output_filter"},
+    }.get(step, set())
     assert {name for name, _ in views} == expected
     record_calls = [kwargs for name, kwargs in views if name == "recording"]
     assert len(record_calls) == 1
     assert record_calls[0].get("visible", True) == (step == 1)
-    assert next(kwargs for name, kwargs in views if name == "sessions") == {"participant": participant}
+    assert next(kwargs for name, kwargs in views if name == "sessions") == {
+        "participant": participant
+    }
     assert all(overhang <= 1 for _, overhang in buttons), buttons
     assert all(horizontal == 0 for _, _, _, horizontal, _ in cells), cells
     assert heights["viewer"] > heights["simulator"]
-    assert all(cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
-               for name, cursor, height, _, vertical in cells if name == "simulator"), cells
+    assert all(
+        cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
+        for name, cursor, height, _, vertical in cells
+        if name == "simulator"
+    ), cells
     if width == 2560:
         assert all(min(bounds[1:]) >= -1 for bounds in text_bounds), text_bounds
-        assert all(cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
-                   for _, cursor, height, _, vertical in cells), cells
+        assert all(
+            cursor - imgui.get_style().item_spacing.y <= height and vertical == 0
+            for _, cursor, height, _, vertical in cells
+        ), cells
     assert ns["layout"]._active is (ns["layout"]._wide if width == 2560 else ns["layout"]._narrow)
 
 
-def test_multi_model_recording_callbacks_keep_the_generator_and_hand_wiring(multi_model_app, monkeypatch):
+def test_multi_model_recording_callbacks_keep_the_generator_and_hand_wiring(
+    multi_model_app, monkeypatch
+):
     """Recording callbacks synchronize the simulator, hand and selected label."""
     import numpy as np
 
@@ -281,7 +363,11 @@ def test_multi_model_recording_callbacks_keep_the_generator_and_hand_wiring(mult
 @pytest.mark.parametrize("step", range(4))
 @pytest.mark.parametrize("state", ["idle", "recording", "predicting"])
 def test_multi_model_simulator_steers_each_step_and_defers_to_recording(
-    multi_model_app, monkeypatch, implot_frame, step, state,
+    multi_model_app,
+    monkeypatch,
+    implot_frame,
+    step,
+    state,
 ):
     """The persistent chips drive only the signal, and recording can still set it."""
     from imgui_bundle import imgui
@@ -289,6 +375,7 @@ def test_multi_model_simulator_steers_each_step_and_defers_to_recording(
     ns = multi_model_app
     ns["steps"].active = step
     ns["app"].ctx.state = state
+    ns["app"].ctx.recording = state == "recording"
     # Establish the lazy outlet, then observe the samples without touching LSL.
     ns["simulator"].set(0.0)
     samples, chips = [], []
@@ -331,7 +418,10 @@ def test_recording_resyncs_each_of_the_four_presets(multi_model_app, monkeypatch
 
 
 def test_classifier_caption_and_icon_actions_keep_model_persistence(
-    multi_model_app, monkeypatch, implot_frame, tmp_path,
+    multi_model_app,
+    monkeypatch,
+    implot_frame,
+    tmp_path,
 ):
     """The recipe precedes Train, Save auto-names, and Load opens the same picker."""
     from types import SimpleNamespace
@@ -375,9 +465,11 @@ def test_classifier_caption_and_icon_actions_keep_model_persistence(
     monkeypatch.setattr(imgui, "combo", combo)
     monkeypatch.setattr(imgui, "small_button", button)
     monkeypatch.setattr(type(ns["train_button"]), "ui", lambda self: calls.append("train"))
-    monkeypatch.setattr(ns["pfd"], "open_file", lambda *args: (
-        calls.append(args), SimpleNamespace(ready=lambda: False)
-    )[1])
+    monkeypatch.setattr(
+        ns["pfd"],
+        "open_file",
+        lambda *args: (calls.append(args), SimpleNamespace(ready=lambda: False))[1],
+    )
     implot_frame(lambda: ns["app"]._ui_fn(ns["app"].ctx))
     assert calls.index("recipe") < calls.index("train")
     assert globals_["selected_model_idx"] == 3
@@ -392,7 +484,9 @@ def test_classifier_caption_and_icon_actions_keep_model_persistence(
 
 
 @pytest.mark.parametrize("step", [0, 1, 3])
-def test_model_dialog_and_log_survive_leaving_train(multi_model_app, monkeypatch, implot_frame, step):
+def test_model_dialog_and_log_survive_leaving_train(
+    multi_model_app, monkeypatch, implot_frame, step
+):
     """An open picker or training-log window stays alive off the Train step."""
     from types import SimpleNamespace
 
@@ -401,9 +495,14 @@ def test_model_dialog_and_log_survive_leaving_train(multi_model_app, monkeypatch
     model = {"recipe": "saved model"}
     path = Path("saved.joblib")
     ns["save_pickle"](model, str(path))
-    monkeypatch.setitem(globals_, "_load_dialog", SimpleNamespace(
-        ready=lambda: True, result=lambda: [str(path)],
-    ))
+    monkeypatch.setitem(
+        globals_,
+        "_load_dialog",
+        SimpleNamespace(
+            ready=lambda: True,
+            result=lambda: [str(path)],
+        ),
+    )
     monkeypatch.setitem(globals_, "_popout_open", True)
     popouts = []
     monkeypatch.setitem(globals_, "render_log_popout", lambda *a, **k: popouts.append(k) or True)
@@ -424,8 +523,12 @@ def test_features_and_prediction_preserve_the_original_wiring(multi_model_app, m
     ns = multi_model_app
     emg = np.random.default_rng(0).normal(size=(32, 512)).astype(np.float32)
     tensor = torch.from_numpy(emg).float()
-    expected = np.concatenate([ns[key](tensor).numpy().flatten()
-                               for key in ("rms_transform", "mav_transform", "wl_transform")])
+    expected = np.concatenate(
+        [
+            ns[key](tensor).numpy().flatten()
+            for key in ("rms_transform", "mav_transform", "wl_transform")
+        ]
+    )
     np.testing.assert_array_equal(ns["extract"]({"emg": emg}), expected)
     pushed = []
     bus = SimpleNamespace(push=lambda values: pushed.append(values) or values)
@@ -438,7 +541,9 @@ def test_features_and_prediction_preserve_the_original_wiring(multi_model_app, m
 
 
 def test_popout_actions_open_registered_windows_and_training_log_survives_steps(
-    multi_model_app, monkeypatch, implot_frame,
+    multi_model_app,
+    monkeypatch,
+    implot_frame,
 ):
     from imgui_bundle import hello_imgui, imgui
 
@@ -447,22 +552,28 @@ def test_popout_actions_open_registered_windows_and_training_log_survives_steps(
     ns = multi_model_app
     app = ns["app"]
     params = hello_imgui.RunnerParams()
-    params.docking_params.dockable_windows = [_make_dockable_window(*spec) for spec in app._popout_specs]
+    params.docking_params.dockable_windows = [
+        _make_dockable_window(*spec) for spec in app._popout_specs
+    ]
     app._runner_params = params
     for title in PANELS:
         assert not ns["_panel_visible"](title)
         ns["_show_panel"](title)
         assert ns["_panel_visible"](title)
-        window = next(window for window in params.docking_params.dockable_windows
-                      if window.label == title)
+        window = next(
+            window for window in params.docking_params.dockable_windows if window.label == title
+        )
         assert window.dock_space_name == "" and window.focus_window_at_next_frame
     # Closing windows in the runner must be reflected immediately, including Recording.
     for window in params.docking_params.dockable_windows:
         window.is_visible = False
     assert not any(ns["_panel_visible"](title) for title in PANELS)
     calls = []
-    monkeypatch.setitem(app._ui_fn.__globals__, "render_log_popout",
-                        lambda *args, **kwargs: calls.append(kwargs["title"]) or True)
+    monkeypatch.setitem(
+        app._ui_fn.__globals__,
+        "render_log_popout",
+        lambda *args, **kwargs: calls.append(kwargs["title"]) or True,
+    )
     monkeypatch.setitem(app._ui_fn.__globals__, "_popout_open", True)
     for step in range(4):
         ns["steps"].active = step
@@ -522,7 +633,9 @@ def test_popout_header_buttons_open_windows_and_log(multi_model_app, monkeypatch
 
 
 @pytest.mark.parametrize("target", sorted(PANELS))
-def test_step_header_chooser_can_open_every_card(multi_model_app, monkeypatch, implot_frame, target):
+def test_step_header_chooser_can_open_every_card(
+    multi_model_app, monkeypatch, implot_frame, target
+):
     """Cards without a window action of their own stay reachable from the step header."""
     from imgui_bundle import imgui
 

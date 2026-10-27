@@ -68,7 +68,10 @@ class StreamPanel:
     """
 
     def __init__(
-        self, *, selectable: bool = True, show_header: bool = True,
+        self,
+        *,
+        selectable: bool = True,
+        show_header: bool = True,
         widget_id: str | None = None,
     ) -> None:
         self._selectable = selectable
@@ -93,13 +96,20 @@ class StreamPanel:
         streams = list(ctx.streams.values())
         attached = [s.status == "connected" and s.info is not None for s in streams]
         problem = any(s.last_error for s in streams) or any(a.busy for a in self._attempts.values())
-        tone = (WARNING if problem or (any(attached) and not all(attached)) else
-                SUCCESS if attached and all(attached) else IDLE)
+        tone = (
+            WARNING
+            if problem or (any(attached) and not all(attached))
+            else SUCCESS
+            if attached and all(attached)
+            else IDLE
+        )
         style = imgui.get_style()
         width = imgui.calc_text_size(fa.ICON_FA_ARROWS_ROTATE).x + 2 * style.frame_padding.x
         panel_header("Streams", fa.ICON_FA_PLUG, reserve=width + style.item_spacing.x, status=tone)
         imgui.same_line()
-        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0, imgui.get_content_region_avail().x - width))
+        imgui.set_cursor_pos_x(
+            imgui.get_cursor_pos_x() + max(0, imgui.get_content_region_avail().x - width)
+        )
         if imgui.small_button(f"{fa.ICON_FA_ARROWS_ROTATE}##sp_rescan"):
             for name, stream in ctx.streams.items():
                 _kickoff_scan(name, stream)
@@ -120,7 +130,7 @@ class StreamPanel:
             tone, label = SUCCESS, fa.ICON_FA_ARROWS_ROTATE
         else:
             detail, tone, label = "not connected", IDLE, "Connect"
-        recording = getattr(ctx, "state", "") == "recording"
+        recording = bool(getattr(ctx, "recording", False))
         disabled = recording or bool(busy and attempt.aborted)
         popup_width = imgui.get_content_region_avail().x
         with tinted_row(
@@ -133,12 +143,16 @@ class StreamPanel:
             imgui.align_text_to_frame_padding()
             imgui.text_colored(tone, fa.ICON_FA_CIRCLE)
             imgui.same_line()
-            text_w = max(0, width - (imgui.get_cursor_pos_x() - left) - action_w - 2 * style.item_spacing.x)
+            text_w = max(
+                0, width - (imgui.get_cursor_pos_x() - left) - action_w - 2 * style.item_spacing.x
+            )
             name_w = min(_mono_width(name), text_w * 0.35)
             mono_text(_fit_mono(name, name_w))
             imgui.set_item_tooltip(name)
             imgui.same_line()
-            detail_w = max(0, left + width - action_w - style.item_spacing.x - imgui.get_cursor_pos_x())
+            detail_w = max(
+                0, left + width - action_w - style.item_spacing.x - imgui.get_cursor_pos_x()
+            )
             shown = _fit_mono(detail, detail_w)
             imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0, detail_w - _mono_width(shown)))
             mono_text(shown, muted())
@@ -149,13 +163,21 @@ class StreamPanel:
             clicked = imgui.button(f"{label}##sp_conn_{name}")
             imgui.end_disabled()
             if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-                imgui.set_tooltip("Stop the recording before changing connections." if recording else
-                                  "Abort this connection attempt" if busy else
-                                  "Reconnect this stream" if connected else "Connect this stream")
+                imgui.set_tooltip(
+                    "Stop the recording before changing connections."
+                    if recording
+                    else "Abort this connection attempt"
+                    if busy
+                    else "Reconnect this stream"
+                    if connected
+                    else "Connect this stream"
+                )
             if clicked and not disabled:
                 if busy:
                     self._abort(name, stream, ctx)
-                elif label == "Connect" and self._selectable and hasattr(stream._source, "discover"):
+                elif (
+                    label == "Connect" and self._selectable and hasattr(stream._source, "discover")
+                ):
                     imgui.open_popup(f"outlets##{name}")
                     _kickoff_scan(name, stream)
                 else:
@@ -181,7 +203,7 @@ class StreamPanel:
                 imgui.text_wrapped("Scanning for outlets…")
             elif not scan.results:
                 imgui.text_wrapped("No outlets found. Start the source, then rescan.")
-            recording = getattr(ctx, "state", "") == "recording"
+            recording = bool(getattr(ctx, "recording", False))
             imgui.begin_disabled(busy or recording)
             for index, result in enumerate(scan.results):
                 target = result.get("name", "")
@@ -206,7 +228,9 @@ class StreamPanel:
 
     def _connect(self, name: str, stream: Stream, ctx: Context, target: str | None = None) -> None:
         """Connect off-thread; keep an aborted attempt busy until it settles."""
-        if (name in self._attempts and self._attempts[name].busy) or getattr(ctx, "state", "") == "recording":
+        if (name in self._attempts and self._attempts[name].busy) or bool(
+            getattr(ctx, "recording", False)
+        ):
             return
         attempt = _Attempt()
         self._attempts[name] = attempt
@@ -221,7 +245,9 @@ class StreamPanel:
                         stream.last_error = ""
                         ctx.log(f"{name}: connected")
                     else:
-                        stream.last_error = stream.last_error or "Connection failed. Check the source and retry."
+                        stream.last_error = (
+                            stream.last_error or "Connection failed. Check the source and retry."
+                        )
                         ctx.log(f"{name}: connect failed — {stream.last_error}")
             except Exception as exc:
                 if not attempt.aborted:

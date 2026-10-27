@@ -117,6 +117,8 @@ def _session_row(path: Path) -> dict | None:
             "class_names": list(meta.get("class_names") or []),
             "duration_s": float(meta.get("duration_s", 0.0)),
             "class_seconds": dict(meta.get("class_seconds") or {}),
+            "drive": any(key in (meta.get("extras") or {}) for key in ("pipeline", "guided")),
+            "guided": "guided" in (meta.get("extras") or {}),
             "selected": False,
         }
     except Exception:
@@ -174,9 +176,9 @@ def add_recorded_session(path: str, base_path: str = "sessions", title: str = "S
         return
     existing = {row["path"]: row for row in state.sessions}
     if path in existing:
-        existing[path]["selected"] = True
+        existing[path]["selected"] = not recorded["drive"]
     else:
-        recorded["selected"] = True
+        recorded["selected"] = not recorded["drive"]
         state.sessions.insert(0, recorded)
     if state.participant:
         # Refresh after each take without changing any existing selections.
@@ -294,7 +296,10 @@ def _created(value: object) -> datetime | None:
 
 
 def group_sessions(
-    sessions: list[dict], base_path: str, *, today: date | None = None,
+    sessions: list[dict],
+    base_path: str,
+    *,
+    today: date | None = None,
 ) -> list[SessionGroup]:
     """Group local takes by recorded day, then files loaded from elsewhere."""
     today = today or date.today()
@@ -309,8 +314,13 @@ def group_sessions(
         else:
             day = created.date()
             key = day.isoformat()
-            label = ("Today" if day == today else "Yesterday" if day == today - timedelta(days=1)
-                     else day.strftime("%b %d"))
+            label = (
+                "Today"
+                if day == today
+                else "Yesterday"
+                if day == today - timedelta(days=1)
+                else day.strftime("%b %d")
+            )
         groups.setdefault(key, SessionGroup(key, label, [])).rows.append(row)
     ordered = [g for k, g in groups.items() if k not in {"loaded", "undated"}]
     ordered.extend(groups[k] for k in ("undated", "loaded") if k in groups)

@@ -33,20 +33,26 @@ and feature recipes. Model persistence lives here: `save_pickle` / `load_pickle`
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 import threading
 import time
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
+from weakref import WeakKeyDictionary
+
+import numpy as np
 
 from myogestic.contracts import TrainingData
+from myogestic.core import RECORDABLE_STATES, AppState
 from myogestic.session import labelled_path
 
 if TYPE_CHECKING:
     from myogestic.core import App
+    from myogestic.session import Session
 
 log = logging.getLogger("myogestic.ml")
 
@@ -55,13 +61,37 @@ log = logging.getLogger("myogestic.ml")
 _IS_BROWSER = sys.platform == "emscripten"
 
 
+def _event_row(value: Any) -> np.ndarray | None:
+    """One float32 row for a recordable value, or ``None`` for one that is not.
+
+    Recordable: a bool, a number, or an array-like of numbers with at most one dimension.
+    Not recordable: text, ``None``, nested mappings, and anything 2-D or wider — a raw window
+    is already the recorded stream, and a CNN history is rebuilt from consecutive frames.
+    """
+    if isinstance(value, (str, bytes, Mapping)) or value is None:
+        return None
+    if isinstance(value, (bool, int, float, np.number)):
+        return np.asarray([value], dtype=np.float32)
+    try:
+        arr = np.asarray(value)
+    except Exception:  # noqa: BLE001 - anything numpy cannot read is simply not recorded
+        return None
+    if arr.ndim > 1 or arr.size == 0:
+        return None
+    if arr.dtype != bool and not np.issubdtype(arr.dtype, np.number):
+        return None
+    return arr.astype(np.float32).ravel()
+
+
 class PipelineState(StrEnum):
     """ML-side extension of [`AppState`][myogestic.AppState].
 
     The core app only knows about ``"idle"`` and ``"recording"``;
     attaching a [`Pipeline`][] (via ``Pipeline(app)``) adds two more
-    states for the ML lifecycle. Mutually exclusive with each other and
-    with the core states.
+    states for the ML lifecycle. Mutually exclusive with each other. A
+    recording is a flag beside the state (``ctx.recording``), so a take
+    can run under ``predicting``; ``stop_predicting`` returns to
+    ``recording`` while one is open.
 
     The enum is a ``StrEnum`` so it compares cleanly against the raw
     string written to ``app.ctx.state`` by the transition methods.
@@ -102,6 +132,10 @@ class Pipeline:
         Maximum predict-loop tick rate. Set to 0 or negative to remove
         the cap (run at full speed).
 
+    input_streams : sequence of str or None, optional
+        Streams passed to ``extract`` and used for tick timestamps. ``None``
+        uses every app stream; select inputs to keep feedback recording-only.
+
     Attributes
     ----------
     autosave_dir : str or None
@@ -122,9 +156,16 @@ class Pipeline:
     ...     return windows["emg"].mean(axis=1)
     """
 
-    def __init__(self, app: App, predict_hz: float = 50.0):
+    def __init__(
+        self,
+        app: App,
+        predict_hz: float = 50.0,
+        *,
+        input_streams: Sequence[str] | None = None,
+    ):
         self.app = app
         self.predict_hz = predict_hz
+        self.input_streams = None if input_streams is None else tuple(input_streams)
         self.model: Any = None
         self.predictions: dict[str, Any] = {}
         self.train_log: list[str] = []
@@ -142,6 +183,14 @@ class Pipeline:
         self.training_data: TrainingData | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        # Recording state: which session the skip list belongs to, and what was skipped in
+        # it (name -> reason), so each skip is logged once and lands in meta.json.
+        self._recorded_session: Any = None
+        self._skipped: dict[str, str] = {}
+        self._recordings: WeakKeyDictionary = WeakKeyDictionary()
+
+        RECORDABLE_STATES.add(PipelineState.PREDICTING)
+        app.finalize_hooks.append(self._on_finalize)
 
         app.before_run_hooks.append(self._start_predict_thread)
         app.cleanup_hooks.append(self._cleanup)
@@ -259,13 +308,15 @@ class Pipeline:
     def start_predicting(self) -> None:
         """Flip the state to ``predicting`` so the predict thread runs.
 
-        No-op (sets ``ctx.status_message``) unless the state is ``idle``
-        and a `model` is loaded.
+        No-op (sets ``ctx.status_message``) unless the state is ``idle`` or ``recording``
+        and a `model` is loaded. A take that is open keeps recording; the pipeline writes
+        into it.
         """
         ctx = self.app.ctx
-        if ctx.state != "idle":
+        if ctx.state not in ("idle", AppState.RECORDING):
             ctx.status_message = (
-                f"Cannot start predicting: state is {ctx.state!r}, expected 'idle'."
+                f"Cannot start predicting: state is {str(ctx.state)!r}, expected 'idle' or "
+                "'recording'."
             )
             return
         if self.model is None:
@@ -275,7 +326,7 @@ class Pipeline:
         ctx.status_message = "Predicting..."
 
     def stop_predicting(self) -> None:
-        """Return to ``idle``, pausing the predict loop.
+        """Return to ``idle`` — or to ``recording`` when a take is open — pausing the predict loop.
 
         No-op (sets ``ctx.status_message``) unless the state is currently
         ``predicting``.
@@ -283,10 +334,10 @@ class Pipeline:
         ctx = self.app.ctx
         if ctx.state != PipelineState.PREDICTING:
             ctx.status_message = (
-                f"Cannot stop predicting: state is {ctx.state!r}, expected 'predicting'."
+                f"Cannot stop predicting: state is {str(ctx.state)!r}, expected 'predicting'."
             )
             return
-        ctx.state = "idle"
+        ctx.state = AppState.RECORDING if ctx.recording else "idle"
         ctx.status_message = "Prediction stopped"
 
     # --- Hooks registered with App.run() ---
@@ -301,15 +352,22 @@ class Pipeline:
         if app.ctx.state == PipelineState.PREDICTING and self.model is not None:
             try:
                 windows: dict[str, Any] = {}
+                latest: float | None = None
                 for name, stream in app.ctx.streams.items():
-                    data, _ts = stream.get_window()
+                    if self.input_streams is not None and name not in self.input_streams:
+                        continue
+                    data, ts = stream.get_window()
                     if data.size > 0:
                         windows[name] = data
+                        if len(ts):
+                            end = float(ts[-1])
+                            latest = end if latest is None else max(latest, end)
                 if windows and self.on_extract and self.on_predict:
                     features = self.on_extract(windows)
                     result = self.on_predict(self.model, features)
                     if isinstance(result, dict):
                         self.predictions = result
+                    self._record_tick(app, features, result, latest)
             except Exception as e:
                 tb = traceback.format_exc()
                 app.ctx.status_message = f"Predict error: {e}"
@@ -320,6 +378,92 @@ class Pipeline:
         # Not predicting - poll at 100 Hz so the state flip is picked up
         # within ~10ms, without burning CPU.
         return 0.01
+
+    # --- Recording -----------------------------------------------------------
+
+    def _record_tick(self, app: App, features: Any, result: Any, latest: float | None) -> None:
+        """Write this tick's input and output into the open session, if there is one.
+
+        Rows are stamped with the newest sample the tick consumed, so they align with the
+        raw arrays; ``pipeline.tick`` carries the decision clock, so latency is one
+        subtraction. Never raises: a value that cannot be recorded is skipped, once, with a
+        log line, and the loop goes on.
+        """
+        ctx = app.ctx
+        session = ctx.session
+        if not ctx.recording or session is None or latest is None:
+            return
+        if session is not self._recorded_session:
+            self._recorded_session = session
+            self._skipped = {}
+        self._recordings[session] = (self.model, self._skipped)
+        if "*" in self._skipped:
+            return
+        try:
+            from mne_lsl.lsl import local_clock
+
+            tick = local_clock()
+            fs = self.predict_hz if self.predict_hz > 0 else 1.0
+            self._record(ctx, session, "features", features, latest, fs)
+            self._record(ctx, session, "prediction", result, latest, fs)
+            session.append_event("pipeline.tick", [tick], latest, fs=fs, dtype=np.float64)
+        except Exception as e:  # noqa: BLE001 - recording must never stop the predict loop
+            self._skip(ctx, "*", f"recording stopped for this take: {e!r}")
+
+    def _record(self, ctx: Any, session: Any, prefix: str, obj: Any, t: float, fs: float) -> None:
+        items = obj.items() if isinstance(obj, Mapping) else ((None, obj),)
+        for key, value in items:
+            name = prefix if key is None else f"{prefix}.{key}"
+            if name in self._skipped:
+                continue
+            row = _event_row(value)
+            if row is None:
+                self._skip(ctx, name, "not a number or a 1-D array")
+                continue
+            try:
+                session.append_event(name, row, t, fs=fs)
+            except ValueError as e:
+                self._skip(ctx, name, str(e))
+
+    def _skip(self, ctx: Any, name: str, reason: str) -> None:
+        self._skipped[name] = reason
+        ctx.log(f"Recording: skipped {name} ({reason})")
+
+    def _on_finalize(self, session: Session) -> None:
+        """Save the running model beside the take and describe what was recorded.
+
+        Runs on the finalize thread after `Session.freeze`, so ``event_streams`` is
+        complete. A model that cannot be saved is a recorded fact, not a missing file.
+        """
+        if "pipeline.tick" not in session.event_streams:
+            return
+        model, skipped = self._recordings.pop(session, (self.model, {}))
+        info: dict[str, Any] = {
+            "predict_hz": self.predict_hz,
+            "event_streams": list(session.event_streams),
+            "skipped": dict(skipped),
+            "model": None,
+            "model_type": None,
+        }
+        if model is not None:
+            info["model_type"] = type(model).__qualname__
+            if self.save_model is None:
+                info["model_note"] = "not saved: pipeline.save_model is unset"
+            else:
+                path = session.path / "model.joblib"
+                try:
+                    self.save_model(model, str(path))
+                    info["model"] = path.name
+                except Exception as e:  # noqa: BLE001 - a failed save is recorded, never fatal
+                    info["model_note"] = f"not saved: {e!r}"
+            report = getattr(model, "report", None)
+            if isinstance(report, Mapping):
+                try:
+                    json.dumps(report)
+                    info["report"] = dict(report)
+                except (TypeError, ValueError):
+                    info["report_note"] = "model.report is not JSON-serialisable"
+        session.extras["pipeline"] = info
 
     def _start_predict_thread(self, app: App) -> None:
         # Clear stop event so a second App.run() restarts the loop cleanly.

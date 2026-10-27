@@ -83,6 +83,7 @@ def _unanswered_line(namespace: str, addresses: list[str]) -> str:
         f"cannot be checked. Saves either way."
     )
 
+
 def _search_hint(all_answered: bool) -> str:
     """The picker's search-box placeholder.
 
@@ -263,12 +264,35 @@ class ControlMapEditor:
     """
 
     __slots__ = (
-        "_answered", "_capabilities", "_client", "_conflict", "_fetched", "_fetching",
-        "_last_attempt", "_refetch", "_draft", "_error", "_filter", "_header",
-        "_asked", "_baseline", "_clients", "_message", "_path", "_raw", "_raw_error", "_raw_open",
+        "_answered",
+        "_capabilities",
+        "_client",
+        "_conflict",
+        "_fetched",
+        "_fetching",
+        "_last_attempt",
+        "_refetch",
+        "_draft",
+        "_error",
+        "_filter",
+        "_header",
+        "_asked",
+        "_baseline",
+        "_clients",
+        "_message",
+        "_path",
+        "_raw",
+        "_raw_error",
+        "_raw_open",
         "_refusal",
-        "_all_answered", "_open_picker", "_save_as", "_stamp",
-        "_title", "_loaded", "_widget_id", "_raw_base",
+        "_all_answered",
+        "_open_picker",
+        "_save_as",
+        "_stamp",
+        "_title",
+        "_loaded",
+        "_widget_id",
+        "_raw_base",
     )
 
     def __init__(
@@ -428,7 +452,7 @@ class ControlMapEditor:
         if self._on_disk() is None:
             return dumped
         if self._unparseable_on_disk():
-            return self._path.read_text(encoding="utf-8")   # show it so it can be fixed by hand
+            return self._path.read_text(encoding="utf-8")  # show it so it can be fixed by hand
         return self._path.read_text(encoding="utf-8") if self._matches_disk() else dumped
 
     def _unparseable_on_disk(self) -> bool:
@@ -454,7 +478,9 @@ class ControlMapEditor:
         if self._on_disk() is None:
             return False
         try:
-            on_disk = load_control_map(tomllib.loads(self._path.read_text(encoding="utf-8"))).as_control_space()
+            on_disk = load_control_map(
+                tomllib.loads(self._path.read_text(encoding="utf-8"))
+            ).as_control_space()
         except (OSError, tomllib.TOMLDecodeError, ValueError):
             return False
         mine = (self.as_control_map() or ControlMap(bindings={})).as_control_space()
@@ -472,8 +498,12 @@ class ControlMapEditor:
             try:
                 bindings = load_control_map(tomllib.loads(self._raw)).bindings.values()
                 after = [
-                    {"alias": b.alias, "targets": [[r.address, float(r.weight)] for r in b.targets],
-                     "threshold_fraction": b.threshold_fraction, "debounce_s": float(b.debounce_s)}
+                    {
+                        "alias": b.alias,
+                        "targets": [[r.address, float(r.weight)] for r in b.targets],
+                        "threshold_fraction": b.threshold_fraction,
+                        "debounce_s": float(b.debounce_s),
+                    }
                     for b in bindings
                 ]
             except (ValueError, tomllib.TOMLDecodeError):
@@ -570,7 +600,7 @@ class ControlMapEditor:
             self._raw_error = f"Not valid TOML: {exc}"
             return False
         if "dofs" not in raw:
-            self._raw_error = 'No [dofs] table — a control map needs one.'
+            self._raw_error = "No [dofs] table — a control map needs one."
             return False
         try:
             control_map = load_control_map(raw)
@@ -652,8 +682,7 @@ class ControlMapEditor:
         self._conflict = False
         self._stamp = self._current_stamp()
         self._message = (
-            f"Keeping the unsaved edits. {self.label} on disk is newer — Save "
-            f"overwrites it."
+            f"Keeping the unsaved edits. {self.label} on disk is newer — Save overwrites it."
         )
 
     def _finish_save_as(self) -> bool:
@@ -664,7 +693,7 @@ class ControlMapEditor:
         result = dialog.result()
         self._save_as = None
         if not result:
-            return False            # cancelled: the path must not move
+            return False  # cancelled: the path must not move
         if self._raw_pending() and not self.apply_raw(self._raw):
             return False
         saved = self.save_as(pathlib.Path(result))
@@ -887,7 +916,8 @@ class ControlMapEditor:
         if not self._all_answered and not silent:
             self._notice(
                 "A target has not answered, so its controls are not in the list. "
-                "Type its address in the search box to use one anyway.", WARNING,
+                "Type its address in the search box to use one anyway.",
+                WARNING,
             )
         if self._clients:
             if imgui.small_button(f"{fa.ICON_FA_ARROWS_ROTATE}  Connect"):
@@ -900,7 +930,11 @@ class ControlMapEditor:
                 DANGER if self._error or self._refusal else None,
             )
 
-        columns = 2 if self._raw_open and imgui.get_content_region_avail().x >= ui_px(_TOML_COLUMNS_AT) else 1
+        columns = (
+            2
+            if self._raw_open and imgui.get_content_region_avail().x >= ui_px(_TOML_COLUMNS_AT)
+            else 1
+        )
         if imgui.begin_table("##editors", columns, imgui.TableFlags_.sizing_stretch_same):
             imgui.table_next_column()
             pending = self._raw_pending()
@@ -915,7 +949,12 @@ class ControlMapEditor:
             imgui.end_disabled()
             if pending:
                 imgui.text_wrapped("Apply or revert the TOML edits to edit these fields.")
-            if self._snapshot() != before and not pending and self._raw_open and not self.problems():
+            if (
+                self._snapshot() != before
+                and not pending
+                and self._raw_open
+                and not self.problems()
+            ):
                 self._sync_raw()
             if self._raw_open:
                 imgui.table_next_column()
@@ -929,26 +968,41 @@ class ControlMapEditor:
     def _header_ui(self) -> bool:
         """The filename, map state and three icon-only file actions."""
         style = imgui.get_style()
-        imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(ui_px(4), style.frame_padding.y))
+        imgui.push_style_var(
+            imgui.StyleVar_.frame_padding, imgui.ImVec2(ui_px(4), style.frame_padding.y)
+        )
         icons = (fa.ICON_FA_ARROWS_ROTATE, fa.ICON_FA_FILE_EXPORT, fa.ICON_FA_CODE)
         widths = [imgui.calc_text_size(icon).x + 2 * style.frame_padding.x for icon in icons]
         reserve = sum(widths) + 3 * style.item_spacing.x
         dot, detail = self._status()
         available = imgui.get_content_region_avail().x
-        inline = available >= reserve + imgui.calc_text_size(fa.ICON_FA_CIRCLE).x + 3 * style.item_spacing.x
-        panel_header(f"{self._title} · {self.label}", status=dot, reserve=reserve if inline else 0.0)
+        inline = (
+            available
+            >= reserve + imgui.calc_text_size(fa.ICON_FA_CIRCLE).x + 3 * style.item_spacing.x
+        )
+        panel_header(
+            f"{self._title} · {self.label}", status=dot, reserve=reserve if inline else 0.0
+        )
         imgui.set_item_tooltip(detail)
         saved = False
-        for index, (icon, tooltip) in enumerate(zip(icons, ("Reload", "Save as", "TOML"), strict=True)):
+        for index, (icon, tooltip) in enumerate(
+            zip(icons, ("Reload", "Save as", "TOML"), strict=True)
+        ):
             if inline or index:
                 imgui.same_line()
             if index == 0:
                 avail = imgui.get_content_region_avail().x
-                imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + max(0.0, avail - reserve + style.item_spacing.x))
+                imgui.set_cursor_pos_x(
+                    imgui.get_cursor_pos_x() + max(0.0, avail - reserve + style.item_spacing.x)
+                )
             selected = index == 2 and self._raw_open
             if selected:
                 push_selected()
-            disabled = index == 1 and (self._conflict or self._save_as is not None or (bool(self.problems()) and not self._raw_pending()))
+            disabled = index == 1 and (
+                self._conflict
+                or self._save_as is not None
+                or (bool(self.problems()) and not self._raw_pending())
+            )
             imgui.begin_disabled(disabled)
             clicked = imgui.small_button(f"{icon}##{tooltip}")
             imgui.end_disabled()
@@ -976,8 +1030,10 @@ class ControlMapEditor:
         text = f"Unsaved changes · {count} control{'s' if count != 1 else ''} edited"
         width = max(1.0, imgui.get_content_region_avail().x - ui_px(8))
         height = (
-            imgui.calc_text_size(text, wrap_width=width).y + imgui.get_style().item_spacing.y
-            + imgui.get_frame_height() + ui_px(8)
+            imgui.calc_text_size(text, wrap_width=width).y
+            + imgui.get_style().item_spacing.y
+            + imgui.get_frame_height()
+            + ui_px(8)
         )
         with tinted_row(WARNING, height=height) as inner:
             imgui.push_text_wrap_pos(imgui.get_cursor_pos_x() + inner)
@@ -988,7 +1044,8 @@ class ControlMapEditor:
     def _save_button(self, *, width: float = -1) -> bool:
         """Disable Save until a disk conflict is resolved."""
         disabled = (
-            self._conflict or self._save_as is not None
+            self._conflict
+            or self._save_as is not None
             or (bool(self.problems()) and not self._raw_pending())
         )
         imgui.begin_disabled(disabled)
@@ -1005,7 +1062,8 @@ class ControlMapEditor:
             return False
         if save_as or self._path is None:
             self._save_as = pfd.save_file(
-                "Save the control map as", str(self._path.parent if self._path else pathlib.Path.cwd())
+                "Save the control map as",
+                str(self._path.parent if self._path else pathlib.Path.cwd()),
             )
             return False
         saved = self.save()
@@ -1028,11 +1086,20 @@ class ControlMapEditor:
         text = f"{self.label} changed on disk. Choose which version to keep."
         style = imgui.get_style()
         width = max(1.0, imgui.get_content_region_avail().x - ui_px(8))
-        imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(ui_px(4), style.frame_padding.y))
-        needed = sum(imgui.calc_text_size(label).x + 2 * style.frame_padding.x for label in ("Reload from disk", "Keep my edits"))
+        imgui.push_style_var(
+            imgui.StyleVar_.frame_padding, imgui.ImVec2(ui_px(4), style.frame_padding.y)
+        )
+        needed = sum(
+            imgui.calc_text_size(label).x + 2 * style.frame_padding.x
+            for label in ("Reload from disk", "Keep my edits")
+        )
         inline = needed + style.item_spacing.x <= width
         rows = 1 if inline else 2
-        height = imgui.calc_text_size(text, wrap_width=width).y + rows * (imgui.get_frame_height() + style.item_spacing.y) + ui_px(8)
+        height = (
+            imgui.calc_text_size(text, wrap_width=width).y
+            + rows * (imgui.get_frame_height() + style.item_spacing.y)
+            + ui_px(8)
+        )
         changed = False
         with tinted_row(DANGER, height=height) as inner:
             imgui.push_text_wrap_pos(imgui.get_cursor_pos_x() + inner)
@@ -1055,15 +1122,15 @@ class ControlMapEditor:
         font = mono_font()
         if font is not None:
             imgui.push_font(font, imgui.get_style().font_size_base)
-        _, self._raw = imgui.input_text_multiline(
-            "##raw", self._raw, imgui.ImVec2(-1, ui_px(240))
-        )
+        _, self._raw = imgui.input_text_multiline("##raw", self._raw, imgui.ImVec2(-1, ui_px(240)))
         if font is not None:
             imgui.pop_font()
         if imgui.button("Apply##Apply to fields") and self.apply_raw(self._raw):
             self._raw_base = self._raw
         imgui.set_item_tooltip("Apply TOML to the fields without writing the file")
-        if self._room_for(imgui.calc_text_size("Revert text").x + 2 * imgui.get_style().frame_padding.x):
+        if self._room_for(
+            imgui.calc_text_size("Revert text").x + 2 * imgui.get_style().frame_padding.x
+        ):
             imgui.same_line()
         if imgui.button("Revert text"):
             self._sync_raw()
@@ -1112,8 +1179,7 @@ class ControlMapEditor:
         if pending is not None:
             self._adopt(pending)
         if self._fetching or (
-            not self._refetch
-            and time.monotonic() - self._last_attempt < self._RETRY_EVERY_S
+            not self._refetch and time.monotonic() - self._last_attempt < self._RETRY_EVERY_S
         ):
             return
         self._asked = self._asked or self._refetch  # a press, not the timer
@@ -1196,9 +1262,7 @@ class ControlMapEditor:
         # nothing"; with two it means "I know about one of them", and an address belonging to
         # the silent one is unverifiable rather than wrong. Same namespace reasoning
         # `RemoteTarget` uses to decide what is its to drive, so the two cannot disagree.
-        self._answered = frozenset(
-            address.split(".", 1)[0] for address in merged
-        )
+        self._answered = frozenset(address.split(".", 1)[0] for address in merged)
         # Every *client*, not every namespace that turned up. `_answered` being non-empty was
         # the retry's stop condition, and a `KeyboardTarget` answers instantly from a local
         # list — so the first frame filled it, the retry stopped for good, and a VHI launched
@@ -1237,8 +1301,10 @@ class ControlMapEditor:
         imgui.push_style_color(imgui.Col_.child_bg, style.color_(imgui.Col_.popup_bg))
         imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(ui_px(8), ui_px(8)))
         visible = imgui.begin_child(
-            "##card", imgui.ImVec2(0, 0),
-            imgui.ChildFlags_.auto_resize_y | imgui.ChildFlags_.always_auto_resize
+            "##card",
+            imgui.ImVec2(0, 0),
+            imgui.ChildFlags_.auto_resize_y
+            | imgui.ChildFlags_.always_auto_resize
             | imgui.ChildFlags_.always_use_window_padding,
         )
         removed = False
@@ -1264,7 +1330,9 @@ class ControlMapEditor:
                 imgui.same_line()
                 self._probability_ui(entry)
             imgui.same_line()
-            if destructive_button(f"{fa.ICON_FA_TRASH}##Remove control", tooltip="Delete this control and its targets"):
+            if destructive_button(
+                f"{fa.ICON_FA_TRASH}##Remove control", tooltip="Delete this control and its targets"
+            ):
                 self._draft.remove(entry)
                 removed = True
             if not removed:
@@ -1296,7 +1364,10 @@ class ControlMapEditor:
         if gated:
             push_selected()
         label = "Treat as probability"
-        width = min(imgui.get_content_region_avail().x, imgui.calc_text_size(label).x + 2 * imgui.get_style().frame_padding.x)
+        width = min(
+            imgui.get_content_region_avail().x,
+            imgui.calc_text_size(label).x + 2 * imgui.get_style().frame_padding.x,
+        )
         budget = width - 2 * imgui.get_style().frame_padding.x
         if imgui.calc_text_size(label).x > budget:
             label = _truncate_to_width(label, budget - imgui.calc_text_size("…").x) + "…"
@@ -1305,7 +1376,10 @@ class ControlMapEditor:
         if gated:
             pop_selected()
         imgui.end_disabled()
-        imgui.set_item_tooltip(reason or "Treat as probability: interpret a confidence in 0..1 as on/off at the cutoff below.")
+        imgui.set_item_tooltip(
+            reason
+            or "Treat as probability: interpret a confidence in 0..1 as on/off at the cutoff below."
+        )
 
     @staticmethod
     def _room_for(needed: float) -> bool:
@@ -1332,7 +1406,9 @@ class ControlMapEditor:
         value_w = imgui.calc_text_size(_WEIGHT_READOUT).x
         if font is not None:
             imgui.pop_font()
-        remove_w = imgui.calc_text_size(fa.ICON_FA_XMARK).x + 2 * style.frame_padding.x if drop else 0.0
+        remove_w = (
+            imgui.calc_text_size(fa.ICON_FA_XMARK).x + 2 * style.frame_padding.x if drop else 0.0
+        )
         gap = style.item_spacing.x
         flexible = max(2.0, avail - value_w - remove_w - gap * (3 if drop else 2))
         weight_w = min(ui_px(130), flexible * 0.36)
@@ -1629,7 +1705,11 @@ class ControlMapEditor:
             controls.append(("Steady for", "debounce_s", "##debounce", ".2f"))
         if not controls:
             return
-        columns = 2 if len(controls) == 2 and imgui.get_content_region_avail().x >= ui_px(_STACK_BELOW) else 1
+        columns = (
+            2
+            if len(controls) == 2 and imgui.get_content_region_avail().x >= ui_px(_STACK_BELOW)
+            else 1
+        )
         if imgui.begin_table("##activation", columns, imgui.TableFlags_.sizing_stretch_same):
             for caption, key, label, fmt in controls:
                 imgui.table_next_column()
@@ -1638,18 +1718,27 @@ class ControlMapEditor:
                 font = mono_font()
                 if font is not None:
                     imgui.push_font(font, imgui.get_style().font_size_base)
-                value_w = imgui.calc_text_size("100%" if key == "threshold_fraction" else "0.00 s").x
+                value_w = imgui.calc_text_size(
+                    "100%" if key == "threshold_fraction" else "0.00 s"
+                ).x
                 if font is not None:
                     imgui.pop_font()
-                imgui.set_next_item_width(max(1.0, imgui.get_content_region_avail().x - value_w - imgui.get_style().item_spacing.x))
+                imgui.set_next_item_width(
+                    max(
+                        1.0,
+                        imgui.get_content_region_avail().x
+                        - value_w
+                        - imgui.get_style().item_spacing.x,
+                    )
+                )
                 changed, value = imgui.slider_float(label, float(entry[key]), 0.0, 1.0, "")
                 if changed:
                     entry[key] = round(value, 2)
                     text = format(entry[key], fmt) + (" s" if key == "debounce_s" else "")
                 imgui.set_item_tooltip(
                     "Minimum probability that activates this control."
-                    if key == "threshold_fraction" else
-                    "How long the prediction must stay steady before it counts; 0 acts immediately."
+                    if key == "threshold_fraction"
+                    else "How long the prediction must stay steady before it counts; 0 acts immediately."
                 )
                 imgui.same_line()
                 mono_text(text, muted())
@@ -1693,9 +1782,7 @@ class ControlMapEditor:
                 # the same control — you would read `index` here and have to know it means
                 # `vhi.prediction.index` in the file, and with two targets in one map the
                 # short form is not even unique.
-                routes = ", ".join(
-                    f"{ref.address} x{ref.weight}" for ref in controls.routes[alias]
-                )
+                routes = ", ".join(f"{ref.address} x{ref.weight}" for ref in controls.routes[alias])
                 gate = (
                     f" (on at >= {dof.threshold_fraction})"
                     if dof.threshold_fraction is not None

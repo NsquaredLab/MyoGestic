@@ -18,10 +18,7 @@ FINGERS = ("thumb", "index", "middle", "ring", "little")
 
 #: A stand-in for what VHI's GetControlManifest declares.
 VHI = [
-    *(
-        Capability(f"vhi.prediction.{d}", "continuous", lo=-1.0, hi=1.0, rest=0.0)
-        for d in FINGERS
-    ),
+    *(Capability(f"vhi.prediction.{d}", "continuous", lo=-1.0, hi=1.0, rest=0.0) for d in FINGERS),
     Capability("vhi.prediction.thumb.abduction", "continuous", lo=-1.0, hi=1.0, rest=0.0),
     Capability("vhi.grip.force", "continuous", lo=0.0, hi=1.0, rest=0.0),
     Capability(
@@ -92,9 +89,7 @@ def test_an_unquoted_dotted_alias_is_diagnosed():
 
 def test_kind_is_derived_from_the_capability_not_declared():
     """The user writes the same syntax for both; the target decides what it is."""
-    cmap = load_control_map(
-        {"dofs": {"a": "vhi.prediction.index", "b": "vhi.control.gesture"}}
-    )
+    cmap = load_control_map({"dofs": {"a": "vhi.prediction.index", "b": "vhi.control.gesture"}})
     resolved = resolve(cmap, VHI)
     assert hasattr(resolved.dofs["a"], "lo"), "should be continuous"
     assert hasattr(resolved.dofs["b"], "states"), "should be discrete"
@@ -131,9 +126,7 @@ def test_the_error_names_near_misses_first():
 def test_every_fault_is_reported_not_just_the_first():
     """A half-corrected config file is worse than an uncorrected one."""
     with pytest.raises(ValueError) as excinfo:
-        resolve(
-            load_control_map({"dofs": {"a": "vhi.nope.one", "b": "vhi.nope.two"}}), VHI
-        )
+        resolve(load_control_map({"dofs": {"a": "vhi.nope.one", "b": "vhi.nope.two"}}), VHI)
     assert "vhi.nope.one" in str(excinfo.value)
     assert "vhi.nope.two" in str(excinfo.value)
 
@@ -143,9 +136,7 @@ def test_every_fault_is_reported_not_just_the_first():
 
 def test_a_list_fans_one_output_out_to_many_targets():
     """No whole-hand capability needed just to close the hand."""
-    cmap = load_control_map(
-        {"dofs": {"fist": [f"vhi.prediction.{d}" for d in FINGERS[1:]]}}
-    )
+    cmap = load_control_map({"dofs": {"fist": [f"vhi.prediction.{d}" for d in FINGERS[1:]]}})
     resolved = resolve(cmap, VHI)
     assert [r.address for r in resolved.routes["fist"]] == [
         f"vhi.prediction.{d}" for d in FINGERS[1:]
@@ -189,27 +180,21 @@ def test_a_mixed_list_of_addresses_and_tables_is_accepted():
 def test_a_non_finite_weight_is_refused(weight):
     """It becomes a full-scale deflection the moment it is multiplied in."""
     with pytest.raises(ValueError, match="finite"):
-        load_control_map(
-            {"dofs": {"a": [{"target": "vhi.prediction.index", "weight": weight}]}}
-        )
+        load_control_map({"dofs": {"a": [{"target": "vhi.prediction.index", "weight": weight}]}})
 
 
 def test_a_negative_weight_needs_a_target_that_can_render_it():
     """On a one-way control there is no opposite direction to send."""
     with pytest.raises(ValueError, match="negative"):
         resolve(
-            load_control_map(
-                {"dofs": {"f": [{"target": "vhi.grip.force", "weight": -1.0}]}}
-            ),
+            load_control_map({"dofs": {"f": [{"target": "vhi.grip.force", "weight": -1.0}]}}),
             VHI,
         )
 
 
 def test_a_negative_weight_is_allowed_on_a_signed_target():
     resolved = resolve(
-        load_control_map(
-            {"dofs": {"a": [{"target": "vhi.prediction.index", "weight": -1.0}]}}
-        ),
+        load_control_map({"dofs": {"a": [{"target": "vhi.prediction.index", "weight": -1.0}]}}),
         VHI,
     )
     assert resolved.routes["a"][0].weight == -1.0
@@ -234,9 +219,7 @@ def test_a_fan_out_across_kinds_is_refused():
     """One output cannot be both a number and a held state."""
     with pytest.raises(ValueError, match="disagree about what they take"):
         resolve(
-            load_control_map(
-                {"dofs": {"a": ["vhi.prediction.index", "vhi.control.gesture"]}}
-            ),
+            load_control_map({"dofs": {"a": ["vhi.prediction.index", "vhi.control.gesture"]}}),
             VHI,
         )
 
@@ -252,9 +235,7 @@ def test_a_fan_out_is_signed_only_if_every_member_is():
 
 def test_debounce_is_declared_on_this_side():
     """It is a property of the control loop, not of the target."""
-    cmap = load_control_map(
-        {"dofs": {"g": {"target": "vhi.control.gesture", "debounce_s": 0.25}}}
-    )
+    cmap = load_control_map({"dofs": {"g": {"target": "vhi.control.gesture", "debounce_s": 0.25}}})
     assert resolve(cmap, VHI).dofs["g"].debounce_s == 0.25
 
 
@@ -354,7 +335,9 @@ class TestTheProbabilityCutoffIsValidatedAsAFraction:
 
     @staticmethod
     def _spec(fraction):
-        return {"dofs": {"fist": {"target": "vhi.prediction.index", "threshold_fraction": fraction}}}
+        return {
+            "dofs": {"fist": {"target": "vhi.prediction.index", "threshold_fraction": fraction}}
+        }
 
     @pytest.mark.parametrize("fraction", [0.0, 0.001, 0.5, 0.999, 1.0, 0, 1])
     def test_the_whole_closed_unit_interval_is_accepted(self, fraction):
@@ -396,7 +379,9 @@ class TestTheProbabilityCutoffIsValidatedAsAFraction:
     def test_it_round_trips_under_its_new_name(self):
         once = load_control_map(self._spec(0.25))
         assert once.as_control_space()["dofs"]["fist"]["threshold_fraction"] == 0.25
-        assert load_control_map(once.as_control_space()).as_control_space() == once.as_control_space()
+        assert (
+            load_control_map(once.as_control_space()).as_control_space() == once.as_control_space()
+        )
 
 
 class TestTheFileCanBeWrittenBackOut:
@@ -410,9 +395,7 @@ class TestTheFileCanBeWrittenBackOut:
 
     SHAPES = [
         pytest.param({"my_index": "vhi.prediction.index"}, id="one-to-one"),
-        pytest.param(
-            {"fist": ["vhi.prediction.index", "vhi.prediction.middle"]}, id="fan-out"
-        ),
+        pytest.param({"fist": ["vhi.prediction.index", "vhi.prediction.middle"]}, id="fan-out"),
         pytest.param(
             {
                 "fist": {
@@ -485,8 +468,10 @@ class TestTheFileCanBeWrittenBackOut:
 
         from myogestic.controls import dump_control_map  # noqa: PLC0415
 
-        spec = {name: f"vhi.prediction.{d}" for name, d in
-                zip("zyx", ("index", "middle", "ring"), strict=True)}
+        spec = {
+            name: f"vhi.prediction.{d}"
+            for name, d in zip("zyx", ("index", "middle", "ring"), strict=True)
+        }
         text = dump_control_map(load_control_map({"dofs": spec}))
         assert list(load_control_map(tomllib.loads(text)).bindings) == list(spec)
 

@@ -94,9 +94,7 @@ def test_a_fan_out_is_demonstrated(resolved):
 
 
 def test_a_weighted_fan_out_is_demonstrated(resolved):
-    weighted = [
-        a for a, refs in resolved.routes.items() if any(r.weight != 1.0 for r in refs)
-    ]
+    weighted = [a for a, refs in resolved.routes.items() if any(r.weight != 1.0 for r in refs)]
     assert weighted, "the file must show a per-target weight"
     for alias in weighted:
         for ref in resolved.routes[alias]:
@@ -170,20 +168,17 @@ class TestTheClassificationFileTeachesTheUnifiedPath:
     def test_the_activation_is_gated_and_weighted(self, resolved):
         gated = [d for d in resolved.dofs.values() if d.threshold_fraction is not None]
         assert gated, "the file must show a probability cutoff"
-        assert any(
-            any(ref.weight != 1.0 for ref in resolved.routes[d.name]) for d in gated
-        ), "and one that still fans out with weights, as a regressor's would"
+        assert any(any(ref.weight != 1.0 for ref in resolved.routes[d.name]) for d in gated), (
+            "and one that still fans out with weights, as a regressor's would"
+        )
 
     @pytest.mark.parametrize(("probability", "sent"), [(0.2, 0.0), (0.9, 1.0)])
-    def test_a_probability_never_reaches_a_target_as_itself(
-        self, resolved, probability, sent
-    ):
+    def test_a_probability_never_reaches_a_target_as_itself(self, resolved, probability, sent):
         """The headline behaviour: 0 to every listed control, or 1 x each weight."""
         bus = ControlBus(resolved, targets=[], hz=50)
         delivered = bus.push({name: probability for name in resolved.dofs})
         assert set(delivered.values()) == {sent}
         bus.stop()
-
 
 
 class TestTheWalkthroughDemonstratesTheClassifierPath:
@@ -212,10 +207,7 @@ class TestTheWalkthroughDemonstratesTheClassifierPath:
         """A demonstration that only ever shows the active side proves nothing."""
         assert "substitute_rest" in source, "it must gate real values, not describe gating"
         step = source.split("def step_5_classification")[1].split("\ndef ")[0]
-        probabilities = [
-            float(p)
-            for p in __import__("re").findall(r"\b0\.\d+|\b[01]\.0\b", step)
-        ]
+        probabilities = [float(p) for p in __import__("re").findall(r"\b0\.\d+|\b[01]\.0\b", step)]
         assert any(p < 0.5 for p in probabilities), "no inactive case shown"
         assert any(p >= 0.5 for p in probabilities), "no active case shown"
 

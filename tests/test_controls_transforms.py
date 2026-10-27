@@ -32,8 +32,8 @@ from myogestic.controls import (
 #: exercise every branch. `force` is one-way on purpose: a global rail would be wrong.
 MIXED = ControlSet(
     dofs={
-        "wrist": Continuous("wrist"),                          # signed [-1, 1]
-        "force": Continuous("force", lo=0.0, hi=1.0),           # one-way
+        "wrist": Continuous("wrist"),  # signed [-1, 1]
+        "force": Continuous("force", lo=0.0, hi=1.0),  # one-way
         "grasp": Discrete("grasp", ("rest", "fist"), "rest"),
     }
 )
@@ -45,14 +45,14 @@ MIXED = ControlSet(
 @pytest.mark.parametrize(
     "bad",
     [
-        {},                                # nothing supplied
-        {"wrist": math.nan},               # NaN
-        {"wrist": math.inf},               # inf
-        {"wrist": "not a number"},         # wrong type
-        {"wrist": None},                   # explicit None
-        {"grasp": "unknown_state"},        # a state that does not exist
-        {"grasp": 3},                      # wrong type for a discrete control
-        {"wrist": np.float32("nan")},      # the library's own prediction dtype
+        {},  # nothing supplied
+        {"wrist": math.nan},  # NaN
+        {"wrist": math.inf},  # inf
+        {"wrist": "not a number"},  # wrong type
+        {"wrist": None},  # explicit None
+        {"grasp": "unknown_state"},  # a state that does not exist
+        {"grasp": 3},  # wrong type for a discrete control
+        {"wrist": np.float32("nan")},  # the library's own prediction dtype
     ],
 )
 def test_substitute_rest_never_raises_and_lands_on_rest(bad):
@@ -185,9 +185,7 @@ class TestAClassifierActivationIsGatedNotStreamed:
     one grouped mapping serve a regressor and a classifier alike.
     """
 
-    GATED = ControlSet(
-        dofs={"fist": Continuous("fist", lo=0.0, hi=1.0, threshold_fraction=0.6)}
-    )
+    GATED = ControlSet(dofs={"fist": Continuous("fist", lo=0.0, hi=1.0, threshold_fraction=0.6)})
 
     @pytest.mark.parametrize(
         ("probability", "expected"),
@@ -227,9 +225,7 @@ class TestAnUnusableInputNeverActivates:
     `0.0` is an accepted fraction, so this is reachable from a mapping file.
     """
 
-    ALWAYS = ControlSet(
-        dofs={"fist": Continuous("fist", lo=0.0, hi=1.0, threshold_fraction=0.0)}
-    )
+    ALWAYS = ControlSet(dofs={"fist": Continuous("fist", lo=0.0, hi=1.0, threshold_fraction=0.0)})
 
     @pytest.mark.parametrize("unusable", [None, "closed", float("nan"), [1.0], {}])
     def test_it_rests_instead_of_activating(self, unusable):

@@ -55,7 +55,10 @@ def _observe(monkeypatch, module):
 @pytest.mark.parametrize("scale", [1.0, 2.0])
 @pytest.mark.parametrize("dark", [False, True])
 def test_record_idle_is_red_full_width_and_explains_participant_gate(
-    imgui_frame, monkeypatch, scale, dark,
+    imgui_frame,
+    monkeypatch,
+    scale,
+    dark,
 ):
     _theme_at(monkeypatch, scale, dark)
     _, _, buttons = _observe(monkeypatch, recording)
@@ -88,7 +91,9 @@ def test_record_idle_is_red_full_width_and_explains_participant_gate(
 
 @pytest.mark.parametrize("scale", [1.0, 2.0])
 def test_recording_row_has_elapsed_clock_and_stop_inside_narrow_cell(
-    imgui_frame, monkeypatch, scale,
+    imgui_frame,
+    monkeypatch,
+    scale,
 ):
     _theme_at(monkeypatch, scale)
     rows, texts, buttons = _observe(monkeypatch, recording)
@@ -100,7 +105,7 @@ def test_recording_row_has_elapsed_clock_and_stop_inside_narrow_cell(
     def draw():
         imgui.begin_child("narrow", imgui.ImVec2(320, 400))
         bounds.append(imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x)
-        recorder.ui(Context(state=AppState.RECORDING))
+        recorder.ui(Context(recording=True, state=AppState.RECORDING))
         imgui.end_child()
 
     imgui_frame(draw)
@@ -112,14 +117,19 @@ def test_recording_row_has_elapsed_clock_and_stop_inside_narrow_cell(
 
 @pytest.mark.parametrize("scale", [1.0, 2.0])
 def test_naming_dialog_previews_safe_stem_and_offers_primary_save_and_outlined_discard(
-    imgui_frame, monkeypatch, tmp_path, scale,
+    imgui_frame,
+    monkeypatch,
+    tmp_path,
+    scale,
 ):
     _theme_at(monkeypatch, scale)
     rows, texts, buttons = _observe(monkeypatch, recording)
     session = Session(str(tmp_path))
-    ctx = Context(state=AppState.RECORDING, session=session)
+    ctx = Context(recording=True, state=AppState.RECORDING, session=session)
     recorder = recording.RecordButton(
-        on_record=lambda: None, on_stop=lambda: None, on_discard=lambda: None,
+        on_record=lambda: None,
+        on_stop=lambda: None,
+        on_discard=lambda: None,
     )
     recorder._naming = True
     recorder._captured = 42.7
@@ -158,7 +168,9 @@ def test_naming_dialog_previews_safe_stem_and_offers_primary_save_and_outlined_d
 
 @pytest.mark.parametrize("scale", [1.0, 2.0])
 def test_pong_serve_is_primary_in_court_and_header_stop_fits(
-    imgui_frame, monkeypatch, scale,
+    imgui_frame,
+    monkeypatch,
+    scale,
 ):
     _theme_at(monkeypatch, scale)
     rows, texts, buttons = _observe(monkeypatch, pong)
@@ -227,8 +239,13 @@ def test_shortened_readouts_show_ellipsis_and_keep_the_full_tooltip(imgui_frame,
     monkeypatch.setattr(imgui, "set_item_tooltip", tips.append)
     task = pong.PongTask()
     full = "naming · 0:42.7 captured" if kind == "recording" else task._detail(0.4)
-    imgui_frame(lambda: recording.RecordButton._mono_detail(full, 70) if kind == "recording"
-                else task._detail_ui(0.4, 70))
+    imgui_frame(
+        lambda: (
+            recording.RecordButton._mono_detail(full, 70)
+            if kind == "recording"
+            else task._detail_ui(0.4, 70)
+        )
+    )
     assert texts[0].endswith("…")
     assert widths[0] <= 70
     assert tips == [full]
@@ -268,7 +285,7 @@ def test_filename_preview_matches_archive_including_recorded_labels(tmp_path, cl
     session.append("emg", np.zeros((3, 1), dtype=np.float32), np.array([1.0, 2.0, 3.0]))
     session.add_label(1, timestamp=1.0)
     session.add_label(0, timestamp=2.0)
-    ctx = Context(state=AppState.RECORDING, session=session, class_names=classes)
+    ctx = Context(recording=True, state=AppState.RECORDING, session=session, class_names=classes)
     recorder = recording.RecordButton(on_record=lambda: None, on_stop=lambda: None)
     recorder._name = "../day 2"
     preview = recorder._file_stem(ctx)

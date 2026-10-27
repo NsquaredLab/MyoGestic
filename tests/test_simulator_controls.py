@@ -29,7 +29,7 @@ def test_export_and_lazy_outlet(monkeypatch, imgui_frame, outlet):
     assert widget.value == 0.0 and not created
     # Advertise the outlet when the card first appears, before a preset click.
     for _ in range(2):
-        imgui_frame(lambda: widget.ui(SimpleNamespace(state="idle")))
+        imgui_frame(lambda: widget.ui(SimpleNamespace(state="idle", recording=False)))
     assert created == [outlet] and not outlet.samples
     widget.set(1.0)
     assert created == [outlet]
@@ -75,11 +75,11 @@ def _capture_chips(monkeypatch, click=None):
 def test_chip_pushes_value_and_updates_selection(monkeypatch, imgui_frame, outlet):
     widget = SimulatorControls(PRESETS, outlet=outlet)
     selected, depth = _capture_chips(monkeypatch, click="Fist")
-    imgui_frame(lambda: widget.ui(SimpleNamespace(state="predicting")))
+    imgui_frame(lambda: widget.ui(SimpleNamespace(state="predicting", recording=False)))
     assert widget.value == 1.0 and not depth
     np.testing.assert_array_equal(outlet.samples, [[1.0]])
     selected.clear()
-    imgui_frame(lambda: widget.ui(SimpleNamespace(state="idle")))
+    imgui_frame(lambda: widget.ui(SimpleNamespace(state="idle", recording=False)))
     assert selected == ["Fist"] and not depth
 
 
@@ -88,7 +88,7 @@ def test_set_selects_matching_chip(value, selected, monkeypatch, imgui_frame, ou
     widget = SimulatorControls(PRESETS, outlet=outlet)
     widget.set(value)
     seen, depth = _capture_chips(monkeypatch)
-    imgui_frame(lambda: widget.ui(SimpleNamespace(state="idle")))
+    imgui_frame(lambda: widget.ui(SimpleNamespace(state="idle", recording=False)))
     assert seen == selected and not depth
     assert len(outlet.samples) == 1
 
@@ -119,7 +119,7 @@ def test_recording_disables_controls_but_keeps_caption_visible(monkeypatch, imgu
     monkeypatch.setattr(imgui, "end_disabled", enable)
     monkeypatch.setattr(imgui, "text_wrapped", caption)
     monkeypatch.setattr(imgui, "small_button", chip)
-    imgui_frame(lambda: widget.ui(SimpleNamespace(state="recording")))
+    imgui_frame(lambda: widget.ui(SimpleNamespace(state="recording", recording=True)))
     assert not outlet.samples and widget.value == 0.0
     assert captions == ["The simulator follows the gesture being recorded."]
     widget.set(1.0)  # The recording callback still owns the signal.
@@ -128,7 +128,10 @@ def test_recording_disables_controls_but_keeps_caption_visible(monkeypatch, imgu
 
 @pytest.mark.parametrize("state", ["idle", "recording"])
 def test_narrow_card_fits_light_theme_at_double_scale(
-    state, monkeypatch, imgui_frame, outlet,
+    state,
+    monkeypatch,
+    imgui_frame,
+    outlet,
 ):
     from myogestic import _scale, _theme
 
@@ -152,9 +155,10 @@ def test_narrow_card_fits_light_theme_at_double_scale(
 
     def draw():
         imgui.begin_child("narrow-simulator", imgui.ImVec2(320, 420))
-        widget.ui(SimpleNamespace(state=state))
-        bounds.append((imgui.get_scroll_max_x(), imgui.get_scroll_max_y(),
-                       imgui.get_cursor_pos_y()))
+        widget.ui(SimpleNamespace(state=state, recording=state == "recording"))
+        bounds.append(
+            (imgui.get_scroll_max_x(), imgui.get_scroll_max_y(), imgui.get_cursor_pos_y())
+        )
         imgui.end_child()
 
     for _ in range(4):
@@ -176,6 +180,10 @@ def test_widget_ids_keep_duplicate_controls_independent(monkeypatch, imgui_frame
 
     monkeypatch.setattr(imgui, "small_button", capture)
     first.set(1.0)
-    imgui_frame(lambda: [widget.ui(SimpleNamespace(state="idle")) for widget in (first, second)])
+    imgui_frame(
+        lambda: [
+            widget.ui(SimpleNamespace(state="idle", recording=False)) for widget in (first, second)
+        ]
+    )
     assert len(set(ids)) == 4
     assert first.value == 1.0 and second.value == 0.0

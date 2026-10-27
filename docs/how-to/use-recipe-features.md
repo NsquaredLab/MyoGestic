@@ -25,9 +25,9 @@ shape `(n_channels,)` with dtype `float32`.
 import numpy as np
 from myogestic.recipes.features import rms
 
-emg = np.random.randn(8, 256).astype(np.float32)   # 8 channels, 256 samples
-rms(emg).shape                                     # (8,)
-rms(emg).dtype                                     # dtype('float32')
+emg = np.random.randn(8, 256).astype(np.float32)  # 8 channels, 256 samples
+rms(emg).shape  # (8,)
+rms(emg).dtype  # dtype('float32')
 ```
 
 The shape and dtype are part of the contract. Stick to them when writing
@@ -46,12 +46,14 @@ from myogestic.widgets import FeatureSelector
 
 feats = FeatureSelector(
     {"RMS": rms, "MAV": mav, "WL": wl, "VAR": var, "ZC": zc},
-    default=["RMS", "MAV"],          # start with these active
+    default=["RMS", "MAV"],  # start with these active
 )
+
 
 @pipeline.extract
 def extract(window):
-    return feats(window)            # → (n_features * n_channels,)
+    return feats(window)  # → (n_features * n_channels,)
+
 
 @app.ui
 def ui(ctx):
@@ -86,11 +88,13 @@ shape contract. Drop yours in next to the recipe ones:
 import numpy as np
 from myogestic.recipes.features import rms, mav
 
+
 def slope_sign_changes(emg: np.ndarray) -> np.ndarray:
     """Count slope-sign changes per channel - classic Hudgins SSC feature."""
     d1 = np.diff(emg, axis=1)
     flips = (d1[:, :-1] * d1[:, 1:]) < 0
     return np.sum(flips, axis=1).astype(np.float32)
+
 
 feats = FeatureSelector(
     {"RMS": rms, "MAV": mav, "SSC": slope_sign_changes},

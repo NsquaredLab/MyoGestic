@@ -47,8 +47,10 @@ TrainingData(paths=[], class_names=[], classes=set())
 <!--docs:skip-->
 ```python
 LSLSource(stream_name)
-ReplaySource(session_path, stream_name, speed=1.0) # accepts .session.zip
-SerialSource(port, baud, n_channels, fs)  # extras:[serial]; from myogestic.sources.serial_source import SerialSource
+ReplaySource(session_path, stream_name, speed=1.0)  # accepts .session.zip
+SerialSource(
+    port, baud, n_channels, fs
+)  # extras:[serial]; from myogestic.sources.serial_source import SerialSource
 ```
 
 ## Targets
@@ -182,10 +184,10 @@ channels, points per channel and FPS in a mono footer. Give raw viewers distinct
 
 <!--docs:skip-->
 ```python
-TrainButton(pipeline)               .ui()
-PredictButton(pipeline)             .ui()
-TrainingLog(pipeline)               .ui()
-SaveModelButton(pipeline, path)     .ui()
-LoadModelButton(pipeline, path)     .ui()
-PipelinePanel(pipeline)             .ui()
+TrainButton(pipeline).ui()
+PredictButton(pipeline).ui()
+TrainingLog(pipeline).ui()
+SaveModelButton(pipeline, path).ui()
+LoadModelButton(pipeline, path).ui()
+PipelinePanel(pipeline).ui()
 ```

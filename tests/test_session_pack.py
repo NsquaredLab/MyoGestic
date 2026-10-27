@@ -114,7 +114,11 @@ def test_archive_labels_precede_typed_name_in_class_order(tmp_path, label_order,
     ],
 )
 def test_archive_without_recorded_labels_keeps_its_name(
-    tmp_path, name, class_names, labels, timestamps,
+    tmp_path,
+    name,
+    class_names,
+    labels,
+    timestamps,
 ):
     session = _archive_session(tmp_path, timestamps)
     session.name = name
@@ -160,7 +164,8 @@ def test_archive_labels_refresh_when_metadata_is_saved_again(tmp_path):
 
 def test_labelled_archive_reserves_same_second_participant_stem(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "myogestic.session._core.time.strftime", lambda *args: "2026-10-24_22-13-05",
+        "myogestic.session._core.time.strftime",
+        lambda *args: "2026-10-24_22-13-05",
     )
     first = _archive_session(tmp_path)
     first.name = "my take"

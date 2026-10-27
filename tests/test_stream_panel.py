@@ -49,8 +49,12 @@ def actions(monkeypatch):
     return seen, click
 
 
-@pytest.mark.parametrize("state,tone", [("idle", IDLE), ("connected", SUCCESS), ("failed", WARNING), ("mixed", WARNING)])
-def test_header_reports_worst_state_and_rows_say_what_to_do(imgui_frame, monkeypatch, actions, state, tone):
+@pytest.mark.parametrize(
+    "state,tone", [("idle", IDLE), ("connected", SUCCESS), ("failed", WARNING), ("mixed", WARNING)]
+)
+def test_header_reports_worst_state_and_rows_say_what_to_do(
+    imgui_frame, monkeypatch, actions, state, tone
+):
     item = stream()
     if state in ("connected", "mixed"):
         assert item.reconnect()
@@ -85,7 +89,9 @@ def test_header_reports_worst_state_and_rows_say_what_to_do(imgui_frame, monkeyp
         assert any(label.startswith("Retry##") for label in labels)
 
 
-def test_selectable_connect_opens_outlets_and_connects_the_chosen_target(imgui_frame, monkeypatch, actions):
+def test_selectable_connect_opens_outlets_and_connects_the_chosen_target(
+    imgui_frame, monkeypatch, actions
+):
     item = stream()
     item._source.discover = lambda: [{"name": "Lab EMG", "info": "8ch 2000Hz EMG"}]
     panel = StreamPanel(widget_id="outlets")
@@ -94,7 +100,9 @@ def test_selectable_connect_opens_outlets_and_connects_the_chosen_target(imgui_f
     monkeypatch.setitem(module._scans, "emg", scan)
     monkeypatch.setattr(module, "_kickoff_scan", lambda *args: None)
     targets = []
-    monkeypatch.setattr(panel, "_connect", lambda name, stream, ctx, target=None: targets.append(target))
+    monkeypatch.setattr(
+        panel, "_connect", lambda name, stream, ctx, target=None: targets.append(target)
+    )
     seen, click = actions
     click["id"] = "##sp_conn_emg"
     imgui_frame(lambda: panel.ui(ctx))
@@ -181,7 +189,9 @@ def test_stream_rows_fit_on_one_line_in_light_theme(imgui_frame, monkeypatch, sc
     assert rects and all(lo >= left and hi <= right for _, lo, hi, left, right in rects), rects
 
 
-def test_retry_reuses_the_failed_target_without_reopening_discovery(imgui_frame, monkeypatch, actions):
+def test_retry_reuses_the_failed_target_without_reopening_discovery(
+    imgui_frame, monkeypatch, actions
+):
     item = stream()
     item._source.discover = lambda: []
     item.last_error = "Source unavailable"
@@ -256,6 +266,7 @@ def test_recording_disables_connection_actions(imgui_frame, monkeypatch, actions
     panel = StreamPanel(selectable=False)
     ctx = context({"emg": item})
     ctx.state = "recording"
+    ctx.recording = True
     monkeypatch.setattr(panel, "_connect", lambda *args: pytest.fail("reconnected while recording"))
     actions[1]["id"] = "##sp_conn_emg"
     imgui_frame(lambda: panel.ui(ctx))

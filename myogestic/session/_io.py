@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import zipfile
 from pathlib import Path
 
@@ -72,6 +73,12 @@ def open_session_store(path: str | Path) -> Session:
     # Always set (None for folder sessions): keeps Session.close() safe even
     # though open_session_store bypasses __init__ via Session.__new__.
     session._zip_store = zip_store
+    # A loaded session is read-only: frozen, with no buffers, so freeze() is a no-op and
+    # append_event drops instead of raising AttributeError on the attributes __init__ set.
+    session._event_lock = threading.Lock()
+    session._event_buffers = {}
+    session._event_streams = list(meta.get("event_streams") or [])
+    session._finalising = True
 
     for name, info in meta.get("streams", {}).items():
         data = open_array(f"{name}.zarr")

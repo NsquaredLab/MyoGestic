@@ -17,11 +17,13 @@ from myogestic.sources import LSLSource
 
 from .conftest import build_controls
 
-CONTROLS = build_controls({
-            "index.flexion": "continuous",
-            "thumb.flexion": "continuous",
-            "wrist.pronation": "continuous",
-        })
+CONTROLS = build_controls(
+    {
+        "index.flexion": "continuous",
+        "thumb.flexion": "continuous",
+        "wrist.pronation": "continuous",
+    }
+)
 
 
 def _roundtrip(name: str, **kwargs) -> object:

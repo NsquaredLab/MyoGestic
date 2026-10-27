@@ -4,6 +4,7 @@ PC is the TCP server on port 54321; the probe connects in as client (in AP
 mode the probe is the WiFi access point and DHCP-assigns the PC). Big-endian
 int16 (EMG) / int24 (EEG); see docs/reference/otb/Read_muovi.m.
 """
+
 from __future__ import annotations
 
 import socket

@@ -63,6 +63,8 @@ class SignalViewer:
         per electrode grid) — otherwise they share a single state and render
         identically. Pair with ``channel_scope`` to give each its own channels,
         and prefer a stable, unique string (grid labels can repeat).
+    exclude
+        Stream names omitted from the selectable viewer, such as target feedback.
     channel_scope
         The columns this viewer may **ever** show — a hard restriction, unlike
         ``initial_channels`` (which only seeds the opening selection). All /
@@ -146,6 +148,7 @@ class SignalViewer:
         show_diagnostics: bool = False,
         show_connect: bool = True,
         selectable: bool = False,
+        exclude: Iterable[str] = (),
         scale_mode: str = "auto",
         y_range: tuple[float, float] = (-1.0, 1.0),
         show_markers: bool = False,
@@ -172,6 +175,7 @@ class SignalViewer:
         self._channel_height = channel_height
         self._show_diagnostics = show_diagnostics
         self._selectable = selectable
+        self._excluded = frozenset(exclude)
         self._scale_mode = scale_mode
         self._y_range = y_range
         self._show_markers = show_markers
@@ -197,6 +201,9 @@ class SignalViewer:
             show_controls=self._show_controls,
         )
         active_stream = v.selected_stream or stream_name
+        if active_stream in self._excluded:
+            active_stream = stream_name
+            v.selected_stream = stream_name
         stream = ctx.streams.get(active_stream)
 
         connected = stream is not None and stream.status == "connected" and stream.info is not None
@@ -204,11 +211,21 @@ class SignalViewer:
         scope = resolve_scope(self._channel_scope, n_channels)
         enabled = (
             resolve_enabled(v, active_stream, n_channels, self._initial_channels, scope)
-            if connected else set()
+            if connected
+            else set()
         )
         render_controls(
-            ctx, wid, active_stream, stream, v, self._selectable, enabled, scope,
-            title=self._title, show_title=self._show_title,
+            ctx,
+            wid,
+            active_stream,
+            stream,
+            v,
+            self._selectable,
+            enabled,
+            scope,
+            title=self._title,
+            show_title=self._show_title,
+            exclude=self._excluded,
         )
         if stream is None:
             imgui.text(f"{active_stream}: not found")
@@ -217,9 +234,7 @@ class SignalViewer:
             _disconnected_ui(active_stream, stream, show_connect=self._show_connect)
             return
         if not scope:
-            imgui.text_disabled(
-                f"{active_stream}: no channels in scope (stream has {n_channels})"
-            )
+            imgui.text_disabled(f"{active_stream}: no channels in scope (stream has {n_channels})")
             if v.show_controls:
                 render_display_popup(wid, stream, v, None, enabled, self._show_diagnostics)
             return

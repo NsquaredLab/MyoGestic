@@ -92,7 +92,7 @@ class SessionManager:
         self._widget_id = f"{title}_{base_path}"
 
     def select_all(self, participant: str) -> None:
-        """Scan and tick every saved take of a participant without drawing a frame.
+        """Scan and tick every saved training take of a participant without drawing a frame.
 
         Parameters
         ----------
@@ -100,7 +100,7 @@ class SessionManager:
             Nonempty participant ID, reduced to the same safe slug used by
             recordings. Replaces the previous selection and clears class
             exclusions and pending file dialogs. Takes still being saved are
-            excluded. A following ``ui(participant=participant)`` preserves the
+            excluded, as are drive runs identified by ``extras.pipeline``. A following ``ui(participant=participant)`` preserves the
             ticks without scanning again.
 
         Raises
@@ -115,7 +115,7 @@ class SessionManager:
         state.participant = participant
         state.sessions = scan_sessions(str(Path(self._base_path) / participant))
         for row in state.sessions:
-            row["selected"] = True
+            row["selected"] = not row.get("drive", False)
         state.deactivated_classes.clear()
         state.folder_dialog = None
         state.last_load_msg = ""
@@ -157,6 +157,8 @@ class SessionManager:
         saving = is_session_saving(scan_path)
         if saving:
             imgui.text_colored(muted(), "Saving the last take…")
+        if any(row.get("drive", False) for row in state.sessions):
+            imgui.text_colored(muted(), "Drive runs are not ticked for training.")
         render_summary(widget_id, self.selection(), state)
         render_class_buttons(widget_id, state, class_names)
         render_session_rows(widget_id, scan_path, state, class_names)
@@ -193,8 +195,11 @@ def render_header(widget_id: str, title: str, base_path: str, state: SessionWidg
     width = sum(imgui.calc_text_size(icon).x + 2 * style.frame_padding.x for icon in icons)
     width += 2 * style.item_spacing.x
     right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
-    panel_header(f"Takes · {state.participant}" if state.participant else title,
-                 fa.ICON_FA_FOLDER_OPEN, reserve=width + style.item_spacing.x)
+    panel_header(
+        f"Takes · {state.participant}" if state.participant else title,
+        fa.ICON_FA_FOLDER_OPEN,
+        reserve=width + style.item_spacing.x,
+    )
     imgui.same_line()
     imgui.set_cursor_pos_x(max(imgui.get_cursor_pos_x(), right - width))
     if imgui.small_button(f"{icons[0]}##{widget_id}_scan"):
@@ -206,7 +211,10 @@ def render_header(widget_id: str, title: str, base_path: str, state: SessionWidg
     imgui.same_line()
     if imgui.small_button(f"{icons[1]}##{widget_id}_load"):
         state.folder_dialog = pfd.open_file(
-            "Select session files", base_path, ["Session zip", "*.zip"], pfd.opt.multiselect,
+            "Select session files",
+            base_path,
+            ["Session zip", "*.zip"],
+            pfd.opt.multiselect,
         )
     imgui.set_item_tooltip("Load files from elsewhere… Choose one or more session zip files.")
     imgui.same_line()
@@ -220,10 +228,14 @@ def render_header(widget_id: str, title: str, base_path: str, state: SessionWidg
 def render_summary(widget_id: str, summary: SelectionSummary, state: SessionWidgetState) -> None:
     style = imgui.get_style()
     right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
-    width = sum(imgui.calc_text_size(label).x + 2 * style.frame_padding.x for label in ("All", "None"))
+    width = sum(
+        imgui.calc_text_size(label).x + 2 * style.frame_padding.x for label in ("All", "None")
+    )
     width += style.item_spacing.x
     total = _elapsed_str(sum(summary.class_seconds.values()))
-    imgui.text_colored(muted(), f"{summary.n_selected} of {summary.n_total} selected · {total} total")
+    imgui.text_colored(
+        muted(), f"{summary.n_selected} of {summary.n_total} selected · {total} total"
+    )
     if state.last_load_msg:
         imgui.set_item_tooltip(state.last_load_msg)
     imgui.same_line()
@@ -246,7 +258,9 @@ def poll_file_dialog(state: SessionWidgetState) -> None:
 
 
 def _render_empty_participant(
-    widget_id: str, base_path: str, state: SessionWidgetState,
+    widget_id: str,
+    base_path: str,
+    state: SessionWidgetState,
 ) -> None:
     """Centre the empty participant's guidance and existing file-picker action."""
     left = imgui.get_cursor_pos_x()
@@ -272,22 +286,32 @@ def _render_empty_participant(
     imgui.set_cursor_pos_x(left + max(0.0, (width - button_width) / 2))
     if imgui.small_button(f"{label}##{widget_id}_empty"):
         state.folder_dialog = pfd.open_file(
-            "Select session files", base_path, ["Session zip", "*.zip"], pfd.opt.multiselect,
+            "Select session files",
+            base_path,
+            ["Session zip", "*.zip"],
+            pfd.opt.multiselect,
         )
 
 
 def render_class_buttons(
-    widget_id: str, state: SessionWidgetState, class_names: list[str] | None,
+    widget_id: str,
+    state: SessionWidgetState,
+    class_names: list[str] | None,
 ) -> None:
     gestures: dict[tuple[int | None, str], float] = {}
     for row in state.sessions:
+        if row.get("drive", False) and not row["selected"]:
+            continue
         for ci, name, seconds in row_gestures(row, class_names):
             gestures[ci, name] = gestures.get((ci, name), 0.0) + seconds
     right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
     for index, ((ci, name), seconds) in enumerate(gestures.items()):
         label = f"   {name} {_elapsed_str(seconds)}"
         width = imgui.calc_text_size(label).x + 2 * imgui.get_style().frame_padding.x
-        if index and imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + width <= right:
+        if (
+            index
+            and imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + width <= right
+        ):
             imgui.same_line()
         included = ci not in state.deactivated_classes
         if included:
@@ -299,7 +323,8 @@ def render_class_buttons(
         color = PALETTE[(ci if ci is not None else index) % len(PALETTE)]
         imgui.get_window_draw_list().add_circle_filled(
             imgui.ImVec2(lo.x + imgui.get_style().frame_padding.x + ui_px(3), (lo.y + hi.y) / 2),
-            ui_px(3), imgui.get_color_u32(imgui.ImVec4(*color, 1.0)),
+            ui_px(3),
+            imgui.get_color_u32(imgui.ImVec4(*color, 1.0)),
         )
         if clicked and ci is not None:
             if included:
@@ -310,7 +335,10 @@ def render_class_buttons(
 
 
 def render_session_rows(
-    widget_id: str, base_path: str, state: SessionWidgetState, class_names: list[str] | None,
+    widget_id: str,
+    base_path: str,
+    state: SessionWidgetState,
+    class_names: list[str] | None,
 ) -> None:
     if not state.sessions:
         return
@@ -329,12 +357,16 @@ def render_session_rows(
 
 
 def _render_row(
-    widget_id: str, row: dict, excluded: set[int], class_names: list[str] | None,
+    widget_id: str,
+    row: dict,
+    excluded: set[int],
+    class_names: list[str] | None,
 ) -> None:
     # Two-pixel vertical padding keeps the checkbox and chips to 18 px with
     # the 14 px body font; the theme's trailing 8 px gap makes a 26 px row.
-    imgui.push_style_var(imgui.StyleVar_.frame_padding,
-                         imgui.ImVec2(imgui.get_style().frame_padding.x, ui_px(2)))
+    imgui.push_style_var(
+        imgui.StyleVar_.frame_padding, imgui.ImVec2(imgui.get_style().frame_padding.x, ui_px(2))
+    )
     imgui.begin_group()
     right = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
     _, row["selected"] = imgui.checkbox(f"##{widget_id}_{row['path']}", row["selected"])
@@ -352,6 +384,10 @@ def _render_row(
         imgui.pop_font()
     gap = imgui.get_style().item_spacing.x
     time_x = right - time_width - gap - duration_width
+    if row.get("drive", False):
+        imgui.align_text_to_frame_padding()
+        imgui.text_colored(muted(), "Guided" if row.get("guided", False) else "Drive")
+        imgui.same_line()
     for index, (ci, name, _) in enumerate(row_gestures(row, class_names)):
         room = time_x - gap - imgui.get_cursor_pos_x()
         if room <= ui_px(10):
@@ -368,9 +404,16 @@ def _render_row(
         color = PALETTE[(ci if ci is not None else index) % len(PALETTE)]
         tone = muted() if ci in excluded else imgui.ImVec4(*color, 1.0)
         draw = imgui.get_window_draw_list()
-        draw.add_rect_filled(lo, hi, imgui.get_color_u32(imgui.ImVec4(tone.x, tone.y, tone.z, 0.16)), ui_px(4))
-        draw.add_text(imgui.ImVec2(lo.x + pad, lo.y + imgui.get_style().frame_padding.y),
-                      imgui.get_color_u32(muted() if ci in excluded else imgui.get_style().color_(imgui.Col_.text)), label)
+        draw.add_rect_filled(
+            lo, hi, imgui.get_color_u32(imgui.ImVec4(tone.x, tone.y, tone.z, 0.16)), ui_px(4)
+        )
+        draw.add_text(
+            imgui.ImVec2(lo.x + pad, lo.y + imgui.get_style().frame_padding.y),
+            imgui.get_color_u32(
+                muted() if ci in excluded else imgui.get_style().color_(imgui.Col_.text)
+            ),
+            label,
+        )
         imgui.same_line()
     imgui.set_cursor_pos_x(max(imgui.get_cursor_pos_x(), time_x))
     imgui.align_text_to_frame_padding()
@@ -383,7 +426,9 @@ def _render_row(
     if not checkbox_hovered and imgui.is_item_clicked():
         row["selected"] = not row["selected"]
     name = row.get("session_name", "")
-    imgui.set_item_tooltip(f"{name + chr(10) if name else ''}{row['name']}\n{row.get('streams_str', '')}")
+    imgui.set_item_tooltip(
+        f"{name + chr(10) if name else ''}{row['name']}\n{row.get('streams_str', '')}"
+    )
 
 
 def _elapsed_str(seconds: float) -> str:

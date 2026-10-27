@@ -65,7 +65,8 @@ def _content_rect() -> tuple[imgui.ImVec2, imgui.ImVec2]:
     # already specify different padding for our children, so use its real bounds.
     # Cursor + remaining space is stable even after another cell was submitted.
     return origin, imgui.ImVec2(
-        cursor.x + available.x - origin.x, cursor.y + available.y - origin.y,
+        cursor.x + available.x - origin.x,
+        cursor.y + available.y - origin.y,
     )
 
 
@@ -401,7 +402,8 @@ class Grid:
         origin, content = _content_rect()
         avail_w = content.x - max(self.cols - 1, 0) * _gutter()
         pos = imgui.ImVec2(
-            self._col_x(col_start, avail_w) + origin.x, self._row_y(row_start) + origin.y,
+            self._col_x(col_start, avail_w) + origin.x,
+            self._row_y(row_start) + origin.y,
         )
         size = imgui.ImVec2(
             self._col_span_w(col_start, col_end, avail_w), self._row_span_h(row_start, row_end)
@@ -502,13 +504,20 @@ class _AreaCell:
                 # cannot fix it with a later style push inside the cell.
                 padding = imgui.get_style().window_padding
                 room = size.y - imgui.get_frame_height() - imgui.get_style().item_spacing.y
-                imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(
-                    padding.x, min(padding.y, max(0.0, room / 2)),
-                ))
+                imgui.push_style_var(
+                    imgui.StyleVar_.window_padding,
+                    imgui.ImVec2(
+                        padding.x,
+                        min(padding.y, max(0.0, room / 2)),
+                    ),
+                )
             imgui.begin_child(
-                f"##area_{name}", size,
+                f"##area_{name}",
+                size,
                 child_flags=(
-                    imgui.ChildFlags_.always_use_window_padding if bare else imgui.ChildFlags_.borders
+                    imgui.ChildFlags_.always_use_window_padding
+                    if bare
+                    else imgui.ChildFlags_.borders
                 ),
                 window_flags=window_flags,
             )
@@ -523,9 +532,12 @@ class _AreaCell:
         key = "|".join(group)
         group_bare = g._selected.get(group, group[0]) in g._bare
         imgui.begin_child(
-            f"##group_{key}", size,
+            f"##group_{key}",
+            size,
             child_flags=(
-                imgui.ChildFlags_.always_use_window_padding if group_bare else imgui.ChildFlags_.borders
+                imgui.ChildFlags_.always_use_window_padding
+                if group_bare
+                else imgui.ChildFlags_.borders
             ),
             window_flags=imgui.WindowFlags_.no_background if group_bare else 0,
         )
@@ -600,7 +612,9 @@ class Layout:
             raise TypeError(f"breakpoint={breakpoint!r}: must be Px(...), e.g. Px(1100)")
         for label, grid in (("wide", wide), ("narrow", narrow)):
             if not isinstance(grid, Grid) or not grid.panel_names:
-                raise ValueError(f"Layout({label}=...): build it with Grid.areas(...) so panels have names")
+                raise ValueError(
+                    f"Layout({label}=...): build it with Grid.areas(...) so panels have names"
+                )
         only_wide = wide.panel_names - narrow.panel_names
         only_narrow = narrow.panel_names - wide.panel_names
         if only_wide or only_narrow:

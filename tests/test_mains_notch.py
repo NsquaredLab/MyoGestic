@@ -222,7 +222,9 @@ def test_notchcache_reprocesses_new_columns_on_a_channel_selection_change():
 
     cache = NotchCache()
     cache.notched(1, 1, n, sig, ts, region_idx, ts[region_idx], fs, freq, [0])  # draw ch0
-    got = cache.notched(1, 1, n, sig, ts, region_idx, ts[region_idx], fs, freq, [1])  # switch to ch1
+    got = cache.notched(
+        1, 1, n, sig, ts, region_idx, ts[region_idx], fs, freq, [1]
+    )  # switch to ch1
     expected = apply_mains_notch(sig[warm_idx:, [1]], fs, freq)[region_idx - warm_idx :]
     assert np.max(np.abs(got - expected)) < 1e-9
 
@@ -272,8 +274,12 @@ def test_notchcache_cold_resets_on_a_backward_timestamp_jump():
     region_idx = n - 1000
 
     cache = NotchCache()
-    cache.notched(1, 1, n, sig1, ts1, region_idx, ts1[region_idx], fs, freq, [0])  # pre-loop (t~100)
-    got = cache.notched(1, 1, 2 * n, sig2, ts2, region_idx, ts2[region_idx], fs, freq, [0])  # loop → t~0
+    cache.notched(
+        1, 1, n, sig1, ts1, region_idx, ts1[region_idx], fs, freq, [0]
+    )  # pre-loop (t~100)
+    got = cache.notched(
+        1, 1, 2 * n, sig2, ts2, region_idx, ts2[region_idx], fs, freq, [0]
+    )  # loop → t~0
     warm_idx = int(np.searchsorted(ts2, ts2[region_idx] - _NOTCH_WARMUP_S, side="left"))
     expected = apply_mains_notch(sig2[warm_idx:], fs, freq)[region_idx - warm_idx :]
     assert np.max(np.abs(got - expected)) < 1e-9  # cold-rebuilt on sig2, not carried from sig1

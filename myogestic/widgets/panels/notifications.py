@@ -114,7 +114,9 @@ def render_notifications(ctx: Context) -> None:
         pivot=imgui.ImVec2(1, 1),
     )
     imgui.set_next_window_size(imgui.ImVec2(width, 0))
-    imgui.set_next_window_size_constraints(imgui.ImVec2(width, 0), imgui.ImVec2(width, float("inf")))
+    imgui.set_next_window_size_constraints(
+        imgui.ImVec2(width, 0), imgui.ImVec2(width, float("inf"))
+    )
     flags = (
         imgui.WindowFlags_.no_decoration
         | imgui.WindowFlags_.no_focus_on_appearing

@@ -38,9 +38,7 @@ vhi = virtual_hand()
 
 # What this app controls, declared in a file: the left side is *ours*, the right side is
 # VHI's. Parsing needs no VHI; resolving does, so that waits for a connection.
-CONTROL_FILE = (
-    pathlib.Path(__file__).resolve().parent.parent / "controls" / "control_hand.toml"
-)
+CONTROL_FILE = pathlib.Path(__file__).resolve().parent.parent / "controls" / "control_hand.toml"
 with CONTROL_FILE.open("rb") as handle:  # "rb" — tomllib requires binary
     CONTROL_MAP = load_control_map(tomllib.load(handle))
 
@@ -93,8 +91,8 @@ def demo_ui(ctx: Context) -> None:
             imgui.push_style_color(imgui.Col_.text, muted())
             imgui.text_wrapped(
                 "Launch VHI, then Connect to load the operator hand's controls."
-                if PROCESSES else
-                "Launch VHI externally, then Connect to load the operator hand's controls."
+                if PROCESSES
+                else "Launch VHI externally, then Connect to load the operator hand's controls."
             )
             imgui.pop_style_color()
             if primary_button("Connect", size=(imgui.get_content_region_avail().x, 0)):

@@ -25,14 +25,21 @@ def _record_text(monkeypatch):
     return seen
 
 
-@pytest.mark.parametrize("state,model,reason", [
-    ("idle", None, "train or load a model"),
-    ("idle", object(), "ready to predict"),
-    ("predicting", object(), "waiting for first prediction"),
-])
+@pytest.mark.parametrize(
+    "state,model,reason",
+    [
+        ("idle", None, "train or load a model"),
+        ("idle", object(), "ready to predict"),
+        ("predicting", object(), "waiting for first prediction"),
+    ],
+)
 def test_prediction_idle_has_dash_and_reason(imgui_frame, monkeypatch, state, model, reason):
-    pipeline = SimpleNamespace(predictions={}, model=model, predict_hz=20,
-                               app=SimpleNamespace(ctx=SimpleNamespace(state=state)))
+    pipeline = SimpleNamespace(
+        predictions={},
+        model=model,
+        predict_hz=20,
+        app=SimpleNamespace(ctx=SimpleNamespace(state=state)),
+    )
     label = PredictionLabel(pipeline, ["Rest", "Fist"], show_probability=True)
     seen = _record_text(monkeypatch)
     imgui_frame(label.ui)
@@ -41,8 +48,12 @@ def test_prediction_idle_has_dash_and_reason(imgui_frame, monkeypatch, state, mo
 
 
 def test_prediction_card_shows_every_class_probability(imgui_frame, monkeypatch):
-    pipeline = SimpleNamespace(predictions={"class": 1, "proba": [0.2, 0.8]}, model=object(),
-                               predict_hz=20, app=SimpleNamespace(ctx=SimpleNamespace(state="predicting")))
+    pipeline = SimpleNamespace(
+        predictions={"class": 1, "proba": [0.2, 0.8]},
+        model=object(),
+        predict_hz=20,
+        app=SimpleNamespace(ctx=SimpleNamespace(state="predicting")),
+    )
     label = PredictionLabel(pipeline, ["Rest", "Fist"], show_probability=True)
     seen, bars = _record_text(monkeypatch), []
     bar = imgui.progress_bar
@@ -94,14 +105,22 @@ def test_probability_values_align_with_class_labels(imgui_frame, monkeypatch):
     assert positions["Fist"] == positions["80%"]
 
 
-@pytest.mark.parametrize("scale", [1., 2.])
-@pytest.mark.parametrize("state,model,reason", [
-    ("idle", None, "train or load a model"),
-    ("idle", object(), "ready to predict"),
-    ("predicting", object(), "waiting for first prediction"),
-])
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+@pytest.mark.parametrize(
+    "state,model,reason",
+    [
+        ("idle", None, "train or load a model"),
+        ("idle", object(), "ready to predict"),
+        ("predicting", object(), "waiting for first prediction"),
+    ],
+)
 def test_idle_and_live_share_hero_size_and_centered_detail(
-    imgui_frame, monkeypatch, scale, state, model, reason,
+    imgui_frame,
+    monkeypatch,
+    scale,
+    state,
+    model,
+    reason,
 ):
     from pathlib import Path
 
@@ -119,8 +138,12 @@ def test_idle_and_live_share_hero_size_and_centered_detail(
     mono = atlas.add_font_from_file_ttf(str(fonts / "IBMPlexMono-Regular.ttf"), 13)
     monkeypatch.setattr(_theme, "_DISPLAY_FONT", display)
     monkeypatch.setattr(_theme, "_MONO_FONT", mono)
-    pipeline = SimpleNamespace(predictions={}, model=model, predict_hz=20,
-                               app=SimpleNamespace(ctx=SimpleNamespace(state=state)))
+    pipeline = SimpleNamespace(
+        predictions={},
+        model=model,
+        predict_hz=20,
+        app=SimpleNamespace(ctx=SimpleNamespace(state=state)),
+    )
     label = PredictionLabel(pipeline, ["Rest", "Fist"])
     text = imgui.text_colored
     items, cards, base_sizes = {}, [], []

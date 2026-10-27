@@ -87,16 +87,19 @@ stateDiagram-v2
     idle --> training: pipeline.start_training()
     training --> idle: train() returns
     idle --> predicting: pipeline.start_predicting()
-    predicting --> idle: pipeline.stop_predicting()
+    recording --> predicting: pipeline.start_predicting()\n(ctx.recording stays True)
+    predicting --> idle: pipeline.stop_predicting()\nwhen no take is open
+    predicting --> recording: pipeline.stop_predicting()\nwhen a take is open
 
-    note right of training
-        Training and predicting are
-        mutually exclusive - stop
-        predicting before training.
+    note right of predicting
+        app.start_recording() here sets
+        ctx.recording and leaves the state
+        alone. The pipeline writes its
+        tick into the session.
     end note
 ```
 
-Training and prediction are mutually exclusive. Stop prediction with the **Predict** chip before clicking **Train**; when training completes, click **Predict** again to resume. Stop an active recording before training too.
+`ctx.state` is the pipeline's state while it is busy (`training`, `predicting`); otherwise `recording` if a take is open, else `idle`. **Training needs `idle`**: stop predicting, and stop any open take, before Train; the button refuses otherwise. Recording is a flag beside the state (`ctx.recording`), not a fourth exclusive state: press Record while predicting and the raw streams, the pipeline's input and output, and the delivered control frames all land in one session. See [Recording → Event streams](recording.md#event-streams).
 
 The user-facing UI layer (`PipelinePanel`, `TrainButton`, `PredictButton`) handles transitions; user code rarely calls `start_training()` / `stop_predicting()` directly.
 

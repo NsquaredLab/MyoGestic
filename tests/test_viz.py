@@ -207,11 +207,9 @@ def test_process_launcher_renders_wide_and_narrow(imgui_frame):
 def test_recording_controls_label_buttons_wrap(imgui_frame, monkeypatch):
     """Per-class label buttons wrap onto new rows when they don't fit instead of
     running off the right edge — one row when wide, several when narrow."""
-    from types import SimpleNamespace
-
     from imgui_bundle import imgui
 
-    from myogestic.core import AppState
+    from myogestic.core import AppState, Context
     from myogestic.widgets import RecordingControls
 
     rows: list[float] = []
@@ -226,7 +224,7 @@ def test_recording_controls_label_buttons_wrap(imgui_frame, monkeypatch):
     classes = ["Rest", "Fist", "Open", "Pinch"]
 
     def draw(w):
-        ctx = SimpleNamespace(
+        ctx = Context(
             current_label=0, class_names=[], state=AppState.IDLE, session=None, status_message=""
         )
         imgui.begin_child("c", imgui.ImVec2(float(w), 300))
@@ -465,8 +463,8 @@ class TestTheProcessDotSaysTheState:
         from myogestic.widgets.panels.process_launcher import _ProcState, _status_of
 
         state = _ProcState("x", ["true"])
-        state.process = self._Exited(-9)          # SIGKILL, as `stop` leaves it
-        state.process = None                      # ...which `stop` then clears
+        state.process = self._Exited(-9)  # SIGKILL, as `stop` leaves it
+        state.process = None  # ...which `stop` then clears
         assert _status_of(state)[0] is IDLE
 
 

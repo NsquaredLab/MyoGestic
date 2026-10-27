@@ -10,20 +10,23 @@ stateDiagram-v2
     idle: state = "idle"\nstreams flowing\nnothing persisted
 
     idle --> recording: app.start_recording(base_path="sessions")
-    recording: state = "recording"\nacquisition threads also write to Zarr\nctx.session = Session(...)
+    recording: state = "recording"\nctx.recording = True\nacquisition threads also write to Zarr
 
     recording --> recording: button click\n→ ctx.session.add_label(class_idx, timestamp=local_clock())
     recording --> idle: app.stop_recording()
 
-    note right of idle
-        On stop_recording, the
-        session folder packs to
-        .session.zip on a
-        finalize daemon thread.
+    note right of recording
+        With myogestic.ml attached, a take can
+        also run under state = "predicting":
+        ctx.recording is the flag, state is
+        what the pipeline is doing. Check
+        ctx.recording, not the state string.
     end note
 ```
 
-Acquisition threads check `ctx.session is not None` on every chunk; if set, they append to the corresponding Zarr array. Recording adds *no* new threads.
+Acquisition threads append each chunk while their stream has an attached session. Stop detaches the streams, freezes event buffers, then finalizes metadata and the archive on a daemon thread.
+
+`ctx.recording` is the truth of "a take is open". It is independent of `ctx.state`: from `idle`, Record moves the state to `recording`; while a `Pipeline` is `predicting`, Record leaves the state alone and sets the flag. `RECORDABLE_STATES` in `myogestic.core` lists the states a take may start from — core registers `idle`, `myogestic.ml` registers `predicting`. `ctx.session` stays set after a stop so the signal viewer can keep drawing the last take's label markers; do not use it as the flag.
 
 ## On-disk layout
 
@@ -100,6 +103,29 @@ rec_controls.ui(ctx)
 ```
 
 `on_gesture` is yours - typically you forward to a control LSL stream (so a synthetic generator can change pattern), or a robot, or just log it. The label itself is added by `RecordingControls` itself before calling your callback.
+
+## Event streams
+
+A sampled stream has a clock; an event stream has one row per *thing that happened*. `Session.append_event(name, values, timestamp, channel_names=..., fs=...)` declares such a stream on first use and appends one float32 row to it. On disk it is the same `<name>.zarr` / `<name>_timestamps.zarr` pair as any stream, so every reader — `open_session_store`, `ReplaySource`, the window iterators — sees it unchanged. `meta.json` lists these names under `event_streams`, and their `fs` is *nominal* (the producer's tick rate) so `ReplaySource` can pace them; the timestamps are the truth.
+
+Rows are buffered in memory and written 1024 at a time or once a second, whichever comes first, because a single-row zarr append rewrites the partial chunk (about 1.5 ms each on zarr 3.2). `Session.freeze()` flushes every buffer and closes the session to new rows and new streams; `App.stop_recording` calls it before anything is written.
+
+Rows are float32 by default; a value that is itself a clock — an LSL timestamp, `local_clock()` — loses milliseconds at float32 after a day of uptime, so pass `dtype=np.float64` for it (the pipeline does for `pipeline.tick`) or record an offset instead.
+
+With a take open, two producers write event streams for you:
+
+| Stream | Written by | One row per | Timestamp |
+|---|---|---|---|
+| `features` or `features.<key>` | `Pipeline`, what `@pipeline.extract` returned | predict tick | newest sample the tick consumed |
+| `prediction.<key>` | `Pipeline`, what `@pipeline.predict` returned | predict tick | same |
+| `pipeline.tick` | `Pipeline`, the LSL `local_clock()` at the decision | predict tick | same — so `tick − timestamp` is the latency |
+| `controls` | `ControlBus`, the continuous frame it delivered, DOF names as channels | `push` | delivery clock |
+
+A dict becomes one stream per key. A value is recorded when it is a bool, a number, or a 1-D array; text, `None`, nested dicts and anything 2-D or wider are skipped — once, with a log line, and listed under `extras.pipeline.skipped` in `meta.json`. A raw window returned by `extract` is the recorded stream already; a CNN history is rebuilt from consecutive frames.
+
+For a take that recorded pipeline ticks, `extras.pipeline` identifies it as a Drive run. Takes shows a Drive tag and leaves it unticked for training; the operator can still tick it. Continue → Train selects ordinary takes and skips Drive runs.
+
+On stop, `App.finalize_hooks` run on the finalize thread before `meta.json` is written. The pipeline's hook saves the running model as `model.joblib` beside the arrays (when `pipeline.save_model` is set) and writes `extras.pipeline` with the model type, its `report` if it has one, the event streams, and the skip list.
 
 ## Reading recordings
 

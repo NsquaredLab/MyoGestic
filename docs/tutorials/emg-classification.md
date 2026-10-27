@@ -34,7 +34,7 @@ The whole script is structured top-to-bottom: imports → outputs → constants 
 [`SimulatorControls`][myogestic.widgets.SimulatorControls] lazily publishes the generator's `EMG_Control` stream. Its persistent **Rest** and **Fist** chips preview either signal without changing a recording label. The Record step's class buttons also select the control-hand movement when a hand is connected; starting a take restores the signal for its selected label.
 
 ```python
---8<-- "examples/synthetic/emg_classification.py:poses"
+--8 < --"examples/synthetic/emg_classification.py:poses"
 ```
 
 The example declares two outputs in `examples/controls/classification_grpc.toml`. `fist` is a continuous activation: `0` for Rest and `1` for Fist, fanned out to the predicted hand's digits with negative thumb abduction for opposition. `gesture` is the matching movement name, sent to the control hand over gRPC after the configured `debounce_s = 0.1` settles a class change. The target's manifest supplies its controls and streams; nothing is resolved until the optional hand is connected, and gRPC clients are created only on that request.
@@ -42,7 +42,7 @@ The example declares two outputs in `examples/controls/classification_grpc.toml`
 ### 2. The output filter
 
 ```python
---8<-- "examples/synthetic/emg_classification.py:filter"
+--8 < --"examples/synthetic/emg_classification.py:filter"
 ```
 
 [`PostProcessor`][myogestic.widgets.PostProcessor] is the post-processing widget - exposes a UI panel and is callable. We hand it to the bus as `ControlBus(..., smoothing=output_filter)` so it runs once per frame before any target sees it, and render its panel inside `@app.ui`.
@@ -52,7 +52,7 @@ See [Post-process predictions](../how-to/post-process-output.md) for tuning.
 ### 3. Feature set
 
 ```python
---8<-- "examples/synthetic/emg_classification.py:features"
+--8 < --"examples/synthetic/emg_classification.py:features"
 ```
 
 [`FeatureSelector`][myogestic.widgets.FeatureSelector] holds a menu of named feature functions - the reference `rms`/`mav`/`wl`/`var`/`zc` from [`myogestic.recipes.features`][myogestic.recipes.features], plus any of your own callables - and renders a panel to toggle them live. Calling it, `features(window)`, runs every active feature over the channels-first window and stacks the results into one flat vector. `default=["RMS", "MAV"]` ticks two on at startup.
@@ -60,7 +60,7 @@ See [Post-process predictions](../how-to/post-process-output.md) for tuning.
 ### 4. App, stream, pipeline
 
 ```python
---8<-- "examples/synthetic/emg_classification.py:setup"
+--8 < --"examples/synthetic/emg_classification.py:setup"
 ```
 
 The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s of EMG, channels-first as `(n_channels, n_samples)`. The buffer is 60 s so [`SignalViewer`][myogestic.widgets.SignalViewer] shows a longer history than the prediction window.
@@ -68,7 +68,7 @@ The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s o
 ### 5. `extract` - same code for training and live predict
 
 ```python
---8<-- "examples/synthetic/emg_classification.py:extract"
+--8 < --"examples/synthetic/emg_classification.py:extract"
 ```
 
 `features(windows["emg"])` runs every active feature over the window (channels-first `(n_channels, n_samples)`) and returns one flat vector. The same function is invoked from inside `train()` (over recorded windows) and on the predict thread (over live windows), so training and inference always see identical features.
@@ -76,7 +76,7 @@ The stream window is 0.2 s - every `extract()` call sees the most-recent 0.2 s o
 ### 6. `train` - slice sessions, featurize, fit
 
 ```python
---8<-- "examples/synthetic/emg_classification.py:train"
+--8 < --"examples/synthetic/emg_classification.py:train"
 ```
 
 [`iter_labeled_windows`][myogestic.session.iter_labeled_windows] does all the session-loading, label-track walking, and overlapping-window slicing - see [Record and replay](../how-to/record-and-replay.md). We just call `extract()` on each window.
@@ -86,7 +86,7 @@ The validation up front (`is_empty`, `len(data.classes) < 2`) gives the user act
 ### 7. `predict` - classify, smooth the pose and command movements
 
 ```python
---8<-- "examples/synthetic/emg_classification.py:predict"
+--8 < --"examples/synthetic/emg_classification.py:predict"
 ```
 
 The class index chooses both values from `CTRL_VALUES` and `CLASSES`. One bus frame carries `{"fist": 1.0, "gesture": "Fist"}` for a fist prediction. The bus smooths the continuous activation and debounces the discrete movement; LSL carries the predicted-hand pose and gRPC carries control-hand class changes. Palette clicks use `bus.select("gesture", state)` to send an immediate movement and rebase that trigger.
@@ -96,7 +96,7 @@ Without a connected bus, `predict` returns class and probabilities normally. It 
 ### 8. Layout
 
 ```python
---8<-- "examples/synthetic/emg_classification.py:layout"
+--8 < --"examples/synthetic/emg_classification.py:layout"
 ```
 
 A responsive [`Grid`][myogestic.Grid] keeps the header and status in bare rows. The wide layout places the live signal beside the active step and sessions; the narrow layout stacks them. Each active step is one card with one header. `SessionManager` returns a `TrainingData` instance; assigning it to `pipeline.training_data` connects the selected participant takes to `train()`.

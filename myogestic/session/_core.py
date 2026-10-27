@@ -8,11 +8,12 @@ import os
 import shutil
 import stat
 import sys
+import threading
 import time
 import uuid
 import zipfile
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -44,6 +45,23 @@ _META_SCHEMA_VERSION = 3
 #: written rather than inferred. Unstamped, a session recorded today would read as legacy
 #: and be flipped by a migration it does not need.
 POSE_CONVENTION = "standard"
+
+#: Rows an event stream buffers before one batched zarr write. Measured on zarr 3.2.1: a
+#: single-row append into a partially filled chunk costs ~1.5 ms (read, decompress, rewrite,
+#: recompress the chunk); 32 rows appended at once cost ~0.04 ms per row. The predict thread
+#: has a 31 ms budget per tick and may feed ten of these streams.
+EVENT_CHUNK_ROWS = 1024
+#: A buffer older than this is flushed on the next append, whatever its size, so a quiet
+#: stream still reaches disk within a second.
+EVENT_FLUSH_SECONDS = 1.0
+
+
+@dataclass
+class _EventBuffer:
+    rows: list[np.ndarray] = field(default_factory=list)
+    times: list[float] = field(default_factory=list)
+    since: float | None = None  # time.monotonic() of the oldest buffered row
+    dead: bool = False  # set by _flush_locked on IO failure; append_event returns early if true
 
 
 def _robust_rmtree(path: Path, *, retries: int = 5, delay_s: float = 0.1) -> None:
@@ -269,7 +287,9 @@ def _read_session_metadata(path: Path) -> tuple[dict, list] | None:
         if path.is_dir() and (path / "meta.json").exists():
             meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
             labels_file = path / "labels.json"
-            labels = json.loads(labels_file.read_text(encoding="utf-8")) if labels_file.exists() else []
+            labels = (
+                json.loads(labels_file.read_text(encoding="utf-8")) if labels_file.exists() else []
+            )
         elif path.is_file() and path.name.endswith(".zip"):
             # Renamed archives remain discoverable by the picker and totals.
             with zipfile.ZipFile(path) as archive:
@@ -400,27 +420,46 @@ class Session:
         # open_session_store): zarr reads arrays lazily from the archive, so the
         # store handle must outlive this Session. Assigned there, never read.
         self._zip_store: zarr.storage.ZipStore | None = None
+        # Event streams: one row per tick from the pipeline or the bus, declared on first
+        # use and buffered (see EVENT_CHUNK_ROWS). One lock covers declaration, buffering,
+        # flush and freeze, because the predict thread, the UI thread and the finalise
+        # thread all reach these.
+        self._event_lock = threading.Lock()
+        self._event_buffers: dict[str, _EventBuffer] = {}
+        self._event_streams: list[str] = []
+        #: Set by freeze(): no row is accepted and no stream declared after it.
+        self._finalising = False
 
-    def init_stream(self, stream_name: str, info: StreamInfo) -> None:
-        """Called once per stream when recording starts."""
+    def init_stream(
+        self, stream_name: str, info: StreamInfo, *, chunk_rows: int | None = None
+    ) -> None:
+        """Called once per stream when recording starts.
+
+        ``chunk_rows`` sizes the zarr chunk; the default is one second of samples. Event
+        streams pass `EVENT_CHUNK_ROWS` because their rate is nominal.
+        """
+        rows = max(1, int(info.fs) if chunk_rows is None else int(chunk_rows))
         self._streams_info[stream_name] = info
         self.stores[stream_name] = zarr.open_array(
             str(self.path / f"{stream_name}.zarr"),
             mode="w",
             shape=(0, info.n_channels),
-            chunks=(int(info.fs), info.n_channels),
+            chunks=(rows, info.n_channels),
             dtype=info.dtype,
         )
         self.ts_stores[stream_name] = zarr.open_array(
             str(self.path / f"{stream_name}_timestamps.zarr"),
             mode="w",
             shape=(0,),
-            chunks=(int(info.fs),),
+            chunks=(rows,),
             dtype=np.float64,
         )
 
     def append(self, stream_name: str, data: np.ndarray, timestamps: np.ndarray) -> None:
         """Called from acquire loop when recording. data: (n_samples, n_channels)."""
+        if self._finalising:
+            log.debug("dropping late append for frozen session %s", self.path)
+            return
         # Stream.detach_session() (under its lock) is what prevents an append from
         # racing pack_to_zip()'s clear(). This guard only keeps a stray late append
         # from raising KeyError on the caller's thread; the log line makes a future
@@ -432,6 +471,127 @@ class Session:
             return
         store.append(data)
         ts_store.append(timestamps)
+
+    @property
+    def event_streams(self) -> tuple[str, ...]:
+        """Names of the event streams, in declaration order. One row per tick, nominal rate."""
+        return tuple(self._event_streams)
+
+    def append_event(
+        self,
+        name: str,
+        values: Any,
+        timestamp: float,
+        *,
+        channel_names: Sequence[str] | None = None,
+        fs: float = 1.0,
+        dtype: Any = np.float32,
+    ) -> None:
+        """Append one timestamped row to an event stream, declaring it on first use.
+
+        ``values`` is flattened and cast to ``dtype``; its width is fixed by the first
+        call, and a later row of another width raises ``ValueError`` so a producer
+        whose shape changed learns it once instead of writing a ragged array. ``fs``
+        is the *nominal* rate the declaration carries, so `ReplaySource` can pace the
+        stream; the rows are irregular and ``meta.json`` lists the stream under
+        ``event_streams`` to say so.
+
+        Rows are buffered and written in batches (`EVENT_CHUNK_ROWS`, `EVENT_FLUSH_SECONDS`).
+        After `freeze` a row is dropped with a debug log, like a late `append`.
+
+        Parameters
+        ----------
+        dtype
+            Dtype for this stream, fixed by whichever call declares ``name`` first — a
+            later call's ``dtype`` is ignored and its row is coerced to the dtype
+            already on file, so a caller cannot change it after the fact. Default
+            ``float32``, right for signals and features. Pass ``float64`` for a value
+            that is itself a clock — an LSL timestamp, ``local_clock()`` — float32 has
+            about 7 significant digits, so a seconds-since-boot reading loses
+            millisecond precision after roughly a day of uptime.
+        """
+        row = np.asarray(values, dtype=dtype).ravel()
+        if row.size == 0:
+            raise ValueError(f"{name!r}: an event row needs at least one value")
+        with self._event_lock:
+            if self._finalising:
+                log.debug("dropping event row for frozen session %s", self.path)
+                return
+            buf = self._event_buffers.get(name)
+            if buf is None:
+                if name in self.stores:
+                    raise ValueError(f"{name!r} is a sampled stream, not an event stream")
+                from myogestic.stream import StreamInfo
+
+                self.init_stream(
+                    name,
+                    StreamInfo(
+                        n_channels=int(row.size),
+                        fs=float(fs),
+                        dtype=np.dtype(dtype),
+                        channel_names=list(channel_names) if channel_names else None,
+                    ),
+                    chunk_rows=EVENT_CHUNK_ROWS,
+                )
+                self._event_streams.append(name)
+                buf = self._event_buffers[name] = _EventBuffer()
+            else:
+                # Already declared: the stream's dtype won, not this call's — coerce
+                # rather than let a later, differently-typed caller silently drift it.
+                row = row.astype(self._streams_info[name].dtype, copy=False)
+            width = self._streams_info[name].n_channels
+            if row.size != width:
+                raise ValueError(f"{name!r} rows are {width} wide, got {row.size}")
+            if buf.dead:
+                log.debug("dropping event row for dead stream %r", name)
+                return
+            now = time.monotonic()
+            buf.rows.append(row)
+            buf.times.append(float(timestamp))
+            if buf.since is None:
+                buf.since = now
+            if len(buf.rows) >= EVENT_CHUNK_ROWS or now - buf.since >= EVENT_FLUSH_SECONDS:
+                self._flush_locked(name, buf)
+
+    def _flush_locked(self, name: str, buf: _EventBuffer) -> None:
+        """Write a buffer as one batch. Caller holds ``_event_lock``.
+
+        On IO failure, logs once at warning level, marks the buffer dead so later
+        append_event calls drop silently, and clears the buffer to avoid retries.
+        """
+        if not buf.rows:
+            return
+        try:
+            self.stores[name].append(np.stack(buf.rows))
+            self.ts_stores[name].append(np.asarray(buf.times, dtype=np.float64))
+        except Exception as exc:
+            log.warning(
+                "event stream %r: flush failed, dropping its rows for the rest of this session: %r",
+                name,
+                exc,
+            )
+            buf.dead = True
+        finally:
+            buf.rows.clear()
+            buf.times.clear()
+            buf.since = None
+
+    def freeze(self) -> None:
+        """Close the session to new rows and flush every event buffer. Idempotent.
+
+        `App.stop_recording` calls this right after detaching the streams and before any
+        finalize hook or ``meta.json`` is written, so nothing can declare a stream that the
+        metadata does not list. `pack_to_zip` and `discard` call it as well.
+
+        Flushes every buffer even if one fails; per-buffer failures are logged at
+        warning level, and the buffer is marked dead to prevent retries.
+        """
+        with self._event_lock:
+            if self._finalising:
+                return
+            self._finalising = True
+            for name, buf in self._event_buffers.items():
+                self._flush_locked(name, buf)
 
     def add_label(self, class_index: int, timestamp: float | None = None) -> None:
         """Append a label event to the session's label track.
@@ -491,6 +651,7 @@ class Session:
                 }
                 for name, info in self._streams_info.items()
             },
+            "event_streams": list(self._event_streams),
         }
         # Use the same clock as add_label, and only the first nonempty stream:
         # multiple streams describe the same take, not extra recorded time.
@@ -531,9 +692,7 @@ class Session:
         labels = [
             {"timestamp": e.timestamp, "class_index": e.class_index} for e in self.label_track
         ]
-        (self.path / "labels.json").write_text(
-            json.dumps(labels, indent=2), encoding="utf-8"
-        )
+        (self.path / "labels.json").write_text(json.dumps(labels, indent=2), encoding="utf-8")
 
     def pack_to_zip(self) -> Path:
         """Pack the session folder into a single `<name>.session.zip` file.
@@ -541,6 +700,7 @@ class Session:
         Uses ZIP_STORED: zarr chunks are already compressed internally, so an outer
         compression layer would add CPU for little gain.
         """
+        self.freeze()
         # zarr v3 arrays expose no explicit close, so drop refs and force a GC to
         # release the chunk-file handles. Required on Windows: the later
         # rmtree/replace fail with WinError 32 while any handle into the folder
@@ -603,6 +763,7 @@ class Session:
         Releases the Zarr handles first, exactly as `pack_to_zip` does: on
         Windows the folder cannot be removed while any chunk file is still open.
         """
+        self.freeze()
         self.stores.clear()
         self.ts_stores.clear()
         gc.collect()
