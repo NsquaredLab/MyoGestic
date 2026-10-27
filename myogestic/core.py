@@ -116,6 +116,8 @@ def _collapse_glfw_monitor_spam():
 
 log = logging.getLogger("myogestic")
 
+_FINALIZE_TIMEOUT_S = 30.0
+
 
 class AppState(StrEnum):
     """Core app-state values. Extensions (e.g. myogestic.ml.PipelineState) add more.
@@ -698,6 +700,7 @@ class App:
             └─ 4. [finally] cleanup - always runs, even on startup failure
                  ├─ cleanup_hooks(app)   each wrapped in try/except
                  ├─ stop_recording(wait=True) if a take is open
+                 ├─ wait for pending saves (up to 30 seconds)
                  ├─ Stream.stop()         per stream
                  ├─ Bridge.stop()         per bridge
                  └─ process_launcher._cleanup_all()
@@ -772,7 +775,8 @@ class App:
 
         An open recording is stopped *after* the cleanup hooks (the pipeline's hook stops
         the predict thread, so no tick appends during the flush) and *before* the streams
-        stop, inline, so the archive is complete when the interpreter exits.
+        stop, inline, so the archive is complete when the interpreter exits. Saves started
+        earlier or by cleanup hooks get up to 30 seconds to finish before streams stop.
         """
         log.info("run() - cleanup")
         for hook in self.cleanup_hooks:
@@ -785,6 +789,17 @@ class App:
                 self.stop_recording(wait=True)
             except Exception as e:
                 log.exception("stop_recording at exit failed: %s", e)
+        deadline = time.monotonic() + _FINALIZE_TIMEOUT_S
+        while self.ctx.pending_saves:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                log.warning(
+                    "Timed out after %.1f s waiting for %d recording save(s) at exit",
+                    _FINALIZE_TIMEOUT_S,
+                    len(self.ctx.pending_saves),
+                )
+                break
+            time.sleep(min(0.05, remaining))
         for stream in self.ctx.streams.values():
             try:
                 stream.stop()
